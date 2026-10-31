@@ -1,0 +1,22 @@
+[package]
+name = "simulator"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Deterministic catalog sky camera, known optics and virtual time."
+
+[dependencies]
+# The real camera port and its refusal rules, without linking the solver at runtime.
+scope-node = { version = "0.1.0", path = "../scope-node" }
+# Camera modes and descriptions use the scope link's wire types.
+scope-link = { version = "0.1.0", path = "../scope-link" }
+# Read the existing star table; project with the unchanged numerical primitives.
+pattern-database = { version = "0.1.0", path = "../pattern-database" }
+math-core = { version = "0.1.0", path = "../math-core" }
+tokio = { version = "1.53.1", features = ["time"] }
+
+[dev-dependencies]
+plate-solver = { version = "0.1.0", path = "../plate-solver" }
+tokio = { version = "1.53.1", features = ["macros", "rt", "test-util"] }
