@@ -6,15 +6,16 @@ import { defineConfig } from "@playwright/test";
 const externalURL = process.env.FINDER_URL;
 const consoleURL = "http://127.0.0.1:8097";
 const sessionURL = "http://127.0.0.1:8098";
+const simulateURL = "http://127.0.0.1:8099";
 
-function server(port: number, name: string) {
+function server(port: number, name: string, extraArgs = "") {
   return {
     // Create state at server startup, never in the user's normal state directory.
     // mktemp gives each server and each run a separate folder, even after a failure.
     command: [
       "mkdir -p target",
       `state_dir=$(mktemp -d target/finder-e2e-${name}.XXXXXX)`,
-      `cargo run --release --locked -p finder -- --listen 127.0.0.1:${port} --state "$state_dir"`,
+      `cargo run --release --locked -p finder -- --listen 127.0.0.1:${port} --state "$state_dir"${extraArgs ? ` ${extraArgs}` : ""}`,
     ].join(" && "),
     cwd: "../../..",
     url: `http://127.0.0.1:${port}/api/health`,
@@ -30,7 +31,7 @@ export default defineConfig({
   reporter: "list",
   use: { baseURL: externalURL ?? consoleURL, browserName: "chromium" },
   projects: [
-    { name: "default", testIgnore: "**/session.spec.ts" },
+    { name: "default", testIgnore: ["**/session.spec.ts", "**/simulate.spec.ts"] },
     {
       name: "session",
       testMatch: "**/session.spec.ts",
@@ -38,6 +39,18 @@ export default defineConfig({
       // An explicit URL shares one server: finish the existing suite before edits.
       dependencies: externalURL ? ["default"] : [],
     },
+    {
+      name: "simulate",
+      testMatch: "**/simulate.spec.ts",
+      use: { baseURL: externalURL ?? simulateURL },
+      dependencies: externalURL ? ["session"] : [],
+    },
   ],
-  webServer: externalURL ? undefined : [server(8097, "console"), server(8098, "session")],
+  webServer: externalURL
+    ? undefined
+    : [
+        server(8097, "console"),
+        server(8098, "session"),
+        server(8099, "simulate", "--simulate --sim-start 2026-01-16T02:00:00Z"),
+      ],
 });
