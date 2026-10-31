@@ -56,6 +56,7 @@ pub mod live;
 pub mod pushto;
 pub mod samples;
 pub mod session;
+pub mod simulate;
 pub mod sky;
 pub mod solve;
 pub mod stars;

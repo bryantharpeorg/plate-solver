@@ -30,6 +30,8 @@ cargo run --release -p finder -- --db my_camera.npz --samples ~/frames
 | `--samples DIR` | cedar's `medium_fov` samples | Folder of frames to offer on the page. |
 | `--listen ADDR` | `127.0.0.1:8080` | Address to serve on. `0.0.0.0:8080` lets other devices connect. |
 | `--state DIR` | `$XDG_STATE_HOME/finder`, otherwise `~/.local/state/finder` | Folder holding the observing session in `session.json`. |
+| `--simulate` | off | In-process simulator on a virtual clock, with an isolated session and pairing. |
+| `--sim-start UTC` | now | Start the simulated night at `YYYY-MM-DDTHH:MM:SSZ`, optionally with fractional seconds. Requires `--simulate`. |
 | `--allow-host NAME` | none | DNS name permitted for same-origin writes, in addition to IP literals and `localhost`. Repeat for multiple names. |
 | `--licenses` | | Print the third-party notices for the embedded page and data, and exit. |
 
@@ -111,8 +113,8 @@ The page uses the API types in `web/src/api.ts`, which mirror the Rust structs i
 
 All phones and laptops connected to the console read and edit the same observing session.
 A fresh session has no site, target or latest pointing, and a minimum altitude of 15°.
-`time` is the console's clock in Unix seconds. The binary uses the system clock and has
-no fixed-clock option.
+`time` is the console's clock in Unix seconds. The binary uses the system clock except
+under `--simulate`, whose virtual clock runs at the real rate.
 
 Writes to `PUT /api/session` and `POST /api/solve` follow the same-origin rule. When
 a request carries an `Origin`, its scheme, host and port must match the request's own
@@ -238,3 +240,50 @@ holding at least ten stars without a solve. Any live solve resets that interval.
 Library servers call `with_live()` after `with_link`; `with_live_solver` injects a
 `live::Solver`. `AppState::live()` exposes reports and previews. Uploads and live
 solves share one gate.
+
+## Simulated night and live stream
+
+Run a desk console without a telescope:
+
+```sh
+cargo run --release -p finder --locked -- --simulate --sim-start 2026-01-16T02:00:00Z
+```
+
+The simulator draws catalog stars through the real camera, detection, scope link and
+console solver. It starts at altitude 45°, azimuth 180°, using the saved session's site
+or 40° N, 75° W. Its optics are 1456 × 1088 pixels, a 12° horizontal field, and an
+eyepiece centred on pixel (700, 420). The virtual clock advances at the real rate from
+`--sim-start` (default now). Invalid dates and `--sim-start` without `--simulate` are
+refused before any server binds.
+
+Without `--state`, the simulated session is `simulate/session.json` under the default
+state folder. The night's default `session.json` is never read or written. `--state DIR`
+still uses exactly `DIR/session.json`. A private in-memory pairing connects only to the
+in-process node on `127.0.0.1` at a random port with a random token; saved or edited node
+addresses and tokens cannot divert it. Camera settings still reach the simulator.
+
+Only simulate mode registers these controls, all behind the console's same-origin check:
+
+| Route | Request / answer |
+|-------|------------------|
+| `GET /api/sim/telescope` | `{camera: {alt, az, ra, dec}, eyepiece: {alt, az, ra, dec}}`, true directions in degrees, RA/Dec in J2000. |
+| `POST /api/sim/telescope` | Exactly one of `{alt_deg, az_deg}`, `{turn_deg, tilt_deg}`, or `{eyepiece_on_star: true}`; answers the true directions. |
+| `POST /api/sim/frames` | `{running: false}` stops exposures; `{running: true}` resumes them. Answers `{running}`. |
+
+Turn is clockwise positive; tilt is up positive. `eyepiece_on_star` centres the brightest
+database star in the field at the current time. Stars continue to drift with the sky.
+An exposure already in progress finishes before a push or stop takes effect. Outside
+simulate mode every `/api/sim/*` path answers 404. Unknown request fields are refused.
+
+`GET /api/live` is `text/event-stream`. Each `live` event carries
+`{frame_id, time, pointing_seq, preview_seq, stars, report, guidance?}`. Time is the
+mid-exposure instant mapped to the console clock; `report` is the same `SolveReport`
+as an upload, with `name: null`. Guidance is evaluated at that solve. Keep-alive comments
+arrive every 15 seconds; subscribers lagging beyond 16 reports skip missed events.
+
+`GET /api/live/preview.jpg?seq=N` serves the JPEG carried by exposure N, while it remains
+in the last eight preview frames; an absent or expired preview answers 404. A console
+without a live loop answers 404 for both live routes. Library servers opt into simulation
+with `with_simulation(start_unix_s, SimulationTransport::Loopback).await?`, then
+`with_live()`. Paused-time tests use `SimulationTransport::Memory` over duplex IO in
+one runtime.

@@ -1,6 +1,7 @@
 //! The HTTP surface: the JSON API and the embedded page.
 
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -9,8 +10,11 @@ use axum::extract::multipart::{Field, MultipartError};
 use axum::extract::rejection::{JsonRejection, QueryRejection};
 use axum::extract::{DefaultBodyLimit, FromRequestParts, Multipart, Path, Query, State};
 use axum::http::{header, request::Parts, uri::Authority, StatusCode, Uri};
-use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::response::{
+    sse::{Event, KeepAlive, Sse},
+    IntoResponse, Response,
+};
+use axum::routing::{any, get, post};
 use axum::{Json, Router};
 use pattern_database::PatternDatabase;
 use rust_embed::RustEmbed;
@@ -22,6 +26,7 @@ use crate::link::{LinkManager, Transport};
 use crate::live::{DbSolver, Live, Solver};
 use crate::samples::{self, SampleInfo, Samples};
 use crate::session::{Clock, Session, SessionEdit, SessionError, SessionView, SystemClock};
+use crate::simulate::{Push, Simulation, SimulationTransport, Telescope};
 use crate::sky::Observer;
 use crate::solve::{self, DecodeError, SolveOptions, SolveReport};
 use crate::targets::{self, SearchResult};
@@ -53,6 +58,7 @@ pub struct AppState {
     allowed_hosts: Arc<Vec<String>>,
     link: Option<Arc<LinkManager>>,
     live: Option<Arc<Live>>,
+    simulation: Option<Arc<Simulation>>,
 }
 
 impl AppState {
@@ -74,6 +80,7 @@ impl AppState {
             allowed_hosts: Arc::new(Vec::new()),
             link: None,
             live: None,
+            simulation: None,
         }
     }
 
@@ -94,6 +101,33 @@ impl AppState {
     pub fn with_clock(mut self, clock: Arc<dyn Clock>) -> Self {
         self.clock = clock;
         self
+    }
+
+    /// Build the desk-only node and its isolated link. Call before `with_live`.
+    /// The saved session supplies the site and camera settings, never pairing.
+    pub async fn with_simulation(
+        mut self,
+        start_unix_s: f64,
+        transport: SimulationTransport,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let simulation = Arc::new(
+            Simulation::start(
+                self.db.clone(),
+                self.session.clone(),
+                start_unix_s,
+                transport,
+            )
+            .await?,
+        );
+        self.clock = simulation.clock.clone();
+        self.link = Some(simulation.link.clone());
+        self.simulation = Some(simulation);
+        Ok(self)
+    }
+
+    /// Ground-truth controls, available only when constructed in simulate mode.
+    pub fn simulator(&self) -> Option<simulator::Simulator> {
+        self.simulation.as_ref().map(|s| s.simulator.clone())
     }
 
     /// Start the session's paired scope link, using TCP or a reusable connector.
@@ -239,7 +273,7 @@ impl FromRequestParts<AppState> for SessionWrite {
 
 /// The console's routes.
 pub fn router(state: AppState) -> Router {
-    Router::new()
+    let mut routes = Router::new()
         .route("/api/health", get(health))
         .route("/api/samples", get(list_samples))
         .route("/api/samples/{name}", get(sample_file))
@@ -252,9 +286,115 @@ pub fn router(state: AppState) -> Router {
         .route("/api/targets", get(search_targets))
         .route("/api/session", get(get_session).put(put_session))
         .route("/api/aim", post(set_aim).delete(reset_aim))
+        .route("/api/live", get(live_stream))
+        .route("/api/live/preview.jpg", get(live_preview))
+        .route("/api/sim", any(api_not_found))
+        .route("/api/sim/{*rest}", any(api_not_found))
         .route("/api/{*rest}", get(api_not_found))
-        .fallback(get(page))
-        .with_state(state)
+        .fallback(get(page));
+    if state.simulation.is_some() {
+        routes = routes
+            .route("/api/sim/telescope", get(sim_telescope).post(sim_push))
+            .route("/api/sim/frames", post(sim_frames));
+    }
+    routes.with_state(state)
+}
+
+async fn live_stream(State(state): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    let receiver = state
+        .live
+        .as_ref()
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "no live loop"))?
+        .subscribe();
+    let stream = futures_util::stream::unfold(receiver, |mut receiver| async move {
+        loop {
+            match receiver.recv().await {
+                Ok(report) => {
+                    let event = Event::default()
+                        .event("live")
+                        .json_data(report)
+                        .expect("finite live report");
+                    return Some((Ok::<_, Infallible>(event), receiver));
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => return None,
+            }
+        }
+    });
+    Ok(Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15))))
+}
+
+#[derive(Deserialize)]
+struct PreviewQuery {
+    seq: u64,
+}
+async fn live_preview(
+    State(state): State<AppState>,
+    Query(query): Query<PreviewQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    let preview = state
+        .live
+        .as_ref()
+        .and_then(|live| live.preview(query.seq))
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "the console no longer holds that preview",
+            )
+        })?;
+    Ok(([(header::CONTENT_TYPE, "image/jpeg")], preview.jpeg))
+}
+
+async fn sim_telescope(State(state): State<AppState>, _write: SessionWrite) -> Json<Telescope> {
+    Json(
+        state
+            .simulator()
+            .expect("simulate route")
+            .telescope()
+            .into(),
+    )
+}
+async fn sim_push(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    push: Result<Json<Push>, JsonRejection>,
+) -> Result<Json<Telescope>, ApiError> {
+    let sim = state.simulator().expect("simulate route");
+    sim_json(push)?
+        .apply(&sim, &state.db)
+        .map_err(ApiError::bad_request)?;
+    Ok(Json(sim.telescope().into()))
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FramesControl {
+    running: bool,
+}
+async fn sim_frames(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    control: Result<Json<FramesControl>, JsonRejection>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let running = sim_json(control)?.running;
+    let sim = state.simulator().expect("simulate route");
+    if running {
+        sim.start_frames();
+    } else {
+        sim.stop_frames();
+    }
+    Ok(Json(serde_json::json!({"running":running})))
+}
+fn sim_json<T>(result: Result<Json<T>, JsonRejection>) -> Result<T, ApiError> {
+    result.map(|Json(value)| value).map_err(|error| {
+        ApiError::new(
+            if error.status() == StatusCode::UNPROCESSABLE_ENTITY {
+                StatusCode::BAD_REQUEST
+            } else {
+                error.status()
+            },
+            error.body_text(),
+        )
+    })
 }
 
 async fn get_session(State(state): State<AppState>) -> Json<SessionView> {
