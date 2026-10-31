@@ -5,6 +5,10 @@ depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto"]
 # now the feature's only specification. It stays draft until the owner has reviewed
 # it and given the approvals listed under "Owner approvals". Flipping it to `ready`
 # is the act that dispatches it.
+# Refined 2026-10-31 against main at 1976dff (013's US1 to US4, US8 and US9 landed) and
+# 014's refined trio at cab5143 (plan.md § Plan traps and § Refinement Record). It stays
+# draft until 013 and 014 have landed and the prerequisites in plan.md are met; the paths
+# marked "013's" and "014's" are re-read against them as landed then.
 ---
 
 # Feature Specification: Tracking
@@ -65,6 +69,30 @@ the link: tracking uses 014's move-at-rate and stop.
   and flipping it to `ready`. The approvals are listed below so that the flip is an
   informed act.
 
+### Session 2026-10-31 (refinement against main, 013 and 014)
+
+- Q: Where are the simulated mount and the pointing model? → A: 014 creates them, the
+  simulated mount in `crates/simulator/src/mount.rs` (014's US1) and the model in
+  `crates/finder/src/model.rs` (014's US5). US2 extends both there.
+- Q: What do the new session fields read before they have a value? → A: They are left out
+  of the body, as 013's and 014's are, so the whole-body test of a fresh session stays as
+  it is. `track` appears once Track is first turned on in a run of the binary,
+  `imaging_camera` once one is set, and `backlash` once an axis's backlash is measured.
+- Q: Does Stop end tracking? → A: Yes. `POST /api/stop` stops both axes, as 014 made it,
+  and also ends tracking as stopped by the observer, so the next second's rates never
+  start the axes again (FR-007, US7-S10).
+- Q: What feeds the tracker its pointings in the running console? → A: 013's live loop
+  (`crates/finder/src/live.rs`), which hands each live solve's error at the aim point to
+  the tracker while tracking, from US7. US4's tests feed the same entry point themselves.
+- Q: Are tracking frames still syncs? → A: Yes. 014 takes a frame as a sync when both axes
+  move at no more than 0.2°/s during it. Tracking rates stay under that outside the 2°
+  zenith circle (about 0.1°/s in azimuth at its edge). The backlash take-up at 0.5°/s
+  and the keyhole slew are not syncs, as a GoTo's slew is not.
+- Q: How can US6 and US7 run together when both concern the tracker? → A: The armed state
+  (Track on, waiting for a GoTo) is the session's, and the session starts the tracker
+  when the GoTo ends. So US7 does not edit `crates/finder/src/tracking.rs`, and US6 edits
+  nothing else of the console's.
+
 ## Owner approvals
 
 Flipping this spec to `ready` approves the following. Each is named in the FR that makes
@@ -74,10 +102,16 @@ it. No existing test changes, and CI (`ci.yml`) is unchanged.
    "a 0.5% rate error drifts more than 1′ in 10 minutes". That does not hold: 0.5% of the
    8,985″ M42 moves in 10 minutes is about 45″. The scenario uses 1% (about 90″) instead
    (FR-008).
-2. **The Playwright `simulate` project gains one test file.** US9 adds
-   `e2e/tracking.spec.ts` to the `simulate` project that 013 created. If that project
-   lists its files, its list gains this one entry and nothing else in
-   `playwright.config.ts` changes (FR-020).
+2. **Two lines of Playwright config, and the `simulate` project one file at a time.**
+   013's `simulate` project matches only `e2e/simulate.spec.ts`, and its `default`
+   project ignores that file by name (013 plan.md, User Story 10). 014's US9 adds
+   `e2e/goto.spec.ts` to both. US9 here adds `e2e/tracking.spec.ts` to the `simulate`
+   project's match and to the `default` project's ignore. The `simulate` project's files
+   share one `finder --simulate` server, and each sets the session's target and moves the
+   mount, so they must not run at once: the project runs one file at a time
+   (`workers: 1` on the project, Playwright 1.52 and later). If 014 has not set it when
+   this spec flips, US9 sets it. No server, other project or existing test changes
+   (FR-020). Re-read against 013's US10 and 014's US9 as landed, at the flip.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -132,11 +166,13 @@ reversal cannot be measured. Without the truth loaded, a feed-forward test would
 measure the model's fit.
 
 **Independent Test**: Two sets of tests run:
-- `cargo test -p simulator --locked` runs the new `crates/simulator/tests/rate_and_backlash.rs`;
+- `cargo test -p simulator --locked` runs the new `crates/simulator/tests/rate_and_backlash.rs`
+  against 014's simulated mount in `crates/simulator/src/mount.rs`;
 - `cargo test -p finder --locked --test sim_truth` runs the new
-  `crates/finder/tests/sim_truth.rs`.
+  `crates/finder/tests/sim_truth.rs` against 014's pointing model in
+  `crates/finder/src/model.rs`.
 
-The simulator's existing tests pass unchanged.
+The simulator's existing tests, 013's and 014's, pass unchanged.
 
 **Acceptance Scenarios**:
 
@@ -184,11 +220,12 @@ the in-process link, as 014's GoTo tests do.
 2. **Given** a target tracked as it sets through a minimum altitude of 15°, **When** its
    geometric altitude reaches 15°, **Then** a test asserts that tracking ends with both
    axes stopped within 1 s, saying the target is too low.
-3. **Given** a target being tracked, **When** Stop is sent, **Then** a test asserts that
-   both axes stop within 0.5 s of virtual time, and that tracking reports the observer
-   stopped it.
-4. **Given** M42 being tracked, **When** the simulator's link stops answering heartbeats,
-   **Then** a test asserts three things:
+3. **Given** a target being tracked, **When** the observer's Stop reaches the tracker (as
+   `POST /api/stop` hands it on from US7), **Then** a test asserts that both axes stop
+   within 0.5 s of virtual time, that no rate is sent to either axis after the stop, and
+   that tracking reports the observer stopped it.
+4. **Given** M42 being tracked, **When** the heartbeats between the console and the node
+   fall silent, as in 014's US6-S12, **Then** a test asserts three things:
    - the node's watchdog stops both axes 1.0 ± 0.1 s after the last heartbeat;
    - tracking ends saying the link was lost;
    - it does not resume when the link returns.
@@ -268,20 +305,22 @@ backlash on each axis:
    the measured backlash and reverses, and that the target stays within 30″ of the aim
    point through the reversal.
 3. **Given** the azimuth axis's backlash already measured, **When** M81 (Dec +69°) is
-   tracked at latitude 40° through its greatest elongation (hour angle about 43.5°, where
-   its azimuth rate changes sign), **Then** a test asserts that the azimuth axis stops,
+   tracked at latitude 40° through its greatest elongation (hour angle about 71.3°, at
+   altitude about 43.5°, where its azimuth rate changes sign), **Then** a test asserts
+   that the azimuth axis stops,
    takes up the measured backlash and reverses, and that the target stays within 30″ of
    the aim point through the reversal.
 4. **Given** the altitude axis's backlash measured on the simulator, **When** the binary
    restarts on the same `--state` folder the next day, **Then** a test asserts that the
-   session holds the same backlash for that axis exactly.
+   session's `backlash` holds the same value for that axis exactly.
 5. **Given** M42 tracked through its transit on the simulator, with 0.3° of altitude
    backlash measured at that reversal, **When** syncs are then taken while the altitude
    axis tracks down, **Then** a test asserts that no new zero-point epoch is opened, and
    that the fitted IE equals the simulator's true altitude zero point within 30″.
 6. **Given** a measured backlash, **When** the fixed terms are reset through
-   `POST /api/model/reset`, **Then** a test asserts that the session holds no backlash for
-   either axis.
+   `POST /api/model/reset` with `{"what": "fixed"}`, **Then** a test asserts that the
+   session's body has no `backlash` field. The test first reads the measured backlash in
+   the same session, so the field's absence follows a value.
 
 ---
 
@@ -354,7 +393,8 @@ because it consumes the tracker that US3 to US5 build.
    stop).
 5. **Given** a 23.5 × 15.6 mm sensor with 3.76 µm pixels put into the session, **When** the
    binary restarts on the same `--state` folder, **Then** a test asserts that the session
-   holds the same three values exactly.
+   holds the same three values exactly, and that once `"imaging_camera": null` is put,
+   the body has no `imaging_camera` field.
 6. **Given** a session, **When** a pixel pitch of 0 µm is put, **Then** a test asserts that
    the answer is 400 with a JSON `error`, and that nothing changes.
 7. **Given** M42 tracked on the simulator with that imaging camera in the session, **When**
@@ -368,6 +408,14 @@ because it consumes the tracker that US3 to US5 build.
    nothing moves.
 9. **Given** tracking on, **When** the binary restarts on the same `--state` folder,
    **Then** a test asserts that tracking is off after the restart and that nothing moves.
+10. **Given** M42 being tracked on the simulator, **When** a bodiless `POST /api/stop`
+    from a foreign origin is sent, **Then** a test asserts that the answer is 200, that
+    both axes are at rest within 1.5 s of virtual time and stay at rest for the next 10 s,
+    and that the session reports tracking ended because the observer stopped it.
+
+In US7-S2, US7-S8 and US7-S9, "nothing moves" is asserted only after the same test has
+seen an accepted Track move an axis of the connected simulated mount (plan.md § Plan
+traps, trap 9).
 
 ---
 
@@ -385,13 +433,15 @@ and pixel pitch, and the page refuses values out of range with a message.
 **Why this priority**: This is the visible half of tracking. It is P2 because it consumes
 US7's API.
 
-**Independent Test**: In `crates/finder/web`, run `npm run typecheck`,
-`npm run format:check` and `npm test`:
+**Independent Test**: The `test` gate's page checks run in `crates/finder/web`:
+`npm run typecheck`, `npm run format:check` and `npm test`:
 - the new tests are `src/components/TrackControl.test.tsx` and
   `src/components/ImagingCameraSection.test.tsx`;
 - every existing Vitest file is unchanged.
 
-Then the build-freshness check passes on the rebuilt `web/dist`.
+Then the gate's `npm run build` and `git status --porcelain -- dist` list nothing for the
+committed `web/dist`, and its `CI=1 npm run e2e` passes with `e2e/session.spec.ts`
+unchanged.
 
 **Acceptance Scenarios**:
 
@@ -412,9 +462,10 @@ Then the build-freshness check passes on the rebuilt `web/dist`.
 6. **Given** `DESIGN.md` and `.impeccable/design.json`, **When** they are read, **Then**
    they describe the Track toggle, the tracking readout and Setup's imaging camera section
    as built.
-7. **Given** the rebuilt `web/dist`, **When** CI's build-freshness check runs, **Then** the
-   committed build is the build of this source, and no npm package was added
-   (`package.json` dependencies are unchanged).
+7. **Given** the rebuilt `web/dist`, **When** the `test` gate runs `npm run build` and
+   then `git status --porcelain -- dist`, **Then** the second lists nothing, so the
+   committed build is the build of this source. The story's diff leaves `package.json`'s
+   dependencies unchanged, so no npm package was added.
 
 ---
 
@@ -432,8 +483,8 @@ piece. They come last because they exercise every story before them.
 **Independent Test**: Two checks run:
 - `cargo test -p finder --locked --test tracking_night` runs the new
   `crates/finder/tests/tracking_night.rs`;
-- in `crates/finder/web`, `npm run e2e` runs every earlier test unchanged and green, plus
-  the new `e2e/tracking.spec.ts` in the `simulate` project.
+- in `crates/finder/web`, the `test` gate's `CI=1 npm run e2e` runs every earlier test
+  unchanged and green, plus the new `e2e/tracking.spec.ts` in the `simulate` project.
 
 **Acceptance Scenarios**:
 
@@ -445,6 +496,9 @@ piece. They come last because they exercise every story before them.
    - tracking ends saying the target is too low, within 1 s of its geometric altitude
      reaching the minimum;
    - the test's own `Instant::elapsed` is under 30 s.
+
+   It runs in the `test` gate's `cargo test --workspace --all-targets --all-features
+   --locked`.
 2. **Given** `finder --simulate` with a 23.5 × 15.6 mm, 3.76 µm imaging camera and Track
    on for M42, **When** a committed Playwright test in `e2e/tracking.spec.ts` reads the
    guidance block, **Then** it asserts that the error in arcseconds, the field rotation and
@@ -454,8 +508,9 @@ piece. They come last because they exercise every story before them.
    pixel with any green or blue, and none redder than the ink beyond two levels of
    compositing rounding.
 4. **Given** the story's diff, **When** it is read, **Then** every earlier end-to-end test
-   file is unchanged. `playwright.config.ts` changes at most by adding
-   `e2e/tracking.spec.ts` to the `simulate` project (owner approval 2).
+   file is unchanged. `playwright.config.ts` changes only by owner approval 2: it adds
+   `e2e/tracking.spec.ts` to the `simulate` project's match and the `default` project's
+   ignore, and sets the `simulate` project to one file at a time if 014 has not.
 
 ---
 
@@ -581,12 +636,14 @@ piece. They come last because they exercise every story before them.
 - **FR-014**: Turning Track on while the target is more than 1′ from the aim point and no
   GoTo is running SHALL start a GoTo first. Turning Track on while a GoTo is running SHALL
   start tracking when the GoTo completes. Turning Track off SHALL stop tracking and both
-  axes, leaving the telescope where it is. **Refs**: 014's GoTo ("Halts").
+  axes, leaving the telescope where it is. `POST /api/stop` SHALL also end tracking, as
+  stopped by the observer (FR-007). **Refs**: 014's GoTo ("Halts"); 014's FR-020.
 - **FR-015**: The session SHALL hold the imaging camera's sensor width and height in
   millimetres and its pixel pitch in micrometres, kept across restarts. Each value SHALL
   be more than 0, and at most 100 mm or 50 µm respectively. A value out of range SHALL be
-  refused with 400 and a JSON `error`, changing nothing. **Refs**: GLOSSARY.md (imaging
-  camera); FR-002.
+  refused with 400 and a JSON `error`, changing nothing. An explicit `null` SHALL clear
+  the imaging camera, as it clears the site and the target. **Refs**: GLOSSARY.md (imaging
+  camera); FR-002; 012's checked edits.
 - **FR-016**: While tracking, the session SHALL report a readout of three values:
   - the RMS tracking error over the last 60 s, in arcseconds;
   - the field rotation at the target, from FR-001's rate, in °/min;
@@ -633,10 +690,10 @@ piece. They come last because they exercise every story before them.
 - **Tracking offset**: the integral of the closed loop, one value per axis. It is kept
   apart from the model's IA and IE, cleared when tracking ends, and clamped to 5% of the
   sidereal rate.
-- **Measured backlash**: one value per axis, in degrees or `null`. It is kept with the
-  fixed terms and cleared with them.
-- **Imaging camera**: sensor width and height (mm) and pixel pitch (µm). It is kept across
-  restarts.
+- **Measured backlash**: one value per axis, in degrees, left out until that axis is
+  measured. It is kept with the fixed terms and cleared with them.
+- **Imaging camera**: sensor width and height (mm) and pixel pitch (µm), left out until
+  one is set. It is kept across restarts.
 - **Simulator settings**: a rate error (a fraction, default 0) and a backlash per axis
   (degrees, default 0.3).
 
@@ -645,7 +702,8 @@ piece. They come last because they exercise every story before them.
 ### Measurable Outcomes
 
 - **SC-001**: Every acceptance scenario above has a committed test that asserts it. In
-  that state `cargo test --workspace --locked`, `npm test` and `npm run e2e` pass.
+  that state the `lint` and `test` gates pass, the `test` gate running the workspace's
+  cargo tests, `npm test` and `CI=1 npm run e2e`.
 - **SC-002**: No story edits an existing test, golden, `scripts/ci/` file,
   `.github/workflows/ci.yml` or `CODEOWNERS` entry.
 - **SC-003**: Workspace line coverage stays at or above the 80% floor after every story.
@@ -657,13 +715,17 @@ piece. They come last because they exercise every story before them.
 
 - **Built on 012, 013 and 014.**
   - 012-targets-and-push-to: the session, the push-to classes, the ephemeris.
-  - 013-live-finder: live solving, the link with its 1 s rule, the simulator, and the
-    `simulate` Playwright project.
-  - 014-goto: the mount port's move-at-rate and stop-before-reverse, the pointing model
-    and its fixed terms, GoTo and its planner, `POST /api/stop` and
-    `POST /api/model/reset`.
+  - 013-live-finder: live solving and the live loop (`crates/finder/src/live.rs`, US6),
+    the link client with its 1 s rule (`crates/finder/src/link.rs`, US5), the simulator
+    and `finder --simulate` (US7), and the `simulate` Playwright project (US10).
+  - 014-goto: the mount port's move-at-rate and stop (US1, US2), the simulated mount
+    (`crates/simulator/src/mount.rs`, US1), apparent altitude (US4), the pointing model
+    and its fixed terms (`crates/finder/src/model.rs`, US5), GoTo and its planner
+    (`crates/finder/src/goto.rs`, US6), `POST /api/stop` (US6) and
+    `POST /api/model/reset` (US7).
 
-  All three have landed before this spec dispatches.
+  All three have landed before this spec dispatches. On `main` at 1976dff, 012 has
+  landed, 013's US1 to US4, US8 and US9 have landed, and 014 is a refined draft.
 - **No operator-staged data.** No story adds a file over about 200 KiB.
 - **Out of scope:**
   - field derotation (the readout says how long an exposure may be instead);
@@ -682,12 +744,13 @@ piece. They come last because they exercise every story before them.
   - the measurement at bring-up of rate updates on the 9600-baud link, and the mount's
     firmware version (firmware below 3.39 may track unevenly; 014 warns at connect).
 - **The factory's gates and CI:**
-  - The factory's local gates are `lint` and `test`, which are cargo only.
-  - The page story (US8) must also pass `npm run typecheck`, `npm run format:check`,
-    `npm test` and the build-freshness check. The end-to-end story (US9) must pass
-    `npm run e2e`.
-  - All of these run in CI's required `finder-page` check in the merge queue, and every
-    story's tasks run them before proposing.
+  - The factory's gates are `lint` and `test` (`ergane.yaml`, as of 3fc6a24). `lint`
+    runs fmt, clippy and both rustdoc builds. `test` runs the workspace's cargo tests,
+    then the page checks in `crates/finder/web`: `npm ci`, `npm run typecheck`,
+    `npm run format:check`, `npm test`, `npm run build`, `git status --porcelain -- dist`
+    and `CI=1 npm run e2e`. Every story runs both, Rust and page stories alike.
+  - The merge queue also runs every `ci.yml` job, among them the coverage floor, msrv,
+    deny and machete, which have no factory counterpart (plan.md § Verification).
 
 ## Work Graph
 
@@ -747,5 +810,6 @@ Two pairs may run together:
 - **US1 and US2.** US1 touches only `crates/finder/src/ephemeris.rs` and a new test file.
   US2 touches `crates/simulator` and the pointing model's test hook.
 - **US6 and US7**, once US5 has merged. US6 touches only `crates/finder/src/tracking.rs`
-  and a new test file; US7 touches `crates/finder/src/session.rs`, `src/api.rs` and new
-  test files.
+  and a new test file; US7 touches `crates/finder/src/session.rs`, `src/api.rs`,
+  `src/live.rs`, `crates/finder/README.md` and new test files, and never `tracking.rs`
+  (the armed state is the session's).
