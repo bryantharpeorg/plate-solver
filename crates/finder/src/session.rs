@@ -249,6 +249,73 @@ fn present_number<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<f
     f64::deserialize(deserializer).map(Some)
 }
 
+/// Durable full-frame pixel calibrated from a detected star.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Aim {
+    /// Column in full-frame pixels.
+    pub x: f64,
+    /// Row in full-frame pixels.
+    pub y: f64,
+}
+impl Aim {
+    fn validate(self) -> Result<(), SessionError> {
+        if self.x.is_finite() && self.y.is_finite() && self.x >= 0.0 && self.y >= 0.0 {
+            Ok(())
+        } else {
+            Err(SessionError::Invalid(
+                "aim must contain finite non-negative pixel coordinates".into(),
+            ))
+        }
+    }
+}
+/// Where the latest pointing came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PointingSource {
+    /// An uploaded image; it never expires.
+    #[default]
+    Upload,
+    /// A star frame timed on the scope link.
+    Live,
+}
+/// Pointing with its source.
+#[derive(Debug, Clone, Serialize)]
+pub struct LatestPointing {
+    /// Original fields, flattened in JSON.
+    #[serde(flatten)]
+    pub pointing: Pointing,
+    /// Upload or live.
+    pub source: PointingSource,
+    /// Exposure id, for live pointings only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frame_id: Option<u64>,
+}
+impl std::ops::Deref for LatestPointing {
+    type Target = Pointing;
+    fn deref(&self) -> &Pointing {
+        &self.pointing
+    }
+}
+/// Field information appears only after receiving a live star frame.
+#[derive(Debug, Clone, Serialize)]
+pub struct FieldView {
+    /// Latest solved horizontal field, in degrees.
+    pub fov_deg: Option<f64>,
+    /// Loaded database's lower field limit, in degrees.
+    pub db_min_fov_deg: f64,
+    /// Loaded database's upper field limit, in degrees.
+    pub db_max_fov_deg: f64,
+    /// Console seconds of rich frames without a solve.
+    pub unsolved_s: f64,
+}
+#[derive(Clone)]
+struct LiveField {
+    fov_deg: Option<f64>,
+    range: (f64, f64),
+    unsolved_since: Option<f64>,
+}
+
 /// The most recent solved frame's pointing, held at its frame time.
 #[derive(Debug, Clone, Serialize)]
 pub struct Pointing {
@@ -298,7 +365,7 @@ pub struct SessionView {
     /// The resolved canonical catalog object, if selected.
     pub target: Option<&'static Target>,
     /// The latest pointing, if a frame has solved in this session.
-    pub pointing: Option<Pointing>,
+    pub pointing: Option<LatestPointing>,
     /// Unix seconds from the application's clock.
     pub time: f64,
     /// The selected target's guidance, derived at this read's console time.
@@ -310,6 +377,12 @@ pub struct SessionView {
     /// Camera settings; omitted until a camera control has been set.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub camera_settings: Option<CameraSettings>,
+    /// Calibrated pixel, omitted until set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aim: Option<Aim>,
+    /// Live field report, omitted before the first star frame.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub field: Option<FieldView>,
 }
 
 #[derive(Clone)]
@@ -321,6 +394,10 @@ struct Values {
     node: Option<NodeSettings>,
     camera_settings: Option<CameraSettings>,
     link_status: LinkStatus,
+    aim: Option<Aim>,
+    source: PointingSource,
+    frame_id: Option<u64>,
+    field: Option<LiveField>,
 }
 
 impl Default for Values {
@@ -333,6 +410,10 @@ impl Default for Values {
             node: None,
             camera_settings: None,
             link_status: LinkStatus::default(),
+            aim: None,
+            source: PointingSource::Upload,
+            frame_id: None,
+            field: None,
         }
     }
 }
@@ -343,7 +424,20 @@ impl Values {
             site: self.site,
             min_alt_deg: self.min_alt_deg,
             target: self.target,
-            pointing: self.pointing.clone(),
+            pointing: self.pointing.clone().map(|pointing| LatestPointing {
+                pointing,
+                source: self.source,
+                frame_id: self.frame_id,
+            }),
+            aim: self.aim,
+            field: self.field.as_ref().map(|field| FieldView {
+                fov_deg: field.fov_deg,
+                db_min_fov_deg: field.range.0,
+                db_max_fov_deg: field.range.1,
+                unsolved_s: field
+                    .unsolved_since
+                    .map_or(0.0, |since| (time - since).max(0.0)),
+            }),
             time,
             node: (self.node.is_some() || self.link_status.connected).then(|| {
                 let status = &self.link_status;
@@ -364,12 +458,13 @@ impl Values {
             }),
             camera_settings: self.camera_settings.clone(),
             guidance: self.target.map(|target| {
-                pushto::guidance(
+                pushto::guidance_with_source(
                     target,
                     self.site,
                     self.min_alt_deg,
                     time,
                     self.pointing.as_ref(),
+                    self.source,
                 )
             }),
         }
@@ -448,7 +543,66 @@ impl Session {
         };
         pointing.with_site(values.site);
         values.pointing = Some(pointing);
+        values.source = PointingSource::Upload;
+        values.frame_id = None;
         seq
+    }
+
+    /// Record a live solve at the current aim pixel, timed at mapped mid-exposure.
+    pub fn record_live_pointing(&self, frame: Frame, time: f64, frame_id: u64) -> Option<u64> {
+        let mut values = self.values.lock().expect("observing session");
+        let direction = match values.aim {
+            Some(aim) => frame.unproject((aim.x, aim.y))?,
+            None => frame.center,
+        };
+        let (ra, dec) = direction.to_radec();
+        let seq = values.pointing.as_ref().map_or(1, |p| p.seq + 1);
+        let mut pointing = Pointing {
+            seq,
+            frame,
+            ra_deg: ra.to_degrees(),
+            dec_deg: dec.to_degrees(),
+            time,
+            alt_deg: None,
+            az_deg: None,
+        };
+        pointing.with_site(values.site);
+        values.pointing = Some(pointing);
+        values.source = PointingSource::Live;
+        values.frame_id = Some(frame_id);
+        if let Some(field) = &mut values.field {
+            field.fov_deg = Some(frame.fov_deg());
+            field.unsolved_since = None;
+        }
+        Some(seq)
+    }
+
+    /// Note receipt, including frames dropped while solving.
+    pub(crate) fn receive_live_frame(&self, stars: usize, time: f64, range: (f64, f64)) {
+        let mut values = self.values.lock().expect("observing session");
+        let field = values.field.get_or_insert(LiveField {
+            fov_deg: None,
+            range,
+            unsolved_since: None,
+        });
+        if stars >= 10 {
+            field.unsolved_since.get_or_insert(time);
+        }
+    }
+
+    /// Persist the aim for subsequent solves, or reset it.
+    pub fn set_aim(&self, aim: Option<Aim>, time: f64) -> Result<SessionView, SessionError> {
+        if let Some(aim) = aim {
+            aim.validate()?;
+        }
+        let mut values = self.values.lock().expect("observing session");
+        let mut next = values.clone();
+        next.aim = aim;
+        if let Some(path) = &self.state_file {
+            write_state(path, &next).map_err(SessionError::Storage)?;
+        }
+        *values = next;
+        Ok(values.view(time))
     }
 
     /// Validate the entire edit and persist it before changing any field.
@@ -648,12 +802,19 @@ struct StoredSession {
     node: Option<NodeSettings>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     camera_settings: Option<CameraSettings>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    aim: Option<Aim>,
 }
 
 fn read_state(path: &Path) -> io::Result<Values> {
     let bytes = fs::read(path)?;
     let stored: StoredSession = serde_json::from_slice(&bytes)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid session state JSON"))?;
+    let aim = stored.aim;
+    if let Some(aim) = aim {
+        aim.validate()
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    }
     Values::default()
         .edited(SessionEdit {
             site: Some(stored.site),
@@ -670,6 +831,10 @@ fn read_state(path: &Path) -> io::Result<Values> {
                 gain: Some(settings.gain),
                 sigma: Some(settings.sigma),
             }),
+        })
+        .map(|mut values| {
+            values.aim = aim;
+            values
         })
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
 }
@@ -704,6 +869,7 @@ fn write_state(path: &Path, values: &Values) -> io::Result<()> {
             target: values.target.map(|target| target.id.clone()),
             node: values.node.clone(),
             camera_settings: values.camera_settings.clone(),
+            aim: values.aim,
         },
     )
     .map_err(io::Error::other)?;

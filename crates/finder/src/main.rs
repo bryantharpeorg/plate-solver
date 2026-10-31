@@ -92,7 +92,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             AppState::new(db, samples)
                 .with_session(session)
                 .with_allowed_hosts(args.allow_host)
-                .with_link(finder::link::Transport::Tcp),
+                .with_link(finder::link::Transport::Tcp)
+                .with_live(),
         ),
     )
     .await?;
