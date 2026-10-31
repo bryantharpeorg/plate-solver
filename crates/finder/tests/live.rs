@@ -259,6 +259,122 @@ async fn rich_frames_failing_for_thirty_seconds_report_the_whole_unsolved_interv
     assert!(read["field"]["fov_deg"].is_null());
 }
 
+#[tokio::test(start_paused = true)]
+async fn immediate_failures_publish_only_after_receiving_the_preview_and_field() {
+    let session = Arc::new(Session::default());
+    let (tx, frames) = tokio::sync::watch::channel(None);
+    let (_status_tx, status) = tokio::sync::watch::channel(finder::link::LinkStatus {
+        connected: true,
+        offset_s: Some(0.0),
+        ..Default::default()
+    });
+    let live = finder::live::Live::start(
+        session.clone(),
+        Arc::new(FixedClock(200.2)),
+        frames,
+        status,
+        Arc::new(Fail),
+        Arc::new(tokio::sync::Semaphore::new(1)),
+        (10.0, 30.0),
+    );
+    let mut events = live.subscribe();
+    for id in 0..32 {
+        let jpeg = vec![id as u8];
+        tx.send_replace(Some(StarFrame {
+            id,
+            start_s: 200.0,
+            end_s: 200.2,
+            width: 1456,
+            height: 1088,
+            centroids: vec![Default::default(); 25],
+            preview_jpeg: Some(jpeg.clone()),
+            ..Default::default()
+        }));
+        let report = event(&mut events).await;
+        assert_eq!(report.frame_id, id);
+        assert_eq!(report.preview_seq, Some(id));
+        assert_eq!(live.preview(id).unwrap().jpeg, jpeg);
+        let field = session.snapshot(200.2).field.unwrap();
+        assert_eq!(field.db_min_fov_deg, 10.0);
+        assert_eq!(field.db_max_fov_deg, 30.0);
+        assert_eq!(field.fov_deg, None);
+        if id >= 8 {
+            assert!(live.preview(id - 8).is_none());
+        }
+    }
+}
+
+struct HeldSolver {
+    starts: tokio::sync::mpsc::UnboundedSender<u64>,
+    release: tokio::sync::Semaphore,
+}
+impl Solver for HeldSolver {
+    fn solve(&self, frame: StarFrame, options: SolveOptions) -> SolveFuture<'_> {
+        self.starts.send(frame.id).unwrap();
+        Box::pin(async move {
+            self.release.acquire().await.unwrap().forget();
+            solve::solve_centroids(&DB, &[], (1456, 1088), &options)
+        })
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn previews_arrive_while_busy_and_the_next_solve_takes_only_the_newest_frame() {
+    let session = Arc::new(Session::default());
+    let (tx, frames) = tokio::sync::watch::channel(None);
+    let (_status_tx, status) = tokio::sync::watch::channel(finder::link::LinkStatus {
+        connected: true,
+        offset_s: Some(0.0),
+        ..Default::default()
+    });
+    let (starts, mut started) = tokio::sync::mpsc::unbounded_channel();
+    let solver = Arc::new(HeldSolver {
+        starts,
+        release: tokio::sync::Semaphore::new(0),
+    });
+    let gate = Arc::new(tokio::sync::Semaphore::new(0));
+    let live = finder::live::Live::start(
+        session.clone(),
+        Arc::new(FixedClock(200.2)),
+        frames,
+        status,
+        solver.clone(),
+        gate.clone(),
+        (10.0, 30.0),
+    );
+    let mut events = live.subscribe();
+    for id in 1..=4 {
+        tx.send_replace(Some(StarFrame {
+            id,
+            start_s: 200.0,
+            end_s: 200.2,
+            width: 1456,
+            height: 1088,
+            centroids: vec![Default::default(); 25],
+            preview_jpeg: Some(vec![id as u8]),
+            ..Default::default()
+        }));
+        tick().await;
+        assert_eq!(live.preview(id).unwrap().jpeg, vec![id as u8]);
+        assert!(session.snapshot(200.2).field.is_some());
+        if id == 1 {
+            assert!(started.try_recv().is_err());
+        } else if id == 2 {
+            gate.add_permits(1);
+            assert_eq!(started.recv().await, Some(2));
+        }
+    }
+    assert!(started.try_recv().is_err());
+    solver.release.add_permits(1);
+    let first = event(&mut events).await;
+    assert_eq!(first.frame_id, 2);
+    assert_eq!(first.preview_seq, Some(4));
+    assert_eq!(started.recv().await, Some(4));
+    solver.release.add_permits(1);
+    assert_eq!(event(&mut events).await.frame_id, 4);
+    assert!(started.try_recv().is_err());
+}
+
 #[test]
 fn unprojection_inverts_camera_distortion_and_rotation() {
     let frame = Frame::from_solution(&plate_solver::Solution {

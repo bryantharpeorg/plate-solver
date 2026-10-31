@@ -77,25 +77,81 @@ pub struct Preview {
     /// Tap centroids.
     pub centroids: Vec<scope_link::proto::Centroid>,
 }
-/// Owns and cancels the live tasks.
+/// Owns and cancels the live task.
 pub struct Live {
-    tasks: Vec<JoinHandle<()>>,
+    task: JoinHandle<()>,
     reports: broadcast::Sender<LiveReport>,
     previews: Arc<Mutex<VecDeque<Preview>>>,
 }
 impl Drop for Live {
     fn drop(&mut self) {
-        for task in &self.tasks {
-            task.abort();
+        self.task.abort();
+    }
+}
+
+// One receiver records receipt before a solve can use the frame. It continues
+// receiving while the gate, clock map or solver is pending.
+struct Incoming {
+    frames: watch::Receiver<Option<StarFrame>>,
+    latest: Option<StarFrame>,
+    session: Arc<Session>,
+    clock: Arc<dyn Clock>,
+    previews: Arc<Mutex<VecDeque<Preview>>>,
+    db_range: (f64, f64),
+}
+impl Incoming {
+    fn receive(&mut self) {
+        let frame = self.frames.borrow_and_update().clone();
+        if let Some(frame) = &frame {
+            self.session
+                .receive_live_frame(frame.centroids.len(), self.clock.now(), self.db_range);
+            if let Some(jpeg) = &frame.preview_jpeg {
+                let mut history = self.previews.lock().expect("preview history");
+                if history.len() == 8 {
+                    history.pop_front();
+                }
+                history.push_back(Preview {
+                    frame_id: frame.id,
+                    jpeg: jpeg.clone(),
+                    centroids: frame.centroids.clone(),
+                });
+            }
+        }
+        self.latest = frame;
+    }
+
+    fn take(&mut self) -> Option<StarFrame> {
+        let changed = self.frames.borrow().has_changed();
+        if changed {
+            self.receive();
+        }
+        self.latest.take()
+    }
+
+    async fn changed(&mut self) -> Result<(), watch::error::RecvError> {
+        self.frames.changed().await?;
+        self.receive();
+        Ok(())
+    }
+
+    async fn during<F: Future>(&mut self, future: F) -> Result<F::Output, watch::error::RecvError> {
+        tokio::pin!(future);
+        loop {
+            tokio::select! {
+                biased;
+                result = self.changed() => result?,
+                result = &mut future => return Ok(result),
+            }
         }
     }
 }
+
 impl Live {
     /// Start alongside a link. The shared gate also serializes uploaded solves.
     pub fn start(
         session: Arc<Session>,
         clock: Arc<dyn Clock>,
-        mut frames: watch::Receiver<Option<StarFrame>>,
+        frames: watch::Receiver<Option<StarFrame>>,
         mut status: watch::Receiver<LinkStatus>,
         solver: Arc<dyn Solver>,
         gate: Arc<Semaphore>,
@@ -103,52 +159,32 @@ impl Live {
     ) -> Self {
         let (reports, _) = broadcast::channel(16);
         let previews = Arc::new(Mutex::new(VecDeque::with_capacity(8)));
-        let mut incoming = frames.clone();
-        let history = previews.clone();
-        let receive_session = session.clone();
-        let receive_clock = clock.clone();
-        // Receipt continues while solving, including previews on frames we drop.
-        let receive = tokio::spawn(async move {
-            loop {
-                let frame = incoming.borrow_and_update().clone();
-                if let Some(frame) = frame {
-                    receive_session.receive_live_frame(
-                        frame.centroids.len(),
-                        receive_clock.now(),
-                        db_range,
-                    );
-                    if let Some(jpeg) = frame.preview_jpeg {
-                        let mut history = history.lock().expect("preview history");
-                        if history.len() == 8 {
-                            history.pop_front();
-                        }
-                        history.push_back(Preview {
-                            frame_id: frame.id,
-                            jpeg,
-                            centroids: frame.centroids,
-                        });
-                    }
-                }
-                if incoming.changed().await.is_err() {
-                    return;
-                }
-            }
-        });
+        let mut incoming = Incoming {
+            frames,
+            latest: None,
+            session: session.clone(),
+            clock: clock.clone(),
+            previews: previews.clone(),
+            db_range,
+        };
         let outgoing = reports.clone();
         let history = previews.clone();
-        let solve = tokio::spawn(async move {
+        let task = tokio::spawn(async move {
+            incoming.receive();
             let mut estimate = None;
             let mut failures = 0;
             loop {
-                if frames.borrow().is_none() && frames.changed().await.is_err() {
-                    return;
-                }
-                while !status.borrow().connected || status.borrow().offset_s.is_none() {
-                    if status.changed().await.is_err() {
+                while incoming.latest.is_none() {
+                    if incoming.changed().await.is_err() {
                         return;
                     }
                 }
-                let Ok(permit) = gate.acquire().await else {
+                while !status.borrow().connected || status.borrow().offset_s.is_none() {
+                    if !matches!(incoming.during(status.changed()).await, Ok(Ok(()))) {
+                        return;
+                    }
+                }
+                let Ok(Ok(permit)) = incoming.during(gate.acquire()).await else {
                     return;
                 };
                 // A link may have dropped or been re-paired while an upload held the gate.
@@ -157,7 +193,7 @@ impl Live {
                     continue;
                 };
                 // Take the frame only once free, even if an upload held the gate.
-                let Some(frame) = frames.borrow_and_update().clone() else {
+                let Some(frame) = incoming.take() else {
                     continue;
                 };
                 let time = (frame.start_s + frame.end_s) / 2.0 - offset;
@@ -167,7 +203,11 @@ impl Live {
                         .map_or(SolveOptions::default().fov_max_error, |fov| 0.05 * fov),
                     ..SolveOptions::default()
                 };
-                let (mut report, solved) = solver.solve(frame.clone(), options).await;
+                let Ok((mut report, solved)) =
+                    incoming.during(solver.solve(frame.clone(), options)).await
+                else {
+                    return;
+                };
                 report.name = None;
                 let pointing_seq = solved.and_then(|solved| {
                     estimate = Some(solved.fov_deg());
@@ -198,13 +238,10 @@ impl Live {
                     guidance,
                 });
                 drop(permit);
-                if frames.changed().await.is_err() {
-                    return;
-                }
             }
         });
         Self {
-            tasks: vec![receive, solve],
+            task,
             reports,
             previews,
         }
