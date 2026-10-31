@@ -5,9 +5,13 @@ description: "Task list for 014-goto: GoTo"
 # Tasks: GoTo
 
 **Prerequisites** (plan.md § Prerequisites):
-- the owner approvals in spec.md are given;
-- the repository is wired for the Ergane merge queue;
-- 012 and 013 have landed (`depends_on_landed`).
+- 012 and 013 have landed (`depends_on_landed`), and this trio has been re-read against
+  013 as landed;
+- the owner approvals in spec.md are given, with approval 1's serial path named;
+- the repository is wired for the Ergane merge queue (met since 012);
+- the coding agent can run cargo (met since ergane#896);
+- `npm run e2e` waits its turn on one host-wide lock (met by #125, at 80cbd51);
+- every CI job that builds `scope-link` installs protoc (met by #126, at 7f487e5).
 
 **Rules for every story:**
 - Never edit an existing test, golden, `scripts/ci/`, `.github/` or `CODEOWNERS`.
@@ -16,6 +20,11 @@ description: "Task list for 014-goto: GoTo"
 - No test opens a serial device or moves real hardware. Mount behaviour is proven on the
   simulated mount or the byte-level emulator, in paused virtual time.
 - Read 013's modules before editing them, and keep to the names 013 actually landed.
+- No step runs a tool outside the factory's gates (plan.md § Plan traps, trap 5).
+- When the operator says a fix landed on `main`, run `git merge origin/main`; never
+  cherry-pick or copy an operator's commit (trap 8).
+- Node code reads time only through 013's `NodeClock` and waits only with `tokio::time`
+  (trap 12).
 
 ## Phase 1: User Story 1 — the mount port and the simulated mount (Priority: P1)
 
@@ -51,9 +60,9 @@ description: "Task list for 014-goto: GoTo"
 - [ ] T005 [US1] Add the simulated mount's test hooks in `crates/simulator/src/mount.rs`:
   push by hand, slip per move, power-cycle, and the true eyepiece direction. Make 013's
   simulated telescope follow the mount's true direction while a mount is connected, and
-  route 013's push by hand through the hook.
-- [ ] T006 [US1] Run the `lint` and `test` gates and
-  `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features`. Confirm
+  route 013's push by hand (`push_to` and `push_by` in `crates/simulator/src/controls.rs`)
+  through the hook.
+- [ ] T006 [US1] Run the `lint` and `test` gates. Confirm
   three things: `crates/scope-node/Cargo.toml` still depends on `star-detection` and
   `scope-link` only; `crates/math-core` is untouched; and every existing test is unchanged
   (US1-S9). Commit the green story (FR-001, FR-002, FR-003; US1-S1, US1-S2, US1-S3,
@@ -66,7 +75,7 @@ description: "Task list for 014-goto: GoTo"
 - [ ] T007 [US2] In a new `crates/scope-node/tests/stop_and_watchdog.rs`, write failing
   paused-time tests on the real node service over the simulated mount:
   - a stop drops the goto queued behind another command, and a goto sent after the stop's
-    reply is carried out (US2-S1);
+    reply is carried out (US2-S1), so the test fails if no goto is ever carried out;
   - with both axes moving, silent heartbeats lead to a stop command 1.0 ± 0.1 s after the
     last one (US2-S2);
   - after the watchdog's stop, resumed heartbeats leave the axis at rest until a new move
@@ -77,7 +86,8 @@ description: "Task list for 014-goto: GoTo"
 - [ ] T009 [US2] In a new `crates/scope-link/tests/mount_calls.rs`, write failing tests
   over the in-process link:
   - a move with no token fails with UNAUTHENTICATED and no axis moves (US2-S5);
-  - stop all with no token succeeds while both axes move, and both stop (US2-S6);
+  - stop all with no token succeeds while both axes move, and both stop (US2-S6), with
+    `ScopeNode` and `ScopeNodeStop` served together by `memory::serve_routes_on`;
   - describe and state through the link equal the simulator's counts per revolution, top
     rate, position, rate and moving flag exactly (US2-S7).
 
@@ -87,16 +97,21 @@ description: "Task list for 014-goto: GoTo"
   a new `crates/scope-node/src/mount/queue.rs`. Stop raises the epoch, clears the queue
   and commands the stop at once, and older-epoch commands are dropped.
 - [ ] T011 [US2] Implement the watchdog in a new `crates/scope-node/src/mount/watchdog.rs`:
-  a 50 ms tick on the node's monotonic clock that calls `stop_all` at 1 s since the last
-  heartbeat and marks the link lost. Nothing resumes on its own.
-- [ ] T012 [US2] In 013's frame loop in `crates/scope-node`, read both axes' positions at
-  exposure start and end while a mount is connected.
-- [ ] T013 [US2] Add `DescribeMount`, `AxisState`, `GotoAxis`, `RateAxis` and `StopAll` to
-  `crates/scope-link/proto/scope_node/v1/scope_node.proto`, and optional `axis_start` and
-  `axis_end` to `StarFrame`, on new field numbers only and with no `[...]` in comments.
-  Exempt `StopAll` alone from 013's token interceptor. Serve the calls from the node over
-  the queue, and add the matching calls to the console's link client.
-- [ ] T014 [US2] Run the `lint` and `test` gates and the rustdoc build. Confirm that the
+  a 50 ms `tokio::time` tick, reading 013's `NodeClock`, that calls `stop_all` at 1 s since
+  the last heartbeat and marks the link lost. Nothing resumes on its own. Declare `queue`
+  and `watchdog` in `crates/scope-node/src/mount/mod.rs`.
+- [ ] T012 [US2] In 013's capture loop, `crates/scope-node/src/capture.rs`, read both axes'
+  positions at exposure start and end while a mount is connected.
+- [ ] T013 [US2] Add `DescribeMount`, `AxisState`, `GotoAxis` and `RateAxis` to
+  `service ScopeNode` in `crates/scope-link/proto/scope_node/v1/scope_node.proto`, a new
+  `service ScopeNodeStop` holding only `StopAll`, and optional `axis_start` and `axis_end`
+  to `StarFrame`, on new field numbers only and with no `[...]` in comments. Add
+  `serve_routes_on` to `crates/scope-link/src/memory.rs`, keeping `serve_on`. Serve both
+  services from 013's `crates/scope-node/src/service.rs` over the queue, `ScopeNode` with
+  013's `TokenInterceptor` and `ScopeNodeStop` with none, and from 013's `SimNode` in
+  `crates/simulator/src/node.rs`. Add the matching calls to the console's link client,
+  `crates/finder/src/link.rs`.
+- [ ] T014 [US2] Run the `lint` and `test` gates. Confirm that the
   proto change only adds, and that every existing test in `crates/scope-link` and
   `crates/scope-node` is unchanged (US2-S8). Commit the green story (FR-004, FR-005,
   FR-006; US2-S1, US2-S2, US2-S3, US2-S4, US2-S5, US2-S6, US2-S7, US2-S8).
@@ -129,6 +144,11 @@ description: "Task list for 014-goto: GoTo"
   - the probe sequence `:e1`, `:a1`, `:b1`, `:g1`, `:q1010000`, `:j1` in order, and its
     report's fields (US3-S14).
 
+  In a new `crates/scope-node/tests/mount_config.rs`, write failing CLI tests of
+  `scope-node --check-config`: a `[mount]` table with `device = "/dev/ttyUSB0"` prints the
+  device and exits 0; no `[mount]` table prints that no mount is configured and exits 0;
+  an unknown key in `[mount]`, or no `device`, exits nonzero naming the key (US3-S16).
+
 ### Implementation
 
 - [ ] T018 [US3] Implement the codec (24-bit little-endian hex, the 0x800000 offset,
@@ -148,16 +168,20 @@ description: "Task list for 014-goto: GoTo"
   - reversing by stop and wait;
   - the `!2` retry;
   - stop by `:K`, then `:L`.
-- [ ] T022 [US3] Add `serialport` with `default-features = false` to
-  `crates/scope-node/Cargo.toml` and update `Cargo.lock`. Open the device in a new
-  `crates/scope-node/src/mount/skywatcher/serial.rs`, the only untested shell. Add
-  `--probe-mount DEVICE` to `crates/scope-node/src/main.rs`, over a probe function that
-  takes any byte stream.
-- [ ] T023 [US3] Run the `lint` and `test` gates and the rustdoc build. Confirm that
-  `serialport` (or `rustix`) is the only new dependency and that opening the device is the
-  only code path no test reaches (US3-S15). Commit the green story (FR-007, FR-008,
-  FR-009; US3-S1, US3-S2, US3-S3, US3-S4, US3-S5, US3-S6, US3-S7, US3-S8, US3-S9, US3-S10,
-  US3-S11, US3-S12, US3-S13, US3-S14, US3-S15).
+- [ ] T022 [US3] Add the serial path the owner chose (spec.md, owner approval 1) to
+  `crates/scope-node/Cargo.toml`, and update `Cargo.lock` by running cargo once without
+  `--locked` (plan.md § Plan traps, trap 13). Open the device in a new
+  `crates/scope-node/src/mount/skywatcher/serial.rs`, the only untested shell, and declare
+  the adapter's modules in `crates/scope-node/src/mount/skywatcher/mod.rs` and
+  `crates/scope-node/src/mount/mod.rs`. Add the optional `[mount]` table (`device`) to
+  013's `crates/scope-node/src/config.rs`, printed by `--check-config`. In
+  `crates/scope-node/src/main.rs`, add `--probe-mount DEVICE` over a probe function that
+  takes any byte stream, and drive the mount from the `[mount]` table when it is set.
+- [ ] T023 [US3] Run the `lint` and `test` gates. Confirm that the chosen serial path is
+  the only new dependency and that opening the device is the only code path no test
+  reaches (US3-S15). Commit the green story (FR-007, FR-008, FR-009; US3-S1, US3-S2,
+  US3-S3, US3-S4, US3-S5, US3-S6, US3-S7, US3-S8, US3-S9, US3-S10, US3-S11, US3-S12,
+  US3-S13, US3-S14, US3-S15, US3-S16).
 
 ## Phase 4: User Story 4 — apparent altitude (Priority: P1)
 
@@ -175,7 +199,7 @@ description: "Task list for 014-goto: GoTo"
 - [ ] T025 [US4] Implement `apparent_from_true` (Saemundsson, Meeus 16.4) and
   `true_from_apparent` (Bennett, Meeus 16.3) for 1010 hPa and 10 °C in
   `crates/finder/src/ephemeris.rs`, with docs.
-- [ ] T026 [US4] Run the `lint` and `test` gates and the rustdoc build. Confirm that
+- [ ] T026 [US4] Run the `lint` and `test` gates. Confirm that
   `sky::alt_az` and `alt_az_matches_meeus_example_13b` are unchanged (US4-S4, US4-S5).
   Commit the green story (FR-010; US4-S1, US4-S2, US4-S3, US4-S4, US4-S5).
 
@@ -220,13 +244,15 @@ description: "Task list for 014-goto: GoTo"
   thresholds; and the fixed terms' 20-sync, 180° × 30° rule with `needs`.
 - [ ] T031 [US5] Implement sync intake in `crates/finder/src/model.rs` (the 0.2°/s rule,
   interpolation to mid-exposure, thinning to one per 2° per 2 minutes, refraction removed
-  first). In 013's live loop, hand each solved star frame with axis positions to it. Keep
+  first). In 013's live loop, `crates/finder/src/live.rs`, hand each solved star frame
+  with axis positions to it. Keep
   `/api/solve` uploads out of it.
 - [ ] T032 [US5] In `crates/finder/src/session.rs`, keep the night's syncs, epochs and base
   tilt until the Sun's next upper transit after the first sync, across restarts, and the
   fixed terms until reset. Add `model` and `mount` to `GET /api/session` in
-  `crates/finder/src/api.rs`.
-- [ ] T033 [US5] Run the `lint` and `test` gates and the rustdoc build. Confirm that the
+  `crates/finder/src/api.rs`, each left out of the body until it has a value, so
+  `crates/finder/tests/session_api.rs` stays as it is (plan.md § Plan traps, trap 4).
+- [ ] T033 [US5] Run the `lint` and `test` gates. Confirm that the
   fit adds no dependency, that `crates/math-core` is untouched, and that every existing
   `finder` test is unchanged (US5-S14). Commit the green story (FR-011, FR-012, FR-013,
   FR-014, FR-015; US5-S1, US5-S2, US5-S3, US5-S4, US5-S5, US5-S6, US5-S7, US5-S8, US5-S9,
@@ -262,7 +288,9 @@ description: "Task list for 014-goto: GoTo"
   - the Sun at +5° → 409 "Sun is up", and no axis moves (US6-S6);
   - M8 at 02:00 → 409 below the horizon, and no axis moves (US6-S14);
   - no mount, or no sync → 409 naming each reason, and no axis moves (US6-S15);
-  - a foreign `Origin` on `POST /api/goto` → 403, and no axis moves (US6-S17).
+  - a foreign `Origin` on `POST /api/goto` → 403, and no axis moves (US6-S17);
+  - first, with the simulated mount connected, an accepted GoTo moves an axis, so "no axis
+    moves" is asserted against a mount that can (plan.md § Plan traps, trap 11).
 
 ### Implementation
 
@@ -283,7 +311,7 @@ description: "Task list for 014-goto: GoTo"
   same-origin check with its 409 reasons, and `POST /api/stop` with no body and no
   same-origin check. Add `goto` progress to `GET /api/session`. Document both routes in
   the crate docs and `crates/finder/README.md`.
-- [ ] T041 [US6] Run the `lint` and `test` gates and the rustdoc build. Confirm that every
+- [ ] T041 [US6] Run the `lint` and `test` gates. Confirm that every
   existing test is unchanged and that no field or option turns off the Sun guard. Commit
   the green story (FR-016, FR-017, FR-018, FR-019, FR-020, FR-021; US6-S1, US6-S2, US6-S3,
   US6-S4, US6-S5, US6-S6, US6-S7, US6-S8, US6-S9, US6-S10, US6-S11, US6-S12, US6-S13,
@@ -311,8 +339,8 @@ description: "Task list for 014-goto: GoTo"
 - [ ] T045 [US7] In `crates/finder/src/api.rs`, add `POST /api/model/second-sync` and
   `POST /api/model/reset` (`{"what": "night" | "fixed"}`) behind 012's same-origin check.
   Document them in the crate docs and `crates/finder/README.md`.
-- [ ] T046 [US7] Run the `lint` and `test` gates and the rustdoc build, with every existing
-  test unchanged. Commit the green story (FR-022, FR-023; US7-S1, US7-S2, US7-S3).
+- [ ] T046 [US7] Run the `lint` and `test` gates, with every existing test unchanged.
+  Commit the green story (FR-022, FR-023; US7-S1, US7-S2, US7-S3).
 
 ## Phase 8: User Story 8 — GoTo and Stop on the page, and Setup's section (Priority: P2)
 
@@ -333,19 +361,23 @@ description: "Task list for 014-goto: GoTo"
 
 ### Implementation
 
-- [ ] T048 [US8] Implement `GoToControl` in the guidance block, and `StopButton` in
-  `TopBar` on every page whenever the mount may be moving: never disabled, never inside a
-  sheet, at least 44 px tall.
-- [ ] T049 [US8] Implement `MountSection` on `SetupPage`.
+- [ ] T048 [US8] Add the session's `goto`, `model` and `mount` to
+  `crates/finder/web/src/api.ts`. Implement `GoToControl` in
+  `src/components/GuidanceBlock.tsx`, and `StopButton` in `src/components/TopBar.tsx`,
+  which `src/App.tsx` renders above the console and Setup alike and hands the session's
+  `mount` and `goto`, whenever the mount may be
+  moving: never disabled, never inside a sheet, at least 44 px tall. Both render nothing
+  when the session has no `mount` (plan.md § Plan traps, trap 9).
+- [ ] T049 [US8] Implement `MountSection` on `src/components/SetupPage.tsx`.
 - [ ] T050 [US8] Record GoTo, Stop and the mount and model section as built in
   `DESIGN.md` and `.impeccable/design.json` (US8-S7).
 - [ ] T051 [US8] In `crates/finder/web`, run `npm ci`, `npm run typecheck`,
   `npm run format:check` and `npm test`, then `npm run build`. Commit the rebuilt
-  `web/dist`, and confirm the build-freshness check passes with `package.json`
-  dependencies unchanged (US8-S8).
+  `web/dist`, and confirm that `git status --porcelain -- dist` lists nothing, with
+  `package.json` dependencies unchanged (US8-S8).
 - [ ] T052 [US8] Run the `lint` and `test` gates, with every existing Vitest file
-  unchanged. Commit the green story (FR-024, FR-025, FR-026; US8-S1, US8-S2, US8-S3,
-  US8-S4, US8-S5, US8-S6, US8-S7, US8-S8).
+  unchanged and `e2e/session.spec.ts` green. Commit the green story (FR-024, FR-025,
+  FR-026; US8-S1, US8-S2, US8-S3, US8-S4, US8-S5, US8-S6, US8-S7, US8-S8).
 
 ## Phase 9: User Story 9 — a night on the simulator, end to end (Priority: P3)
 
@@ -354,7 +386,8 @@ description: "Task list for 014-goto: GoTo"
 - [ ] T053 [US9] In a new `crates/finder/tests/night_sim.rs`, write the paused-time night
   from `--sim-start 2026-01-16T02:00:00Z` at 40° N, 75° W: first sync, second sync, five
   GoTos, a hand push and a GoTo, a Stop mid-slew, and a dropped link mid-slew. Every GoTo
-  ends within 1′, and every halt leaves both axes at rest (US9-S1).
+  ends within 1′, and every halt leaves both axes at rest (US9-S1). It runs in the `test`
+  gate's `cargo test --workspace --all-targets --all-features --locked`.
 - [ ] T054 [US9] In a new `crates/finder/web/e2e/goto.spec.ts`, write the Playwright tests
   for 013's `simulate` project:
   - a GoTo to M42 from the page, with the block's progress and the target reticle within
@@ -368,12 +401,13 @@ description: "Task list for 014-goto: GoTo"
 
 ### Implementation
 
-- [ ] T055 [US9] If 013's `simulate` project names its spec files, add `e2e/goto.spec.ts`
-  to its match in `crates/finder/web/playwright.config.ts` (owner approval 3), changing
-  nothing else (US9-S7).
-- [ ] T056 [US9] Run the `lint` and `test` gates, and `npm run e2e` in `crates/finder/web`
-  with every earlier end-to-end test unchanged and green. Commit the green story (FR-027,
-  FR-028; US9-S1, US9-S2, US9-S3, US9-S4, US9-S5, US9-S6, US9-S7).
+- [ ] T055 [US9] In `crates/finder/web/playwright.config.ts`, add `e2e/goto.spec.ts` to
+  013's `simulate` project's match and to the `default` project's ignore (owner approval
+  3), changing nothing else (US9-S7).
+- [ ] T056 [US9] Run the `lint` and `test` gates, whose `test` gate runs `CI=1 npm run e2e`
+  in `crates/finder/web`, with every earlier end-to-end test unchanged and green. Commit
+  the green story (FR-027, FR-028; US9-S1, US9-S2, US9-S3, US9-S4, US9-S5, US9-S6,
+  US9-S7).
 
 ## Execution Order
 
@@ -393,6 +427,7 @@ one.
   `Cargo.lock`.
 - **`[P]`** marks nothing here: every task within a story shares a file with another.
 - **Out of scope for every story:** `crates/math-core`, `proto/`, `scripts/ci/`,
-  `.github/`, existing tests, and Playwright servers and projects.
+  `.github/`, `fixtures/`, existing tests, and Playwright servers and projects beyond
+  owner approval 3's two lines.
 - **Outside the factory, after landing:** the Impeccable review (after US8), and the
   maintainer's checks at the telescope with the musl cross-build (spec § Assumptions).

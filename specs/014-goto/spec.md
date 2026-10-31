@@ -5,6 +5,10 @@ depends_on_landed: [012-targets-and-push-to, 013-live-finder]
 # now the feature's only specification. It stays draft until the owner has reviewed
 # it and given the approvals listed under "Owner approvals". Flipping it to `ready`
 # is the act that dispatches it.
+# Refined 2026-10-31 against main at 2a2f9d2 (013's US1, US8 and US9 landed, US2 in the
+# merge queue) and the factory's gates as 013 runs them (plan.md § Plan traps and
+# § Refinement Record). It stays draft until 013 has landed and the prerequisites in
+# plan.md are met; the paths marked "013's" are re-read against 013 as landed then.
 ---
 
 # Feature Specification: GoTo
@@ -76,25 +80,52 @@ feature (015).
   spec and flipping it to `ready`. The approvals are listed below so that the flip is an
   informed act.
 
+### Session 2026-10-31 (refinement against main and 013)
+
+- Q: How is stop all exempt from the token, when 013's `TokenInterceptor` guards the whole
+  `ScopeNode` service? → A: Stop all is the one call of a second service, `ScopeNodeStop`,
+  in the same proto file and package, served beside `ScopeNode` with no interceptor.
+  tonic's server interceptor sees only a request's metadata, never which call it is, so
+  one interceptor cannot exempt one call (plan.md § Decisions).
+- Q: How does the node on the telescope know it has a mount? → A: From an optional
+  `[mount]` table in its config file, naming the serial device. Without it the node runs
+  with no mount, and its frames carry no axis positions (FR-009, US3-S16).
+- Q: Which serial code? → A: The owner chooses at the flip (owner approval 1). Since 013,
+  `rustix` is already a dependency of `crates/scope-node`, so its `termios` feature is a
+  path with no new crate, beside `serialport`.
+- Q: What do the new session fields read before they have a value? → A: They are left out
+  of the body, as 013's are, so the whole-body test of a fresh session stays as it is.
+
 ## Owner approvals
 
 Flipping this spec to `ready` approves the following. No existing requirement is modified,
-and no existing test, `ci.yml` or Playwright server or project changes.
+no existing test or `ci.yml` changes, and no Playwright server or project changes beyond
+approval 3's two lines.
 
-1. **A new dependency.** It is `serialport`, with `default-features = false` (MPL-2.0, in
-   `deny.toml`'s allow-list, no libudev), in `crates/scope-node`. Alternatively, it is a
-   few lines of termios through `rustix`, if `serialport` cannot build for
-   `aarch64-unknown-linux-musl` (FR-009).
+1. **The serial device's code**, one of two, which the owner names at the flip (plan.md
+   § Prerequisites, item 2):
+   - `serialport` with `default-features = false` (MPL-2.0, in `deny.toml`'s allow-list,
+     no libudev), a new crate in `crates/scope-node`; or
+   - `rustix`'s `termios` and `fs` features. `rustix` is already a dependency of
+     `crates/scope-node` since 013 (its `time` feature, for the node's clock), so this
+     adds no crate.
+
+   If `serialport` is chosen and does not build for `aarch64-unknown-linux-musl` at
+   bring-up, `rustix`'s termios replaces it behind the same interface (FR-009).
 2. **Stop is open to anyone.**
    - `POST /api/stop` skips the same-origin check that 012 put on every route that changes
      the session. 012 already left room for a route that only stops the telescope.
-   - The link's stop-all call needs no token.
+   - The link's stop-all call needs no token. It is its own service, `ScopeNodeStop`,
+     served without the token interceptor.
 
    So anyone who can reach the console or the node can halt the telescope, and no one else
    can move it (FR-006, FR-020).
-3. **One possible line of Playwright config.** 013 created the `simulate` project. If
-   that project matches its spec files by name rather than by pattern, US9 adds
-   `e2e/goto.spec.ts` to its match. No server, project or existing test changes (FR-028).
+3. **Two lines of Playwright config.** 013's `simulate` project matches only
+   `e2e/simulate.spec.ts`, and its `default` project ignores that file by name (013
+   plan.md, User Story 10). US9 adds `e2e/goto.spec.ts` to the `simulate` project's match
+   and to the `default` project's ignore. The `session` project matches only
+   `e2e/session.spec.ts` and is unchanged. No server, project or existing test changes
+   (FR-028). Re-read against 013's US10 as landed, at the flip.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -286,8 +317,15 @@ No serial device is opened.
     names the board version, counts per revolution, timer frequency, high-speed ratio,
     auxiliary-encoder support and axis position.
 15. **Given** the story's diff, **When** it is read, **Then** `crates/scope-node/Cargo.toml`
-    adds `serialport` with `default-features = false` (or `rustix` for termios) and no
-    other new dependency, and opening the device is the only code path no test reaches.
+    adds only the serial path the owner chose (owner approval 1): `serialport` with
+    `default-features = false`, or `rustix`'s `termios` and `fs` features. Opening the
+    device is the only code path no test reaches.
+16. **Given** a config file whose `[mount]` table names `device = "/dev/ttyUSB0"`, **When**
+    `scope-node --check-config` runs on it, **Then** a CLI test in
+    `crates/scope-node/tests/mount_config.rs` asserts that it prints the mount's device and
+    exits 0. **And** with no `[mount]` table it prints that no mount is configured and
+    exits 0, and a `[mount]` table with an unknown key, or with no `device`, exits nonzero
+    naming the key.
 
 ---
 
@@ -546,7 +584,8 @@ it consumes US6's and US7's API.
   `src/components/StopButton.test.tsx` and `src/components/MountSection.test.tsx`;
 - every existing Vitest file is unchanged.
 
-Then CI's build-freshness check passes on the rebuilt `web/dist`.
+Then `npm run build` rebuilds `web/dist`, and `git status --porcelain -- dist` lists
+nothing once it is committed: the `test` gate runs both.
 
 **Acceptance Scenarios**:
 
@@ -574,9 +613,9 @@ Then CI's build-freshness check passes on the rebuilt `web/dist`.
 7. **Given** `DESIGN.md` and `.impeccable/design.json`, **When** they are read, **Then**
    they describe GoTo in the guidance block, Stop in the top bar, and the mount and model
    section as built.
-8. **Given** the rebuilt `web/dist`, **When** CI's build-freshness check runs, **Then** the
-   committed build is the build of this source, and `package.json` dependencies are
-   unchanged.
+8. **Given** the committed `web/dist`, **When** the `test` gate runs `npm run build` and
+   then `git status --porcelain -- dist`, **Then** it lists nothing, so the committed build
+   is the build of this source, and `package.json` dependencies are unchanged.
 
 ---
 
@@ -606,8 +645,9 @@ unchanged and green.
 1. **Given** the simulator and the console in one paused-time runtime from
    `--sim-start 2026-01-16T02:00:00Z` at 40° N, 75° W, **When**
    `crates/finder/tests/night_sim.rs` runs the night in this order, **Then** it asserts
-   that every GoTo ends within 1′, that the stops leave both axes at rest, and that the
-   test passes under the coverage job. The night:
+   that every GoTo ends within 1′ and that the stops leave both axes at rest. It runs in
+   the `test` gate's `cargo test --workspace --all-targets --all-features --locked`. The
+   night:
    1. the first sync, then the second sync;
    2. five GoTos;
    3. a hand push;
@@ -631,8 +671,9 @@ unchanged and green.
    test measures Stop, **Then** it asserts that Stop's bounding box is at least 44 px tall,
    and that the element at its centre is Stop itself.
 7. **Given** the story's diff, **When** it is read, **Then** every earlier end-to-end test
-   and the Playwright servers and projects are unchanged. At most, the `simulate` project's
-   file match gains `e2e/goto.spec.ts` (owner approval 3).
+   and the Playwright servers and projects are unchanged, except that the `simulate`
+   project's match and the `default` project's ignore gain `e2e/goto.spec.ts` (owner
+   approval 3).
 
 ---
 
@@ -740,12 +781,15 @@ unchanged and green.
   A byte-level emulator of the mount SHALL stand in for it in tests. **Refs**: the
   Sky-Watcher motor controller command set; INDI's SkyWatcher driver (retries, fast mode);
   `docs/research/2026-10-21-synscan-mount-control.md` §3–5.
-- **FR-009**: The adapter SHALL open the serial device with `serialport`
-  (`default-features = false`), or with termios through `rustix` if `serialport` cannot
-  build for `aarch64-unknown-linux-musl`. *(Owner approval 1.)* `scope-node --probe-mount
-  DEVICE` SHALL run the first-test sequence (`:e1`, `:a1`, `:b1`, `:g1`, `:q1010000`,
-  `:j1`) and print its results, for bring-up. **Refs**:
-  `docs/research/2026-10-21-synscan-mount-control.md` (first test); `deny.toml`.
+- **FR-009**: The adapter SHALL open the serial device with the serial path the owner
+  chose: `serialport` (`default-features = false`), or termios through `rustix`.
+  *(Owner approval 1.)* `scope-node --probe-mount DEVICE` SHALL run the first-test
+  sequence (`:e1`, `:a1`, `:b1`, `:g1`, `:q1010000`, `:j1`) and print its results, for
+  bring-up. The node's config file SHALL take an optional `[mount]` table naming the
+  serial `device`. With it, the node drives the mount through the Sky-Watcher adapter on
+  that device; without it, the node runs with no mount. **Refs**:
+  `docs/research/2026-10-21-synscan-mount-control.md` (first test); `deny.toml`; 013's
+  FR-007 (the node's config).
 
 **Apparent altitude** (US4):
 
@@ -938,8 +982,9 @@ unchanged and green.
     reports.
 - **Done by the maintainer at the telescope, outside the factory**, after the spec lands:
   - the checks listed in Clarifications;
-  - a cross-build of `scope-node` for `aarch64-unknown-linux-musl`, which settles whether
-    `serialport` builds there or termios through `rustix` is needed.
+  - a cross-build of `scope-node` for `aarch64-unknown-linux-musl`, which settles, if the
+    owner chose `serialport`, whether it builds there or termios through `rustix` replaces
+    it.
 
   Neither is evidence a diff can carry.
 - **Done by the maintainer after US8 lands:** the Impeccable review of GoTo, Stop and the
@@ -947,14 +992,14 @@ unchanged and green.
 - **Hardware facts that come from the mount, not the code:** the 400P's board, its motor
   firmware version and its counts per revolution. `--probe-mount` records them at
   bring-up.
-- **The factory's gates and CI:**
-  - The factory's local gates are `lint` and `test`, which are cargo only.
-  - The page story (US8) must also pass `npm run typecheck`, `npm run format:check`,
-    `npm test` and the build-freshness check. The end-to-end story (US9) must pass
-    `npm run e2e`.
-  - All of these run in CI's required `finder-page` check in the merge queue, and every
-    story's tasks run them before proposing. `cargo-deny` and the MSRV build check US3's
-    new dependency in the queue.
+- **The factory's gates and CI** (as of 3fc6a24; plan.md § Verification):
+  - The `lint` gate runs `cargo fmt`, clippy and rustdoc. The `test` gate runs the
+    workspace's tests and, in `crates/finder/web`, `npm ci`, `npm run typecheck`,
+    `npm run format:check`, `npm test`, `npm run build`, the build-freshness check and
+    `CI=1 npm run e2e`. Every story runs both.
+  - The merge queue's CI also runs coverage, the cedar eval, `cargo-deny`, `cargo machete`,
+    the secret scan and the MSRV build, which the sandbox cannot run (plan.md § Plan traps,
+    trap 5). `cargo-deny` and the MSRV build check US3's serial code there.
 
 ## Work Graph
 
