@@ -8,6 +8,9 @@ repository.workspace = true
 description = "Finder console: a local web page that plate-solves a frame and shows where it points, what is in the field and what to look at next."
 
 [dependencies]
+# US7: the in-process desk node and the SSE broadcast-to-stream adapter.
+simulator = { version = "0.1.0", path = "../simulator" }
+futures-util = { version = "0.3.31", default-features = false }
 # US5: the paired protocol and tonic client; tower and hyper-util adapt test connectors.
 scope-link = { version = "0.1.0", path = "../scope-link" }
 tonic = "0.14.6"
@@ -28,6 +31,4 @@ serde_json = "1.0"
 tokio = { version = "1.53.1", features = ["fs", "macros", "rt-multi-thread", "net", "sync", "time"] }
 
 [dev-dependencies]
-simulator = { version = "0.1.0", path = "../simulator" }
 tokio = { version = "1.53.1", features = ["test-util"] }
-futures-util = { version = "0.3.31", default-features = false }
