@@ -391,16 +391,38 @@ pub fn solve_frame_with_frame(
         cedar.detect_hot_pixels,
     );
     let detect = ms(t);
-    // The solver speaks (y, x); `Star` names x (column) and y (row).
-    let centroids: Vec<(f64, f64)> = detected
+    let detected = detected.iter().map(|s| [s.x, s.y]).collect();
+    solve_detected(db, detected, (image.width, image.height), options, detect)
+}
+
+/// Solve a node's brightest-first centroids, keeping the solved projection.
+/// Pixel coordinates on the link are `(x, y)`; the solver takes `(y, x)`.
+pub fn solve_centroids(
+    db: &PatternDatabase,
+    centroids: &[scope_link::proto::Centroid],
+    size: (usize, usize),
+    options: &SolveOptions,
+) -> (SolveReport, Option<Frame>) {
+    let detected = centroids.iter().map(|s| [s.x, s.y]).collect();
+    solve_detected(db, detected, size, options, 0.0)
+}
+
+fn solve_detected(
+    db: &PatternDatabase,
+    detected: Vec<[f64; 2]>,
+    (width, height): (usize, usize),
+    options: &SolveOptions,
+    detect: f64,
+) -> (SolveReport, Option<Frame>) {
+    let centroids: Vec<_> = detected
         .iter()
         .take(options.stars)
-        .map(|s| (s.y, s.x))
+        .map(|s| (s[1], s[0]))
         .collect();
     let t = Instant::now();
     let solution = solve_from_centroids(
         &centroids,
-        (image.width, image.height),
+        (width, height),
         options.fov,
         options.fov_max_error,
         MATCH_RADIUS,
@@ -417,18 +439,14 @@ pub fn solve_frame_with_frame(
         name: None,
         status,
         hint: status.hint(),
-        width: image.width,
-        height: image.height,
+        width,
+        height,
         timing_ms: Timing {
             decode: 0.0,
             detect,
             solve,
         },
-        detected: detected
-            .iter()
-            .take(MAX_DETECTED)
-            .map(|s| [s.x, s.y])
-            .collect(),
+        detected: detected.into_iter().take(MAX_DETECTED).collect(),
         used: centroids.len(),
         pointing: None,
         pointing_seq: None,

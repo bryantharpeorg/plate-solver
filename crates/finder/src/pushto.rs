@@ -6,7 +6,7 @@ use serde::{Serialize, Serializer};
 
 use crate::catalog::{self, DeepSkyObject};
 use crate::ephemeris::{self, AltitudeState, Position};
-use crate::session::{Pointing, Site};
+use crate::session::{Pointing, PointingSource, Site};
 use crate::sky::{self, Frame, Observer};
 use crate::targets::Target;
 
@@ -85,6 +85,9 @@ pub struct Guidance {
     /// Target geometry on or off the latest pointing's frame, when one exists.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub placement: Option<Placement>,
+    /// Live pointing is more than five console seconds old; no turn or tilt is given.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stale: Option<bool>,
 }
 
 /// Read guidance without advancing the latest pointing's held horizontal coordinates.
@@ -106,6 +109,7 @@ pub fn guidance(
         turn_deg: None,
         tilt_deg: None,
         placement: pointing.map(|p| placement(target, &p.frame)),
+        stale: None,
     };
     if let Some(site) = site {
         let observer = observer(site, time);
@@ -131,6 +135,24 @@ pub fn guidance(
                 result.tilt_deg = Some(tilt);
             }
         }
+    }
+    result
+}
+
+/// Apply live freshness regardless of the link's current connection state.
+pub fn guidance_with_source(
+    target: &Target,
+    site: Option<Site>,
+    min_alt_deg: f64,
+    time: f64,
+    pointing: Option<&Pointing>,
+    source: PointingSource,
+) -> Guidance {
+    let mut result = guidance(target, site, min_alt_deg, time, pointing);
+    if source == PointingSource::Live && pointing.is_some_and(|p| time - p.time > 5.0) {
+        result.stale = Some(true);
+        result.turn_deg = None;
+        result.tilt_deg = None;
     }
     result
 }

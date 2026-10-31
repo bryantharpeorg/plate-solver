@@ -105,10 +105,36 @@ impl Frame {
         Some((x, y))
     }
 
+    /// Sky direction of a full-frame pixel, undoing lens distortion and attitude.
+    pub fn unproject(&self, (x, y): (f64, f64)) -> Option<UnitVector> {
+        if !x.is_finite() || !y.is_finite() {
+            return None;
+        }
+        let pixels = math_core::undistort_centroids(
+            &[(y, x)],
+            self.camera.width,
+            self.camera.height,
+            self.distortion,
+        );
+        let v = self.camera.unproject(&pixels)[0]?;
+        let r = self.rotation.rows;
+        UnitVector {
+            x: r[0][0] * v.x + r[1][0] * v.y + r[2][0] * v.z,
+            y: r[0][1] * v.x + r[1][1] * v.y + r[2][1] * v.z,
+            z: r[0][2] * v.x + r[1][2] * v.y + r[2][2] * v.z,
+        }
+        .normalize()
+    }
+
     /// Whether `(x, y)` lies inside the image grown by `margin` pixels on every side.
     pub fn contains(&self, (x, y): (f64, f64), margin: f64) -> bool {
         let (w, h) = self.size();
         x > -margin && x < w + margin && y > -margin && y < h + margin
+    }
+
+    /// Horizontal field of view in degrees.
+    pub fn fov_deg(&self) -> f64 {
+        self.camera.fov.to_degrees()
     }
 
     /// Vertical field of view in radians (the horizontal one is the camera's `fov`).

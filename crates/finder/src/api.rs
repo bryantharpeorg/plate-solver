@@ -19,6 +19,7 @@ use tokio::sync::Semaphore;
 
 use crate::catalog::{self, SimilarReport};
 use crate::link::{LinkManager, Transport};
+use crate::live::{DbSolver, Live, Solver};
 use crate::samples::{self, SampleInfo, Samples};
 use crate::session::{Clock, Session, SessionEdit, SessionError, SessionView, SystemClock};
 use crate::sky::Observer;
@@ -51,6 +52,7 @@ pub struct AppState {
     clock: Arc<dyn Clock>,
     allowed_hosts: Arc<Vec<String>>,
     link: Option<Arc<LinkManager>>,
+    live: Option<Arc<Live>>,
 }
 
 impl AppState {
@@ -71,6 +73,7 @@ impl AppState {
             clock: Arc::new(SystemClock),
             allowed_hosts: Arc::new(Vec::new()),
             link: None,
+            live: None,
         }
     }
 
@@ -107,6 +110,43 @@ impl AppState {
     /// The running link, including its newest-frame and health subscriptions.
     pub fn link(&self) -> Option<Arc<LinkManager>> {
         self.link.clone()
+    }
+
+    /// Shared session, for integrations recording live pointings.
+    pub fn session(&self) -> Arc<Session> {
+        self.session.clone()
+    }
+
+    /// Start live solving after setting the session, clock and link.
+    pub fn with_live(self) -> Self {
+        let solver = Arc::new(DbSolver(self.db.clone()));
+        self.with_live_solver(solver)
+    }
+
+    /// Start with an injected async solver, for delayed and failing solves in tests.
+    pub fn with_live_solver(mut self, solver: Arc<dyn Solver>) -> Self {
+        let link = self
+            .link
+            .as_ref()
+            .expect("with_live requires with_link first");
+        self.live = Some(Arc::new(Live::start(
+            self.session.clone(),
+            self.clock.clone(),
+            link.frames(),
+            link.status(),
+            solver,
+            self.solve_gate.clone(),
+            (
+                f64::from(self.db.properties.min_fov),
+                f64::from(self.db.properties.max_fov),
+            ),
+        )));
+        self
+    }
+
+    /// Live reports and preview history for stream and calibration consumers.
+    pub fn live(&self) -> Option<Arc<Live>> {
+        self.live.clone()
     }
 
     /// Allow these DNS names for same-origin writes, in addition to IPs and localhost.
@@ -211,6 +251,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/similar", get(similar))
         .route("/api/targets", get(search_targets))
         .route("/api/session", get(get_session).put(put_session))
+        .route("/api/aim", post(set_aim).delete(reset_aim))
         .route("/api/{*rest}", get(api_not_found))
         .fallback(get(page))
         .with_state(state)
@@ -237,14 +278,86 @@ async fn put_session(
         .session
         .edit(edit, state.clock.now())
         .map(Json)
-        .map_err(|error| {
-            let status = match error {
-                SessionError::Invalid(_) => StatusCode::BAD_REQUEST,
-                SessionError::UnknownTarget(_) => StatusCode::NOT_FOUND,
-                SessionError::Storage(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            };
-            ApiError::new(status, error.to_string())
+        .map_err(session_error)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AimTap {
+    frame_id: u64,
+    x: f64,
+    y: f64,
+}
+
+async fn set_aim(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    tap: Result<Json<AimTap>, JsonRejection>,
+) -> Result<Json<SessionView>, ApiError> {
+    let Json(tap) = tap.map_err(|error| {
+        ApiError::new(
+            if error.status() == StatusCode::UNPROCESSABLE_ENTITY {
+                StatusCode::BAD_REQUEST
+            } else {
+                error.status()
+            },
+            error.body_text(),
+        )
+    })?;
+    let preview = state
+        .live
+        .as_ref()
+        .and_then(|live| live.preview(tap.frame_id))
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::CONFLICT,
+                "the console no longer holds that frame",
+            )
+        })?;
+    let star = preview
+        .centroids
+        .iter()
+        .filter_map(|star| {
+            let distance = (star.x - tap.x).hypot(star.y - tap.y);
+            (distance <= 10.0).then_some((distance, star))
         })
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, star)| star)
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "no star is close enough to the tap",
+            )
+        })?;
+    state
+        .session
+        .set_aim(
+            Some(crate::session::Aim {
+                x: star.x,
+                y: star.y,
+            }),
+            state.clock.now(),
+        )
+        .map(Json)
+        .map_err(session_error)
+}
+async fn reset_aim(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+) -> Result<Json<SessionView>, ApiError> {
+    state
+        .session
+        .set_aim(None, state.clock.now())
+        .map(Json)
+        .map_err(session_error)
+}
+fn session_error(error: SessionError) -> ApiError {
+    let status = match error {
+        SessionError::Invalid(_) => StatusCode::BAD_REQUEST,
+        SessionError::UnknownTarget(_) => StatusCode::NOT_FOUND,
+        SessionError::Storage(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    ApiError::new(status, error.to_string())
 }
 
 /// An error answered as JSON `{"error": "..."}`.

@@ -208,3 +208,33 @@ Library servers opt into the link with `AppState::with_link(Transport::Tcp)` aft
 setting their session and clock. `Transport::connector` injects a reusable stream
 connector for in-memory tests through the same client. `AppState::link` exposes health
 and newest-frame subscriptions. Without the builder, a configured node reads disconnected.
+
+The binary solves the newest star frame whenever free, dropping intervening frames.
+The last solved field estimates the next (5% allowance); three consecutive failures
+clear the estimate. `pointing.source` is `"live"` or `"upload"`; live pointings add
+`frame_id`. Live times are mid-exposure mapped through the link offset, including for
+altitude and azimuth. After five seconds, `guidance.stale: true` replaces turn and tilt,
+connected or disconnected. Uploaded pointings never expire.
+
+Calibrate by tapping a star centred in the eyepiece:
+
+```sh
+curl -X POST http://127.0.0.1:8080/api/aim \
+  -H 'Content-Type: application/json' \
+  -d '{"frame_id":42,"x":706,"y":420}'
+curl -X DELETE http://127.0.0.1:8080/api/aim
+```
+
+Both routes enforce the same-origin check and return the session. A tap snaps to the
+nearest centroid within 10 px of its preview frame. A miss answers 422 with
+`{"error":"no star is close enough to the tap"}`; an expired frame answers 409 with
+an `error`. The last eight preview frames are held. The snapped `aim: {x,y}` survives
+restarts until reset. Without an aim, reads omit it and pointings use the frame centre.
+Unprojection includes the solved camera, distortion and attitude.
+
+After the first star frame, reads include `field`: `fov_deg` (null until solved),
+`db_min_fov_deg`, `db_max_fov_deg`, and `unsolved_s`, the console seconds of frames
+holding at least ten stars without a solve. Any live solve resets that interval.
+Library servers call `with_live()` after `with_link`; `with_live_solver` injects a
+`live::Solver`. `AppState::live()` exposes reports and previews. Uploads and live
+solves share one gate.
