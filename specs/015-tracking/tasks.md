@@ -71,8 +71,10 @@ description: "Task list for 015-tracking: Tracking"
 ### Implementation
 
 - [ ] T007 [US2] In 014's simulated mount, `crates/simulator/src/mount.rs`:
-  - add `rate_error`, default 0, applied to every commanded rate;
-  - make the per-axis backlash a `backlash_deg` setting, default 0.3;
+  - add `rate_error` to `MountConfig`, default 0, applied to every commanded rate;
+  - keep 014's `backlash_deg`, one value for both axes with a default of 0.3, which
+    already makes the backlash a setting. Every existing `MountConfig` literal ends with
+    `..`, so the new field changes no existing test (plan.md § Plan traps, trap 16);
   - add a truth accessor for the base tilt and zero points.
 - [ ] T008 [US2] Add a public hook to 014's pointing model in `crates/finder/src/model.rs`
   that loads known base-tilt and zero-point terms, documented as being for tests and the
