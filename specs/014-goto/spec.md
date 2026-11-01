@@ -16,6 +16,10 @@ depends_on_landed: [012-targets-and-push-to, 013-live-finder]
 # Changed 2026-11-01 mid-epic by the owner, on US2's question d1a76f5e8e1b: the mount
 # calls are their own service, ScopeNodeMount, so 013's ScopeNode and its test servers
 # are unchanged (plan.md § Decisions; § Plan traps, trap 16).
+# Changed again 2026-11-01 by the owner, on US2's question cb055dc8c9d4: US2's three new
+# tests live in crates/simulator and crates/finder, which already reach what they test,
+# and finder gains one test-only dependency on scope-node (owner approval 4; plan.md
+# § Decisions; § Plan traps, trap 13).
 ---
 
 # Feature Specification: GoTo
@@ -116,6 +120,22 @@ feature (015).
   `axis_end: None` and nothing else (US2-S8). The owner chose this on 2026-11-01 over
   stubbing the four calls in both test servers.
 
+### Session 2026-11-01 (US2's question cb055dc8c9d4)
+
+- Q: US2's tests run the real node over the simulated mount, and the console's link
+  client over the node. `crates/scope-node` does not depend on `crates/simulator`, and
+  `crates/scope-link` depends on neither, so the tests cannot build where they were
+  placed without new dependencies, and `--locked` refuses the lockfile change. Where do
+  they go? → A: Where 013 put the same kind of test. `stop_and_watchdog.rs` and
+  `frame_positions.rs` go in `crates/simulator/tests/`, beside 013's `node.rs`, because
+  `simulator` already depends on `scope-node` and `scope-link`. `mount_calls.rs` goes in
+  `crates/finder/tests/`, beside 013's `link.rs`, because US2-S7 needs the console's link
+  client. `finder` gains one test-only dependency, on `scope-node` (owner approval 4),
+  which adds one line to `Cargo.lock` and no crate or version. The owner chose this on
+  2026-11-01 over test-only dependencies of `scope-node` on `simulator` and of
+  `scope-link` on `scope-node`, `simulator` and `finder`, which loop back on crates that
+  already depend on them.
+
 ## Owner approvals
 
 Flipping this spec to `ready` approves the following. No existing requirement is modified,
@@ -145,6 +165,12 @@ approval 3's three lines.
    or existing test changes (FR-028). Re-read against 013's US10 as landed, at the flip:
    the `simulate` project sets no `workers`, so without this line its files would run in
    parallel.
+4. **A test-only dependency of `finder` on `scope-node`.** US2's `mount_calls.rs` drives
+   the console's link client against the real node service, so it lives in
+   `crates/finder/tests/`, and `crates/finder/Cargo.toml` gains `scope-node` under
+   `[dev-dependencies]`. `scope-node` is a crate of this workspace that `finder` already
+   builds through `simulator`, so no crate or version is added: `Cargo.lock` gains one
+   line in `finder`'s entry. Given 2026-11-01, mid-epic, on US2's question cb055dc8c9d4.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -224,13 +250,15 @@ all, so anyone can halt the telescope and no one else can move it.
 the laptop's Wi-Fi drops, is dangerous. Axis positions on frames are what turn a solve into
 a sync.
 
-**Independent Test**: `cargo test -p scope-node --locked` and
-`cargo test -p scope-link --locked` run the new tests in paused virtual time:
-- `crates/scope-node/tests/stop_and_watchdog.rs`;
-- `crates/scope-node/tests/frame_positions.rs`;
-- `crates/scope-link/tests/mount_calls.rs`.
+**Independent Test**: `cargo test -p simulator --locked` and
+`cargo test -p finder --locked` run the new tests in paused virtual time:
+- `crates/simulator/tests/stop_and_watchdog.rs`;
+- `crates/simulator/tests/frame_positions.rs`;
+- `crates/finder/tests/mount_calls.rs`.
 
-They run the real node service over the simulated mount and the in-process link.
+They run the real node service over the simulated mount and the in-process link. They sit
+beside 013's `crates/simulator/tests/node.rs` and `crates/finder/tests/link.rs`, in the
+crates that already reach the node, the simulator and the console's link client.
 
 **Acceptance Scenarios**:
 

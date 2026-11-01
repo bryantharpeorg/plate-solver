@@ -72,19 +72,25 @@ description: "Task list for 014-goto: GoTo"
 
 ### Tests first
 
-- [ ] T007 [US2] In a new `crates/scope-node/tests/stop_and_watchdog.rs`, write failing
-  paused-time tests on the real node service over the simulated mount:
+- [ ] T007 [US2] In a new `crates/simulator/tests/stop_and_watchdog.rs`, beside 013's
+  `node.rs`, write failing paused-time tests on the real node service over the simulated
+  mount, with any helper T007 to T009 share in a new
+  `crates/simulator/tests/support/mod.rs` (plan.md § Decisions, "US2's tests live where
+  their dependencies already are"):
   - a stop drops the goto queued behind another command, and a goto sent after the stop's
     reply is carried out (US2-S1), so the test fails if no goto is ever carried out;
   - with both axes moving, silent heartbeats lead to a stop command 1.0 ± 0.1 s after the
     last one (US2-S2);
   - after the watchdog's stop, resumed heartbeats leave the axis at rest until a new move
     is requested, and the new move is carried out (US2-S3).
-- [ ] T008 [US2] In a new `crates/scope-node/tests/frame_positions.rs`, write a failing
+- [ ] T008 [US2] In a new `crates/simulator/tests/frame_positions.rs`, write a failing
   test: a steady azimuth rate and a 200 ms exposure give start and end positions that
   differ by rate × exposure within two counts, on the node's clock (US2-S4).
-- [ ] T009 [US2] In a new `crates/scope-link/tests/mount_calls.rs`, write failing tests
-  over the in-process link:
+- [ ] T009 [US2] In a new `crates/finder/tests/mount_calls.rs`, beside 013's `link.rs`,
+  write failing tests over the in-process link. Add `scope-node` to the
+  `[dev-dependencies]` of `crates/finder/Cargo.toml` (spec.md, owner approval 4), and
+  update `Cargo.lock` by running cargo once without `--locked` (plan.md § Plan traps,
+  trap 13):
   - a move with no token fails with UNAUTHENTICATED and no axis moves (US2-S5);
   - stop all with no token succeeds while both axes move, and both stop (US2-S6), with
     `ScopeNode`, `ScopeNodeMount` and `ScopeNodeStop` served together by
@@ -120,7 +126,8 @@ description: "Task list for 014-goto: GoTo"
 - [ ] T014 [US2] Run the `lint` and `test` gates. Confirm that the proto change only
   adds, that 013's `service ScopeNode` is unchanged, and that every existing test in
   `crates/scope-link`, `crates/scope-node` and `crates/finder` is unchanged except
-  `star_frame`'s two new fields (US2-S8). Commit the green story (FR-004, FR-005,
+  `star_frame`'s two new fields (US2-S8), and that `Cargo.lock`'s diff is the one
+  `scope-node` line in `finder`'s entry. Commit the green story (FR-004, FR-005,
   FR-006; US2-S1, US2-S2, US2-S3, US2-S4, US2-S5, US2-S6, US2-S7, US2-S8).
 
 ## Phase 3: User Story 3 — the Sky-Watcher adapter (Priority: P2)
