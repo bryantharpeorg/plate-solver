@@ -1,14 +1,40 @@
-//! Solar coordinates and the rising, transit and setting of an altitude (Meeus,
-//! *Astronomical Algorithms*, second edition, chapters 25 and 15).
+//! Solar coordinates, altitude events and atmospheric refraction (Meeus,
+//! *Astronomical Algorithms*, second edition, chapters 25, 15 and 16).
 //!
 //! All times are supplied by the caller. Event times are Unix seconds in UT;
-//! [`sun`] takes a Julian date in dynamical time (TD/TT). Altitudes are geometric:
-//! any desired refraction or limb allowance belongs in the requested altitude.
+//! [`sun`] takes a Julian date in dynamical time (TD/TT). Event altitudes are
+//! geometric: any desired refraction or limb allowance belongs in the requested
+//! altitude. Refraction is applied only by the explicit conversions below;
+//! [`sky::alt_az`] remains geometric.
 
 use crate::sky::{self, Observer};
 
 const SECONDS_PER_DAY: f64 = 86_400.0;
 const SIDEREAL_DAY: f64 = SECONDS_PER_DAY * 360.0 / 360.985_647_366_29;
+
+/// Apparent altitude in degrees from a true (geometric) altitude in degrees.
+///
+/// Adds Saemundsson's refraction (Meeus eq. 16.4):
+/// `R = 1.02 / tan(h + 10.3 / (h + 5.11))` arcminutes, with the tangent's
+/// argument in degrees. Assumes the standard atmosphere, 1010 hPa and 10 °C,
+/// so the pressure and temperature scale factor is one. Input must be finite
+/// and in `[0, 90]` degrees.
+pub fn apparent_from_true(altitude_deg: f64) -> f64 {
+    let argument = (altitude_deg + 10.3 / (altitude_deg + 5.11)).to_radians();
+    altitude_deg + 1.02 / argument.tan() / 60.0
+}
+
+/// True (geometric) altitude in degrees from an apparent altitude in degrees.
+///
+/// Subtracts Bennett's refraction (Meeus eq. 16.3):
+/// `R = 1 / tan(h0 + 7.31 / (h0 + 4.4))` arcminutes, with the tangent's
+/// argument in degrees. Assumes 1010 hPa and 10 °C. Input must be finite and
+/// in `[0, 90]` degrees; an apparent altitude at the horizon gives a negative
+/// true altitude. This is an approximate inverse of [`apparent_from_true`].
+pub fn true_from_apparent(altitude_deg: f64) -> f64 {
+    let argument = (altitude_deg + 7.31 / (altitude_deg + 4.4)).to_radians();
+    altitude_deg - 1.0 / argument.tan() / 60.0
+}
 
 /// The Sun's apparent right ascension and declination, in degrees, of date.
 ///
@@ -340,6 +366,67 @@ mod tests {
         } else {
             assert!(before > altitude && after < altitude, "{before} -> {after}");
         }
+    }
+
+    #[test]
+    fn bennett_at_apparent_horizon_matches_meeus() {
+        // Meeus ch. 16, eq. 16.3: 34.5 arcmin at apparent 0°, tolerance 0.1 arcmin.
+        let refraction_arcmin = (0.0 - true_from_apparent(0.0)) * 60.0;
+        assert!(
+            (refraction_arcmin - 34.5).abs() <= 0.1,
+            "Bennett refraction {refraction_arcmin} arcmin"
+        );
+    }
+
+    #[test]
+    fn saemundsson_at_true_forty_five_degrees_matches_meeus() {
+        // Meeus ch. 16, eq. 16.4: 1.01 arcmin at true 45°, tolerance 0.01 arcmin.
+        let refraction_arcmin = (apparent_from_true(45.0) - 45.0) * 60.0;
+        assert!(
+            (refraction_arcmin - 1.01).abs() <= 0.01,
+            "Saemundsson refraction {refraction_arcmin} arcmin"
+        );
+    }
+
+    #[test]
+    fn refraction_round_trip_from_horizon_to_zenith() {
+        // Meeus 16.3/16.4 are approximate inverses: recover the supplied true
+        // altitude within 0.1 arcmin, including both endpoints, in 0.1° steps.
+        for step in 0..=900 {
+            let true_deg = f64::from(step) / 10.0;
+            let apparent_deg = apparent_from_true(true_deg);
+            let recovered_deg = true_from_apparent(apparent_deg);
+            let error_arcmin = (recovered_deg - true_deg).abs() * 60.0;
+            assert!(
+                error_arcmin <= 0.1,
+                "true {true_deg}°, apparent {apparent_deg}°, error {error_arcmin} arcmin"
+            );
+        }
+    }
+
+    #[test]
+    fn sky_altitude_stays_geometric_for_meeus_example_13b() {
+        // Meeus 13.b: Venus, 1987 April 10 19:21 UT, Washington. Convert the
+        // example's place of date to J2000 for sky::alt_az, allowing 0.01° for
+        // its mean sidereal time rather than the example's apparent time.
+        let observer = Observer {
+            lat: 38.921_389,
+            lon: -77.065_556,
+            time: unix(2_446_896.306_25),
+        };
+        let place_of_date = (347.319_337_5, -6.719_892);
+        let mut j2000 = place_of_date;
+        for _ in 0..10 {
+            let precessed =
+                sky::precess_from_j2000(j2000.0, j2000.1, sky::julian_date(observer.time));
+            j2000.0 += place_of_date.0 - precessed.0;
+            j2000.1 += place_of_date.1 - precessed.1;
+        }
+        let altitude_deg = sky::alt_az(j2000.0, j2000.1, &observer).0;
+        assert!(
+            (altitude_deg - 15.1249).abs() < 0.01,
+            "geometric altitude {altitude_deg}°"
+        );
     }
 
     #[test]
