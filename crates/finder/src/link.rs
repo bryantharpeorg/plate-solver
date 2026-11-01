@@ -4,7 +4,10 @@ use std::{future::Future, io, pin::Pin, sync::Arc, time::Duration};
 
 use hyper_util::rt::TokioIo;
 use scope_link::{
-    proto::{self, scope_node_client::ScopeNodeClient},
+    proto::{
+        self, scope_node_client::ScopeNodeClient, scope_node_mount_client::ScopeNodeMountClient,
+        scope_node_stop_client::ScopeNodeStopClient,
+    },
     BearerToken, ClockMap, Exchange,
 };
 use serde::Serialize;
@@ -29,6 +32,61 @@ type Connect = Pin<Box<dyn Future<Output = Result<Channel, tonic::transport::Err
 type Client = ScopeNodeClient<InterceptedService<Channel, BearerToken>>;
 type Configure =
     Pin<Box<dyn Future<Output = Result<tonic::Response<proto::Settings>, Status>> + Send>>;
+
+/// Mount calls on the same paired channel as frames and heartbeats.
+#[derive(Clone)]
+pub struct MountClient {
+    mount: ScopeNodeMountClient<InterceptedService<Channel, BearerToken>>,
+    stop: ScopeNodeStopClient<Channel>,
+}
+impl MountClient {
+    pub fn new(channel: Channel, token: BearerToken) -> Self {
+        Self {
+            mount: ScopeNodeMountClient::with_interceptor(channel.clone(), token),
+            stop: ScopeNodeStopClient::new(channel),
+        }
+    }
+    pub async fn describe_mount(&self) -> Result<proto::DescribeMountReply, Status> {
+        Ok(self
+            .mount
+            .clone()
+            .describe_mount(proto::DescribeMountRequest {})
+            .await?
+            .into_inner())
+    }
+    pub async fn axis_state(&self, axis: proto::Axis) -> Result<proto::AxisStateReply, Status> {
+        Ok(self
+            .mount
+            .clone()
+            .axis_state(proto::AxisStateRequest { axis: axis as i32 })
+            .await?
+            .into_inner())
+    }
+    pub async fn goto_axis(&self, axis: proto::Axis, position: i32) -> Result<(), Status> {
+        self.mount
+            .clone()
+            .goto_axis(proto::GotoAxisRequest {
+                axis: axis as i32,
+                position,
+            })
+            .await?;
+        Ok(())
+    }
+    pub async fn rate_axis(&self, axis: proto::Axis, deg_per_s: f64) -> Result<(), Status> {
+        self.mount
+            .clone()
+            .rate_axis(proto::RateAxisRequest {
+                axis: axis as i32,
+                deg_per_s,
+            })
+            .await?;
+        Ok(())
+    }
+    pub async fn stop_all(&self) -> Result<(), Status> {
+        self.stop.clone().stop_all(proto::StopAllRequest {}).await?;
+        Ok(())
+    }
+}
 
 /// A real address, or a reusable connector (one new stream for every connection).
 #[derive(Clone, Default)]
@@ -115,6 +173,7 @@ pub struct LinkManager {
     task: JoinHandle<()>,
     status: watch::Receiver<LinkStatus>,
     frames: watch::Receiver<Option<proto::StarFrame>>,
+    mount: watch::Receiver<Option<MountClient>>,
 }
 impl Drop for LinkManager {
     fn drop(&mut self) {
@@ -126,12 +185,20 @@ impl LinkManager {
     pub fn start(session: Arc<Session>, clock: Arc<dyn Clock>, transport: Transport) -> Self {
         let (status_tx, status) = watch::channel(LinkStatus::default());
         let (frame_tx, frames) = watch::channel(None);
-        let task = tokio::spawn(run(session, clock, transport, status_tx, frame_tx));
+        let (mount_tx, mount) = watch::channel(None);
+        let task = tokio::spawn(run(
+            session, clock, transport, status_tx, frame_tx, mount_tx,
+        ));
         Self {
             task,
             status,
             frames,
+            mount,
         }
+    }
+    /// Current paired mount channel, replaced on every reconnect.
+    pub fn mount(&self) -> Option<MountClient> {
+        self.mount.borrow().clone()
     }
     /// Subscribe to link health changes.
     pub fn status(&self) -> watch::Receiver<LinkStatus> {
@@ -202,6 +269,7 @@ async fn pair(
 ) -> Result<
     (
         Client,
+        MountClient,
         tonic::Streaming<proto::StarFrame>,
         proto::CameraInfo,
     ),
@@ -213,6 +281,7 @@ async fn pair(
         .await?;
     let bearer = BearerToken::new(node.token.as_deref().expect("node token"))
         .map_err(|_| Status::invalid_argument("invalid scope node token"))?;
+    let mount = MountClient::new(channel.clone(), bearer.clone());
     let mut client = ScopeNodeClient::with_interceptor(channel, bearer);
     let camera = client
         .describe(proto::DescribeRequest {})
@@ -221,7 +290,7 @@ async fn pair(
     let (settings, _) = camera_settings(&config.settings, &camera);
     client.configure(settings).await?;
     let frames = client.frames(proto::FramesRequest {}).await?.into_inner();
-    Ok((client, frames, camera))
+    Ok((client, mount, frames, camera))
 }
 
 async fn run(
@@ -230,6 +299,7 @@ async fn run(
     transport: Transport,
     status_tx: watch::Sender<LinkStatus>,
     frame_tx: watch::Sender<Option<proto::StarFrame>>,
+    mount_tx: watch::Sender<Option<MountClient>>,
 ) {
     let mut changes = session.link_changes();
     let mut status = LinkStatus::default();
@@ -244,6 +314,7 @@ async fn run(
             retries = 0;
             publish(&session, &status_tx, &status);
         }
+        mount_tx.send_replace(None);
         if !config.paired() {
             if changes.changed().await.is_err() {
                 return;
@@ -255,7 +326,8 @@ async fn run(
             result = changes.changed() => { if result.is_err() { return; } continue; }
             result = time::timeout(SILENCE, pair(&transport, &config)) => result,
         };
-        if let Ok(Ok((client, stream, camera))) = paired {
+        if let Ok(Ok((client, mount, stream, camera))) = paired {
+            mount_tx.send_replace(Some(mount));
             status.out_of_range = camera_settings(&config.settings, &camera).1;
             status.camera = Some(camera);
             publish(&session, &status_tx, &status);
@@ -272,6 +344,7 @@ async fn run(
                 &frame_tx,
             )
             .await;
+            mount_tx.send_replace(None);
             status.connected = false;
             publish(&session, &status_tx, &status);
             if reconfigured {

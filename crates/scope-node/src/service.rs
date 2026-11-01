@@ -5,13 +5,16 @@ use crate::{
     clock::NodeClock,
     detect::DetectSettings,
     exposure::Controller,
+    mount::{queue::MountQueue, watchdog::Watchdog, Axis, Mount},
     preview::{self, PreviewSchedule},
     Camera, CameraInfo, RangeError, Settings,
 };
 use scope_link::{
     proto::{
         self,
+        scope_node_mount_server::{ScopeNodeMount, ScopeNodeMountServer},
         scope_node_server::{ScopeNode, ScopeNodeServer},
+        scope_node_stop_server::{ScopeNodeStop, ScopeNodeStopServer},
     },
     TokenInterceptor,
 };
@@ -83,6 +86,8 @@ struct Shared {
     commands: Mutex<Commands>,
     frames: broadcast::Sender<proto::StarFrame>,
     controls: NodeControls,
+    mount: Option<MountQueue>,
+    watchdog: Option<Watchdog>,
 }
 struct Runtime {
     shared: Arc<Shared>,
@@ -115,8 +120,23 @@ impl NodeService {
         initial: Settings,
         controls: NodeControls,
     ) -> Result<Self, RangeError> {
+        Self::with_mount(camera, clock, token, initial, controls, None)
+    }
+    /// Install an optional mount before starting capture and the heartbeat watchdog.
+    pub fn with_mount<C: Camera + 'static>(
+        camera: C,
+        clock: Arc<dyn NodeClock>,
+        token: impl AsRef<[u8]>,
+        initial: Settings,
+        controls: NodeControls,
+        mount: Option<Arc<dyn Mount>>,
+    ) -> Result<Self, RangeError> {
         let info = camera.info();
-        let capture = CaptureLoop::new(camera, initial.clone())?;
+        let mount = mount.map(MountQueue::new);
+        let watchdog = mount
+            .as_ref()
+            .map(|m| Watchdog::new(clock.clone(), m.clone()));
+        let capture = CaptureLoop::new(camera, initial.clone())?.with_mount(mount.clone());
         let shared = Arc::new(Shared {
             info,
             clock,
@@ -126,6 +146,8 @@ impl NodeService {
             }),
             frames: broadcast::channel(16).0,
             controls,
+            mount,
+            watchdog,
         });
         let task = tokio::spawn(run(capture, initial, shared.clone()));
         Ok(Self {
@@ -138,6 +160,20 @@ impl NodeService {
     }
     pub fn controls(&self) -> NodeControls {
         self.runtime.shared.controls.clone()
+    }
+    /// All three services share one channel. Only StopAll omits authentication.
+    pub fn into_routes(self) -> tonic::service::Routes {
+        let token = self.runtime.token.clone();
+        tonic::service::Routes::new(self.clone().into_server())
+            .add_service(ScopeNodeMountServer::with_interceptor(self.clone(), token))
+            .add_service(ScopeNodeStopServer::new(self))
+    }
+    fn mount(&self) -> Result<&MountQueue, Status> {
+        self.runtime
+            .shared
+            .mount
+            .as_ref()
+            .ok_or_else(|| Status::failed_precondition("no mount connected"))
     }
     /// Every method, including Describe and Heartbeat, uses the pairing interceptor.
     pub fn into_server(
@@ -216,6 +252,8 @@ async fn run<C: Camera>(mut capture: CaptureLoop<C>, mut settings: Settings, sha
                 settings: Some(to_wire(&settings)),
                 centroids: captured.centroids,
                 preview_jpeg,
+                axis_start: captured.axis_start,
+                axis_end: captured.axis_end,
             });
         }
         tokio::time::sleep_until(start + interval).await;
@@ -289,6 +327,9 @@ impl ScopeNode for NodeService {
     ) -> Result<Response<proto::HeartbeatReply>, Status> {
         let t1 = self.runtime.shared.clock.now();
         self.runtime.shared.controls.ready(false).await;
+        if let Some(watchdog) = &self.runtime.shared.watchdog {
+            watchdog.heartbeat();
+        }
         Ok(Response::new(proto::HeartbeatReply {
             t0: request.into_inner().t0,
             t1,
@@ -314,5 +355,83 @@ impl ScopeNode for NodeService {
         self.runtime.shared.controls.ready(false).await;
         self.runtime.shared.commands.lock().unwrap().preview = true;
         Ok(Response::new(proto::PreviewAck {}))
+    }
+}
+
+fn axis(value: i32) -> Result<Axis, Status> {
+    match proto::Axis::try_from(value) {
+        Ok(proto::Axis::Azimuth) => Ok(Axis::Azimuth),
+        Ok(proto::Axis::Altitude) => Ok(Axis::Altitude),
+        _ => Err(Status::invalid_argument("axis must be azimuth or altitude")),
+    }
+}
+#[tonic::async_trait]
+impl ScopeNodeMount for NodeService {
+    async fn describe_mount(
+        &self,
+        _: Request<proto::DescribeMountRequest>,
+    ) -> Result<Response<proto::DescribeMountReply>, Status> {
+        self.runtime.shared.controls.ready(false).await;
+        let axes = self
+            .mount()?
+            .axes()
+            .into_iter()
+            .map(|info| proto::AxisInfo {
+                counts_per_revolution: info.counts_per_revolution,
+                top_rate_deg_per_s: info.top_rate_deg_per_s,
+                can_goto: info.can_goto,
+            })
+            .collect();
+        Ok(Response::new(proto::DescribeMountReply { axes }))
+    }
+    async fn axis_state(
+        &self,
+        request: Request<proto::AxisStateRequest>,
+    ) -> Result<Response<proto::AxisStateReply>, Status> {
+        let axis = axis(request.into_inner().axis)?;
+        self.runtime.shared.controls.ready(false).await;
+        let state = self.mount()?.state(axis).await;
+        Ok(Response::new(proto::AxisStateReply {
+            position: state.position,
+            rate_deg_per_s: state.rate_deg_per_s,
+            moving: state.moving,
+        }))
+    }
+    async fn goto_axis(
+        &self,
+        request: Request<proto::GotoAxisRequest>,
+    ) -> Result<Response<proto::GotoAxisReply>, Status> {
+        let request = request.into_inner();
+        let axis = axis(request.axis)?;
+        let mount = self.mount()?;
+        if !mount.axes()[axis.index()].can_goto {
+            return Err(Status::failed_precondition("axis cannot go to a position"));
+        }
+        mount.goto(axis, request.position).await?;
+        Ok(Response::new(proto::GotoAxisReply {}))
+    }
+    async fn rate_axis(
+        &self,
+        request: Request<proto::RateAxisRequest>,
+    ) -> Result<Response<proto::RateAxisReply>, Status> {
+        let request = request.into_inner();
+        let axis = axis(request.axis)?;
+        if !request.deg_per_s.is_finite() {
+            return Err(Status::invalid_argument("axis rate must be finite"));
+        }
+        self.mount()?.rate(axis, request.deg_per_s).await?;
+        Ok(Response::new(proto::RateAxisReply {}))
+    }
+}
+#[tonic::async_trait]
+impl ScopeNodeStop for NodeService {
+    async fn stop_all(
+        &self,
+        _: Request<proto::StopAllRequest>,
+    ) -> Result<Response<proto::StopAllReply>, Status> {
+        if let Some(mount) = &self.runtime.shared.mount {
+            mount.stop_all().await;
+        }
+        Ok(Response::new(proto::StopAllReply {}))
     }
 }

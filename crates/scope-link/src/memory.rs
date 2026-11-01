@@ -65,3 +65,14 @@ where
         .serve_with_incoming(tokio_stream::iter(vec![Ok::<_, io::Error>(server_io)]))
         .await
 }
+
+/// Serves several generated services with their individual interceptors on one duplex.
+pub async fn serve_routes_on(
+    server_io: DuplexStream,
+    routes: tonic::service::Routes,
+) -> Result<(), Error> {
+    Server::builder()
+        .add_routes(routes)
+        .serve_with_incoming(tokio_stream::iter(vec![Ok::<_, io::Error>(server_io)]))
+        .await
+}

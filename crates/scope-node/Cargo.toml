@@ -27,6 +27,8 @@ tokio-stream = { version = "0.1.18", features = ["sync"] }
 image = { version = "0.25.1", default-features = false, features = ["jpeg"] }
 
 [dev-dependencies]
+# US2 exercises the real node against the existing simulated mount.
+simulator = { version = "0.1.0", path = "../simulator" }
 plate-solver = { version = "0.1.0", path = "../plate-solver" }
 image = { version = "0.25.1", default-features = false, features = ["png"] }
 tokio = { version = "1.53.1", features = ["test-util"] }

@@ -1,7 +1,7 @@
 //! The production scope-node service over the catalog-rendered camera.
 use crate::{SimCamera, Simulator, VirtualClock};
 use scope_link::memory;
-use scope_node::{clock::NodeClock, service::NodeService, RangeError, Settings};
+use scope_node::{clock::NodeClock, mount::Mount, service::NodeService, RangeError, Settings};
 use std::{
     net::SocketAddr,
     sync::{Arc, Mutex},
@@ -37,12 +37,13 @@ impl SimNode {
         token: impl AsRef<[u8]>,
         initial: Settings,
     ) -> Result<Self, RangeError> {
-        let service = NodeService::with_controls(
+        let service = NodeService::with_mount(
             camera,
             Arc::new(Clock(simulator.clock().clone())),
             token,
             initial,
             simulator.controls.clone(),
+            simulator.mount().map(|m| Arc::new(m) as Arc<dyn Mount>),
         )?;
         Ok(Self {
             service,
@@ -58,9 +59,9 @@ impl SimNode {
     }
     pub async fn memory_channel(&self) -> Result<Channel, tonic::transport::Error> {
         let (connect, io) = memory::channel_pair();
-        let service = self.service.clone().into_server();
+        let service = self.service.clone().into_routes();
         self.servers.lock().unwrap().push(tokio::spawn(async move {
-            if let Err(error) = memory::serve_on(io, service).await {
+            if let Err(error) = memory::serve_routes_on(io, service).await {
                 eprintln!("simulator memory transport: {error}");
             }
         }));
@@ -69,10 +70,10 @@ impl SimNode {
     pub async fn listen_loopback(&self) -> Result<SocketAddr, std::io::Error> {
         let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
         let address = listener.local_addr()?;
-        let service = self.service.clone().into_server();
+        let service = self.service.clone().into_routes();
         self.servers.lock().unwrap().push(tokio::spawn(async move {
             if let Err(error) = Server::builder()
-                .add_service(service)
+                .add_routes(service)
                 .serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(listener))
                 .await
             {

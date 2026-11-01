@@ -46,6 +46,8 @@ fn star_frame(id: u64) -> StarFrame {
             brightness: 100.0,
         }],
         preview_jpeg: Some(vec![0xff, 0xd8, 0xff, 0xd9]),
+        axis_start: None,
+        axis_end: None,
     }
 }
 

@@ -1,6 +1,7 @@
 //! Capture through the camera port; a failed adapter does not terminate the service.
+use crate::mount::{queue::MountQueue, Axis};
 use crate::{detect, Camera, CameraError, GrayFrame, RangeError, Settings};
-use scope_link::proto::Centroid;
+use scope_link::proto::{AxisPositions, Centroid};
 use std::time::Duration;
 
 #[derive(Debug)]
@@ -8,6 +9,8 @@ pub struct Captured {
     pub id: u64,
     pub frame: GrayFrame,
     pub centroids: Vec<Centroid>,
+    pub axis_start: Option<AxisPositions>,
+    pub axis_end: Option<AxisPositions>,
 }
 
 pub struct CaptureLoop<C> {
@@ -16,6 +19,7 @@ pub struct CaptureLoop<C> {
     id: u64,
     restart_at: Option<tokio::time::Instant>,
     restarts: u64,
+    mount: Option<MountQueue>,
 }
 impl<C: Camera> CaptureLoop<C> {
     pub fn new(mut camera: C, settings: Settings) -> Result<Self, RangeError> {
@@ -26,7 +30,12 @@ impl<C: Camera> CaptureLoop<C> {
             id: 0,
             restart_at: None,
             restarts: 0,
+            mount: None,
         })
+    }
+    pub fn with_mount(mut self, mount: Option<MountQueue>) -> Self {
+        self.mount = mount;
+        self
     }
     pub fn restarts(&self) -> u64 {
         self.restarts
@@ -57,13 +66,24 @@ impl<C: Camera> CaptureLoop<C> {
             self.camera.restart()?;
             self.restarts += 1;
         }
+        let axis_start = positions(self.mount.as_ref()).await;
         let frame = self.camera.next_frame().await?;
+        let axis_end = positions(self.mount.as_ref()).await;
         self.id += 1;
         let centroids = detect::detect(&frame, &self.settings.detection);
         Ok(Captured {
             id: self.id,
             frame,
             centroids,
+            axis_start,
+            axis_end,
         })
     }
+}
+
+async fn positions(mount: Option<&MountQueue>) -> Option<AxisPositions> {
+    let mount = mount?;
+    let azimuth = mount.state(Axis::Azimuth).await.position;
+    let altitude = mount.state(Axis::Altitude).await.position;
+    Some(AxisPositions { azimuth, altitude })
 }

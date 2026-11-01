@@ -57,7 +57,7 @@ async fn serve(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let service = NodeService::new(camera, Arc::new(SystemClock), &config.token, settings)?;
     tonic::transport::Server::builder()
-        .add_service(service.into_server())
+        .add_routes(service.into_routes())
         .serve(config.listen)
         .await?;
     Ok(())
