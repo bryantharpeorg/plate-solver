@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: [012-targets-and-push-to, 013-live-finder]
 # Converted 2026-10-28 from the reviewed OpenSpec change feat-14 (#102). This trio is
 # now the feature's only specification. It stays draft until the owner has reviewed
@@ -9,6 +9,10 @@ depends_on_landed: [012-targets-and-push-to, 013-live-finder]
 # merge queue) and the factory's gates as 013 runs them (plan.md § Plan traps and
 # § Refinement Record). It stays draft until 013 has landed and the prerequisites in
 # plan.md are met; the paths marked "013's" are re-read against 013 as landed then.
+# Flipped to ready 2026-10-31 by the owner, once 013 had landed (0675455) and the trio
+# had been re-read against it. The re-read added `workers: 1` to approval 3, because
+# 013's simulate project runs its files in parallel (plan.md § Plan traps, trap 15).
+# The flip gives the approvals under "Owner approvals".
 ---
 
 # Feature Specification: GoTo
@@ -100,7 +104,7 @@ feature (015).
 
 Flipping this spec to `ready` approves the following. No existing requirement is modified,
 no existing test or `ci.yml` changes, and no Playwright server or project changes beyond
-approval 3's two lines.
+approval 3's three lines.
 
 1. **Two `rustix` features for the serial device.** `rustix`'s `termios` and `fs`
    features open the mount's serial device. `crates/scope-node` already depends on
@@ -114,12 +118,17 @@ approval 3's two lines.
 
    So anyone who can reach the console or the node can halt the telescope, and no one else
    can move it (FR-006, FR-020).
-3. **Two lines of Playwright config.** 013's `simulate` project matches only
+3. **Three lines of Playwright config.** 013's `simulate` project matches only
    `e2e/simulate.spec.ts`, and its `default` project ignores that file by name (013
    plan.md, User Story 10). US9 adds `e2e/goto.spec.ts` to the `simulate` project's match
-   and to the `default` project's ignore. The `session` project matches only
-   `e2e/session.spec.ts` and is unchanged. No server, project or existing test changes
-   (FR-028). Re-read against 013's US10 as landed, at the flip.
+   and to the `default` project's ignore. The `simulate` project's files share one
+   `finder --simulate` server, and each sets the session's target and moves the simulated
+   telescope, so they must not run at once: US9 also sets `workers: 1` on the `simulate`
+   project (Playwright 1.52 and later), which then runs one file at a time. The `session`
+   project matches only `e2e/session.spec.ts` and is unchanged. No server, other project
+   or existing test changes (FR-028). Re-read against 013's US10 as landed, at the flip:
+   the `simulate` project sets no `workers`, so without this line its files would run in
+   parallel.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -665,8 +674,8 @@ unchanged and green.
    and that the element at its centre is Stop itself.
 7. **Given** the story's diff, **When** it is read, **Then** every earlier end-to-end test
    and the Playwright servers and projects are unchanged, except that the `simulate`
-   project's match and the `default` project's ignore gain `e2e/goto.spec.ts` (owner
-   approval 3).
+   project's match and the `default` project's ignore gain `e2e/goto.spec.ts`, and the
+   `simulate` project gains `workers: 1` (owner approval 3).
 
 ---
 
