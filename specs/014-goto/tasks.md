@@ -402,8 +402,9 @@ description: "Task list for 014-goto: GoTo"
 ### Implementation
 
 - [ ] T055 [US9] In `crates/finder/web/playwright.config.ts`, add `e2e/goto.spec.ts` to
-  013's `simulate` project's match and to the `default` project's ignore (owner approval
-  3), changing nothing else (US9-S7).
+  013's `simulate` project's match and to the `default` project's ignore, and set
+  `workers: 1` on the `simulate` project (owner approval 3; plan.md § Plan traps, trap
+  15), changing nothing else (US9-S7).
 - [ ] T056 [US9] Run the `lint` and `test` gates, whose `test` gate runs `CI=1 npm run e2e`
   in `crates/finder/web`, with every earlier end-to-end test unchanged and green. Commit
   the green story (FR-027, FR-028; US9-S1, US9-S2, US9-S3, US9-S4, US9-S5, US9-S6,
@@ -428,6 +429,6 @@ one.
 - **`[P]`** marks nothing here: every task within a story shares a file with another.
 - **Out of scope for every story:** `crates/math-core`, `proto/`, `scripts/ci/`,
   `.github/`, `fixtures/`, existing tests, and Playwright servers and projects beyond
-  owner approval 3's two lines.
+  owner approval 3's three lines.
 - **Outside the factory, after landing:** the Impeccable review (after US8), and the
   maintainer's checks at the telescope with the musl cross-build (spec § Assumptions).

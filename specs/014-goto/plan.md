@@ -132,7 +132,7 @@ crates/finder/web/
 ├── src/components/MountSection.tsx (+ test)  # US8
 ├── src/test/fixtures/session-*.json          # US8: sessions recorded from the simulator
 ├── dist/                                     # US8: rebuilt
-├── playwright.config.ts                      # US9: two lines (owner approval 3)
+├── playwright.config.ts                      # US9: three lines (owner approval 3)
 └── e2e/goto.spec.ts                          # US9 (013's simulate project)
 DESIGN.md, .impeccable/design.json            # US8
 ```
@@ -221,8 +221,8 @@ These are not changed by any story:
 - **The proto:** `scope_node.v1`'s existing calls, messages and field numbers are kept.
   New ones only add, and proto comments hold no `[...]`, because rustdoc denies warnings.
 - **Playwright:** the servers and projects are unchanged, except that the `simulate`
-  project's match and the `default` project's ignore gain `e2e/goto.spec.ts` (owner
-  approval 3).
+  project's match and the `default` project's ignore gain `e2e/goto.spec.ts`, and the
+  `simulate` project gains `workers: 1` (owner approval 3; § Plan traps, trap 15).
 - **Layering:** `crates/scope-node` still depends on `star-detection` and `scope-link`
   only, so the Pi never links the solver.
 
@@ -561,6 +561,10 @@ built.
 - Stop's size and that nothing covers it;
 - the night pixel check with GoTo running.
 
+The `simulate` project gains `workers: 1`, so this file and 013's `simulate.spec.ts`
+never run at once against the one simulated telescope (owner approval 3; § Plan traps,
+trap 15).
+
 ## Verification (every story, before proposing)
 
 - **The factory gates** (`ergane.yaml`, as of 3fc6a24):
@@ -584,13 +588,17 @@ built.
 
 1. **012 and 013 have landed**, and this trio has been re-read against 013 as landed:
    every path marked "013's" in § Project Structure, § Interfaces, § Shapes that existing
-   tests pin, owner approval 3's two Playwright lines, and `StarFrame`'s next free field
-   numbers. 012: met (108a5a8). 013: not yet; on `main` at 2a2f9d2, US1, US8 and US9 have
-   landed. `depends_on_landed` holds dispatch until then.
+   tests pin, owner approval 3's Playwright lines, and `StarFrame`'s next free field
+   numbers. 012: met (108a5a8). 013: met; its last story, US10, landed at 0675455. The
+   re-read found every cited 013 path where the trio says, and `StarFrame`'s highest
+   field at 10, so 014 takes 11 and 12. It found one gap: 013's `simulate` project sets no
+   `workers`, so Playwright would run `simulate.spec.ts` and `goto.spec.ts` at once.
+   Approval 3 gained `workers: 1` in the flip's PR (§ Plan traps, trap 15).
 2. **The owner approvals are given.** Approval 1 is settled: termios through `rustix`,
    chosen 2026-10-31 and written into FR-009, US3-S15, T022 and § User Story 3. The
    others (the `ScopeNodeStop` service, the `[mount]` table and the Playwright lines) were
-   accepted the same day; flipping to `ready` records them all.
+   accepted the same day; flipping to `ready` records them all. Met: the owner flipped
+   014 to `ready` on 2026-10-31.
 3. **The repository is wired for the Ergane merge queue.** Met since 012: `ergane.yaml`
    and `ergane-gates.yml` are on `main`, and 012 and 013 have run through the queue.
 4. **The factory's coding agent can run cargo.** Met since ergane#896 (deployed
@@ -682,6 +690,12 @@ that keeps it from recurring. They bind every story. 013's plan holds the longer
     metadata, never the method (§ Decisions). *Check:* `ScopeNode` keeps 013's
     `TokenInterceptor` on every call, `ScopeNodeStop` is served with none, and US2-S5 and
     US2-S6 run both over `memory::serve_routes_on`.
+15. **One `finder --simulate` server serves the whole `simulate` project.** Playwright runs
+    a project's files in parallel workers by default, and 013 set no `workers`.
+    `simulate.spec.ts` and `goto.spec.ts` each set the session's target and move the
+    simulated telescope, so two at once break each other. 013's `serial` mode orders the
+    tests within one file only. *Check:* the `simulate` project has `workers: 1` (owner
+    approval 3).
 
 ## Risks
 
@@ -1234,7 +1248,7 @@ stories:
         decision: "spec.md:US9-S7"
     preserved_behavior:
       - "013's e2e/simulate.spec.ts and e2e/live-off.spec.ts pass unchanged (plan.md Shapes that existing tests pin)"
-      - "playwright.config.ts changes only by approval 3's two lines (spec.md US9-S7)"
+      - "playwright.config.ts changes only by approval 3's three lines, including workers: 1 on the simulate project (spec.md US9-S7)"
     checks:
       development:
         - "cargo test -p finder --locked --test night_sim"
