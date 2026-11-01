@@ -4,6 +4,7 @@
 pub mod camera;
 pub mod clock;
 pub mod controls;
+pub mod mount;
 pub mod node;
 mod noise;
 pub mod optics;

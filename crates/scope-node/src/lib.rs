@@ -7,6 +7,7 @@ pub mod clock;
 pub mod config;
 pub mod detect;
 pub mod exposure;
+pub mod mount;
 pub mod preview;
 pub mod rpicam;
 pub mod service;
