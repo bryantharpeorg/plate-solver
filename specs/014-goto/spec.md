@@ -13,6 +13,9 @@ depends_on_landed: [012-targets-and-push-to, 013-live-finder]
 # had been re-read against it. The re-read added `workers: 1` to approval 3, because
 # 013's simulate project runs its files in parallel (plan.md § Plan traps, trap 15).
 # The flip gives the approvals under "Owner approvals".
+# Changed 2026-11-01 mid-epic by the owner, on US2's question d1a76f5e8e1b: the mount
+# calls are their own service, ScopeNodeMount, so 013's ScopeNode and its test servers
+# are unchanged (plan.md § Decisions; § Plan traps, trap 16).
 ---
 
 # Feature Specification: GoTo
@@ -99,6 +102,19 @@ feature (015).
   added; `serialport` was the alternative.
 - Q: What do the new session fields read before they have a value? → A: They are left out
   of the body, as 013's are, so the whole-body test of a fresh session stays as it is.
+
+### Session 2026-11-01 (US2's question d1a76f5e8e1b)
+
+- Q: A tonic server must implement every call of its service, and 013 has two test
+  servers for `ScopeNode`. A struct literal must list every field, and one 013 test lists
+  every `StarFrame` field. Where do the mount calls go, when no story changes an existing
+  test? → A: In their own service, `ScopeNodeMount`, in the same proto file and package,
+  served beside `ScopeNode` with 013's `TokenInterceptor`. 013's `ScopeNode` is
+  unchanged, so its test servers in `crates/scope-link/tests/link.rs` and
+  `crates/finder/tests/aim_cli.rs` compile as they are. The one test that lists every
+  `StarFrame` field, `star_frame` in `link.rs`, gains `axis_start: None` and
+  `axis_end: None` and nothing else (US2-S8). The owner chose this on 2026-11-01 over
+  stubbing the four calls in both test servers.
 
 ## Owner approvals
 
@@ -241,11 +257,15 @@ They run the real node service over the simulated mount and the in-process link.
    the axes and reads their state through the link, **Then** it gets each axis's counts
    per revolution and top rate, and its position, rate and moving flag, exactly as the
    simulator holds them.
-8. **Given** the story's diff, **When** it is read, **Then** three things hold:
+8. **Given** the story's diff, **When** it is read, **Then** four things hold:
    - the changes to `crates/scope-link/proto/scope_node/v1/scope_node.proto` only add
-     calls, messages and new field numbers;
+     services, calls, messages and new field numbers;
+   - 013's `service ScopeNode` is unchanged: the mount calls are the new
+     `service ScopeNodeMount`, and stop all is the new `service ScopeNodeStop`;
    - its comments hold no `[...]`;
-   - every existing test in `crates/scope-link` and `crates/scope-node` is unchanged.
+   - every existing test in `crates/scope-link`, `crates/scope-node` and `crates/finder`
+     is unchanged, except that `star_frame` in `crates/scope-link/tests/link.rs` lists
+     the two new `StarFrame` fields as `None`, with no assertion changed.
 
 ---
 
