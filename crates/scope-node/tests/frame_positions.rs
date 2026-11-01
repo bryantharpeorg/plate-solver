@@ -18,8 +18,16 @@ async fn frame_positions_bracket_a_200_ms_exposure_on_the_node_clock() {
         })
         .await
         .unwrap();
+    rig.mount
+        .rate_axis(proto::RateAxisRequest {
+            axis: 2,
+            deg_per_s: -0.3,
+        })
+        .await
+        .unwrap();
     advance(0.4).await;
     assert_eq!(mount.state(Axis::Azimuth).await.rate_deg_per_s, 0.6);
+    assert_eq!(mount.state(Axis::Altitude).await.rate_deg_per_s, -0.3);
     beat(&mut rig).await;
     let mut stream = rig
         .client
@@ -34,9 +42,22 @@ async fn frame_positions_bracket_a_200_ms_exposure_on_the_node_clock() {
     let end = frame.axis_end.unwrap();
     let expected = 0.6 * 0.2 * f64::from(mount.axes()[0].counts_per_revolution) / 360.0;
     assert!((f64::from(end.azimuth - start.azimuth) - expected).abs() <= 2.0);
+    // The simulator accelerates at 3 degrees/s², then holds the requested rate.
+    // Check absolute counts against each exposure timestamp as well as travel:
+    // equal travel alone would also accept two readings shifted in time.
+    for (axis, rate, first, last) in [
+        (Axis::Azimuth, 0.6_f64, start.azimuth, end.azimuth),
+        (Axis::Altitude, -0.3_f64, start.altitude, end.altitude),
+    ] {
+        for (time, position) in [(frame.start_s, first), (frame.end_s, last)] {
+            let degrees = rate * (time - 1000.0 - rate.abs() / (2.0 * 3.0));
+            let counts =
+                degrees * f64::from(mount.axes()[axis.index()].counts_per_revolution) / 360.0;
+            assert!((f64::from(position) - counts).abs() <= 2.0);
+        }
+    }
     assert!(end.azimuth > start.azimuth);
-    assert_eq!(start.altitude, 0);
-    assert_eq!(end.altitude, 0);
+    assert!(end.altitude < start.altitude);
 }
 
 #[tokio::test(start_paused = true)]

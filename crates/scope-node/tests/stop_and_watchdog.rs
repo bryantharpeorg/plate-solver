@@ -198,3 +198,46 @@ async fn silent_heartbeats_command_both_axes_to_stop_at_one_second_and_never_res
         positions[0]
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn stop_cancels_an_active_goto_even_when_heartbeats_continue() {
+    let clock = VirtualClock::new(1_768_528_800.0);
+    let mount = Arc::new(SimMount::new(clock.clone()));
+    let mut rig = rig(clock, Some(mount.clone())).await;
+    rig.mount
+        .goto_axis(proto::GotoAxisRequest {
+            axis: proto::Axis::Azimuth as i32,
+            position: 100_000,
+        })
+        .await
+        .unwrap();
+    advance(0.3).await;
+    let moving = mount.state(Axis::Azimuth).await;
+    assert!(moving.moving && moving.position > 0);
+    assert!(moving.position < 100_000);
+    rig.stop.stop_all(proto::StopAllRequest {}).await.unwrap();
+    advance(0.4).await;
+    stopped(&mount).await;
+    let position = mount.state(Axis::Azimuth).await.position;
+    assert!(position < 100_000);
+    for _ in 0..6 {
+        beat(&mut rig).await;
+        advance(0.2).await;
+    }
+    assert_eq!(mount.state(Axis::Azimuth).await.position, position);
+    stopped(&mount).await;
+    // A new positioning request still reaches its target after the explicit stop.
+    rig.mount
+        .goto_axis(proto::GotoAxisRequest {
+            axis: proto::Axis::Azimuth as i32,
+            position: 2000,
+        })
+        .await
+        .unwrap();
+    for _ in 0..5 {
+        beat(&mut rig).await;
+        advance(0.2).await;
+    }
+    assert_eq!(mount.state(Axis::Azimuth).await.position, 2000);
+    stopped(&mount).await;
+}
