@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto"]
 # Converted 2026-10-28 from the reviewed OpenSpec change feat-15 (#102). This trio is
 # now the feature's only specification. It stays draft until the owner has reviewed
@@ -9,6 +9,11 @@ depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto"]
 # 014's refined trio at cab5143 (plan.md § Plan traps and § Refinement Record). It stays
 # draft until 013 and 014 have landed and the prerequisites in plan.md are met; the paths
 # marked "013's" and "014's" are re-read against them as landed then.
+# Flipped to ready 2026-11-01 by the owner, before 014 landed (014's US1 and US4 on main,
+# US2 running); depends_on_landed holds dispatch until 014 lands. Re-read against 014 so
+# far: US1's MountConfig already has backlash_deg, one value for both axes, so US2 adds
+# only rate_error (FR-004, T007; plan.md § Plan traps, trap 16). The rest of the re-read
+# follows 014's stories as they land (plan.md § Prerequisites, 1).
 ---
 
 # Feature Specification: Tracking
@@ -109,9 +114,10 @@ it. No existing test changes, and CI (`ci.yml`) is unchanged.
    project's match and to the `default` project's ignore. The `simulate` project's files
    share one `finder --simulate` server, and each sets the session's target and moves the
    mount, so they must not run at once: the project runs one file at a time
-   (`workers: 1` on the project, Playwright 1.52 and later). If 014 has not set it when
-   this spec flips, US9 sets it. No server, other project or existing test changes
-   (FR-020). Re-read against 013's US10 and 014's US9 as landed, at the flip.
+   (`workers: 1` on the project, Playwright 1.52 and later). 014's US9 sets it (014's
+   approval 3); if it is not set when US9 here runs, US9 sets it. No server, other
+   project or existing test changes (FR-020). Re-read against 013's US10 as landed, and
+   against 014's US9 once it lands.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -154,11 +160,11 @@ needed.
 
 ### User Story 2 - The simulator's rate error, backlash setting and known model (Priority: P1)
 
-As a tracking test, I set the simulated mount's axes to run 1% fast, set an axis's
-backlash (0.3° by default) to any value including 0, and load the simulator's true base
-tilt and zero points into the console's pointing model. A test can then show that
-feed-forward alone drifts, and that the closed loop holds, against a model it knows to be
-right.
+As a tracking test, I set the simulated mount's axes to run 1% fast, set its backlash
+(014's setting, one value for both axes, 0.3° by default) to any value including 0, and
+load the simulator's true base tilt and zero points into the console's pointing model. A
+test can then show that feed-forward alone drifts, and that the closed loop holds, against
+a model it knows to be right.
 
 **Why this priority**: Every later story's evidence runs on these three settings. Without
 a rate error, the closed loop has nothing to correct. Without a backlash setting, a
@@ -185,8 +191,8 @@ The simulator's existing tests, 013's and 014's, pass unchanged.
    that the model's prediction for axis altitude 45°, azimuth 120° equals the simulator's
    true eyepiece direction there, within 1″.
 4. **Given** a simulated mount built with no settings, **When** a test reads them,
-   **Then** the rate error is exactly 0 and each axis's backlash is exactly 0.3°, as 014's
-   simulator tests assume.
+   **Then** the rate error is exactly 0 and the backlash is exactly 0.3° on both axes, as
+   014's simulator tests assume.
 5. **Given** the story's diff, **When** it is read, **Then** every existing test in
    `crates/simulator` and `crates/scope-node` is unchanged.
 
@@ -560,8 +566,9 @@ piece. They come last because they exercise every story before them.
 - **FR-003**: The simulated mount SHALL take a rate-error setting, zero by default. It is
   a fraction by which every axis runs faster than commanded, or slower when negative.
   **Refs**: GLOSSARY.md (simulator); FR-008.
-- **FR-004**: The simulated mount SHALL take a backlash setting for each axis, 0.3° by
-  default. **Refs**: GLOSSARY.md (simulator); FR-009.
+- **FR-004**: The simulated mount SHALL take a backlash setting, 0.3° by default and
+  settable to any value including 0. 014's US1 provides it as `MountConfig.backlash_deg`,
+  one value for both axes. **Refs**: GLOSSARY.md (simulator); FR-009.
 - **FR-005**: Tests SHALL be able to load the simulator's true base tilt and zero points
   into the console's pointing model. **Refs**: GLOSSARY.md (simulator, pointing model);
   014's pointing model ("Zero points and the base tilt").
@@ -694,8 +701,8 @@ piece. They come last because they exercise every story before them.
   measured. It is kept with the fixed terms and cleared with them.
 - **Imaging camera**: sensor width and height (mm) and pixel pitch (µm), left out until
   one is set. It is kept across restarts.
-- **Simulator settings**: a rate error (a fraction, default 0) and a backlash per axis
-  (degrees, default 0.3).
+- **Simulator settings**: a rate error (a fraction, default 0), beside 014's backlash
+  (degrees, default 0.3, one value for both axes).
 
 ## Success Criteria *(mandatory)*
 

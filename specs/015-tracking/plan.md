@@ -175,8 +175,9 @@ next second's rates never restart the axes.
 - `backlash?: {alt_deg?, az_deg?}`, each axis left out until it is measured. It is kept
   in the state file beside 014's fixed terms and cleared with them.
 
-**The simulator** (US2) gains `rate_error` (a fraction, default 0) and a per-axis
-`backlash_deg` (default 0.3), on 014's simulated mount in `crates/simulator/src/mount.rs`.
+**The simulator** (US2) gains `rate_error` (a fraction, default 0) on 014's `MountConfig`,
+beside its `backlash_deg` (default 0.3, one value for both axes), in
+`crates/simulator/src/mount.rs`.
 It also gains a truth accessor (base tilt and zero points) that a test can hand to the
 pointing model's load hook in `crates/finder/src/model.rs`.
 
@@ -193,7 +194,7 @@ These are not changed by any story:
 - **Playwright:** the servers and projects are unchanged, except by owner approval 2: the
   `simulate` project's match and the `default` project's ignore gain
   `e2e/tracking.spec.ts`, and the `simulate` project runs one file at a time.
-- **The simulator's defaults:** a rate error of 0 and backlash of 0.3° per axis are the
+- **The simulator's defaults:** a rate error of 0 and backlash of 0.3° on both axes are the
   defaults, so 014's simulator, GoTo and model tests stand unchanged.
 - **014's mount path:** GoTo's approach-from-below, the slip thresholds (0.5° once the
   base tilt is fitted, 2.5° before) and the rule that every solve is a sync.
@@ -344,9 +345,9 @@ Add `altaz_rates` and `longest_exposure`, with its corner radius, to
 ## User Story 2 — The simulator's settings and truth
 
 In 014's simulated mount, `crates/simulator/src/mount.rs`:
-- add `rate_error`, applied to every commanded rate;
-- add the per-axis `backlash_deg`, replacing the fixed 0.3° with a setting of the same
-  default;
+- add `rate_error` to `MountConfig`, applied to every commanded rate;
+- keep 014's `backlash_deg`, one value for both axes with a default of 0.3, which already
+  makes the backlash a setting (§ Plan traps, trap 16);
 - add a truth accessor for the base tilt and zero points.
 
 In the pointing model (`crates/finder/src/model.rs`), add a public hook that loads known
@@ -471,11 +472,16 @@ to the gate.
    landed: every path marked "013's" or "014's" in § Project Structure, § Interfaces and
    § Shapes that existing tests pin, the names of 014's link calls, simulated-mount
    settings, model reset and session fields, and owner approval 2's Playwright lines.
-   012: met (108a5a8). 013: not yet; on `main` at 1976dff, US1 to US4, US8 and US9 have
-   landed. 014: not yet; refined at cab5143, still draft. `depends_on_landed` holds
-   dispatch until then.
-2. **The owner approvals are given** (spec § Owner approvals). Flipping to `ready` records
-   them.
+   012: met (108a5a8). 013: met (0675455). 014: not yet; ready since 37c9062 and running,
+   with US1 and US4 landed (10a1c8d, a706d5d). The owner flipped this spec on 2026-11-01,
+   before 014 landed; `depends_on_landed` holds dispatch until 014 lands. Re-read so far:
+   014's US1 `MountConfig` already has `backlash_deg`, one value for both axes (FR-004,
+   T007, trap 16). The rest is re-read as 014's stories land. Any fix lands on `main`
+   before 014's last story does, because the roadmap dispatches this spec at its next tick
+   after 014 lands, and the judge grades the spec as dispatched: a criteria fix landed
+   after dispatch never reaches it (014's US2, escalation cdecd8235a10).
+2. **The owner approvals are given** (spec § Owner approvals). Met: the owner gave both on
+   2026-11-01, and flipping to `ready` records them.
 3. **The repository is wired for the Ergane merge queue.** Met since 012: `ergane.yaml`
    and `ergane-gates.yml` are on `main`, and 012 and 013 have run through the queue.
 4. **The factory's coding agent can run cargo.** Met since ergane#896 (deployed
@@ -574,6 +580,12 @@ recurring here. They bind every story.
     *Check:* every end is recorded before `StopAll` is sent and no rate follows it
     (US3-S3); `POST /api/stop` ends tracking (US7-S10); a lost link never resumes
     (US3-S4).
+16. **A new field breaks a struct literal that names every field.** A Rust struct literal
+    must list every field unless it ends with `..` (014's trap 16, on `StarFrame`).
+    014's `MountConfig` has four fields, and US2 adds `rate_error`. *Check:* every
+    existing `MountConfig` literal ends with `..` (`ideal()` and its two uses in 014's
+    `crates/simulator/tests/mount.rs`, re-read at 3bb1ef4), and new ones do too; no
+    existing test changes (US2-S5).
 
 ## Risks
 
@@ -646,7 +658,7 @@ stories:
       - path: crates/simulator/tests/rate_and_backlash.rs
         status: new
         disposition: add
-        assertion: "a 1% rate error turns an axis commanded at 0.01 deg/s for 100 s through 1.01 deg within 0.001; with backlash 0, up 1 deg and down 1 deg returns within 1 arcsec; a mount built with no settings has a rate error of exactly 0 and backlash of exactly 0.3 deg per axis"
+        assertion: "a 1% rate error turns an axis commanded at 0.01 deg/s for 100 s through 1.01 deg within 0.001; with backlash 0, up 1 deg and down 1 deg returns within 1 arcsec; a mount built with no settings has a rate error of exactly 0 and backlash of exactly 0.3 deg on both axes"
         decision: "spec.md:US2-S1"
       - path: crates/finder/tests/sim_truth.rs
         status: new
