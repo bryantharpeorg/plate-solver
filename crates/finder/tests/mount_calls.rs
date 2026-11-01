@@ -1,5 +1,5 @@
 //! Real node + simulated mount over one duplex, with independent adapter readings.
-#[path = "../../scope-node/tests/support/mod.rs"]
+#[path = "../../simulator/tests/support/mod.rs"]
 mod support;
 use finder::link::MountClient;
 use scope_link::{

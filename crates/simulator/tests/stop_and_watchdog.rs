@@ -4,7 +4,7 @@ use scope_link::proto::{self, scope_node_mount_server::ScopeNodeMount};
 use scope_node::mount::{Axis, AxisInfo, AxisState, Mount, MountFuture};
 use simulator::{mount::SimMount, VirtualClock};
 use std::{
-    future::{pending, poll_fn},
+    future::{pending, poll_fn, Future},
     sync::{Arc, Mutex},
     task::Poll,
 };

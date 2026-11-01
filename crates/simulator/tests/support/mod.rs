@@ -56,8 +56,11 @@ pub async fn rig(clock: VirtualClock, mount: Option<Arc<dyn Mount>>) -> Rig {
     let channel = channel.await.unwrap();
     Rig {
         service,
-        client: Client::with_interceptor(channel.clone(), BearerToken::new("test-token").unwrap()),
-        mount: MountClient::with_interceptor(
+        client: proto::scope_node_client::ScopeNodeClient::with_interceptor(
+            channel.clone(),
+            BearerToken::new("test-token").unwrap(),
+        ),
+        mount: proto::scope_node_mount_client::ScopeNodeMountClient::with_interceptor(
             channel.clone(),
             BearerToken::new("test-token").unwrap(),
         ),

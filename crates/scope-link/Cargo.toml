@@ -27,10 +27,3 @@ tonic-prost-build = "0.14.6"
 # rebuilding: both are load-bearing.
 [package.metadata.cargo-machete]
 ignored = ["prost", "tonic-prost"]
-
-[dev-dependencies]
-# US2 uses production services and the console client, not a substitute server.
-scope-node = { version = "0.1.0", path = "../scope-node" }
-simulator = { version = "0.1.0", path = "../simulator" }
-finder = { version = "0.1.0", path = "../finder" }
-tokio = { version = "1.53.1", features = ["test-util"] }
