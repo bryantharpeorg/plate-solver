@@ -809,27 +809,9 @@ stories:
       - crates/simulator/src/mount.rs
       - crates/simulator/src/controls.rs
       - crates/simulator/tests/mount.rs
-    shared_writes:
-      - path: crates/scope-node/src/mount/mod.rs
-        other_spec: 014-goto
-        other_story: US2
-        disposition: merge_order
-        reason: "US2 depends_on_merged US1, and declares queue and watchdog"
-      - path: crates/scope-node/src/lib.rs
-        other_spec: 013-live-finder
-        other_story: US4
-        disposition: merge_order
-        reason: "014 depends_on_landed 013, whose US4 last declares modules in it"
-      - path: crates/simulator/src/lib.rs
-        other_spec: 013-live-finder
-        other_story: US4
-        disposition: merge_order
-        reason: "014 depends_on_landed 013, whose US4 declares node and controls"
-      - path: crates/simulator/src/controls.rs
-        other_spec: 013-live-finder
-        other_story: US4
-        disposition: merge_order
-        reason: "014 depends_on_landed 013, whose US4 creates the push"
+    # 2026-11-01: US1 landed (#145, 10a1c8d), so its shared_writes are retired. A delta
+    # redispatch has no us2 -> us1 merge edge left for its merge_order entry to name.
+    shared_writes: []
     open_questions: []
   US2:
     tests:
