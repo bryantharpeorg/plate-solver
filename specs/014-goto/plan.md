@@ -95,13 +95,14 @@ crates/scope-node/
 ├── src/mount/skywatcher/emulator.rs    # US3: the byte-level emulator of the mount
 ├── src/mount/skywatcher/serial.rs      # US3: opening the device, the only untested shell
 ├── src/capture.rs (013's capture loop) # US2: axis positions at exposure start and end
-├── src/service.rs (013's NodeService)  # US2: the mount calls and ScopeNodeStop
+├── src/service.rs (013's NodeService)  # US2: ScopeNodeMount and ScopeNodeStop
 ├── src/config.rs (013's config)        # US3: the optional [mount] table
 ├── src/main.rs (013's)                 # US3: --probe-mount DEVICE; the mount from config
 └── tests/{stop_and_watchdog,frame_positions,skywatcher,mount_config}.rs   # US2, US3
 crates/scope-link/
-├── proto/scope_node/v1/scope_node.proto   # US2: mount calls, ScopeNodeStop (adds only)
-├── src/memory.rs (013's)                  # US2: serve_routes_on, both services on a duplex
+├── proto/scope_node/v1/scope_node.proto   # US2: ScopeNodeMount, ScopeNodeStop (adds only)
+├── src/memory.rs (013's)                  # US2: serve_routes_on, all three on a duplex
+├── tests/link.rs (013's)                  # US2: star_frame's two new fields, as None
 └── tests/mount_calls.rs                   # US2
 crates/simulator/
 ├── src/lib.rs                          # US1: `pub mod mount;`
@@ -163,8 +164,10 @@ trait Mount {
   revolution.
 - Rates are signed degrees per second, and each adapter turns them into its own units.
 
-**`scope_node.v1` gains these calls** (adds only):
-- in `service ScopeNode`, behind 013's `TokenInterceptor` like every call there:
+**`scope_node.v1` gains two services** (adds only; 013's `service ScopeNode` is unchanged):
+- a new `service ScopeNodeMount`, served beside `ScopeNode` with 013's `TokenInterceptor`,
+  so every call needs the token as `ScopeNode`'s do (§ Decisions, "The mount calls are
+  their own service"):
   - `DescribeMount` → two `AxisInfo`;
   - `AxisState(axis)`;
   - `GotoAxis(axis, position)`;
@@ -176,10 +179,10 @@ trait Mount {
 `StarFrame` gains optional `axis_start` and `axis_end` (both axes' counts, read at
 exposure start and end) on the next free field numbers: 11 and 12 on `main` at 2a2f9d2,
 where `preview_jpeg` is 10. `ScopeNode`'s comment, "Every call requires the session's
-bearer token", stays true.
+bearer token", stays true, and `ScopeNodeMount` carries the same comment.
 
 **`scope-link`'s Rust surface** gains `memory::serve_routes_on(server_io, routes)`, which
-serves a `tonic::service::Routes` (both services) on one duplex. 013's `serve_on` keeps
+serves a `tonic::service::Routes` (all three services) on one duplex. 013's `serve_on` keeps
 its signature.
 
 **`GET /api/session` gains** three fields, each left out of the body until it has a
@@ -211,8 +214,10 @@ These are not changed by any story:
   read's whole body with 012's fields, so `goto`, `model` and `mount` are left out until
   they have a value.
 - **013's link and node:** `TokenInterceptor`, `BearerToken`, `tokens_match` and
-  `memory::{channel_pair, serve_on}` keep their signatures, and `ScopeNode` keeps the
-  interceptor on every call. 013's config keys, `scope-node --check-config` and
+  `memory::{channel_pair, serve_on}` keep their signatures, and `service ScopeNode` is
+  unchanged, with the interceptor on every call. So 013's test servers for it, in
+  `crates/scope-link/tests/link.rs` and `crates/finder/tests/aim_cli.rs`, compile as
+  they are. 013's config keys, `scope-node --check-config` and
   `crates/scope-node/tests/cli.rs` are unchanged; the `[mount]` table is new and optional.
 - **013's end-to-end tests:** `e2e/simulate.spec.ts`, `e2e/live-off.spec.ts` and
   `crates/finder/tests/e2e_live.rs` pass unchanged.
@@ -220,6 +225,9 @@ These are not changed by any story:
   pins. Refraction lives only in `finder::ephemeris`.
 - **The proto:** `scope_node.v1`'s existing calls, messages and field numbers are kept.
   New ones only add, and proto comments hold no `[...]`, because rustdoc denies warnings.
+  `star_frame` in `crates/scope-link/tests/link.rs` lists every `StarFrame` field, so it
+  gains `axis_start: None` and `axis_end: None` and nothing else: the one change to an
+  existing test (US2-S8). Every other `StarFrame` literal ends with `..Default::default()`.
 - **Playwright:** the servers and projects are unchanged, except that the `simulate`
   project's match and the `default` project's ignore gain `e2e/goto.spec.ts`, and the
   `simulate` project gains `workers: 1` (owner approval 3; § Plan traps, trap 15).
@@ -274,8 +282,22 @@ installed on the generated `ScopeNodeServer`, and it sees only a request's metad
 and it does not cross the wire (tonic 0.14.6). So one interceptor cannot exempt one call.
 `StopAll` is the only call of `service ScopeNodeStop`, served beside `ScopeNode` on the
 same server with no interceptor. The node's TCP server (013's `service.rs`) and 013's
-`SimNode` add both services to one router, and `memory::serve_routes_on` serves both on
-one duplex for tests. A stop needs no token, and every other call still does.
+`SimNode` add all three services (`ScopeNode`, `ScopeNodeMount` and `ScopeNodeStop`) to
+one router, and `memory::serve_routes_on` serves them on one duplex for tests. A stop
+needs no token, and every other call still does.
+
+**The mount calls are their own service.** tonic's generated server trait makes every
+implementation define every call of its service, and 013 has two test servers for
+`ScopeNode`: `TestNode` in `crates/scope-link/tests/link.rs` and `Node` in
+`crates/finder/tests/aim_cli.rs`. Adding the mount calls to `ScopeNode` would break both,
+and no story changes an existing test. So `DescribeMount`, `AxisState`, `GotoAxis` and
+`RateAxis` are `service ScopeNodeMount`, served beside `ScopeNode` with the same
+`TokenInterceptor`, and `ScopeNode` is unchanged. The console's link client calls it
+through a `ScopeNodeMount` client on the link's channel and token. tonic's
+`generate_default_stubs` is not used: it also changes how the streaming `Frames` call is
+generated, which breaks all three of 013's implementations (tonic-build 0.14.6). The owner
+chose this on 2026-11-01, on US2's question d1a76f5e8e1b, over stubbing the four calls in
+both test servers.
 
 **The node's mount comes from its config.** 013's config file gains an optional `[mount]`
 table with one key, `device`, the serial device. With it, `main.rs` opens the device and
@@ -452,12 +474,15 @@ coverage job counts it. Playwright's `simulate` project adds one GoTo-and-Stop f
   `stop_all` at 1 s and marks the link lost.
 - **The capture loop:** 013's `capture.rs` reads both axes' positions at exposure start
   and end, onto `StarFrame`.
-- **`scope_node.v1`:** gains the mount calls in `ScopeNode`, behind 013's interceptor, and
-  `ScopeNodeStop` with `StopAll`, served with none. 013's `service.rs` serves both, over
-  the queue, and 013's `SimNode` (`crates/simulator/src/node.rs`) serves them over the
-  simulated mount. `scope_link::memory` gains `serve_routes_on`.
+- **`scope_node.v1`:** gains `ScopeNodeMount` with the mount calls, behind 013's
+  interceptor, and `ScopeNodeStop` with `StopAll`, served with none. 013's `ScopeNode` is
+  unchanged. 013's `service.rs` serves all three, over the queue, and 013's `SimNode`
+  (`crates/simulator/src/node.rs`) serves them over the simulated mount.
+  `scope_link::memory` gains `serve_routes_on`.
+- **The one existing test it touches:** `star_frame` in `crates/scope-link/tests/link.rs`
+  gains `axis_start: None` and `axis_end: None`, and nothing else (US2-S8).
 - **The console's link client:** 013's `crates/finder/src/link.rs` gains the matching
-  calls.
+  calls, through a `ScopeNodeMount` client on the link's channel and token.
 
 ## User Story 3 — The Sky-Watcher adapter
 
@@ -687,8 +712,8 @@ that keeps it from recurring. They bind every story. 013's plan holds the longer
     cargo once without `--locked` for `rustix`'s new features, never `cargo update`, and checks
     that the lock's diff only adds; every gate stays `--locked`.
 14. **One interceptor cannot exempt one call.** A tonic server interceptor sees only
-    metadata, never the method (§ Decisions). *Check:* `ScopeNode` keeps 013's
-    `TokenInterceptor` on every call, `ScopeNodeStop` is served with none, and US2-S5 and
+    metadata, never the method (§ Decisions). *Check:* `ScopeNode` and `ScopeNodeMount`
+    are served with 013's `TokenInterceptor`, `ScopeNodeStop` with none, and US2-S5 and
     US2-S6 run both over `memory::serve_routes_on`.
 15. **One `finder --simulate` server serves the whole `simulate` project.** Playwright runs
     a project's files in parallel workers by default, and 013 set no `workers`.
@@ -696,6 +721,13 @@ that keeps it from recurring. They bind every story. 013's plan holds the longer
     simulated telescope, so two at once break each other. 013's `serial` mode orders the
     tests within one file only. *Check:* the `simulate` project has `workers: 1` (owner
     approval 3).
+16. **A new field or call breaks 013's code that names every one.** A Rust struct literal
+    must list every field, and a tonic server must implement every call of its service.
+    `star_frame` in `crates/scope-link/tests/link.rs` lists every `StarFrame` field, and
+    013 has two test servers for `ScopeNode` (US2's question d1a76f5e8e1b). *Check:* the
+    mount calls are their own service, so `ScopeNode` and its test servers are
+    unchanged; `star_frame` gains only the two new fields, as `None`; every other
+    `StarFrame` literal already ends with `..Default::default()`, and new ones do too.
 
 ## Risks
 
@@ -800,12 +832,17 @@ stories:
       - path: crates/scope-link/tests/link.rs
         status: existing
         disposition: preserve
-        assertion: "no token and a wrong token are still UNAUTHENTICATED on ScopeNode, and frames still stream with the token; serve_on is unchanged"
+        assertion: "no token and a wrong token are still UNAUTHENTICATED on ScopeNode, and frames still stream with the token; serve_on is unchanged; star_frame only gains the two new StarFrame fields as None"
+        decision: "spec.md:US2-S8"
+      - path: crates/finder/tests/aim_cli.rs
+        status: existing
+        disposition: preserve
+        assertion: "013's aim CLI tests pass unchanged; their ScopeNode test server compiles as it is, because ScopeNode gains no call"
         decision: "spec.md:US2-S8"
     preserved_behavior:
-      - "the proto only adds calls, a service, messages and new field numbers, with no [ in comments (spec.md US2-S8)"
-      - "ScopeNode keeps 013's TokenInterceptor on every call; only ScopeNodeStop has none (plan.md Plan traps, trap 14)"
-      - "every existing test in crates/scope-link and crates/scope-node is unchanged (spec.md US2-S8)"
+      - "the proto only adds services, calls, messages and new field numbers, with no [ in comments, and service ScopeNode is unchanged (spec.md US2-S8)"
+      - "ScopeNode and ScopeNodeMount are served with 013's TokenInterceptor; only ScopeNodeStop has none (plan.md Plan traps, trap 14)"
+      - "every existing test in crates/scope-link, crates/scope-node and crates/finder is unchanged, except star_frame's two new None fields in crates/scope-link/tests/link.rs (spec.md US2-S8; plan.md Plan traps, trap 16)"
     checks:
       development:
         - "cargo test -p scope-node --locked"
@@ -825,6 +862,7 @@ stories:
       - crates/scope-link/proto/scope_node/v1/scope_node.proto
       - crates/scope-link/src/memory.rs
       - crates/scope-link/tests/mount_calls.rs
+      - crates/scope-link/tests/link.rs
       - crates/simulator/src/node.rs
       - crates/finder/src/link.rs
     shared_writes:
@@ -853,6 +891,11 @@ stories:
         other_story: US1
         disposition: merge_order
         reason: "014 depends_on_landed 013, whose US1 created memory.rs (67ad559)"
+      - path: crates/scope-link/tests/link.rs
+        other_spec: 013-live-finder
+        other_story: US1
+        disposition: merge_order
+        reason: "014 depends_on_landed 013, whose US1 created link.rs (67ad559)"
       - path: crates/simulator/src/node.rs
         other_spec: 013-live-finder
         other_story: US4

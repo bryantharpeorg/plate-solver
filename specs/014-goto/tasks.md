@@ -87,7 +87,8 @@ description: "Task list for 014-goto: GoTo"
   over the in-process link:
   - a move with no token fails with UNAUTHENTICATED and no axis moves (US2-S5);
   - stop all with no token succeeds while both axes move, and both stop (US2-S6), with
-    `ScopeNode` and `ScopeNodeStop` served together by `memory::serve_routes_on`;
+    `ScopeNode`, `ScopeNodeMount` and `ScopeNodeStop` served together by
+    `memory::serve_routes_on`;
   - describe and state through the link equal the simulator's counts per revolution, top
     rate, position, rate and moving flag exactly (US2-S7).
 
@@ -102,18 +103,24 @@ description: "Task list for 014-goto: GoTo"
   and `watchdog` in `crates/scope-node/src/mount/mod.rs`.
 - [ ] T012 [US2] In 013's capture loop, `crates/scope-node/src/capture.rs`, read both axes'
   positions at exposure start and end while a mount is connected.
-- [ ] T013 [US2] Add `DescribeMount`, `AxisState`, `GotoAxis` and `RateAxis` to
-  `service ScopeNode` in `crates/scope-link/proto/scope_node/v1/scope_node.proto`, a new
-  `service ScopeNodeStop` holding only `StopAll`, and optional `axis_start` and `axis_end`
-  to `StarFrame`, on new field numbers only and with no `[...]` in comments. Add
-  `serve_routes_on` to `crates/scope-link/src/memory.rs`, keeping `serve_on`. Serve both
-  services from 013's `crates/scope-node/src/service.rs` over the queue, `ScopeNode` with
+- [ ] T013 [US2] In `crates/scope-link/proto/scope_node/v1/scope_node.proto`, add a new
+  `service ScopeNodeMount` holding `DescribeMount`, `AxisState`, `GotoAxis` and
+  `RateAxis`, a new `service ScopeNodeStop` holding only `StopAll`, and optional
+  `axis_start` and `axis_end` to `StarFrame`, on new field numbers only and with no
+  `[...]` in comments. Leave 013's `service ScopeNode` unchanged (plan.md § Decisions,
+  "The mount calls are their own service"). In `crates/scope-link/tests/link.rs`, add
+  `axis_start: None` and `axis_end: None` to `star_frame`'s literal and change nothing
+  else in that file (US2-S8). Add `serve_routes_on` to `crates/scope-link/src/memory.rs`,
+  keeping `serve_on`. Serve all three services from 013's
+  `crates/scope-node/src/service.rs` over the queue, `ScopeNode` and `ScopeNodeMount` with
   013's `TokenInterceptor` and `ScopeNodeStop` with none, and from 013's `SimNode` in
   `crates/simulator/src/node.rs`. Add the matching calls to the console's link client,
-  `crates/finder/src/link.rs`.
-- [ ] T014 [US2] Run the `lint` and `test` gates. Confirm that the
-  proto change only adds, and that every existing test in `crates/scope-link` and
-  `crates/scope-node` is unchanged (US2-S8). Commit the green story (FR-004, FR-005,
+  `crates/finder/src/link.rs`, through a `ScopeNodeMount` client on the link's channel
+  and token.
+- [ ] T014 [US2] Run the `lint` and `test` gates. Confirm that the proto change only
+  adds, that 013's `service ScopeNode` is unchanged, and that every existing test in
+  `crates/scope-link`, `crates/scope-node` and `crates/finder` is unchanged except
+  `star_frame`'s two new fields (US2-S8). Commit the green story (FR-004, FR-005,
   FR-006; US2-S1, US2-S2, US2-S3, US2-S4, US2-S5, US2-S6, US2-S7, US2-S8).
 
 ## Phase 3: User Story 3 — the Sky-Watcher adapter (Priority: P2)
