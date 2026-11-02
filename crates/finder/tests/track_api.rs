@@ -212,6 +212,67 @@ async fn off_stops_within_half_a_second_and_leaves_true_direction_fixed() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn live_preview_after_track_off_reaches_the_router_within_five_point_five_seconds() {
+    let rig = accepted().await;
+    off(&rig).await;
+    let live = rig.state.live().unwrap();
+    let mut events = live.subscribe();
+    // Start just after a preview, exercising the full five-second cadence.
+    let mut previous = None;
+    for _ in 0..60 {
+        rig.tick().await;
+        while let Ok(report) = events.try_recv() {
+            if report.preview_seq == Some(report.frame_id) {
+                previous = Some(report.frame_id);
+            }
+        }
+        if previous.is_some() {
+            break;
+        }
+    }
+    let previous = previous.expect("live previews must continue after Track off");
+    rig.mount.push_to(40.0, 200.0);
+    let pushed_at = rig.now();
+    let mut fresh = None;
+    for _ in 0..55 {
+        rig.tick().await;
+        assert!(rig.stationary().await);
+        while let Ok(report) = events.try_recv() {
+            // The 200 ms exposure must have started after the push. Receiving
+            // an old JPEG, or publishing a preview without its frame, cannot pass.
+            if report.frame_id > previous
+                && report.preview_seq == Some(report.frame_id)
+                && report.time - 0.1 > pushed_at
+            {
+                fresh = Some(report);
+            }
+        }
+        if fresh.is_some() {
+            break;
+        }
+    }
+    let fresh = fresh.expect("no post-push preview within 5.5 seconds");
+    assert!(rig.now() - pushed_at <= 5.5);
+    let response = rig
+        .app
+        .clone()
+        .oneshot(
+            Request::get(format!("/api/live/preview.jpg?seq={}", fresh.frame_id))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(response.headers()["content-type"], "image/jpeg");
+    let jpeg = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let image = image::load_from_memory_with_format(&jpeg, image::ImageFormat::Jpeg).unwrap();
+    assert_eq!((image.width(), image.height()), (640, 478));
+}
+
+#[tokio::test(start_paused = true)]
 async fn below_horizon_and_foreign_origin_refuse_after_accepted_tracking_moved() {
     let rig = accepted().await;
     off(&rig).await;

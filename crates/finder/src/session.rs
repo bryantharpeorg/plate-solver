@@ -675,17 +675,35 @@ impl TrackControl {
             monitor: Mutex::new(None),
         });
         control.session.values.lock().unwrap().track = Arc::downgrade(&control);
-        let weak = Arc::downgrade(&control);
-        *control.monitor.lock().unwrap() = Some(tokio::spawn(async move {
+        control
+    }
+
+    fn watch_goto(self: &Arc<Self>) {
+        let weak = Arc::downgrade(self);
+        let mut monitor = self.monitor.lock().unwrap();
+        if let Some(previous) = monitor.take() {
+            previous.abort();
+        }
+        // Only an armed request needs a GoTo watcher. In particular opening
+        // the live console must not add a permanent 20 Hz polling task.
+        *monitor = Some(tokio::spawn(async move {
             loop {
                 tokio::time::sleep(Duration::from_millis(50)).await;
                 let Some(control) = weak.upgrade() else {
                     return;
                 };
                 control.advance().await;
+                if !control
+                    .run
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .is_some_and(|r| r.armed)
+                {
+                    return;
+                }
             }
         }));
-        control
     }
 
     fn view(
@@ -784,7 +802,7 @@ impl TrackControl {
         Ok((view, model, site, target))
     }
 
-    pub(crate) async fn set(&self, on: bool) -> Result<(), String> {
+    pub(crate) async fn set(self: &Arc<Self>, on: bool) -> Result<(), String> {
         if !on {
             self.stop().await;
             return Ok(());
@@ -827,6 +845,8 @@ impl TrackControl {
         }
         if !busy && !off_target {
             self.begin(generation).await?;
+        } else {
+            self.watch_goto();
         }
         Ok(())
     }
