@@ -198,6 +198,8 @@ export interface PointingModel {
 
 export interface ObservingSession {
   goto?: GoToProgress;
+  /** The planner's refusal, omitted when an idle GoTo would be accepted. */
+  goto_refusal?: string;
   model?: PointingModel;
   mount?: SessionMount;
   site: SessionSite | null;

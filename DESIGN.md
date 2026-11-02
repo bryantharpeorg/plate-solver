@@ -266,7 +266,7 @@ Ruled, square and quiet. The ink does the work.
 - **Focus:** a 2px ink outline offset 2px on the field box.
 
 ### Navigation
-- **Top bar:** sticky, Cool Paper ground, a hairline bottom rule. It carries the reticle mark and "Finder" (weight 600), then the frame chip with a 28px thumbnail, the target-sheet button, the site chip, the Setup link and the Night switch. On phones the wordmark, frame label and target button label are hidden to leave room for the controls.
+- **Top bar:** sticky, Cool Paper ground, a hairline bottom rule. It carries the reticle mark and "Finder" (weight 600), then the frame chip with a 28px thumbnail, the target-sheet button, the site chip, the Setup link, Stop while the mount may move, and the Night switch. On phones the wordmark, frame label and target button label are hidden to leave room for the controls.
 
 ### Sheets
 - **Style:** a native `<dialog>`, Cool Paper ground, 1px ink border, up to 640px wide (448px for the site sheet). It rises from the bottom on phones and centres from 48rem. The header row has a headline title, a quiet Close button and a hairline below. It enters with a 280ms rise and fade on the expo-out curve. The built target sheet searches the catalog as typed and shows its ordered answers as hairline-divided rows: family symbol, italic catalog and Messier IDs, common names, kind, magnitude and pointability class. Picking or clearing saves the shared session before closing; a failed save keeps the sheet open with an ink error.
@@ -279,6 +279,19 @@ An ink-only ruled block leads the page when a target is set, before the doubled-
 
 ### Target reticle — built
 On the latest pointing's chart, the target's atlas family symbol sits at the supplied pixel coordinates inside four open square corner ticks in Frame Ink. Galaxy symbols retain the supplied axes and position angle. The italic object-colour label sits toward the interior of the frame. This is session furniture, outside the legend: the five chips and their counts stay the same, and hiding Deep sky leaves the target drawn. A missing or different `pointing_seq` suppresses the mark. Existing object and Frame Ink tokens collapse to red at night.
+
+### GoTo — built
+`GoToControl` sits inside the guidance block, under its directions, while mount telemetry is present. Its square 44px primary button uses the existing dim primary treatment at night. Only a connected mount with no running GoTo or second sync and no `goto_refusal` enables it. The refusal is the server planner's exact text, linked to the button and printed in Second Ink. The page does no motion planning. An ink status line shows Slewing, Solving, each numbered Correction, and On target with the final error rounded to 0.1″; failures and halts retain their reason. Requests refresh the session immediately, and mount sessions poll every 500ms, waiting for an outstanding read to finish.
+
+### Stop — built
+`StopButton` lives in the sticky top bar shared by the console and Setup. Mount motion or an active GoTo or second sync shows it, including settling and solving before moving telemetry arrives. It stays enabled through pending and failed requests and sends a bodyless `POST /api/stop`. The square ink button is at least 44px tall. No mount telemetry means no GoTo or Stop, preserving the phone's existing first screen.
+
+With a mount, phone top-bar gaps tighten to 4px; below 380px the site chip yields to Stop, with the site still available in Setup. The bar fits at 320px without clipping Stop or the Night switch.
+
+With mount telemetry present, both the target and frame sheets use nonmodal dialogs below the top bar (inset 4rem, layer 20 below the bar's 30). Native modal dialogs would make Stop inert even above their backdrop. These sheets leave the top bar interactive and close with Close or Escape; they never contain Stop. Errors use the existing ink tokens, red only at night.
+
+### Mount and pointing model — built
+Setup's `MountSection`, below Scope node and camera, uses hairline rules and ink text for four parts: the mount's Connected/Disconnected link, scope address, board and reported firmware; “base tilt 1.0° toward 130°” (magnitude to 0.1°, direction to whole degrees); RMS residual to 0.1″ and the sync count; Second sync and Reset night's model / Reset fixed terms. Missing board data says Board not reported, and an unfitted base tilt explains the two syncs at least 90° apart. Second sync sends `/api/model/second-sync`; the resets send `/api/model/reset` with `night` or `fixed`. Controls are square and at least 44px tall. Pending requests and motion disable model actions while top-bar Stop remains enabled. Successes and refusals remain readable alongside the controls, using the same red-only tokens at night.
 
 ### Edge arrow — built
 An off-frame target uses the existing DirectionArrow, on the ray from the chart centre toward the supplied bearing (clockwise from up). It meets a neatline inset by 12 CSS pixels so the arrow stays in the frame, with an inward italic label giving the target ID and whole-degree distance. It shares the target family's object colour and the red-only night tokens, and is outside the legend like the reticle.

@@ -25,7 +25,8 @@ const LIVE_IMAGE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALA
 export function App() {
   const [night, setNight] = useNight();
   const [browserSite, setBrowserSite] = useSite();
-  const { session, loaded, error: sessionError, put } = useSession();
+  const { session, loaded, error: sessionError, put, refresh } = useSession();
+  const changed = () => void refresh().catch(() => {});
   const { live, pointingSeq: liveSeq, previewSeq, stale, session: liveSession } = useLive(session);
   const site = useMemo(
     () => (session.site ? { lat: session.site.lat_deg, lon: session.site.lon_deg } : null),
@@ -129,6 +130,7 @@ export function App() {
   return (
     <div className="contents" style={{ "--chart-aspect": aspect } as CSSProperties}>
       <TopBar
+        onChange={changed}
         mount={session.mount}
         goto={session.goto}
         source={source}
@@ -149,7 +151,7 @@ export function App() {
         </p>
       )}
       {path === "/setup" ? (
-        <SetupPage session={session} put={put} onBack={() => navigate("/")} />
+        <SetupPage session={session} put={put} onBack={() => navigate("/")} onChange={changed} />
       ) : (
         <>
           {/*
@@ -161,7 +163,12 @@ export function App() {
           >
             {session.target && (
               <div className="lg:col-span-2 lg:row-start-1">
-                <GuidanceBlock session={liveSession} stale={stale} onSetup={() => navigate("/setup")} />
+                <GuidanceBlock
+                  session={liveSession}
+                  stale={stale}
+                  onSetup={() => navigate("/setup")}
+                  onChange={changed}
+                />
               </div>
             )}
             {hasFrame && (

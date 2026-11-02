@@ -6,14 +6,16 @@ import { useLive } from "../useLive";
 import { AimTap } from "./AimTap";
 import { FieldWarning } from "./FieldWarning";
 import { ScopeNodeSection } from "./ScopeNodeSection";
+import { MountSection } from "./MountSection";
 
 interface Props {
   session: ObservingSession;
   put: (edit: SessionEdit) => Promise<void>;
   onBack: () => void;
+  onChange?: () => void;
 }
 
-export function SetupPage({ session, put, onBack }: Props) {
+export function SetupPage({ session, put, onBack, onChange }: Props) {
   const { live } = useLive(session);
   const [lat, setLat] = useState("");
   const [lon, setLon] = useState("");
@@ -168,6 +170,7 @@ export function SetupPage({ session, put, onBack }: Props) {
         </form>
       </section>
       <ScopeNodeSection session={session} live={live} />
+      <MountSection session={session} onChange={onChange} />
       <FieldWarning field={session.field} />
       <AimTap session={session} live={live} />
     </main>

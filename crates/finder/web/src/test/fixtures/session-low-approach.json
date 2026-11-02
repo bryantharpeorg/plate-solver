@@ -20,6 +20,7 @@
     "reason": null,
     "state": "done"
   },
+  "goto_refusal": "approach would go below the minimum altitude",
   "guidance": {
     "class": "pointable",
     "placement": {

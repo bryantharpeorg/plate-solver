@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import type { ObservingSession } from "../api";
 import second from "../test/fixtures/session-second-sync-slewing.json";
+import ready from "../test/fixtures/session-ready.json";
 import { StopButton } from "./StopButton";
 
 // Oracle: simulator second-sync capture and FR-024's exact DOM/accessibility
@@ -60,21 +61,33 @@ describe("Stop", () => {
     await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/stop", { method: "POST" }));
   });
 
-  it.each(["/", "/setup"])("remains accessible on %s with the target sheet open and closed", async (path) => {
-    serve();
-    window.history.replaceState(null, "", path);
-    const modal = vi.spyOn(HTMLDialogElement.prototype, "showModal");
-    render(<App />);
-    await screen.findByRole("button", { name: "Stop" });
-    assertAccessible();
-    fireEvent.click(screen.getByRole("button", { name: "Choose target" }));
-    expect(screen.getByRole("dialog", { name: "Choose a target" })).toBeTruthy();
-    assertAccessible();
-    expect(modal).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    expect(screen.queryByRole("dialog", { name: "Choose a target" })).toBeNull();
-    assertAccessible();
-  });
+  it.each([
+    ["/", false],
+    ["/setup", false],
+    ["/", true],
+    ["/setup", true],
+  ] as const)(
+    "remains accessible on %s with moving telemetry %s and the target sheet open and closed",
+    async (path, moving) => {
+      serve(
+        moving
+          ? ({ ...second, goto: undefined, mount: { ...second.mount, moving: true } } as ObservingSession)
+          : (second as ObservingSession),
+      );
+      window.history.replaceState(null, "", path);
+      const modal = vi.spyOn(HTMLDialogElement.prototype, "showModal");
+      render(<App />);
+      await screen.findByRole("button", { name: "Stop" });
+      assertAccessible();
+      fireEvent.click(screen.getByRole("button", { name: "Choose target" }));
+      expect(screen.getByRole("dialog", { name: "Choose a target" })).toBeTruthy();
+      assertAccessible();
+      expect(modal).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Close" }));
+      expect(screen.queryByRole("dialog", { name: "Choose a target" })).toBeNull();
+      assertAccessible();
+    },
+  );
 
   it("also keeps the frame sheet from making Stop inert", async () => {
     serve();
@@ -105,6 +118,29 @@ describe("Stop", () => {
     fireEvent.click(stop);
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(stop.disabled).toBe(false);
+  });
+
+  it("shows Stop after an accepted GoTo even when session replies take longer than the poll interval", async () => {
+    let session = ready as ObservingSession;
+    let reads = 0;
+    const fallback = serve(session);
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/session") {
+        const snapshot = session;
+        if (++reads > 1) await new Promise((resolve) => setTimeout(resolve, 650));
+        return new Response(JSON.stringify(snapshot));
+      }
+      if (String(input) === "/api/goto") {
+        session = { ...session, goto: { state: "slewing", correction: 0, error_arcsec: null, reason: null } };
+        return new Response(JSON.stringify({ started: true }));
+      }
+      return fallback(input);
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "GoTo" }));
+    const stop = await screen.findByRole("button", { name: "Stop" }, { timeout: 2500 });
+    expect((stop as HTMLButtonElement).disabled).toBe(false);
+    assertAccessible();
   });
 
   it.each(["slewing", "solving", "correcting"] as const)("shows for %s before telemetry reports motion", (state) => {

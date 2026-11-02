@@ -6,6 +6,8 @@ real catalog rendering and plate solving, simulated mount, in-process scope link
 and externally supplied paused virtual time starting 2026-01-16 02:00:00 UTC.
 The script's header gives the exact capture command. It adds a temporary test;
 no existing test is edited.
+Refused idle sessions include `goto_refusal`, captured from the shared planner;
+accepted and running sessions omit it. No reason is supplied by the page.
 
 - `session-ready`: connected, still mount with one solved sync, target M42.
 - `session-goto-m42`: every distinct state/correction pair of a completed M42

@@ -9,6 +9,7 @@ import approach from "../test/fixtures/session-low-approach.json";
 import recorded from "../test/fixtures/session-goto-m42.json";
 import { GuidanceBlock } from "./GuidanceBlock";
 import { StopButton } from "./StopButton";
+import { GoToControl } from "./GoToControl";
 
 // Oracle: captured simulator sessions and the API's motion guards. Exact text,
 // correction numbers and 0.1 arcsecond display rounding; no browser clock.
@@ -71,5 +72,35 @@ describe("GoTo in guidance", () => {
     const { mount: _mount, ...session } = ready;
     render(<GuidanceBlock session={session as ObservingSession} />);
     expect(screen.queryByRole("button", { name: "GoTo" })).toBeNull();
+  });
+
+  it("requests fresh session progress immediately after an accepted GoTo", async () => {
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ started: true })));
+    const changed = vi.fn();
+    render(<GoToControl session={ready as ObservingSession} onChange={changed} />);
+    fireEvent.click(screen.getByRole("button", { name: "GoTo" }));
+    await waitFor(() => expect(changed).toHaveBeenCalledOnce());
+  });
+
+  it.each(["slewing", "solving", "correcting"] as const)("disables GoTo during %s", (state) => {
+    render(
+      <GoToControl
+        session={{ ...ready, goto: { state, correction: 2, error_arcsec: 80, reason: null } } as ObservingSession}
+      />,
+    );
+    expect((screen.getByRole("button", { name: "GoTo" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole("status").textContent).toContain("Correction 2");
+  });
+
+  it.each(["halted", "failed"] as const)("shows a %s result and its reason", (state) => {
+    render(
+      <GoToControl
+        session={
+          { ...ready, goto: { state, correction: 5, error_arcsec: 85.4, reason: "lost link" } } as ObservingSession
+        }
+      />,
+    );
+    expect(screen.getByRole("status").textContent).toMatch(/lost link/);
+    expect(screen.getByRole("status").textContent).toContain("85.4″");
   });
 });

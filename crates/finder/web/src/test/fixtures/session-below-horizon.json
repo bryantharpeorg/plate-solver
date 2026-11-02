@@ -20,6 +20,7 @@
     "reason": null,
     "state": "done"
   },
+  "goto_refusal": "M8 is below the horizon",
   "guidance": {
     "class": "below_horizon",
     "placement": {

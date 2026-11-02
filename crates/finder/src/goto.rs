@@ -473,15 +473,28 @@ impl GoTo {
     pub fn progress(&self) -> Option<Progress> {
         self.state.lock().unwrap().progress.clone()
     }
-    /// Start toward the session's canonical target, refusing before any movement.
-    pub async fn start(self: &Arc<Self>) -> Result<(), String> {
-        let target = self
-            .session
+    /// Idle GoTo eligibility, using the request's planner without commanding motion.
+    /// Active GoTos and second syncs report progress instead of a refusal.
+    pub async fn refusal(&self) -> Option<String> {
+        let _gate = self.start_gate.lock().await;
+        if self.state.lock().unwrap().busy {
+            return None;
+        }
+        match self.target() {
+            Ok(target) => self.check_request(Some(&target)).await.err(),
+            Err(reason) => Some(reason),
+        }
+    }
+    fn target(&self) -> Result<Target, String> {
+        self.session
             .snapshot(self.clock.now())
             .target
-            .ok_or("no target is selected")?
-            .clone();
-        self.start_target(target).await
+            .cloned()
+            .ok_or_else(|| "no target is selected".into())
+    }
+    /// Start toward the session's canonical target, refusing before any movement.
+    pub async fn start(self: &Arc<Self>) -> Result<(), String> {
+        self.start_target(self.target()?).await
     }
     /// Plan a supplied celestial direction through the same mandatory guards.
     pub async fn start_target(self: &Arc<Self>, target: Target) -> Result<(), String> {
@@ -494,17 +507,8 @@ impl GoTo {
     }
     async fn start_request(self: &Arc<Self>, target: Option<Target>) -> Result<(), String> {
         let _gate = self.start_gate.lock().await;
-        if self.state.lock().unwrap().busy {
-            return Err("a GoTo is already running".into());
-        }
         let generation = *self.cancel.borrow();
-        let mut client = self.link.mount().ok_or("no mount is connected")?;
-        let plan = tokio::time::timeout(
-            Duration::from_secs(1),
-            self.prepare(target.as_ref(), &mut client, false),
-        )
-        .await
-        .map_err(|_| "mount did not answer")??;
+        let (client, plan) = self.check_request(target.as_ref()).await?;
         if *self.cancel.borrow() != generation {
             return Err("the observer stopped it".into());
         }
@@ -521,9 +525,24 @@ impl GoTo {
         }
         let owner = self.clone();
         tokio::spawn(async move {
-            owner.run(target, client, plan.0, generation).await;
+            owner.run(target, client, plan, generation).await;
         });
         Ok(())
+    }
+    // Shared by session reads and motion requests: every refusal and path guard
+    // stays in prepare/Planner, with the same bounded wait for mount telemetry.
+    async fn check_request(&self, target: Option<&Target>) -> Result<(MountClient, Plan), String> {
+        if self.state.lock().unwrap().busy {
+            return Err("a GoTo is already running".into());
+        }
+        let mut client = self.link.mount().ok_or("no mount is connected")?;
+        let plan = tokio::time::timeout(
+            Duration::from_secs(1),
+            self.prepare(target, &mut client, false),
+        )
+        .await
+        .map_err(|_| "mount did not answer")??;
+        Ok((client, plan.0))
     }
     async fn prepare(
         &self,

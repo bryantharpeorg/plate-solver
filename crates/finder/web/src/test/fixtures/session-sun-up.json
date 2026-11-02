@@ -14,6 +14,7 @@
     "fov_deg": 11.999058931666076,
     "unsolved_s": 0.0
   },
+  "goto_refusal": "Sun is up",
   "guidance": {
     "class": "pointable",
     "placement": {

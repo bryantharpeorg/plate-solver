@@ -644,6 +644,30 @@
       "description": "Built in AimTap.tsx on /setup. Centre a star in the eyepiece, then tap the .photo live preview. The shown photograph retains its frame id and full-frame dimensions; a tap scales its displayed rectangle to full-frame pixels and POSTs /api/aim. The console snaps to a star. 422 and expired-frame reasons stay visible without changing the aim point. Unloaded or failed previews accept no tap. Saved coordinates and Reset aim point remain available without a preview; DELETE restores frame centre immediately. Moving the finder camera is the cue to reset. Existing ink and red-only filter at night.",
       "html": "<section class=\"ds-aim\"><h2>Aim point</h2><p>Aim point: (700, 420) px</p><button aria-label=\"Set aim point on live preview\"><img class=\"photo\" alt=\"Live preview, frame 42\"/></button><button>Reset aim point</button></section>",
       "css": ".ds-aim{color:var(--color-ink)}.ds-aim button{border:1px solid var(--color-ink);background:transparent;color:inherit;min-height:44px}.ds-aim img{display:block;width:100%;height:auto}[data-theme=\"night\"] .photo{filter:url(#red-only)}"
+    },
+    {
+      "name": "GoTo",
+      "kind": "custom",
+      "refersTo": "button",
+      "description": "Built in GoToControl.tsx inside GuidanceBlock. Present with mount telemetry; enabled only for a connected mount, no running GoTo or second sync, and no server goto_refusal. The exact planner refusal is printed and linked with aria-describedby. A primary 44px button POSTs /api/goto. An ink status shows Slewing, Solving, each numbered Correction and On target with the final error to 0.1 arcsecond, or the halt/failure reason. Motion requests refresh immediately and mount sessions poll every 500ms, waiting for an outstanding read to finish. Existing dim primary and red-only night tokens.",
+      "html": "<section aria-label=\"Target M42\"><button class=\"ds-goto\">GoTo</button><p role=\"status\">Correction 1 · On target · 12.3″</p></section>",
+      "css": ".ds-goto{min-height:44px;border:1px solid var(--color-ink);border-radius:0;background:var(--color-ink);color:var(--color-paper)}[data-theme=\"night\"] .ds-goto{background:var(--color-rule);color:var(--color-ink)}"
+    },
+    {
+      "name": "Stop",
+      "kind": "custom",
+      "refersTo": "button",
+      "description": "Built in StopButton.tsx in the sticky TopBar shared by console and Setup. Visible whenever mount.moving or a GoTo/second sync is slewing, solving or correcting. No mount telemetry renders nothing. Always enabled, including pending, failed and repeated bodyless POST /api/stop requests. Explicit 44px minimum height, square ink border, red-only night tokens. With a mount, target and frame sheets are nonmodal dialogs fixed below the top bar (4rem inset, layer 20 below 30); Stop stays outside every dialog and inert/aria-hidden subtree. Close and Escape dismiss the sheets. Mount top-bar gaps tighten to 4px on phones; below 380px the site chip yields to Stop and remains available in Setup. Fits at 320px.",
+      "html": "<header class=\"ds-motion-bar\"><button class=\"ds-stop\">Stop</button></header>",
+      "css": ".ds-motion-bar{position:sticky;top:0;z-index:30;background:var(--color-paper)}.ds-stop{min-height:44px;border:1px solid var(--color-ink);border-radius:0;color:var(--color-ink);background:transparent}"
+    },
+    {
+      "name": "Mount and Pointing Model",
+      "kind": "custom",
+      "refersTo": "list-row",
+      "description": "Built in MountSection.tsx on Setup below Scope node and camera. Four parts: link state, scope address, board (or Board not reported) and reported firmware; base tilt to 0.1 degree toward whole-degree azimuth; RMS residual to 0.1 arcsecond and sync count; Second sync and resets for the night model and fixed terms. An unfitted tilt explains two syncs at least 90 degrees apart. Second sync POSTs /api/model/second-sync; each reset POSTs /api/model/reset with what night or fixed. Model actions disable while pending or moving; top-bar Stop stays enabled. Hairline rules, square 44px controls, ink successes/refusals and existing red-only night tokens.",
+      "html": "<section class=\"ds-mount\"><h2>Mount and pointing model</h2><p>Connected · scope.local:1 · Sky-Watcher · firmware 3.39</p><p>base tilt 1.0° toward 130°</p><p>2 syncs</p><p>RMS residual 1.2″</p><button>Second sync</button><button>Reset night's model</button><button>Reset fixed terms</button></section>",
+      "css": ".ds-mount{color:var(--color-ink);border-block:1px solid var(--color-rule)}.ds-mount button{min-height:44px;border:1px solid var(--color-ink);border-radius:0;color:inherit;background:transparent}"
     }
   ],
   "narrative": {

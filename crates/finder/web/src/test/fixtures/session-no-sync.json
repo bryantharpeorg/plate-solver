@@ -20,6 +20,7 @@
     "reason": null,
     "state": "done"
   },
+  "goto_refusal": "the night has no sync yet",
   "guidance": {
     "class": "pointable",
     "placement": {
