@@ -274,7 +274,7 @@ and sin h = sin φ / sin δ; at φ 40° that includes M81, M82, M101 and Capella
 next 30 minutes. When the path enters the 2° circle round the zenith, the tracker:
 1. stops at the entry;
 2. slews ahead, through 014's planner with the Sun guard included, to where the path
-   leaves the circle;
+   leaves the circle (§ Plan traps, trap 17);
 3. waits;
 4. once the target's forecast position is outside the circle, solves, applies the error
    and resumes.
@@ -586,6 +586,23 @@ recurring here. They bind every story.
     existing `MountConfig` literal ends with `..` (`ideal()` and its two uses in 014's
     `crates/simulator/tests/mount.rs`, re-read at 3bb1ef4), and new ones do too; no
     existing test changes (US2-S5).
+17. **014's planner aims where the target will be at the end of the slew.** Its one public
+    entry, `goto::Planner::plan(&Target)`, plans to the target's place at the Planner's
+    `start` plus the slew's travel time (`plan_place` is private). The keyhole needs the
+    exit instead. *Check:* US6 builds the `Planner` with `start` set to the forecast exit
+    time and calls `plan` unchanged.
+    - The destination is then just past the exit, outside the circle.
+    - The Sun-up check and the path's Sun guard are evaluated from that time. Near the
+      zenith that changes nothing, and a refusal still ends tracking with its reason.
+    - The Planner's fields are public: the current model, the axes, the counts, the
+      site, the minimum altitude and the cable wind.
+    - 014's GoTo keeps its own `goto::Wind` privately. So the tracker keeps one the same
+      way: the night's first sync's azimuth, then each solved azimuth. A fresh `Wind`
+      would let the plan wind the cable past its revolution.
+    - The plan's waypoints are driven with 014's `GotoAxis` (`MountClient::goto_axis`),
+      with both axes stopped before the next waypoint, as 014's GoTo drives them.
+      Tracking's rates stay `RateAxis`.
+    - `crates/finder/src/goto.rs` is not edited (re-read at d5e8c0c).
 
 ## Risks
 
