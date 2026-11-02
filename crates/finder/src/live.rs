@@ -213,6 +213,7 @@ impl Live {
                     estimate = Some(solved.fov_deg());
                     let seq = session.record_live_pointing(solved, time, frame.id);
                     if seq.is_some() {
+                        session.track_pointing(solved);
                         let rms = report
                             .pointing
                             .as_ref()

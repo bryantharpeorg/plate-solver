@@ -109,9 +109,10 @@ The page uses the API types in `web/src/api.ts`, which mirror the Rust structs i
 | `POST /api/solve` | Multipart: an `image` file or a `sample` name, and optionally `fov`, `fov_max_error`, `distortion`, `bin`, `sigma`, `stars`, `timeout_ms` (the `solve_image` flags). Answers a `SolveReport`. |
 | `GET /api/similar?id=M42&lat=&lon=&time=` | Objects like `id`, best first. With `lat`/`lon` (degrees, east positive) and optional Unix `time`, each has its altitude and whether it is up. |
 | `GET /api/session` | One shared observing session: `{site, min_alt_deg, target, pointing, time}`. |
-| `PUT /api/session` | JSON partial edit: `{site?, min_alt_deg?, target?}`. Answers the updated observing session. |
+| `PUT /api/session` | JSON partial edit: `{site?, min_alt_deg?, target?, imaging_camera?}`. Answers the updated observing session. |
 | `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
-| `POST /api/stop` | No body. Always 200, commanding both axes to stop, from any origin. |
+| `POST /api/track` | JSON `{"on":true}` or `{"on":false}`. Returns the session; turning on can answer 409 with a JSON `error`. Same-origin writes only. |
+| `POST /api/stop` | No body. Always 200, ending armed or running tracking as `stopped` and commanding both axes to stop, from any origin. |
 | `POST /api/model/second-sync` | No body. Start the second sync; 200 with `{"started":true}`, or 409 with a JSON `error` naming the refusal. Same-origin writes only. |
 | `POST /api/model/reset` | JSON `{"what":"night"}` or `{"what":"fixed"}`. Reset that part of the pointing model and return the session. Same-origin writes only. |
 
@@ -120,7 +121,29 @@ A fresh session has no site, target or latest pointing, and a minimum altitude o
 `time` is the console's clock in Unix seconds. The binary uses the system clock except
 under `--simulate`, whose virtual clock runs at the real rate.
 
-Session edits, solves, GoTo and model writes follow the same-origin rule. When
+Track-on requires a connected mount, a sync tonight, a site, the Sun down and a
+pointable target. A refusal names the missing condition. If a GoTo is running,
+Track is `armed` until it completes; a failed or halted GoTo ends tracking with
+its reason. Otherwise, Track starts a GoTo first when the target is more than 1′
+from the aim point. Track-off stops both axes, leaving the telescope where it is.
+
+After the first accepted Track-on, session bodies include
+`track: {wanted, state, target?, ended_reason?, readout?}`. The state is `armed`,
+`off`, `tracking`, or the tracker's other stable state name, such as `keyhole_wait`.
+Safe endings clear `wanted` and retain the reason. While following, `readout`
+reports `rms_arcsec` over the last 60 seconds and `field_rotation_deg_per_min`.
+Live finder solves at the aim point supply the errors; uploaded frames do not.
+Tracking always starts off after a binary restart, with no `track` field.
+
+Put `{"imaging_camera":{"width_mm":23.5,"height_mm":15.6,"pitch_um":3.76}}`
+to save the imaging camera's geometry across restarts. Each dimension must be
+greater than 0 and at most 100 mm; pitch must be greater than 0 and at most 50 µm.
+Invalid edits answer 400 with a JSON `error` and change nothing. An explicit
+`{"imaging_camera":null}` clears it; session bodies omit the field until set.
+With this camera, the tracking readout also includes `longest_exposure_s` for
+one pixel of field-rotation smear at the sensor's corner, as seconds or `"no limit"`.
+
+Session edits, solves, GoTo, Track and model writes follow the same-origin rule. When
 a request carries an `Origin`, its scheme, host and port must match the request's own
 origin. Its `Host` must also be an IP literal, `localhost`, or an explicitly allowed DNS
 name. A different origin or an unlisted DNS name answers 403 with a JSON `error` and
