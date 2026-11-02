@@ -130,8 +130,9 @@ description: "Task list for 015-tracking: Tracking"
   - a mount that runs 1% fast: feed-forward alone drifts more than 1′, and the closed loop
     holds an RMS of at most 20″ (US4-S1);
   - inside the deadband (US4-S2);
-  - rendered frames, solved in the test with `finder::solve`, agree with truth plus noise
-    within 5″ RMS (US4-S3).
+  - with the 1% rate error, 2 minutes on rendered frames solved in the test with
+    `finder::solve` and 2 minutes on truth plus noise each apply a correction, and their
+    true eyepiece errors from M42 agree within 5″ RMS (US4-S3).
 
   The noise is drawn from a seeded generator in the test file; the simulator's
   `SplitMix64` is private to its crate.
@@ -156,10 +157,13 @@ description: "Task list for 015-tracking: Tracking"
 
 - [ ] T019 [US5] Write failing paused-time tests in a new
   `crates/finder/tests/backlash_sim.rs`, with 0.3° of backlash on each axis:
-  - the first reversal measures the backlash (US5-S1);
+  - the first reversal: a zero rate before the opposite one, within 60″ through the dead
+    band and back within 30″ within 10 minutes, and the settled backlash 0.3° within
+    30″ (US5-S1);
   - later reversals take it up (US5-S2);
   - an azimuth reversal for M81 at greatest elongation (US5-S3);
-  - syncs after a transit, asserting first that they were taken (US5-S5);
+  - syncs after a transit, asserting first that they were taken, then that IE is within
+    30″ of the IE fitted from the syncs on the way up, read before the reversal (US5-S5);
   - the backlash read, then cleared by `POST /api/model/reset` with
     `{"what": "fixed"}`, leaving no `backlash` field (US5-S6).
 - [ ] T020 [US5] Write a failing test in a new `crates/finder/tests/backlash_cli.rs`: the
@@ -173,8 +177,8 @@ description: "Task list for 015-tracking: Tracking"
 
 - [ ] T021 [US5] In `crates/finder/src/tracking.rs`:
   - forecast reversals over 30 minutes from the feed-forward rate's sign;
-  - at an axis's first reversal, measure the backlash from the closed loop's settled
-    jump;
+  - at an axis's first reversal, measure the backlash from the drive the closed loop
+    adds to cross the dead band (plan.md § Decisions, "Measuring");
   - before later reversals, stop the axis, drive through the backlash at 0.5°/s, and
     resume.
 - [ ] T022 [US5] In 014's `crates/finder/src/model.rs`, apply the measured backlash to
@@ -196,7 +200,8 @@ description: "Task list for 015-tracking: Tracking"
 ### Tests first
 
 - [ ] T025 [US6] Write a failing paused-time test in a new
-  `crates/finder/tests/keyhole_sim.rs`: a target at δ = φ − 1° at φ 40°. Tracking pauses
+  `crates/finder/tests/keyhole_sim.rs`: a target at δ = φ − 1° at φ 40°, with 0.3° of
+  backlash and the altitude backlash seeded through US5's state-file field. Tracking pauses
   at the 2° circle, waits at the exit, and is back within 1′ within 30 s of the target
   leaving (US6-S1).
 
@@ -227,7 +232,8 @@ description: "Task list for 015-tracking: Tracking"
   - Track on starts a GoTo (US7-S3);
   - Track off leaves the telescope where it is (US7-S4);
   - an impossible pixel pitch (US7-S6);
-  - the tracking readout against FR-001 and FR-002 (US7-S7);
+  - the tracking readout: the RMS of the tracker's last 60 s of samples within 1e-9″ and
+    at most 20″, and FR-001 and FR-002 (US7-S7);
   - a foreign `Origin` on `POST /api/track` (US7-S8);
   - a foreign, bodiless `POST /api/stop` while tracking: 200, both axes at rest within
     1.5 s and for the next 10 s, and tracking ended as stopped (US7-S10);
@@ -278,7 +284,8 @@ description: "Task list for 015-tracking: Tracking"
 
 - [ ] T036 [US8] Write failing Vitest tests in a new
   `crates/finder/web/src/components/TrackControl.test.tsx`, on recorded sessions:
-  - tracking ended because the target is too low (US8-S1);
+  - tracking ended because the target is too low, asserted inside TrackControl's own
+    labelled element (US8-S1);
   - the readout's rounding, and "no limit" (US8-S2);
   - no toggle without a mount (US8-S3).
 - [ ] T037 [US8] Write failing Vitest tests in a new
@@ -317,9 +324,12 @@ description: "Task list for 015-tracking: Tracking"
 ### Tests first
 
 - [ ] T042 [US9] Write `crates/finder/tests/tracking_night.rs`: an hour of paused time on
-  the simulator, with a 1% rate error and 0.3° of backlash. It covers a transit, a keyhole
-  passage, then setting below the minimum altitude, and asserts its own `Instant::elapsed`
-  under 30 s (US9-S1).
+  the simulator at φ 40°, with a 1% rate error, 0.3° of backlash and the altitude
+  backlash seeded through US5's state-file field. A δ 20° target is tracked from 10
+  minutes before its transit through its reversal, then, with the minimum altitude set to
+  69.5° once it is tracked, until it ends too low. A δ 39° target is then tracked from 5
+  minutes before the 2° zenith circle until 30 s after it leaves. The test asserts its own
+  `Instant::elapsed` under 30 s (US9-S1).
 - [ ] T043 [US9] Write `crates/finder/web/e2e/tracking.spec.ts` for the `simulate`
   project. It runs serially, sets the site, the imaging camera and M42 first, and turns
   Track off at the end:

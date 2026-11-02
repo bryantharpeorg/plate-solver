@@ -265,9 +265,12 @@ them.
 reverses at greatest elongation for any target with δ > φ, where cos H = tan φ / tan δ
 and sin h = sin φ / sin δ; at φ 40° that includes M81, M82, M101 and Capella. For M81
 (δ +69.07°) that is H ≈ 71.3° at h ≈ 43.5°.
-- **Measuring.** At an axis's first reversal in the mount's life, the closed loop sees
-  the error jump along that axis. The size of the jump, settled over the next solves, is
-  that axis's backlash. Later reversals refine it.
+- **Measuring.** At an axis's first reversal in the mount's life, the axis crosses its
+  dead band: the counts move while the tube stands still, which on the simulator is a
+  crawl of a few minutes, not a jump. The closed loop adds drive until the error settles.
+  The drive it added beyond feed-forward from the reversal to that settling is that
+  axis's backlash; the settled shift between the solved altitude and the model's
+  prediction from the counts is an equivalent measure. Later reversals refine it.
 - **Keeping.** The measurement belongs to the mount, so it is kept with the fixed terms
   and cleared when they are reset.
 - **Syncs.** A GoTo's last approach is from below, so its syncs carry the backlash on the
@@ -281,8 +284,9 @@ and sin h = sin φ / sin δ; at φ 40° that includes M81, M82, M101 and Capella
   3. resumes the feed-forward rate.
 
   A reversal is planned when the axis's feed-forward rate changes sign within the
-  30-minute forecast. Until a backlash is measured, the closed loop recovers within about
-  15 s, relying on 014's stop-before-reverse.
+  30-minute forecast. Until a backlash is measured, the closed loop carries the reversal
+  after a zero rate: the error stays within 60″ through the dead band and is back within
+  30″ within 10 minutes (US5-S1).
 
 **The zenith keyhole: wait at the exit.** The tracker forecasts the target's path for the
 next 30 minutes. When the path enters the 2° circle round the zenith, the tracker:
@@ -392,7 +396,8 @@ and the 2-minute rendered-frame run beside it, which solves in the test (§ Deci
 
 In `crates/finder/src/tracking.rs`:
 - add the 30-minute reversal forecast from the feed-forward rate's sign;
-- measure the backlash from the closed loop's settled jump at the first reversal;
+- measure the backlash at the first reversal from the drive the closed loop adds to cross
+  the dead band (§ Decisions, "Measuring");
 - take it up at 0.5°/s before later reversals.
 
 In `crates/finder/src/model.rs`, apply or hold back syncs taken against the approach
@@ -450,8 +455,10 @@ the error, field rotation and longest exposure, rounded to 1″, 0.01°/min and 
 
 **`crates/finder/tests/tracking_night.rs`.** An hour of paused time on the simulator:
 - a 1% rate error and 0.3° of backlash;
-- a target chosen to transit, pass within 2° of the zenith and then set through the
-  minimum altitude within the hour;
+- at latitude 40°, with the altitude backlash measured first: a target at δ 20° from 10
+  minutes before its transit until it sinks below a minimum altitude of 69.5°, set once
+  it is tracked, about 20 minutes after transit; then a target at δ 39° from 5 minutes
+  before the 2° zenith circle until 30 s after it leaves;
 - the test asserts its own `Instant::elapsed` is under 30 s.
 
 **`crates/finder/web/e2e/tracking.spec.ts`.** It goes in the `simulate` project and covers
@@ -626,9 +633,8 @@ recurring here. They bind every story.
       target descends. At the resume, before the feed-forward rate, an axis whose next
       tracking direction opposes its last motion takes up its measured backlash as US5
       does (stop, drive through it at 0.5°/s, resume). US5's forecast take-up does not
-      run during `keyhole_wait`. US6-S1's Given names no backlash, so its test either
-      seeds the measured altitude backlash (US5's state-file field) with the default
-      0.3°, or sets the simulator's backlash to 0.
+      run during `keyhole_wait`. US6-S1's and US9-S1's Givens have the altitude
+      backlash measured, so their tests seed it through US5's state-file field.
     - The Planner's fields are public: the current model, the axes, the counts, the
       site, the minimum altitude and the cable wind.
     - 014's GoTo keeps its own `goto::Wind` privately. So the tracker keeps one the same
@@ -645,7 +651,7 @@ recurring here. They bind every story.
 |---|---|
 | Motor firmware below 3.39 reportedly tracks unevenly at variable rates. | 014 warns at connect. The closed loop absorbs small unevenness, and bring-up records the firmware. |
 | Rate updates every second go over a 9600-baud single-wire link. | Each update is a few short commands per axis, well under the link's capacity. It is measured at bring-up, outside the factory. |
-| The altitude axis reverses at transit. | Stop-before-reverse costs a fraction of a second, and backlash far more. The first reversal measures the backlash and later ones take it up ahead of time, so the error stays within the 30″ the scenario allows. A real mount's backlash may vary along the axis; the closed loop absorbs what the measurement misses. |
+| The altitude axis reverses at transit. | Stop-before-reverse costs a fraction of a second, and backlash far more. The first reversal measures the backlash and later ones take it up ahead of time, so the error stays within 30″ at later reversals, and within 60″ through the first (US5-S1). A real mount's backlash may vary along the axis; the closed loop absorbs what the measurement misses. |
 | Imaging at 1800 mm on an alt-az mount needs short subs and derotation when stacking. | The readout states the limit. Derotation is out of scope. |
 | A rate error far beyond 1% (a slipping clutch, a wrong counts-per-turn). | 1% is the closed loop's design case, and the integral is clamped at 5%. Larger errors point to a fault that the model and the slip rule catch at the next sync. |
 | The simulator's PI gains do not suit the real mount. | They are the starting point. The on-sky checklist confirms or retunes them as constants in code. |
@@ -780,7 +786,7 @@ stories:
       - path: crates/finder/tests/tracking_loop.rs
         status: new
         disposition: add
-        assertion: "with a 1% rate error and seeded truth plus 3 arcsec of noise every 2 s, feed-forward alone drifts more than 1 arcmin in 10 minutes and the closed loop holds an RMS of at most 20 arcsec over the last 8; with every error under 10 arcsec the commanded rates equal feed-forward within 0.001 arcsec/s and the offset stays 0; 2 minutes on rendered, solved frames agree with truth plus noise within 5 arcsec RMS"
+        assertion: "with a 1% rate error and seeded truth plus 3 arcsec of noise every 2 s, feed-forward alone drifts more than 1 arcmin in 10 minutes and the closed loop holds an RMS of at most 20 arcsec over the last 8; with every error under 10 arcsec the commanded rates equal feed-forward within 0.001 arcsec/s and the offset stays 0; with a 1% rate error, 2 minutes on rendered, solved frames and 2 on truth plus noise each apply a correction, and their true eyepiece errors agree within 5 arcsec RMS"
         decision: "spec.md:US4-S1"
       - path: crates/finder/tests/session_api.rs
         status: existing
@@ -812,7 +818,7 @@ stories:
       - path: crates/finder/tests/backlash_sim.rs
         status: new
         disposition: add
-        assertion: "with 0.3 deg of backlash: the first transit stops the altitude axis before it reverses, is back within 30 arcsec within 15 s and measures 0.3 deg within 30 arcsec; a later transit and M81's elongation stop, take it up and stay within 30 arcsec; syncs taken tracking down after the transit open no epoch and fit IE within 30 arcsec of the truth; after the backlash is read, a fixed-terms reset leaves no backlash field"
+        assertion: "with 0.3 deg of backlash: the first transit stops the altitude axis before it reverses, sends it a zero rate first, stays within 60 arcsec through the dead band, is back within 30 arcsec within 10 minutes and measures 0.3 deg within 30 arcsec; a later transit and M81's elongation stop, take it up and stay within 30 arcsec; syncs taken tracking down after the transit are added, open no epoch and fit IE within 30 arcsec of the IE fitted from the syncs on the way up; after the backlash is read, a fixed-terms reset leaves no backlash field"
         decision: "spec.md:US5-S1"
       - path: crates/finder/tests/backlash_cli.rs
         status: new
@@ -883,7 +889,7 @@ stories:
       - path: crates/finder/tests/keyhole_sim.rs
         status: new
         disposition: add
-        assertion: "a target at declination 39 deg at latitude 40 pauses where it enters the 2 deg zenith circle, waits where it will leave after a slew through 014's planner, and is back within 1 arcmin within 30 s of leaving"
+        assertion: "with 0.3 deg of backlash and the altitude backlash measured, a target at declination 39 deg at latitude 40 pauses where it enters the 2 deg zenith circle, waits where it will leave after a slew through 014's planner, and is back within 1 arcmin within 30 s of leaving"
         decision: "spec.md:US6-S1"
       - path: crates/finder/tests/session_api.rs
         status: existing
@@ -910,7 +916,7 @@ stories:
       - path: crates/finder/tests/track_api.rs
         status: new
         disposition: add
-        assertion: "through the router in paused time, with the simulated mount connected and an accepted Track moving an axis first: Track on during a GoTo starts within 2 s of its end; M8 below the horizon answers 409 and moves nothing; M42 5 deg off starts a GoTo, then tracks; Track off stops both axes within 0.5 s and the true direction moves under 1 arcmin; a pitch of 0 answers 400 and changes nothing; the readout's field rotation and longest exposure equal FR-001 and FR-002 within 1e-9; a foreign Origin answers 403 and moves nothing; a foreign bodiless POST /api/stop answers 200, rests both axes within 1.5 s for 10 s and ends tracking as stopped"
+        assertion: "through the router in paused time, with the simulated mount connected and an accepted Track moving an axis first: Track on during a GoTo starts within 2 s of its end; M8 below the horizon answers 409 and moves nothing; M42 5 deg off starts a GoTo, then tracks; Track off stops both axes within 0.5 s and the true direction moves under 1 arcmin; a pitch of 0 answers 400 and changes nothing; the readout's RMS equals the RMS of the tracker's last 60 s of samples within 1e-9 and is at most 20 arcsec, and its field rotation and longest exposure equal FR-001 and FR-002 within 1e-9; a foreign Origin answers 403 and moves nothing; a foreign bodiless POST /api/stop answers 200, rests both axes within 1.5 s for 10 s and ends tracking as stopped"
         decision: "spec.md:US7-S1"
       - path: crates/finder/tests/track_cli.rs
         status: new
@@ -972,7 +978,7 @@ stories:
       - path: crates/finder/web/src/components/TrackControl.test.tsx
         status: new
         disposition: add
-        assertion: "a recorded too-low end shows the toggle off and says the target is too low; the readout rounds to 1 arcsec, 0.01 deg/min and 0.1 s, or reads no limit; no toggle is offered without a mount"
+        assertion: "a recorded too-low end shows the toggle off and the Track control's own labelled element says the target is too low; the readout rounds to 1 arcsec, 0.01 deg/min and 0.1 s, or reads no limit; no toggle is offered without a mount"
         decision: "spec.md:US8-S1"
       - path: crates/finder/web/src/components/ImagingCameraSection.test.tsx
         status: new
@@ -1070,7 +1076,7 @@ stories:
       - path: crates/finder/tests/tracking_night.rs
         status: new
         disposition: add
-        assertion: "an hour of paused time with a 1% rate error and 0.3 deg of backlash: within 30 arcsec through the transit's reversal, back within 1 arcmin within 30 s of leaving the keyhole, too_low within 1 s of the minimum altitude, and its own Instant::elapsed under 30 s"
+        assertion: "an hour of paused time at latitude 40 with a 1% rate error, 0.3 deg of backlash and the altitude backlash measured: a dec 20 target within 30 arcsec through its transit's reversal and too_low within 1 s of reaching a 69.5 deg minimum; then a dec 39 target back within 1 arcmin within 30 s of leaving the keyhole; its own Instant::elapsed under 30 s"
         decision: "spec.md:US9-S1"
       - path: crates/finder/web/e2e/tracking.spec.ts
         status: new

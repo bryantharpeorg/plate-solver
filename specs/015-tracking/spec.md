@@ -269,10 +269,13 @@ are what keep the target in a high-power eyepiece.
    pointing's error under 10″, **When** M42 is tracked for 2 minutes of virtual time,
    **Then** a test asserts that each axis's commanded rate equals the feed-forward rate
    within 0.001″/s, and that the tracking offset stays 0.
-3. **Given** M42 tracked for the same 2 minutes of virtual time on the simulator twice,
-   once on rendered and solved frames and once on its truth plus 3″ of noise every 2 s,
-   **When** the two runs' tracking errors are compared, **Then** a test asserts that they
-   agree within 5″ RMS.
+3. **Given** M42 tracked for the same 2 minutes of virtual time on a simulator whose axes
+   run 1% faster than commanded, twice, once on rendered and solved frames and once on
+   its truth plus 3″ of noise every 2 s, **When** the two runs are compared, **Then** a
+   test asserts two things:
+   - each run applied at least one correction, a non-zero proportional rate or tracking
+     offset;
+   - the simulator's true eyepiece errors from M42 in the two runs agree within 5″ RMS.
 
 ---
 
@@ -303,9 +306,10 @@ backlash on each axis:
 1. **Given** a target tracked through its transit on the simulator (0.3° of backlash)
    before any backlash has been measured on this mount, **When** the altitude axis
    reverses, **Then** a test asserts three things:
-   - the axis stops before it reverses;
-   - the target is back within 30″ of the aim point within 15 s of the reversal;
-   - the backlash measured there is 0.3°, within 30″.
+   - the tracker sends that axis a zero rate before its first opposite-sign rate;
+   - the target stays within 60″ of the aim point while the axis crosses its dead band,
+     and is back within 30″ within 10 minutes of the reversal;
+   - the backlash measured there, once the error has settled, is 0.3°, within 30″.
 2. **Given** that measurement, **When** another target is tracked through its transit on
    the same simulated mount, **Then** a test asserts that the altitude axis stops, takes up
    the measured backlash and reverses, and that the target stays within 30″ of the aim
@@ -319,10 +323,13 @@ backlash on each axis:
 4. **Given** the altitude axis's backlash measured on the simulator, **When** the binary
    restarts on the same `--state` folder the next day, **Then** a test asserts that the
    session's `backlash` holds the same value for that axis exactly.
-5. **Given** M42 tracked through its transit on the simulator, with 0.3° of altitude
-   backlash measured at that reversal, **When** syncs are then taken while the altitude
-   axis tracks down, **Then** a test asserts that no new zero-point epoch is opened, and
-   that the fitted IE equals the simulator's true altitude zero point within 30″.
+5. **Given** M42 tracked through its transit on the simulator, with syncs taken on the
+   way up and 0.3° of altitude backlash measured at the reversal, **When** syncs are then
+   taken while the altitude axis tracks down, **Then** a test asserts three things:
+   - those syncs were added to the model;
+   - no new zero-point epoch is opened;
+   - the fitted IE is within 30″ of the IE fitted from the syncs on the way up, read
+     before the reversal.
 6. **Given** a measured backlash, **When** the fixed terms are reset through
    `POST /api/model/reset` with `{"what": "fixed"}`, **Then** a test asserts that the
    session's body has no `backlash` field. The test first reads the measured backlash in
@@ -350,7 +357,8 @@ zenith.
 **Acceptance Scenarios**:
 
 1. **Given** a target at declination φ − 1° tracked at latitude φ = 40° through its
-   transit, **When** its path crosses the 2° circle round the zenith, **Then** a test
+   transit, on the simulator with 0.3° of backlash and the altitude backlash already
+   measured, **When** its path crosses the 2° circle round the zenith, **Then** a test
    asserts three things:
    - tracking pauses where the target enters the circle;
    - the telescope waits where the target will leave;
@@ -405,7 +413,8 @@ because it consumes the tracker that US3 to US5 build.
    the answer is 400 with a JSON `error`, and that nothing changes.
 7. **Given** M42 tracked on the simulator with that imaging camera in the session, **When**
    the session is read, **Then** a test asserts three things about its tracking readout:
-   - the RMS error over the last 60 s;
+   - an RMS error equal to the RMS of the tracker's error samples from the last 60 s,
+     within 1e-9″, and at most 20″;
    - a field rotation in °/min equal to FR-001's rate at the target divided by 60, within
      1e-9;
    - a longest exposure equal to FR-002's answer, within 1e-9 s.
@@ -453,7 +462,8 @@ unchanged.
 
 1. **Given** a recorded session in which tracking ended because the target sank below the
    minimum altitude, **When** a Vitest test renders the guidance block, **Then** it asserts
-   that the toggle is off and that the block says the target is too low.
+   that the toggle is off and that the Track control's own text says the target is too
+   low, not only the guidance block's altitude text.
 2. **Given** a recorded tracking session carrying an RMS error, a field rotation and a
    longest exposure, **When** a Vitest test renders the guidance block, **Then** it asserts
    the readout rounded to the nearest arcsecond, 0.01°/min and 0.1 s. A session reporting
@@ -478,8 +488,8 @@ unchanged.
 ### User Story 9 - An hour of tracking end to end, and Track on the page (Priority: P3)
 
 As the maintainer, I run two end-to-end checks. The first is one Rust test of an hour of
-tracking on the simulator in paused time: a 1% rate error, a transit, a keyhole passage,
-then setting below the minimum altitude. It finishes in under 30 s of wall time, so the
+tracking on the simulator in paused time: a 1% rate error, one target's transit and
+setting below the minimum altitude, then another's keyhole passage. It finishes in under 30 s of wall time, so the
 coverage job stays fast. The second is a Playwright flow that turns Track on for M42 on
 `finder --simulate` and runs the night pixel check with tracking on.
 
@@ -494,13 +504,17 @@ piece. They come last because they exercise every story before them.
 
 **Acceptance Scenarios**:
 
-1. **Given** the simulator with a 1% rate error and 0.3° of backlash, **When** a target is
-   tracked for an hour of paused virtual time through a transit, a keyhole passage and
-   then setting below the minimum altitude, **Then** the test asserts four things:
-   - the target stays within 30″ of the aim point through the transit's reversal;
-   - after leaving the keyhole, it is back within 1′ within 30 s;
-   - tracking ends saying the target is too low, within 1 s of its geometric altitude
-     reaching the minimum;
+1. **Given** the simulator at latitude 40° with a 1% rate error, 0.3° of backlash and the
+   altitude backlash already measured, **When** one test tracks two targets in turn
+   through an hour of paused virtual time, **Then** it asserts four things:
+   - a target at declination 20°, tracked from 10 minutes before its transit, stays
+     within 30″ of the aim point through its altitude reversal;
+   - with the minimum altitude set to 69.5° once that target is tracked, tracking ends
+     saying it is too low within 1 s of its geometric altitude reaching 69.5°, about
+     20 minutes after its transit;
+   - a target at declination 39°, then tracked from 5 minutes before it enters the 2°
+     circle round the zenith, is back within 1′ of the aim point within 30 s of leaving
+     the circle;
    - the test's own `Instant::elapsed` is under 30 s.
 
    It runs in the `test` gate's `cargo test --workspace --all-targets --all-features
@@ -533,8 +547,9 @@ piece. They come last because they exercise every story before them.
   - The integral (the tracking offset) is cleared whenever tracking ends, for any reason.
 - **Backlash:**
   - A reversal forecast inside the 30-minute horizon before any backlash is measured is
-    handled by the closed loop alone, which recovers within about 15 s. That reversal is
-    the measurement.
+    handled by the closed loop alone. The error stays within 60″ while the axis crosses
+    its dead band, and is back within 30″ within 10 minutes. That reversal is the
+    measurement.
   - A sync taken against the approach direction before that axis's backlash is measured
     is held back from the fit, not dropped.
 - **The keyhole:** a target whose keyhole exit is within 15° of the Sun is not slewed to.
@@ -677,9 +692,9 @@ piece. They come last because they exercise every story before them.
 **End to end** (US9):
 
 - **FR-020**: *(Owner approval 2.)* The repository SHALL hold two end-to-end proofs:
-  - a Rust test of an hour of tracking on the simulator in paused time (a 1% rate error, a
-    transit, a keyhole passage, then setting below the minimum altitude) that bounds its
-    own wall time to 30 s;
+  - a Rust test of an hour of tracking on the simulator in paused time (a 1% rate error,
+    one target's transit and setting below the minimum altitude, then another's keyhole
+    passage) that bounds its own wall time to 30 s;
   - a Playwright Track flow in the `simulate` project, with the night pixel check while
     tracking.
 
