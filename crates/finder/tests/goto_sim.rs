@@ -16,7 +16,7 @@ async fn five_catalog_targets_converge_after_two_syncs_and_report_progress() {
         let mut nudged = false;
         let progress = rig
             .finish_with(Some(15.0), true, |v| {
-                if name == "M42" && !nudged && v["state"] == "settling" {
+                if name == "M42" && !nudged && v["state"] == "solving" {
                     // Known initial slip makes the numbered correction observable.
                     rig.mount.push_by(0.1, 0.0);
                     nudged = true;
@@ -46,6 +46,19 @@ async fn five_catalog_targets_converge_after_two_syncs_and_report_progress() {
             corrections,
             (1..=last["correction"].as_u64().unwrap()).collect::<Vec<_>>()
         );
+        // US6-S16's ordered session contract includes each numbered correction,
+        // with no additional observer-facing phases between slew and solve.
+        let mut states: Vec<_> = progress
+            .iter()
+            .map(|value| value["state"].as_str().unwrap())
+            .collect();
+        states.dedup();
+        let mut expected = vec!["slewing", "solving"];
+        for _ in &corrections {
+            expected.extend(["correcting", "slewing", "solving"]);
+        }
+        expected.push("done");
+        assert_eq!(states, expected, "{name}: {progress:?}");
     }
 }
 #[tokio::test(start_paused = true)]
@@ -113,7 +126,7 @@ async fn repeated_half_degree_slips_fail_after_five_corrections_with_error() {
     let progress = rig
         .finish_with(Some(15.0), true, |value| {
             let number = value["correction"].as_u64();
-            if value["state"] == "settling" && slipped != number {
+            if value["state"] == "solving" && slipped != number {
                 rig.mount.push_by(0.5, 0.0);
                 slipped = number;
             }

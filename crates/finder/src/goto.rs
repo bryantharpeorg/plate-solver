@@ -312,7 +312,8 @@ impl Planner<'_> {
 /// GoTo progress retained in the session until the next requested GoTo.
 #[derive(Clone, Debug, Serialize)]
 pub struct Progress {
-    /// `planning`, `slewing`, `settling`, `solving`, `correcting`, `done`, `failed`, or `halted`.
+    /// `slewing`, `solving`, `correcting`, `done`, `failed`, or `halted`.
+    /// Solving includes the settle wait before the first eligible exposure.
     pub state: &'static str,
     /// Number of correction slews started (zero for the initial slew).
     pub correction: u8,
@@ -660,10 +661,9 @@ impl GoTo {
                     tokio::time::sleep(TICK).await;
                 }
             }
-            self.update(generation, "settling", correction, error, None);
+            self.update(generation, "solving", correction, error, None);
             tokio::time::sleep(Duration::from_millis(500)).await;
             let settled = self.clock.now();
-            self.update(generation, "solving", correction, error, None);
             // Identify the first exposure STARTING after settle, not a late solve
             // of an exposure made during motion. The live loop takes the sync.
             let solve = async {

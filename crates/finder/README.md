@@ -305,7 +305,8 @@ then uses a solved exposure starting after that wait as a sync. It corrects at m
 five times to bring the target within 1′ of the calibrated aim point.
 `GET /api/session` adds `goto: {state, correction, error_arcsec, reason}` only after
 one starts, retaining its result until the next GoTo. States are `slewing`,
-`settling`, `solving`, `correcting` (numbered 1–5), `done`, `failed`, and `halted`.
+`solving` (including the settle wait), `correcting` (numbered 1–5), `done`,
+`failed`, and `halted`.
 The final error is in arcseconds. Stop reports the observer; heartbeat silence of
 one second reports a lost link; sunrise reports the Sun guard. Every halt stops
 both axes and cancels further motion. Stop remains available while planning,
