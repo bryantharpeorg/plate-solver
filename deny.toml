@@ -38,6 +38,11 @@ ignore = [
     "RUSTSEC-2026-0367",
     "RUSTSEC-2026-0368",
     "RUSTSEC-2026-0369",
+    # zip 0.6.6 again (RUSTSEC-2026-0429, published 2026-11-02): ZipArchive::extract
+    # sizes a symlink target's buffer from the declared size and aborts on a huge
+    # one. Also extraction only, so the reasoning above holds: npyz opens archives
+    # with ZipArchive::new and reads members by name, and nothing calls extract.
+    "RUSTSEC-2026-0429",
     # zstd-safe 5.0.2 (RUSTSEC-2026-0403): streaming decompression of a legacy zstd
     # frame that fails can expose uninitialized output memory. The fix is in
     # zstd-safe >= 8.2, which only zstd >= 0.14 uses, and zip 0.6 pins zstd 0.11.
