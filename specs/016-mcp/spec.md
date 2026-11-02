@@ -5,8 +5,9 @@ depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "0
 # #102). This trio is now the feature's only specification. It stays draft until the
 # owner has reviewed it and given the approvals listed under "Owner approvals".
 # Flipping it to `ready` is the act that dispatches it.
-# Refined 2026-11-01 against `main` at 1c928e3 (014's US1 to US8 landed) and 015's trio
-# as written at 29ab190 (plan.md § Refinement Record). Nine owner questions there block
+# Refined 2026-11-01 against `main` at 1c928e3, and again 2026-11-02 against `main` at
+# a43747f (014's US1 to US9 landed) and 015's trio as dispatched there, with the gap
+# hunt's fixes (plan.md § Refinement Record). Eleven owner questions there block
 # readiness, and every citation of 015 is marked "re-check when 015 lands".
 ---
 
@@ -94,16 +95,34 @@ over the `scope_node.v1` link, and the console stays the only holder of its toke
   and the tool both call. Direct axis moves call 014's own planner and GoTo checks through
   entry points US5 adds to `goto.rs`, with every refusal text unchanged. No guard is
   copied (plan.md § Interfaces, § Decisions).
-- Q: What blocks readiness now? → A: The nine owner questions in plan.md § Refinement
+- Q: What blocks readiness now? → A: The eleven owner questions in plan.md § Refinement
   Record, and a re-read of every 015 citation once 015 lands. Where the written decision
   could not be built as it stood, the text below already carries the recommended answer
   and names its question; where it could, the text is unchanged and the question offers
   the alternative.
 
+### Session 2026-11-02 (gap hunt against `main` at a43747f)
+
+- Q: Does a request need a `Host`? → A: Yes. The door refuses a request with no `Host`, or
+  a malformed one, with 403, after carrying out any stop in it. 012's same-origin check
+  reads `Host` only when an `Origin` is present, so this rule is the door's own. `rmcp`
+  would answer 400 for it anyway (FR-002).
+- Q: Can a later story add to an earlier story's test file? → A: Only to 016's own
+  `crates/finder/tests/mcp/support.rs`, and only by adding items (approval 17).
+- Q: Can an MCP client start a move while Track is on? → A: No. Over MCP, a GoTo or a
+  direct axis move is refused while Track is on, and Track is refused while a direct
+  axis move runs. 014's refusals don't cover 015's keyhole wait, when no GoTo runs and
+  both axes are at rest (FR-009, FR-013; owner question 10).
+- Q: Where does Setup get its MCP status? → A: `App` reads `GET /api/mcp` while Setup is
+  open and hands it to `SetupPage`, so the page's existing tests, several of which count
+  `SetupPage`'s fetches exactly, see no new request (plan.md § Shapes that existing tests
+  pin).
+
 ## Owner approvals
 
 Flipping this spec to `ready` approves the following. Each is named in the FR that makes
-it. No existing test, golden or CI file changes beyond approval 15.
+it. No existing test, golden or CI file changes beyond approval 15, and 016's own test
+module changes only as approval 17 allows.
 
 1. **Open on the LAN, with no token.** MCP clients need no token. `Origin` is still
    validated (FR-001, FR-002).
@@ -115,9 +134,10 @@ it. No existing test, golden or CI file changes beyond approval 15.
 
    This is the one place where "passthrough" isn't literal (FR-009).
 3. **The `Host` check.** The `Host`, and the `Origin` host when present, must be an IP
-   literal, `localhost`, or a name given with `--mcp-allow-host`. The `Origin` rule alone
-   lets a DNS-rebinding page through (FR-002). Owner question 7 asks whether `/mcp` should
-   use 012's `--allow-host` list instead of a second flag.
+   literal, `localhost`, or a name given with `--mcp-allow-host`. A request with no
+   `Host`, or a malformed one, fails the check. The `Origin` rule alone lets a
+   DNS-rebinding page through (FR-002). Owner question 7 asks whether `/mcp` should use
+   012's `--allow-host` list instead of a second flag.
 4. **Stop and stop all skip the door's checks.** They skip the `Origin`, `Host` and
    peer-address checks, and are carried out even when the answer must be an error. From a
    request that fails a check, only the stops run (FR-002, FR-003, FR-012).
@@ -147,11 +167,15 @@ it. No existing test, golden or CI file changes beyond approval 15.
     (FR-016; plan.md § Dependencies; owner question 4).
 14. **A new read-only route, `GET /api/mcp`**, for Setup's MCP section (FR-019; owner
     question 6 for where its URLs come from).
-15. **Two lines in `playwright.config.ts`.** US7 adds `mcp.spec.ts` to the `simulate`
-    project's file match and to the `default` project's ignore list, and changes nothing
-    else in the config (FR-015; owner question 5).
+15. **`mcp.spec.ts` in `playwright.config.ts`.** US7 adds `mcp.spec.ts` to the
+    `simulate` project's match list and to the `default` project's ignore list, laid out
+    as Prettier formats them, and changes nothing else in the config (FR-015; owner
+    question 5).
 16. **A new session field, `axis_move`**, that reports the latest direct axis move and
     why it ended, beside 014's `goto` (FR-022; owner question 3).
+17. **016's own test module grows by addition.** `crates/finder/tests/mcp/support.rs` is
+    016's shared test module, created by US1. US2 to US6 may add new items to it, and may
+    not change or remove any item an earlier story put there (SC-004; owner question 11).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -159,10 +183,13 @@ All Rust scenarios share one setup:
 - They post JSON-RPC to `/mcp` through the console's router with
   `tower::ServiceExt::oneshot`, as `tests/api.rs` posts to `/api/*`. Peer addresses are
   set with axum's `MockConnectInfo`.
-- Each request carries `Content-Type: application/json`,
+- Each request carries `Host: localhost:8080`, `Content-Type: application/json`,
   `Accept: application/json, text/event-stream` and `MCP-Protocol-Version: 2025-11-25`
-  unless the scenario says otherwise, because `rmcp` answers 406 or 415 without the first
-  two.
+  unless the scenario says otherwise. A request built from a path alone has no `Host`,
+  which the door refuses; `rmcp` answers 406 or 415 without the `Accept` or the
+  `Content-Type`.
+- A test checks that `tools/list` includes each tool it names, by name, and never checks
+  the list's length or its whole contents, so it stays true as later stories add tools.
 - A scenario that compares a tool with its route exactly runs on a console with
   `session::FixedClock` and no simulator, so both read the same time. A simulator
   scenario that compares them leaves out the time-derived fields it names.
@@ -202,8 +229,8 @@ them.
 1. **Given** a console built with the defaults, **When** a committed test posts `initialize`
    to `/mcp` with no `Authorization` header, **Then** it asserts three things:
    - a 200 `application/json` answer with the server's name and the `tools` capability;
-   - a following `tools/list`, sent without an `Mcp-Session-Id`, lists `get_session` and
-     `set_target` by those exact names;
+   - a following `tools/list`, sent without an `Mcp-Session-Id`, includes `get_session`
+     and `set_target` by those exact names;
    - `get_session` carries `readOnlyHint: true`, and `set_target` does not.
 2. **Given** a console with a state file, **When** a committed test sends GET to `/mcp`,
    **Then** it asserts a 405 answer and a state file that is byte-for-byte unchanged.
@@ -222,8 +249,8 @@ them.
    exactly.
 7. **Given** `evil.example` was not given with `--mcp-allow-host`, **When** a committed
    test posts `set_target` for M42 with `Host: evil.example:8080` and
-   `Origin: http://evil.example:8080`, **Then** it asserts a 403 answer and that the
-   target is unchanged.
+   `Origin: http://evil.example:8080`, and again with no `Host` and no `Origin`, **Then**
+   it asserts a 403 answer each time and that the target is unchanged.
 8. **Given** two requests, **When** a committed test posts `get_session` with no `Origin`
    and `Host: 192.168.1.20:8080`, and again with `Host: surface.local:8080` on a console
    built with `--mcp-allow-host surface.local`, **Then** it asserts that both are answered
@@ -262,6 +289,11 @@ them.
 15. **Given** the router served without connect info (no `MockConnectInfo` layer),
     **When** a committed test posts `get_session`, **Then** it asserts a 403 answer, so a
     door that cannot read the peer refuses rather than lets the request through.
+16. **Given** a session with no target and no site, **When** a committed test calls
+    `set_target` with `{"target": "M42", "node": {"token": "x"}}`, and again with
+    `{"target": "M42", "site": {"lat_deg": 40, "lon_deg": -75}}`, **Then** it asserts
+    that each result has `isError: true` with the reason `set_target changes only target`,
+    and that `GET /api/session` is exactly unchanged.
 
 ---
 
@@ -294,10 +326,14 @@ the simulator.
    - its text is the same `error` text that `PUT /api/session` answers with 400 for the
      same body;
    - the session is unchanged (oracle: `GET /api/session`, exactly).
-3. **Given** a session whose latest pointing is at azimuth 350°, altitude 30°, with a
-   target pointable at azimuth 24°, altitude 42°, **When** a committed test calls
-   `get_guidance`, **Then** it asserts a turn of clockwise 34° and a tilt of up 12°,
-   within 1e-9°, equal to the `guidance` in `GET /api/session` for the same session.
+3. **Given** a console on `session::FixedClock` at 2026-01-16 02:00 UT, with the site
+   40° N, 75° W, the target M78 and the pointing from solving the sample `orion2.jpg`, as
+   012's `tests/pushto_api.rs` builds it, **When** a committed test calls `get_guidance`,
+   **Then** it asserts three things:
+   - the guidance is `pointable`;
+   - its `turn_deg` and `tilt_deg` equal the `guidance` in `GET /api/session` exactly;
+   - they equal `pushto::turn_tilt` of the pointing's and the target's `sky::alt_az`
+     positions within 1e-9°.
 4. **Given** a session, **When** a committed test calls `set_session` with a scope node
    address, and again with a scope node token, **Then** it asserts that each result has
    `isError: true` with the reason `set_session changes only site, min_alt_deg and target`.
@@ -315,7 +351,7 @@ the simulator.
    - each tool's `structuredContent` equals its route's JSON exactly, under FR-004's
      object rule;
    - `search_targets` and `get_guidance` carry `readOnlyHint: true`;
-   - `tools/list` names all three.
+   - `tools/list` includes all three.
 
 ---
 
@@ -356,7 +392,7 @@ committed. The live scenarios use the simulator.
    `GET /api/session`'s `node` read straight after, field for field, except
    `last_frame_age_s`, which agrees within 0.1 s.
 5. **Given** `tools/list`, **When** a committed test reads it, **Then** it asserts that it
-   names `solve_frame`, `get_pointing` and `get_link`, and that `get_pointing` and
+   includes `solve_frame`, `get_pointing` and `get_link`, and that `get_pointing` and
    `get_link` carry `readOnlyHint: true`.
 
 ---
@@ -414,8 +450,8 @@ has to win here before any other moving tool exists.
    and the GoTo is halted with the reason `the observer stopped it`, whatever the answer's
    status (oracle: the command log).
 9. **Given** no mount connected, **When** a committed test calls `stop`, **Then** it
-   asserts that the result is a success, not an error, and that `tools/list` still names
-   `stop` and `stop_all`.
+   asserts that the result is a success, not an error, and that `tools/list` still
+   includes `stop` and `stop_all`.
 10. **Given** a GoTo running, **When** a committed test posts `stop_all` with
     `Origin: http://elsewhere.example`, **Then** it asserts that the GoTo is halted with
     the reason `the observer stopped it`, and both axes are commanded to stop within
@@ -440,6 +476,13 @@ has to win here before any other moving tool exists.
     captures in a buffer, **When** a committed test calls `goto_target` and then
     `stop_all`, **Then** it asserts exactly two lines, in that order, each naming the
     tool, its arguments and its result in the form plan.md § The call log gives.
+16. **Given** a GoTo running, **When** a committed test posts `stop_all` four times, each
+    as its own request on a running GoTo: with `Host: evil.example:8080` and
+    `Origin: http://evil.example:8080`; with no `Host`; from the peer `203.0.113.7`; and
+    through the router served without connect info, **Then** it asserts that each is
+    answered 403, and that each time both axes are commanded to stop within 0.1 s of
+    virtual time and the GoTo is halted with the reason `the observer stopped it`
+    (oracle: the command log).
 
 ---
 
@@ -453,7 +496,8 @@ night's first sync. As the console, I hold each move to the page's guards:
 
 I forecast a rate move's path, including its stopping distance, and refuse one that
 crosses a limit. While it runs I re-forecast and stop it in time, and I stop it at the end
-of its duration. Moving tools share a limit of 2 calls a second.
+of its duration. Moving tools share a limit of 2 calls a second, and none starts a move
+while Track is on.
 
 **Why this priority**: The page has no direct axis moves, so these tools are the only path
 by which an MCP client could aim the telescope without a target. They are where the Sun
@@ -525,7 +569,7 @@ simulator is sampled every 0.1 s of virtual time.
       `the rate limit of 2 moving calls a second was reached`;
     - `stop_all` stops both axes.
 13. **Given** `tools/list`, **When** a committed test reads it, **Then** it asserts that
-    `goto_axis_position` and `move_axis` are named, that each one's description says it
+    it includes `goto_axis_position` and `move_axis`, that each one's description says it
     moves a real telescope, and that the scope node's test token occurs in neither tool's
     results nor the call log.
 14. **Given** a `move_axis` running, **When** a committed test posts the page's
@@ -535,53 +579,73 @@ simulator is sampled every 0.1 s of virtual time.
 15. **Given** a `move_axis` running, **When** a committed test calls `goto_target`,
     **Then** it asserts that the result has `isError: true` with 014's reason
     `the mount is already moving`, and that the command log holds no go-to.
+16. **Given** night, a sync, and Track turned on for M42 through the page's
+    `POST /api/track` with `track.state` at `tracking`, **When** a committed test calls
+    `move_axis` at 1°/s for 5 s, `goto_axis_position` for a position clear of every limit
+    and `goto_target`, each at least 1 s of virtual time apart, **Then** it asserts that
+    each result has `isError: true` with the reason `Track is on`, that the command log
+    gains no go-to and no rate of 1°/s, and that `track.state` is still `tracking` 5 s
+    later (owner question 10; re-check when 015 lands).
 
 ---
 
 ### User Story 6 - Tracking over MCP (Priority: P2)
 
 As an MCP client, I turn Track on or off as the page's toggle does, refused for the same
-reasons. I read tracking's readout in `get_session`.
+reasons, and refused while a direct axis move runs. I read tracking's readout in
+`get_session`.
 
 **Why this priority**: Tracking keeps a target in the eyepiece once a GoTo has put it
 there. It is P2 because it is a thin passthrough over tracking that has already landed.
 
 **Independent Test**: `cargo test -p finder --locked --test mcp_tracking` runs
-`crates/finder/tests/mcp_tracking.rs` against the simulator in virtual time. The console
-is fed the simulator's true pointing plus noise, as 015's long tracking tests do
-(re-check when 015 lands).
+`crates/finder/tests/mcp_tracking.rs` against the simulator in virtual time. The
+console's own live loop feeds its tracker from the rig's solved simulator frames, as
+015's US7 wires `live.rs`: US2's support rig, with `with_live_solver` over the centroid
+solver and 0.5 s frames, as 014's `tests/goto_api.rs` builds its rig (re-check when 015
+lands).
 
 **Acceptance Scenarios**:
 
-1. **Given** M42, a sync and the simulator, **When** a committed test calls
-   `set_tracking` with `{"on": true}` and lets 10 min of virtual time pass, **Then** it
-   asserts three things:
-   - M42 stays within 1′ of the aim point (oracle: the simulator's true eyepiece
-     direction, sampled every 1 s);
+1. **Given** M42 as the target, the simulator, and a sync made with the telescope more
+   than 1′ from M42, **When** a committed test calls `set_tracking` with `{"on": true}`,
+   **Then** it asserts three things:
+   - `motion.by` is `mcp` with `motion.tool` `set_tracking` from the call, through the
+     GoTo that Track starts first, and while Track runs;
+   - from the moment `track.state` is `tracking`, M42 stays within 1′ of the aim point for
+     10 min (oracle: the simulator's true eyepiece direction, sampled every 1 s);
    - `get_session`'s `track.readout.rms_arcsec` equals `GET /api/session`'s read at the
-     same virtual instant;
-   - `motion.by` is `mcp` with `motion.tool` `set_tracking` while Track runs, including
-     the GoTo that Track starts first when the target is more than 1′ from the aim point
-     (re-check when 015 lands).
+     same virtual instant (re-check when 015 lands).
 2. **Given** no mount connected, **When** a committed test calls `set_tracking`, **Then**
    it asserts that the result has `isError: true`, with the same reason
    `POST /api/track` gives in its 409 (re-check when 015 lands), and that the token
    occurs in neither the result nor the call log.
 3. **Given** the rate limit on moving tools, **When** a committed test calls `move_axis`,
    `set_tracking` with `{"on": true}` and `set_tracking` with `{"on": true}` within 1 s of
-   virtual time, and then `set_tracking` with `{"on": false}`, **Then** it asserts that
-   the third call is refused with the rate limit's reason and moves nothing, and that the
-   fourth is not refused for the rate limit (owner question 8).
+   virtual time, and then, within the same second of virtual time, `set_tracking` with
+   `{"on": false}`, **Then** it asserts that the third call is refused with the rate
+   limit's reason and moves nothing, and that the fourth is not refused for the rate
+   limit (owner question 8).
+4. **Given** night, a sync, and Track turned on for M42 through `set_tracking`, with
+   `track.state` at `tracking`, **When** a committed test calls `stop` over MCP, **Then**
+   it asserts that `track.state` is `off` with `ended_reason` `stopped`, that both axes
+   are commanded to stop within 0.1 s of virtual time, and that no rate is commanded in
+   the next 5 s (oracle: the command log; re-check when 015 lands).
+5. **Given** night, a sync and a `move_axis` running, **When** a committed test calls
+   `set_tracking` with `{"on": true}`, **Then** it asserts that the result has
+   `isError: true` with the reason `a direct axis move is running`, that Track is not on
+   (no `track`, or `track.wanted` false), and that the move is still commanded to stop at
+   the end of its duration, within 0.1 s (owner question 10; re-check when 015 lands).
 
 ---
 
 ### User Story 7 - The page says an MCP client is moving the telescope, and Setup shows the MCP address (Priority: P2)
 
 As the observer at the eyepiece, while an MCP client moves the telescope, the guidance
-block and the top bar say "Moved by an MCP client · goto_target", beside a Stop that stays
-enabled. On Setup, an MCP section lists the URLs I can paste into a client, or says that
-MCP is off, or reachable only from this machine. The README tells me how to reach the
-endpoint from the phone under WSL2.
+block and the top bar say "Moved by an MCP client · goto_target", and the top bar's Stop
+stays enabled. The guidance block gets no Stop of its own. On Setup, an MCP section lists
+the URLs I can paste into a client, or says that MCP is off, or reachable only from this
+machine. The README tells me how to reach the endpoint from the phone under WSL2.
 
 **Why this priority**: The owner chose no confirmation. The page's note and its Stop are
 what keep the person at the eyepiece informed and in control.
@@ -603,10 +667,10 @@ order: `npm ci --no-audit --no-fund`, `npm run typecheck`, `npm run format:check
    things:
    - within 1 s the page renders "Moved by an MCP client · goto_target" in the guidance
      block and the top bar;
-   - Stop is enabled;
+   - the top bar's Stop is enabled, and it is the page's only Stop;
    - pressing Stop halts the GoTo: the session's `goto` is `halted` with the reason
-     `the observer stopped it`, and `GET /api/sim/telescope`'s eyepiece direction is the
-     same over the next 2 s.
+     `the observer stopped it`, and `GET /api/sim/telescope`'s eyepiece altitude and
+     azimuth each change by less than 1e-8° over the next 2 s.
 2. **Given** a `GET /api/mcp` answer for a console started with `--listen 0.0.0.0:8080`
    and `--mcp-allow-host surface.local`, **When** a committed Vitest test renders Setup's
    MCP section, **Then** it asserts two things:
@@ -649,11 +713,18 @@ order: `npm ci --no-audit --no-fund`, `npm run typecheck`, `npm run format:check
 - **Batches.** `rmcp` refuses a JSON-RPC batch with 415, so no call in it runs through
   `rmcp`. The door carries out any stop in it first, whether or not the request passes
   its checks.
-- **Peers.** An IPv4-mapped IPv6 peer is judged as its IPv4 address. A request whose peer
-  the door can't read is refused, after any stop in it is carried out.
-- **One motion at a time.** A GoTo, a direct axis move or Track is refused while another
-  runs, with 014's reasons `a GoTo is already running` and
-  `the mount is already moving`.
+- **Peers and hosts.** An IPv4-mapped IPv6 peer is judged as its IPv4 address. A request
+  whose peer the door can't read, or that has no `Host` or a malformed one, is refused,
+  after any stop in it is carried out.
+- **One motion at a time:**
+  - A GoTo or a direct axis move is refused while another motion moves the mount, with
+    014's reasons `a GoTo is already running` and `the mount is already moving`.
+  - Track turned on during a GoTo arms, and starts when the GoTo completes, as 015's
+    FR-014 says.
+  - Over MCP, a GoTo or a direct axis move is also refused with `Track is on` while
+    Track is on, including 015's keyhole wait, when no GoTo runs and both axes are at
+    rest. Track turned on over MCP is refused with `a direct axis move is running` while
+    one runs (owner question 10; re-check when 015 lands).
 - **Two clients at once.** The page and an MCP client, or two MCP clients, share one
   session, and the last write wins. Stop from any of them ends every motion, whoever
   started it.
@@ -694,10 +765,11 @@ order: `npm ci --no-audit --no-fund`, `npm run typecheck`, `npm run format:check
   - its `Host`, or the host in its `Origin`, is not an IP literal, `localhost`, or a name
     given with `--mcp-allow-host` (owner question 7).
 
-  It SHALL allow a request with no `Origin`. The `Origin` and host-name rules SHALL be the
-  same functions 012's same-origin check uses. From a request that fails these checks, it
-  SHALL carry out a `tools/call` of `stop` or `stop_all` and nothing else. **Refs**: MCP
-  specification 2025-06-18, Transports (Security Warning); RFC 6454 §7.
+  It SHALL allow a request with no `Origin`, and refuse one with no `Host` or a malformed
+  one. The `Origin` and host-name rules SHALL be the same functions 012's same-origin
+  check uses. From a request that fails these checks, it SHALL carry out a `tools/call`
+  of `stop` or `stop_all` and nothing else. **Refs**: MCP specification 2025-06-18,
+  Transports (Security Warning); RFC 6454 §7.
 - **FR-003**: *(Owner approvals 4 and 10.)* The endpoint SHALL refuse a request with 403,
   and run nothing, when its peer address is not one of these:
   - loopback;
@@ -751,7 +823,9 @@ order: `npm ci --no-audit --no-fund`, `npm run typecheck`, `npm run format:check
 
 - **FR-005**: The endpoint SHALL offer `get_session`, passing through to
   `GET /api/session`, and `set_target`, passing through to `PUT /api/session` with a
-  target only. **Refs**: 012 (One session for every device, Checked edits).
+  target only. `set_target` SHALL refuse an edit that sets any other session field with
+  `set_target changes only target`. **Refs**: 012 (One session for every device, Checked
+  edits).
 - **FR-020**: *(Owner approval 12.)* The endpoint SHALL offer at least three more tools:
   - `set_session`, for `site`, `min_alt_deg` and `target` only;
   - `search_targets`;
@@ -833,8 +907,11 @@ order: `npm ci --no-audit --no-fund`, `npm run typecheck`, `npm run format:check
   cannot then tell where it would point. A direct axis move SHALL be checked by 014's own
   planner and GoTo code, never a copy, so a telescope below the minimum altitude may only
   raise its altitude axis, with no azimuth turn, until it clears the minimum (owner
-  question 1). **Refs**: 014 (The Sun guard on motion, Planning a slew, Halts, Pointable
-  targets only); ADR-0001; GLOSSARY.md (Sun guard, minimum altitude, direct axis move).
+  question 1). `goto_target`, `goto_axis_position` and `move_axis` SHALL be refused with
+  `Track is on` while the session's `track.state` is anything but `off` (owner question
+  10; re-check when 015 lands). **Refs**: 014 (The Sun guard on motion, Planning a slew,
+  Halts, Pointable targets only); ADR-0001; GLOSSARY.md (Sun guard, minimum altitude,
+  direct axis move).
 - **FR-010**: *(Owner approval 6.)* `move_axis` SHALL take a signed rate, capped at the
   axis's top rate, and a duration of at most 30 s. It SHALL refuse a move whose path over
   that duration, including its stopping distance, would break a guard. It SHALL stop the
@@ -862,16 +939,18 @@ order: `npm ci --no-audit --no-fund`, `npm run typecheck`, `npm run format:check
 
 - **FR-013**: The endpoint SHALL offer at least `set_tracking`, which turns Track on or off
   as the page's toggle does, through the same function as `POST /api/track`, and is
-  refused for the same reasons. `get_session` SHALL include tracking's readout.
-  **Refs**: 015 (Ending safely, Track in the session, Track on the console; re-check when
-  015 lands).
+  refused for the same reasons. `set_tracking` with `on: true` SHALL also be refused with
+  `a direct axis move is running` while `axis_move` is `moving` (owner question 10).
+  `get_session` SHALL include tracking's readout. **Refs**: 015 (Ending safely, Track in
+  the session, Track on the console; re-check when 015 lands).
 
 **The page and the README** (US7):
 
 - **FR-015**: *(Owner approvals 9 and 15.)* While the session's `motion.by` is `mcp`, the
   guidance block and the top bar SHALL say that the telescope is being moved by an MCP
-  client, naming the tool, beside a Stop that stays enabled while any `motion` is present.
-  Setup SHALL show an MCP section with three things from `GET /api/mcp`:
+  client, naming the tool. The top bar's Stop, the page's only Stop, SHALL stay enabled
+  while any `motion` is present; the guidance block SHALL show the note with no Stop of
+  its own. Setup SHALL show an MCP section with three things from `GET /api/mcp`:
   - the endpoint's URLs that the listen address serves;
   - the allowed host names;
   - whether MCP is off, or reachable only from this machine.
@@ -919,15 +998,18 @@ order: `npm ci --no-audit --no-fund`, `npm run typecheck`, `npm run format:check
 - **SC-003**: Through MCP, a stop reaches both axes within 0.1 s of virtual time in every
   case: wrong headers, wrong peer, wrong protocol version, no `initialize`, or a batch.
 - **SC-004**: No existing test, golden, `scripts/ci/` file, `.github/workflows/ci.yml` or
-  `CODEOWNERS` entry is edited, and workspace line coverage stays at or above 80%.
+  `CODEOWNERS` entry is edited, and workspace line coverage stays at or above 80%. The
+  one exception is 016's own `crates/finder/tests/mcp/support.rs`, which US2 to US6 only
+  add to (approval 17).
 - **SC-005**: The scope node's token appears in no MCP result, and in no log line.
 
 ## Assumptions
 
 - **Earlier features are in place.** 012, 013, 014 and 015 have landed: the observing
   session and its routes, the scope link and the simulator, GoTo and Stop with the pointing
-  model and planner, and tracking. Their functions are what the tools call. 015 had not
-  landed when this trio was refined, so its citations are marked to be re-checked.
+  model and planner, and tracking. Their functions are what the tools call. 015 was
+  dispatched at a43747f and still building when this trio was refined, so its citations
+  come from its trio on `main` and are marked to be re-checked.
 - **Out of scope:**
   - MCP on the scope node;
   - MCP resources, prompts and sampling;

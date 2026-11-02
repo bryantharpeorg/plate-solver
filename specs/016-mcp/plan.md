@@ -1,6 +1,6 @@
 # Implementation Plan: The Console's MCP Server
 
-**Branch**: `016-mcp` | **Date**: 2026-10-28, refined 2026-11-01 | **Spec**: [spec.md](spec.md)
+**Branch**: `016-mcp` | **Date**: 2026-10-28, refined 2026-11-01 and 2026-11-02 | **Spec**: [spec.md](spec.md)
 
 This plan records every design decision for the feature. A story that would change one
 escalates rather than re-deciding it.
@@ -62,7 +62,7 @@ memory and never written to the session file.
 | Principle | How this plan honours it |
 |---|---|
 | I. Agreeing with cedar is correctness | Nothing touches the solver or `crates/math-core`. `solve_frame` calls the same function as `POST /api/solve`. |
-| II. Never weaken a gate | No existing test, golden, `scripts/ci/`, `ci.yml`, `deny.toml` or `CODEOWNERS` is edited. New tests go in new files. The owner's decisions are listed in spec § Owner approvals. |
+| II. Never weaken a gate | No existing test, golden, `scripts/ci/`, `ci.yml`, `deny.toml` or `CODEOWNERS` is edited. New tests go in new files. `crates/finder/tests/mcp/support.rs` is 016's own shared test module, created by US1; US2 to US6 may add new items to it, and may not change or remove any item an earlier story put there (approval 17). The owner's decisions are listed in spec § Owner approvals. |
 | III. Tests first, independent expectations | Each read tool is compared with its route's JSON. Each moving tool is checked against the simulator's true eyepiece direction and axis state, and a recording mount's command log, in virtual time. |
 | IV. Critical paths | One dependency change (`rmcp`, plus its tree in `Cargo.lock`, and `base64`, which that tree already holds), owner-approved. No `unsafe`, no proto change, no database-format change. |
 | V. Standalone Rust, honest licensing | `rmcp` is Apache-2.0, and every package it adds is MIT, Apache-2.0 or both, inside `deny.toml`'s allow-list (§ Dependencies). |
@@ -84,10 +84,12 @@ frequent, so the pin is exact and moves only deliberately.
 compiled under `-D warnings`, with clippy clean, against both 3.8.0 and 3.5.1. US1 locks
 3.5.1 with `cargo update -p rmcp-macros --precise 3.5.1` (owner question 4).
 
-**What it adds to `Cargo.lock`.** Resolved offline against `main`'s lock at 1c928e3, in a
-scratch copy of the workspace, adding `rmcp` adds 34 packages: `rmcp`, `rmcp-macros`,
-`schemars` and `schemars_derive` 1.2.3, `serde_derive_internals`, `chrono` and its
-`iana-time-zone`, `android_system_properties` and `core-foundation-sys`, `uuid`,
+**What it adds to `Cargo.lock`.** Resolved offline against `main`'s lock at 1c928e3
+(unchanged at a43747f), in a scratch copy of the workspace, adding `rmcp` adds 34
+packages: `rmcp`, `rmcp-macros`, `schemars` and `schemars_derive` 1.2.3,
+`serde_derive_internals`, `chrono` and its `iana-time-zone`, `iana-time-zone-haiku`
+0.1.2 (its build dependency `cc` is already locked), `android_system_properties` and
+`core-foundation-sys`, `uuid`,
 `sse-stream`, `futures`, `futures-executor`, `futures-io`, `futures-macro`, `dyn-clone`,
 `ref-cast` and `ref-cast-impl`, `darling` 0.24 with `darling_core`, `darling_macro`,
 `ident_case` and `strsim`, `pastey` 0.2.3, `rand` 0.10.3, `rand_core` 0.10.1,
@@ -141,7 +143,7 @@ crates/finder/
 │   ├── goto.rs                           # US5: public entry points for direct moves
 │   └── main.rs                           # US1: --no-mcp, --mcp-allow-host, connect info
 ├── tests/
-│   ├── mcp/support.rs                    # US1–US6: requests, the recording mount, the rig
+│   ├── mcp/support.rs                    # US1 creates; US2–US6 only add (approval 17)
 │   ├── mcp_endpoint.rs                   # US1
 │   ├── mcp_session_tools.rs              # US2
 │   ├── mcp_frames.rs                     # US3
@@ -153,9 +155,10 @@ crates/finder/
     ├── src/components/McpSection.tsx (+ test)  # US7: Setup's MCP section
     ├── src/components/GuidanceBlock.tsx, TopBar.tsx, SetupPage.tsx   # US7: placing them
     ├── src/components/StopButton.tsx, MountSection.tsx   # US7: Stop shown while `motion` is
-    ├── src/api.ts, src/useSession.ts, src/App.tsx         # US7: `motion` reaches the page
+    ├── src/api.ts, src/useSession.ts, src/App.tsx         # US7: `motion` reaches the page;
+    │                                                      # App reads GET /api/mcp for Setup
     ├── dist/                                   # US7: rebuilt
-    ├── playwright.config.ts                    # US7: two lines (owner approval 15)
+    ├── playwright.config.ts                    # US7: mcp.spec.ts in two lists (approval 15)
     └── e2e/mcp.spec.ts                         # US7: in the `simulate` project
 DESIGN.md, .impeccable/design.json              # US7
 ```
@@ -191,7 +194,7 @@ calls compiled in a scratch crate under `-D warnings`, with clippy clean:
 |---|---|---|---|
 | `legacy_session_mode` | true | `.with_legacy_session_mode(false)` | No `Mcp-Session-Id` is needed on older revisions either. |
 | `json_response` | false | `.with_json_response(true)` | Tools send no notification before their result, so every answer is `application/json`. |
-| `allowed_hosts` | loopback names, matched exactly | `.disable_allowed_hosts()` | Exact loopback names would refuse the phone by IP. `rmcp` then checks no `Host`, and the door makes the checks, including the stop exemption that `rmcp`'s checks would break. |
+| `allowed_hosts` | loopback names, matched exactly | `.disable_allowed_hosts()` | Exact loopback names would refuse the phone by IP. `rmcp` then accepts any well-formed `Host`, but still answers 400 for a missing or malformed one, before its method dispatch (`validate_dns_rebinding_headers`, first in `handle()`). The door runs first and makes the checks, including the stop exemption that `rmcp`'s checks would break. |
 | `allowed_origins` | none | `.disable_allowed_origins()` | The door checks `Origin`. |
 | `max_request_body_bytes` | 4 MiB | `.with_max_request_body_bytes(44 * 1024 * 1024)` | 4 MiB would cap `solve_frame` at a 3 MiB image. 44 MiB fits a 32 MiB image as base64 (4/3 of it, plus the JSON around it). |
 
@@ -220,7 +223,10 @@ order:
    DNS-rebinding page sends the attacker's name in both `Origin` and `Host`, so check 3
    alone passes it. Real MCP clients send no `Origin`, and reach the console by an
    address or a listed name. Checks 3 and 4 call the same functions as 012's same-origin
-   check (§ The shared functions).
+   check (§ The shared functions). A request with no `Host`, more than one, or one that
+   is not a valid authority fails this check with 403. That rule is the door's own: 012's
+   `SessionWrite` reads `Host` only when an `Origin` is present. From US4 on, any stop in
+   such a request has already been carried out (step 2).
 5. **Peer.** The peer address (`ConnectInfo<SocketAddr>`) must be loopback, RFC 1918,
    link-local (169.254/16, fe80::/10) or IPv6 unique local (fc00::/7). An IPv4-mapped
    IPv6 peer, as a dual-stack listener reports one, is judged as its IPv4 address. With no
@@ -255,7 +261,7 @@ crate function that the route then calls too. No tool repeats a route's logic.
 | `search_targets`'s body | `search(&AppState, q, limit) -> Result<Vec<SearchResult>, ApiError>` | US2 | `search_targets` |
 | `solve`'s body after its form is read | `solve_upload(&AppState, permit, bytes, name, SolveOptions) -> Result<SolveReport, ApiError>` | US3 | `solve_frame`; the caller passes the solve gate's permit, so the route still takes it before reading its form |
 | `start_goto`, `second_sync`, and 015's `POST /api/track` | `start_motion(&AppState, by, tool, start) -> Result<(), ApiError>` | US4 | `goto_target` (US4), the direct moves (US5), `set_tracking` (US6) |
-| `stop_mount`'s body, with 015's `Tracker::stop` (re-check when 015 lands) | `stop(&AppState) -> serde_json::Value` | US4 | the door's stops |
+| `stop_mount`'s body, which from 015's US7 also calls `Tracker::stop` with `stopped` and clears the armed state (re-check when 015 lands) | `stop(&AppState) -> serde_json::Value` | US4 | the door's stops |
 
 The names are this plan's. A builder may adjust a signature to fit the code it finds, but
 not inline a copy.
@@ -265,7 +271,7 @@ not inline a copy.
 | Tool | Arguments | Passes through to | `structuredContent` | Story | Moves |
 |---|---|---|---|---|---|
 | `get_session` | none | `GET /api/session` | the session | US1 | no |
-| `set_target` | `{target: string \| null}` | `PUT /api/session` with a target only | the route's session view | US1 | no |
+| `set_target` | `{target: string \| null}` | `PUT /api/session` with a target only; any other field is refused | the route's session view | US1 | no |
 | `set_session` | `{site?, min_alt_deg?, target?}` | `PUT /api/session`, never the scope node | the route's session view | US2 | no |
 | `search_targets` | `{q: string, limit?: integer}` | `GET /api/targets?q=` | `{targets: [...]}` | US2 | no |
 | `get_guidance` | none | the session's `guidance` | `{guidance}` | US2 | no |
@@ -295,6 +301,16 @@ not inline a copy.
 **Annotations.** Read-only tools carry `readOnlyHint: true`. Each moving tool's
 description says that it moves a real telescope. Annotations are hints that a client may
 ignore, so no guard depends on them.
+
+**`set_target`.** It reads its arguments as `PUT /api/session` reads its body, then
+refuses an edit that sets any `SessionEdit` field but `target` with
+`set_target changes only target`. Without that check, `{"target": "M42", "node": {...}}`
+would parse and apply, and `set_target` would get around `set_session`'s whitelist and
+its site lock.
+
+**Both whitelists are exhaustive.** `set_target` and `set_session` each check their edit
+with a destructure of `SessionEdit` that names every field and has no `..`, so a field a
+later change adds to `SessionEdit` fails to compile until both tools decide on it.
 
 **`set_session`:**
 - It reads its arguments as `PUT /api/session` reads its body, so an unknown field such as
@@ -396,17 +412,45 @@ These are not changed by any story:
   not JSON and `POST /api/solve`'s 413. Tools read those answers and never reshape them.
 - **The session:** existing session file fields and the session JSON, which `motion` and
   `axis_move` only add to, each left out until it has a value.
-- **The page:** the page's existing components and tests. The note is a new component
-  placed inside GuidanceBlock and TopBar, and the Setup section is a new component inside
-  SetupPage. `SetupPage.test.tsx` answers every URL it doesn't name with a health-shaped
-  body, so `McpSection` renders nothing for an answer that isn't an MCP status.
+- **The page:** the page's existing components and tests, re-read at a43747f.
+  - The note is a new component placed inside GuidanceBlock and TopBar. GuidanceBlock has
+    no Stop (it renders `GoToControl`), and TopBar renders the page's only `StopButton`
+    (`TopBar.tsx:110`). No second Stop is added: `e2e/goto.spec.ts:72` finds Stop with a
+    strict `getByRole("button", { name: "Stop", exact: true })`, and
+    `StopButton.test.tsx:80` finds it unscoped.
+  - Setup's section is a new component that `SetupPage` renders only when `App` passes it
+    the `GET /api/mcp` status as an optional prop. `App` reads that route only while the
+    path is `/setup`. So `SetupPage` itself makes no new request. That matters because
+    `ScopeNodeSection.test.tsx`, `AimTap.test.tsx`, `MountSection.test.tsx`,
+    `FieldWarning.test.tsx` and `SetupPage.test.tsx`'s `open()` render `SetupPage`
+    directly, and some of them count its fetches exactly
+    (`ScopeNodeSection.test.tsx:81` and `:134`; `AimTap.test.tsx:83`, `:113`, `:123` and
+    `:134`).
+  - The App-level cases that reach `/setup` (`SetupPage.test.tsx:118–163` and
+    `:165–184`, and `StopButton.test.tsx`'s `/setup` cases) answer URLs they don't name
+    with a health-shaped body or `{stopped: true}`, and assert with `toHaveBeenCalledWith`
+    or on `pushState`, never on a count of fetches. So `McpSection` renders nothing for an
+    answer that isn't an MCP status, and `App` catches every failure of its read: a
+    rejected fetch, a non-OK answer or a body that isn't JSON leaves the prop unset.
+  - Neither new view renders an element with role `status` or `alert`.
+    `e2e/session.spec.ts:117` and `e2e/simulate.spec.ts:306` find Setup's save messages
+    with an unscoped `page.getByRole("status")`, and `e2e/goto.spec.ts:193` finds the
+    guidance block's GoTo status with `block.getByRole("status")`; all are strict.
+  - `useSession.ts` passes `motion` through only when present, as it passes 014's
+    `goto_refusal`, so `useSession.test.ts`'s `toEqual` on a health body still holds.
 - **Playwright:** `playwright.config.ts`, its servers and its existing projects. The new
   `crates/finder/web/e2e/mcp.spec.ts` runs in the `simulate` project, against its
-  `finder --simulate` server and fresh `--state`. At 1c928e3 the `default` project ignores
-  only `session.spec.ts` and `simulate.spec.ts`, and `simulate` matches only
-  `simulate.spec.ts`, so US7 adds `mcp.spec.ts` to both lists and nothing else (owner
-  approval 15). 014's US9 and 015's US9 change these lines first, so US7 re-reads them.
-  Any other config change escalates.
+  `finder --simulate` server and fresh `--state`.
+  - At a43747f, line 34 has the `default` project ignore `session.spec.ts`,
+    `simulate.spec.ts` and `goto.spec.ts` on one 102-character line, and the `simulate`
+    project (lines 42–48) matches `["**/simulate.spec.ts", "**/goto.spec.ts"]` with
+    `workers: 1`. 015's US9 adds `tracking.spec.ts` to both lists.
+  - US7 adds `mcp.spec.ts` to both lists, laid out as Prettier formats them, and changes
+    nothing else (owner approval 15). `.prettierrc.json` sets `printWidth` 120, and the
+    `test` gate's `npm run format:check` covers the config. With `tracking.spec.ts` in
+    the list, the `default` object no longer fits one line, so the diff is several lines,
+    not two. US7 re-reads the layout 015's US9 left.
+  - Any other config change escalates.
 
 ## Decisions and the alternatives rejected
 
@@ -517,6 +561,24 @@ While a direct move runs, a GoTo or another direct move is refused by 014's own
 `the mount is already moving`, and a direct move during a GoTo by
 `a GoTo is already running`.
 
+**Track and the MCP moves** (owner question 10; re-check when 015 lands). 014's two
+refusals don't cover Track. 015's tracker drives its keyhole slew itself with
+`goto_axis`, then waits at the exit with both axes at rest and no GoTo running, so
+neither refusal fires then. And 015 refuses Track on only for its four reasons (no mount,
+no sync, Sun up, target not pointable). So, on the MCP path only:
+- `goto_target`, `goto_axis_position` and `move_axis` are refused with `Track is on`
+  while the session's `track.state` is anything but `off` (`armed`, `tracking` or
+  `keyhole_wait`; a session with no `track` counts as off), after the limiter and before
+  014's checks;
+- `set_tracking` with `on: true` is refused with `a direct axis move is running` while
+  `axis_move` is `moving`, after the limiter and before `POST /api/track`'s function;
+- Track turned on during a GoTo still arms, as 015's FR-014 says.
+
+The page's `POST /api/goto` and `POST /api/track` keep exactly the answers 015's tests
+pin. What 016 assumes of 015: `track.state` is serialized in the session under those
+stable names, which 015's US7 reads by name (015 plan.md § Interfaces), and 015 defines
+nothing for a GoTo or a direct move requested during `keyhole_wait`.
+
 **A rate limit on moves (`mcp::limit`).** The tools page says servers MUST rate limit tool
 invocations:
 - Moving tools share one limit of 2 calls a second across all clients: `goto_target`,
@@ -534,7 +596,7 @@ untouched.
 ### Who moved it
 
 The session's `motion` shows the source. The page's note reads "Moved by an MCP client ·
-<tool>" while `by` is `mcp`, beside the Stop that is shown whenever `motion` is present.
+<tool>" while `by` is `mcp`, and the top bar's Stop is shown whenever `motion` is present.
 Every moving or stopping MCP call is also written to the call log with its tool, arguments
 and result. The scope node's token is never in a log line or a result.
 
@@ -564,8 +626,11 @@ falls through to the router's page fallback, which answers a POST with 405, as i
   connect info.
 - `api.rs` gains `GET /api/mcp` and the US1 shared functions: `session_response`,
   `session_edit_error`, `edit_session`, `check_origin` and `host_allowed`.
-- `get_session` and `set_target` are the first two tools, in `mcp::tools`.
-- `tests/mcp/support.rs` holds the request helper with spec.md's shared headers.
+- `get_session` and `set_target` are the first two tools, in `mcp::tools`; `set_target`
+  refuses every field but `target` (§ The tool table).
+- `tests/mcp/support.rs` holds the request helper with spec.md's shared headers,
+  `Host: localhost:8080` included, each overridable or removable per test. Later stories
+  only add to the module (approval 17).
 
 ## User Story 2 — Session and catalog tools
 
@@ -574,7 +639,15 @@ calls `search`, which US2 moves out of the route. `set_session` reads its argume
 `axum::Json::<SessionEdit>::from_bytes` and `session_edit_error`, refuses the other
 `SessionEdit` fields and a site change while a mount is connected (§ The tool table), and
 applies the rest with `edit_session`. The support module gains the simulator rig with the
-recording mount.
+recording mount, built as 014's `tests/goto_api.rs` builds its `Rig`: the live loop with
+`with_live_solver` over the centroid solver, 0.5 s frames, and the aim point at
+(700, 420).
+
+`get_guidance`'s test follows 012's `tests/pushto_api.rs`: a solved `orion2.jpg` pointing
+and M78 at 40° N, 75° W on `FixedClock`, compared with `pushto::turn_tilt` of the two
+`sky::alt_az` positions. The session takes a pointing only as RA/Dec and a target only
+as a catalog id, so a Given of exact azimuths and altitudes would need inverse precession
+that the crate doesn't have.
 
 ## User Story 3 — Frames and the link
 
@@ -600,11 +673,16 @@ added to `session.rs` or the session file.
 
 **Stop.** US4 moves `stop_mount`'s body into `stop`, which `POST /api/stop` keeps calling.
 `mcp::door` recognises and carries out stops before `rmcp`, as § The door says, including
-for batches and for requests that fail a check. The `stop` and `stop_all` tools answer
-without stopping again when the door's extension says it has.
+for batches and for requests that fail a check: a foreign `Origin`, a rebinding or
+missing `Host`, a peer outside the LAN, or no connect info. The `stop` and `stop_all`
+tools answer without stopping again when the door's extension says it has.
 
 **The log and the token.** Add `AppState::with_call_log(..)` and the line format of § The
 call log. Add the token-never-leaves test.
+
+**Spacing GoTos in the tests.** US5 adds a limit of 2 moving calls in any sliding second
+to `goto_target`, and US5 may not edit `mcp_motion.rs`. So within one rig, US4's tests
+keep `goto_target` calls at least 1 s of virtual time apart (§ Plan traps, trap 26).
 
 ## User Story 5 — Direct axis moves and the rate limit
 
@@ -622,44 +700,76 @@ running each move and its watcher. `move_axis` refuses a duration outside 0 to 3
 
 **The limiter.** Add `mcp::limit` and apply it to `goto_target` and the two direct moves.
 
+**Track.** After the limiter, the three moving tools refuse with `Track is on` while
+015's `track.state` is anything but `off` (§ Decisions, "Track and the MCP moves"; owner
+question 10; re-check when 015 lands). US5-S16 turns Track on through the page's
+`POST /api/track`, because `set_tracking` arrives in US6.
+
 ## User Story 6 — Tracking over MCP
 
 **`set_tracking`.** It calls `start_motion` with `by = mcp, tool = set_tracking` for
 `{"on": true}`, and the same function as `POST /api/track` for `{"on": false}`, so both
-refuse with the route's reasons. `{"on": true}` joins the move limiter (re-check when 015
-lands).
+refuse with the route's reasons. `{"on": true}` joins the move limiter, and is refused
+with `a direct axis move is running` while `axis_move` is `moving` (owner question 10;
+re-check when 015 lands).
 
 **`get_session`.** It already includes tracking's readout, because it passes the session
 through.
 
+**The feed.** US6's tests drive the console's own live loop: US2's rig, whose
+`with_live_solver` over the centroid solver solves the simulator's frames every 0.5 s.
+What 016 assumes of 015: its US7 hands each live solve to the console's tracker whenever
+the tracker's state is not `off` (015 plan.md § Interfaces), so those solves reach the
+tracker with no hook of 016's. At the 015 re-check, confirm that, and that a 10-minute
+paused-time run at 0.5 s frames fits the coverage job's time. If it doesn't, the fix is
+a shorter span in US6-S1, a criteria change for the owner, rather than a hook (re-check
+when 015 lands).
+
 ## User Story 7 — The page and the README
 
 **`motion` reaches the page.** `api.ts`'s `ObservingSession` gains `motion?`;
-`useSession.ts`, which copies the session field by field, copies it; `App.tsx` passes it
-to `TopBar`.
+`useSession.ts`, which copies the session field by field, copies it only when present;
+`App.tsx` passes it to `TopBar`.
 
 **The note.** `McpNote` renders "Moved by an MCP client · <tool>" from the session's
-`motion` while `by` is `mcp`. It is placed in GuidanceBlock and TopBar beside the existing
-Stop. `StopButton`'s `mountMayMove` also returns true while `motion` is present, through
-an optional third argument that TopBar and MountSection pass, so Stop shows from the
-moment a motion starts, before mount telemetry reports moving axes.
+`motion` while `by` is `mcp`. It is placed in GuidanceBlock, which has no Stop and gets
+none, and in TopBar beside its single `StopButton`. No second Stop is rendered anywhere
+(§ Shapes that existing tests pin, "The page"). `StopButton`'s `mountMayMove` also
+returns true while `motion` is present, through an optional third argument that TopBar
+and MountSection pass, so Stop shows from the moment a motion starts, before mount
+telemetry reports moving axes. The note is plain text, with no `status` or `alert` role.
 
-**Setup's MCP section.** `McpSection` reads `GET /api/mcp` and lists the URLs, the allowed
-host names and the off or local-only notes, including the WSL NAT note naming the README's
-section. An answer without a boolean `enabled` and an array `urls` renders nothing.
+**Setup's MCP section.** `App.tsx` reads `GET /api/mcp` each time the path becomes
+`/setup`, catches every failure, and passes the answer to `SetupPage` as an optional
+prop. `SetupPage` renders `McpSection` last, after every existing section, only when it
+has the prop. The answer arrives after Setup has drawn, so a section placed last moves
+nothing that `e2e/simulate.spec.ts`'s Setup tap measures (`:297–304`).
+
+`McpSection` takes the status as a prop and fetches nothing. It lists the URLs, the
+allowed host names and the off or local-only notes, including the WSL NAT note naming the
+README's section, as plain text with no `status` or `alert` role. A status without a
+boolean `enabled` and an array `urls` renders nothing. `McpSection.test.tsx` renders
+`McpSection` directly with each status.
 
 **Records, tests and the build.**
 - The README gains its MCP section; `DESIGN.md` and `.impeccable/design.json` record both
   views as built.
 - `crates/finder/web/e2e/mcp.spec.ts` covers the GoTo flow and the night pixel check of
   both views. It reaches a running GoTo as 014's `e2e/goto.spec.ts` does, and carries its
-  own night pixel helpers, because `e2e/session.spec.ts`'s are local to that file.
-- `playwright.config.ts` gains its two lines (owner approval 15).
+  own night pixel helpers, because `e2e/session.spec.ts`'s and `e2e/goto.spec.ts`'s are
+  local to those files.
+- With `workers: 1`, Playwright runs the `simulate` project's files in name order: goto,
+  mcp, simulate, then 015's tracking. So `mcp.spec.ts`'s `afterAll` leaves the server as
+  `goto.spec.ts`'s does (`goto.spec.ts:109–116`): it posts `/api/stop`, sets frames
+  running, deletes `/api/aim` and resets the night's model, because `simulate.spec.ts`
+  runs next and its `beforeAll` asserts there is no aim point.
+- `playwright.config.ts` gains `mcp.spec.ts` in its two lists, laid out as Prettier
+  formats them (owner approval 15).
 - `web/dist` is rebuilt.
 
 ## Verification (every story, before proposing)
 
-- **The factory gates** (`ergane.yaml`, as of 1c928e3):
+- **The factory gates** (`ergane.yaml`, as of a43747f, unchanged since 1c928e3):
   - `lint` = `cargo fmt --all --check`,
     `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`,
     `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked`
@@ -680,18 +790,29 @@ section. An answer without a boolean `enabled` and an array `urls` renders nothi
 ## Prerequisites before this spec is flipped to `ready`
 
 1. **The earlier specs have landed:** `012-targets-and-push-to`, `013-live-finder`,
-   `014-goto` and `015-tracking`. `depends_on_landed` enforces this. 012 and 013: met.
-   014: US1 to US8 landed by 1c928e3; US9 was building when this trio was refined.
-   015: `ready`, not built.
-2. **This trio is re-read against 014's US9 and 015 as landed.** Every citation marked
-   "re-check when 015 lands", the playwright lines both specs' US9 change, how 014's
-   `e2e/goto.spec.ts` reaches a running GoTo, and the last writers in § Refinement
-   Record's `shared_writes`.
+   `014-goto` and `015-tracking`. `depends_on_landed` enforces this. 012, 013 and 014:
+   met (014's US9 landed at a43747f). 015: dispatched at a43747f and building.
+2. **This trio is re-read against 015 as landed.** 014's US9 has been re-read (a43747f).
+   The 015 re-read covers:
+   - every citation marked "re-check when 015 lands";
+   - the `playwright.config.ts` layout 015's US9 leaves (§ Shapes that existing tests
+     pin, "Playwright");
+   - what 015 does with a GoTo or a direct move requested during `keyhole_wait`, and
+     whether owner question 10's MCP-side refusals still fit (§ Decisions, "Track and the
+     MCP moves");
+   - that `live.rs` hands each live solve to the console's tracker whenever its state is
+     not `off`, and that US6-S1's 10-minute run fits the coverage job's time (§ User
+     Story 6, "The feed");
+   - 015's open owner decision on showing Stop during `keyhole_wait` (its gap-hunt
+     finding 13), which would add `StopButton.tsx`, `TopBar.tsx` and `App.tsx` to 015's
+     US8 and make it their last writer before US7;
+   - the last writers in § Refinement Record's `shared_writes`.
 3. **The owner questions are answered** (§ Refinement Record, `open_questions`), and the
    text that carries a recommended answer is kept or changed to match.
 4. **The owner approvals are given**, including the `rmcp` and `base64` dependencies,
-   `GET /api/mcp`, `axis_move` and the two Playwright config lines (spec § Owner
-   approvals). Flipping to `ready` records them.
+   `GET /api/mcp`, `axis_move`, `mcp.spec.ts` in the Playwright config's two lists, and
+   the additive rule for 016's test module (spec § Owner approvals). Flipping to `ready`
+   records them.
 5. **No operator-staged files are needed.** No story adds a file over 200 KiB.
 
 ## Plan traps
@@ -738,7 +859,8 @@ that keeps it from recurring. They bind every story. 014's plan holds the longer
 10. **A negative assertion passes when nothing happens** (014 trap 11). Here "no axis
     moves" passes on a mount that is not connected, and a request missing `Accept` gets
     406 before any guard runs. *Check:* every such scenario shows its positive side in the
-    same test (spec.md's shared setup), and the support helper sends the shared headers.
+    same test (spec.md's shared setup), and the support helper sends the shared headers,
+    `Host` included.
 11. **`Cargo.lock` is updated by cargo, once** (014 trap 13). *Check:* US1 runs cargo
     once without `--locked`, then the one `--precise` update, and checks the lock's diff
     against § Dependencies' list; US3 runs cargo once for `base64`, whose diff is one
@@ -774,17 +896,37 @@ that keeps it from recurring. They bind every story. 014's plan holds the longer
     field by field, so a new field reaches no component until it is copied. *Check:*
     `McpNote.test.tsx` renders the top bar through `useSession` with a stubbed session
     that carries `motion`.
-20. **Setup's tests stub every fetch.** `SetupPage.test.tsx` answers unnamed URLs with a
-    health-shaped body. *Check:* `McpSection` renders nothing for an answer that isn't an
-    MCP status, and `SetupPage.test.tsx` passes unchanged.
+20. **Setup's tests count its fetches.** `ScopeNodeSection.test.tsx` and
+    `AimTap.test.tsx` render `SetupPage` directly and pin its fetches exactly, so a
+    section that fetches on mount turns them red. *Check:* `SetupPage` and `McpSection`
+    fetch nothing; `App` reads `GET /api/mcp` only on `/setup` and passes it down; the
+    App-level cases that reach `/setup` get a health-shaped or `{stopped: true}` answer,
+    for which `McpSection` renders nothing; neither new view has a `status` or `alert`
+    role (§ Shapes that existing tests pin, "The page").
 21. **Playwright projects match by file name.** A new spec runs in every project whose
-    match it fits, and at 1c928e3 that is `default`, against a server with no simulator.
-    *Check:* owner approval 15's two lines, re-read after 014's and 015's US9 land.
+    match it fits, and at a43747f that is `default`, against a server with no simulator.
+    *Check:* owner approval 15's two lists, laid out as Prettier formats them, re-read
+    after 015's US9 lands.
 22. **One `finder --simulate` server serves the whole `simulate` project** (014 trap 15).
-    *Check:* `mcp.spec.ts` sets its own site, target and sync, and leaves the telescope
-    stopped; the project keeps 014's `workers: 1`.
+    *Check:* `mcp.spec.ts` sets its own site, target and sync. Its `afterAll` posts
+    `/api/stop`, sets frames running, deletes `/api/aim` and resets the night's model, as
+    `goto.spec.ts`'s does, because `simulate.spec.ts` runs next and asserts there is no
+    aim point. The project keeps 014's `workers: 1`.
 23. **015 is cited from its trio, not its code.** *Check:* every 015 citation says
     "re-check when 015 lands", and Prerequisite 2 re-reads them before the flip.
+24. **A landed test must stay true as later stories add to the server.** `rmcp` lists
+    every routed tool, so a test that pins `tools/list`'s length or exact contents breaks
+    when the next story adds a tool, and that story may not edit it. *Check:* a test
+    checks each named tool's presence by name; a whole-body check compares two reads of
+    the same console, never a literal body that a later tool or session field would
+    change.
+25. **016's test module grows only by addition** (approval 17). Every 016 test binary
+    includes `tests/mcp/support.rs` by `#[path]`, so a changed helper breaks an earlier
+    story's test file, which the later story may not edit. *Check:* each story adds
+    items to `support.rs` and changes or removes none that an earlier story put there.
+26. **US5's limiter counts US4's GoTo calls.** *Check:* within one rig, `mcp_motion.rs`
+    keeps `goto_target` calls at least 1 s of virtual time apart, and US5 runs
+    `--test mcp_motion` among its development checks.
 
 ## Risks
 
@@ -800,23 +942,38 @@ that keeps it from recurring. They bind every story. 014's plan holds the longer
 
 ## Refinement Record
 
-Reviewed on 2026-11-01 by a plate-solver refinement session against `main` at 1c928e3
-(014's US1 to US8 landed, US9 building) and 015's trio as written at 29ab190, which is
-`ready` and not built. Writes come from the task text. Shared writes name the merge edge
-that orders them, and the 013, 014 and 015 stories that last write the same file; the 015
-entries come from 015's own record, to be re-checked when 015 lands. Readiness waits on
-the nine owner questions below.
+Reviewed on 2026-11-01 by a plate-solver refinement session against `main` at 1c928e3,
+and again on 2026-11-02 against `main` at a43747f: 014's US1 to US9 landed, and 015's
+trio as dispatched there (#158 included), with 015 building. The second pass applied a
+read-only gap hunt of the first draft. Writes come from the task text. Shared writes name
+the merge edge that orders them, and the 013, 014 and 015 stories that last write the
+same file; the 015 entries come from 015's own record, to be re-checked when 015 lands.
+Readiness waits on the eleven owner questions below.
+
+**Criteria changed in the second pass** (none of it reviewed yet):
+- approvals 3 (a missing `Host` fails), 15 (`mcp.spec.ts` in two lists, as Prettier
+  lays them out) and the new 17 (016's test module grows by addition);
+- FR-002 (no `Host` is refused), FR-005 (`set_target` refuses other fields), FR-009 and
+  FR-013 (MCP refusals while Track is on, or a direct move runs), FR-015 (the top bar's
+  single Stop), SC-004 (the `support.rs` exception), and the "Peers and hosts" and "One
+  motion at a time" edge cases;
+- US1-S1, US2-S6, US3-S5, US4-S9 and US5-S13 (`tools/list` "includes"); US1-S7 (no
+  `Host`); new US1-S16 (`set_target`'s whitelist); US2-S3 (restated in 012's relative
+  form); new US4-S16 (stops from refused requests); new US5-S16 (moves refused while
+  Track is on); US6-S1 (a sync away from M42, the hold timed from `tracking`) and US6-S3
+  (the same second); new US6-S4 (MCP stop ends Track) and US6-S5 (Track refused during a
+  direct move); US7's story text and US7-S1 (one Stop, alt/az within 1e-8°).
 
 ```yaml
 version: 1
-reviewed_revision: 1c928e3e18e06c342d0c59aa7d7b1b72dd2223d5
+reviewed_revision: a43747f7bccacb7521065534a3101fa396c6bee0
 stories:
   US1:
     tests:
       - path: crates/finder/tests/mcp_endpoint.rs
         status: new
         disposition: add
-        assertion: "through the router: initialize with no Authorization and tools/list with no Mcp-Session-Id name get_session (readOnlyHint) and set_target; GET is 405 with the state file byte-for-byte unchanged; with --no-mcp a POST to /mcp answers as the same POST to /no-such-path; MCP-Protocol-Version 1999-01-01 is 400 and a notification 202; a foreign Origin and a rebinding Host are 403 with the target unchanged; 192.168.1.20 and surface.local under --mcp-allow-host are 200"
+        assertion: "through the router, with Host localhost:8080 by default: initialize with no Authorization, then a tools/list with no Mcp-Session-Id that includes get_session (readOnlyHint) and set_target by name; GET is 405 with the state file byte-for-byte unchanged; with --no-mcp a POST to /mcp answers as the same POST to /no-such-path; MCP-Protocol-Version 1999-01-01 is 400 and a notification 202; a foreign Origin, a rebinding Host and no Host at all are 403 with the target unchanged; 192.168.1.20 and surface.local under --mcp-allow-host are 200"
         decision: "spec.md:US1-S1"
       - path: crates/finder/tests/mcp_endpoint.rs
         status: new
@@ -828,6 +985,11 @@ stories:
         disposition: add
         assertion: "on FixedClock, get_session's and set_target's structuredContent and text equal their routes' JSON exactly; GET /api/mcp lists localhost, the injected non-loopback IPv4, link-local and unique local addresses but no global IPv6 one, and surface.local under 0.0.0.0, only localhost with local_only under 127.0.0.1, and enabled false under --no-mcp"
         decision: "spec.md:US1-S11"
+      - path: crates/finder/tests/mcp_endpoint.rs
+        status: new
+        disposition: add
+        assertion: "set_target with a node token, and with a site, each answers isError with set_target changes only target, and GET /api/session is exactly unchanged"
+        decision: "spec.md:US1-S16"
       - path: crates/finder/tests/api.rs
         status: existing
         disposition: preserve
@@ -851,7 +1013,9 @@ stories:
     preserved_behavior:
       - "AppState::new, AppState::shared and router keep their signatures; MCP is added with AppState::with_mcp (plan.md Shapes that existing tests pin)"
       - "deny.toml, scripts/ci/ and .github/ are unchanged; cargo-deny's duplicate warnings stay warnings (plan.md Dependencies)"
-      - "the lock's diff adds rmcp's 34 packages with rmcp-macros at 3.5.1 and changes only the entries plan.md Dependencies lists"
+      - "the lock's diff adds rmcp's 34 packages, iana-time-zone-haiku included, with rmcp-macros at 3.5.1, and changes only the entries plan.md Dependencies lists"
+      - "crates/finder/tests/mcp/support.rs is created here as 016's own shared test module; later stories only add to it (spec.md Owner approvals, approval 17)"
+      - "set_target's whitelist destructures SessionEdit with no .., so a later SessionEdit field fails to compile until the tool decides on it (plan.md The tool table)"
     checks:
       development:
         - "cargo test -p finder --locked --test mcp_endpoint"
@@ -943,12 +1107,12 @@ stories:
       - path: crates/finder/tests/mcp_session_tools.rs
         status: new
         disposition: add
-        assertion: "search_targets for orion answers {targets} equal to GET /api/targets?q=orion exactly, with the route's array as text; set_session with min_alt_deg 85 and with sun_guard false is isError with PUT /api/session's own 400 text and the session unchanged; get_guidance from 350/30 to 24/42 gives clockwise 34 and up 12 within 1e-9"
+        assertion: "search_targets for orion answers {targets} equal to GET /api/targets?q=orion exactly, with the route's array as text; set_session with min_alt_deg 85 and with sun_guard false is isError with PUT /api/session's own 400 text and the session unchanged; on FixedClock with M78 at 40 N, 75 W and orion2.jpg's pointing, get_guidance is pointable, equals the session's guidance exactly, and equals pushto::turn_tilt of the two sky::alt_az positions within 1e-9"
         decision: "spec.md:US2-S1"
       - path: crates/finder/tests/mcp_session_tools.rs
         status: new
         disposition: add
-        assertion: "the scope node's address and token are refused with set_session's own reason and the node unchanged; with the simulated mount connected the site 40 N 75 E is refused with the site lock's reason and applied on a console with no mount; each tool equals its route under the object rule, with read-only hints and all three listed"
+        assertion: "the scope node's address and token are refused with set_session's own reason and the node unchanged; with the simulated mount connected the site 40 N 75 E is refused with the site lock's reason and applied on a console with no mount; each tool equals its route under the object rule, with read-only hints, and tools/list includes all three by name"
         decision: "spec.md:US2-S4"
       - path: crates/finder/tests/targets_api.rs
         status: existing
@@ -961,8 +1125,9 @@ stories:
         assertion: "PUT /api/session still sets the scope node's address and token for the page; only set_session refuses them"
         decision: "spec.md:FR-020"
     preserved_behavior:
-      - "PUT /api/session's checked-edit rules and texts are unchanged; set_session reads its arguments through the same parser (plan.md The tool table)"
+      - "PUT /api/session's checked-edit rules and texts are unchanged; set_session reads its arguments through the same parser, and its whitelist destructures SessionEdit with no .. (plan.md The tool table)"
       - "the page can still change the site while a mount is connected; the site lock is MCP's only (spec.md Clarifications)"
+      - "every item US1 put in crates/finder/tests/mcp/support.rs is unchanged, and mcp_endpoint.rs passes unchanged; US2 only adds the rig (spec.md Owner approvals, approval 17)"
     checks:
       development:
         - "cargo test -p finder --locked --test mcp_session_tools"
@@ -992,8 +1157,9 @@ stories:
         other_spec: 016-mcp
         other_story: US3
         disposition: merge_order
-        reason: "US3 depends_on_merged US2, and may extend the support module"
-    open_questions: []
+        reason: "US3 depends_on_merged US2, and may only add items to the support module (approval 17)"
+    open_questions:
+      - "Owner question 11 (approval 17, SC-004): US2 to US6 add helpers to crates/finder/tests/mcp/support.rs, which US1 creates, and the rule against editing an existing test would block that. Recommended: approve an additive rule, so later stories may add items to support.rs and may not change or remove any item an earlier story put there. Alternative: each story puts its helpers in a new file of its own, included by #[path] from its own test file, so no story edits a landed test file."
   US3:
     tests:
       - path: crates/finder/tests/mcp_frames.rs
@@ -1004,7 +1170,7 @@ stories:
       - path: crates/finder/tests/mcp_frames.rs
         status: new
         disposition: add
-        assertion: "on the live loop get_pointing is within 1 arcmin of the true eyepiece at mid-exposure; 2 s after set_unresponsive(true) get_link's node is disconnected and equals the session's node except last_frame_age_s within 0.1 s; tools/list names the three tools with the read-only hints"
+        assertion: "on the live loop get_pointing is within 1 arcmin of the true eyepiece at mid-exposure; 2 s after set_unresponsive(true) get_link's node is disconnected and equals the session's node except last_frame_age_s within 0.1 s; tools/list includes the three tools by name, with the read-only hints"
         decision: "spec.md:US3-S3"
       - path: crates/finder/tests/api.rs
         status: existing
@@ -1019,6 +1185,7 @@ stories:
     preserved_behavior:
       - "no test image is committed; the 32 MiB PGMs are synthesised at run time (spec.md Assumptions)"
       - "the lock gains only base64's line in finder's dependency list (plan.md Plan traps, trap 11)"
+      - "every item US1 and US2 put in crates/finder/tests/mcp/support.rs is unchanged, and mcp_endpoint.rs and mcp_session_tools.rs pass unchanged (spec.md Owner approvals, approval 17)"
     checks:
       development:
         - "cargo test -p finder --locked --test mcp_frames"
@@ -1050,7 +1217,7 @@ stories:
         other_spec: 016-mcp
         other_story: US4
         disposition: merge_order
-        reason: "US4 depends_on_merged US3, and may extend the support module"
+        reason: "US4 depends_on_merged US3, and may only add items to the support module (approval 17)"
     open_questions:
       - "Owner question 2 (approval 13, FR-021): finder has no base64 decoder, and rmcp does not re-export its own. Recommended: base64 =0.23.1, the version rmcp already locks, so no package is added. Alternatives: a small standard-alphabet decoder written in mcp/tools.rs with its own tests; or leave solve_frame out of 016."
   US4:
@@ -1063,8 +1230,13 @@ stories:
       - path: crates/finder/tests/mcp_motion.rs
         status: new
         disposition: add
-        assertion: "stop_all from a second client, stop under MCP-Protocol-Version 1999-01-01 (400), a bare stop_all with no initialize, Accept or version, a foreign-Origin stop_all, and a batch with and without a foreign Origin (403 then 415) each command both axes to stop within 0.1 s, halting the GoTo with the observer stopped it and starting none; a rebinding Host and the peer 203.0.113.7 get 403 with no axis moving after an accepted call moved it"
+        assertion: "stop_all from a second client, stop under MCP-Protocol-Version 1999-01-01 (400), a bare stop_all with no initialize, Accept or version, a foreign-Origin stop_all, and a batch with and without a foreign Origin (403 then 415) each command both axes to stop within 0.1 s, halting the GoTo with the observer stopped it and starting none; a goto_target with a rebinding Host or from the peer 203.0.113.7 gets 403 with no axis moving after an accepted call moved it; tools/list still includes stop and stop_all by name"
         decision: "spec.md:US4-S6"
+      - path: crates/finder/tests/mcp_motion.rs
+        status: new
+        disposition: add
+        assertion: "a stop_all with a rebinding Host and Origin, one with no Host, one from 203.0.113.7 and one through a router with no connect info are each answered 403, and each time both axes are commanded to stop within 0.1 s and the GoTo is halted with the observer stopped it"
+        decision: "spec.md:US4-S16"
       - path: crates/finder/tests/mcp_motion.rs
         status: new
         disposition: add
@@ -1085,14 +1257,26 @@ stories:
         disposition: preserve
         assertion: "the state file still holds only its durable keys; motion is never written"
         decision: "spec.md:FR-014"
+      - path: crates/finder/tests/goto_refusal_api.rs
+        status: existing
+        disposition: preserve
+        assertion: "the session's goto_refusal still equals POST /api/goto's 409 text, in 014's refusal order, after the GoTo start moves into start_motion"
+        decision: "plan.md:The shared functions"
+      - path: crates/finder/tests/night_sim.rs
+        status: existing
+        disposition: preserve
+        assertion: "014's night still halts with the observer stopped it after POST /api/stop's body moves into stop, with no restart for 2 s"
+        decision: "plan.md:The shared functions"
     preserved_behavior:
       - "POST /api/stop keeps its body, answer and missing same-origin check (plan.md Shapes that existing tests pin)"
       - "goto.rs, session.rs and the session file are not changed by US4"
       - "015's tests/track_api.rs passes unchanged after POST /api/track's start moves into start_motion; it is not on main yet, so it is named here rather than as an existing test (re-check when 015 lands)"
+      - "every item US1 to US3 put in crates/finder/tests/mcp/support.rs is unchanged, and their test files pass unchanged (spec.md Owner approvals, approval 17)"
+      - "within one rig, mcp_motion.rs keeps goto_target calls at least 1 s of virtual time apart, so US5's limiter leaves it green (plan.md Plan traps, trap 26)"
     checks:
       development:
         - "cargo test -p finder --locked --test mcp_motion"
-        - "cargo test -p finder --locked --test goto_api --test goto_sim --test session_cli"
+        - "cargo test -p finder --locked --test goto_api --test goto_sim --test session_cli --test goto_refusal_api --test night_sim"
       handoff: declared_gates
       independent: declared_pipeline
       release:
@@ -1119,7 +1303,7 @@ stories:
         other_spec: 016-mcp
         other_story: US5
         disposition: merge_order
-        reason: "US5 depends_on_merged US4, and may extend the support module"
+        reason: "US5 depends_on_merged US4, and may only add items to the support module (approval 17)"
     open_questions: []
   US5:
     tests:
@@ -1131,8 +1315,23 @@ stories:
       - path: crates/finder/tests/mcp_axis_moves.rs
         status: new
         disposition: add
-        assertion: "0.5 deg/s for 10 s stops at 10.0 +/- 0.1 s having moved 5.0 deg less the ramp within 0.1; 60 s is refused with the duration reason; a 20 s move whose client leaves stops at 20.0 +/- 0.1 s with heartbeats carrying on; sunrise stops it within 1 s with axis_move halted by the Sun guard; ten moves in 1 s give one carried out, one the mount is already moving and eight rate-limit refusals; the page's Stop halts a move with the observer stopped it; goto_target over a move is refused; tools/list describes both moves and no result or log line holds the token"
+        assertion: "0.5 deg/s for 10 s stops at 10.0 +/- 0.1 s having moved 5.0 deg less the ramp within 0.1; 60 s is refused with the duration reason; a 20 s move whose client leaves stops at 20.0 +/- 0.1 s with heartbeats carrying on; sunrise stops it within 1 s with axis_move halted by the Sun guard; ten moves in 1 s give one carried out, one the mount is already moving and eight rate-limit refusals; the page's Stop halts a move with the observer stopped it; goto_target over a move is refused; tools/list includes both moves by name with descriptions that say they move a real telescope, and no result or log line holds the token"
         decision: "spec.md:US5-S8"
+      - path: crates/finder/tests/mcp_axis_moves.rs
+        status: new
+        disposition: add
+        assertion: "with Track on for M42 through POST /api/track and tracking, move_axis, goto_axis_position and goto_target are each refused with Track is on, the command log gains no go-to and no 1 deg/s rate, and track.state is still tracking 5 s later (re-check when 015 lands)"
+        decision: "spec.md:US5-S16"
+      - path: crates/finder/tests/goto_refusal_api.rs
+        status: existing
+        disposition: preserve
+        assertion: "refusal() and POST /api/goto still give the same text in the same order, Sun is up included while guidance is pointable, after prepare's shared steps move into one function"
+        decision: "plan.md:Decisions and the alternatives rejected"
+      - path: crates/finder/tests/night_sim.rs
+        status: existing
+        disposition: preserve
+        assertion: "014's halts keep the observer stopped it and halted by a lost link, with no restart for 2 s, after guard() calls halt_reason"
+        decision: "plan.md:Decisions and the alternatives rejected"
       - path: crates/finder/tests/second_sync_sim.rs
         status: existing
         disposition: preserve
@@ -1151,10 +1350,13 @@ stories:
     preserved_behavior:
       - "every refusal and halt text in goto.rs stays byte-for-byte (plan.md Shapes that existing tests pin)"
       - "Progress, serialized as the session's goto, gains no field"
+      - "US4's crates/finder/tests/mcp_motion.rs passes unchanged under the limiter, because its goto_target calls are at least 1 s of virtual time apart within a rig; it is not on main yet, so it is named here rather than as an existing test (plan.md Plan traps, trap 26)"
+      - "every item US1 to US4 put in crates/finder/tests/mcp/support.rs is unchanged, and their test files pass unchanged (spec.md Owner approvals, approval 17)"
+      - "the page's POST /api/goto and POST /api/track keep their answers; the Track is on refusal is MCP's only (plan.md Decisions, Track and the MCP moves; re-check when 015 lands)"
     checks:
       development:
-        - "cargo test -p finder --locked --test mcp_axis_moves"
-        - "cargo test -p finder --locked --test second_sync_sim --test goto_api --test goto_sim"
+        - "cargo test -p finder --locked --test mcp_axis_moves --test mcp_motion"
+        - "cargo test -p finder --locked --test second_sync_sim --test goto_api --test goto_sim --test goto_refusal_api --test night_sim"
         - "cargo test -p finder --locked --lib goto"
       handoff: declared_gates
       independent: declared_pipeline
@@ -1185,7 +1387,7 @@ stories:
         other_spec: 016-mcp
         other_story: US6
         disposition: merge_order
-        reason: "US6 depends_on_merged US5, and may extend the support module"
+        reason: "US6 depends_on_merged US5, and may only add items to the support module (approval 17)"
       - path: crates/finder/src/goto.rs
         other_spec: 014-goto
         other_story: US8
@@ -1194,21 +1396,29 @@ stories:
     open_questions:
       - "Owner question 1 (approval 11, FR-009): 014's planner lets a telescope below the minimum altitude only lift, with no azimuth turn, while the approval as written allowed upward or level moves. Calling the same code gives 014's rule. Recommended: adopt 014's rule, as the text now says. Alternatives: keep upward or level by adding a parameter to safe_path, which changes 014's planner; or refuse every direct move that starts below the minimum."
       - "Owner question 3 (approval 16, FR-022): US5-S11 needs the session to say that the Sun guard ended a move, and nothing reports a direct move today. Recommended: a new axis_move field beside goto, kept until the next direct move and never persisted. Alternatives: run direct moves as the GoTo owner's motions and report them through goto, so the page shows them as GoTo progress; or report nothing and assert only the stop."
+      - "Owner question 10 (FR-009, FR-013; re-check when 015 lands): 014's refusals don't cover Track. During 015's keyhole wait no GoTo runs and both axes rest, so a GoTo or a direct move would start a second controller, and 015 refuses Track on only for its four reasons, so Track could start on top of a direct move. Recommended: refuse on the MCP path only. goto_target and the direct moves are refused with Track is on while track.state is not off, and set_tracking on is refused with a direct axis move is running while one runs. Track turned on during a GoTo still arms, and the page's answers stay as 015 pins them. Alternatives: put the same refusals in start_motion, so the page refuses too; or drop the claim from the edge case and accept the overlap, with Stop as the remedy."
   US6:
     tests:
       - path: crates/finder/tests/mcp_tracking.rs
         status: new
         disposition: add
-        assertion: "set_tracking on M42 holds within 1 arcmin for 10 min sampled every 1 s, get_session's track readout equals GET /api/session's at the same instant, and motion is mcp/set_tracking throughout, the Track-first GoTo included; with no mount it is refused with POST /api/track's 409 reason and no token in the result or log; move_axis then two set_tracking on in 1 s refuse the third for the rate limit, and set_tracking off straight after is not limited (re-check when 015 lands)"
+        assertion: "from a sync more than 1 arcmin from M42, set_tracking on gives motion mcp/set_tracking from the call through the Track-first GoTo and while Track runs; from the moment track.state is tracking M42 holds within 1 arcmin for 10 min sampled every 1 s, fed by the rig's live loop; get_session's track readout equals GET /api/session's at the same instant; with no mount it is refused with POST /api/track's 409 reason and no token in the result or log; move_axis then two set_tracking on in 1 s refuse the third for the rate limit, and set_tracking off in the same second is not limited (re-check when 015 lands)"
         decision: "spec.md:US6-S1"
+      - path: crates/finder/tests/mcp_tracking.rs
+        status: new
+        disposition: add
+        assertion: "stop over MCP while tracking leaves track.state off with ended_reason stopped, both axes commanded to stop within 0.1 s and no rate in the next 5 s; set_tracking on during a move_axis is refused with a direct axis move is running, Track stays off and the move still stops at the end of its duration (re-check when 015 lands)"
+        decision: "spec.md:US6-S4"
     preserved_behavior:
       - "crates/finder/src/tracking.rs and 015's armed state in session.rs are not edited (re-check when 015 lands)"
       - "tracking is never persisted and starts off, as 015 says (re-check when 015 lands)"
       - "015's tests/track_api.rs and tests/tracking_sim.rs pass unchanged; they are not on main yet, so they are named here rather than as existing tests (re-check when 015 lands)"
+      - "every item US1 to US5 put in crates/finder/tests/mcp/support.rs is unchanged, and their test files pass unchanged (spec.md Owner approvals, approval 17)"
+      - "the console's tracker is fed by 015's live.rs from the rig's solved frames, with no hook of 016's; 016 assumes live.rs hands each solve to the tracker whenever its state is not off (plan.md User Story 6; re-check when 015 lands)"
     checks:
       development:
         - "cargo test -p finder --locked --test mcp_tracking"
-        - "cargo test -p finder --locked --test track_api --test tracking_sim"
+        - "cargo test -p finder --locked --test track_api --test tracking_sim --test mcp_axis_moves"
       handoff: declared_gates
       independent: declared_pipeline
       release:
@@ -1222,6 +1432,7 @@ stories:
     shared_writes: []
     open_questions:
       - "Owner question 8 (approval 8, FR-011): set_tracking with on false only ends motion, as stop does, but the approval limits every moving tool. Recommended: limit set_tracking only when it turns Track on. Alternatives: limit both, as first written, leaving stop and stop_all as the unlimited way to end tracking."
+      - "Owner question 10 (FR-013; the full question is in US5's entry): US6 refuses set_tracking on while a direct axis move runs, with a direct axis move is running. Recommended and alternatives as in US5's entry."
   US7:
     tests:
       - path: crates/finder/web/src/components/McpNote.test.tsx
@@ -1232,37 +1443,68 @@ stories:
       - path: crates/finder/web/src/components/McpSection.test.tsx
         status: new
         disposition: add
-        assertion: "a LAN answer lists every URL in order and surface.local with the WSL NAT note; a loopback answer lists only localhost with its note; an off answer says MCP is off; a health-shaped answer renders nothing"
+        assertion: "rendered directly with each status: a LAN status lists every URL in order and surface.local with the WSL NAT note; a loopback status lists only localhost with its note; an off status says MCP is off; a health-shaped answer renders nothing; no element has a status or alert role"
         decision: "spec.md:US7-S2"
       - path: crates/finder/web/e2e/mcp.spec.ts
         status: new
         disposition: add
-        assertion: "in the simulate project, goto_target over HTTP shows the note in the guidance block and top bar within 1 s with Stop enabled, Stop halts the GoTo with the observer stopped it and an unchanged eyepiece over 2 s, and the note and Setup's MCP section have 0 off-red pixels in night mode"
+        assertion: "in the simulate project, goto_target over HTTP shows the note in the guidance block and top bar within 1 s with the top bar's single Stop enabled; Stop halts the GoTo with the observer stopped it, and the eyepiece's alt and az change by less than 1e-8 deg over 2 s; the note and Setup's MCP section have 0 off-red pixels in night mode; afterAll stops, restarts frames, deletes the aim and resets the night's model"
         decision: "spec.md:US7-S1"
       - path: crates/finder/web/src/components/SetupPage.test.tsx
         status: existing
         disposition: preserve
-        assertion: "Setup's tests pass unchanged with their stubbed fetches; McpSection renders nothing for their health-shaped answer"
+        assertion: "open() renders SetupPage with no MCP prop and so makes no new fetch; the two App cases at /setup answer GET /api/mcp with a health-shaped body, for which McpSection renders nothing, and assert on pushState, not on a fetch count"
+        decision: "plan.md:Shapes that existing tests pin"
+      - path: crates/finder/web/src/components/ScopeNodeSection.test.tsx
+        status: existing
+        disposition: preserve
+        assertion: "its exact fetch counts on SetupPage (lines 81 and 134) hold, because SetupPage fetches nothing new"
+        decision: "plan.md:Shapes that existing tests pin"
+      - path: crates/finder/web/src/components/AimTap.test.tsx
+        status: existing
+        disposition: preserve
+        assertion: "its exact fetch counts on SetupPage (lines 83, 113, 123 and 134) hold, because SetupPage fetches nothing new"
+        decision: "plan.md:Shapes that existing tests pin"
+      - path: crates/finder/web/src/components/MountSection.test.tsx
+        status: existing
+        disposition: preserve
+        assertion: "the mount section's cases pass unchanged, rendered through SetupPage with no MCP prop and on its own; with no motion in the session, mountMayMove answers as before"
+        decision: "plan.md:Shapes that existing tests pin"
+      - path: crates/finder/web/src/components/FieldWarning.test.tsx
+        status: existing
+        disposition: preserve
+        assertion: "the field warning's cases pass unchanged, rendered through SetupPage with no MCP prop"
+        decision: "plan.md:Shapes that existing tests pin"
+      - path: crates/finder/web/src/useSession.test.ts
+        status: existing
+        disposition: preserve
+        assertion: "the hook's existing cases, including the health body's toEqual, pass unchanged because motion is passed through only when present"
         decision: "plan.md:Shapes that existing tests pin"
       - path: crates/finder/web/src/components/StopButton.test.tsx
         status: existing
         disposition: preserve
-        assertion: "Stop's existing cases pass unchanged with two arguments; motion is an optional third"
+        assertion: "Stop's existing cases pass unchanged with two arguments, motion being an optional third; its /setup App cases answer GET /api/mcp with {stopped: true}, for which McpSection renders nothing, and line 80 still finds one Stop"
         decision: "plan.md:User Story 7 — The page and the README"
       - path: crates/finder/web/e2e/session.spec.ts
         status: existing
         disposition: preserve
-        assertion: "Setup has no off-red pixel with the MCP section on the session server, and the phone's first screen is unchanged with no motion there"
-        decision: "plan.md:Plan traps"
+        assertion: "Setup has no off-red pixel with the MCP section on the session server, its unscoped getByRole status still finds only Site saved., and the phone's first screen is unchanged with no motion there"
+        decision: "plan.md:Shapes that existing tests pin"
+      - path: crates/finder/web/e2e/goto.spec.ts
+        status: existing
+        disposition: preserve
+        assertion: "014's GoTo, second sync and Stop flows pass unchanged before mcp.spec.ts in the simulate project; its strict Stop locator and the guidance block's status locator each still find one element"
+        decision: "plan.md:Shapes that existing tests pin"
       - path: crates/finder/web/e2e/simulate.spec.ts
         status: existing
         disposition: preserve
-        assertion: "013's simulate flow passes unchanged beside mcp.spec.ts under workers 1"
+        assertion: "013's simulate flow passes unchanged after mcp.spec.ts under workers 1, starting with no aim point"
         decision: "plan.md:Plan traps"
     preserved_behavior:
       - "package.json dependencies are unchanged, and dist is the build of its source (spec.md US7-S6)"
-      - "playwright.config.ts changes only by owner approval 15's two lines"
+      - "playwright.config.ts changes only by owner approval 15: mcp.spec.ts in the simulate project's match list and the default project's ignore list, laid out as Prettier formats them; the layout is re-read after 015's US9 lands"
       - "every existing Vitest and Playwright test and every fixture under src/test/fixtures is unchanged"
+      - "the page renders one Stop, the top bar's; the guidance block gets none (spec.md FR-015)"
     checks:
       development:
         - "cd crates/finder/web && npm test"
@@ -1296,7 +1538,7 @@ stories:
         other_spec: 015-tracking
         other_story: US9
         disposition: merge_order
-        reason: "016 depends_on_landed 015, whose US9 last changes the config after 014's US9 (re-check when 015 lands)"
+        reason: "016 depends_on_landed 015, whose US9 adds tracking.spec.ts after 014's US9 added goto.spec.ts at a43747f, and so sets the layout US7 adds to (re-check when 015 lands)"
       - path: crates/finder/README.md
         other_spec: 015-tracking
         other_story: US7
@@ -1333,30 +1575,45 @@ stories:
         disposition: merge_order
         reason: "016 depends_on_landed 015, whose US8 adds the imaging camera section (re-check when 015 lands)"
       - path: crates/finder/web/src/useSession.ts
-        other_spec: 014-goto
+        other_spec: 015-tracking
         other_story: US8
         disposition: merge_order
-        reason: "016 depends_on_landed 014, whose US8 last changed useSession.ts on main"
+        reason: "016 depends_on_landed 015, whose US8 passes track, imaging_camera and backlash through useSession.ts after 014's US8 (#158; re-check when 015 lands)"
       - path: crates/finder/web/src/App.tsx
         other_spec: 014-goto
         other_story: US8
         disposition: merge_order
-        reason: "016 depends_on_landed 014, whose US8 last changed App.tsx on main"
+        reason: "016 depends_on_landed 014, whose US8 last changed App.tsx on main at a43747f"
+      - path: crates/finder/web/src/App.tsx
+        other_spec: 015-tracking
+        other_story: US8
+        disposition: merge_order
+        reason: "016 depends_on_landed 015; if 015's open finding 13 (Stop during keyhole_wait) adds App.tsx to its US8, that story becomes the last writer (re-check when 015 lands)"
       - path: crates/finder/web/src/components/TopBar.tsx
         other_spec: 014-goto
         other_story: US8
         disposition: merge_order
-        reason: "016 depends_on_landed 014, whose US8 put Stop in the top bar"
+        reason: "016 depends_on_landed 014, whose US8 put Stop in the top bar and last changed it at a43747f"
+      - path: crates/finder/web/src/components/TopBar.tsx
+        other_spec: 015-tracking
+        other_story: US8
+        disposition: merge_order
+        reason: "016 depends_on_landed 015; if 015's open finding 13 (Stop during keyhole_wait) adds TopBar.tsx to its US8, that story becomes the last writer (re-check when 015 lands)"
       - path: crates/finder/web/src/components/StopButton.tsx
         other_spec: 014-goto
         other_story: US8
         disposition: merge_order
-        reason: "016 depends_on_landed 014, whose US8 added StopButton"
+        reason: "016 depends_on_landed 014, whose US8 added StopButton and last changed it at a43747f"
+      - path: crates/finder/web/src/components/StopButton.tsx
+        other_spec: 015-tracking
+        other_story: US8
+        disposition: merge_order
+        reason: "016 depends_on_landed 015; if 015's open finding 13 (Stop during keyhole_wait) adds StopButton.tsx to its US8, that story becomes the last writer, and T045's third mountMayMove argument is re-read against its signature (re-check when 015 lands)"
       - path: crates/finder/web/src/components/MountSection.tsx
         other_spec: 014-goto
         other_story: US8
         disposition: merge_order
         reason: "016 depends_on_landed 014, whose US8 added MountSection"
     open_questions:
-      - "Owner question 5 (approval 15, FR-015): at 1c928e3 the default project would also run mcp.spec.ts, against a server with no simulator, so one line in the simulate project's match is not enough. Recommended: two lines, adding mcp.spec.ts to the simulate project's match and to the default project's ignore list. Alternatives: a new Playwright project with its own simulate server; or fold the MCP flow into a new simulate-matched file name that the default project already ignores, if 014's or 015's US9 adds such a pattern."
+      - "Owner question 5 (approval 15, FR-015): the default project runs every e2e file it doesn't ignore by name, against a server with no simulator, so mcp.spec.ts must also go in its ignore list. Once 015's US9 adds tracking.spec.ts, Prettier spreads that list over several lines, so the change is no longer two lines. Recommended: add mcp.spec.ts to the simulate project's match list and the default project's ignore list, laid out as Prettier formats them, and change nothing else. Alternatives: a new Playwright project with its own simulate server; or add it to the simulate match only and have mcp.spec.ts skip itself when the server isn't simulating."
 ```
