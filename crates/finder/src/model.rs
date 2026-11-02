@@ -231,6 +231,30 @@ fn forward(axis: [f64; 2], epoch: Epoch, base: BaseTilt, fixed: FixedTerms) -> P
     }
 }
 impl Model {
+    /// Load known base tilt and zero points for tests and the simulator, without
+    /// fitting syncs. Angles are degrees; zero points are added to axis azimuth
+    /// and altitude before the base rotation, as in the simulator's truth.
+    /// Replaces the night's syncs and epochs, retaining the hardware fixed terms.
+    pub fn load_known_terms(
+        &mut self,
+        base_tilt_deg: f64,
+        base_tilt_toward_deg: f64,
+        zero_points_deg: [f64; 2],
+    ) {
+        assert!(base_tilt_deg.is_finite() && base_tilt_toward_deg.is_finite());
+        assert!(zero_points_deg.iter().all(|angle| angle.is_finite()));
+        self.reset_night();
+        let toward = base_tilt_toward_deg.to_radians();
+        self.base_tilt = Some(BaseTilt {
+            an: base_tilt_deg * toward.cos(),
+            aw: -base_tilt_deg * toward.sin(),
+        });
+        self.epochs.push(Epoch {
+            ia: -zero_points_deg[0],
+            ie: zero_points_deg[1],
+        });
+    }
+
     /// Current-epoch forward model, axis positions in counts.
     pub fn predict(&self, axis: [f64; 2], counts: [u32; 2]) -> Option<Prediction> {
         if counts.contains(&0) || axis.iter().any(|a| !a.is_finite()) {
