@@ -1,10 +1,8 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ObservingSession } from "../api";
-import captures from "../test/fixtures/session-track.json";
+import recorded from "../test/fixtures/session-track";
 import { GuidanceBlock } from "./GuidanceBlock";
-
-const recorded = captures as unknown as Record<keyof typeof captures, ObservingSession>;
 
 // Oracle: unedited simulator/API captures (record-tracking.rs). Expectations below
 // are fixed decimal rounding of those values: 1″, 0.01°/min and 0.1 s, exact text.

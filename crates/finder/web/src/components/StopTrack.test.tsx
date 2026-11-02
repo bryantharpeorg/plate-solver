@@ -2,9 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import type { ObservingSession } from "../api";
-import captures from "../test/fixtures/session-track.json";
-
-const recorded = captures as unknown as Record<keyof typeof captures, ObservingSession>;
+import recorded from "../test/fixtures/session-track";
 
 // Oracle: recorded Track states, with telemetry held at rest to exercise the
 // interval before autonomous motion. Exact visibility and bodyless Stop request.

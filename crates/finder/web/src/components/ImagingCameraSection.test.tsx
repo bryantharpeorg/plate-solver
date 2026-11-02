@@ -2,10 +2,8 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import type { ObservingSession } from "../api";
-import captures from "../test/fixtures/session-track.json";
+import recorded from "../test/fixtures/session-track";
 import { SetupPage } from "./SetupPage";
-
-const recorded = captures as unknown as Record<keyof typeof captures, ObservingSession>;
 
 // Oracle: FR-015's checked ranges and captured sessions before/after a
 // 23.5 × 15.6 mm, 3.76 µm camera edit. Wire values and display text are exact.

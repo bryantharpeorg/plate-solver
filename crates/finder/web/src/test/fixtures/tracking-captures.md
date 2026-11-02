@@ -1,6 +1,9 @@
 # Tracking session captures (015 US8)
 
-`session-track.json` contains unedited API responses, formatted with Prettier.
+`session-track.json` stores API responses as a shared base and top-level deltas,
+formatted with Prettier. `session-track.ts` restores every captured field with a
+shallow merge. The recorder asserts this reconstruction equals each original
+response exactly; no values are dropped or altered.
 `record-tracking.rs` gives the reproduction command and uses the existing
 simulated mount, catalog rendering, solver, router and paused-clock harness.
 No page code produces these values. The clock starts at 2026-01-16 02:00 UTC.

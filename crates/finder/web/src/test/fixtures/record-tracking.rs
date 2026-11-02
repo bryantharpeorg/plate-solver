@@ -110,11 +110,36 @@ async fn record_tracking() {
     assert_eq!(too_low["track"]["ended_reason"], "too_low");
     let captures = json!({"armed":armed,"tracking":tracking,"no_camera":no_camera,
         "no_limit":no_limit,"keyhole_wait":keyhole,"too_low":too_low});
+    // Share baseline fields present in every capture; top-level deltas are exact.
+    let base: serde_json::Map<String, Value> = captures["no_camera"]
+        .as_object()
+        .unwrap()
+        .iter()
+        .filter(|(key, _)| {
+            captures
+                .as_object()
+                .unwrap()
+                .values()
+                .all(|view| view.get(key).is_some())
+        })
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect();
+    let mut sessions = serde_json::Map::new();
+    for (name, view) in captures.as_object().unwrap() {
+        let delta: serde_json::Map<String, Value> = view
+            .as_object()
+            .unwrap()
+            .iter()
+            .filter(|(key, value)| base.get(*key) != Some(*value))
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
+        let mut restored = base.clone();
+        restored.extend(delta.clone());
+        assert_eq!(&Value::Object(restored), view);
+        sessions.insert(name.clone(), Value::Object(delta));
+    }
+    let packed = json!({"base":base,"sessions":sessions});
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("web/src/test/fixtures/session-track.json");
-    std::fs::write(
-        path,
-        serde_json::to_string_pretty(&captures).unwrap() + "\n",
-    )
-    .unwrap();
+    std::fs::write(path, serde_json::to_string_pretty(&packed).unwrap() + "\n").unwrap();
 }
