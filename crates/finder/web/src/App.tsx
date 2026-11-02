@@ -129,6 +129,8 @@ export function App() {
   return (
     <div className="contents" style={{ "--chart-aspect": aspect } as CSSProperties}>
       <TopBar
+        mount={session.mount}
+        goto={session.goto}
         source={source}
         label={label}
         site={site}
@@ -247,6 +249,7 @@ export function App() {
       )}
       <FramePicker
         open={picker}
+        keepTopBarActive={session.mount !== undefined}
         current={source?.kind === "sample" ? source.name : null}
         settings={settings}
         onSettings={setSettings}
@@ -256,7 +259,13 @@ export function App() {
           open(source);
         }}
       />
-      <TargetSheet open={targetSheet} target={session.target ?? null} put={put} onClose={() => setTargetSheet(false)} />
+      <TargetSheet
+        keepTopBarActive={session.mount !== undefined}
+        open={targetSheet}
+        target={session.target ?? null}
+        put={put}
+        onClose={() => setTargetSheet(false)}
+      />
     </div>
   );
 }

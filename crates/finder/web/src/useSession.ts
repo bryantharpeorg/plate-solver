@@ -36,6 +36,9 @@ async function request(init?: RequestInit): Promise<ObservingSession> {
     ...(body?.camera_settings != null && { camera_settings: body.camera_settings }),
     ...(body?.aim != null && { aim: body.aim }),
     ...(body?.field != null && { field: body.field }),
+    ...(body?.mount != null && { mount: body.mount }),
+    ...(body?.model != null && { model: body.model }),
+    ...(body?.goto != null && { goto: body.goto }),
   };
 }
 

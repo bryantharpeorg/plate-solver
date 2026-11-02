@@ -1,0 +1,114 @@
+{
+  "aim": {
+    "x": 700.0,
+    "y": 420.0
+  },
+  "camera_settings": {
+    "exposure_ms": 200.0,
+    "gain": 1.0,
+    "sigma": 8.0
+  },
+  "field": {
+    "db_max_fov_deg": 30.0,
+    "db_min_fov_deg": 10.0,
+    "fov_deg": 11.999859130896992,
+    "unsolved_s": 0.0
+  },
+  "goto": {
+    "correction": 0,
+    "error_arcsec": null,
+    "reason": null,
+    "state": "slewing"
+  },
+  "guidance": {
+    "class": "pointable",
+    "placement": {
+      "direction_deg": 86.40936405031856,
+      "distance_deg": 28.768254871191353,
+      "on_frame": false
+    },
+    "tilt_deg": -7.070807949322727,
+    "turn_deg": 41.357037777320045
+  },
+  "min_alt_deg": 15.0,
+  "model": {
+    "epoch": 1,
+    "ia": -118.99989234391734,
+    "ie": 49.014185560412216,
+    "needs": 19,
+    "rms_arcsec": 0.0,
+    "syncs": 1
+  },
+  "mount": {
+    "board": null,
+    "connected": true,
+    "firmware": null,
+    "moving": false
+  },
+  "node": {
+    "address": "scope.local:1",
+    "camera": {
+      "exposure_ms": {
+        "max": 2000.0,
+        "min": 1.0
+      },
+      "gain": {
+        "max": 16.0,
+        "min": 1.0
+      },
+      "height": 1088,
+      "model": "simulator",
+      "width": 1456
+    },
+    "connected": true,
+    "last_frame_age_s": 0.09999990463256836,
+    "offset_s": -1768527800.0,
+    "out_of_range": [],
+    "stars": 39,
+    "token_set": true
+  },
+  "pointing": {
+    "alt_deg": 50.00001511519589,
+    "az_deg": 119.99989234391734,
+    "dec_deg": 14.291458563736647,
+    "frame": {
+      "camera": {
+        "fov": 0.20943705160965773,
+        "height": 1088.0,
+        "width": 1456.0
+      },
+      "center": [-0.26442075340069454, 0.936218615763754, 0.2314656965263094],
+      "distortion": 0.00005714013481843677,
+      "rotation": [
+        [-0.26442075340069454, 0.936218615763754, 0.2314656965263094],
+        [-0.6617158602170137, -0.35072519555630477, 0.6626642872067647],
+        [0.7015794933635581, 0.022057667587309895, 0.7122497271268982]
+      ]
+    },
+    "frame_id": 7,
+    "ra_deg": 105.22557538148524,
+    "seq": 7,
+    "source": "live",
+    "time": 1768528803.1
+  },
+  "site": {
+    "lat_deg": 40.0,
+    "lon_deg": -75.0
+  },
+  "target": {
+    "code": "Cl+N",
+    "common_names": ["Great Orion Nebula", "Orion Nebula"],
+    "constellation": "Ori",
+    "dec_deg": -5.38967,
+    "family": "nebula",
+    "id": "NGC 1976",
+    "kind": "Nebula with cluster",
+    "mag": 4.0,
+    "major_arcmin": 90.0,
+    "messier": "M42",
+    "minor_arcmin": 60.0,
+    "pa_deg": null,
+    "ra_deg": 83.81867
+  },
+  "time": 1768528803.3
+}
