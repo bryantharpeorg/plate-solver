@@ -815,12 +815,9 @@ stories:
     writes:
       - crates/finder/src/tracking.rs
       - crates/finder/tests/tracking_loop.rs
-    shared_writes:
-      - path: crates/finder/src/tracking.rs
-        other_spec: 015-tracking
-        other_story: US5
-        disposition: merge_order
-        reason: "US5 depends_on_merged US4, and adds the backlash measurement and take-up"
+    # 2026-11-02: US4 landed (#168, 3e51689), so its shared_writes are retired. A delta
+    # redispatch has no merge edge left to US4 for a merge_order entry to name.
+    shared_writes: []
     open_questions: []
   US5:
     tests:
@@ -861,37 +858,9 @@ stories:
       - crates/finder/src/api.rs
       - crates/finder/tests/backlash_sim.rs
       - crates/finder/tests/backlash_cli.rs
-    shared_writes:
-      - path: crates/finder/src/tracking.rs
-        other_spec: 015-tracking
-        other_story: US6
-        disposition: merge_order
-        reason: "US6 depends_on_merged US5, and adds the keyhole"
-      - path: crates/finder/src/session.rs
-        other_spec: 015-tracking
-        other_story: US7
-        disposition: merge_order
-        reason: "US7 depends_on_merged US5, and adds Track and the imaging camera"
-      - path: crates/finder/src/api.rs
-        other_spec: 015-tracking
-        other_story: US7
-        disposition: merge_order
-        reason: "US7 depends_on_merged US5, and adds POST /api/track"
-      - path: crates/finder/src/model.rs
-        other_spec: 014-goto
-        other_story: US5
-        disposition: merge_order
-        reason: "015 depends_on_landed 014, whose US5 creates the pointing model"
-      - path: crates/finder/src/session.rs
-        other_spec: 014-goto
-        other_story: US5
-        disposition: merge_order
-        reason: "015 depends_on_landed 014, whose US5 last adds session state"
-      - path: crates/finder/src/api.rs
-        other_spec: 014-goto
-        other_story: US7
-        disposition: merge_order
-        reason: "015 depends_on_landed 014, whose US7 last adds routes"
+    # 2026-11-02: US5 landed (#169, ba58db2), so its shared_writes are retired. A delta
+    # redispatch has no merge edge left to US5 for a merge_order entry to name.
+    shared_writes: []
     open_questions: []
   US6:
     tests:
