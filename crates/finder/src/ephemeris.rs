@@ -1,5 +1,5 @@
-//! Solar coordinates, altitude events and atmospheric refraction (Meeus,
-//! *Astronomical Algorithms*, second edition, chapters 25, 15 and 16).
+//! Solar coordinates, altitude events, atmospheric refraction and tracking rates
+//! (Meeus, *Astronomical Algorithms*, second edition, chapters 25, 15, 16, 13 and 14).
 //!
 //! All times are supplied by the caller. Event times are Unix seconds in UT;
 //! [`sun`] takes a Julian date in dynamical time (TD/TT). Event altitudes are
@@ -11,6 +11,113 @@ use crate::sky::{self, Observer};
 
 const SECONDS_PER_DAY: f64 = 86_400.0;
 const SIDEREAL_DAY: f64 = SECONDS_PER_DAY * 360.0 / 360.985_647_366_29;
+
+/// Instantaneous geometric rates for a fixed equatorial position at a site.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AltAzRates {
+    /// Altitude rate in arcseconds per SI second, positive upward.
+    pub alt_arcsec_per_s: f64,
+    /// Azimuth rate in arcseconds per SI second, positive from north through east.
+    pub az_arcsec_per_s: f64,
+    /// Field rotation in degrees per SI hour, positive as the parallactic angle increases.
+    pub field_rotation_deg_per_h: f64,
+}
+
+/// Altitude, azimuth and parallactic-angle rates (Meeus ch. 13/14; SLALIB `sla_ALTAZ`).
+///
+/// Inputs are degrees: site latitude `phi` (north positive), declination `delta`
+/// of date, and local hour angle `H` (positive west, increasing at the sidereal
+/// rate `omega = 2*pi / SIDEREAL_DAY` in radians per SI second).
+/// Differentiating `sin(h) = sin(phi)*sin(delta) + cos(phi)*cos(delta)*cos(H)` gives:
+///
+/// - `dh/dt = -omega*cos(phi)*cos(delta)*sin(H)/cos(h)`;
+/// - `dA/dt = omega*(sin(phi) - sin(delta)*sin(h))/cos(h)^2`;
+/// - `dq/dt = -omega*cos(phi)*cos(A)/cos(h)`.
+///
+/// Azimuth `A` is measured from north through east, and field rotation is positive
+/// when the parallactic angle `q` increases. See [`AltAzRates`] for output units.
+/// Inputs must be finite, with latitude and declination in `[-90, 90]`. Rates
+/// are singular at the zenith and nadir. No refraction or pointing model is applied.
+pub fn altaz_rates(lat_deg: f64, dec_deg: f64, hour_angle_deg: f64) -> AltAzRates {
+    let (sin_lat, cos_lat) = lat_deg.to_radians().sin_cos();
+    let (sin_dec, cos_dec) = dec_deg.to_radians().sin_cos();
+    let (sin_hour, cos_hour) = hour_angle_deg.to_radians().sin_cos();
+    let east = -cos_dec * sin_hour;
+    let north = cos_lat * sin_dec - sin_lat * cos_dec * cos_hour;
+    let up = sin_lat * sin_dec + cos_lat * cos_dec * cos_hour;
+    let altitude = up.atan2(east.hypot(north));
+    let azimuth = east.atan2(north);
+    altaz_rates_from_alt_az(lat_deg, altitude.to_degrees(), azimuth.to_degrees())
+}
+
+/// The same geometric rates as [`altaz_rates`], from altitude and azimuth in degrees.
+///
+/// With `A` measured from north through east and `omega = 2*pi / SIDEREAL_DAY`,
+/// the equivalent horizontal forms of the Meeus ch. 13/14 relations are:
+///
+/// - `dh/dt = omega*cos(phi)*sin(A)`;
+/// - `dA/dt = omega*(sin(phi) - cos(phi)*cos(A)*tan(h))`;
+/// - `dq/dt = -omega*cos(phi)*cos(A)/cos(h)`.
+///
+/// Field rotation is positive when the parallactic angle increases. Inputs must
+/// be finite, with latitude in `[-90, 90]` and altitude strictly between -90 and
+/// 90 degrees; rates are singular at the zenith and nadir.
+pub fn altaz_rates_from_alt_az(lat_deg: f64, alt_deg: f64, az_deg: f64) -> AltAzRates {
+    let (sin_lat, cos_lat) = lat_deg.to_radians().sin_cos();
+    let altitude = alt_deg.to_radians();
+    let (sin_az, cos_az) = az_deg.to_radians().sin_cos();
+    let omega = std::f64::consts::TAU / SIDEREAL_DAY;
+    let alt_rate = omega * cos_lat * sin_az;
+    let az_rate = omega * (sin_lat - cos_lat * cos_az * altitude.tan());
+    let rotation = -omega * cos_lat * cos_az / altitude.cos();
+    AltAzRates {
+        alt_arcsec_per_s: alt_rate.to_degrees() * 3600.0,
+        az_arcsec_per_s: az_rate.to_degrees() * 3600.0,
+        field_rotation_deg_per_h: rotation.to_degrees() * 3600.0,
+    }
+}
+
+/// An imaging camera's exposure limit due to field rotation alone.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Exposure {
+    /// Maximum exposure in SI seconds for the requested corner smear.
+    Seconds(f64),
+    /// Field rotation is below `1e-9` radians per SI second in magnitude.
+    NoLimit,
+}
+
+/// Distance from a centred imaging camera's sensor centre to a corner, in pixels.
+///
+/// `r = hypot(sensor_w_mm, sensor_h_mm) * 1000 / (2 * pitch_um)`.
+/// Sensor dimensions in millimetres and pixel pitch in micrometres must be finite
+/// and positive. This is the sensor's half-diagonal, independent of focal length.
+pub fn corner_radius_px(sensor_w_mm: f64, sensor_h_mm: f64, pitch_um: f64) -> f64 {
+    sensor_w_mm.hypot(sensor_h_mm) * 1000.0 / (2.0 * pitch_um)
+}
+
+/// Longest exposure before field rotation smears the sensor's corner by `smear_px`.
+///
+/// For the corner radius `r` from [`corner_radius_px`],
+/// `t = smear_px / (r * abs(field_rotation_rad_per_s))`. Rotation is in radians
+/// per SI second; its sign does not affect smear. A magnitude strictly below
+/// `1e-9` rad/s gives [`Exposure::NoLimit`]. Dimensions and pitch must be finite
+/// and positive, rotation finite, and smear finite and nonnegative.
+pub fn longest_exposure(
+    sensor_w_mm: f64,
+    sensor_h_mm: f64,
+    pitch_um: f64,
+    field_rotation_rad_per_s: f64,
+    smear_px: f64,
+) -> Exposure {
+    let rotation = field_rotation_rad_per_s.abs();
+    if rotation < 1e-9 {
+        Exposure::NoLimit
+    } else {
+        Exposure::Seconds(
+            smear_px / (corner_radius_px(sensor_w_mm, sensor_h_mm, pitch_um) * rotation),
+        )
+    }
+}
 
 /// Apparent altitude in degrees from a true (geometric) altitude in degrees.
 ///
