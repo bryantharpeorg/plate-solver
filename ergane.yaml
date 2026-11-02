@@ -16,7 +16,7 @@ runtime: bwrap
 # `ci.yml` job (the 13 checks branch protection already requires: coverage floor,
 # the cedar e2e eval and canary, finder-page, msrv, docs, deny, machete, secrets),
 # so a node can pass here and still be refused at the queue. The commands below are
-# the ones `ci.yml` runs, with the same RUSTFLAGS, so the two halves agree on
+# the ones `ci.yml` runs, with the same `-D warnings`, so the two halves agree on
 # everything they both check. `.github/workflows/ergane-gates.yml` runs these same
 # commands under the job names `lint` and `test`; keep the two files in lockstep.
 #
@@ -31,6 +31,17 @@ runtime: bwrap
 # `cc` not found". `gcc` and `g++` resolve within `/usr`. CC/CXX reach the cc crate
 # (zstd-sys compiles C); the LINKER variable reaches rustc. Neither changes what is
 # compiled, so CI, which uses the runner's own `cc`, checks the same thing.
+#
+# Naming `gcc` costs rustc its default linker. rustc reads the linker flavor from
+# the name it is given, so an explicit `gcc` drops the bundled `rust-lld` and links
+# with GNU ld, which is single-threaded and slow enough that a cold `test` piles up
+# one link per test binary. On 2026-11-02, 31 of them held about 15 GB and the
+# host OOM-killed an unrelated app. The two `link-arg`s hand gcc the toolchain's
+# own lld back, as rustc does when it picks the linker itself. On a cold
+# `cargo test --no-run -j16`, GNU ld peaked at 13 links and 6.3 GiB; lld at 4 and
+# 2.7 GiB. RUSTFLAGS is exported after PATH because `$(rustc ...)` expands before
+# `export` assigns anything. Link arguments change how binaries are linked, not
+# what is compiled, so `-D warnings` is still the flag CI and the gates share.
 #
 # `lint` also builds the docs with warnings denied, the command `ci.yml`'s `docs`
 # job runs. The judge sees gate results and the diff, nothing else, so a story
@@ -58,16 +69,18 @@ runtime: bwrap
 gates:
   lint: >-
     export PATH="$CARGO_HOME/bin:$PATH" CARGO_TARGET_DIR="$PWD/target"
-    RUSTFLAGS="-D warnings"
     CC=gcc CXX=g++ CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc &&
+    export RUSTFLAGS="-D warnings -C link-arg=-fuse-ld=lld
+    -C link-arg=-B$(rustc --print sysroot)/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld" &&
     cargo fmt --all --check &&
     cargo clippy --workspace --all-targets --all-features --locked -- -D warnings &&
     RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked &&
     RUSTDOCFLAGS="-D warnings" cargo doc -p finder --no-deps
   test: >-
     export PATH="$CARGO_HOME/bin:$PATH" CARGO_TARGET_DIR="$PWD/target"
-    RUSTFLAGS="-D warnings"
     CC=gcc CXX=g++ CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc &&
+    export RUSTFLAGS="-D warnings -C link-arg=-fuse-ld=lld
+    -C link-arg=-B$(rustc --print sysroot)/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld" &&
     cargo test --workspace --all-targets --all-features --locked &&
     cargo test --workspace --locked --doc &&
     cd crates/finder/web &&
