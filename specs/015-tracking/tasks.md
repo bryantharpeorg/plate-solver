@@ -199,7 +199,9 @@ description: "Task list for 015-tracking: Tracking"
   `crates/finder/src/tracking.rs`, using US1's rates. Enter the `keyhole_wait` state at
   the circle's entry.
 - [ ] T027 [US6] In `crates/finder/src/tracking.rs`, slew to the exit through 014's
-  planner, with the Sun guard included, calling it as it is without changing it. Wait
+  planner, with the Sun guard included, calling it as it is without changing it. Build its
+  `Planner` with `start` at the forecast exit time, and drive the plan's waypoints with
+  `goto_axis` (plan.md § Plan traps, trap 17). Wait
   there, and once the forecast position is outside the circle, solve,
   apply the error and resume. A planner refusal ends tracking with that reason.
 - [ ] T028 [US6] Run the `lint` and `test` gates. Commit the green story (FR-012;
