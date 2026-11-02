@@ -5,14 +5,14 @@
 
 use crate::{
     ephemeris,
-    goto::sun_horizontal,
+    goto::{sun_horizontal, Planner, Wind},
     link::{LinkManager, MountClient},
     model::Model,
     session::{Clock, Site},
     sky::{self, Observer},
     targets::Target,
 };
-use scope_link::proto::Axis;
+use scope_link::proto::{Axis, AxisInfo};
 use std::{
     sync::{Arc, Mutex},
     time::Duration,
@@ -32,6 +32,7 @@ const INTEGRAL_TIME_S: f64 = 60.0;
 const DEADBAND_ARCSEC: f64 = 10.0;
 const FORECAST_S: f64 = 30.0 * 60.0;
 const TAKEUP_RATE: f64 = 0.5;
+const KEYHOLE_ALT: f64 = 88.0;
 
 struct Measurement {
     baseline_deg: f64,
@@ -56,7 +57,7 @@ pub struct PointingError {
 /// so later tracking phases can be reported without exhaustive enum matches.
 #[derive(Debug, Clone)]
 pub struct State {
-    /// `off` or `tracking` (the keyhole extension may also report `keyhole_wait`).
+    /// `off`, `tracking` or `keyhole_wait` (including the slew and exit solve).
     pub state: &'static str,
     /// `stopped`, `link_lost`, `sun_up`, `too_low`, or a motion failure reason.
     pub ended_reason: Option<String>,
@@ -87,6 +88,8 @@ struct Control {
     proportional_until: f64,
     measurement: [Option<Measurement>; 2],
     encoder_residual_deg: [f64; 2],
+    solve_after: Option<f64>,
+    resume_pointing: Option<PointingError>,
 }
 
 struct Shared {
@@ -95,6 +98,7 @@ struct Shared {
     model: Model,
     site: Site,
     min_alt_deg: f64,
+    wind: Mutex<Wind>,
     control: Mutex<Control>,
     cancel: watch::Sender<u64>,
 }
@@ -123,6 +127,10 @@ impl Tracker {
         site: Site,
         min_alt_deg: f64,
     ) -> Self {
+        let mut wind = Wind::default();
+        for sync in &model.syncs {
+            wind.observe(sync.az_deg);
+        }
         Self {
             shared: Arc::new(Shared {
                 clock,
@@ -130,6 +138,7 @@ impl Tracker {
                 model,
                 site,
                 min_alt_deg,
+                wind: Mutex::new(wind),
                 control: Mutex::new(Control::default()),
                 cancel: watch::channel(0).0,
             }),
@@ -160,6 +169,7 @@ impl Tracker {
         if axes.len() != 2 || axes.iter().any(|a| a.counts_per_revolution == 0) {
             return Err("mount must describe two axes with nonzero counts".into());
         }
+        let axes: [AxisInfo; 2] = axes.try_into().unwrap();
         let counts = [axes[0].counts_per_revolution, axes[1].counts_per_revolution];
         self.shared.rates(&target, counts)?;
         // Stop may have arrived while DescribeMount or a prior stop was pending.
@@ -180,7 +190,7 @@ impl Tracker {
         }
         let shared = self.shared.clone();
         *task = Some(tokio::spawn(async move {
-            shared.run(target, client, counts, generation).await;
+            shared.run(target, client, axes, generation).await;
         }));
         Ok(())
     }
@@ -215,7 +225,40 @@ impl Tracker {
     /// (east is RA times cos declination). The caller supplies at least one solve
     /// every five seconds. Both solved frames and simulator pointings use this path.
     pub fn pointing(&self, east_arcsec: f64, north_arcsec: f64) {
-        let mut control = self.shared.control.lock().unwrap();
+        self.shared.pointing(east_arcsec, north_arcsec);
+    }
+}
+
+impl Shared {
+    fn pointing(&self, east_arcsec: f64, north_arcsec: f64) {
+        let mut control = self.control.lock().unwrap();
+        if control.state.state == "off" || !east_arcsec.is_finite() || !north_arcsec.is_finite() {
+            return;
+        }
+        let time = self.clock.now();
+        let target = control.state.target.as_ref().unwrap();
+        // Retain the night's cable travel through every solved azimuth, even
+        // while waiting. A fresh Wind at the keyhole would forget earlier turns.
+        let (_, az) = sky::alt_az(
+            target.ra_deg + east_arcsec / (3600.0 * target.dec_deg.to_radians().cos()),
+            target.dec_deg + north_arcsec / 3600.0,
+            &Observer {
+                lat: self.site.lat_deg,
+                lon: self.site.lon_deg,
+                time,
+            },
+        );
+        self.wind.lock().unwrap().observe(az);
+        if control.state.state == "keyhole_wait" {
+            if control.solve_after.is_some_and(|after| time >= after) {
+                control.resume_pointing = Some(PointingError {
+                    time,
+                    east_arcsec,
+                    north_arcsec,
+                });
+            }
+            return;
+        }
         let Control {
             state,
             previous_pointing,
@@ -223,10 +266,6 @@ impl Tracker {
             proportional_until,
             ..
         } = &mut *control;
-        if state.state == "off" || !east_arcsec.is_finite() || !north_arcsec.is_finite() {
-            return;
-        }
-        let time = self.shared.clock.now();
         // The first solve establishes timing; there is no preceding interval to
         // integrate. Later solves set the interval over which P removes 60% of
         // the error. Repeated timestamps must not accumulate an integral.
@@ -237,9 +276,7 @@ impl Tracker {
         *proportional_until = time + interval;
         if east_arcsec.hypot(north_arcsec) >= DEADBAND_ARCSEC {
             let target = state.target.as_ref().unwrap();
-            let axis_error = self
-                .shared
-                .axis_error(target, time, east_arcsec, north_arcsec);
+            let axis_error = self.axis_error(target, time, east_arcsec, north_arcsec);
             for i in 0..2 {
                 proportional[i] = -PROPORTIONAL_GAIN * axis_error[i] / interval;
                 if elapsed.is_some_and(|dt| dt > 0.0) {
@@ -258,7 +295,7 @@ impl Tracker {
             north_arcsec,
         });
         drop(control);
-        self.shared.settle(time, east_arcsec, north_arcsec);
+        self.settle(time, east_arcsec, north_arcsec);
     }
 }
 
@@ -395,6 +432,186 @@ impl Shared {
         None
     }
 
+    fn bisect(mut lo: f64, mut hi: f64, before: impl Fn(f64) -> bool) -> f64 {
+        while hi - lo > TICK.as_secs_f64() {
+            let mid = (lo + hi) / 2.0;
+            if before(mid) {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        hi
+    }
+
+    // Forecast the next 30 minutes. US1's geometric altitude rate locates a
+    // maximum between samples, so even a short, grazing passage is detected.
+    fn keyhole_entry(&self, target: &Target) -> Option<f64> {
+        let now = self.clock.now();
+        if self.place(target, now).0 >= KEYHOLE_ALT {
+            return Some(now);
+        }
+        let rising = |t| {
+            let (alt, az) = self.place(target, t);
+            ephemeris::altaz_rates_from_alt_az(self.site.lat_deg, alt, az).alt_arcsec_per_s > 0.0
+        };
+        let mut lo = now;
+        for step in 1..=30 {
+            let hi = now + f64::from(step) * FORECAST_S / 30.0;
+            let peak = if rising(lo) && !rising(hi) {
+                Self::bisect(lo, hi, rising)
+            } else {
+                hi
+            };
+            if self.place(target, peak).0 >= KEYHOLE_ALT {
+                return Some(Self::bisect(lo, peak, |t| {
+                    self.place(target, t).0 < KEYHOLE_ALT
+                }));
+            }
+            lo = hi;
+        }
+        None
+    }
+
+    fn keyhole_exit(&self, target: &Target) -> Result<f64, String> {
+        let now = self.clock.now();
+        let mut lo = now;
+        // Complete the crossing already forecast. At high latitudes its exit
+        // can be beyond the entry forecast's 30-minute horizon. One rotation
+        // also bounds the search for a direction permanently inside the circle.
+        for minute in 1..=1440 {
+            let hi = now + f64::from(minute) * 60.0;
+            if self.place(target, hi).0 < KEYHOLE_ALT {
+                return Ok(Self::bisect(lo, hi, |t| {
+                    self.place(target, t).0 >= KEYHOLE_ALT
+                }));
+            }
+            lo = hi;
+        }
+        Err("target does not leave the zenith circle".into())
+    }
+
+    // Observe continuously, including long cable-unwinding slews. Wind::observe
+    // takes successive directions less than half a revolution apart.
+    async fn at_rest(
+        &self,
+        client: &mut MountClient,
+        counts: [u32; 2],
+    ) -> Result<[i32; 2], String> {
+        loop {
+            let az = client
+                .axis_state(Axis::Azimuth)
+                .await
+                .map_err(|_| "link_lost")?;
+            let alt = client
+                .axis_state(Axis::Altitude)
+                .await
+                .map_err(|_| "link_lost")?;
+            let positions = [az.position, alt.position];
+            if let Some(p) = self.model.predict(positions.map(f64::from), counts) {
+                self.wind.lock().unwrap().observe(p.az_deg);
+            }
+            if !az.moving && !alt.moving {
+                return Ok(positions);
+            }
+            sleep(TICK).await;
+        }
+    }
+
+    async fn keyhole(
+        &self,
+        target: &Target,
+        client: &mut MountClient,
+        axes: [AxisInfo; 2],
+    ) -> Result<[f64; 2], String> {
+        {
+            let mut control = self.control.lock().unwrap();
+            if control.state.state == "off" {
+                return Err("stopped".into());
+            }
+            control.state.state = "keyhole_wait";
+            control.state.tracking_offset = [0.0; 2];
+            control.proportional = [0.0; 2];
+            control.previous_pointing = None;
+            control.solve_after = None;
+            control.resume_pointing = None;
+            for i in 0..2 {
+                control.measurement[i] = None;
+                self.model.motion.crossing(i, true);
+            }
+        }
+        client.stop_all().await.map_err(|_| "link_lost")?;
+        let counts = axes.map(|a| a.counts_per_revolution);
+        let mut current = self.at_rest(client, counts).await?;
+        let exit = self.keyhole_exit(target)?;
+        let mut planner = Planner {
+            model: &self.model,
+            axes,
+            current,
+            wind: *self.wind.lock().unwrap(),
+            site: self.site,
+            min_alt: self.min_alt_deg,
+            start: exit,
+        };
+        // Planner::plan aims at start + travel. The first plan estimates that
+        // travel; the second subtracts it so the destination is the exit itself.
+        let first = planner.plan(target)?;
+        planner.start = exit - first.duration;
+        let plan = planner.plan(target)?;
+        for waypoint in plan.waypoints {
+            for (i, axis) in AXES.into_iter().enumerate() {
+                self.model
+                    .motion
+                    .moving(i, f64::from(waypoint[i]) - f64::from(current[i]));
+                self.model.motion.crossing(i, true);
+                client
+                    .goto_axis(axis, waypoint[i])
+                    .await
+                    .map_err(|_| "mount refused the slew")?;
+            }
+            current = self.at_rest(client, counts).await?;
+        }
+        for i in 0..2 {
+            self.model.motion.crossing(i, false);
+        }
+        // Neither PI nor reversal take-up runs during this wait. Solves made
+        // here still observe cable wind but cannot provide the resume pointing.
+        sleep(Duration::from_millis(500)).await;
+        while self.clock.now() < exit || self.place(target, self.clock.now()).0 >= KEYHOLE_ALT {
+            sleep(TICK).await;
+        }
+        self.control.lock().unwrap().solve_after = Some(self.clock.now());
+        let pointing = loop {
+            if let Some(p) = self.control.lock().unwrap().resume_pointing {
+                break p;
+            }
+            sleep(TICK).await;
+        };
+        // The planner's last approach drove both axes positively. Take up a
+        // measured gear before reversing it, just as at a forecast reversal.
+        let rates = self.rates(target, counts)?;
+        let mut direction = [1.0; 2];
+        for i in 0..2 {
+            if rates[i] < 0.0 {
+                if let Some(b) = self.model.motion.backlash().axis(i) {
+                    self.take_up(client, i, -1.0, b).await?;
+                    direction[i] = -1.0;
+                }
+            }
+        }
+        {
+            let mut control = self.control.lock().unwrap();
+            if control.state.state == "off" {
+                return Err("stopped".into());
+            }
+            control.state.state = "tracking";
+            control.solve_after = None;
+            control.resume_pointing = None;
+        }
+        self.pointing(pointing.east_arcsec, pointing.north_arcsec);
+        Ok(direction)
+    }
+
     fn settle(&self, time: f64, east: f64, north: f64) {
         let mut measured = [None; 2];
         {
@@ -489,23 +706,37 @@ impl Shared {
         self: Arc<Self>,
         target: Target,
         mut client: MountClient,
-        counts: [u32; 2],
+        axes: [AxisInfo; 2],
         generation: u64,
     ) {
         let mut movement = client.clone();
+        let counts = axes.map(|a| a.counts_per_revolution);
         let rates = async {
             let mut second = interval(SECOND);
             second.set_missed_tick_behavior(MissedTickBehavior::Skip);
             let mut direction = [0.0_f64; 2];
             let mut forecast = [None; 2];
             let mut prepared = [false; 2];
+            let mut keyhole_entry = None;
             let mut refresh_at = 0.0;
             loop {
                 second.tick().await;
                 let now = self.clock.now();
                 if now >= refresh_at {
+                    keyhole_entry = self.keyhole_entry(&target);
                     forecast = [0, 1].map(|i| self.reversal(&target, counts, i));
                     refresh_at = now + 60.0;
+                }
+                if keyhole_entry.is_some_and(|entry| now >= entry) {
+                    direction = match self.keyhole(&target, &mut movement, axes).await {
+                        Ok(direction) => direction,
+                        Err(reason) => return reason,
+                    };
+                    keyhole_entry = None;
+                    forecast = [None; 2];
+                    prepared = [false; 2];
+                    refresh_at = 0.0;
+                    second.reset();
                 }
                 let rates = match self.rates(&target, counts) {
                     Ok(rates) => rates,
