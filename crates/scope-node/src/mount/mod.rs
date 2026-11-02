@@ -2,6 +2,7 @@
 use std::{future::Future, pin::Pin};
 
 pub mod queue;
+pub mod skywatcher;
 pub mod watchdog;
 
 /// An axis in the mount's own frame, independent of its zero points on the sky.

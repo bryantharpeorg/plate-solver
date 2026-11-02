@@ -43,6 +43,13 @@ impl Control {
     }
 }
 
+/// Optional serial mount; unknown keys are errors just as in the camera config.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MountConfig {
+    pub device: std::path::PathBuf,
+}
+
 /// Token-bearing config deliberately has no Debug/Serialize implementation.
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -58,6 +65,8 @@ pub struct Config {
     pub gain: Control,
     #[serde(default)]
     pub detection: DetectSettings,
+    #[serde(default)]
+    pub mount: Option<MountConfig>,
 }
 fn default_listen() -> SocketAddr {
     SocketAddr::from(([0, 0, 0, 0], 50051))
@@ -93,6 +102,8 @@ impl Config {
             // A missing required field is not located on a key's source line.
             let missing = if error.message().contains("missing field `token`") {
                 " (missing token)"
+            } else if error.message().contains("missing field `device`") {
+                " (missing mount.device)"
             } else {
                 ""
             };
@@ -107,6 +118,13 @@ impl Config {
         Self::parse(&source)
     }
     fn validate(&self) -> Result<(), ConfigError> {
+        if self
+            .mount
+            .as_ref()
+            .is_some_and(|mount| mount.device.as_os_str().is_empty())
+        {
+            return Err(ConfigError("mount.device must not be empty".into()));
+        }
         if self.token.trim().is_empty() {
             return Err(ConfigError("token must not be empty".into()));
         }
