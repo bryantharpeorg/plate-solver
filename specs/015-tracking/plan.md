@@ -154,6 +154,18 @@ The tracker drives the mount through 014's link calls (`RateAxis`, `StopAll`) an
 the link's state from 013's link client. `armed` is not a tracker state: the session
 holds it while Track waits for a GoTo, and calls `start` when the GoTo ends (US7).
 
+US6 and US7 run together once US5 has merged, and US7 uses the tracker that US6 extends.
+So that either may merge first, the tracker's surface is fixed from US3:
+- the state and `ended_reason` each have a stable name (the text above), which the
+  session's body serializes. US7 reads them by name and never matches either
+  exhaustively, so US6's `keyhole_wait` reaches the body with no change outside
+  `tracking.rs`;
+- the constructor and `start` take, from US3, everything US6's planner needs (§ Plan
+  traps, trap 17): the console's clock, the link, and the session's current model, site
+  and minimum altitude. US4 to US6 add no argument to either;
+- US7 hands each live solve to the tracker whenever its state is not `off`, so the
+  keyhole's resume gets its solve.
+
 **`POST /api/track`** (US7) takes `{"on": true | false}` and answers 200 with the session.
 - It answers 409 with `{"error": <reason>}` when there is no mount connected, no sync
   tonight, the Sun is up, or the target is not pointable.
@@ -175,9 +187,11 @@ next second's rates never restart the axes.
 - `backlash?: {alt_deg?, az_deg?}`, each axis left out until it is measured. It is kept
   in the state file beside 014's fixed terms and cleared with them.
 
-**The simulator** (US2) gains `rate_error` (a fraction, default 0) on 014's `MountConfig`,
-beside its `backlash_deg` (default 0.3, one value for both axes), in
-`crates/simulator/src/mount.rs`.
+**The simulator** (US2) gains a rate error (a fraction, 0 at construction) on 014's
+`SimMount`, in `crates/simulator/src/mount.rs`: `SimMount::set_rate_error(fraction)` and
+`rate_error()`, applied to every commanded rate, beside 014's `set_slip_per_move`.
+`MountConfig` keeps its four fields, with `backlash_deg` (default 0.3, one value for both
+axes), because 014's finder tests build it naming every field (§ Plan traps, trap 16).
 It also gains a truth accessor (base tilt and zero points) that a test can hand to the
 pointing model's load hook in `crates/finder/src/model.rs`.
 
@@ -345,7 +359,8 @@ Add `altaz_rates` and `longest_exposure`, with its corner radius, to
 ## User Story 2 — The simulator's settings and truth
 
 In 014's simulated mount, `crates/simulator/src/mount.rs`:
-- add `rate_error` to `MountConfig`, applied to every commanded rate;
+- add `SimMount::set_rate_error(fraction)` and `rate_error()`, 0 at construction and
+  applied to every commanded rate. `MountConfig` gains no field (§ Plan traps, trap 16);
 - keep 014's `backlash_deg`, one value for both axes with a default of 0.3, which already
   makes the backlash a setting (§ Plan traps, trap 16);
 - add a truth accessor for the base tilt and zero points.
@@ -390,7 +405,8 @@ is measured.
 
 In `crates/finder/src/tracking.rs`, add the 30-minute path forecast against the 2° circle.
 At the circle's entry, stop, slew to the exit through 014's planner, wait, then solve and
-resume. A Sun-guard refusal from the planner ends tracking with that reason.
+resume. A Sun-guard refusal from the planner ends tracking with that reason. § Plan
+traps, trap 17 sets the planner's `start` and the take-up at the resume.
 
 ## User Story 7 — Track and the imaging camera in the session
 
@@ -408,7 +424,8 @@ In `crates/finder/src/session.rs`:
 - persist the imaging camera, and never persist tracking.
 
 In 013's live loop, `crates/finder/src/live.rs`, hand each live solve's error at the aim
-point to the tracker while tracking. Document the route and the fields in the crate docs
+point to the tracker whenever its state is not `off`. Read the tracker's state and ended
+reason by name, never matching either exhaustively (§ Interfaces, `finder::tracking`). Document the route and the fields in the crate docs
 and `crates/finder/README.md`. `tracking.rs` is not edited (§ Decisions, "Track and GoTo
 together").
 
@@ -423,7 +440,9 @@ the error, field rotation and longest exposure, rounded to 1″, 0.01°/min and 
 **`ImagingCameraSection`.** It goes on the Setup page, using DESIGN.md's inputs. It puts
 `imaging_camera`, and refuses values out of range with the allowed range.
 
-`src/api.ts` gains `postTrack` and the session's new fields. The recorded sessions go in
+`src/api.ts` gains `postTrack` and the session's new fields. `src/useSession.ts` passes
+`track`, `imaging_camera` and `backlash` through, each only when present, as it passes
+014's `goto_refusal`, and its `SessionEdit` gains `imaging_camera` (nullable). The recorded sessions go in
 `src/test/fixtures/`, inside the existing package. Record both parts in `DESIGN.md` and
 `.impeccable/design.json`. Rebuild `web/dist`.
 
@@ -582,18 +601,34 @@ recurring here. They bind every story.
     (US3-S4).
 16. **A new field breaks a struct literal that names every field.** A Rust struct literal
     must list every field unless it ends with `..` (014's trap 16, on `StarFrame`).
-    014's `MountConfig` has four fields, and US2 adds `rate_error`. *Check:* every
-    existing `MountConfig` literal ends with `..` (`ideal()` and its two uses in 014's
-    `crates/simulator/tests/mount.rs`, re-read at 3bb1ef4), and new ones do too; no
-    existing test changes (US2-S5).
+    014's `MountConfig` has four fields. Two of 014's finder tests name all four (re-read
+    at 1c928e3): `crates/finder/tests/model_sim.rs`, and the rig in
+    `crates/finder/tests/goto_api.rs`, which `goto_sim.rs`, `second_sync_sim.rs`,
+    `model_api.rs`, `goto_refusal_api.rs` and the fixture recorder
+    `web/src/test/fixtures/record-sessions.rs` include by `#[path]`. A fifth field would
+    break them all, and US2 may not edit them. *Check:* US2 adds the rate error as a
+    `SimMount` setter (`set_rate_error`, beside `set_slip_per_move`), not as a field, and
+    `MountConfig` keeps its four fields; no existing test changes (US2-S5).
 17. **014's planner aims where the target will be at the end of the slew.** Its one public
     entry, `goto::Planner::plan(&Target)`, plans to the target's place at the Planner's
     `start` plus the slew's travel time (`plan_place` is private). The keyhole needs the
     exit instead. *Check:* US6 builds the `Planner` with `start` set to the forecast exit
     time and calls `plan` unchanged.
-    - The destination is then just past the exit, outside the circle.
+    - Planned from the exit time, the destination is where the target will be one
+      slew's travel past the exit: several arcminutes for δ = φ − 1° on the simulator,
+      too far for US6-S1's 1′ within 30 s. So plan twice: first with `start` at the exit
+      time, to read the plan's `duration`; then with `start` at the exit time less that
+      duration, so the destination is the exit itself. The slew runs at once, and the
+      telescope waits there.
     - The Sun-up check and the path's Sun guard are evaluated from that time. Near the
       zenith that changes nothing, and a refusal still ends tracking with its reason.
+    - The planner's approach last drove the altitude axis up, and after transit the
+      target descends. At the resume, before the feed-forward rate, an axis whose next
+      tracking direction opposes its last motion takes up its measured backlash as US5
+      does (stop, drive through it at 0.5°/s, resume). US5's forecast take-up does not
+      run during `keyhole_wait`. US6-S1's Given names no backlash, so its test either
+      seeds the measured altitude backlash (US5's state-file field) with the default
+      0.3°, or sets the simulator's backlash to 0.
     - The Planner's fields are public: the current model, the axes, the counts, the
       site, the minimum altitude and the cable wind.
     - 014's GoTo keeps its own `goto::Wind` privately. So the tracker keeps one the same
@@ -693,7 +728,7 @@ stories:
         assertion: "013's simulated sky test passes unchanged"
         decision: "spec.md:US2-S5"
     preserved_behavior:
-      - "014's crates/simulator/tests/mount.rs, model_sim.rs and goto_sim.rs pass unchanged with the defaults of 0 and 0.3 deg (spec.md US2-S4)"
+      - "014's crates/simulator/tests/mount.rs and crates/finder/tests/goto_api.rs, goto_sim.rs, second_sync_sim.rs, model_api.rs, goto_refusal_api.rs and model_sim.rs pass unchanged with the defaults of 0 and 0.3 deg; MountConfig keeps its four fields, and the rate error is a SimMount setter (spec.md US2-S4; plan.md Plan traps, trap 16)"
       - "crates/scope-node is untouched (spec.md US2-S5)"
       - "the load hook is documented as being for tests and the simulator; the model's fit is unchanged (plan.md User Story 2)"
     checks:
@@ -973,6 +1008,11 @@ stories:
         disposition: preserve
         assertion: "Setup's existing cases pass unchanged with the new section in it"
         decision: "plan.md:Shapes that existing tests pin"
+      - path: crates/finder/web/src/useSession.test.ts
+        status: existing
+        disposition: preserve
+        assertion: "the hook's existing cases, including the health body's toEqual, pass unchanged because each new field is passed only when present"
+        decision: "plan.md:Shapes that existing tests pin"
       - path: crates/finder/web/e2e/session.spec.ts
         status: existing
         disposition: preserve
@@ -994,6 +1034,7 @@ stories:
       - .impeccable/design.json
       - crates/finder/web/dist
       - crates/finder/web/src/api.ts
+      - crates/finder/web/src/useSession.ts
       - crates/finder/web/src/components/GuidanceBlock.tsx
       - crates/finder/web/src/components/SetupPage.tsx
       - crates/finder/web/src/components/TrackControl.tsx
@@ -1022,6 +1063,11 @@ stories:
         other_story: US8
         disposition: merge_order
         reason: "015 depends_on_landed 014, whose US8 last writes api.ts"
+      - path: crates/finder/web/src/useSession.ts
+        other_spec: 014-goto
+        other_story: US8
+        disposition: merge_order
+        reason: "015 depends_on_landed 014, whose US8 last writes useSession.ts (goto_refusal)"
       - path: crates/finder/web/src/components/GuidanceBlock.tsx
         other_spec: 014-goto
         other_story: US8

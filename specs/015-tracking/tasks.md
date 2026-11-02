@@ -71,10 +71,12 @@ description: "Task list for 015-tracking: Tracking"
 ### Implementation
 
 - [ ] T007 [US2] In 014's simulated mount, `crates/simulator/src/mount.rs`:
-  - add `rate_error` to `MountConfig`, default 0, applied to every commanded rate;
+  - add `SimMount::set_rate_error(fraction)` and `rate_error()`, 0 at construction and
+    applied to every commanded rate, beside `set_slip_per_move`. Don't add a field to
+    `MountConfig`: 014's `goto_api.rs` and `model_sim.rs` name all four of its fields, so
+    a fifth would break existing tests (plan.md § Plan traps, trap 16);
   - keep 014's `backlash_deg`, one value for both axes with a default of 0.3, which
-    already makes the backlash a setting. Every existing `MountConfig` literal ends with
-    `..`, so the new field changes no existing test (plan.md § Plan traps, trap 16);
+    already makes the backlash a setting;
   - add a truth accessor for the base tilt and zero points.
 - [ ] T008 [US2] Add a public hook to 014's pointing model in `crates/finder/src/model.rs`
   that loads known base-tilt and zero-point terms, documented as being for tests and the
@@ -162,7 +164,10 @@ description: "Task list for 015-tracking: Tracking"
     `{"what": "fixed"}`, leaving no `backlash` field (US5-S6).
 - [ ] T020 [US5] Write a failing test in a new `crates/finder/tests/backlash_cli.rs`: the
   binary restarted on the same `--state` folder the next day keeps the measured altitude
-  backlash exactly (US5-S4).
+  backlash exactly (US5-S4). Measure it in process on a session with a state file
+  (`Session::with_state_file`) in a temporary folder, then start the binary with
+  `--simulate --state <folder> --sim-start <the next day>` and read it, and read it again
+  after a second restart.
 
 ### Implementation
 
@@ -176,7 +181,9 @@ description: "Task list for 015-tracking: Tracking"
   syncs taken while an axis last moved against the GoTo's approach (from below). Hold
   such syncs back until that axis's backlash is measured.
 - [ ] T023 [US5] In `crates/finder/src/session.rs`, keep the backlash per axis with the
-  fixed terms in the state file, and clear it when the fixed terms are reset. In
+  fixed terms in the state file, and clear it when the fixed terms are reset. It is its
+  own `StoredSession` field (`skip_serializing_if = "Option::is_none"`), not part of the
+  model's persisted view, so it survives every restart. In
   `crates/finder/src/api.rs`, add `backlash` to `GET /api/session`, each axis left out
   until measured and the field left out until one is, so
   `crates/finder/tests/session_api.rs` stays as it is (plan.md § Plan traps, trap 4).
@@ -201,9 +208,11 @@ description: "Task list for 015-tracking: Tracking"
 - [ ] T027 [US6] In `crates/finder/src/tracking.rs`, slew to the exit through 014's
   planner, with the Sun guard included, calling it as it is without changing it. Build its
   `Planner` with `start` at the forecast exit time, and drive the plan's waypoints with
-  `goto_axis` (plan.md § Plan traps, trap 17). Wait
-  there, and once the forecast position is outside the circle, solve,
-  apply the error and resume. A planner refusal ends tracking with that reason.
+  `goto_axis` (plan.md § Plan traps, trap 17). Plan twice, the second time with `start`
+  at the exit less the first plan's `duration`, so the destination is the exit. Wait
+  there, and once the forecast position is outside the circle, solve, take up the
+  backlash on an axis that now reverses, apply the error and resume. A planner refusal
+  ends tracking with that reason.
 - [ ] T028 [US6] Run the `lint` and `test` gates. Commit the green story (FR-012;
   US6-S1).
 
@@ -282,7 +291,10 @@ description: "Task list for 015-tracking: Tracking"
 
 - [ ] T038 [US8] Add `postTrack` and the session's `track`, `imaging_camera` and
   `backlash` fields to `crates/finder/web/src/api.ts`, and the recorded sessions to
-  `crates/finder/web/src/test/fixtures/`. Add
+  `crates/finder/web/src/test/fixtures/`. In `crates/finder/web/src/useSession.ts`, pass
+  the three fields through `request()`, each only when present, as 014's `goto_refusal`
+  is, and add `imaging_camera` (nullable) to `SessionEdit`; `useSession.test.ts` stays
+  unchanged. Add
   `crates/finder/web/src/components/TrackControl.tsx`: a Switch per DESIGN.md, offered
   only with a mount connected and rendering nothing with no `mount` (plan.md § Plan
   traps, trap 10), posting `/api/track`. It reads out the error, field rotation and
