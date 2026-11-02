@@ -442,6 +442,15 @@ nothing, as on the `default` and `session` servers (§ Plan traps, trap 10). It 
 the error, field rotation and longest exposure, rounded to 1″, 0.01°/min and 0.1 s or
 "no limit", or why tracking ended.
 
+**Stop while Track is on.** 014's `mountMayMove` shows Stop only while an axis moves or a
+GoTo runs, so it hides Stop while Track is armed or waits at the keyhole, just before the
+mount starts by itself. On Setup the Track switch is not on screen either. US8 widens the
+rule: with a mount connected, Stop also shows while `track.state` is `armed`, `tracking`
+or `keyhole_wait`. `StopButton.tsx` takes the session's `track`, `TopBar.tsx` passes it
+through, and `App.tsx` hands it `session.track`. Each new prop is optional, so 014's
+`StopButton.test.tsx` and `App.test.tsx` pass unchanged. The new cases go in a new
+`src/components/StopTrack.test.tsx` (US8-S8).
+
 **`ImagingCameraSection`.** It goes on the Setup page, using DESIGN.md's inputs. It puts
 `imaging_camera`, and refuses values out of range with the allowed range.
 
@@ -980,6 +989,21 @@ stories:
         disposition: add
         assertion: "a recorded too-low end shows the toggle off and the Track control's own labelled element says the target is too low; the readout rounds to 1 arcsec, 0.01 deg/min and 0.1 s, or reads no limit; no toggle is offered without a mount"
         decision: "spec.md:US8-S1"
+      - path: crates/finder/web/src/components/StopTrack.test.tsx
+        status: new
+        disposition: add
+        assertion: "with a mount at rest and track.state armed, tracking or keyhole_wait, the top bar shows Stop on the main screen and on Setup and pressing it POSTs /api/stop; with track absent or ended and the mount at rest, no Stop"
+        decision: "spec.md:US8-S8"
+      - path: crates/finder/web/src/components/StopButton.test.tsx
+        status: existing
+        disposition: preserve
+        assertion: "014's Stop cases pass unchanged: the new track prop is optional"
+        decision: "plan.md:User Story 8"
+      - path: crates/finder/web/src/App.test.tsx
+        status: existing
+        disposition: preserve
+        assertion: "the app's existing cases pass unchanged with track passed to the top bar"
+        decision: "plan.md:User Story 8"
       - path: crates/finder/web/src/components/ImagingCameraSection.test.tsx
         status: new
         disposition: add
@@ -1028,6 +1052,10 @@ stories:
       - crates/finder/web/src/components/TrackControl.test.tsx
       - crates/finder/web/src/components/ImagingCameraSection.tsx
       - crates/finder/web/src/components/ImagingCameraSection.test.tsx
+      - crates/finder/web/src/components/StopButton.tsx
+      - crates/finder/web/src/components/StopTrack.test.tsx
+      - crates/finder/web/src/components/TopBar.tsx
+      - crates/finder/web/src/App.tsx
       - crates/finder/web/src/test/fixtures
     shared_writes:
       - path: DESIGN.md
@@ -1070,6 +1098,21 @@ stories:
         other_story: US8
         disposition: merge_order
         reason: "015 depends_on_landed 014, whose US8 adds recorded mount sessions"
+      - path: crates/finder/web/src/components/StopButton.tsx
+        other_spec: 014-goto
+        other_story: US8
+        disposition: merge_order
+        reason: "015 depends_on_landed 014, whose US8 last writes Stop's rule"
+      - path: crates/finder/web/src/components/TopBar.tsx
+        other_spec: 014-goto
+        other_story: US8
+        disposition: merge_order
+        reason: "015 depends_on_landed 014, whose US8 last writes the top bar"
+      - path: crates/finder/web/src/App.tsx
+        other_spec: 014-goto
+        other_story: US8
+        disposition: merge_order
+        reason: "015 depends_on_landed 014, whose US8 last writes App.tsx"
     open_questions: []
   US9:
     tests:

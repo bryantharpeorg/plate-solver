@@ -288,6 +288,12 @@ description: "Task list for 015-tracking: Tracking"
     labelled element (US8-S1);
   - the readout's rounding, and "no limit" (US8-S2);
   - no toggle without a mount (US8-S3).
+
+  Also write failing Vitest tests in a new
+  `crates/finder/web/src/components/StopTrack.test.tsx`, rendering the app on recorded
+  sessions: Stop in the top bar on the main screen and on Setup while `track.state` is
+  `armed`, `tracking` or `keyhole_wait` with the mount at rest, posting `/api/stop` when
+  pressed, and no Stop with `track` absent or ended (US8-S8).
 - [ ] T037 [US8] Write failing Vitest tests in a new
   `crates/finder/web/src/components/ImagingCameraSection.test.tsx`:
   - a camera set on Setup, which puts the session and adds the longest exposure to the
@@ -306,7 +312,12 @@ description: "Task list for 015-tracking: Tracking"
   only with a mount connected and rendering nothing with no `mount` (plan.md § Plan
   traps, trap 10), posting `/api/track`. It reads out the error, field rotation and
   longest exposure, or why tracking ended. Mount it beside 014's GoTo in
-  `crates/finder/web/src/components/GuidanceBlock.tsx`.
+  `crates/finder/web/src/components/GuidanceBlock.tsx`. In
+  `crates/finder/web/src/components/StopButton.tsx`, give `mountMayMove` and `StopButton`
+  an optional `track`, true also while `track.state` is `armed`, `tracking` or
+  `keyhole_wait`. Pass it through `crates/finder/web/src/components/TopBar.tsx`, and hand
+  it `session.track` in `crates/finder/web/src/App.tsx`. 014's `StopButton.test.tsx` and
+  `App.test.tsx` stay unchanged.
 - [ ] T039 [US8] Add `crates/finder/web/src/components/ImagingCameraSection.tsx`, which
   puts `imaging_camera` with range checks, and mount it in
   `crates/finder/web/src/components/SetupPage.tsx`.
@@ -317,7 +328,7 @@ description: "Task list for 015-tracking: Tracking"
   `git status --porcelain -- dist` must list nothing, and its `CI=1 npm run e2e` must
   pass with `e2e/session.spec.ts` unchanged. Confirm `package.json` dependencies and every
   existing Vitest file are unchanged (US8-S7). Commit the green story (FR-017, FR-018,
-  FR-019; US8-S1, US8-S2, US8-S3, US8-S4, US8-S5, US8-S6, US8-S7).
+  FR-019; US8-S1, US8-S2, US8-S3, US8-S4, US8-S5, US8-S6, US8-S7, US8-S8).
 
 ## Phase 9: User Story 9 — an hour of tracking end to end, and Track on the page (Priority: P3)
 

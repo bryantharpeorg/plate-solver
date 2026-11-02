@@ -442,16 +442,18 @@ tracking, it reads out three values:
 - the field rotation;
 - with an imaging camera set, the longest exposure.
 
-When tracking ends, it says why. On the Setup page, I set the imaging camera's sensor size
-and pixel pitch, and the page refuses values out of range with a message.
+When tracking ends, it says why. While Track is on, the top bar's Stop stays on screen on
+every page, because the mount may start moving by itself, as it does when the target
+leaves the keyhole. On the Setup page, I set the imaging camera's sensor size and pixel
+pitch, and the page refuses values out of range with a message.
 
 **Why this priority**: This is the visible half of tracking. It is P2 because it consumes
 US7's API.
 
 **Independent Test**: The `test` gate's page checks run in `crates/finder/web`:
 `npm run typecheck`, `npm run format:check` and `npm test`:
-- the new tests are `src/components/TrackControl.test.tsx` and
-  `src/components/ImagingCameraSection.test.tsx`;
+- the new tests are `src/components/TrackControl.test.tsx`,
+  `src/components/ImagingCameraSection.test.tsx` and `src/components/StopTrack.test.tsx`;
 - every existing Vitest file is unchanged.
 
 Then the gate's `npm run build` and `git status --porcelain -- dist` list nothing for the
@@ -482,6 +484,11 @@ unchanged.
    then `git status --porcelain -- dist`, **Then** the second lists nothing, so the
    committed build is the build of this source. The story's diff leaves `package.json`'s
    dependencies unchanged, so no npm package was added.
+8. **Given** recorded sessions with a mount at rest whose `track.state` is `armed`,
+   `tracking` or `keyhole_wait`, **When** a Vitest test renders the app on the main screen
+   and on Setup, **Then** it asserts that the top bar shows Stop on both, and that pressing
+   it POSTs `/api/stop`. With the mount at rest and `track` absent, or with tracking
+   ended, it asserts that no Stop is shown, as before.
 
 ---
 
@@ -681,7 +688,9 @@ piece. They come last because they exercise every story before them.
   arcseconds), the field rotation (°/min) and, with an imaging camera set, the longest
   exposure for 1 px of smear. These SHALL be rounded to the nearest arcsecond, 0.01°/min
   and 0.1 s, or read "no limit". When tracking ends, the block SHALL say why. Without a
-  mount, no Track toggle SHALL be offered. **Refs**: FR-013, FR-016; DESIGN.md (Switch).
+  mount, no Track toggle SHALL be offered. While Track is armed, tracking or waiting at
+  the keyhole, the top bar SHALL offer 014's Stop on every page, as it does while the
+  mount moves. **Refs**: FR-013, FR-016; DESIGN.md (Switch).
 - **FR-018**: The Setup page SHALL have an imaging camera section. It SHALL set the
   sensor's width and height in millimetres and its pixel pitch in micrometres, refusing
   values out of range with a message. **Refs**: FR-015; DESIGN.md (Inputs / Fields).
