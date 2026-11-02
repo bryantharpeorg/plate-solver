@@ -60,6 +60,7 @@ pub struct AppState {
     live: Option<Arc<Live>>,
     mount_monitor: Option<Arc<crate::live::MountMonitor>>,
     simulation: Option<Arc<Simulation>>,
+    goto: Option<Arc<crate::goto::GoTo>>,
 }
 
 impl AppState {
@@ -83,6 +84,7 @@ impl AppState {
             live: None,
             mount_monitor: None,
             simulation: None,
+            goto: None,
         }
     }
 
@@ -185,7 +187,18 @@ impl AppState {
                 f64::from(self.db.properties.max_fov),
             ),
         )));
+        self.goto = Some(Arc::new(crate::goto::GoTo::new(
+            self.session.clone(),
+            self.clock.clone(),
+            link.clone(),
+            self.live.as_ref().unwrap().clone(),
+        )));
         self
+    }
+
+    /// Session motion controller, present alongside live solving.
+    pub fn goto(&self) -> Option<Arc<crate::goto::GoTo>> {
+        self.goto.clone()
     }
 
     /// Live reports and preview history for stream and calibration consumers.
@@ -295,6 +308,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/similar", get(similar))
         .route("/api/targets", get(search_targets))
         .route("/api/session", get(get_session).put(put_session))
+        .route("/api/goto", post(start_goto))
+        .route("/api/stop", post(stop_mount))
         .route("/api/aim", post(set_aim).delete(reset_aim))
         .route("/api/live", get(live_stream))
         .route("/api/live/preview.jpg", get(live_preview))
@@ -407,8 +422,41 @@ fn sim_json<T>(result: Result<Json<T>, JsonRejection>) -> Result<T, ApiError> {
     })
 }
 
-async fn get_session(State(state): State<AppState>) -> Json<SessionView> {
-    Json(state.session.snapshot(state.clock.now()))
+#[derive(Serialize)]
+struct SessionResponse {
+    #[serde(flatten)]
+    session: SessionView,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    goto: Option<crate::goto::Progress>,
+}
+async fn get_session(State(state): State<AppState>) -> Json<SessionResponse> {
+    Json(SessionResponse {
+        session: state.session.snapshot(state.clock.now()),
+        goto: state.goto.as_ref().and_then(|g| g.progress()),
+    })
+}
+async fn start_goto(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let goto = state
+        .goto
+        .as_ref()
+        .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "no mount is connected"))?;
+    goto.start()
+        .await
+        .map_err(|reason| ApiError::new(StatusCode::CONFLICT, reason))?;
+    Ok(Json(serde_json::json!({"started": true})))
+}
+// Intentionally no SessionWrite and no body extractor: stopping is accepted
+// from every origin, even while another route is waiting on a solve.
+async fn stop_mount(State(state): State<AppState>) -> Json<serde_json::Value> {
+    if let Some(goto) = &state.goto {
+        goto.stop().await;
+    } else if let Some(mut mount) = state.link.as_ref().and_then(|link| link.mount()) {
+        let _ = tokio::time::timeout(Duration::from_millis(200), mount.stop_all()).await;
+    }
+    Json(serde_json::json!({"stopped": true}))
 }
 
 async fn put_session(

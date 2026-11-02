@@ -1,5 +1,8 @@
 //! Telescope and service controls shared by all clones of a simulator.
-use crate::{mount::SimMount, optics, sky, Site, VirtualClock};
+use crate::{
+    mount::{MountDirection, SimMount},
+    optics, sky, Site, VirtualClock,
+};
 use math_core::UnitVector;
 use pattern_database::PatternDatabase;
 use scope_node::service::NodeControls;
@@ -14,6 +17,7 @@ pub struct Simulator {
     sky: optics::Simulator,
     pub(crate) controls: NodeControls,
     mount: Arc<Mutex<Option<SimMount>>>,
+    followed: Arc<Mutex<Option<MountDirection>>>,
 }
 impl Simulator {
     pub fn new(db: Arc<PatternDatabase>, site: Site, clock: VirtualClock) -> Self {
@@ -21,6 +25,7 @@ impl Simulator {
             sky: optics::Simulator::new(db, site, clock),
             controls: NodeControls::default(),
             mount: Arc::new(Mutex::new(None)),
+            followed: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -28,6 +33,7 @@ impl Simulator {
     /// is the eyepiece direction; the finder camera retains its known aim point.
     pub fn connect_mount(&self, mount: SimMount) {
         *self.mount.lock().unwrap() = Some(mount);
+        *self.followed.lock().unwrap() = None;
         self.follow_mount();
     }
 
@@ -47,6 +53,10 @@ impl Simulator {
     fn follow_mount(&self) {
         if let Some(mount) = self.mount() {
             let direction = mount.true_direction();
+            let mut followed = self.followed.lock().unwrap();
+            if *followed == Some(direction) {
+                return;
+            }
             let site = self.sky.state.lock().unwrap().site;
             let rotation =
                 sky::camera_rotation(direction.alt, direction.az, site, self.sky.clock().now());
@@ -61,6 +71,7 @@ impl Simulator {
             let (ra, dec) = vector.to_radec();
             self.sky
                 .point_eyepiece_at(ra.to_degrees(), dec.to_degrees());
+            *followed = Some(direction);
         }
     }
 
@@ -75,6 +86,9 @@ impl Simulator {
         if let Some(mount) = self.mount() {
             let eyepiece = self.sky.telescope().eyepiece;
             mount.push_to(eyepiece.alt, eyepiece.az);
+            // The sky already contains the exact hand-set direction. Remember
+            // the corresponding mechanics so a still mount does not re-point it.
+            *self.followed.lock().unwrap() = Some(mount.true_direction());
         }
     }
 

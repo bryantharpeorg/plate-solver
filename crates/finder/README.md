@@ -110,6 +110,8 @@ The page uses the API types in `web/src/api.ts`, which mirror the Rust structs i
 | `GET /api/similar?id=M42&lat=&lon=&time=` | Objects like `id`, best first. With `lat`/`lon` (degrees, east positive) and optional Unix `time`, each has its altitude and whether it is up. |
 | `GET /api/session` | One shared observing session: `{site, min_alt_deg, target, pointing, time}`. |
 | `PUT /api/session` | JSON partial edit: `{site?, min_alt_deg?, target?}`. Answers the updated observing session. |
+| `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
+| `POST /api/stop` | No body. Always 200, commanding both axes to stop, from any origin. |
 
 All phones and laptops connected to the console read and edit the same observing session.
 A fresh session has no site, target or latest pointing, and a minimum altitude of 15°.
@@ -287,3 +289,25 @@ without a live loop answers 404 for both live routes. Library servers opt into s
 with `with_simulation(start_unix_s, SimulationTransport::Loopback).await?`, then
 `with_live()`. Paused-time tests use `SimulationTransport::Memory` over duplex IO in
 one runtime.
+
+A GoTo requires a connected mount, a sync that night, a site and a pointable target.
+It refuses a target below the horizon or minimum altitude, an approach that would
+go below that minimum, the Sun up (centre at or above −0.83°), and any path that
+cannot stay 15° clear of the Sun. The Sun guard is always on.
+
+The planner uses the apparent place at arrival and the pointing model, keeps cable
+wind within one revolution across zero-point epochs, and approaches both axes from
+below by 0.5°. It tries alternate axis orders and a higher path for Sun clearance.
+A telescope below the minimum must first lift without turning in azimuth.
+
+After slewing at the mount's top speed, it waits for both axes to stop plus 0.5 s,
+then uses a solved exposure starting after that wait as a sync. It corrects at most
+five times to bring the target within 1′ of the calibrated aim point.
+`GET /api/session` adds `goto: {state, correction, error_arcsec, reason}` only after
+one starts, retaining its result until the next GoTo. States are `slewing`,
+`solving` (including the settle wait), `correcting` (numbered 1–5), `done`,
+`failed`, and `halted`.
+The final error is in arcseconds. Stop reports the observer; heartbeat silence of
+one second reports a lost link; sunrise reports the Sun guard. Every halt stops
+both axes and cancels further motion. Stop remains available while planning,
+solving or another request is pending.
