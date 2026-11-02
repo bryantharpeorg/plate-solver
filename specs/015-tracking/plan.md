@@ -698,12 +698,9 @@ stories:
     writes:
       - crates/finder/src/ephemeris.rs
       - crates/finder/tests/rates.rs
-    shared_writes:
-      - path: crates/finder/src/ephemeris.rs
-        other_spec: 014-goto
-        other_story: US4
-        disposition: merge_order
-        reason: "015 depends_on_landed 014, whose US4 adds refraction to ephemeris.rs"
+    # 2026-11-02: US1 landed (#162, c977fe1), so its shared_writes are retired. A delta
+    # redispatch has no merge edge left to US1 for a merge_order entry to name.
+    shared_writes: []
     open_questions: []
   US2:
     tests:
@@ -744,17 +741,9 @@ stories:
       - crates/simulator/tests/rate_and_backlash.rs
       - crates/finder/src/model.rs
       - crates/finder/tests/sim_truth.rs
-    shared_writes:
-      - path: crates/simulator/src/mount.rs
-        other_spec: 014-goto
-        other_story: US1
-        disposition: merge_order
-        reason: "015 depends_on_landed 014, whose US1 creates the simulated mount"
-      - path: crates/finder/src/model.rs
-        other_spec: 014-goto
-        other_story: US5
-        disposition: merge_order
-        reason: "015 depends_on_landed 014, whose US5 creates the pointing model"
+    # 2026-11-02: US2 landed (#161, 5c964ca), so its shared_writes are retired. A delta
+    # redispatch has no merge edge left to US2 for a merge_order entry to name.
+    shared_writes: []
     open_questions: []
   US3:
     tests:
@@ -782,17 +771,9 @@ stories:
       - crates/finder/src/lib.rs
       - crates/finder/src/tracking.rs
       - crates/finder/tests/tracking_sim.rs
-    shared_writes:
-      - path: crates/finder/src/tracking.rs
-        other_spec: 015-tracking
-        other_story: US4
-        disposition: merge_order
-        reason: "US4 depends_on_merged US3, and adds the PI correction"
-      - path: crates/finder/src/lib.rs
-        other_spec: 014-goto
-        other_story: US6
-        disposition: merge_order
-        reason: "015 depends_on_landed 014, whose US6 last declares a module in it"
+    # 2026-11-02: US3 landed (#164, 87cc1c1), so its shared_writes are retired. A delta
+    # redispatch has no merge edge left to US3 for a merge_order entry to name.
+    shared_writes: []
     open_questions: []
   US4:
     tests:
