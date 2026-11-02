@@ -152,7 +152,71 @@ impl Planner<'_> {
             )
         })
     }
-    fn plan_place(&self, place: impl Fn(f64) -> (f64, f64)) -> Result<Plan, String> {
+    /// Choose the nearest pointable second-sync spot in turn/tilt coordinates.
+    /// Include every exact 90° boundary, including gaps crossing north. The
+    /// half-degree mesh also searches alternate altitudes when a path is blocked,
+    /// at the same resolution as the motion guard. Every candidate passes the
+    /// ordinary planner, including the Sun, approach and cable-wind checks.
+    pub fn second_sync(&self) -> Result<Plan, String> {
+        self.ready()?;
+        if self.model.syncs.is_empty() {
+            return Err("the night has no sync yet".into());
+        }
+        let (alt, az) = self.predict(self.degrees(self.current))?;
+        // Before the base is fitted the model can miss by the pre-fit slip
+        // threshold (2.5° on the sky). Reserve that uncertainty in azimuth so
+        // a nominal 90° move cannot produce a sync less than 90° away. Project
+        // at both ends of the move; lowering alone must not shrink the allowance.
+        let clearance = if self.model.base_tilt.is_none() {
+            2.5_f64
+        } else {
+            0.0
+        };
+        let mut altitudes = vec![alt.max(self.min_alt)];
+        altitudes.extend(
+            (0..180)
+                .map(|i| f64::from(i) * 0.5)
+                .filter(|e| *e >= self.min_alt),
+        );
+        let mut spots = Vec::new();
+        for e in altitudes {
+            let cone = clearance.to_radians().sin() / e.max(alt).to_radians().cos();
+            if cone >= 1.0 {
+                continue;
+            }
+            let distance = 90.0 + cone.asin().to_degrees();
+            let azimuths = std::iter::once(az)
+                .chain(
+                    self.model
+                        .syncs
+                        .iter()
+                        .flat_map(|s| [s.az_deg - distance, s.az_deg + distance]),
+                )
+                .chain((0..720).map(|i| f64::from(i) * 0.5));
+            for a in azimuths {
+                if self
+                    .model
+                    .syncs
+                    .iter()
+                    .all(|s| wrap(a - s.az_deg).abs() >= distance)
+                {
+                    spots.push((e, a));
+                }
+            }
+        }
+        spots.sort_by(|a, b| {
+            wrap(a.1 - az)
+                .hypot(a.0 - alt)
+                .total_cmp(&wrap(b.1 - az).hypot(b.0 - alt))
+        });
+        for spot in spots {
+            if let Ok(plan) = self.plan_place(|_| spot) {
+                return Ok(plan);
+            }
+        }
+        Err("no pointable second-sync spot at least 90 degrees from every nightly sync has a safe path".into())
+    }
+    fn ready(&self) -> Result<(), String> {
         if self.axes.iter().any(|a| {
             a.counts_per_revolution == 0
                 || !a.can_goto
@@ -164,6 +228,10 @@ impl Planner<'_> {
         if sun_horizontal(self.site.lat_deg, self.site.lon_deg, self.start).0 >= -0.83 {
             return Err("Sun is up".into());
         }
+        Ok(())
+    }
+    fn plan_place(&self, place: impl Fn(f64) -> (f64, f64)) -> Result<Plan, String> {
+        self.ready()?;
         let mut estimate = 0.0;
         for iteration in 0..=2 {
             let arrival = self.start + estimate;
@@ -416,8 +484,15 @@ impl GoTo {
         self.start_target(target).await
     }
     /// Plan a supplied celestial direction through the same mandatory guards.
-    /// Also supports the second sync's chosen spot without changing the target.
     pub async fn start_target(self: &Arc<Self>, target: Target) -> Result<(), String> {
+        self.start_request(Some(target)).await
+    }
+    /// Slew to a second-sync spot, settle and solve once, with no corrections.
+    /// The observing session's selected target is left intact.
+    pub async fn second_sync(self: &Arc<Self>) -> Result<(), String> {
+        self.start_request(None).await
+    }
+    async fn start_request(self: &Arc<Self>, target: Option<Target>) -> Result<(), String> {
         let _gate = self.start_gate.lock().await;
         if self.state.lock().unwrap().busy {
             return Err("a GoTo is already running".into());
@@ -426,7 +501,7 @@ impl GoTo {
         let mut client = self.link.mount().ok_or("no mount is connected")?;
         let plan = tokio::time::timeout(
             Duration::from_secs(1),
-            self.prepare(&target, &mut client, false),
+            self.prepare(target.as_ref(), &mut client, false),
         )
         .await
         .map_err(|_| "mount did not answer")??;
@@ -452,7 +527,7 @@ impl GoTo {
     }
     async fn prepare(
         &self,
-        target: &Target,
+        target: Option<&Target>,
         client: &mut MountClient,
         anchor: bool,
     ) -> Result<(Plan, [proto::AxisInfo; 2]), String> {
@@ -492,16 +567,18 @@ impl GoTo {
         if sun_horizontal(site.lat_deg, site.lon_deg, now).0 >= -0.83 {
             return Err("Sun is up".into());
         }
-        let name = target.messier.as_ref().unwrap_or(&target.id);
-        match crate::pushto::class(target, Some(site), view.min_alt_deg, now) {
-            crate::pushto::Class::Pointable => {}
-            crate::pushto::Class::BelowHorizon => {
-                return Err(format!("{name} is below the horizon"))
+        if let Some(target) = target {
+            let name = target.messier.as_ref().unwrap_or(&target.id);
+            match crate::pushto::class(target, Some(site), view.min_alt_deg, now) {
+                crate::pushto::Class::Pointable => {}
+                crate::pushto::Class::BelowHorizon => {
+                    return Err(format!("{name} is below the horizon"))
+                }
+                crate::pushto::Class::TooLow => {
+                    return Err(format!("{name} is below the minimum altitude"))
+                }
+                _ => return Err(format!("{name} is not pointable: Sun guard")),
             }
-            crate::pushto::Class::TooLow => {
-                return Err(format!("{name} is below the minimum altitude"))
-            }
-            _ => return Err(format!("{name} is not pointable: Sun guard")),
         }
         let mut current = [0; 2];
         for (i, axis) in AXES.into_iter().enumerate() {
@@ -539,7 +616,11 @@ impl GoTo {
             start: now,
             min_alt: view.min_alt_deg,
         };
-        Ok((planner.plan(target)?, axes))
+        let plan = match target {
+            Some(target) => planner.plan(target)?,
+            None => planner.second_sync()?,
+        };
+        Ok((plan, axes))
     }
     fn update(
         &self,
@@ -600,7 +681,7 @@ impl GoTo {
     }
     async fn run(
         self: Arc<Self>,
-        target: Target,
+        target: Option<Target>,
         mut client: MountClient,
         plan: Plan,
         generation: u64,
@@ -609,7 +690,7 @@ impl GoTo {
         let result = tokio::select! {
             biased;
             reason = self.guard(generation) => Err((true, reason)),
-            result = self.motion(&target, &mut movement, plan, generation) => result.map_err(|reason| (false, reason)),
+            result = self.motion(target.as_ref(), &mut movement, plan, generation) => result.map_err(|reason| (false, reason)),
         };
         if let Err((halted, reason)) = result {
             let _ = tokio::time::timeout(Duration::from_millis(200), client.stop_all()).await;
@@ -629,7 +710,7 @@ impl GoTo {
     }
     async fn motion(
         &self,
-        target: &Target,
+        target: Option<&Target>,
         client: &mut MountClient,
         mut plan: Plan,
         generation: u64,
@@ -693,22 +774,35 @@ impl GoTo {
                         if pointing.frame_id != Some(report.frame_id) {
                             continue;
                         }
-                        return Ok(separation(
-                            pointing.ra_deg,
-                            pointing.dec_deg,
-                            target.ra_deg,
-                            target.dec_deg,
-                        ) * 3600.0);
+                        if let Some(target) = target {
+                            return Ok(Some(
+                                separation(
+                                    pointing.ra_deg,
+                                    pointing.dec_deg,
+                                    target.ra_deg,
+                                    target.dec_deg,
+                                ) * 3600.0,
+                            ));
+                        }
+                        // A solve alone is insufficient: second sync completes
+                        // only when the live loop actually accepted its sync.
+                        if self
+                            .session
+                            .model(report.time)
+                            .syncs
+                            .iter()
+                            .any(|s| s.time == report.time)
+                        {
+                            return Ok(None);
+                        }
                     }
                 }
             };
-            error = Some(
-                tokio::time::timeout(Duration::from_secs(30), solve)
-                    .await
-                    .map_err(|_| "no frame solved after settling")??,
-            );
+            error = tokio::time::timeout(Duration::from_secs(30), solve)
+                .await
+                .map_err(|_| "no frame solved after settling")??;
             self.update(generation, "solving", correction, error, None);
-            if error.unwrap() < 60.0 {
+            if target.is_none() || error.is_some_and(|e| e < 60.0) {
                 self.update(generation, "done", correction, error, None);
                 return Ok(());
             }

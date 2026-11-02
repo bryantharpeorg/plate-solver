@@ -112,13 +112,15 @@ The page uses the API types in `web/src/api.ts`, which mirror the Rust structs i
 | `PUT /api/session` | JSON partial edit: `{site?, min_alt_deg?, target?}`. Answers the updated observing session. |
 | `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
 | `POST /api/stop` | No body. Always 200, commanding both axes to stop, from any origin. |
+| `POST /api/model/second-sync` | No body. Start the second sync; 200 with `{"started":true}`, or 409 with a JSON `error` naming the refusal. Same-origin writes only. |
+| `POST /api/model/reset` | JSON `{"what":"night"}` or `{"what":"fixed"}`. Reset that part of the pointing model and return the session. Same-origin writes only. |
 
 All phones and laptops connected to the console read and edit the same observing session.
 A fresh session has no site, target or latest pointing, and a minimum altitude of 15°.
 `time` is the console's clock in Unix seconds. The binary uses the system clock except
 under `--simulate`, whose virtual clock runs at the real rate.
 
-Writes to `PUT /api/session` and `POST /api/solve` follow the same-origin rule. When
+Session edits, solves, GoTo and model writes follow the same-origin rule. When
 a request carries an `Origin`, its scheme, host and port must match the request's own
 origin. Its `Host` must also be an IP literal, `localhost`, or an explicitly allowed DNS
 name. A different origin or an unlisted DNS name answers 403 with a JSON `error` and
@@ -311,3 +313,19 @@ The final error is in arcseconds. Stop reports the observer; heartbeat silence o
 one second reports a lost link; sunrise reports the Sun guard. Every halt stops
 both axes and cancels further motion. Stop remains available while planning,
 solving or another request is pending.
+
+After the first sync, the second-sync route chooses the nearest pointable spot
+in turn and tilt at least 90° in azimuth from every sync of the night, allowing
+for the initial model's uncertainty before the base tilt is fitted. It uses the
+same Sun guard, cable-wind and approach checks as GoTo, waits for a settled solve
+and takes the sync, with no correction slews. It leaves the selected target
+unchanged and reports progress through the same `goto` session field. Stop also
+halts a second sync. No suitable spot, missing sync, site or mount, a moving mount,
+or an operation already running answers 409 with a JSON `error` before movement.
+
+Resetting `night` clears the night's syncs, zero points and base tilt, retaining
+the fixed terms. Resetting `fixed` clears those hardware terms, retaining the
+night's model. Resets are persisted across restarts and command no motion.
+Invalid reset bodies answer 400 with a JSON `error`; a missing JSON content type
+answers 415. A foreign Origin on either model route answers 403 with a JSON
+`error`, leaving both the model and axes unchanged.

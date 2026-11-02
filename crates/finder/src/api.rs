@@ -1,4 +1,15 @@
 //! The HTTP surface: the JSON API and the embedded page.
+//!
+//! `POST /api/model/second-sync` takes no body and starts a guarded slew to the
+//! nearest pointable spot at least 90° in azimuth from every nightly sync. It
+//! settles, solves and takes a sync without corrections or changing the target.
+//! Answers 200 with `{"started":true}`, or 409 with a JSON `error` on refusal.
+//!
+//! `POST /api/model/reset` accepts exactly `{"what":"night"}` or
+//! `{"what":"fixed"}` and returns the session. The night reset clears syncs,
+//! zero points and base tilt, retaining fixed terms; the fixed reset clears only
+//! those hardware terms. Both routes enforce the console's same-origin rule:
+//! a foreign Origin answers 403 with a JSON `error` before any model or axis change.
 
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -310,6 +321,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/session", get(get_session).put(put_session))
         .route("/api/goto", post(start_goto))
         .route("/api/stop", post(stop_mount))
+        .route("/api/model/second-sync", post(second_sync))
+        .route("/api/model/reset", post(reset_model))
         .route("/api/aim", post(set_aim).delete(reset_aim))
         .route("/api/live", get(live_stream))
         .route("/api/live/preview.jpg", get(live_preview))
@@ -447,6 +460,54 @@ async fn start_goto(
         .await
         .map_err(|reason| ApiError::new(StatusCode::CONFLICT, reason))?;
     Ok(Json(serde_json::json!({"started": true})))
+}
+async fn second_sync(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let goto = state
+        .goto
+        .as_ref()
+        .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "no mount is connected"))?;
+    goto.second_sync()
+        .await
+        .map_err(|reason| ApiError::new(StatusCode::CONFLICT, reason))?;
+    Ok(Json(serde_json::json!({"started": true})))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum ModelPart {
+    Night,
+    Fixed,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ModelReset {
+    what: ModelPart,
+}
+
+async fn reset_model(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    reset: Result<Json<ModelReset>, JsonRejection>,
+) -> Result<Json<SessionView>, ApiError> {
+    let Json(reset) = reset.map_err(|error| {
+        ApiError::new(
+            if error.status() == StatusCode::UNPROCESSABLE_ENTITY {
+                StatusCode::BAD_REQUEST
+            } else {
+                error.status()
+            },
+            error.body_text(),
+        )
+    })?;
+    state
+        .session
+        .reset_model(matches!(reset.what, ModelPart::Fixed), state.clock.now())
+        .map(Json)
+        .map_err(session_error)
 }
 // Intentionally no SessionWrite and no body extractor: stopping is accepted
 // from every origin, even while another route is waiting on a solve.
