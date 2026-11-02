@@ -4,7 +4,7 @@ use std::fmt;
 use std::fs::{self, OpenOptions};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use crate::link::{self, LinkStatus, OutOfRange};
 use scope_link::proto::CameraInfo;
@@ -13,7 +13,7 @@ use tokio::sync::watch;
 
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::model::{Model, ModelView, Sync as ModelSync};
+use crate::model::{Backlash, Model, ModelView, Sync as ModelSync};
 use crate::pushto::{self, Guidance};
 use crate::sky::{self, Frame, Observer};
 use crate::targets::{self, Target};
@@ -372,6 +372,9 @@ pub struct MountView {
 /// One consistent read of the observing session and its console time.
 #[derive(Debug, Serialize)]
 pub struct SessionView {
+    /// Measured mount backlash, absent until at least one axis is measured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backlash: Option<Backlash>,
     /// Nightly pointing model, or retained fixed terms.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<ModelView>,
@@ -407,6 +410,7 @@ pub struct SessionView {
 
 #[derive(Clone)]
 struct Values {
+    backlash: Option<Backlash>,
     model: Model,
     mount: Option<MountView>,
     counts_per_revolution: Option<[u32; 2]>,
@@ -426,6 +430,7 @@ struct Values {
 impl Default for Values {
     fn default() -> Self {
         Self {
+            backlash: None,
             model: Model::default(),
             mount: None,
             counts_per_revolution: None,
@@ -447,6 +452,7 @@ impl Default for Values {
 impl Values {
     fn view(&self, time: f64) -> SessionView {
         SessionView {
+            backlash: self.backlash,
             model: self.model.view(),
             mount: self.mount.clone(),
             site: self.site,
@@ -501,7 +507,7 @@ impl Values {
 
 /// One shared observing session. By default it lives entirely in memory.
 pub struct Session {
-    values: Mutex<Values>,
+    values: Arc<Mutex<Values>>,
     state_file: Option<PathBuf>,
     changes: watch::Sender<LinkConfig>,
 }
@@ -537,8 +543,29 @@ impl std::error::Error for SessionError {}
 impl Session {
     fn from_values(values: Values, state_file: Option<PathBuf>) -> Self {
         let changes = watch::channel(values.link_config()).0;
+        values
+            .model
+            .motion
+            .restore(values.backlash.unwrap_or_default());
+        let motion = values.model.motion.clone();
+        let values = Arc::new(Mutex::new(values));
+        let weak = Arc::downgrade(&values);
+        let path = state_file.clone();
+        motion.persist_with(Arc::new(move |backlash| {
+            let Some(values) = weak.upgrade() else {
+                return Ok(());
+            };
+            let mut values = values.lock().expect("observing session");
+            let mut next = values.clone();
+            next.backlash = backlash.present();
+            if let Some(path) = &path {
+                write_state(path, &next).map_err(|e| format!("could not persist backlash: {e}"))?;
+            }
+            *values = next;
+            Ok(())
+        }));
         Self {
-            values: Mutex::new(values),
+            values,
             state_file,
             changes,
         }
@@ -641,6 +668,24 @@ impl Session {
         let (Some(site), Some(counts)) = (site, counts) else {
             return Ok(false);
         };
+        // Tracking owns reversal direction, including fast take-up exposures.
+        // A later GoTo approaches from below: observing that positive approach
+        // restores its side of the gears, retained through the following stop.
+        // A frame alone cannot identify an intermediate slew as a reversal.
+        if let (Some(start), Some(end)) = (&frame.axis_start, &frame.axis_end) {
+            let model = self.values.lock().expect("observing session").model.clone();
+            for (i, delta) in [
+                f64::from(end.azimuth) - f64::from(start.azimuth),
+                f64::from(end.altitude) - f64::from(start.altitude),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                if delta > 0.0 {
+                    model.motion.moving(i, delta);
+                }
+            }
+        }
         let observer = Observer {
             lat: site.lat_deg,
             lon: site.lon_deg,
@@ -659,6 +704,7 @@ impl Session {
         next.model.expire(time);
         if fixed {
             next.model.reset_fixed();
+            next.backlash = None;
         } else {
             next.model.reset_night();
         }
@@ -666,6 +712,9 @@ impl Session {
             write_state(path, &next).map_err(SessionError::Storage)?;
         }
         *values = next;
+        if fixed {
+            values.model.motion.restore(Backlash::default());
+        }
         Ok(values.view(time))
     }
 
@@ -938,6 +987,8 @@ fn validate_address(address: &str) -> Result<(), SessionError> {
 #[serde(deny_unknown_fields)]
 struct StoredSession {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    backlash: Option<Backlash>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     model: Option<Model>,
     site: Option<Site>,
     min_alt_deg: f64,
@@ -954,6 +1005,17 @@ fn read_state(path: &Path) -> io::Result<Values> {
     let bytes = fs::read(path)?;
     let stored: StoredSession = serde_json::from_slice(&bytes)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid session state JSON"))?;
+    if stored.backlash.is_some_and(|b| {
+        [b.alt_deg, b.az_deg]
+            .into_iter()
+            .flatten()
+            .any(|v| !v.is_finite() || v < 0.0)
+    }) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "invalid mount backlash",
+        ));
+    }
     let aim = stored.aim;
     if let Some(aim) = aim {
         aim.validate()
@@ -978,6 +1040,7 @@ fn read_state(path: &Path) -> io::Result<Values> {
         })
         .map(|mut values| {
             values.aim = aim;
+            values.backlash = stored.backlash.and_then(Backlash::present);
             values.model = stored.model.unwrap_or_default();
             values
         })
@@ -1009,6 +1072,7 @@ fn write_state(path: &Path, values: &Values) -> io::Result<()> {
     serde_json::to_writer(
         &file,
         &StoredSession {
+            backlash: values.backlash,
             model: (values.model.view().is_some()).then(|| values.model.clone()),
             site: values.site,
             min_alt_deg: values.min_alt_deg,

@@ -20,7 +20,7 @@ use std::{
 use tokio::{
     sync::{watch, Mutex as AsyncMutex},
     task::JoinHandle,
-    time::{interval, timeout, MissedTickBehavior},
+    time::{interval, sleep, timeout, MissedTickBehavior},
 };
 
 const TICK: Duration = Duration::from_millis(50);
@@ -30,6 +30,14 @@ const AXES: [Axis; 2] = [Axis::Azimuth, Axis::Altitude];
 const PROPORTIONAL_GAIN: f64 = 0.6;
 const INTEGRAL_TIME_S: f64 = 60.0;
 const DEADBAND_ARCSEC: f64 = 10.0;
+const FORECAST_S: f64 = 30.0 * 60.0;
+const TAKEUP_RATE: f64 = 0.5;
+
+struct Measurement {
+    baseline_deg: f64,
+    saw_error: bool,
+    settled_since: Option<f64>,
+}
 // Five per cent of 360 degrees per mean sidereal day (Meeus ch. 12).
 const OFFSET_LIMIT: f64 = 0.05 * 360.985_647_366_29 * 3600.0 / 86_400.0;
 
@@ -77,6 +85,8 @@ struct Control {
     previous_pointing: Option<f64>,
     proportional: [f64; 2],
     proportional_until: f64,
+    measurement: [Option<Measurement>; 2],
+    encoder_residual_deg: [f64; 2],
 }
 
 struct Shared {
@@ -211,6 +221,7 @@ impl Tracker {
             previous_pointing,
             proportional,
             proportional_until,
+            ..
         } = &mut *control;
         if state.state == "off" || !east_arcsec.is_finite() || !north_arcsec.is_finite() {
             return;
@@ -246,6 +257,8 @@ impl Tracker {
             east_arcsec,
             north_arcsec,
         });
+        drop(control);
+        self.shared.settle(time, east_arcsec, north_arcsec);
     }
 }
 
@@ -260,6 +273,11 @@ impl Shared {
         }
         control.proportional = [0.0; 2];
         control.previous_pointing = None;
+        for i in 0..2 {
+            if control.measurement[i].take().is_some() {
+                self.model.motion.crossing(i, false);
+            }
+        }
         self.cancel
             .send_modify(|generation| *generation = generation.wrapping_add(1));
     }
@@ -321,7 +339,16 @@ impl Shared {
     }
 
     fn rates(&self, target: &Target, counts: [u32; 2]) -> Result<[f64; 2], String> {
-        let now = self.clock.now();
+        self.rates_at(target, counts, self.clock.now())
+    }
+
+    fn positions(&self, target: &Target, counts: [u32; 2], time: f64) -> Option<[f64; 2]> {
+        let (alt, az) = self.place(target, time);
+        self.model
+            .inverse(az, ephemeris::apparent_from_true(alt), counts)
+    }
+
+    fn rates_at(&self, target: &Target, counts: [u32; 2], now: f64) -> Result<[f64; 2], String> {
         let positions = [now, now + 1.0].map(|time| {
             let (alt, az) = self.place(target, time);
             self.model
@@ -340,6 +367,107 @@ impl Shared {
                 delta
             }
         }))
+    }
+
+    // Locate each sign change in model space, including all fixed terms. The
+    // 30-minute window is sampled each minute then bisected to 50 ms; forecasts
+    // are cached between refreshes, keeping long paused-time runs inexpensive.
+    fn reversal(&self, target: &Target, counts: [u32; 2], axis: usize) -> Option<f64> {
+        let now = self.clock.now();
+        let initial = self.rates_at(target, counts, now).ok()?[axis];
+        let mut lo = now;
+        for step in 1..=30 {
+            let hi = now + f64::from(step) * FORECAST_S / 30.0;
+            if self.rates_at(target, counts, hi).ok()?[axis] * initial <= 0.0 {
+                let mut hi = hi;
+                while hi - lo > TICK.as_secs_f64() {
+                    let mid = (lo + hi) / 2.0;
+                    if self.rates_at(target, counts, mid).ok()?[axis] * initial > 0.0 {
+                        lo = mid;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                return Some((lo + hi) / 2.0);
+            }
+            lo = hi;
+        }
+        None
+    }
+
+    fn settle(&self, time: f64, east: f64, north: f64) {
+        let mut measured = [None; 2];
+        {
+            let mut control = self.control.lock().unwrap();
+            let Some(target) = control.state.target.as_ref() else {
+                return;
+            };
+            let errors = self.axis_error(target, time, east, north);
+            for i in 0..2 {
+                let residual = control.encoder_residual_deg[i];
+                let Some(m) = &mut control.measurement[i] else {
+                    continue;
+                };
+                m.saw_error |= errors[i].abs() >= DEADBAND_ARCSEC;
+                if m.saw_error && errors[i].abs() < DEADBAND_ARCSEC {
+                    let since = *m.settled_since.get_or_insert(time);
+                    if time - since >= 10.0 {
+                        // Encoder drive minus the inverse model's feed-forward
+                        // travel, removing the remaining solved error. This is
+                        // the settled optical/count shift across the dead band,
+                        // equivalent to integrating drive added by the PI loop.
+                        measured[i] = Some((residual - m.baseline_deg - errors[i] / 3600.0).abs());
+                        control.measurement[i] = None;
+                    }
+                } else {
+                    m.settled_since = None;
+                }
+            }
+        }
+        for (i, degrees) in measured.into_iter().enumerate() {
+            if let Some(degrees) = degrees {
+                if let Err(reason) = self.model.motion.measured(i, degrees) {
+                    self.end(reason);
+                    return;
+                }
+                self.model.motion.crossing(i, false);
+            }
+        }
+    }
+
+    async fn stop_axis(client: &mut MountClient, axis: Axis) -> Result<(), String> {
+        client.rate_axis(axis, 0.0).await.map_err(|_| "link_lost")?;
+        loop {
+            let state = client.axis_state(axis).await.map_err(|_| "link_lost")?;
+            if !state.moving {
+                return Ok(());
+            }
+            sleep(TICK).await;
+        }
+    }
+
+    async fn take_up(
+        &self,
+        client: &mut MountClient,
+        i: usize,
+        direction: f64,
+        degrees: f64,
+    ) -> Result<(), String> {
+        self.model.motion.moving(i, direction);
+        self.model.motion.crossing(i, true);
+        Self::stop_axis(client, AXES[i]).await?;
+        client
+            .rate_axis(AXES[i], direction * TAKEUP_RATE)
+            .await
+            .map_err(|_| "link_lost")?;
+        // Acceleration and braking have equal areas about this rectangular
+        // pulse. Wait for rest before resuming feed-forward; never interleave
+        // the one-second rate refresh with the take-up pulse.
+        sleep(Duration::from_secs_f64(degrees / TAKEUP_RATE)).await;
+        Self::stop_axis(client, AXES[i]).await?;
+        self.model.motion.moving(i, direction);
+        self.model.motion.crossing(i, false);
+        Ok(())
     }
 
     async fn guard(&self, target: &Target, generation: u64) -> String {
@@ -368,12 +496,93 @@ impl Shared {
         let rates = async {
             let mut second = interval(SECOND);
             second.set_missed_tick_behavior(MissedTickBehavior::Skip);
+            let mut direction = [0.0_f64; 2];
+            let mut forecast = [None; 2];
+            let mut prepared = [false; 2];
+            let mut refresh_at = 0.0;
             loop {
                 second.tick().await;
+                let now = self.clock.now();
+                if now >= refresh_at {
+                    forecast = [0, 1].map(|i| self.reversal(&target, counts, i));
+                    refresh_at = now + 60.0;
+                }
                 let rates = match self.rates(&target, counts) {
                     Ok(rates) => rates,
                     Err(reason) => return reason,
                 };
+                for i in 0..2 {
+                    let next = if rates[i] == 0.0 {
+                        direction[i]
+                    } else {
+                        rates[i].signum()
+                    };
+                    if next == 0.0 {
+                        continue;
+                    }
+                    let backlash = self.model.motion.backlash().axis(i);
+                    let approaching = backlash.is_some_and(|b| {
+                        forecast[i].is_some_and(|t| t >= now && t - now <= b / TAKEUP_RATE + 1.0)
+                    });
+                    let initial_opposite = direction[i] == 0.0 && next < 0.0;
+                    if prepared[i] && next == direction[i] {
+                        prepared[i] = false;
+                    }
+                    if !prepared[i]
+                        && (approaching
+                            || initial_opposite
+                            || (direction[i] != 0.0 && direction[i] != next))
+                    {
+                        if let Some(b) = backlash {
+                            let new_direction = if approaching { -next } else { next };
+                            if direction[i] != new_direction {
+                                if let Err(reason) =
+                                    self.take_up(&mut movement, i, new_direction, b).await
+                                {
+                                    return reason;
+                                }
+                                direction[i] = new_direction;
+                                prepared[i] = approaching;
+                                forecast[i] = None;
+                            }
+                        } else {
+                            if let Err(reason) = Self::stop_axis(&mut movement, AXES[i]).await {
+                                return reason;
+                            }
+                            let state = match movement.axis_state(AXES[i]).await {
+                                Ok(s) => s,
+                                Err(_) => return "link_lost".into(),
+                            };
+                            let expected =
+                                self.positions(&target, counts, self.clock.now()).unwrap();
+                            self.control.lock().unwrap().measurement[i] = Some(Measurement {
+                                baseline_deg: (f64::from(state.position) - expected[i]) * 360.0
+                                    / f64::from(counts[i]),
+                                saw_error: false,
+                                settled_since: None,
+                            });
+                            self.model.motion.crossing(i, true);
+                            direction[i] = next;
+                        }
+                    }
+                    if direction[i] == 0.0 {
+                        direction[i] = next;
+                    }
+                }
+                // Read counts at the same model time as the rates. Pointings
+                // use this residual only to measure a settled dead band.
+                for i in 0..2 {
+                    if self.control.lock().unwrap().measurement[i].is_some() {
+                        let state = match movement.axis_state(AXES[i]).await {
+                            Ok(s) => s,
+                            Err(_) => return "link_lost".into(),
+                        };
+                        let expected = self.positions(&target, counts, self.clock.now()).unwrap();
+                        self.control.lock().unwrap().encoder_residual_deg[i] =
+                            (f64::from(state.position) - expected[i]) * 360.0
+                                / f64::from(counts[i]);
+                    }
+                }
                 let correction = {
                     let control = self.control.lock().unwrap();
                     [0, 1].map(|i| {
@@ -386,7 +595,16 @@ impl Shared {
                     })
                 };
                 for (i, axis) in AXES.into_iter().enumerate() {
-                    let rate = rates[i] + correction[i];
+                    // Do not unload a gear on PI noise near a turning point,
+                    // or undo a forecast take-up before the sign actually turns.
+                    let requested = rates[i] + correction[i];
+                    let rate =
+                        if rates[i].signum() != direction[i] || requested * direction[i] < 0.0 {
+                            0.0
+                        } else {
+                            requested
+                        };
+                    self.model.motion.moving(i, rate);
                     if movement.rate_axis(axis, rate).await.is_err() {
                         return "link_lost".into();
                     }

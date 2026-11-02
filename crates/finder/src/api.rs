@@ -5,9 +5,12 @@
 //! settles, solves and takes a sync without corrections or changing the target.
 //! Answers 200 with `{"started":true}`, or 409 with a JSON `error` on refusal.
 //!
+//! `GET /api/session` includes `backlash: {alt_deg?, az_deg?}` once measured.
+//! It survives nights and restarts; resetting fixed terms clears it.
+//!
 //! `POST /api/model/reset` accepts exactly `{"what":"night"}` or
 //! `{"what":"fixed"}` and returns the session. The night reset clears syncs,
-//! zero points and base tilt, retaining fixed terms; the fixed reset clears only
+//! zero points and base tilt, retaining fixed terms; the fixed reset clears backlash and
 //! those hardware terms. Both routes enforce the console's same-origin rule:
 //! a foreign Origin answers 403 with a JSON `error` before any model or axis change.
 

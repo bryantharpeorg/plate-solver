@@ -10,7 +10,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, };
+use std::time::Duration;
 
 use serde_json::Value;
 
@@ -49,8 +49,15 @@ impl Server {
             .arg(repo.join("reference-solutions/cedar-solve/tetra3/data/default_database.npz"))
             .arg("--samples")
             .arg(repo.join("reference-solutions/cedar-solve/examples/data/medium_fov"))
-            .args(["--listen", "127.0.0.1:0", "--simulate", "--sim-start", "2026-01-17T02:00:00Z"])
-            .arg("--state").arg(&folder.0)
+            .args([
+                "--listen",
+                "127.0.0.1:0",
+                "--simulate",
+                "--sim-start",
+                "2026-01-17T02:00:00Z",
+            ])
+            .arg("--state")
+            .arg(&folder.0)
             .env("TOKIO_WORKER_THREADS", "2")
             .env_remove("XDG_STATE_HOME")
             .env("HOME", &folder.0)
@@ -116,12 +123,25 @@ async fn measured_altitude_backlash_survives_two_next_day_binary_restarts_exactl
     let session = finder::session::Session::with_state_file(folder.0.join("session.json")).unwrap();
     let rig = backlash_sim::measured(session).await;
     let measured = rig.body().await["backlash"]["alt_deg"].as_f64().unwrap();
-    assert!((measured-0.3).abs()*3600.0 <= 30.0);
+    assert!((measured - 0.3).abs() * 3600.0 <= 30.0);
+    let stored: Value =
+        serde_json::from_slice(&std::fs::read(folder.0.join("session.json")).unwrap()).unwrap();
+    assert_eq!(stored["backlash"]["alt_deg"].as_f64(), Some(measured));
+    assert!(
+        stored.get("model").is_none(),
+        "backlash is durable even without a persisted model view"
+    );
+    assert!(stored["backlash"].get("az_deg").is_none());
+    rig.session.reset_model(false, rig.now()).unwrap();
+    assert_eq!(
+        rig.body().await["backlash"]["alt_deg"].as_f64(),
+        Some(measured)
+    );
     drop(rig);
     for _ in 0..2 {
         let server = Server::start(&folder);
         let body = server.request(None);
         assert!(body["time"].as_f64().unwrap() >= 1_768_615_200.0);
-        assert_eq!(body["backlash"]["alt_deg"].as_f64(),Some(measured));
+        assert_eq!(body["backlash"]["alt_deg"].as_f64(), Some(measured));
     }
 }
