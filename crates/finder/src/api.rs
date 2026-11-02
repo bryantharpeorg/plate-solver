@@ -58,6 +58,7 @@ pub struct AppState {
     allowed_hosts: Arc<Vec<String>>,
     link: Option<Arc<LinkManager>>,
     live: Option<Arc<Live>>,
+    mount_monitor: Option<Arc<crate::live::MountMonitor>>,
     simulation: Option<Arc<Simulation>>,
 }
 
@@ -80,6 +81,7 @@ impl AppState {
             allowed_hosts: Arc::new(Vec::new()),
             link: None,
             live: None,
+            mount_monitor: None,
             simulation: None,
         }
     }
@@ -121,6 +123,10 @@ impl AppState {
         );
         self.clock = simulation.clock.clone();
         self.link = Some(simulation.link.clone());
+        self.mount_monitor = Some(Arc::new(crate::live::MountMonitor::start(
+            simulation.link.clone(),
+            self.session.clone(),
+        )));
         self.simulation = Some(simulation);
         Ok(self)
     }
@@ -137,6 +143,10 @@ impl AppState {
             self.session.clone(),
             self.clock.clone(),
             transport,
+        )));
+        self.mount_monitor = Some(Arc::new(crate::live::MountMonitor::start(
+            self.link.as_ref().unwrap().clone(),
+            self.session.clone(),
         )));
         self
     }

@@ -63,3 +63,6 @@ pub mod stars;
 pub mod targets;
 
 pub use api::{router, AppState};
+
+/// Pointing model fitted from scope-node syncs.
+pub mod model;

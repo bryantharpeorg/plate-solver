@@ -13,6 +13,7 @@ use tokio::sync::watch;
 
 use serde::{Deserialize, Deserializer, Serialize};
 
+use crate::model::{Model, ModelView, Sync as ModelSync};
 use crate::pushto::{self, Guidance};
 use crate::sky::{self, Frame, Observer};
 use crate::targets::{self, Target};
@@ -355,9 +356,28 @@ impl Pointing {
     }
 }
 
+/// Mount telemetry, omitted until a node describes two axes.
+#[derive(Debug, Clone, Serialize)]
+pub struct MountView {
+    /// Connected scope link and responding mount.
+    pub connected: bool,
+    /// Board identity, when the mount protocol reports it.
+    pub board: Option<String>,
+    /// Firmware version, when reported by the mount protocol.
+    pub firmware: Option<String>,
+    /// Either axis is moving.
+    pub moving: bool,
+}
+
 /// One consistent read of the observing session and its console time.
 #[derive(Debug, Serialize)]
 pub struct SessionView {
+    /// Nightly pointing model, or retained fixed terms.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<ModelView>,
+    /// Connected mount telemetry, absent before a mount is described.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mount: Option<MountView>,
     /// The telescope's site, if set.
     pub site: Option<Site>,
     /// The minimum altitude in degrees.
@@ -387,6 +407,9 @@ pub struct SessionView {
 
 #[derive(Clone)]
 struct Values {
+    model: Model,
+    mount: Option<MountView>,
+    counts_per_revolution: Option<[u32; 2]>,
     site: Option<Site>,
     min_alt_deg: f64,
     target: Option<&'static Target>,
@@ -403,6 +426,9 @@ struct Values {
 impl Default for Values {
     fn default() -> Self {
         Self {
+            model: Model::default(),
+            mount: None,
+            counts_per_revolution: None,
             site: None,
             min_alt_deg: 15.0,
             target: None,
@@ -421,6 +447,8 @@ impl Default for Values {
 impl Values {
     fn view(&self, time: f64) -> SessionView {
         SessionView {
+            model: self.model.view(),
+            mount: self.mount.clone(),
             site: self.site,
             min_alt_deg: self.min_alt_deg,
             target: self.target,
@@ -524,7 +552,121 @@ impl Session {
 
     /// Read all session fields together, using time from the application's clock.
     pub fn snapshot(&self, time: f64) -> SessionView {
-        self.values.lock().expect("observing session").view(time)
+        let mut values = self.values.lock().expect("observing session");
+        if values.model.expire(time) {
+            if let Some(path) = &self.state_file {
+                if let Err(error) = write_state(path, &values) {
+                    eprintln!("could not persist expired pointing model: {error}");
+                }
+            }
+        }
+        values.view(time)
+    }
+
+    /// Read the nightly fit, applying solar-noon expiry with the supplied clock.
+    pub fn model(&self, time: f64) -> Model {
+        self.snapshot(time);
+        self.values.lock().expect("observing session").model.clone()
+    }
+
+    pub(crate) fn set_mount(&self, counts: Option<[u32; 2]>, connected: bool, moving: bool) {
+        let mut values = self.values.lock().expect("observing session");
+        values.counts_per_revolution = counts.filter(|_| connected);
+        if counts.is_some() {
+            values.mount = Some(MountView {
+                connected,
+                moving,
+                board: None,
+                firmware: None,
+            });
+        } else if let Some(mount) = &mut values.mount {
+            mount.connected = false;
+            mount.moving = false;
+        }
+    }
+
+    /// Persist a qualified sync, starting this night's expiry at the next solar
+    /// upper transit. Writes are atomic and a failed write leaves the fit intact.
+    pub fn record_sync(&self, sync: ModelSync) -> Result<bool, SessionError> {
+        let mut values = self.values.lock().expect("observing session");
+        let Some(site) = values.site else {
+            return Ok(false);
+        };
+        let mut next = values.clone();
+        next.model.expire(sync.time);
+        let time = sync.time;
+        if !next.model.add_sync(sync) {
+            return Ok(false);
+        }
+        if next.model.expires_at.is_none() {
+            let mut observer = Observer {
+                lat: site.lat_deg,
+                lon: site.lon_deg,
+                time,
+            };
+            let transit = |observer: &Observer| {
+                let jd = sky::julian_date(observer.time.div_euclid(86_400.0) * 86_400.0);
+                let sun = crate::ephemeris::Position::Daily {
+                    epoch_jd: jd,
+                    coordinates: [-1.0, 0.0, 1.0].map(|offset| crate::ephemeris::sun(jd + offset)),
+                    delta_t_seconds: 0.0,
+                };
+                crate::ephemeris::on_date(sun, observer, -0.83).transit
+            };
+            let mut noon = transit(&observer);
+            if noon <= time {
+                observer.time += 86_400.0;
+                noon = transit(&observer);
+            }
+            next.model.expires_at = Some(noon);
+        }
+        if let Some(path) = &self.state_file {
+            write_state(path, &next).map_err(SessionError::Storage)?;
+        }
+        *values = next;
+        Ok(true)
+    }
+
+    pub(crate) fn record_frame_sync(
+        &self,
+        frame: &scope_link::proto::StarFrame,
+        solved: Frame,
+        time: f64,
+        rms: f64,
+    ) -> Result<bool, SessionError> {
+        let (aim, site, counts) = {
+            let values = self.values.lock().expect("observing session");
+            (values.aim, values.site, values.counts_per_revolution)
+        };
+        let (Some(site), Some(counts)) = (site, counts) else {
+            return Ok(false);
+        };
+        let observer = Observer {
+            lat: site.lat_deg,
+            lon: site.lon_deg,
+            time,
+        };
+        match ModelSync::from_frame(frame, solved, aim, observer, counts, rms) {
+            Some(sync) => self.record_sync(sync),
+            None => Ok(false),
+        }
+    }
+
+    /// Reset nightly or hardware terms, persisting before committing the change.
+    pub fn reset_model(&self, fixed: bool, time: f64) -> Result<SessionView, SessionError> {
+        let mut values = self.values.lock().expect("observing session");
+        let mut next = values.clone();
+        next.model.expire(time);
+        if fixed {
+            next.model.reset_fixed();
+        } else {
+            next.model.reset_night();
+        }
+        if let Some(path) = &self.state_file {
+            write_state(path, &next).map_err(SessionError::Storage)?;
+        }
+        *values = next;
+        Ok(values.view(time))
     }
 
     /// Record a successful solve and return its sequence. Pointings are never persisted.
@@ -795,6 +937,8 @@ fn validate_address(address: &str) -> Result<(), SessionError> {
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct StoredSession {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    model: Option<Model>,
     site: Option<Site>,
     min_alt_deg: f64,
     target: Option<String>,
@@ -834,6 +978,7 @@ fn read_state(path: &Path) -> io::Result<Values> {
         })
         .map(|mut values| {
             values.aim = aim;
+            values.model = stored.model.unwrap_or_default();
             values
         })
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
@@ -864,6 +1009,7 @@ fn write_state(path: &Path, values: &Values) -> io::Result<()> {
     serde_json::to_writer(
         &file,
         &StoredSession {
+            model: (values.model.view().is_some()).then(|| values.model.clone()),
             site: values.site,
             min_alt_deg: values.min_alt_deg,
             target: values.target.map(|target| target.id.clone()),
