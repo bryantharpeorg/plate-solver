@@ -1,4 +1,4 @@
-//! Feed-forward tracking through the pointing model, with latched safe endings.
+//! Model feed-forward and finder-camera PI tracking, with latched safe endings.
 //!
 //! The caller centres the target before starting. All UTC comes from the console's
 //! injected clock; timers and heartbeat ages use tokio's (pausable) clock.
@@ -27,6 +27,17 @@ const TICK: Duration = Duration::from_millis(50);
 const SECOND: Duration = Duration::from_secs(1);
 const STOP_TIMEOUT: Duration = Duration::from_millis(200);
 const AXES: [Axis; 2] = [Axis::Azimuth, Axis::Altitude];
+const PROPORTIONAL_GAIN: f64 = 0.6;
+const INTEGRAL_TIME_S: f64 = 60.0;
+const DEADBAND_ARCSEC: f64 = 10.0;
+const MAX_OFFSET_ARCSEC_PER_S: f64 = 0.05 * 15.041;
+const MAX_POINTING_INTERVAL_S: f64 = 5.0;
+
+#[derive(Default)]
+struct Correction {
+    time: Option<f64>,
+    proportional: [f64; 2],
+}
 
 /// Error of the aim point relative to the target, in the equatorial tangent plane.
 #[derive(Debug, Clone, Copy)]
@@ -73,6 +84,8 @@ struct Shared {
     site: Site,
     min_alt_deg: f64,
     state: Mutex<State>,
+    // Always locked after state, so a pointing cannot revive an ended run.
+    correction: Mutex<Correction>,
     cancel: watch::Sender<u64>,
 }
 
@@ -108,6 +121,7 @@ impl Tracker {
                 site,
                 min_alt_deg,
                 state: Mutex::new(State::default()),
+                correction: Mutex::new(Correction::default()),
                 cancel: watch::channel(0).0,
             }),
             task: AsyncMutex::new(None),
@@ -151,6 +165,7 @@ impl Tracker {
                 target: Some(target.clone()),
                 ..State::default()
             };
+            *self.shared.correction.lock().unwrap() = Correction::default();
         }
         let shared = self.shared.clone();
         *task = Some(tokio::spawn(async move {
@@ -184,8 +199,12 @@ impl Tracker {
     }
 
     /// Feed a live solve's aim-point error (or simulator truth plus noise).
-    /// US3 records the readout samples; the closed-loop extension uses this same
-    /// entry point to resolve the error into axis rate corrections.
+    /// Errors are aim minus target, east and north in the J2000 tangent plane,
+    /// in arcseconds. Supply at least one pointing every five seconds. The
+    /// measured interval sets the duration of the proportional correction;
+    /// the integral is a separate rate offset, never a model zero point.
+    /// The first pointing establishes the integral's clock and uses a one-second
+    /// proportional interval; only subsequent pointings accumulate the integral.
     pub fn pointing(&self, east_arcsec: f64, north_arcsec: f64) {
         let mut state = self.shared.state.lock().unwrap();
         if state.state == "off" || !east_arcsec.is_finite() || !north_arcsec.is_finite() {
@@ -198,6 +217,33 @@ impl Tracker {
             east_arcsec,
             north_arcsec,
         });
+        let mut correction = self.shared.correction.lock().unwrap();
+        let integrate = correction.time.is_some();
+        let dt = time - correction.time.unwrap_or(time - 1.0);
+        if dt <= 0.0 {
+            return;
+        }
+        let dt = dt.clamp(0.5, MAX_POINTING_INTERVAL_S);
+        correction.time = Some(time);
+        correction.proportional = [0.0; 2];
+        // Test the on-sky vector before cos(E) magnifies its azimuth part.
+        // Inside the deadband P is zero and the held integral still applies.
+        if east_arcsec.hypot(north_arcsec) < DEADBAND_ARCSEC {
+            return;
+        }
+        let target = state.target.as_ref().unwrap();
+        let axis_error = self
+            .shared
+            .axis_error(target, time, east_arcsec, north_arcsec);
+        for (i, error) in axis_error.into_iter().enumerate() {
+            // Negative feedback: pointing() reports aim minus target.
+            correction.proportional[i] = -PROPORTIONAL_GAIN * error / dt;
+            if integrate {
+                state.tracking_offset[i] = (state.tracking_offset[i]
+                    - PROPORTIONAL_GAIN * error * dt / INTEGRAL_TIME_S)
+                    .clamp(-MAX_OFFSET_ARCSEC_PER_S, MAX_OFFSET_ARCSEC_PER_S);
+            }
+        }
     }
 }
 
@@ -208,6 +254,7 @@ impl Shared {
             state.state = "off";
             state.ended_reason = Some(reason);
             state.tracking_offset = [0.0; 2];
+            *self.correction.lock().unwrap() = Correction::default();
         }
         self.cancel
             .send_modify(|generation| *generation = generation.wrapping_add(1));
@@ -242,6 +289,36 @@ impl Shared {
             return Some("too_low".into());
         }
         None
+    }
+
+    fn axis_error(&self, target: &Target, time: f64, east: f64, north: f64) -> [f64; 2] {
+        let (alt, az) = self.place(target, time);
+        // Resolve celestial north through the same horizon transform as the
+        // target. Its bearing is the parallactic angle, including precession
+        // of J2000 north. A short north tangent avoids a separate sky model.
+        let step = if target.dec_deg > 0.0 {
+            -0.0001
+        } else {
+            0.0001
+        };
+        let (north_alt, north_az) = sky::alt_az(
+            target.ra_deg,
+            target.dec_deg + step,
+            &Observer {
+                lat: self.site.lat_deg,
+                lon: self.site.lon_deg,
+                time,
+            },
+        );
+        let cos_e = alt.to_radians().cos();
+        let da = (north_az - az + 180.0).rem_euclid(360.0) - 180.0;
+        let q = (da * cos_e / step).atan2((north_alt - alt) / step);
+        let (sin_q, cos_q) = q.sin_cos();
+        // Wallace (2002): cross-elevation / cos(E), then elevation.
+        [
+            (-cos_q * east + sin_q * north) / cos_e,
+            sin_q * east + cos_q * north,
+        ]
     }
 
     fn rates(&self, target: &Target, counts: [u32; 2]) -> Result<[f64; 2], String> {
@@ -297,6 +374,21 @@ impl Shared {
                 let rates = match self.rates(&target, counts) {
                     Ok(rates) => rates,
                     Err(reason) => return reason,
+                };
+                let rates = {
+                    let state = self.state.lock().unwrap();
+                    let correction = self.correction.lock().unwrap();
+                    let fresh = correction
+                        .time
+                        .is_some_and(|time| self.clock.now() - time <= MAX_POINTING_INTERVAL_S);
+                    [0, 1].map(|i| {
+                        let p = if fresh {
+                            correction.proportional[i]
+                        } else {
+                            0.0
+                        };
+                        rates[i] + (p + state.tracking_offset[i]) / 3600.0
+                    })
                 };
                 for (axis, rate) in AXES.into_iter().zip(rates) {
                     if movement.rate_axis(axis, rate).await.is_err() {
