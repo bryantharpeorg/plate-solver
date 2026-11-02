@@ -56,6 +56,7 @@ impl Simulation {
                     lon_deg: site.lon_deg,
                 });
         let simulator = Simulator::new(db, site, clock.0.clone());
+        simulator.connect_mount(simulator::mount::SimMount::new(clock.0.clone()));
         // OS entropy without a new dependency. Nothing persists or reports this token.
         let mut random = [0u8; 32];
         std::fs::File::open("/dev/urandom")?.read_exact(&mut random)?;
@@ -73,7 +74,7 @@ impl Simulation {
                         let (client, server) = tokio::io::duplex(64 * 1024);
                         tokio::spawn(async move {
                             if let Err(error) =
-                                scope_link::memory::serve_on(server, service.into_server()).await
+                                scope_link::memory::serve_routes_on(server, service.routes()).await
                             {
                                 eprintln!("simulator memory transport: {error}");
                             }

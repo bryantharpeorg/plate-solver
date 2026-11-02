@@ -422,3 +422,48 @@ async fn foreign_goto_is_forbidden_without_motion() {
     accepted_control(&rig).await;
     refused(&rig, 403, "origin", true).await;
 }
+
+#[tokio::test(start_paused = true)]
+async fn simulate_startup_connects_the_default_mount_and_serves_motion_and_stop() {
+    let state = AppState::shared(DB.clone(), Samples::default())
+        .with_simulation(START, finder::simulate::SimulationTransport::Memory)
+        .await
+        .unwrap();
+    let sim = state.simulator().unwrap();
+    let mount = sim.mount().expect("simulate mode must connect a mount");
+    // The startup wiring uses US1's default mechanics, not a special test mount.
+    assert_eq!(mount.axes()[0].counts_per_revolution, 1_620_000);
+    sim.push_to(50.0, 120.0);
+    state
+        .session()
+        .edit(
+            serde_json::from_value(json!({
+                "site":{"lat_deg":40,"lon_deg":-75}, "target":"M42",
+                "camera_settings":{"exposure_ms":200,"gain":1}
+            }))
+            .unwrap(),
+            START,
+        )
+        .unwrap();
+    state
+        .session()
+        .set_aim(Some(Aim { x: 700.0, y: 420.0 }), START)
+        .unwrap();
+    let state = state.with_live_solver(Arc::new(Stars));
+    for _ in 0..100 {
+        if !state.session().model(sim.clock().now()).syncs.is_empty() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    assert!(!state.session().model(sim.clock().now()).syncs.is_empty());
+    let mut client = state.link().unwrap().mount().unwrap();
+    assert_eq!(client.describe_mount().await.unwrap().axes.len(), 2);
+    state.goto().unwrap().start().await.unwrap();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(mount.state(Axis::Azimuth).await.moving || mount.state(Axis::Altitude).await.moving);
+    state.goto().unwrap().stop().await;
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    assert!(!mount.state(Axis::Azimuth).await.moving);
+    assert!(!mount.state(Axis::Altitude).await.moving);
+}
