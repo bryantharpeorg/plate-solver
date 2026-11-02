@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import type { ObservingSession } from "../api";
@@ -7,6 +7,8 @@ import recorded from "../test/fixtures/session-track";
 // Oracle: recorded Track states, with telemetry held at rest to exercise the
 // interval before autonomous motion. Exact visibility and bodyless Stop request.
 afterEach(() => {
+  // Unmount while EventSource is still stubbed: cleanup may flush pending effects.
+  cleanup();
   window.history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
 });

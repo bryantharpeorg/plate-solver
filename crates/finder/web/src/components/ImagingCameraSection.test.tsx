@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import type { ObservingSession } from "../api";
@@ -18,6 +18,8 @@ beforeEach(() =>
   ),
 );
 afterEach(() => {
+  // Unmount while EventSource is still stubbed: cleanup may flush pending effects.
+  cleanup();
   window.history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
 });
@@ -39,14 +41,6 @@ function setup(session = recorded.no_camera as ObservingSession) {
 describe("Setup's imaging camera", () => {
   it("PUTs the three camera values and gains the exposure readout on return to guidance", async () => {
     let session = recorded.no_camera as ObservingSession;
-    vi.stubGlobal(
-      "EventSource",
-      class {
-        addEventListener() {}
-        removeEventListener() {}
-        close() {}
-      },
-    );
     const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input) === "/api/session") {
         if (init?.method === "PUT") session = recorded.tracking as ObservingSession;
