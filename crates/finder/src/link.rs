@@ -4,7 +4,10 @@ use std::{future::Future, io, pin::Pin, sync::Arc, time::Duration};
 
 use hyper_util::rt::TokioIo;
 use scope_link::{
-    proto::{self, scope_node_client::ScopeNodeClient},
+    proto::{
+        self, scope_node_client::ScopeNodeClient, scope_node_mount_client::ScopeNodeMountClient,
+        scope_node_stop_client::ScopeNodeStopClient,
+    },
     BearerToken, ClockMap, Exchange,
 };
 use serde::Serialize;
@@ -29,6 +32,65 @@ type Connect = Pin<Box<dyn Future<Output = Result<Channel, tonic::transport::Err
 type Client = ScopeNodeClient<InterceptedService<Channel, BearerToken>>;
 type Configure =
     Pin<Box<dyn Future<Output = Result<tonic::Response<proto::Settings>, Status>> + Send>>;
+
+/// Mount calls on the console's paired channel. Stop uses the token-free service.
+#[derive(Clone)]
+pub struct MountClient {
+    client: ScopeNodeMountClient<InterceptedService<Channel, BearerToken>>,
+    stop: ScopeNodeStopClient<Channel>,
+}
+impl MountClient {
+    /// Reuse a scope link channel and the session's bearer token.
+    pub fn new(channel: Channel, token: &str) -> Result<Self, Status> {
+        let bearer = BearerToken::new(token)
+            .map_err(|_| Status::invalid_argument("invalid scope node token"))?;
+        Ok(Self {
+            client: ScopeNodeMountClient::with_interceptor(channel.clone(), bearer),
+            stop: ScopeNodeStopClient::new(channel),
+        })
+    }
+    /// Describe the two axes, in azimuth then altitude order.
+    pub async fn describe_mount(&mut self) -> Result<proto::DescribeMountReply, Status> {
+        Ok(self
+            .client
+            .describe_mount(proto::DescribeMountRequest {})
+            .await?
+            .into_inner())
+    }
+    /// Read an axis's counts, signed rate and moving flag.
+    pub async fn axis_state(&mut self, axis: proto::Axis) -> Result<proto::AxisState, Status> {
+        Ok(self
+            .client
+            .axis_state(proto::AxisStateRequest { axis: axis as i32 })
+            .await?
+            .into_inner())
+    }
+    /// Request an absolute axis position, in counts.
+    pub async fn goto_axis(&mut self, axis: proto::Axis, position: i32) -> Result<(), Status> {
+        self.client
+            .goto_axis(proto::GotoAxisRequest {
+                axis: axis as i32,
+                position,
+            })
+            .await?;
+        Ok(())
+    }
+    /// Request a signed angular rate, in degrees per second.
+    pub async fn rate_axis(&mut self, axis: proto::Axis, deg_per_s: f64) -> Result<(), Status> {
+        self.client
+            .rate_axis(proto::RateAxisRequest {
+                axis: axis as i32,
+                deg_per_s,
+            })
+            .await?;
+        Ok(())
+    }
+    /// Stop both axes, regardless of the pairing token's validity.
+    pub async fn stop_all(&mut self) -> Result<(), Status> {
+        self.stop.stop_all(proto::StopAllRequest {}).await?;
+        Ok(())
+    }
+}
 
 /// A real address, or a reusable connector (one new stream for every connection).
 #[derive(Clone, Default)]
@@ -115,6 +177,7 @@ pub struct LinkManager {
     task: JoinHandle<()>,
     status: watch::Receiver<LinkStatus>,
     frames: watch::Receiver<Option<proto::StarFrame>>,
+    mount: watch::Receiver<Option<MountClient>>,
 }
 impl Drop for LinkManager {
     fn drop(&mut self) {
@@ -126,11 +189,15 @@ impl LinkManager {
     pub fn start(session: Arc<Session>, clock: Arc<dyn Clock>, transport: Transport) -> Self {
         let (status_tx, status) = watch::channel(LinkStatus::default());
         let (frame_tx, frames) = watch::channel(None);
-        let task = tokio::spawn(run(session, clock, transport, status_tx, frame_tx));
+        let (mount_tx, mount) = watch::channel(None);
+        let task = tokio::spawn(run(
+            session, clock, transport, status_tx, frame_tx, mount_tx,
+        ));
         Self {
             task,
             status,
             frames,
+            mount,
         }
     }
     /// Subscribe to link health changes.
@@ -140,6 +207,10 @@ impl LinkManager {
     /// Subscribe to the newest frame. Intermediate frames are overwritten, never queued.
     pub fn frames(&self) -> watch::Receiver<Option<proto::StarFrame>> {
         self.frames.clone()
+    }
+    /// Mount calls on the current connection; absent while unpaired or disconnected.
+    pub fn mount(&self) -> Option<MountClient> {
+        self.mount.borrow().clone()
     }
 }
 
@@ -204,6 +275,7 @@ async fn pair(
         Client,
         tonic::Streaming<proto::StarFrame>,
         proto::CameraInfo,
+        MountClient,
     ),
     Status,
 > {
@@ -213,6 +285,7 @@ async fn pair(
         .await?;
     let bearer = BearerToken::new(node.token.as_deref().expect("node token"))
         .map_err(|_| Status::invalid_argument("invalid scope node token"))?;
+    let mount = MountClient::new(channel.clone(), node.token.as_deref().expect("node token"))?;
     let mut client = ScopeNodeClient::with_interceptor(channel, bearer);
     let camera = client
         .describe(proto::DescribeRequest {})
@@ -221,7 +294,7 @@ async fn pair(
     let (settings, _) = camera_settings(&config.settings, &camera);
     client.configure(settings).await?;
     let frames = client.frames(proto::FramesRequest {}).await?.into_inner();
-    Ok((client, frames, camera))
+    Ok((client, frames, camera, mount))
 }
 
 async fn run(
@@ -230,6 +303,7 @@ async fn run(
     transport: Transport,
     status_tx: watch::Sender<LinkStatus>,
     frame_tx: watch::Sender<Option<proto::StarFrame>>,
+    mount_tx: watch::Sender<Option<MountClient>>,
 ) {
     let mut changes = session.link_changes();
     let mut status = LinkStatus::default();
@@ -255,7 +329,8 @@ async fn run(
             result = changes.changed() => { if result.is_err() { return; } continue; }
             result = time::timeout(SILENCE, pair(&transport, &config)) => result,
         };
-        if let Ok(Ok((client, stream, camera))) = paired {
+        if let Ok(Ok((client, stream, camera, mount))) = paired {
+            mount_tx.send_replace(Some(mount));
             status.out_of_range = camera_settings(&config.settings, &camera).1;
             status.camera = Some(camera);
             publish(&session, &status_tx, &status);
@@ -272,6 +347,7 @@ async fn run(
                 &frame_tx,
             )
             .await;
+            mount_tx.send_replace(None);
             status.connected = false;
             publish(&session, &status_tx, &status);
             if reconfigured {

@@ -37,12 +37,15 @@ impl SimNode {
         token: impl AsRef<[u8]>,
         initial: Settings,
     ) -> Result<Self, RangeError> {
-        let service = NodeService::with_controls(
+        let service = NodeService::with_controls_and_mount(
             camera,
             Arc::new(Clock(simulator.clock().clone())),
             token,
             initial,
             simulator.controls.clone(),
+            simulator
+                .mount()
+                .map(|mount| Arc::new(mount) as Arc<dyn scope_node::mount::Mount>),
         )?;
         Ok(Self {
             service,
@@ -58,9 +61,9 @@ impl SimNode {
     }
     pub async fn memory_channel(&self) -> Result<Channel, tonic::transport::Error> {
         let (connect, io) = memory::channel_pair();
-        let service = self.service.clone().into_server();
+        let routes = self.service.routes();
         self.servers.lock().unwrap().push(tokio::spawn(async move {
-            if let Err(error) = memory::serve_on(io, service).await {
+            if let Err(error) = memory::serve_routes_on(io, routes).await {
                 eprintln!("simulator memory transport: {error}");
             }
         }));
@@ -69,10 +72,10 @@ impl SimNode {
     pub async fn listen_loopback(&self) -> Result<SocketAddr, std::io::Error> {
         let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
         let address = listener.local_addr()?;
-        let service = self.service.clone().into_server();
+        let routes = self.service.routes();
         self.servers.lock().unwrap().push(tokio::spawn(async move {
             if let Err(error) = Server::builder()
-                .add_service(service)
+                .add_routes(routes)
                 .serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(listener))
                 .await
             {

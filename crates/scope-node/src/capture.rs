@@ -1,13 +1,16 @@
 //! Capture through the camera port; a failed adapter does not terminate the service.
+use crate::mount::{Axis, Mount};
 use crate::{detect, Camera, CameraError, GrayFrame, RangeError, Settings};
-use scope_link::proto::Centroid;
-use std::time::Duration;
+use scope_link::proto::{AxisPositions, Centroid};
+use std::{sync::Arc, time::Duration};
 
 #[derive(Debug)]
 pub struct Captured {
     pub id: u64,
     pub frame: GrayFrame,
     pub centroids: Vec<Centroid>,
+    pub axis_start: Option<AxisPositions>,
+    pub axis_end: Option<AxisPositions>,
 }
 
 pub struct CaptureLoop<C> {
@@ -16,6 +19,7 @@ pub struct CaptureLoop<C> {
     id: u64,
     restart_at: Option<tokio::time::Instant>,
     restarts: u64,
+    mount: Option<Arc<dyn Mount>>,
 }
 impl<C: Camera> CaptureLoop<C> {
     pub fn new(mut camera: C, settings: Settings) -> Result<Self, RangeError> {
@@ -26,10 +30,23 @@ impl<C: Camera> CaptureLoop<C> {
             id: 0,
             restart_at: None,
             restarts: 0,
+            mount: None,
         })
     }
     pub fn restarts(&self) -> u64 {
         self.restarts
+    }
+    /// Attach exposure position sampling without changing the camera port.
+    pub fn with_mount(mut self, mount: Arc<dyn Mount>) -> Self {
+        self.mount = Some(mount);
+        self
+    }
+    async fn positions(&mut self) -> Option<AxisPositions> {
+        let mount = self.mount.as_ref()?;
+        Some(AxisPositions {
+            azimuth: mount.state(Axis::Azimuth).await.position,
+            altitude: mount.state(Axis::Altitude).await.position,
+        })
     }
     pub fn camera(&self) -> &C {
         &self.camera
@@ -57,13 +74,17 @@ impl<C: Camera> CaptureLoop<C> {
             self.camera.restart()?;
             self.restarts += 1;
         }
+        let axis_start = self.positions().await;
         let frame = self.camera.next_frame().await?;
+        let axis_end = self.positions().await;
         self.id += 1;
         let centroids = detect::detect(&frame, &self.settings.detection);
         Ok(Captured {
             id: self.id,
             frame,
             centroids,
+            axis_start,
+            axis_end,
         })
     }
 }

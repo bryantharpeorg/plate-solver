@@ -64,6 +64,9 @@ message StarFrame {
   // At most 200 centroids, brightest first, in full-frame pixels.
   repeated Centroid centroids = 9;
   optional bytes preview_jpeg = 10;
+  // Both axes' counts sampled at exposure start and end on the node.
+  AxisPositions axis_start = 11;
+  AxisPositions axis_end = 12;
 }
 
 message Centroid {
@@ -84,3 +87,54 @@ message HeartbeatReply {
   double t1 = 2;
   double t2 = 3;
 }
+
+// Mount port. Every call requires the session's bearer token.
+service ScopeNodeMount {
+  rpc DescribeMount(DescribeMountRequest) returns (DescribeMountReply);
+  rpc AxisState(AxisStateRequest) returns (.scope_node.v1.AxisState);
+  rpc GotoAxis(GotoAxisRequest) returns (GotoAxisReply);
+  rpc RateAxis(RateAxisRequest) returns (RateAxisReply);
+}
+
+// Anyone can stop the telescope, including an unpaired console.
+service ScopeNodeStop {
+  rpc StopAll(StopAllRequest) returns (StopAllReply);
+}
+
+enum Axis {
+  AXIS_UNSPECIFIED = 0;
+  AXIS_AZIMUTH = 1;
+  AXIS_ALTITUDE = 2;
+}
+message AxisInfo {
+  uint32 counts_per_revolution = 1;
+  double top_rate_deg_per_s = 2;
+  bool can_goto = 3;
+}
+message AxisState {
+  int32 position = 1;
+  double rate_deg_per_s = 2;
+  bool moving = 3;
+}
+message AxisPositions {
+  int32 azimuth = 1;
+  int32 altitude = 2;
+}
+message DescribeMountRequest {}
+message DescribeMountReply {
+  // Azimuth first, altitude second; empty when no mount is connected.
+  repeated AxisInfo axes = 1;
+}
+message AxisStateRequest { Axis axis = 1; }
+message GotoAxisRequest {
+  Axis axis = 1;
+  int32 position = 2;
+}
+message GotoAxisReply {}
+message RateAxisRequest {
+  Axis axis = 1;
+  double deg_per_s = 2;
+}
+message RateAxisReply {}
+message StopAllRequest {}
+message StopAllReply {}

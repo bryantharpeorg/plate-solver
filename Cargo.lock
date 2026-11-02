@@ -715,6 +715,7 @@ dependencies = [
  "plate-solver",
  "rust-embed",
  "scope-link",
+ "scope-node",
  "serde",
  "serde_json",
  "simulator",
