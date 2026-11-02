@@ -56,6 +56,7 @@ pub struct SimMount {
 struct Mechanics {
     axes: [Motor; 2],
     config: MountConfig,
+    rate_error: f64,
     last_s: f64,
     push: [f64; 2],
 }
@@ -243,6 +244,7 @@ impl SimMount {
             inner: Arc::new(Mutex::new(Mechanics {
                 axes: [Motor::new(), Motor::new()],
                 config,
+                rate_error: 0.0,
                 last_s,
                 push: [0.0; 2],
             })),
@@ -254,6 +256,13 @@ impl SimMount {
         let mut inner = self.inner.lock().unwrap();
         inner.advance(self.clock.node_now());
         inner.direction()
+    }
+
+    /// Configured base tilt, zero points and backlash, for tests and the simulator.
+    /// This is the mechanical truth at construction, before hand pushes or slips.
+    /// Zero points are additive degrees in azimuth, altitude order.
+    pub fn truth(&self) -> MountConfig {
+        self.inner.lock().unwrap().config
     }
 
     /// Push the tube in true horizontal coordinates without changing either count.
@@ -284,6 +293,20 @@ impl SimMount {
         let mut inner = self.inner.lock().unwrap();
         inner.advance(self.clock.node_now());
         inner.axes[axis.index()].slip = degrees;
+    }
+
+    /// Set the fractional error on subsequent rate commands to either axis.
+    /// For example, 0.01 runs 1% fast and -0.01 runs 1% slow. Each requested
+    /// rate is multiplied by 1 + fraction, subject to the mount's top rate.
+    /// Positioning commands still reach their requested encoder positions.
+    pub fn set_rate_error(&self, fraction: f64) {
+        assert!(fraction.is_finite());
+        self.inner.lock().unwrap().rate_error = fraction;
+    }
+
+    /// Fractional rate error shared by both axes; exactly zero at construction.
+    pub fn rate_error(&self) -> f64 {
+        self.inner.lock().unwrap().rate_error
     }
 
     /// Cut power: cancel motion and reset both counts to zero, preserving the tube.
@@ -330,7 +353,8 @@ impl Mount for SimMount {
             assert!(deg_per_s.is_finite());
             let mut inner = self.inner.lock().unwrap();
             inner.advance(self.clock.node_now());
-            inner.axes[axis.index()].rate(deg_per_s.clamp(-TOP_RATE, TOP_RATE));
+            let rate = deg_per_s * (1.0 + inner.rate_error);
+            inner.axes[axis.index()].rate(rate.clamp(-TOP_RATE, TOP_RATE));
         })
     }
 
