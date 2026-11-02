@@ -13,10 +13,12 @@ use tokio::sync::watch;
 
 use serde::{Deserialize, Deserializer, Serialize};
 
+use crate::ephemeris::{self, Exposure};
 use crate::model::{Backlash, Model, ModelView, Sync as ModelSync};
 use crate::pushto::{self, Guidance};
 use crate::sky::{self, Frame, Observer};
 use crate::targets::{self, Target};
+use crate::tracking::Tracker;
 
 /// The console's time source, in Unix seconds. Each application owns its clock.
 pub trait Clock: Send + Sync {
@@ -52,6 +54,140 @@ pub struct Site {
     pub lat_deg: f64,
     /// Longitude within ±180°.
     pub lon_deg: f64,
+}
+
+/// Imaging camera sensor size in millimetres and pixel pitch in micrometres.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ImagingCamera {
+    /// Positive sensor width, at most 100 mm.
+    pub width_mm: f64,
+    /// Positive sensor height, at most 100 mm.
+    pub height_mm: f64,
+    /// Positive pixel pitch, at most 50 µm.
+    pub pitch_um: f64,
+}
+impl ImagingCamera {
+    fn validate(self) -> Result<(), SessionError> {
+        for (field, value, max, unit) in [
+            ("width_mm", self.width_mm, 100.0, "mm"),
+            ("height_mm", self.height_mm, 100.0, "mm"),
+            ("pitch_um", self.pitch_um, 50.0, "µm"),
+        ] {
+            if !value.is_finite() || value <= 0.0 || value > max {
+                return Err(SessionError::Invalid(format!(
+                    "imaging_camera.{field} must be more than 0 and at most {max} {unit}"
+                )));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// The imaging camera's field-rotation exposure limit.
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum ExposureView {
+    /// Maximum exposure in seconds for one pixel of corner smear.
+    Seconds(f64),
+    /// The string `"no limit"` below FR-002's rate threshold.
+    Text(&'static str),
+}
+/// Tracking readout, evaluated at the session's console time.
+#[derive(Debug, Serialize)]
+pub struct TrackingReadout {
+    /// Root mean square of the last 60 seconds of pointing errors, in arcseconds.
+    pub rms_arcsec: f64,
+    /// Signed field rotation at the tracked target, in degrees per minute.
+    pub field_rotation_deg_per_min: f64,
+    /// Absent until an imaging camera is set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub longest_exposure_s: Option<ExposureView>,
+}
+/// Run-only Track state; never written to the state file.
+#[derive(Debug, Serialize)]
+pub struct TrackView {
+    /// Whether the observer still wants tracking, including the wait for a GoTo.
+    pub wanted: bool,
+    /// The tracker's stable state name, or `armed` while waiting for a GoTo.
+    pub state: &'static str,
+    /// Target for this Track request.
+    pub target: Target,
+    /// Last tracking or GoTo ending reason, absent before an end.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ended_reason: Option<String>,
+    /// Present while the tracker is active.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub readout: Option<TrackingReadout>,
+}
+#[derive(Clone)]
+struct TrackRun {
+    wanted: bool,
+    armed: bool,
+    target: Target,
+    tracker: Option<Arc<Tracker>>,
+    ended_reason: Option<String>,
+}
+impl TrackRun {
+    fn view(&self, values: &Values, time: f64) -> TrackView {
+        let tracker = self.tracker.as_ref().map(|t| t.state());
+        // State names are the tracker contract, including future active states.
+        let state = if self.armed {
+            "armed"
+        } else {
+            tracker.as_ref().map_or("off", |t| t.state)
+        };
+        let readout = tracker.as_ref().filter(|t| t.state != "off").and_then(|t| {
+            let site = values.site?;
+            let (alt, az) = sky::alt_az(
+                self.target.ra_deg,
+                self.target.dec_deg,
+                &Observer {
+                    lat: site.lat_deg,
+                    lon: site.lon_deg,
+                    time,
+                },
+            );
+            let rate =
+                ephemeris::altaz_rates_from_alt_az(site.lat_deg, alt, az).field_rotation_deg_per_h;
+            let samples: Vec<_> = t.samples.iter().filter(|s| time - s.time <= 60.0).collect();
+            let rms = if samples.is_empty() {
+                0.0
+            } else {
+                (samples
+                    .iter()
+                    .map(|s| s.east_arcsec.powi(2) + s.north_arcsec.powi(2))
+                    .sum::<f64>()
+                    / samples.len() as f64)
+                    .sqrt()
+            };
+            Some(TrackingReadout {
+                rms_arcsec: rms,
+                field_rotation_deg_per_min: rate / 60.0,
+                longest_exposure_s: values.imaging_camera.map(|camera| {
+                    match ephemeris::longest_exposure(
+                        camera.width_mm,
+                        camera.height_mm,
+                        camera.pitch_um,
+                        rate.to_radians() / 3600.0,
+                        1.0,
+                    ) {
+                        Exposure::Seconds(seconds) => ExposureView::Seconds(seconds),
+                        Exposure::NoLimit => ExposureView::Text("no limit"),
+                    }
+                }),
+            })
+        });
+        TrackView {
+            wanted: self.wanted && state != "off",
+            state,
+            target: self.target.clone(),
+            ended_reason: tracker
+                .and_then(|t| t.ended_reason)
+                .or_else(|| self.ended_reason.clone()),
+            readout,
+        }
+    }
 }
 
 /// A camera control is automatic or a positive numeric value.
@@ -213,6 +349,9 @@ pub struct NodeView {
 #[derive(Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SessionEdit {
+    /// Replacement imaging camera, or explicit null to clear it.
+    #[serde(default, deserialize_with = "present_nullable")]
+    pub imaging_camera: Option<Option<ImagingCamera>>,
     /// A replacement site, or explicit null to clear it.
     #[serde(default, deserialize_with = "present_nullable")]
     pub site: Option<Option<Site>>,
@@ -372,6 +511,12 @@ pub struct MountView {
 /// One consistent read of the observing session and its console time.
 #[derive(Debug, Serialize)]
 pub struct SessionView {
+    /// Run-only Track state, absent before the first accepted Track-on request.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub track: Option<TrackView>,
+    /// Durable imaging camera, absent until set or after being cleared.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub imaging_camera: Option<ImagingCamera>,
     /// Measured mount backlash, absent until at least one axis is measured.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub backlash: Option<Backlash>,
@@ -410,6 +555,9 @@ pub struct SessionView {
 
 #[derive(Clone)]
 struct Values {
+    track: Option<TrackRun>,
+    track_generation: u64,
+    imaging_camera: Option<ImagingCamera>,
     backlash: Option<Backlash>,
     model: Model,
     mount: Option<MountView>,
@@ -430,6 +578,9 @@ struct Values {
 impl Default for Values {
     fn default() -> Self {
         Self {
+            track: None,
+            track_generation: 0,
+            imaging_camera: None,
             backlash: None,
             model: Model::default(),
             mount: None,
@@ -452,6 +603,8 @@ impl Default for Values {
 impl Values {
     fn view(&self, time: f64) -> SessionView {
         SessionView {
+            track: self.track.as_ref().map(|t| t.view(self, time)),
+            imaging_camera: self.imaging_camera,
             backlash: self.backlash,
             model: self.model.view(),
             mount: self.mount.clone(),
@@ -507,6 +660,7 @@ impl Values {
 
 /// One shared observing session. By default it lives entirely in memory.
 pub struct Session {
+    track_gate: tokio::sync::Mutex<()>,
     values: Arc<Mutex<Values>>,
     state_file: Option<PathBuf>,
     changes: watch::Sender<LinkConfig>,
@@ -514,6 +668,23 @@ pub struct Session {
 impl Default for Session {
     fn default() -> Self {
         Self::from_values(Values::default(), None)
+    }
+}
+
+// The link task owns the session. The console owns this separate lifetime
+// guard so dropping it releases Session -> Tracker -> Link -> Session even
+// when the link is healthy. Tracker's Drop cancels rates before its final stop.
+pub(crate) struct TrackingOwner(std::sync::Weak<Session>);
+impl Drop for TrackingOwner {
+    fn drop(&mut self) {
+        if let Some(session) = self.0.upgrade() {
+            let track = {
+                let mut values = session.values.lock().expect("observing session");
+                values.track_generation = values.track_generation.wrapping_add(1);
+                values.track.take()
+            };
+            drop(track);
+        }
     }
 }
 
@@ -565,11 +736,234 @@ impl Session {
             Ok(())
         }));
         Self {
+            track_gate: tokio::sync::Mutex::new(()),
             values,
             state_file,
             changes,
         }
     }
+    pub(crate) fn tracking_owner(self: &Arc<Self>) -> TrackingOwner {
+        TrackingOwner(Arc::downgrade(self))
+    }
+
+    /// Current tracker, for live pointing intake and timestamped error samples.
+    pub fn tracker(&self) -> Option<Arc<Tracker>> {
+        self.values
+            .lock()
+            .expect("observing session")
+            .track
+            .as_ref()
+            .and_then(|t| t.tracker.clone())
+    }
+
+    fn track_target(&self, time: f64, link: &link::LinkManager) -> Result<Target, String> {
+        let view = self.snapshot(time);
+        if !link.status().borrow().connected || !view.mount.as_ref().is_some_and(|m| m.connected) {
+            return Err("no mount is connected".into());
+        }
+        if self.model(time).syncs.is_empty() {
+            return Err("the night has no sync yet".into());
+        }
+        let site = view.site.ok_or("a site is needed")?;
+        if crate::goto::sun_horizontal(site.lat_deg, site.lon_deg, time).0 >= -0.83 {
+            return Err("Sun is up".into());
+        }
+        let target = view.target.ok_or("no target is selected")?;
+        let name = target.messier.as_ref().unwrap_or(&target.id);
+        match pushto::class(target, Some(site), view.min_alt_deg, time) {
+            pushto::Class::Pointable => Ok(target.clone()),
+            pushto::Class::BelowHorizon => Err(format!("{name} is below the horizon")),
+            pushto::Class::TooLow => Err(format!("{name} is below the minimum altitude")),
+            _ => Err(format!("{name} is not pointable: Sun guard")),
+        }
+    }
+
+    /// Arm Track for the selected target, starting a GoTo first above one arcminute.
+    /// All context is taken from the session's console clock and current model.
+    pub async fn start_tracking(
+        self: &Arc<Self>,
+        clock: Arc<dyn Clock>,
+        link: Arc<link::LinkManager>,
+        goto: Arc<crate::goto::GoTo>,
+    ) -> Result<(), String> {
+        let _gate = self.track_gate.lock().await;
+        let generation = self
+            .values
+            .lock()
+            .expect("observing session")
+            .track_generation;
+        let target = self.track_target(clock.now(), &link)?;
+        {
+            let values = self.values.lock().expect("observing session");
+            if let Some(track) = &values.track {
+                if track.wanted
+                    && track.target.id == target.id
+                    && (track.armed
+                        || track
+                            .tracker
+                            .as_ref()
+                            .is_some_and(|t| t.state().state != "off"))
+                {
+                    return Ok(());
+                }
+            }
+        }
+        if let Some(tracker) = self.tracker() {
+            tracker.stop("stopped").await;
+        }
+        let running = goto
+            .progress()
+            .is_some_and(|p| matches!(p.state, "slewing" | "solving" | "correcting"));
+        let pointing = self.snapshot(clock.now()).pointing;
+        let off_target = pointing.is_none_or(|p| {
+            crate::model::separation(p.ra_deg, p.dec_deg, target.ra_deg, target.dec_deg)
+                > 1.0 / 60.0
+        });
+        if !running && off_target {
+            goto.start().await?;
+        }
+        let armed = running || off_target;
+        let generation = {
+            let mut values = self.values.lock().expect("observing session");
+            if values.track_generation != generation {
+                return Err("stopped".into());
+            }
+            // A changed target supersedes any older armed watcher too.
+            values.track_generation = values.track_generation.wrapping_add(1);
+            values.track = Some(TrackRun {
+                wanted: true,
+                armed,
+                target,
+                tracker: None,
+                ended_reason: None,
+            });
+            values.track_generation
+        };
+        if !armed {
+            return self.begin_tracking(generation, clock, link).await;
+        }
+        let session = Arc::downgrade(self);
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                let Some(session) = session.upgrade() else {
+                    return;
+                };
+                let _gate = session.track_gate.lock().await;
+                if session
+                    .values
+                    .lock()
+                    .expect("observing session")
+                    .track_generation
+                    != generation
+                {
+                    return;
+                }
+                if let Some(progress) = goto.progress() {
+                    if progress.state == "done" {
+                        let _ = session.begin_tracking(generation, clock, link).await;
+                        return;
+                    }
+                    if matches!(progress.state, "failed" | "halted") {
+                        session.end_armed(progress.reason.unwrap_or_else(|| progress.state.into()));
+                        return;
+                    }
+                }
+            }
+        });
+        Ok(())
+    }
+
+    // The lifecycle gate is held by the caller, so no competing on request can
+    // replace a tracker while DescribeMount or its preceding StopAll is pending.
+    async fn begin_tracking(
+        &self,
+        generation: u64,
+        clock: Arc<dyn Clock>,
+        link: Arc<link::LinkManager>,
+    ) -> Result<(), String> {
+        let result = async {
+            self.track_target(clock.now(), &link)?;
+            let view = self.snapshot(clock.now());
+            let tracker = Arc::new(Tracker::new(
+                clock.clone(),
+                link,
+                self.model(clock.now()),
+                view.site.ok_or("a site is needed")?,
+                view.min_alt_deg,
+            ));
+            let target = {
+                let mut values = self.values.lock().expect("observing session");
+                if values.track_generation != generation {
+                    return Err("stopped".into());
+                }
+                let track = values.track.as_mut().unwrap();
+                track.armed = false;
+                track.tracker = Some(tracker.clone());
+                track.target.clone()
+            };
+            tracker.start(target).await
+        }
+        .await;
+        if let Err(reason) = &result {
+            self.end_armed(reason.clone());
+        }
+        result
+    }
+
+    fn end_armed(&self, reason: String) {
+        if let Some(track) = &mut self.values.lock().expect("observing session").track {
+            track.armed = false;
+            track.wanted = false;
+            track.ended_reason = Some(reason);
+        }
+    }
+
+    /// Clear arming before awaiting any motor operation, so Stop wins over GoTo
+    /// completion and no later session tick can restart the axes.
+    pub async fn stop_tracking(&self) {
+        {
+            let mut values = self.values.lock().expect("observing session");
+            values.track_generation = values.track_generation.wrapping_add(1);
+            if let Some(track) = &mut values.track {
+                track.wanted = false;
+                track.armed = false;
+                track.ended_reason = Some("stopped".into());
+            }
+        }
+        if let Some(tracker) = self.tracker() {
+            tracker.stop("stopped").await;
+        }
+        let _gate = self.track_gate.lock().await;
+        if let Some(tracker) = self.tracker() {
+            tracker.stop("stopped").await;
+        }
+    }
+
+    /// Feed only successful live solves, at the calibrated aim point. Uploads
+    /// never call this entry point. The tracker accepts every active state name.
+    pub(crate) fn track_live_pointing(&self) {
+        let Some(tracker) = self.tracker() else {
+            return;
+        };
+        let state = tracker.state();
+        if state.state == "off" {
+            return;
+        }
+        let Some(target) = state.target else {
+            return;
+        };
+        let values = self.values.lock().expect("observing session");
+        if let Some(pointing) = &values.pointing {
+            let east = ((pointing.ra_deg - target.ra_deg + 180.0).rem_euclid(360.0) - 180.0)
+                * target.dec_deg.to_radians().cos()
+                * 3600.0;
+            let north = (pointing.dec_deg - target.dec_deg) * 3600.0;
+            drop(values);
+            tracker.pointing(east, north);
+        }
+    }
+
     pub(crate) fn link_changes(&self) -> watch::Receiver<LinkConfig> {
         self.changes.subscribe()
     }
@@ -849,6 +1243,9 @@ impl Values {
         }
     }
     fn edited(&self, edit: SessionEdit) -> Result<Self, SessionError> {
+        if let Some(Some(camera)) = edit.imaging_camera {
+            camera.validate()?;
+        }
         if let Some(Some(site)) = edit.site {
             check_range("site.lat_deg", site.lat_deg, -90.0, 90.0)?;
             check_range("site.lon_deg", site.lon_deg, -180.0, 180.0)?;
@@ -864,6 +1261,9 @@ impl Values {
             })
             .transpose()?;
         let mut next = self.clone();
+        if let Some(camera) = edit.imaging_camera {
+            next.imaging_camera = camera;
+        }
         if let Some(site) = edit.site {
             next.site = site;
             if let Some(pointing) = &mut next.pointing {
@@ -987,6 +1387,8 @@ fn validate_address(address: &str) -> Result<(), SessionError> {
 #[serde(deny_unknown_fields)]
 struct StoredSession {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    imaging_camera: Option<ImagingCamera>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     backlash: Option<Backlash>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     model: Option<Model>,
@@ -1023,6 +1425,7 @@ fn read_state(path: &Path) -> io::Result<Values> {
     }
     Values::default()
         .edited(SessionEdit {
+            imaging_camera: Some(stored.imaging_camera),
             site: Some(stored.site),
             min_alt_deg: Some(stored.min_alt_deg),
             target: Some(stored.target),
@@ -1072,6 +1475,7 @@ fn write_state(path: &Path, values: &Values) -> io::Result<()> {
     serde_json::to_writer(
         &file,
         &StoredSession {
+            imaging_camera: values.imaging_camera,
             backlash: values.backlash,
             model: (values.model.view().is_some()).then(|| values.model.clone()),
             site: values.site,
