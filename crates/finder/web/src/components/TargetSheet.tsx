@@ -15,24 +15,37 @@ export const TARGET_CLASS_LABEL: Record<TargetClass, string> = {
 
 interface Props {
   open: boolean;
+  keepTopBarActive?: boolean;
   target: Target | null;
   put: (edit: SessionEdit) => Promise<void>;
   onClose: () => void;
 }
 
-export function TargetSheet({ open, target, put, onClose }: Props) {
+export function TargetSheet({ open, keepTopBarActive = false, target, put, onClose }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<TargetMatch[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const modal = useRef(false);
   useEffect(() => {
     const d = dialog.current;
     if (!d) return;
-    if (open && !d.open) d.showModal();
-    if (!open && d.open) d.close();
-  }, [open]);
+    // A native modal makes the whole top bar inert, regardless of z-index.
+    // With a mount present, keep the sheet below the live Stop control instead.
+    if (keepTopBarActive) {
+      if (modal.current) d.close();
+      modal.current = false;
+      d.open = open;
+    } else {
+      if (open && !d.open) {
+        d.showModal();
+        modal.current = true;
+      }
+      if (!open && d.open) d.close();
+    }
+  }, [open, keepTopBarActive]);
 
   useEffect(() => {
     setMatches(null);
@@ -64,7 +77,22 @@ export function TargetSheet({ open, target, put, onClose }: Props) {
   };
 
   return (
-    <dialog ref={dialog} className="sheet" aria-labelledby="target-sheet-title" onClose={onClose}>
+    <dialog
+      ref={dialog}
+      className="sheet"
+      style={
+        keepTopBarActive
+          ? { position: "fixed", inset: "4rem 0 0", zIndex: 20, maxHeight: "calc(100dvh - 4rem)" }
+          : undefined
+      }
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+      aria-labelledby="target-sheet-title"
+      onClose={() => {
+        if (!keepTopBarActive || !open) onClose();
+      }}
+    >
       <header className="flex items-center justify-between border-b border-rule px-4 py-3 sm:px-5">
         <h2 id="target-sheet-title" className="section-title">
           Choose a target

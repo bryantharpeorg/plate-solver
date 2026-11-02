@@ -36,6 +36,10 @@ async function request(init?: RequestInit): Promise<ObservingSession> {
     ...(body?.camera_settings != null && { camera_settings: body.camera_settings }),
     ...(body?.aim != null && { aim: body.aim }),
     ...(body?.field != null && { field: body.field }),
+    ...(body?.mount != null && { mount: body.mount }),
+    ...(body?.model != null && { model: body.model }),
+    ...(body?.goto != null && { goto: body.goto }),
+    ...(body?.goto_refusal != null && { goto_refusal: body.goto_refusal }),
   };
 }
 
@@ -45,9 +49,12 @@ export function useSession() {
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(false);
   const latest = useRef(0);
+  const pendingReads = useRef(0);
+  const pollMs = session.mount ? 500 : 5000;
 
   const read = useCallback(async () => {
     const ticket = ++latest.current;
+    ++pendingReads.current;
     try {
       const next = await request();
       if (mounted.current && ticket === latest.current) {
@@ -60,20 +67,27 @@ export function useSession() {
         setError(e instanceof Error ? e.message : "The observing session could not be loaded.");
       }
       throw e;
+    } finally {
+      --pendingReads.current;
     }
   }, []);
 
   useEffect(() => {
     mounted.current = true;
     let timer: ReturnType<typeof setInterval> | undefined;
-    const refresh = () => void read().catch(() => {});
+    // Slow mount telemetry must finish before the next poll can supersede it.
+    // Explicit refreshes after writes still take precedence over older reads.
+    const refresh = () => {
+      if (pendingReads.current === 0) void read().catch(() => {});
+    };
     const visibility = () => {
       clearInterval(timer);
       if (document.visibilityState === "visible") {
-        refresh();
+        // A new effect must replace a read invalidated by StrictMode cleanup.
+        void read().catch(() => {});
         timer = setInterval(() => {
           if (document.visibilityState === "visible") refresh();
-        }, 5000);
+        }, pollMs);
       }
     };
     visibility();
@@ -84,7 +98,7 @@ export function useSession() {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", visibility);
     };
-  }, [read]);
+  }, [read, pollMs]);
 
   const put = useCallback(
     async (edit: SessionEdit) => {
@@ -101,5 +115,5 @@ export function useSession() {
     [read],
   );
 
-  return { session, loaded, error, put };
+  return { session, loaded, error, put, refresh: read };
 }

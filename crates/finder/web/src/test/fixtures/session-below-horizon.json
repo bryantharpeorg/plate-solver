@@ -1,0 +1,116 @@
+{
+  "aim": {
+    "x": 700.0,
+    "y": 420.0
+  },
+  "camera_settings": {
+    "exposure_ms": 200.0,
+    "gain": 1.0,
+    "sigma": 8.0
+  },
+  "field": {
+    "db_max_fov_deg": 30.0,
+    "db_min_fov_deg": 10.0,
+    "fov_deg": 11.99975976242017,
+    "unsolved_s": 0.0
+  },
+  "goto": {
+    "correction": 1,
+    "error_arcsec": 46.08644648426673,
+    "reason": null,
+    "state": "done"
+  },
+  "goto_refusal": "M8 is below the horizon",
+  "guidance": {
+    "class": "below_horizon",
+    "placement": {
+      "direction_deg": 153.51250070740676,
+      "distance_deg": 148.42697089035153,
+      "on_frame": false
+    },
+    "rise": 1768566971.9174416,
+    "set": 1768586745.8524387,
+    "transit": 1768576858.892755
+  },
+  "min_alt_deg": 15.0,
+  "model": {
+    "epoch": 1,
+    "ia": -120.005529150444,
+    "ie": 39.03233875288301,
+    "needs": 18,
+    "rms_arcsec": 1243.7327783912117,
+    "syncs": 2
+  },
+  "mount": {
+    "board": null,
+    "connected": true,
+    "firmware": null,
+    "moving": false
+  },
+  "node": {
+    "address": "scope.local:1",
+    "camera": {
+      "exposure_ms": {
+        "max": 2000.0,
+        "min": 1.0
+      },
+      "gain": {
+        "max": 16.0,
+        "min": 1.0
+      },
+      "height": 1088,
+      "model": "simulator",
+      "width": 1456
+    },
+    "connected": true,
+    "last_frame_age_s": 0.09999990463256836,
+    "offset_s": -1768527800.0,
+    "out_of_range": [],
+    "stars": 54,
+    "token_set": true
+  },
+  "pointing": {
+    "alt_deg": 42.95017312652666,
+    "az_deg": 161.42051986725457,
+    "dec_deg": -5.380753980959861,
+    "frame": {
+      "camera": {
+        "fov": 0.2094353173025645,
+        "height": 1088.0,
+        "width": 1456.0
+      },
+      "center": [0.10639274560420066, 0.9879936995502638, -0.11202246797755758],
+      "distortion": 0.00005844764222283417,
+      "rotation": [
+        [0.10639274560420066, 0.9879936995502638, -0.11202246797755758],
+        [-0.961254618983491, 0.13101329892850486, 0.24253880717685936],
+        [0.254303246471026, 0.08187774516224355, 0.963652371802946]
+      ]
+    },
+    "frame_id": 36,
+    "ra_deg": 83.82789715408381,
+    "seq": 36,
+    "source": "live",
+    "time": 1768528817.6
+  },
+  "site": {
+    "lat_deg": 40.0,
+    "lon_deg": -75.0
+  },
+  "target": {
+    "code": "Neb",
+    "common_names": ["Lagoon Nebula"],
+    "constellation": "Sgr",
+    "dec_deg": -24.38017,
+    "family": "nebula",
+    "id": "NGC 6523",
+    "kind": "Nebula",
+    "mag": 5.8,
+    "major_arcmin": 45.0,
+    "messier": "M8",
+    "minor_arcmin": 30.0,
+    "pa_deg": null,
+    "ra_deg": 270.92196
+  },
+  "time": 1768528817.8
+}

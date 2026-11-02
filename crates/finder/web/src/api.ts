@@ -171,7 +171,37 @@ export interface SessionNode {
   out_of_range: { setting: "exposure_ms" | "gain"; stored: number; min: number; max: number }[];
 }
 
+export interface GoToProgress {
+  state: "slewing" | "solving" | "correcting" | "done" | "failed" | "halted";
+  correction: number;
+  error_arcsec: number | null;
+  reason: string | null;
+}
+
+export interface SessionMount {
+  connected: boolean;
+  board: string | null;
+  firmware: string | null;
+  moving: boolean;
+}
+
+export interface PointingModel {
+  syncs: number;
+  epoch: number;
+  ia: number | null;
+  ie: number | null;
+  base_tilt?: { deg: number; toward_deg: number };
+  fixed?: { ca: number; npae: number; tf: number; camera: number };
+  rms_arcsec: number;
+  needs: number;
+}
+
 export interface ObservingSession {
+  goto?: GoToProgress;
+  /** The planner's refusal, omitted when an idle GoTo would be accepted. */
+  goto_refusal?: string;
+  model?: PointingModel;
+  mount?: SessionMount;
   site: SessionSite | null;
   min_alt_deg?: number;
   target?: Target | null;
@@ -304,4 +334,19 @@ export async function getSimilar(id: string, observer: Omit<Observer, "time"> | 
     query.set("time", String(Date.now() / 1000));
   }
   return json(await fetch(`/api/similar?${query}`));
+}
+
+/** Motion requests have no body. Stop deliberately carries no bearer token. */
+export async function postMotion(route: "/api/goto" | "/api/stop" | "/api/model/second-sync"): Promise<void> {
+  await json(await fetch(route, { method: "POST" }));
+}
+
+export async function resetModel(what: "night" | "fixed"): Promise<void> {
+  await json(
+    await fetch("/api/model/reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ what }),
+    }),
+  );
 }

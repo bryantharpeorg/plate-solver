@@ -6,6 +6,7 @@ import { Chevron, Upload } from "./Icons";
 
 interface Props {
   open: boolean;
+  keepTopBarActive?: boolean;
   current: string | null;
   settings: SolveSettings;
   onSettings: (settings: SolveSettings) => void;
@@ -13,16 +14,28 @@ interface Props {
   onPick: (source: FrameSource) => void;
 }
 
-export function FramePicker({ open, current, settings, onSettings, onClose, onPick }: Props) {
+export function FramePicker({ open, keepTopBarActive = false, current, settings, onSettings, onClose, onPick }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const file = useRef<HTMLInputElement>(null);
 
+  const modal = useRef(false);
   useEffect(() => {
     const d = dialog.current;
     if (!d) return;
-    if (open && !d.open) d.showModal();
-    if (!open && d.open) d.close();
-  }, [open]);
+    // A native modal makes the whole top bar inert, regardless of z-index.
+    // With a mount present, keep the sheet below the live Stop control instead.
+    if (keepTopBarActive) {
+      if (modal.current) d.close();
+      modal.current = false;
+      d.open = open;
+    } else {
+      if (open && !d.open) {
+        d.showModal();
+        modal.current = true;
+      }
+      if (!open && d.open) d.close();
+    }
+  }, [open, keepTopBarActive]);
 
   const pick = (source: FrameSource) => {
     onPick(source);
@@ -30,7 +43,22 @@ export function FramePicker({ open, current, settings, onSettings, onClose, onPi
   };
 
   return (
-    <dialog ref={dialog} className="sheet" aria-labelledby="picker-title" onClose={onClose}>
+    <dialog
+      ref={dialog}
+      className="sheet"
+      style={
+        keepTopBarActive
+          ? { position: "fixed", inset: "4rem 0 0", zIndex: 20, maxHeight: "calc(100dvh - 4rem)" }
+          : undefined
+      }
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+      aria-labelledby="picker-title"
+      onClose={() => {
+        if (!keepTopBarActive || !open) onClose();
+      }}
+    >
       <header className="flex items-center justify-between border-b border-rule px-4 py-3 sm:px-5">
         <h2 id="picker-title" className="section-title">
           Choose a frame

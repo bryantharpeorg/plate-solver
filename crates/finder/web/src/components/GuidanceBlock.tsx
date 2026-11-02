@@ -2,15 +2,18 @@
 import type { Guidance } from "../api";
 import type { ObservingSession } from "../useSession";
 import { TARGET_CLASS_LABEL } from "./TargetSheet";
+import { GoToControl } from "./GoToControl";
 
 export function GuidanceBlock({
   session,
   onSetup,
   stale,
+  onChange,
 }: {
   session: ObservingSession;
   onSetup?: () => void;
   stale?: boolean;
+  onChange?: () => void;
 }) {
   const { target, guidance, pointing } = session;
   if (!target) return null;
@@ -78,6 +81,7 @@ export function GuidanceBlock({
       ) : (
         <p>Solve a frame to get directions from the latest pointing.</p>
       )}
+      <GoToControl session={session} onChange={onChange} />
     </section>
   );
 }

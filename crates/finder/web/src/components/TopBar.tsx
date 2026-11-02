@@ -1,10 +1,13 @@
 // The top bar: the frame being charted, the observing site, and night mode.
 
-import { thumbUrl, type FrameSource } from "../api";
+import { thumbUrl, type GoToProgress, type SessionMount, type FrameSource } from "../api";
+import { StopButton } from "./StopButton";
 import type { Site } from "../settings";
 import { Chevron, Pin, Reticle, Torch } from "./Icons";
 
 interface Props {
+  mount?: SessionMount;
+  goto?: GoToProgress;
   source: FrameSource | null;
   label: string | null;
   site: Site | null;
@@ -16,11 +19,14 @@ interface Props {
   onSetup: () => void;
   onHome: () => void;
   setup: boolean;
+  onChange?: () => void;
 }
 
 const siteText = (site: Site) => `${Math.abs(site.lat).toFixed(1)}° ${site.lat >= 0 ? "N" : "S"}`;
 
 export function TopBar({
+  mount,
+  goto,
   source,
   label,
   site,
@@ -32,10 +38,13 @@ export function TopBar({
   onSetup,
   onHome,
   setup,
+  onChange,
 }: Props) {
   return (
-    <header className="sticky top-0 z-10 border-b border-rule bg-paper">
-      <div className="page-width flex h-14 items-center gap-2 px-3 sm:h-16 sm:gap-3 sm:px-5 lg:px-10">
+    <header className="sticky top-0 z-30 border-b border-rule bg-paper">
+      <div
+        className={`page-width flex h-14 items-center ${mount ? "gap-1" : "gap-2"} px-3 sm:h-16 sm:gap-3 sm:px-5 lg:px-10`}
+      >
         <a
           href="/"
           onClick={(e) => {
@@ -78,7 +87,7 @@ export function TopBar({
         </button>
         <button
           type="button"
-          className="chip px-2.5"
+          className={`chip px-2.5 ${mount ? "max-[380px]:hidden" : ""}`}
           onClick={onSite}
           aria-label={site ? `Site ${siteText(site)}` : "Set your site"}
         >
@@ -98,6 +107,7 @@ export function TopBar({
         >
           Setup
         </a>
+        <StopButton mount={mount} goto={goto} onChange={onChange} />
         <label className="flex items-center gap-2 text-sm font-medium">
           <span className="hidden sm:inline">Night</span>
           <span className="sm:hidden" aria-hidden="true">

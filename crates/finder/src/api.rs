@@ -441,11 +441,23 @@ struct SessionResponse {
     session: SessionView,
     #[serde(skip_serializing_if = "Option::is_none")]
     goto: Option<crate::goto::Progress>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    goto_refusal: Option<String>,
 }
 async fn get_session(State(state): State<AppState>) -> Json<SessionResponse> {
+    let session = state.session.snapshot(state.clock.now());
+    let goto_refusal = if session.mount.as_ref().is_some_and(|m| m.connected) {
+        match &state.goto {
+            Some(goto) => goto.refusal().await,
+            None => None,
+        }
+    } else {
+        None
+    };
     Json(SessionResponse {
-        session: state.session.snapshot(state.clock.now()),
+        session,
         goto: state.goto.as_ref().and_then(|g| g.progress()),
+        goto_refusal,
     })
 }
 async fn start_goto(
