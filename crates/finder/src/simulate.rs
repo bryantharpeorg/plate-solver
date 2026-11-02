@@ -56,7 +56,9 @@ impl Simulation {
                     lon_deg: site.lon_deg,
                 });
         let simulator = Simulator::new(db, site, clock.0.clone());
+        let initial = simulator.telescope().camera;
         simulator.connect_mount(simulator::mount::SimMount::new(clock.0.clone()));
+        simulator.push_to(initial.alt, initial.az);
         // OS entropy without a new dependency. Nothing persists or reports this token.
         let mut random = [0u8; 32];
         std::fs::File::open("/dev/urandom")?.read_exact(&mut random)?;
