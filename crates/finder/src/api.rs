@@ -14,6 +14,27 @@
 //! those hardware terms. Both routes enforce the console's same-origin rule:
 //! a foreign Origin answers 403 with a JSON `error` before any model or axis change.
 
+//! `POST /api/track` accepts exactly `{"on":true}` or `{"on":false}` and
+//! returns the session. It enforces the same-origin rule. Track on answers 409
+//! with a JSON `error` without moving unless a mount, a nightly sync, a site,
+//! a set Sun and a pointable target are available. It arms behind a running GoTo,
+//! or starts a GoTo first when the target is more than one arcminute off the aim
+//! point. Track off stops both axes; the bodiless, any-origin `POST /api/stop`
+//! also clears arming and ends tracking with `ended_reason: "stopped"`.
+//!
+//! Session reads include run-only `track: {wanted, state, target, ended_reason?,
+//! readout?}` after the first accepted Track-on request. `state` is `armed` or
+//! the tracker's stable state name. The readout contains `rms_arcsec` over the
+//! last 60 seconds and `field_rotation_deg_per_min`; `longest_exposure_s` is
+//! added with an imaging camera, as seconds or `"no limit"` for one pixel of
+//! corner smear. Tracking is off at every binary start and is never persisted.
+//!
+//! `PUT /api/session` also accepts `imaging_camera: {width_mm, height_mm,
+//! pitch_um}`. Dimensions must be positive and at most 100 mm, pitch positive
+//! and at most 50 µm. Invalid edits answer 400 with a JSON `error` and change
+//! nothing. Explicit null clears it. The camera survives restarts and is
+//! omitted from session bodies until set, or after being cleared.
+
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
@@ -75,6 +96,7 @@ pub struct AppState {
     mount_monitor: Option<Arc<crate::live::MountMonitor>>,
     simulation: Option<Arc<Simulation>>,
     goto: Option<Arc<crate::goto::GoTo>>,
+    tracking_owner: Option<Arc<crate::session::TrackingOwner>>,
 }
 
 impl AppState {
@@ -99,6 +121,7 @@ impl AppState {
             mount_monitor: None,
             simulation: None,
             goto: None,
+            tracking_owner: None,
         }
     }
 
@@ -201,6 +224,7 @@ impl AppState {
                 f64::from(self.db.properties.max_fov),
             ),
         )));
+        self.tracking_owner = Some(Arc::new(self.session.tracking_owner()));
         self.goto = Some(Arc::new(crate::goto::GoTo::new(
             self.session.clone(),
             self.clock.clone(),
@@ -323,6 +347,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/targets", get(search_targets))
         .route("/api/session", get(get_session).put(put_session))
         .route("/api/goto", post(start_goto))
+        .route("/api/track", post(set_track))
         .route("/api/stop", post(stop_mount))
         .route("/api/model/second-sync", post(second_sync))
         .route("/api/model/reset", post(reset_model))
@@ -463,6 +488,37 @@ async fn get_session(State(state): State<AppState>) -> Json<SessionResponse> {
         goto_refusal,
     })
 }
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TrackEdit {
+    on: bool,
+}
+async fn set_track(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    edit: Result<Json<TrackEdit>, JsonRejection>,
+) -> Result<Json<SessionResponse>, ApiError> {
+    let edit = sim_json(edit)?;
+    if edit.on {
+        let link = state
+            .link
+            .clone()
+            .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "no mount is connected"))?;
+        let goto = state
+            .goto
+            .clone()
+            .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "no mount is connected"))?;
+        state
+            .session
+            .start_tracking(state.clock.clone(), link, goto)
+            .await
+            .map_err(|reason| ApiError::new(StatusCode::CONFLICT, reason))?;
+    } else {
+        let _ = stop_mount(State(state.clone())).await;
+    }
+    Ok(get_session(State(state)).await)
+}
+
 async fn start_goto(
     State(state): State<AppState>,
     _write: SessionWrite,
@@ -527,6 +583,7 @@ async fn reset_model(
 // Intentionally no SessionWrite and no body extractor: stopping is accepted
 // from every origin, even while another route is waiting on a solve.
 async fn stop_mount(State(state): State<AppState>) -> Json<serde_json::Value> {
+    state.session.stop_tracking().await;
     if let Some(goto) = &state.goto {
         goto.stop().await;
     } else if let Some(mut mount) = state.link.as_ref().and_then(|link| link.mount()) {

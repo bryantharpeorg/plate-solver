@@ -110,8 +110,9 @@ The page uses the API types in `web/src/api.ts`, which mirror the Rust structs i
 | `GET /api/similar?id=M42&lat=&lon=&time=` | Objects like `id`, best first. With `lat`/`lon` (degrees, east positive) and optional Unix `time`, each has its altitude and whether it is up. |
 | `GET /api/session` | One shared observing session: `{site, min_alt_deg, target, pointing, time}`. |
 | `PUT /api/session` | JSON partial edit: `{site?, min_alt_deg?, target?}`. Answers the updated observing session. |
+| `POST /api/track` | JSON `{"on":true}` or `{"on":false}`. Answers 200 with the session; on refusal, 409 with a JSON `error`. Same-origin writes only. |
 | `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
-| `POST /api/stop` | No body. Always 200, commanding both axes to stop, from any origin. |
+| `POST /api/stop` | No body. Always 200, ending tracking, clearing arming and commanding both axes to stop, from any origin. |
 | `POST /api/model/second-sync` | No body. Start the second sync; 200 with `{"started":true}`, or 409 with a JSON `error` naming the refusal. Same-origin writes only. |
 | `POST /api/model/reset` | JSON `{"what":"night"}` or `{"what":"fixed"}`. Reset that part of the pointing model and return the session. Same-origin writes only. |
 
@@ -120,7 +121,7 @@ A fresh session has no site, target or latest pointing, and a minimum altitude o
 `time` is the console's clock in Unix seconds. The binary uses the system clock except
 under `--simulate`, whose virtual clock runs at the real rate.
 
-Session edits, solves, GoTo and model writes follow the same-origin rule. When
+Session edits, solves, GoTo, Track and model writes follow the same-origin rule. When
 a request carries an `Origin`, its scheme, host and port must match the request's own
 origin. Its `Host` must also be an IP literal, `localhost`, or an explicitly allowed DNS
 name. A different origin or an unlisted DNS name answers 403 with a JSON `error` and
@@ -152,6 +153,37 @@ Omitted fields remain unchanged; `{"target":null}` clears the target and `{"site
 clears the site. A malformed edit, an unknown field (including `sun_guard`) or an invalid
 range answers 400 with `{"error":"..."}`. An unknown target id answers 404 with the same
 error shape. Each rejected edit leaves the entire observing session unchanged.
+
+Track on requires a connected mount, a sync tonight, a set site, the Sun down and
+a pointable target; a 409 names the missing condition. While a GoTo is running,
+Track is armed and starts tracking when it completes. Otherwise, a target more
+than 1′ from the aim point starts a GoTo first. A failed or halted GoTo ends the
+armed request and retains its reason. Track off stops tracking and both axes,
+leaving the telescope where it is. `POST /api/stop` also ends tracking as `stopped`
+and clears arming, so the next rate update cannot restart the axes.
+
+After the first accepted Track-on request, session reads include
+`track: {wanted, state, target, ended_reason?, readout?}`. `state` is `armed`,
+`tracking`, `keyhole_wait` or `off`; `target` is the canonical object being tracked.
+`ended_reason` holds the last tracker or GoTo ending reason. While tracking, the
+readout reports `rms_arcsec` over the last 60 s of live pointing errors and
+`field_rotation_deg_per_min` at the target. Uploaded frames never drive tracking.
+Track state is never persisted: every binary start has tracking off and omits
+`track` until Track is turned on again.
+
+Set the imaging camera through a checked session edit:
+
+```json
+{"imaging_camera":{"width_mm":23.5,"height_mm":15.6,"pitch_um":3.76}}
+```
+
+Sensor width and height must each be more than 0 and at most 100 mm; pixel pitch
+must be more than 0 and at most 50 µm. Out-of-range or malformed edits answer 400
+with a JSON `error` and change nothing. The camera is retained exactly across
+restarts. `{"imaging_camera":null}` clears it; session bodies omit the field
+until set and after clearing. With a camera set, the tracking readout adds
+`longest_exposure_s`: seconds for 1 px of field-rotation smear at the sensor's
+corner, or `"no limit"` when the rotation is below 1e-9 rad/s in magnitude.
 
 Every frame that solves becomes the latest pointing. `pointing` holds its `seq`, solved
 `frame`, J2000 `ra_deg` and `dec_deg`, and `time` in Unix seconds from the console's clock
