@@ -31,7 +31,7 @@ export default defineConfig({
   reporter: "list",
   use: { baseURL: externalURL ?? consoleURL, browserName: "chromium" },
   projects: [
-    { name: "default", testIgnore: ["**/session.spec.ts", "**/simulate.spec.ts"] },
+    { name: "default", testIgnore: ["**/session.spec.ts", "**/simulate.spec.ts", "**/goto.spec.ts"] },
     {
       name: "session",
       testMatch: "**/session.spec.ts",
@@ -41,7 +41,8 @@ export default defineConfig({
     },
     {
       name: "simulate",
-      testMatch: "**/simulate.spec.ts",
+      testMatch: ["**/simulate.spec.ts", "**/goto.spec.ts"],
+      workers: 1,
       use: { baseURL: externalURL ?? simulateURL },
       dependencies: externalURL ? ["session"] : [],
     },
