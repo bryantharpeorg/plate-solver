@@ -6,7 +6,8 @@ description: "Task list for 016-mcp: The Console's MCP Server"
 
 **Prerequisites** (plan.md § Prerequisites):
 - `012-targets-and-push-to`, `013-live-finder`, `014-goto` and `015-tracking` have
-  landed on `main`, and the trio has been re-read against 014's US9 and 015 as landed;
+  landed on `main`, and the trio has been re-read against 015 as landed (014's US9 was
+  re-read at a43747f);
 - the owner questions in plan.md § Refinement Record are answered, and the owner
   approvals in spec.md are given, including the `rmcp` and `base64` dependencies;
 - no operator-staged file is needed.
@@ -19,7 +20,13 @@ description: "Task list for 016-mcp: The Console's MCP Server"
   trap 18).
 - New Rust tests go in new files under `crates/finder/tests/`, or in-module. Shared test
   code goes in `crates/finder/tests/mcp/support.rs`, which starts with
-  `#![allow(dead_code)]` as `tests/live/support.rs` does.
+  `#![allow(dead_code)]` as `tests/live/support.rs` does. US1 creates it. US2 to US6 may
+  add new items to it, and may not change or remove any item an earlier story put there
+  (spec.md approval 17; plan.md § Plan traps, trap 25).
+- A test checks that `tools/list` includes each tool it names, by name, never the list's
+  length or its whole contents. A whole-body check compares two reads of the same
+  console, never a literal body that a later story's tool or session field would change
+  (plan.md § Plan traps, trap 24).
 - `crates/math-core`, `proto/`, `crates/simulator`, `crates/scope-node`, the scope link
   and its proto are never touched.
 - No test moves real hardware or calls a real LLM. The mount is reached only through the
@@ -33,17 +40,19 @@ description: "Task list for 016-mcp: The Console's MCP Server"
 
 - [ ] T001 [US1] Create `crates/finder/tests/mcp/support.rs` with a request helper that
   posts JSON-RPC to `/mcp` through `finder::router` with `tower::ServiceExt::oneshot`, a
-  peer set through axum's `MockConnectInfo`, and spec.md's shared headers unless a test
-  overrides them. Write failing tests in a new `crates/finder/tests/mcp_endpoint.rs`:
+  peer set through axum's `MockConnectInfo`, and spec.md's shared headers, including
+  `Host: localhost:8080`, unless a test overrides or removes them. Write failing tests in
+  a new `crates/finder/tests/mcp_endpoint.rs`:
   - `initialize` with no `Authorization`, then `tools/list` with no `Mcp-Session-Id`,
-    naming `get_session` (read-only hint) and `set_target` (US1-S1);
+    including `get_session` (read-only hint) and `set_target` by name (US1-S1);
   - GET gets 405, with the state file byte-for-byte unchanged (US1-S2);
   - with MCP off, a POST to `/mcp` answers as the same POST to `/no-such-path` (US1-S3);
   - `MCP-Protocol-Version: 1999-01-01` gets 400 (US1-S4);
   - a notification gets 202 (US1-S5).
 - [ ] T002 [US1] Add failing door tests to `crates/finder/tests/mcp_endpoint.rs`:
   - a foreign `Origin` gets 403, with the target unchanged (US1-S6);
-  - DNS rebinding with `evil.example:8080` gets 403 (US1-S7);
+  - DNS rebinding with `evil.example:8080` gets 403, and so does a request with no
+    `Host` and no `Origin` (US1-S7);
   - `192.168.1.20:8080`, and `surface.local:8080` under `--mcp-allow-host surface.local`,
     are answered 200 (US1-S8);
   - the peers `127.0.0.1`, `192.168.1.30`, `172.24.0.1`, `fe80::1`, `fd00::30` and
@@ -55,7 +64,10 @@ description: "Task list for 016-mcp: The Console's MCP Server"
   with `session::FixedClock`:
   - `get_session` and `set_target` equal their routes' JSON, as `structuredContent` and as
     text (US1-S11);
-  - `GET /api/mcp` on three consoles, with an injected address list (US1-S12).
+  - `GET /api/mcp` on three consoles, with an injected address list (US1-S12);
+  - `set_target` with a node token, and with a site, is refused with
+    `set_target changes only target`, and `GET /api/session` is exactly unchanged
+    (US1-S16).
 
 ### Implementation
 
@@ -78,15 +90,18 @@ description: "Task list for 016-mcp: The Console's MCP Server"
   `host_allowed` from `SessionWrite`. No route's answer changes.
 - [ ] T007 [US1] Create `crates/finder/src/mcp/door.rs`: axum middleware that reads the
   body up to 44 MiB and makes the `Origin`, `Host` and peer checks in plan.md's order,
-  through `check_origin` and `host_allowed`, judging an IPv4-mapped peer as IPv4 and
-  refusing a request with no `ConnectInfo`. A failed check answers 403 with a JSON-RPC
-  error and no id; otherwise the request goes on unchanged.
+  through `check_origin` and `host_allowed`, refusing a request with no `Host`, more than
+  one or a malformed one, judging an IPv4-mapped peer as IPv4 and refusing a request
+  with no `ConnectInfo`. A failed check answers 403 with a JSON-RPC error and no id;
+  otherwise the request goes on unchanged (plan.md § The door).
 - [ ] T008 [US1] Create `crates/finder/src/mcp/tools.rs` with the `Console` server
   (`#[tool_router]`, `#[tool_handler]`, `ServerConfig` with the `tools` capability) and
   `get_session` and `set_target`. `get_session` calls `session_response`; `set_target`
   reads its argument with `axum::Json::<SessionEdit>::from_bytes` and
-  `session_edit_error`, then calls `edit_session`. Each returns its JSON as text and as
-  `structuredContent` under FR-004's object rule, with `outputSchema`
+  `session_edit_error`, refuses an edit that sets any field but `target` with
+  `set_target changes only target`, checking it with a destructure of `SessionEdit` that
+  names every field and has no `..`, then calls `edit_session`. Each returns its JSON as
+  text and as `structuredContent` under FR-004's object rule, with `outputSchema`
   `{"type": "object"}` (owner question 9). Refusals are `isError: true` with the route's
   reason.
 - [ ] T009 [US1] In `crates/finder/src/api.rs`:
@@ -104,28 +119,33 @@ description: "Task list for 016-mcp: The Console's MCP Server"
   are unchanged and green, and that the diff is under 64 KiB (plan.md § Plan traps, trap
   3). Commit the green story (FR-001, FR-002, FR-003, FR-004, FR-005, FR-016, FR-019;
   US1-S1, US1-S2, US1-S3, US1-S4, US1-S5, US1-S6, US1-S7, US1-S8, US1-S9, US1-S10,
-  US1-S11, US1-S12, US1-S13, US1-S14, US1-S15).
+  US1-S11, US1-S12, US1-S13, US1-S14, US1-S15, US1-S16).
 
 ## Phase 2: User Story 2 — The session and catalog tools (Priority: P1)
 
 ### Tests first
 
-- [ ] T012 [US2] Add to `crates/finder/tests/mcp/support.rs` the simulator rig: the
-  simulated mount wrapped in a recording mount that logs each go-to, rate and stop all
-  with its virtual time, as `tests/goto_api.rs`'s `Recorded` does, and a console built on
-  it as `tests/live/support.rs` builds one. Write failing tests in a new
+- [ ] T012 [US2] Add to `crates/finder/tests/mcp/support.rs`, changing nothing US1 put
+  there, the simulator rig: the simulated mount wrapped in a recording mount that logs
+  each go-to, rate and stop all with its virtual time (`tests/goto_api.rs`'s `Recorded`
+  logs only stop all, so this one logs more), and a console built on it as
+  `tests/goto_api.rs`'s `Rig` builds one, with `with_live_solver` over the centroid
+  solver, 0.5 s frames and the aim point at (700, 420). Write failing tests in a new
   `crates/finder/tests/mcp_session_tools.rs`:
   - `search_targets` for "orion" answers `{targets}` equal to
     `GET /api/targets?q=orion` (US2-S1);
   - `set_session` with `min_alt_deg` 85, and with `{"sun_guard": false}`, gets the
     route's 400 text as `isError: true`, with the session unchanged (US2-S2);
-  - `get_guidance` from 350°/30° to 24°/42° gives clockwise 34° and up 12°, within 1e-9°
-    (US2-S3);
+  - on `FixedClock` at 2026-01-16 02:00 UT, with the site 40° N, 75° W, the target M78
+    and the pointing from solving `orion2.jpg`, as `tests/pushto_api.rs` builds them,
+    `get_guidance` is `pointable`, equals the session's `guidance` exactly, and equals
+    `pushto::turn_tilt` of the pointing's and the target's `sky::alt_az` positions
+    within 1e-9° (US2-S3);
   - the scope node's address and token are refused with `set_session`'s reason (US2-S4);
   - with the simulated mount connected at 40° N, 75° W, the site 40° N, 75° E is refused,
     and applied on a console with no mount (US2-S5);
   - each tool equals its route's JSON, the read-only hints are set, and `tools/list`
-    names all three (US2-S6).
+    includes all three by name (US2-S6).
 
 ### Implementation
 
@@ -136,13 +156,16 @@ description: "Task list for 016-mcp: The Console's MCP Server"
   `{"targets": [...]}`; `get_guidance` answers `{"guidance": ...}` from
   `session_response`.
 - [ ] T015 [US2] In `set_session` in `crates/finder/src/mcp/tools.rs`, read the arguments
-  as `set_target` does, refuse an edit that sets any other `SessionEdit` field with
-  `set_session changes only site, min_alt_deg and target`, refuse any `site` key while the
-  session says a mount is connected with
+  with `axum::Json::<SessionEdit>::from_bytes` and `session_edit_error`, as `set_target`
+  does, refuse an edit that sets any other `SessionEdit` field with
+  `set_session changes only site, min_alt_deg and target`, checked with a destructure of
+  `SessionEdit` that names every field and has no `..`, as `set_target`'s is, refuse any
+  `site` key while the session says a mount is connected with
   `the site cannot change while a mount is connected`, and apply the rest with
   `edit_session`.
-- [ ] T016 [US2] Run the `lint` and `test` gates. Confirm `tests/targets_api.rs` and
-  `tests/session_node.rs` are unchanged and green. Commit the green story (FR-020;
+- [ ] T016 [US2] Run the `lint` and `test` gates. Confirm `tests/targets_api.rs`,
+  `tests/session_node.rs` and `tests/mcp_endpoint.rs` are unchanged and green, and that
+  `tests/mcp/support.rs` only gained items. Commit the green story (FR-020;
   US2-S1, US2-S2, US2-S3, US2-S4, US2-S5, US2-S6).
 
 ## Phase 3: User Story 3 — Frames and the link (Priority: P1)
@@ -160,7 +183,7 @@ description: "Task list for 016-mcp: The Console's MCP Server"
     direction at mid-exposure (US3-S3);
   - `get_link` 2 s of virtual time after `set_unresponsive(true)` reads disconnected, with
     its `node` equal to the session's except `last_frame_age_s` (US3-S4);
-  - `tools/list` names the three tools, with the read-only hints (US3-S5).
+  - `tools/list` includes the three tools by name, with the read-only hints (US3-S5).
 
 ### Implementation
 
@@ -177,8 +200,9 @@ description: "Task list for 016-mcp: The Console's MCP Server"
   latest pointing is set as the page sets it.
 - [ ] T021 [US3] Add `get_pointing` and `get_link` to `crates/finder/src/mcp/tools.rs`,
   answering `{"pointing": ...}` and `{"node": ...}` from `session_response`.
-- [ ] T022 [US3] Run the `lint` and `test` gates. Confirm `tests/api.rs` and
-  `tests/link.rs` are unchanged and green, and that no file over 200 KiB is added. Commit
+- [ ] T022 [US3] Run the `lint` and `test` gates. Confirm `tests/api.rs`,
+  `tests/link.rs` and the earlier `tests/mcp_*.rs` files are unchanged and green, that
+  `tests/mcp/support.rs` only gained items, and that no file over 200 KiB is added. Commit
   the green story (FR-006, FR-021; US3-S1, US3-S2, US3-S3, US3-S4, US3-S5).
 
 ## Phase 4: User Story 4 — GoTo and Stop over MCP, and who moved the telescope (Priority: P1)
@@ -186,7 +210,10 @@ description: "Task list for 016-mcp: The Console's MCP Server"
 ### Tests first
 
 - [ ] T023 [US4] Write failing tests in a new `crates/finder/tests/mcp_motion.rs`, on the
-  simulator in virtual time after a sync:
+  simulator in virtual time after a sync. US5 will limit moving tools to 2 calls in any
+  sliding second of the console's clock, and may not edit this file, so within one rig
+  keep `goto_target` calls at least 1 s of virtual time apart, here and in T024 and T025
+  (plan.md § Plan traps, trap 26):
   - `describe_axes` and `get_axis_state` equal the simulator's (US4-S1);
   - `goto_target` completes within 1′ with no page action, with `motion.by` as `mcp`
     (US4-S2);
@@ -202,13 +229,19 @@ description: "Task list for 016-mcp: The Console's MCP Server"
     `the observer stopped it` and no correction for 5 s (US4-S6);
   - `stop` with `MCP-Protocol-Version: 1999-01-01` gets 400 and still stops (US4-S7);
   - a bare `stop_all`, with no `initialize`, `Accept` or protocol version, stops (US4-S8);
-  - `stop` with no mount is a success, and both stops stay listed (US4-S9);
+  - `stop` with no mount is a success, and `tools/list` still includes both stops by
+    name (US4-S9);
   - `stop_all` with a foreign `Origin` stops (US4-S10);
   - a batch of `stop_all` and `goto_target` with a foreign `Origin` gets 403, and with no
     `Origin` 415; each stops and starts no GoTo (US4-S11);
   - `goto_target` with `Host: evil.example:8080` gets 403, and no axis moves (US4-S12);
   - `get_session` and `goto_target` from `203.0.113.7` get 403, and no axis moves
-    (US4-S13).
+    (US4-S13);
+  - on a running GoTo each time, a `stop_all` with `Host: evil.example:8080` and
+    `Origin: http://evil.example:8080`, one with no `Host`, one from `203.0.113.7`, and
+    one through a router with no connect info each get 403, and each still commands both
+    axes to stop within 0.1 s and halts the GoTo with `the observer stopped it`
+    (US4-S16).
 
   Each "no axis moves" test first shows the mount moving on an accepted call.
 - [ ] T025 [US4] Add failing tests to `crates/finder/tests/mcp_motion.rs`:
@@ -234,13 +267,16 @@ description: "Task list for 016-mcp: The Console's MCP Server"
 - [ ] T029 [US4] In `crates/finder/src/mcp/door.rs`, recognise a `tools/call` of `stop`
   or `stop_all`, alone or in a JSON array, and carry it out once through `api::stop`
   before any check answers and before `rmcp` sees the request, writing the stop's
-  call-log line and setting the extension. When a check fails, run nothing else
-  (plan.md § The door).
+  call-log line and setting the extension. That holds for every check: a foreign
+  `Origin`, a rebinding, missing or malformed `Host`, a peer outside the LAN, and no
+  connect info. When a check fails, run nothing else (plan.md § The door).
 - [ ] T030 [US4] Run the `lint` and `test` gates. Confirm `tests/goto_api.rs`,
-  `tests/goto_sim.rs`, `tests/second_sync_sim.rs`, `tests/session_cli.rs` and 015's
-  `tests/track_api.rs` are unchanged and green. Commit the green story (FR-007, FR-008,
-  FR-012, FR-014, FR-017; US4-S1, US4-S2, US4-S3, US4-S4, US4-S5, US4-S6, US4-S7, US4-S8,
-  US4-S9, US4-S10, US4-S11, US4-S12, US4-S13, US4-S14, US4-S15).
+  `tests/goto_sim.rs`, `tests/second_sync_sim.rs`, `tests/session_cli.rs`,
+  `tests/goto_refusal_api.rs`, `tests/night_sim.rs`, 015's `tests/track_api.rs` and the
+  earlier `tests/mcp_*.rs` files are unchanged and green, and that `tests/mcp/support.rs`
+  only gained items. Commit the green story (FR-007, FR-008, FR-012, FR-014, FR-017;
+  US4-S1, US4-S2, US4-S3, US4-S4, US4-S5, US4-S6, US4-S7, US4-S8, US4-S9, US4-S10,
+  US4-S11, US4-S12, US4-S13, US4-S14, US4-S15, US4-S16).
 
 ## Phase 5: User Story 5 — Direct axis moves, held to the page's guards (Priority: P1)
 
@@ -270,12 +306,17 @@ description: "Task list for 016-mcp: The Console's MCP Server"
     guard (US5-S11);
   - ten moves within 1 s: one carried out, one `the mount is already moving`, eight
     refused for the rate limit, and `stop_all` stops (US5-S12);
-  - `tools/list` describes both tools as moving a real telescope, and no result or log
-    line holds the token (US5-S13);
+  - `tools/list` includes both tools by name and describes each as moving a real
+    telescope, and no result or log line holds the token (US5-S13);
   - the page's `POST /api/stop` halts a running move with `the observer stopped it`
     (US5-S14);
   - `goto_target` over a running move is refused with `the mount is already moving`
-    (US5-S15).
+    (US5-S15);
+  - with Track on for M42 through the page's `POST /api/track` and tracking,
+    `move_axis`, `goto_axis_position` and `goto_target`, each at least 1 s apart, are
+    refused with `Track is on`, with no go-to and no 1°/s rate in the command log and
+    `track.state` still `tracking` 5 s later (US5-S16; owner question 10; re-check when
+    015 lands).
 
 ### Implementation
 
@@ -304,39 +345,58 @@ description: "Task list for 016-mcp: The Console's MCP Server"
     lines;
   - `move_axis` caps the rate at the top rate and refuses a duration outside 0 to 30 s
     with `duration_s must be more than 0 and at most 30`;
-  - apply the limiter to them and to `goto_target`.
+  - apply the limiter to them and to `goto_target`;
+  - after the limiter and before 014's checks, refuse all three with `Track is on` while
+    the session's `track.state` is anything but `off`, read by name (plan.md § Decisions,
+    "Track and the MCP moves"; owner question 10; re-check when 015 lands).
 - [ ] T038 [US5] Run the `lint` and `test` gates. Confirm `tests/second_sync_sim.rs`,
-  `tests/goto_api.rs`, `tests/goto_sim.rs` and `goto.rs`'s own tests are unchanged and
-  green, and that the diff is under 64 KiB. Commit the green story (FR-009, FR-010,
-  FR-011, FR-022; US5-S1, US5-S2, US5-S3, US5-S4, US5-S5, US5-S6, US5-S7, US5-S8, US5-S9,
-  US5-S10, US5-S11, US5-S12, US5-S13, US5-S14, US5-S15).
+  `tests/goto_api.rs`, `tests/goto_sim.rs`, `tests/goto_refusal_api.rs`,
+  `tests/night_sim.rs`, `tests/mcp_motion.rs` and `goto.rs`'s own tests are unchanged
+  and green, that `tests/mcp/support.rs` only gained items, and that the diff is under
+  64 KiB. Commit the green story (FR-009, FR-010, FR-011, FR-022; US5-S1, US5-S2, US5-S3,
+  US5-S4, US5-S5, US5-S6, US5-S7, US5-S8, US5-S9, US5-S10, US5-S11, US5-S12, US5-S13,
+  US5-S14, US5-S15, US5-S16).
 
 ## Phase 6: User Story 6 — Tracking over MCP (Priority: P2)
 
 ### Tests first
 
-- [ ] T039 [US6] Write failing tests in a new `crates/finder/tests/mcp_tracking.rs`,
-  feeding the console the simulator's true pointing plus noise, as 015's long tracking
-  tests do (re-check when 015 lands):
-  - `set_tracking` on M42 holds within 1′ over 10 min of virtual time, sampled every 1 s,
-    with `get_session`'s `track.readout.rms_arcsec` equal to the route's and `motion`
-    naming `set_tracking`, the Track-first GoTo included (US6-S1);
+- [ ] T039 [US6] Write failing tests in a new `crates/finder/tests/mcp_tracking.rs`, on
+  US2's rig, whose live loop solves the simulator's frames every 0.5 s with
+  `with_live_solver` over the centroid solver. The console's own tracker is fed by
+  015's `live.rs` from those solves, with no hook added (plan.md § User Story 6, "The
+  feed"; re-check when 015 lands):
+  - from a sync made more than 1′ from M42, `set_tracking` on gives `motion` naming
+    `set_tracking` from the call through the Track-first GoTo; from the moment
+    `track.state` is `tracking`, M42 holds within 1′ for 10 min of virtual time, sampled
+    every 1 s, with `get_session`'s `track.readout.rms_arcsec` equal to the route's
+    (US6-S1);
   - with no mount, it is refused with `POST /api/track`'s 409 reason, and no result or
     log line holds the token (US6-S2);
   - after `move_axis`, a second `set_tracking` on within 1 s is refused for the rate
-    limit, and `set_tracking` off straight after is not (US6-S3; owner question 8).
+    limit, and `set_tracking` off within the same second of virtual time is not (US6-S3;
+    owner question 8);
+  - `stop` over MCP while tracking leaves `track.state` `off` with `ended_reason`
+    `stopped`, both axes commanded to stop within 0.1 s and no rate in the next 5 s
+    (US6-S4);
+  - `set_tracking` on during a `move_axis` is refused with
+    `a direct axis move is running`, Track stays off, and the move still stops at the end
+    of its duration (US6-S5; owner question 10).
 
 ### Implementation
 
 - [ ] T040 [US6] Add `set_tracking` to `crates/finder/src/mcp/tools.rs`: `{"on": true}`
-  calls `start_motion` with `by = mcp` and `set_tracking` and joins the limiter;
-  `{"on": false}` calls the same function as `POST /api/track` for off, unlimited. Both
-  write call-log lines. If 015's landed route needs `crates/finder/src/api.rs` to expose
-  that function, US6 moves it there and changes no answer.
+  joins the limiter, is refused with `a direct axis move is running` while `axis_move`
+  is `moving` (owner question 10), and otherwise calls `start_motion` with `by = mcp` and
+  `set_tracking`; `{"on": false}` calls the same function as `POST /api/track` for off,
+  unlimited. Both write call-log lines. If 015's landed route needs
+  `crates/finder/src/api.rs` to expose that function, US6 moves it there and changes no
+  answer.
 - [ ] T041 [US6] Run the `lint` and `test` gates. Confirm 015's existing tracking tests
-  are unchanged and green, and that `crates/finder/src/tracking.rs` and
+  and the earlier `tests/mcp_*.rs` files are unchanged and green, that
+  `tests/mcp/support.rs` only gained items, and that `crates/finder/src/tracking.rs` and
   `crates/finder/src/session.rs` are not in the diff. Commit the green story (FR-013;
-  US6-S1, US6-S2, US6-S3).
+  US6-S1, US6-S2, US6-S3, US6-S4, US6-S5).
 
 ## Phase 7: User Story 7 — The page says an MCP client is moving the telescope, and Setup shows the MCP address (Priority: P2)
 
@@ -345,37 +405,57 @@ description: "Task list for 016-mcp: The Console's MCP Server"
 - [ ] T042 [US7] Write failing Vitest tests:
   - in a new `crates/finder/web/src/components/McpNote.test.tsx`, rendered through
     `useSession` with a stubbed session: the note renders only while `motion.by` is
-    `mcp`, naming the tool, and Stop shows while `motion` is present though the mount
-    reports no movement;
-  - in a new `crates/finder/web/src/components/McpSection.test.tsx`, a LAN answer lists
-    every URL and `surface.local` with the WSL NAT note (US7-S2), a loopback answer lists
-    only `localhost`, the off state is shown as off (US7-S3), and a health-shaped answer
-    renders nothing.
+    `mcp`, naming the tool, and the top bar's single Stop shows while `motion` is
+    present though the mount reports no movement;
+  - in a new `crates/finder/web/src/components/McpSection.test.tsx`, rendering
+    `McpSection` directly with each status as its prop: a LAN status lists every URL and
+    `surface.local` with the WSL NAT note (US7-S2), a loopback status lists only
+    `localhost`, the off state is shown as off (US7-S3), a health-shaped answer renders
+    nothing, and nothing has a `status` or `alert` role.
 - [ ] T043 [US7] Write `crates/finder/web/e2e/mcp.spec.ts` for the `simulate` project,
   with its own night pixel helpers:
   - it sets its own site, target and sync, as 014's `e2e/goto.spec.ts` reaches a running
     GoTo, then posts `goto_target` over HTTP: the note shows in the guidance block and top
-    bar within 1 s, Stop is enabled, and Stop halts the GoTo, oracle the session's `goto`
-    and `GET /api/sim/telescope` (US7-S1);
-  - the night pixel check on the note and on Setup's MCP section, at 0 pixels (US7-S4).
+    bar within 1 s, the top bar's Stop is enabled and is the page's only Stop, and Stop
+    halts the GoTo, oracle the session's `goto` and `GET /api/sim/telescope`, whose
+    eyepiece altitude and azimuth each change by less than 1e-8° over the next 2 s, as
+    `goto.spec.ts:279–284` compares them (US7-S1);
+  - the night pixel check on the note and on Setup's MCP section, at 0 pixels (US7-S4);
+  - its `afterAll` posts `/api/stop`, sets frames running, deletes `/api/aim` and resets
+    the night's model, as `goto.spec.ts:109–116` does, because `simulate.spec.ts` runs
+    next and asserts there is no aim point (plan.md § Plan traps, trap 22).
 
 ### Implementation
 
 - [ ] T044 [US7] Let `motion` reach the page: add `motion?` to `ObservingSession` in
-  `crates/finder/web/src/api.ts`, copy it in `crates/finder/web/src/useSession.ts`, and
-  pass it to `TopBar` in `crates/finder/web/src/App.tsx`.
-- [ ] T045 [US7] Add `crates/finder/web/src/components/McpNote.tsx`, and place it in
-  `crates/finder/web/src/components/GuidanceBlock.tsx` and
-  `crates/finder/web/src/components/TopBar.tsx` beside the existing Stop. Give
-  `mountMayMove` in `crates/finder/web/src/components/StopButton.tsx` an optional third
-  argument, `motion`, and pass it from `TopBar.tsx` and
+  `crates/finder/web/src/api.ts`, copy it in `crates/finder/web/src/useSession.ts` only
+  when present, as 014's `goto_refusal` is copied, so `useSession.test.ts` stays
+  unchanged, and pass it to `TopBar` in `crates/finder/web/src/App.tsx`.
+- [ ] T045 [US7] Add `crates/finder/web/src/components/McpNote.tsx`, plain text with no
+  `status` or `alert` role, and place it in
+  `crates/finder/web/src/components/GuidanceBlock.tsx`, which has no Stop and gets none,
+  and in `crates/finder/web/src/components/TopBar.tsx` beside its single `StopButton`.
+  Render no second Stop anywhere. Give `mountMayMove` in
+  `crates/finder/web/src/components/StopButton.tsx` an optional third argument,
+  `motion`, and pass it from `TopBar.tsx` and
   `crates/finder/web/src/components/MountSection.tsx`.
-- [ ] T046 [US7] Add `crates/finder/web/src/components/McpSection.tsx`, reading
-  `GET /api/mcp` and rendering nothing for an answer that isn't an MCP status, and place
-  it in `crates/finder/web/src/components/SetupPage.tsx` after the mount section.
+- [ ] T046 [US7] Add `crates/finder/web/src/components/McpSection.tsx`, which takes the
+  `GET /api/mcp` status as a prop, fetches nothing, renders nothing for a status without
+  a boolean `enabled` and an array `urls`, and has no `status` or `alert` role. In
+  `crates/finder/web/src/App.tsx`, read `GET /api/mcp` each time the path becomes
+  `/setup`, catching every failure (a rejected fetch, a non-OK answer, a body that isn't
+  JSON) so that the prop is left unset, and pass the answer to `SetupPage` as an
+  optional prop. In `crates/finder/web/src/components/SetupPage.tsx`, render
+  `McpSection` last, after every existing section, only when that prop is set, so its
+  late arrival moves no existing section. `SetupPage` itself
+  makes no new request, so `ScopeNodeSection.test.tsx`'s and `AimTap.test.tsx`'s exact
+  fetch counts hold (plan.md § Shapes that existing tests pin, "The page").
 - [ ] T047 [US7] In `crates/finder/web/playwright.config.ts`, add `mcp.spec.ts` to the
-  `simulate` project's file match and to the `default` project's ignore list, re-reading
-  the lines 014's and 015's US9 left, and change nothing else (owner approval 15).
+  `simulate` project's match list and to the `default` project's ignore list, re-reading
+  the layout 015's US9 left. Lay the lists out as Prettier formats them (`printWidth`
+  120, which the `test` gate's `npm run format:check` checks); once `tracking.spec.ts`
+  is in the `default` list, that is more than one line. Change nothing else (owner
+  approval 15).
 - [ ] T048 [US7] Add the MCP section to `crates/finder/README.md` (US7-S5). Record the
   note and the Setup section as built in `DESIGN.md` and `.impeccable/design.json`
   (US7-S6).
@@ -397,8 +477,9 @@ US1 → US2 → US3 → US4 ─┬→ US5 → US6
 
 Every arrow is a merge edge: the later story starts from a `main` that holds the earlier
 one.
-- **US2 to US6** each add tools to `crates/finder/src/mcp/tools.rs`, and shared functions
-  to `crates/finder/src/api.rs`, so they run one after another.
+- **US2 to US6** each add tools to `crates/finder/src/mcp/tools.rs`, shared functions to
+  `crates/finder/src/api.rs` and items to `crates/finder/tests/mcp/support.rs`, so they
+  run one after another.
 - **US3** also changes `Cargo.lock` and `crates/finder/Cargo.toml` after US1. **US4**
   changes `mcp/door.rs` from US1. **US5** adds modules to `mcp/mod.rs` and entry points to
   014's `goto.rs`.
@@ -407,4 +488,5 @@ one.
 - **`[P]`** marks nothing here: every task within a story shares a file with another.
 - **Out of scope for every story:** `crates/math-core`, `proto/`, `crates/simulator`,
   `crates/scope-node`, the scope link's proto, `scripts/ci/`, `.github/`, `deny.toml` and
-  existing tests.
+  existing tests. The one exception is adding items to 016's own
+  `crates/finder/tests/mcp/support.rs` (approval 17).
