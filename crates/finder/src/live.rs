@@ -211,7 +211,19 @@ impl Live {
                 report.name = None;
                 let pointing_seq = solved.and_then(|solved| {
                     estimate = Some(solved.fov_deg());
-                    session.record_live_pointing(solved, time, frame.id)
+                    let seq = session.record_live_pointing(solved, time, frame.id);
+                    if seq.is_some() {
+                        let rms = report
+                            .pointing
+                            .as_ref()
+                            .and_then(|p| p.rmse_arcsec)
+                            .unwrap_or(1.0)
+                            .max(0.01);
+                        if let Err(error) = session.record_frame_sync(&frame, solved, time, rms) {
+                            eprintln!("could not retain scope-node sync: {error}");
+                        }
+                    }
+                    seq
                 });
                 if pointing_seq.is_some() {
                     failures = 0;
@@ -258,5 +270,59 @@ impl Live {
             .iter()
             .find(|p| p.frame_id == frame_id)
             .cloned()
+    }
+}
+
+// Mount discovery belongs to the console. Old nodes may lack the additive
+// mount service; that is an absent mount, without affecting live solving.
+pub(crate) struct MountMonitor(JoinHandle<()>);
+impl Drop for MountMonitor {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+impl MountMonitor {
+    pub(crate) fn start(link: Arc<crate::link::LinkManager>, session: Arc<Session>) -> Self {
+        Self(tokio::spawn(async move {
+            let mut status = link.status();
+            loop {
+                status.borrow_and_update();
+                let read = async {
+                    if !link.status().borrow().connected {
+                        return None;
+                    }
+                    let mut mount = link.mount()?;
+                    let info = mount.describe_mount().await.ok()?;
+                    if info.axes.len() != 2
+                        || info.axes.iter().any(|a| a.counts_per_revolution == 0)
+                    {
+                        return None;
+                    }
+                    let az = mount
+                        .axis_state(scope_link::proto::Axis::Azimuth)
+                        .await
+                        .ok()?;
+                    let alt = mount
+                        .axis_state(scope_link::proto::Axis::Altitude)
+                        .await
+                        .ok()?;
+                    Some((
+                        [
+                            info.axes[0].counts_per_revolution,
+                            info.axes[1].counts_per_revolution,
+                        ],
+                        az.moving || alt.moving,
+                    ))
+                };
+                match tokio::time::timeout(std::time::Duration::from_millis(200), read).await {
+                    Ok(Some((counts, moving))) => session.set_mount(Some(counts), true, moving),
+                    _ => session.set_mount(None, false, false),
+                }
+                tokio::select! {
+                    _ = tokio::time::sleep(std::time::Duration::from_millis(250)) => {},
+                    changed = status.changed() => { if changed.is_err() { return; } },
+                }
+            }
+        }))
     }
 }
