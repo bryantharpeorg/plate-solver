@@ -1,6 +1,6 @@
 // The top bar: the frame being charted, the observing site, and night mode.
 
-import { thumbUrl, type GoToProgress, type SessionMount, type FrameSource } from "../api";
+import { thumbUrl, type GoToProgress, type SessionMount, type SessionTrack, type FrameSource } from "../api";
 import { StopButton } from "./StopButton";
 import type { Site } from "../settings";
 import { Chevron, Pin, Reticle, Torch } from "./Icons";
@@ -8,6 +8,7 @@ import { Chevron, Pin, Reticle, Torch } from "./Icons";
 interface Props {
   mount?: SessionMount;
   goto?: GoToProgress;
+  track?: SessionTrack;
   source: FrameSource | null;
   label: string | null;
   site: Site | null;
@@ -27,6 +28,7 @@ const siteText = (site: Site) => `${Math.abs(site.lat).toFixed(1)}° ${site.lat 
 export function TopBar({
   mount,
   goto,
+  track,
   source,
   label,
   site,
@@ -107,7 +109,7 @@ export function TopBar({
         >
           Setup
         </a>
-        <StopButton mount={mount} goto={goto} onChange={onChange} />
+        <StopButton mount={mount} goto={goto} track={track} onChange={onChange} />
         <label className="flex items-center gap-2 text-sm font-medium">
           <span className="hidden sm:inline">Night</span>
           <span className="sm:hidden" aria-hidden="true">

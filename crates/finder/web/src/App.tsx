@@ -133,6 +133,7 @@ export function App() {
         onChange={changed}
         mount={session.mount}
         goto={session.goto}
+        track={session.track}
         source={source}
         label={label}
         site={site}

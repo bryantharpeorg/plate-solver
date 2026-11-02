@@ -3,6 +3,7 @@ import type { Guidance } from "../api";
 import type { ObservingSession } from "../useSession";
 import { TARGET_CLASS_LABEL } from "./TargetSheet";
 import { GoToControl } from "./GoToControl";
+import { TrackControl } from "./TrackControl";
 
 export function GuidanceBlock({
   session,
@@ -82,6 +83,7 @@ export function GuidanceBlock({
         <p>Solve a frame to get directions from the latest pointing.</p>
       )}
       <GoToControl session={session} onChange={onChange} />
+      <TrackControl session={session} onChange={onChange} />
     </section>
   );
 }
