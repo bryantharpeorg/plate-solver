@@ -18,6 +18,13 @@
 //!   such as `"M42"`. Omitted fields remain; `site: null` and `target: null` clear them.
 //!   Invalid fields answer 400, unknown targets 404, with a JSON `error` and no changes.
 //!
+//! * `POST /api/goto`: no body; start a guarded GoTo to the session's target.
+//!   Requires the console's own origin, a connected mount, a sync and a pointable
+//!   target while the Sun is down; refusals answer 409 with a JSON `error`.
+//! * `POST /api/stop`: no body or origin restriction; always answers 200 and
+//!   commands both axes to stop. Session reads retain `goto` progress and its
+//!   final error in arcseconds or halt reason.
+//!
 //! A fresh session has no site, target or pointing and a 15° minimum altitude. Site
 //! coordinates are `lat_deg` (±90°) and `lon_deg` (±180°, east positive); the minimum
 //! altitude accepts 0–80°. Unknown fields are refused, including Sun guard overrides.
@@ -66,3 +73,5 @@ pub use api::{router, AppState};
 
 /// Pointing model fitted from scope-node syncs.
 pub mod model;
+
+pub mod goto;
