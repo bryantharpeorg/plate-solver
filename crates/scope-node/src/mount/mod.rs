@@ -1,6 +1,9 @@
 //! Hardware-neutral two-axis mount port. Positions are counts, rates are degrees/s.
 use std::{future::Future, pin::Pin};
 
+pub mod queue;
+pub mod watchdog;
+
 /// An axis in the mount's own frame, independent of its zero points on the sky.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Axis {

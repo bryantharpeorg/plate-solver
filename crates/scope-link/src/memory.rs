@@ -65,3 +65,14 @@ where
         .serve_with_incoming(tokio_stream::iter(vec![Ok::<_, io::Error>(server_io)]))
         .await
 }
+
+/// Serve several generated services on the same in-process scope link.
+pub async fn serve_routes_on(
+    server_io: DuplexStream,
+    routes: tonic::service::Routes,
+) -> Result<(), Error> {
+    Server::builder()
+        .add_routes(routes)
+        .serve_with_incoming(tokio_stream::iter(vec![Ok::<_, io::Error>(server_io)]))
+        .await
+}
