@@ -12,6 +12,7 @@ use crate::{
 };
 use scope_link::proto::StarFrame;
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex};
 
 /// A solved aim point and interpolated axis positions, all at mid-exposure.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -83,6 +84,112 @@ pub struct Prediction {
     /// Camera rotation relative to increasing altitude, degrees.
     pub roll_deg: f64,
 }
+/// Measured full dead band, kept with the mount's fixed terms across nights.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Backlash {
+    /// Altitude dead band in degrees, absent before its first measurement.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alt_deg: Option<f64>,
+    /// Azimuth dead band in degrees, absent before its first measurement.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub az_deg: Option<f64>,
+}
+impl Backlash {
+    pub(crate) fn axis(self, i: usize) -> Option<f64> {
+        [self.az_deg, self.alt_deg][i]
+    }
+    pub(crate) fn set(&mut self, i: usize, value: f64) {
+        if i == 0 {
+            self.az_deg = Some(value);
+        } else {
+            self.alt_deg = Some(value);
+        }
+    }
+    pub(crate) fn present(self) -> Option<Self> {
+        (self.alt_deg.is_some() || self.az_deg.is_some()).then_some(self)
+    }
+}
+
+type BacklashStore = Arc<dyn Fn(Backlash) -> Result<(), String> + Send + std::marker::Sync>;
+#[derive(Default)]
+struct MotionState {
+    backlash: Backlash,
+    // Zero means the usual GoTo approach, from below. A stop preserves the
+    // last direction; measurement/take-up frames are held out of the fit.
+    direction: [i8; 2],
+    crossing: [bool; 2],
+    store: Option<BacklashStore>,
+}
+/// Runtime mechanical state shared by the session's fit and tracking snapshot.
+/// It is deliberately excluded from the model's serialized nightly data.
+#[derive(Clone, Default)]
+pub(crate) struct Motion(Arc<Mutex<MotionState>>);
+impl std::fmt::Debug for Motion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Motion").field(&self.backlash()).finish()
+    }
+}
+impl PartialEq for Motion {
+    fn eq(&self, other: &Self) -> bool {
+        self.backlash() == other.backlash()
+    }
+}
+impl Motion {
+    pub(crate) fn backlash(&self) -> Backlash {
+        self.0.lock().unwrap().backlash
+    }
+    pub(crate) fn restore(&self, backlash: Backlash) {
+        self.0.lock().unwrap().backlash = backlash;
+    }
+    pub(crate) fn persist_with(&self, store: BacklashStore) {
+        self.0.lock().unwrap().store = Some(store);
+    }
+    pub(crate) fn measured(&self, axis: usize, degrees: f64) -> Result<(), String> {
+        let (mut backlash, store) = {
+            let state = self.0.lock().unwrap();
+            (state.backlash, state.store.clone())
+        };
+        backlash.set(axis, degrees);
+        if let Some(store) = store {
+            store(backlash)?;
+        }
+        self.restore(backlash);
+        Ok(())
+    }
+    pub(crate) fn moving(&self, axis: usize, rate: f64) {
+        if rate != 0.0 {
+            let mut state = self.0.lock().unwrap();
+            // A fresh GoTo's positive approach releases a held, interrupted
+            // measurement or take-up. A stop alone never changes the side.
+            if rate > 0.0 && state.direction[axis] < 0 {
+                state.crossing[axis] = false;
+            }
+            state.direction[axis] = if rate > 0.0 { 1 } else { -1 };
+        }
+    }
+    pub(crate) fn crossing(&self, axis: usize, crossing: bool) {
+        self.0.lock().unwrap().crossing[axis] = crossing;
+    }
+    fn correct(&self, sync: &mut Sync) -> bool {
+        let state = self.0.lock().unwrap();
+        for i in 0..2 {
+            if state.crossing[i] {
+                return false;
+            }
+            if state.direction[i] < 0 {
+                let Some(degrees) = state.backlash.axis(i) else {
+                    return false;
+                };
+                // Counts on the negative side lag the positive approach's
+                // optical position by the full play width. Correct before the
+                // slip check, as well as before fitting the zero points.
+                sync.axis[i] += degrees * f64::from(sync.counts_per_revolution[i]) / 360.0;
+            }
+        }
+        true
+    }
+}
 /// Nightly syncs and zero points, with shared fixed terms.
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Model {
@@ -100,6 +207,8 @@ pub struct Model {
     pub rms_arcsec: f64,
     #[serde(default)]
     fixed_since: Option<f64>,
+    #[serde(skip)]
+    pub(crate) motion: Motion,
 }
 /// Session API projection; absent until the model has syncs or fixed terms.
 #[derive(Debug, Serialize)]
@@ -370,6 +479,9 @@ impl Model {
     }
     /// Add a qualified sync, assign its epoch, thin and refit. Invalid data is refused.
     pub fn add_sync(&mut self, mut sync: Sync) -> bool {
+        if !self.motion.correct(&mut sync) {
+            return false;
+        }
         if !sync.time.is_finite()
             || !sync.az_deg.is_finite()
             || !sync.alt_deg.is_finite()
