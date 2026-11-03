@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use clap::Parser;
+use finder::mcp::McpConfig;
 use finder::samples::Samples;
 use finder::session::Session;
 use finder::session::{Clock, SystemClock};
@@ -39,7 +40,10 @@ struct Args {
     /// Simulated UTC start, YYYY-MM-DDTHH:MM:SSZ (optional fractional seconds).
     #[arg(long, requires = "simulate", value_parser = parse_start)]
     sim_start: Option<f64>,
-    /// DNS name allowed for same-origin writes, besides IPs and localhost (repeatable).
+    /// Turn off the MCP endpoint.
+    #[arg(long)]
+    no_mcp: bool,
+    /// DNS name allowed for same-origin writes and /mcp, besides IPs and localhost (repeatable).
     #[arg(long)]
     allow_host: Vec<String>,
     /// Print the third-party notices for the embedded page and data, and exit.
@@ -109,10 +113,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .with_live();
 
     let listener = tokio::net::TcpListener::bind(args.listen).await?;
-    eprintln!("finder console: http://{}", listener.local_addr()?);
+    let bound_addr = listener.local_addr()?;
+    let state = state.with_mcp(McpConfig {
+        enabled: !args.no_mcp,
+        bound_addr,
+        ..Default::default()
+    });
+    eprintln!("finder console: http://{bound_addr}");
     if args.listen.ip().is_loopback() {
         eprintln!("(to open it from a phone, run with --listen 0.0.0.0:8080)");
     }
-    axum::serve(listener, router(state)).await?;
+    axum::serve(
+        listener,
+        router(state).into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }
