@@ -2,6 +2,7 @@
 use std::sync::Arc;
 
 use axum::Json;
+use base64::prelude::{Engine as _, BASE64_STANDARD};
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
@@ -56,6 +57,14 @@ struct SiteArguments {
 struct SearchArguments {
     q: String,
     limit: Option<usize>,
+}
+
+#[derive(serde::Deserialize, rmcp::schemars::JsonSchema)]
+struct FrameArguments {
+    /// Image file encoded with standard base64, at most 32 MiB once decoded.
+    image: String,
+    /// Optional file name to include in the solve report.
+    name: Option<String>,
 }
 
 fn object_schema() -> Arc<JsonObject> {
@@ -188,6 +197,57 @@ impl Console {
             "guidance",
             serde_json::to_value(guidance).expect("guidance JSON"),
         )
+    }
+
+    #[tool(description = "Solve a saved image encoded as standard base64 and set the latest pointing, as POST /api/solve does. The decoded image limit is 32 MiB.",
+        output_schema = object_schema())]
+    async fn solve_frame(&self, Parameters(args): Parameters<FrameArguments>) -> CallToolResult {
+        let result = async {
+            let bytes = BASE64_STANDARD
+                .decode(args.image)
+                .map_err(|error| format!("the image is not valid base64: {error}"))?;
+            if bytes.len() > api::SOLVE_BODY_LIMIT {
+                return Err("the image is larger than POST /api/solve's 32 MiB limit".to_owned());
+            }
+            let permit = self
+                .state
+                .solve_permit()
+                .await
+                .map_err(|error| error.message)?;
+            api::solve_upload(
+                &self.state,
+                permit,
+                bytes,
+                args.name,
+                crate::solve::SolveOptions::default(),
+            )
+            .await
+            .map_err(|error| error.message)
+        }
+        .await;
+        match result {
+            Ok(report) => {
+                CallToolResult::structured(serde_json::to_value(report).expect("solve report JSON"))
+            }
+            Err(reason) => CallToolResult::error(vec![ContentBlock::text(reason)]),
+        }
+    }
+
+    #[tool(description = "Read the latest pointing, updated by live solves while the live loop runs.",
+        output_schema = object_schema(), annotations(read_only_hint = true))]
+    async fn get_pointing(&self) -> CallToolResult {
+        let pointing = api::session_response(&self.state).await.session.pointing;
+        field_result(
+            "pointing",
+            serde_json::to_value(pointing).expect("pointing JSON"),
+        )
+    }
+
+    #[tool(description = "Read the scope link's health and live loop state as reported by the session's node.",
+        output_schema = object_schema(), annotations(read_only_hint = true))]
+    async fn get_link(&self) -> CallToolResult {
+        let node = api::session_response(&self.state).await.session.node;
+        field_result("node", serde_json::to_value(node).expect("node JSON"))
     }
 }
 
