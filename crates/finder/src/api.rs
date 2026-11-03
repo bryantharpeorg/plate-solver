@@ -576,15 +576,22 @@ where
     }
     // Reserve the whole direct move, including a zero rate or a Stop whose
     // watcher has not finished yet. Telemetry alone may already report rest.
-    if matches!(
-        tool,
-        "goto" | "second_sync" | "goto_target" | "goto_axis_position" | "move_axis"
-    ) && state
+    let direct_move_running = state
         .axis_move
         .lock()
         .unwrap()
         .as_ref()
-        .is_some_and(|m| m.state == "moving")
+        .is_some_and(|m| m.state == "moving");
+    if by == "mcp" && tool == "set_tracking" && direct_move_running {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "a direct axis move is running",
+        ));
+    }
+    if matches!(
+        tool,
+        "goto" | "second_sync" | "goto_target" | "goto_axis_position" | "move_axis"
+    ) && direct_move_running
     {
         return Err(ApiError::new(
             StatusCode::CONFLICT,

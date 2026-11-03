@@ -95,6 +95,12 @@ struct RateArguments {
     duration_s: f64,
 }
 
+#[derive(serde::Deserialize, serde::Serialize, rmcp::schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct TrackingArguments {
+    on: bool,
+}
+
 fn object_schema() -> Arc<JsonObject> {
     Arc::new(json!({"type":"object"}).as_object().unwrap().clone())
 }
@@ -281,6 +287,37 @@ impl Console {
         .await;
         self.state.log_call(
             "move_axis",
+            &json!(args),
+            result.as_ref().map_err(String::as_str),
+        );
+        tool_result(result)
+    }
+
+    #[tool(description = "Move a real telescope by turning Track on for the session's target, or stop all motion by turning it off, as the page's Track toggle does.",
+        output_schema = object_schema())]
+    async fn set_tracking(
+        &self,
+        Parameters(args): Parameters<TrackingArguments>,
+    ) -> CallToolResult {
+        let result = async {
+            if args.on {
+                self.state.limit_move()?;
+                api::start_motion(&self.state, "mcp", "set_tracking", || {
+                    api::start_tracking(&self.state)
+                })
+                .await
+                .map_err(|error| error.message)?;
+            } else {
+                api::stop(&self.state).await;
+            }
+            Ok(
+                serde_json::to_value(api::session_response(&self.state).await)
+                    .expect("session JSON"),
+            )
+        }
+        .await;
+        self.state.log_call(
+            "set_tracking",
             &json!(args),
             result.as_ref().map_err(String::as_str),
         );
