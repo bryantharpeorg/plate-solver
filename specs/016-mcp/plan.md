@@ -605,11 +605,17 @@ telescope already within 1′ of the target starts tracking at once, with no GoT
 nothing refuses Track on top of a running direct move. So, on the MCP path only:
 - `goto_target`, `goto_axis_position` and `move_axis` are refused with `Track is on`
   while the session's `track.state` is anything but `off` (`armed`, `tracking` or
-  `keyhole_wait`; a session with no `track` counts as off), after the limiter and before
-  014's checks;
+  `keyhole_wait`; a session with no `track` counts as off), after the limiter, inside
+  `start_motion`'s lock and before 014's checks;
 - `set_tracking` with `on: true` is refused with `a direct axis move is running` while
-  `axis_move` is `moving`, after the limiter and before `POST /api/track`'s function;
+  `axis_move` is `moving`, after the limiter, inside `start_motion`'s lock and before
+  `POST /api/track`'s function;
 - Track turned on during a GoTo still arms, as 015's FR-014 says.
+
+Both refusals are checked inside `start_motion`'s lock, with the start they guard. Every
+motion start takes that lock, the page's GoTo, second sync and Track-on included (§ The
+session's `motion`), so no Track-on or direct move can start between the check and the
+motion (owner answer, 2026-11-03).
 
 The page's `POST /api/goto` and `POST /api/track` keep exactly the answers 015's tests
 pin. What 016 relies on in 015, as landed: `track.state` is serialized in the session
@@ -743,10 +749,10 @@ running each move and its watcher. `move_axis` refuses a duration outside 0 to 3
 
 **The limiter.** Add `mcp::limit` and apply it to `goto_target` and the two direct moves.
 
-**Track.** After the limiter, the three moving tools refuse with `Track is on` while
-015's `track.state` is anything but `off` (§ Decisions, "Track and the MCP moves"; owner
-question 10). US5-S16 turns Track on through the page's `POST /api/track`, because
-`set_tracking` arrives in US6.
+**Track.** After the limiter, inside `start_motion`'s lock, the three moving tools refuse
+with `Track is on` while 015's `track.state` is anything but `off` (§ Decisions, "Track
+and the MCP moves"; owner question 10). US5-S16 turns Track on through the page's
+`POST /api/track`, because `set_tracking` arrives in US6.
 
 ## User Story 6 — Tracking over MCP
 

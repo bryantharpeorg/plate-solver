@@ -353,7 +353,8 @@ description: "Task list for 016-mcp: The Console's MCP Server"
   - `move_axis` caps the rate at the top rate and refuses a duration outside 0 to 30 s
     with `duration_s must be more than 0 and at most 30`;
   - apply the limiter to them and to `goto_target`;
-  - after the limiter and before 014's checks, refuse all three with `Track is on` while
+  - after the limiter, inside `start_motion`'s lock and before 014's checks, refuse all
+    three with `Track is on` while
     the session's `track.state` is anything but `off`, read by name (plan.md § Decisions,
     "Track and the MCP moves"; owner question 10).
 - [ ] T038 [US5] Run the `lint` and `test` gates. Confirm `tests/second_sync_sim.rs`,
@@ -396,7 +397,8 @@ description: "Task list for 016-mcp: The Console's MCP Server"
 
 - [ ] T040 [US6] Add `set_tracking` to `crates/finder/src/mcp/tools.rs`, answering the
   session as `set_track` does: `{"on": true}` joins the limiter, is refused with
-  `a direct axis move is running` while `axis_move` is `moving` (owner question 10), and
+  `a direct axis move is running` while `axis_move` is `moving`, checked inside
+  `start_motion`'s lock (owner question 10), and
   otherwise calls `start_motion` with `by = mcp` and `set_tracking` around the same Track
   start `set_track` makes; `{"on": false}` calls US4's `stop`, as `set_track` calls
   `stop_mount` for off, unlimited. Both write call-log lines. If US4 left the Track start

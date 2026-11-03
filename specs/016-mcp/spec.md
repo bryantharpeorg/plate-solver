@@ -166,6 +166,29 @@ the answer its recommendation gave.
   `sun_up`, `too_low` or a GoTo's reason. 015's US8 gave `mountMayMove` a third argument,
   `track`, so 016's `motion` becomes its fourth (plan.md § Refinement Record).
 
+### Session 2026-11-03 (owner answers on the re-read)
+
+The re-read against 015 raised five more points. The owner accepted each recommendation
+on 2026-11-03 ("Accept your recs").
+
+- Q: May `set_session` set 015's `imaging_camera`? → A: No. `set_session` stays limited
+  to `site`, `min_alt_deg` and `target`, and refuses `imaging_camera` as it refuses
+  `node` and `camera_settings` (FR-020).
+- Q: Are Setup's mount controls enabled while Track is on? → A: No. MountSection counts
+  the mount as moving while Track is armed, tracking or at the keyhole, so Second sync
+  and the two model resets are disabled then. Second sync would otherwise move the mount
+  under the tracker (plan.md § User Story 7, "The note").
+- Q: Do the docs of `--allow-host` mention `/mcp`? → A: Yes. US1 updates the flag's help
+  line, `with_allowed_hosts`'s doc comment and the crate docs to say that `/mcp` reads
+  the same list (T010).
+- Q: Can a Track-on or a direct move start between an MCP refusal's check and the
+  motion? → A: No. `Track is on` and `a direct axis move is running` are checked inside
+  `start_motion`'s lock, with the start they guard, and every motion start, the page's
+  included, takes that lock (plan.md § Decisions, "Track and the MCP moves").
+- Q: Does 016 make a `min_alt_deg` edit reach a running tracker? → A: No. 015's
+  `Tracker::set_min_alt_deg` has no caller in `src`, so an edit during tracking doesn't
+  reach the tracker. That gap is 015's, outside this spec.
+
 ## Owner approvals
 
 Flipping this spec to `ready` approves the following. Each is named in the FR that makes
