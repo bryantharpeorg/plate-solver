@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Finder console: a local web page that plate-solves a frame and shows where it points, what is in the field and what to look at next."
 
 [dependencies]
+base64 = "=0.23.1"
 rmcp = { version = "=3.5.1", default-features = false, features = ["server", "macros", "transport-streamable-http-server"] }
 # US7: the in-process desk node and the SSE broadcast-to-stream adapter.
 simulator = { version = "0.1.0", path = "../simulator" }

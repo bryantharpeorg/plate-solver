@@ -54,7 +54,7 @@ use axum::{Json, Router};
 use pattern_database::PatternDatabase;
 use rust_embed::RustEmbed;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Semaphore;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::catalog::{self, SimilarReport};
 use crate::link::{LinkManager, Transport};
@@ -132,6 +132,16 @@ impl AppState {
     pub fn with_form_timeout(mut self, timeout: Duration) -> Self {
         self.form_timeout = timeout;
         self
+    }
+
+    /// Serialize uploaded and live solves through the same gate.
+    pub(crate) async fn solve_permit(&self) -> Result<OwnedSemaphorePermit, ApiError> {
+        self.solve_gate.clone().acquire_owned().await.map_err(|_| {
+            ApiError::new(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "the solver is shutting down",
+            )
+        })
     }
 
     /// Share this observing session among all clients. The default is in memory.
@@ -1005,17 +1015,7 @@ async fn solve(
     // Take the gate before reading the form. Each upload may be up to SOLVE_BODY_LIMIT, and
     // reading them first would hold every queued one in memory at once; this way a waiting
     // request's body stays unread. A client that stalls while holding the gate is cut off.
-    let permit = state
-        .solve_gate
-        .clone()
-        .acquire_owned()
-        .await
-        .map_err(|_| {
-            ApiError::new(
-                StatusCode::SERVICE_UNAVAILABLE,
-                "the solver is shutting down",
-            )
-        })?;
+    let permit = state.solve_permit().await?;
     let form = tokio::time::timeout(state.form_timeout, SolveForm::read(&mut multipart))
         .await
         .map_err(|_| {
@@ -1028,10 +1028,23 @@ async fn solve(
         Source::Upload { bytes, name } => (bytes, name),
         Source::Sample(name) => (read_sample(&state, &name).await?, Some(name)),
     };
+    solve_upload(&state, permit, bytes, name, form.options)
+        .await
+        .map(Json)
+}
+
+/// Solve an upload and record its latest pointing exactly as the page does.
+/// The caller takes the gate before reading the multipart form or starting a solve.
+pub(crate) async fn solve_upload(
+    state: &AppState,
+    permit: OwnedSemaphorePermit,
+    bytes: Vec<u8>,
+    name: Option<String>,
+    options: SolveOptions,
+) -> Result<SolveReport, ApiError> {
     let db = state.db.clone();
     let session = state.session.clone();
     let clock = state.clock.clone();
-    let options = form.options;
     let report = tokio::task::spawn_blocking(move || {
         let _permit = permit;
         let t = Instant::now();
@@ -1057,7 +1070,7 @@ async fn solve(
             "the solver stopped unexpectedly",
         )
     })??;
-    Ok(Json(report))
+    Ok(report)
 }
 
 /// `/api/similar` query: an object and, optionally, where and when it is seen from.
