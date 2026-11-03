@@ -129,6 +129,15 @@ test("a push reaches the chart in 2 s and a post-push preview in 5.5 s", async (
   const chart = page.getByRole("img", { name: /^Chart of Live frame / });
   await expect(chart).toBeVisible();
   await expect(preview(page)).toBeVisible();
+  // The node sends a preview at most once every 5 s and the console never asks for one
+  // (FR-013). A push just after a preview leaves the next one 5.0–5.25 s away, and only
+  // the rest of the 5.5 s for the solve, the report and the image. Push 1 s after a
+  // fresh preview, so the next one is due about 4 s after the push on any host.
+  const latest = () => frames.at(-1)?.preview_seq ?? null;
+  await expect.poll(latest, { timeout: 7000, intervals: [50] }).not.toBeNull();
+  const shown = latest();
+  await expect.poll(latest, { timeout: 7000, intervals: [50] }).not.toBe(shown);
+  await page.waitForTimeout(1000);
   const before = await chartDirection(page);
   const started = performance.now();
   const pushed = await request.post("/api/sim/telescope", { data: { alt_deg: 40, az_deg: 200 } });
@@ -148,12 +157,15 @@ test("a push reaches the chart in 2 s and a post-push preview in 5.5 s", async (
     .poll(
       async () => {
         const seq = Number((await preview(page).getAttribute("src"))?.split("seq=")[1]);
-        const exposure = frames.find((f) => f.frame_id === seq && f.preview_seq === seq);
         // The photograph belongs to an exposure STARTED after the push, not just
-        // an old photograph whose URL arrived later. Exposure is fixed at 0.2 s.
+        // an old photograph whose URL arrived later. Exposure is fixed at 0.2 s, and
+        // frame ids grow by one per exposure, so a preview at or after the first frame
+        // reported as started after the push qualifies. The live loop solves only the
+        // newest frame, so it may skip the preview's own frame.
+        const firstAfter = frames.find((f) => f.time - 0.1 > pushedAt);
         return (
-          exposure !== undefined &&
-          exposure.time - 0.1 > pushedAt &&
+          firstAfter !== undefined &&
+          seq >= firstAfter.frame_id &&
           (await preview(page).evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
         );
       },
