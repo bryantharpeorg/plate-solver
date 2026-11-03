@@ -100,3 +100,8 @@ That builds and runs the workspace again with the nightly compiler. The tables g
 `Branches` column, and the HTML marks each branch as taken or not. Nightly's numbers can
 differ slightly from the stable gate's. To keep the stable build's artifacts, give it its
 own `CARGO_TARGET_DIR`. The page's branch coverage needs nothing extra.
+
+On nightly 2026-11-02 (LLVM 23.1), llvm-cov crashes exporting lcov, with or without
+`--branch`. The script then keeps the HTML and `summary.json`, skips `lcov.info`, and
+`summary.md` shows llvm-cov's own columns without the src figures. On `3aa8dde` that run
+measured 76.8% of 2,564 branches.

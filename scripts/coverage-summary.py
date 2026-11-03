@@ -105,28 +105,31 @@ def crate_of(rel):
 def rust_section(out, root):
     with open(os.path.join(out, "rust", "summary.json"), encoding="utf-8") as f:
         data = json.load(f)["data"][0]
-    lcov = read_lcov(os.path.join(out, "rust", "lcov.info"))
+    lcov_path = os.path.join(out, "rust", "lcov.info")
+    # coverage.sh --branch goes on without lcov when nightly's export fails: no src columns.
+    lcov = read_lcov(lcov_path) if os.path.exists(lcov_path) else None
     llvm = ["lines", "functions", "regions"]
     if data["totals"].get("branches", {}).get("count", 0) > 0:
         llvm.append("branches")
-    ours = ["distinct_lines", "src_lines", "src_functions"]
+    ours = ["distinct_lines", "src_lines", "src_functions"] if lcov is not None else []
 
     files, crates = [], {}
     for entry in data["files"]:
         path = entry["filename"]
         rel = os.path.relpath(path, root)
-        lines, fns = lcov.get(path, ({}, {}))
-        blocks = test_blocks(path)
-
-        def src(d):
-            return {n: h for n, h in d.items() if not any(a <= n <= b for a, b in blocks)}
-
         row = {"path": rel, "crate": crate_of(rel)}
         for kind in llvm:
             row[kind] = ratio(entry["summary"][kind]["covered"], entry["summary"][kind]["count"])
-        for kind, d in (("distinct_lines", lines), ("src_lines", src(lines)), ("src_functions", src(fns))):
-            row[kind] = ratio(sum(1 for h in d.values() if h), len(d))
-        row["test_blocks"] = blocks
+        if lcov is not None:
+            lines, fns = lcov.get(path, ({}, {}))
+            blocks = test_blocks(path)
+
+            def src(d):
+                return {n: h for n, h in d.items() if not any(a <= n <= b for a, b in blocks)}
+
+            for kind, d in (("distinct_lines", lines), ("src_lines", src(lines)), ("src_functions", src(fns))):
+                row[kind] = ratio(sum(1 for h in d.values() if h), len(d))
+            row["test_blocks"] = blocks
         files.append(row)
         c = crates.setdefault(row["crate"], {"files": 0, **{k: [0, 0] for k in llvm + ours}})
         c["files"] += 1
@@ -141,7 +144,7 @@ def rust_section(out, root):
     totals = {k: ratio(data["totals"][k]["covered"], data["totals"][k]["count"]) for k in llvm}
     for kind in ours:
         totals[kind] = ratio(sum(r[kind]["covered"] for r in files), sum(r[kind]["count"] for r in files))
-    return {"llvm_kinds": llvm, "totals": totals, "crates": crate_rows, "files": files}
+    return {"llvm_kinds": llvm, "src": lcov is not None, "totals": totals, "crates": crate_rows, "files": files}
 
 
 def web_section(out, root):
@@ -169,44 +172,38 @@ def markdown(rust, web, commit):
     md = [f"## Coverage at `{commit}`", ""]
     if rust:
         t = rust["totals"]
-        extra = [k for k in rust["llvm_kinds"] if k not in ("lines", "functions")]
-        md += [
-            "### Rust (cargo-llvm-cov, as the `test-coverage` job runs it)",
-            "",
-            f"Workspace: **{pct(t['lines'])} lines** by llvm-cov's count (the 80% gate's figure). "
-            f"Each line counted once: {pct(t['distinct_lines'])}. "
-            f"Without the inline `#[cfg(test)]` blocks: **{pct(t['src_lines'])} src lines** "
-            f"({missed(t['src_lines'])} of {t['src_lines']['count']} never ran), "
-            f"{pct(t['src_functions'])} src functions"
-            + "".join(f", {pct(t[k])} {k} (tests included)" for k in extra)
-            + ". docs/coverage.md explains the difference.",
-            "",
-            "| Crate | Files | Lines (llvm-cov) | Src lines | Missed | Src functions | "
-            + " | ".join(f"{k.capitalize()}*" for k in extra)
-            + " |",
-            "|---|---:|---:|---:|---:|---:|" + "---:|" * len(extra),
-        ]
-        for c in rust["crates"]:
-            md.append(
-                f"| `{c['crate']}` | {c['files']} | {pct(c['lines'])} | {pct(c['src_lines'])} "
-                f"| {missed(c['src_lines'])} | {pct(c['src_functions'])} | "
-                + " | ".join(pct(c[k]) for k in extra)
-                + " |"
+        starred = [k for k in rust["llvm_kinds"] if k != "lines" and (k != "functions" or not rust["src"])]
+        if rust["src"]:
+            key = "src_lines"
+            head = (
+                f"Workspace: **{pct(t['lines'])} lines** by llvm-cov's count (the 80% gate's figure). "
+                f"Each line counted once: {pct(t['distinct_lines'])}. "
+                f"Without the inline `#[cfg(test)]` blocks: **{pct(t['src_lines'])} src lines** "
+                f"({missed(t['src_lines'])} of {t['src_lines']['count']} never ran), "
+                f"{pct(t['src_functions'])} src functions"
             )
-        md += [
-            "",
-            "\\* llvm-cov's own count, tests included.",
-            "",
-            f"Weakest files (src lines, files with at least {MIN_LINES}):",
-            "",
-            "| File | Src lines | Missed | Src functions | Regions* |",
-            "|---|---:|---:|---:|---:|",
-        ]
-        for r in weakest(rust["files"], "src_lines"):
-            md.append(
-                f"| `{r['path']}` | {pct(r['src_lines'])} | {missed(r['src_lines'])} "
-                f"| {pct(r['src_functions'])} | {pct(r['regions'])} |"
-            )
+            cols = [
+                ("Src lines", lambda r: pct(r["src_lines"])),
+                ("Missed", lambda r: str(missed(r["src_lines"]))),
+                ("Src functions", lambda r: pct(r["src_functions"])),
+            ]
+        else:
+            key = "lines"
+            head = f"Workspace: **{pct(t['lines'])} lines** by llvm-cov's count (no lcov, so no src figures)"
+            cols = [("Missed", lambda r: str(missed(r["lines"])))]
+        head += "".join(f", {pct(t[k])} {k} (tests included)" for k in starred)
+        cols += [(f"{k.capitalize()}*", lambda r, k=k: pct(r[k])) for k in starred]
+
+        def table(first, rows, label):
+            out = ["| " + " | ".join(h for h, _ in first + cols) + " |", "|---|" + "---:|" * (len(first) + len(cols) - 1)]
+            out += ["| " + " | ".join([label(r)] + [f(r) for _, f in first[1:] + cols]) + " |" for r in rows]
+            return out
+
+        llvm_lines = ("Lines (llvm-cov)", lambda r: pct(r["lines"]))
+        md += ["### Rust (cargo-llvm-cov, as the `test-coverage` job runs it)", "", head + ". docs/coverage.md explains the difference.", ""]
+        md += table([("Crate", None), ("Files", lambda r: str(r["files"])), llvm_lines], rust["crates"], lambda r: f"`{r['crate']}`")
+        md += ["", "\\* llvm-cov's own count, tests included.", "", f"Weakest files ({cols[0][0].lower() if rust['src'] else 'lines'}, files with at least {MIN_LINES}):", ""]
+        md += table([("File", None)] + ([] if rust["src"] else [llvm_lines]), weakest(rust["files"], key), lambda r: f"`{r['path']}`")
         md.append("")
     if web:
         t = web["totals"]

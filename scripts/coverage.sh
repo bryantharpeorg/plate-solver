@@ -26,6 +26,9 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 out="${COVERAGE_DIR:-$root/target/coverage}"
 rust=1 web=1 branch=() toolchain=() report_only=0
+# cargo-llvm-cov already leaves build scripts out, but not from nightly cargo's new build-dir
+# layout. Naming them again changes nothing on stable.
+ignore=(--ignore-filename-regex '(^|/)build\.rs$')
 
 for arg in "$@"; do
   case "$arg" in
@@ -53,10 +56,23 @@ if [ "$rust" = 1 ]; then
   fi
   rm -rf "$out/rust"
   mkdir -p "$out/rust"
-  cargo "${toolchain[@]}" llvm-cov report "${branch[@]}" --html --output-dir "$out/rust"
-  cargo "${toolchain[@]}" llvm-cov report "${branch[@]}" --lcov --output-path "$out/rust/lcov.info"
-  cargo "${toolchain[@]}" llvm-cov report "${branch[@]}" --json --summary-only \
+  cargo "${toolchain[@]}" llvm-cov report "${branch[@]}" "${ignore[@]}" --html --output-dir "$out/rust"
+  cargo "${toolchain[@]}" llvm-cov report "${branch[@]}" "${ignore[@]}" --json --summary-only \
     --output-path "$out/rust/summary.json"
+  # On error cargo-llvm-cov repeats the whole partial export, so keep it out of the terminal.
+  lcov_log="$out/rust/lcov-export.log"
+  if cargo "${toolchain[@]}" llvm-cov report "${branch[@]}" "${ignore[@]}" --lcov \
+    --output-path "$out/rust/lcov.info" 2>"$lcov_log"; then
+    rm -f "$lcov_log"
+  elif [ "${#branch[@]}" -gt 0 ]; then
+    # Nightly 2026-11-02 (LLVM 23.1) segfaults here, with or without --branch.
+    rm -f "$out/rust/lcov.info"
+    echo "coverage.sh: nightly llvm-cov failed to export lcov ($lcov_log). The HTML and" >&2
+    echo "  summary.json have branch coverage; summary.md leaves out the src columns." >&2
+  else
+    tail -20 "$lcov_log" >&2
+    exit 1
+  fi
 fi
 
 if [ "$web" = 1 ]; then
