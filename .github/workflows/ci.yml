@@ -137,6 +137,27 @@ jobs:
           [ -n "$pct" ] && pct="$(printf '%.2f' "$pct")"
           echo "pct=${pct:-unknown}" >> "$GITHUB_OUTPUT"
           echo "line coverage: ${pct:-unknown}% (floor 80%)"
+      # The report a human reads: the profdata the gate just measured, re-rendered as HTML,
+      # lcov and a per-crate table (docs/coverage.md). It re-runs no tests. It also runs when
+      # the floor fails, because that is when the table is wanted. Evidence only: it never
+      # fails the gate.
+      - name: Coverage report (HTML, lcov, per crate)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        env:
+          COVERAGE_DIR: ${{ runner.temp }}/coverage # outside target/, which rust-cache saves
+        run: |
+          bash scripts/coverage.sh --rust --report-only
+          cat "$COVERAGE_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the coverage report
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-rust
+          path: ${{ runner.temp }}/coverage
+          retention-days: 30
+          if-no-files-found: warn
       - name: Doctests (coverage tool excludes them)
         run: cargo test --workspace --locked --doc
       - uses: ./.github/actions/attest
@@ -277,6 +298,24 @@ jobs:
           set -o pipefail
           npm test 2>&1 | tee "$RUNNER_TEMP/vitest.log"
           echo "tests=$(grep -oE 'Tests +[0-9]+ passed' "$RUNNER_TEMP/vitest.log" | grep -oE '[0-9]+')" >> "$GITHUB_OUTPUT"
+      # The same unit tests again with v8 coverage, as a report to read (docs/coverage.md).
+      # A few seconds. Evidence only: no threshold, and it never fails this check.
+      - name: Unit-test coverage report
+        continue-on-error: true
+        working-directory: .
+        env:
+          COVERAGE_DIR: ${{ runner.temp }}/coverage
+        run: |
+          bash scripts/coverage.sh --web
+          cat "$COVERAGE_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the page's coverage report
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-page
+          path: ${{ runner.temp }}/coverage
+          retention-days: 30
+          if-no-files-found: warn
       - name: The committed build is the build of this source
         run: |
           npm run build

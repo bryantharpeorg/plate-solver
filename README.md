@@ -225,6 +225,10 @@ cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --locked
 ```
 
+`scripts/coverage.sh` writes browsable coverage reports for the workspace and the page, with
+per-crate tables, to `target/coverage/`. [`docs/coverage.md`](docs/coverage.md) explains
+how to run and read them.
+
 ## License
 
 The reference implementations vendored in [`reference-solutions/`](reference-solutions/) keep
