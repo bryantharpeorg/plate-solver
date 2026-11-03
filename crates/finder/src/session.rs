@@ -1191,7 +1191,10 @@ impl Session {
     }
 
     /// Validate the entire edit and persist it before changing any field.
+    /// A new minimum altitude also reaches a running tracker, so raising it above
+    /// the target ends tracking as `too_low` on the tracker's next check (FR-007).
     pub fn edit(&self, edit: SessionEdit, time: f64) -> Result<SessionView, SessionError> {
+        let min_alt_deg = edit.min_alt_deg;
         let mut values = self.values.lock().expect("observing session");
         let next = values.edited(edit)?;
         if let Some(path) = &self.state_file {
@@ -1202,6 +1205,12 @@ impl Session {
         let config = values.link_config();
         if config != previous {
             self.changes.send_replace(config);
+        }
+        if let (Some(min), Some(tracker)) = (
+            min_alt_deg,
+            values.track.as_ref().and_then(|t| t.tracker.as_ref()),
+        ) {
+            tracker.set_min_alt_deg(min);
         }
         Ok(values.view(time))
     }
