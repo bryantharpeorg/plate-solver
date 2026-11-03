@@ -229,6 +229,10 @@ cargo test --workspace --locked
 per-crate tables, to `target/coverage/`. [`docs/coverage.md`](docs/coverage.md) explains
 how to run and read them.
 
+`scripts/quality.sh` writes a SonarQube-style code-quality report to `target/quality/`:
+complexity, duplication, lint findings by rule, panic paths, `unsafe` and advisories, with an
+A–E grade per crate and per file. [`docs/quality.md`](docs/quality.md) explains every figure.
+
 ## License
 
 The reference implementations vendored in [`reference-solutions/`](reference-solutions/) keep

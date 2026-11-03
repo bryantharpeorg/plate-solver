@@ -46,3 +46,6 @@ lcov.info
 # Ergane's legacy verification store: a live SQLite database (plus -wal/-shm) written while
 # gates run. Committed mid-write it is a torn database.
 .factory/
+
+# scripts/quality.sh's pinned tools (jscpd, ESLint): npm ci installs them on first run
+scripts/quality/node_modules/
