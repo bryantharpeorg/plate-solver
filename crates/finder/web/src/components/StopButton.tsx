@@ -1,25 +1,35 @@
 import { useState } from "react";
-import { postMotion, type GoToProgress, type SessionMount, type SessionTrack } from "../api";
+import { postMotion, type GoToProgress, type SessionMount, type SessionTrack, type SessionMotion } from "../api";
 import { gotoRunning } from "./GoToControl";
 
-export function mountMayMove(mount?: SessionMount, goto?: GoToProgress, track?: SessionTrack): boolean {
+export function mountMayMove(
+  mount?: SessionMount,
+  goto?: GoToProgress,
+  track?: SessionTrack,
+  motion?: SessionMotion,
+): boolean {
   const tracking = track?.state === "armed" || track?.state === "tracking" || track?.state === "keyhole_wait";
-  return mount !== undefined && (mount.moving || gotoRunning(goto) || (mount.connected && tracking));
+  return (
+    motion !== undefined ||
+    (mount !== undefined && (mount.moving || gotoRunning(goto) || (mount.connected && tracking)))
+  );
 }
 
 export function StopButton({
   mount,
   goto,
   track,
+  motion,
   onChange,
 }: {
   mount?: SessionMount;
   goto?: GoToProgress;
   track?: SessionTrack;
+  motion?: SessionMotion;
   onChange?: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
-  if (!mountMayMove(mount, goto, track)) return null;
+  if (!mountMayMove(mount, goto, track, motion)) return null;
   const stop = async () => {
     setError(null);
     try {

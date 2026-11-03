@@ -4,6 +4,7 @@ import type { ObservingSession } from "../useSession";
 import { TARGET_CLASS_LABEL } from "./TargetSheet";
 import { GoToControl } from "./GoToControl";
 import { TrackControl } from "./TrackControl";
+import { McpNote } from "./McpNote";
 
 export function GuidanceBlock({
   session,
@@ -84,6 +85,7 @@ export function GuidanceBlock({
       )}
       <GoToControl session={session} onChange={onChange} />
       <TrackControl session={session} onChange={onChange} />
+      <McpNote motion={session.motion} />
     </section>
   );
 }

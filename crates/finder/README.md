@@ -54,6 +54,71 @@ Location ("what is up now") is entered by hand on the page. Browsers only share 
 location with pages served over HTTPS or from the same device, so "use this device's
 location" works when the phone runs the server itself.
 
+## MCP clients
+
+The console serves Streamable HTTP MCP at `/mcp` on the same port as the page.
+On the Surface, clients in WSL and Windows can use `http://localhost:8080/mcp`.
+The default `--listen 127.0.0.1:8080` is reachable only from this machine. MCP
+reaches the LAN only with `--listen 0.0.0.0:8080`; a phone then uses
+`http://<surface-LAN-IP>:8080/mcp`. Setup's MCP section lists the URLs the console
+serves, its allowed host names, and whether MCP is off or local only.
+
+`--no-mcp` turns the endpoint off. `/mcp` accepts IP literals, `localhost`, and
+the names given with `--allow-host`, just as the page's writes do. For example,
+`--listen 0.0.0.0:8080 --allow-host surface.local` accepts
+`http://surface.local:8080/mcp`. Names have no scheme or port, match exactly
+ignoring ASCII case, and the flag may be repeated.
+
+There is no token or console confirmation for MCP calls. Every moving tool runs
+the page's guards: Sun guard, minimum altitude, cable wind and mount range checks,
+plus the scope link's watchdog and tracking's safe endings. Direct axis moves
+need a sync so the console can check their path on the sky. While an MCP client
+moves the telescope, the guidance block and top bar say
+“Moved by an MCP client · <tool>”. The top bar's Stop is the page's only Stop;
+it stays enabled throughout motion and ends GoTo, direct axis moves and tracking.
+
+### MCP under WSL2: portproxy or mirrored mode
+
+Under WSL2's default NAT networking, the WSL address listed in Setup is not the
+Surface's LAN address and the phone cannot reach it directly. Run the console
+with `--listen 0.0.0.0:8080`, then choose either Windows portproxy or WSL mirrored
+networking. Both carry the page and `/mcp` on the same port and preserve `Host`.
+
+For NAT, find WSL's IPv4 address with `hostname -I` in WSL, then run in an
+administrator PowerShell, replacing the two example addresses with WSL's current
+IPv4 address and the Surface's LAN IPv4 address:
+
+```powershell
+netsh interface portproxy add v4tov4 listenaddress=192.168.1.20 listenport=8080 connectaddress=172.24.1.2 connectport=8080
+New-NetFirewallRule -DisplayName "Finder console MCP" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8080 -Profile Private -RemoteAddress LocalSubnet
+```
+
+Scope the Windows firewall rule to the local subnet (`LocalSubnet`): portproxy
+hides the peer address, so the console sees the proxy rather than the phone and
+cannot enforce the original peer's LAN membership. Update portproxy if WSL's
+address changes. On the phone, paste `http://192.168.1.20:8080/mcp` (using the
+Surface's LAN address), or the allowed `surface.local` URL.
+
+Alternatively, on Windows 11 22H2 or later, put this in Windows'
+`%UserProfile%\.wslconfig`, then run `wsl --shutdown` and restart WSL:
+
+```ini
+[wsl2]
+networkingMode=mirrored
+```
+
+Allow TCP 8080 through the Hyper-V firewall in administrator PowerShell, replacing
+`192.168.1.0/24` with your LAN subnet:
+
+```powershell
+New-NetFirewallHyperVRule -Name "FinderConsoleMcp" -DisplayName "Finder console MCP" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8080 -RemoteAddresses 192.168.1.0/24
+```
+
+Use the Surface's LAN address in the phone's `/mcp` URL. Windows localhost still
+works for clients on the Surface. Microsoft's [WSL networking guide](https://learn.microsoft.com/en-us/windows/wsl/networking)
+describes NAT forwarding and mirrored networking; its [Hyper-V firewall guide](https://learn.microsoft.com/en-us/powershell/module/netsecurity/new-netfirewallhypervrule)
+describes the firewall rules.
+
 ## Night mode
 
 Night mode turns the whole page, frames and sky survey included, into dim red, to keep your

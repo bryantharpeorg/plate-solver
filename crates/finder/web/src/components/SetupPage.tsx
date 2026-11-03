@@ -8,15 +8,17 @@ import { FieldWarning } from "./FieldWarning";
 import { ScopeNodeSection } from "./ScopeNodeSection";
 import { MountSection } from "./MountSection";
 import { ImagingCameraSection } from "./ImagingCameraSection";
+import { McpSection } from "./McpSection";
 
 interface Props {
   session: ObservingSession;
   put: (edit: SessionEdit) => Promise<void>;
   onBack: () => void;
   onChange?: () => void;
+  mcp?: unknown;
 }
 
-export function SetupPage({ session, put, onBack, onChange }: Props) {
+export function SetupPage({ session, put, onBack, onChange, mcp }: Props) {
   const { live } = useLive(session);
   const [lat, setLat] = useState("");
   const [lon, setLon] = useState("");
@@ -175,6 +177,7 @@ export function SetupPage({ session, put, onBack, onChange }: Props) {
       <ImagingCameraSection session={session} put={put} />
       <FieldWarning field={session.field} />
       <AimTap session={session} live={live} />
+      {mcp !== undefined && <McpSection status={mcp} />}
     </main>
   );
 }
