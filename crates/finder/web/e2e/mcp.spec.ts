@@ -63,9 +63,14 @@ test("MCP GoTo announces its source, stays red at night, and the single Stop hal
       })
     ).ok(),
   ).toBe(true);
-  await post(request, "/api/sim/telescope", { alt_deg: 50, az_deg: 120 });
-  await post(request, "/api/model/reset", { what: "night" });
   await post(request, "/api/sim/frames", { running: true });
+  await post(request, "/api/sim/telescope", { alt_deg: 50, az_deg: 120 });
+  // The exposure in flight during the push still shows the old sky. Solved after the reset, it
+  // syncs there, and the first frame at the push is a slip into a second epoch. Reset only once
+  // a frame whose 200 ms exposure began after the push has solved.
+  const pushed = (await session(request)).time!;
+  await expect.poll(async () => ((await session(request)).pointing?.time ?? 0) - 0.1 > pushed).toBe(true);
+  await post(request, "/api/model/reset", { what: "night" });
   await expect.poll(async () => (await session(request)).model?.syncs).toBe(1);
   await page.addInitScript(() => localStorage.setItem("finder.night", "true"));
   await page.goto("/");
