@@ -37,6 +37,8 @@
 
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::future::Future;
+use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -98,6 +100,8 @@ pub struct AppState {
     simulation: Option<Arc<Simulation>>,
     goto: Option<Arc<crate::goto::GoTo>>,
     tracking_owner: Option<Arc<crate::session::TrackingOwner>>,
+    motion: Arc<tokio::sync::Mutex<Option<Motion>>>,
+    call_log: Arc<Mutex<Box<dyn Write + Send>>>,
 }
 
 impl AppState {
@@ -124,6 +128,8 @@ impl AppState {
             simulation: None,
             goto: None,
             tracking_owner: None,
+            motion: Arc::new(tokio::sync::Mutex::new(None)),
+            call_log: Arc::new(Mutex::new(Box::new(std::io::stderr()))),
         }
     }
 
@@ -261,6 +267,28 @@ impl AppState {
     pub fn with_mcp(mut self, config: crate::mcp::McpConfig) -> Self {
         self.mcp = config;
         self
+    }
+
+    /// Write moving and stopping MCP calls to this sink; defaults to stderr.
+    pub fn with_call_log(mut self, writer: impl Write + Send + 'static) -> Self {
+        self.call_log = Arc::new(Mutex::new(Box::new(writer)));
+        self
+    }
+
+    pub(crate) fn log_call(
+        &self,
+        tool: &str,
+        arguments: &serde_json::Value,
+        result: Result<&serde_json::Value, &str>,
+    ) {
+        let result = match result {
+            Ok(value) => value.to_string(),
+            Err(reason) => format!("error: {reason}"),
+        };
+        let line = format!("mcp {tool} {arguments} -> {result}\n");
+        let mut writer = self.call_log.lock().unwrap();
+        let _ = writer.write_all(line.as_bytes());
+        let _ = writer.flush();
     }
 
     /// Allow these DNS names for same-origin writes and `/mcp`, besides IPs and localhost.
@@ -506,6 +534,39 @@ fn sim_json<T>(result: Result<Json<T>, JsonRejection>) -> Result<T, ApiError> {
     })
 }
 
+/// Run-only attribution, serialized only while its motion is active.
+#[derive(Clone, Serialize)]
+pub(crate) struct Motion {
+    by: &'static str,
+    tool: &'static str,
+    since: f64,
+}
+
+/// Serialize starts and session reads together: attribution precedes motion and
+/// a refusal restores the previous owner without exposing a partial start.
+pub(crate) async fn start_motion<F, Fut>(
+    state: &AppState,
+    by: &'static str,
+    tool: &'static str,
+    start: F,
+) -> Result<(), ApiError>
+where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = Result<(), ApiError>>,
+{
+    let mut record = state.motion.lock().await;
+    let previous = record.replace(Motion {
+        by,
+        tool,
+        since: state.clock.now(),
+    });
+    if let Err(error) = start().await {
+        *record = previous;
+        return Err(error);
+    }
+    Ok(())
+}
+
 #[derive(Serialize)]
 pub(crate) struct SessionResponse {
     #[serde(flatten)]
@@ -514,6 +575,8 @@ pub(crate) struct SessionResponse {
     goto: Option<crate::goto::Progress>,
     #[serde(skip_serializing_if = "Option::is_none")]
     goto_refusal: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    motion: Option<Motion>,
 }
 async fn get_mcp(State(state): State<AppState>) -> Json<crate::mcp::McpStatus> {
     Json(state.mcp.status(&state.allowed_hosts))
@@ -524,6 +587,7 @@ async fn get_session(State(state): State<AppState>) -> Json<SessionResponse> {
 }
 
 pub(crate) async fn session_response(state: &AppState) -> SessionResponse {
+    let record = state.motion.lock().await;
     let session = state.session.snapshot(state.clock.now());
     let goto_refusal = if session.mount.as_ref().is_some_and(|m| m.connected) {
         match &state.goto {
@@ -533,10 +597,19 @@ pub(crate) async fn session_response(state: &AppState) -> SessionResponse {
     } else {
         None
     };
+    let goto = state.goto.as_ref().and_then(|g| g.progress());
+    let running = goto
+        .as_ref()
+        .is_some_and(|g| matches!(g.state, "slewing" | "solving" | "correcting"))
+        || session
+            .track
+            .as_ref()
+            .is_some_and(|t| matches!(t.state, "armed" | "tracking" | "keyhole_wait"));
     SessionResponse {
         session,
-        goto: state.goto.as_ref().and_then(|g| g.progress()),
+        goto,
         goto_refusal,
+        motion: record.clone().filter(|_| running),
     }
 }
 #[derive(Deserialize)]
@@ -551,19 +624,7 @@ async fn set_track(
 ) -> Result<Json<SessionResponse>, ApiError> {
     let edit = sim_json(edit)?;
     if edit.on {
-        let link = state
-            .link
-            .clone()
-            .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "no mount is connected"))?;
-        let goto = state
-            .goto
-            .clone()
-            .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "no mount is connected"))?;
-        state
-            .session
-            .start_tracking(state.clock.clone(), link, goto)
-            .await
-            .map_err(|reason| ApiError::new(StatusCode::CONFLICT, reason))?;
+        start_motion(&state, "page", "track", || start_tracking(&state)).await?;
     } else {
         let _ = stop_mount(State(state.clone())).await;
     }
@@ -574,26 +635,50 @@ async fn start_goto(
     State(state): State<AppState>,
     _write: SessionWrite,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    start_motion(&state, "page", "goto", || goto_target(&state)).await?;
+    Ok(Json(serde_json::json!({"started": true})))
+}
+
+pub(crate) async fn goto_target(state: &AppState) -> Result<(), ApiError> {
     let goto = state
         .goto
         .as_ref()
         .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "no mount is connected"))?;
     goto.start()
         .await
-        .map_err(|reason| ApiError::new(StatusCode::CONFLICT, reason))?;
-    Ok(Json(serde_json::json!({"started": true})))
+        .map_err(|reason| ApiError::new(StatusCode::CONFLICT, reason))
 }
+
+pub(crate) async fn start_tracking(state: &AppState) -> Result<(), ApiError> {
+    let link = state
+        .link
+        .clone()
+        .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "no mount is connected"))?;
+    let goto = state
+        .goto
+        .clone()
+        .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "no mount is connected"))?;
+    state
+        .session
+        .start_tracking(state.clock.clone(), link, goto)
+        .await
+        .map_err(|reason| ApiError::new(StatusCode::CONFLICT, reason))
+}
+
 async fn second_sync(
     State(state): State<AppState>,
     _write: SessionWrite,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let goto = state
-        .goto
-        .as_ref()
-        .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "no mount is connected"))?;
-    goto.second_sync()
-        .await
-        .map_err(|reason| ApiError::new(StatusCode::CONFLICT, reason))?;
+    start_motion(&state, "page", "second_sync", || async {
+        let goto = state
+            .goto
+            .as_ref()
+            .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "no mount is connected"))?;
+        goto.second_sync()
+            .await
+            .map_err(|reason| ApiError::new(StatusCode::CONFLICT, reason))
+    })
+    .await?;
     Ok(Json(serde_json::json!({"started": true})))
 }
 
@@ -634,13 +719,17 @@ async fn reset_model(
 // Intentionally no SessionWrite and no body extractor: stopping is accepted
 // from every origin, even while another route is waiting on a solve.
 async fn stop_mount(State(state): State<AppState>) -> Json<serde_json::Value> {
+    Json(stop(&state).await)
+}
+
+pub(crate) async fn stop(state: &AppState) -> serde_json::Value {
     state.session.stop_tracking().await;
     if let Some(goto) = &state.goto {
         goto.stop().await;
     } else if let Some(mut mount) = state.link.as_ref().and_then(|link| link.mount()) {
         let _ = tokio::time::timeout(Duration::from_millis(200), mount.stop_all()).await;
     }
-    Json(serde_json::json!({"stopped": true}))
+    serde_json::json!({"stopped": true})
 }
 
 async fn put_session(
