@@ -22,10 +22,30 @@ use tokio::{
 
 const APPROACH: f64 = 0.5;
 const ACCELERATION: f64 = 3.0;
-const TICK: Duration = Duration::from_millis(50);
+pub(crate) const TICK: Duration = Duration::from_millis(50);
 const AXES: [Axis; 2] = [Axis::Azimuth, Axis::Altitude];
 fn wrap(angle: f64) -> f64 {
     (angle + 180.0).rem_euclid(360.0) - 180.0
+}
+
+/// A direct request in the mount's counts or signed degrees per second.
+#[derive(Clone, Copy, Debug)]
+pub enum AxisMove {
+    /// Move one axis to absolute counts, leaving the other at rest.
+    Position { axis: Axis, position: i32 },
+    /// Drive one axis for a bounded time, then stop both axes.
+    Rate {
+        axis: Axis,
+        deg_per_s: f64,
+        duration_s: f64,
+    },
+}
+fn axis_index(axis: Axis) -> Result<usize, String> {
+    match axis {
+        Axis::Azimuth => Ok(0),
+        Axis::Altitude => Ok(1),
+        _ => Err("an azimuth or altitude axis is required".into()),
+    }
 }
 
 /// Continuous telescope azimuth, independent of counts and zero-point epochs.
@@ -137,6 +157,89 @@ impl Planner<'_> {
             )
             .ok_or("the night has no sync yet")?;
         Ok((ephemeris::true_from_apparent(p.alt_deg), p.az_deg))
+    }
+    /// Check a direct, single-axis path through the ordinary GoTo guards.
+    pub fn axis_path(&self, destination: [i32; 2]) -> Result<Plan, String> {
+        self.ready()?;
+        let current_alt = self.predict(self.degrees(self.current))?.0;
+        if self.predict(self.degrees(destination))?.0 < current_alt.min(self.min_alt) - 1e-6 {
+            return Err("the position is below the minimum altitude".into());
+        }
+        let duration = self
+            .safe_path(&[destination])?
+            .ok_or("no path keeps clear of the Sun guard, minimum altitude and cable wind")?;
+        Ok(Plan {
+            destination,
+            waypoints: vec![destination],
+            arrival: self.start + duration,
+            duration,
+        })
+    }
+    /// Forecast the signed rate for its duration and the full braking distance.
+    /// Starting at full rate conservatively includes the acceleration ramp.
+    pub fn rate_path(&self, axis: Axis, deg_per_s: f64, duration_s: f64) -> Result<Plan, String> {
+        self.ready()?;
+        let i = axis_index(axis)?;
+        let rate = deg_per_s.clamp(
+            -self.axes[i].top_rate_deg_per_s,
+            self.axes[i].top_rate_deg_per_s,
+        );
+        let brake = rate.abs() / ACCELERATION;
+        let duration = duration_s + brake;
+        let from = self.degrees(self.current);
+        let at = |time: f64| {
+            let mut position = from;
+            let stopping = (time - duration_s).max(0.0);
+            position[i] += rate * time.min(duration_s) + rate * stopping
+                - rate.signum() * ACCELERATION * stopping * stopping / 2.0;
+            position
+        };
+        let destination = self.encode(at(duration))?;
+        if self.predict(at(duration))?.0 < self.predict(from)?.0.min(self.min_alt) - 1e-6 {
+            return Err("the position is below the minimum altitude".into());
+        }
+        let steps = (duration / TICK.as_secs_f64()).ceil().max(1.0) as usize;
+        let samples = (0..=steps).map(|step| {
+            let time = duration * step as f64 / steps as f64;
+            (at(time), time, i == 0 && rate != 0.0)
+        });
+        if !self.safe_samples(samples)? {
+            return Err(
+                "no path keeps clear of the Sun guard, minimum altitude and cable wind".into(),
+            );
+        }
+        Ok(Plan {
+            destination,
+            waypoints: vec![destination],
+            arrival: self.start + duration,
+            duration,
+        })
+    }
+    fn direct(&self, request: AxisMove) -> Result<AxisMove, String> {
+        match request {
+            AxisMove::Position { axis, position } => {
+                let mut destination = self.current;
+                destination[axis_index(axis)?] = position;
+                self.axis_path(destination)?;
+                Ok(request)
+            }
+            AxisMove::Rate {
+                axis,
+                deg_per_s,
+                duration_s,
+            } => {
+                if !deg_per_s.is_finite() || !duration_s.is_finite() || duration_s < 0.0 {
+                    return Err("axis rate and duration must be finite".into());
+                }
+                self.rate_path(axis, deg_per_s, duration_s)?;
+                let top = self.axes[axis_index(axis)?].top_rate_deg_per_s;
+                Ok(AxisMove::Rate {
+                    axis,
+                    deg_per_s: deg_per_s.clamp(-top, top),
+                    duration_s,
+                })
+            }
+        }
     }
     /// Two arrival-time estimates, then the apparent place and model inverse.
     pub fn plan(&self, target: &Target) -> Result<Plan, String> {
@@ -319,13 +422,9 @@ impl Planner<'_> {
         unreachable!()
     }
     fn safe_path(&self, waypoints: &[[i32; 2]]) -> Result<Option<f64>, String> {
-        let initial = self.degrees(self.current);
-        let mut from = initial;
-        let mut previous = self.predict(from)?;
-        let initial_az = previous.1;
-        let mut below = previous.0 < self.min_alt;
+        let mut from = self.degrees(self.current);
         let mut elapsed = 0.0;
-        for &waypoint in waypoints {
+        let samples = waypoints.iter().flat_map(|&waypoint| {
             let to = self.degrees(waypoint);
             let distances = [0, 1].map(|i| to[i] - from[i]);
             let duration = (0..2)
@@ -340,40 +439,51 @@ impl Planner<'_> {
                 / 0.5)
                 .ceil()
                 .max(1.0) as usize;
-            for step in 0..=steps {
+            let start = elapsed;
+            elapsed += duration;
+            let from = std::mem::replace(&mut from, to);
+            (0..=steps).map(move |step| {
                 let time = duration * step as f64 / steps as f64;
                 let axis = [0, 1].map(|i| {
                     from[i] + travelled(distances[i], self.axes[i].top_rate_deg_per_s, time)
                 });
-                let sky = self.predict(axis)?;
-                // A telescope already below the minimum can only lift to safety.
-                // No azimuth turn is permitted until it has cleared the minimum.
-                if sky.0 < self.min_alt {
-                    if !below || distances[0].abs() > 1e-9 || sky.0 < previous.0 - 1e-6 {
-                        return Ok(None);
-                    }
-                } else {
-                    below = false;
+                (axis, start + time, distances[0].abs() > 1e-9)
+            })
+        });
+        Ok(self.safe_samples(samples)?.then_some(elapsed))
+    }
+    // Both positioning profiles and rate/braking profiles use this one guard.
+    fn safe_samples(
+        &self,
+        samples: impl IntoIterator<Item = ([f64; 2], f64, bool)>,
+    ) -> Result<bool, String> {
+        let initial = self.degrees(self.current);
+        let mut previous = self.predict(initial)?;
+        let initial_az = previous.1;
+        let mut below = previous.0 < self.min_alt;
+        for (axis, time, turning) in samples {
+            let sky = self.predict(axis)?;
+            // A telescope already below the minimum can only lift to safety.
+            // No azimuth turn is permitted until it has cleared the minimum.
+            if sky.0 < self.min_alt {
+                if !below || turning || sky.0 < previous.0 - 1e-6 {
+                    return Ok(false);
                 }
-                let turn = axis[0] - initial[0];
-                let wind = self.wind.travel + turn + wrap(sky.1 - initial_az - turn);
-                if wind.abs() > 360.0 + 1e-8 {
-                    return Ok(None);
-                }
-                let sun = sun_horizontal(
-                    self.site.lat_deg,
-                    self.site.lon_deg,
-                    self.start + elapsed + time,
-                );
-                if separation(sky.1, sky.0, sun.1, sun.0) <= 15.0 {
-                    return Ok(None);
-                }
-                previous = sky;
+            } else {
+                below = false;
             }
-            from = to;
-            elapsed += duration;
+            let turn = axis[0] - initial[0];
+            let wind = self.wind.travel + turn + wrap(sky.1 - initial_az - turn);
+            if wind.abs() > 360.0 + 1e-8 {
+                return Ok(false);
+            }
+            let sun = sun_horizontal(self.site.lat_deg, self.site.lon_deg, self.start + time);
+            if separation(sky.1, sky.0, sun.1, sun.0) <= 15.0 {
+                return Ok(false);
+            }
+            previous = sky;
         }
-        Ok(Some(elapsed))
+        Ok(true)
     }
 }
 
@@ -550,6 +660,20 @@ impl GoTo {
         client: &mut MountClient,
         anchor: bool,
     ) -> Result<(Plan, [proto::AxisInfo; 2]), String> {
+        self.prepare_with(target, client, anchor, false, |planner| match target {
+            Some(target) => planner.plan(target),
+            None => planner.second_sync(),
+        })
+        .await
+    }
+    async fn prepare_with<T>(
+        &self,
+        target: Option<&Target>,
+        client: &mut MountClient,
+        anchor: bool,
+        moving: bool,
+        plan: impl FnOnce(Planner<'_>) -> Result<T, String>,
+    ) -> Result<(T, [proto::AxisInfo; 2]), String> {
         let now = self.clock.now();
         let view = self.session.snapshot(now);
         if !self.link.status().borrow().connected {
@@ -605,7 +729,7 @@ impl GoTo {
                 .axis_state(axis)
                 .await
                 .map_err(|_| "mount did not answer")?;
-            if reading.moving {
+            if reading.moving && !moving {
                 return Err("the mount is already moving".into());
             }
             current[i] = reading.position;
@@ -635,11 +759,59 @@ impl GoTo {
             start: now,
             min_alt: view.min_alt_deg,
         };
-        let plan = match target {
-            Some(target) => planner.plan(target)?,
-            None => planner.second_sync()?,
-        };
-        Ok((plan, axes))
+        let result = plan(planner)?;
+        Ok((result, axes))
+    }
+    /// Check a direct move with the same eligibility and bounded telemetry wait.
+    pub async fn check_axis_move(
+        &self,
+        request: AxisMove,
+    ) -> Result<(MountClient, AxisMove), String> {
+        let _gate = self.start_gate.lock().await;
+        if self.state.lock().unwrap().busy {
+            return Err("a GoTo is already running".into());
+        }
+        let mut client = self.link.mount().ok_or("no mount is connected")?;
+        let checked = tokio::time::timeout(
+            Duration::from_secs(1),
+            self.prepare_with(None, &mut client, false, false, |p| p.direct(request)),
+        )
+        .await
+        .map_err(|_| "mount did not answer")??;
+        Ok((client, checked.0))
+    }
+    /// Re-forecast from live counts, permitting the direct move's own motion.
+    pub async fn recheck_axis_move(&self, request: AxisMove) -> Result<(), String> {
+        let mut client = self.link.mount().ok_or("no mount is connected")?;
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            self.prepare_with(None, &mut client, false, true, |p| p.direct(request)),
+        )
+        .await
+        .map_err(|_| "mount did not answer")??;
+        Ok(())
+    }
+    /// Stop generation, advanced before Stop sends any command to the mount.
+    pub fn stops(&self) -> watch::Receiver<u64> {
+        self.cancel.subscribe()
+    }
+
+    /// The ordinary GoTo's live link and sunrise guards, shared with direct moves.
+    pub fn halt_reason(&self) -> Option<String> {
+        let status = self.link.status().borrow().clone();
+        if !status.connected
+            || status
+                .last_heartbeat_at
+                .is_none_or(|t| t.elapsed() >= Duration::from_secs(1))
+        {
+            return Some("halted by a lost link".into());
+        }
+        if let Some(site) = self.session.snapshot(self.clock.now()).site {
+            if sun_horizontal(site.lat_deg, site.lon_deg, self.clock.now()).0 >= -0.83 {
+                return Some("halted by the Sun guard".into());
+            }
+        }
+        None
     }
     fn update(
         &self,
@@ -682,18 +854,8 @@ impl GoTo {
             if *cancel.borrow_and_update() != generation {
                 return "the observer stopped it".into();
             }
-            let status = self.link.status().borrow().clone();
-            if !status.connected
-                || status
-                    .last_heartbeat_at
-                    .is_none_or(|t| t.elapsed() >= Duration::from_secs(1))
-            {
-                return "halted by a lost link".into();
-            }
-            if let Some(site) = self.session.snapshot(self.clock.now()).site {
-                if sun_horizontal(site.lat_deg, site.lon_deg, self.clock.now()).0 >= -0.83 {
-                    return "halted by the Sun guard".into();
-                }
+            if let Some(reason) = self.halt_reason() {
+                return reason;
             }
             tokio::select! { _ = ticks.tick() => {}, _ = cancel.changed() => {} }
         }

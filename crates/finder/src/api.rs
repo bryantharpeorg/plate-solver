@@ -91,7 +91,7 @@ pub struct AppState {
     form_timeout: Duration,
     thumbs: Arc<Mutex<HashMap<String, Bytes>>>,
     session: Arc<Session>,
-    clock: Arc<dyn Clock>,
+    pub(crate) clock: Arc<dyn Clock>,
     pub(crate) allowed_hosts: Arc<Vec<String>>,
     mcp: crate::mcp::McpConfig,
     link: Option<Arc<LinkManager>>,
@@ -102,6 +102,8 @@ pub struct AppState {
     tracking_owner: Option<Arc<crate::session::TrackingOwner>>,
     motion: Arc<tokio::sync::Mutex<Option<Motion>>>,
     call_log: Arc<Mutex<Box<dyn Write + Send>>>,
+    pub(crate) axis_move: Arc<Mutex<Option<crate::mcp::guard::Progress>>>,
+    move_limit: Arc<Mutex<crate::mcp::limit::MoveLimit>>,
 }
 
 impl AppState {
@@ -130,6 +132,8 @@ impl AppState {
             tracking_owner: None,
             motion: Arc::new(tokio::sync::Mutex::new(None)),
             call_log: Arc::new(Mutex::new(Box::new(std::io::stderr()))),
+            axis_move: Arc::new(Mutex::new(None)),
+            move_limit: Arc::new(Mutex::new(crate::mcp::limit::MoveLimit::default())),
         }
     }
 
@@ -260,6 +264,10 @@ impl AppState {
     /// Live reports and preview history for stream and calibration consumers.
     pub fn live(&self) -> Option<Arc<Live>> {
         self.live.clone()
+    }
+
+    pub(crate) fn limit_move(&self) -> Result<(), String> {
+        self.move_limit.lock().unwrap().accept(self.clock.now())
     }
 
     /// Configure MCP on the console's bound address. The default enables it on localhost.
@@ -555,6 +563,34 @@ where
     Fut: Future<Output = Result<(), ApiError>>,
 {
     let mut record = state.motion.lock().await;
+    if by == "mcp"
+        && matches!(tool, "goto_target" | "goto_axis_position" | "move_axis")
+        && state
+            .session
+            .snapshot(state.clock.now())
+            .track
+            .as_ref()
+            .is_some_and(|t| t.state != "off")
+    {
+        return Err(ApiError::new(StatusCode::CONFLICT, "Track is on"));
+    }
+    // Reserve the whole direct move, including a zero rate or a Stop whose
+    // watcher has not finished yet. Telemetry alone may already report rest.
+    if matches!(
+        tool,
+        "goto" | "second_sync" | "goto_target" | "goto_axis_position" | "move_axis"
+    ) && state
+        .axis_move
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|m| m.state == "moving")
+    {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "the mount is already moving",
+        ));
+    }
     let previous = record.replace(Motion {
         by,
         tool,
@@ -577,6 +613,8 @@ pub(crate) struct SessionResponse {
     goto_refusal: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     motion: Option<Motion>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    axis_move: Option<crate::mcp::guard::Progress>,
 }
 async fn get_mcp(State(state): State<AppState>) -> Json<crate::mcp::McpStatus> {
     Json(state.mcp.status(&state.allowed_hosts))
@@ -598,9 +636,11 @@ pub(crate) async fn session_response(state: &AppState) -> SessionResponse {
         None
     };
     let goto = state.goto.as_ref().and_then(|g| g.progress());
-    let running = goto
-        .as_ref()
-        .is_some_and(|g| matches!(g.state, "slewing" | "solving" | "correcting"))
+    let axis_move = state.axis_move.lock().unwrap().clone();
+    let running = axis_move.as_ref().is_some_and(|m| m.state == "moving")
+        || goto
+            .as_ref()
+            .is_some_and(|g| matches!(g.state, "slewing" | "solving" | "correcting"))
         || session
             .track
             .as_ref()
@@ -610,6 +650,7 @@ pub(crate) async fn session_response(state: &AppState) -> SessionResponse {
         goto,
         goto_refusal,
         motion: record.clone().filter(|_| running),
+        axis_move,
     }
 }
 #[derive(Deserialize)]
@@ -844,7 +885,7 @@ pub struct ApiError {
 }
 
 impl ApiError {
-    fn new(status: StatusCode, message: impl Into<String>) -> Self {
+    pub(crate) fn new(status: StatusCode, message: impl Into<String>) -> Self {
         Self {
             status,
             message: message.into(),
