@@ -23,11 +23,12 @@ on:
     # nothing turned red.
     types: [opened, synchronize, reopened, labeled, unlabeled]
   # The Ergane merge queue builds each queued PR on a temporary branch and waits for
-  # every required check to report there. Branch protection requires all 13 jobs
-  # below, so without this trigger none of them would run on the queued commit and
-  # every queued PR would wait out the queue's timeout and be removed. `hold` reads
-  # PR labels, which a merge group does not carry, so it passes there; the brake
-  # still works on the PR itself, which cannot enter the queue while it is red.
+  # every required check to report there. Branch protection requires 13 of the jobs
+  # below, all but quality-report, so without this trigger none of them would run on
+  # the queued commit and every queued PR would wait out the queue's timeout and be
+  # removed. `hold` reads PR labels, which a merge group does not carry, so it passes
+  # there; the brake still works on the PR itself, which cannot enter the queue while
+  # it is red.
   merge_group:
   workflow_dispatch:
 
@@ -44,6 +45,10 @@ env:
   # Pinned tool versions.
   CARGO_LLVM_COV_VERSION: "0.8.7"
   CARGO_MACHETE_VERSION: "0.9.2"
+  # The quality report's own tools (scripts/quality.sh; jscpd and ESLint are pinned in
+  # scripts/quality/package-lock.json).
+  RUST_CODE_ANALYSIS_VERSION: "0.0.25"
+  CARGO_DENY_VERSION: "0.20.2"
   RIPSECRETS_VERSION: "0.1.11"
   # The vendored cedar-solve's runtime is pinned by hash in scripts/ci/cedar-requirements.txt.
 
@@ -413,6 +418,57 @@ jobs:
           gate: cargo-deny
           proves: "no dependency carries a known security advisory, a banned crate, an unvetted source registry, or a disallowed licence"
           measured: "0 findings across advisories, bans, sources, licenses"
+
+  # The code-quality report (docs/quality.md): complexity, duplication, size, clippy's
+  # pedantic and nursery lints, panic paths, `unsafe` and advisories, graded A to E per crate,
+  # as HTML in the quality-report artifact and a table in the job summary. Evidence only,
+  # like the coverage report: not a required check, no threshold, and every step is
+  # continue-on-error, so it cannot turn red. The merge queue skips it; nothing reads it there.
+  quality:
+    name: quality-report
+    needs: detect
+    if: needs.detect.outputs.has_code == 'true' && github.event_name != 'merge_group'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install protoc
+        continue-on-error: true
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+        continue-on-error: true
+        with: { components: clippy }
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        continue-on-error: true
+        with: { shared-key: quality } # also keeps the tools below in ~/.cargo/bin
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        continue-on-error: true
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: scripts/quality/package-lock.json
+      - name: Install the report's tools
+        continue-on-error: true
+        run: |
+          cargo install rust-code-analysis-cli --version "$RUST_CODE_ANALYSIS_VERSION" --locked
+          cargo install cargo-deny --version "$CARGO_DENY_VERSION" --locked
+          cargo install cargo-machete --version "$CARGO_MACHETE_VERSION" --locked
+      # The workflow's RUSTFLAGS="-D warnings" stays: quality.sh caps clippy's lints at warn.
+      - name: Quality report (HTML, JSON, per crate)
+        continue-on-error: true
+        env:
+          QUALITY_DIR: ${{ runner.temp }}/quality
+        run: |
+          bash scripts/quality.sh
+          cat "$QUALITY_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the quality report
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: quality-report
+          path: ${{ runner.temp }}/quality
+          retention-days: 30
+          if-no-files-found: warn
 
   # cargo-semver-checks intentionally ABSENT until the first tagged release
   # exists as a baseline — an unfailable job would be a fake gate.

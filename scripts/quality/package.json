@@ -1,0 +1,15 @@
+{
+  "name": "plate-solver-quality-tools",
+  "private": true,
+  "description": "Pinned tools for scripts/quality.sh: duplication (jscpd) and the page's lint (ESLint). Report only.",
+  "type": "module",
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.13.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-sonarjs": "4.2.2",
+    "jscpd": "5.4.2",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.0"
+  }
+}
