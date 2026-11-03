@@ -499,7 +499,7 @@ fn sim_json<T>(result: Result<Json<T>, JsonRejection>) -> Result<T, ApiError> {
 #[derive(Serialize)]
 pub(crate) struct SessionResponse {
     #[serde(flatten)]
-    session: SessionView,
+    pub(crate) session: SessionView,
     #[serde(skip_serializing_if = "Option::is_none")]
     goto: Option<crate::goto::Progress>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1122,19 +1122,25 @@ async fn search_targets(
     query: Result<Query<TargetsQuery>, QueryRejection>,
 ) -> Result<Json<Vec<SearchResult>>, ApiError> {
     let Query(query) = query.map_err(|error| ApiError::bad_request(error.body_text()))?;
-    let q = query.q.as_deref().unwrap_or("").trim();
+    search(&state, query.q.as_deref().unwrap_or(""), query.limit).map(Json)
+}
+
+pub(crate) fn search(
+    state: &AppState,
+    q: &str,
+    limit: Option<usize>,
+) -> Result<Vec<SearchResult>, ApiError> {
+    let q = q.trim();
     if q.is_empty() {
         return Err(ApiError::bad_request(
             "give a nonempty q to search for a target",
         ));
     }
     let session = state.session.snapshot(state.clock.now());
-    Ok(Json(
-        targets::search(q, query.limit.unwrap_or(20).clamp(1, 50))
-            .into_iter()
-            .map(|object| SearchResult::at(object, session.site, session.min_alt_deg, session.time))
-            .collect(),
-    ))
+    Ok(targets::search(q, limit.unwrap_or(20).clamp(1, 50))
+        .into_iter()
+        .map(|object| SearchResult::at(object, session.site, session.min_alt_deg, session.time))
+        .collect())
 }
 
 async fn api_not_found(uri: Uri) -> ApiError {
