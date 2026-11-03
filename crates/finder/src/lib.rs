@@ -36,6 +36,7 @@
 //! A rejected origin or host answers 403 with a JSON `error`. Requests without an
 //! Origin remain allowed for curl and Rust clients. Session edits require a JSON
 //! content type; other media types answer 415 with a JSON `error`.
+//! `/mcp` checks the same allowed names on every request, even without an Origin.
 //! Library servers configure names with [`AppState::with_allowed_hosts`].
 //!
 //! Every successful solve records the latest pointing: its sequence, solved frame,
@@ -60,6 +61,7 @@ pub mod ephemeris;
 pub mod grid;
 pub mod link;
 pub mod live;
+pub mod mcp;
 pub mod pushto;
 pub mod samples;
 pub mod session;

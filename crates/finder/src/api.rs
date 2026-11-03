@@ -90,7 +90,8 @@ pub struct AppState {
     thumbs: Arc<Mutex<HashMap<String, Bytes>>>,
     session: Arc<Session>,
     clock: Arc<dyn Clock>,
-    allowed_hosts: Arc<Vec<String>>,
+    pub(crate) allowed_hosts: Arc<Vec<String>>,
+    mcp: crate::mcp::McpConfig,
     link: Option<Arc<LinkManager>>,
     live: Option<Arc<Live>>,
     mount_monitor: Option<Arc<crate::live::MountMonitor>>,
@@ -116,6 +117,7 @@ impl AppState {
             session: Arc::new(Session::default()),
             clock: Arc::new(SystemClock),
             allowed_hosts: Arc::new(Vec::new()),
+            mcp: crate::mcp::McpConfig::default(),
             link: None,
             live: None,
             mount_monitor: None,
@@ -244,7 +246,14 @@ impl AppState {
         self.live.clone()
     }
 
-    /// Allow these DNS names for same-origin writes, in addition to IPs and localhost.
+    /// Configure MCP on the console's bound address. The default enables it on localhost.
+    /// The allowed host names are kept unchanged.
+    pub fn with_mcp(mut self, config: crate::mcp::McpConfig) -> Self {
+        self.mcp = config;
+        self
+    }
+
+    /// Allow these DNS names for same-origin writes and `/mcp`, besides IPs and localhost.
     /// Names have no scheme or port; matching is case insensitive and exact.
     pub fn with_allowed_hosts(mut self, hosts: impl IntoIterator<Item = String>) -> Self {
         self.allowed_hosts = Arc::new(hosts.into_iter().collect());
@@ -261,75 +270,88 @@ impl FromRequestParts<AppState> for SessionWrite {
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiError> {
-        let denied = || {
-            ApiError::new(
-                StatusCode::FORBIDDEN,
-                "writes require the console's own origin and an allowed host",
-            )
-        };
-        let mut origins = parts.headers.get_all(header::ORIGIN).iter();
-        let Some(origin) = origins.next() else {
-            return Ok(Self);
-        };
-        if origins.next().is_some() {
-            return Err(denied());
-        }
-        let origin = origin.to_str().map_err(|_| denied())?;
-        let origin_uri: Uri = origin.parse().map_err(|_| denied())?;
-        let scheme = parts.uri.scheme_str().unwrap_or("http");
-        let origin_authority = origin_uri.authority().ok_or_else(denied)?;
-        // An Origin is only a scheme and authority, never a path, query or user info.
-        if origin_uri.scheme_str() != Some(scheme)
-            || !origin.eq_ignore_ascii_case(&format!("{scheme}://{origin_authority}"))
-            || origin_authority.as_str().contains('@')
-        {
-            return Err(denied());
-        }
-        let mut hosts = parts.headers.get_all(header::HOST).iter();
-        let host: Authority = hosts
-            .next()
-            .ok_or_else(denied)?
-            .to_str()
-            .map_err(|_| denied())?
-            .parse()
-            .map_err(|_| denied())?;
-        if hosts.next().is_some() || host.as_str().contains('@') {
-            return Err(denied());
-        }
-        let default_port = match scheme {
-            "http" => 80,
-            "https" => 443,
-            _ => return Err(denied()),
-        };
-        let port = |authority: &Authority| {
-            // `Authority::port()` also returns None for an invalid explicit port.
-            // Only a genuinely absent port may take the scheme's default.
-            let suffix = &authority.as_str()[authority.host().len()..];
-            if suffix.is_empty() {
-                Some(default_port)
-            } else {
-                suffix.strip_prefix(':')?.parse::<u16>().ok()
-            }
-        };
-        if !host.host().eq_ignore_ascii_case(origin_authority.host())
-            || port(&host).is_none()
-            || port(&host) != port(origin_authority)
-        {
-            return Err(denied());
-        }
-        let name = host.host();
-        let ip = name.trim_start_matches('[').trim_end_matches(']');
-        if ip.parse::<std::net::IpAddr>().is_err()
-            && !name.eq_ignore_ascii_case("localhost")
-            && !state
-                .allowed_hosts
-                .iter()
-                .any(|allowed| name.eq_ignore_ascii_case(allowed))
-        {
-            return Err(denied());
-        }
+        check_origin(parts, &state.allowed_hosts)?;
         Ok(Self)
     }
+}
+
+/// The existing write-origin policy, also used before MCP dispatch.
+pub(crate) fn check_origin(parts: &Parts, allowed_hosts: &[String]) -> Result<(), ApiError> {
+    let denied = || {
+        ApiError::new(
+            StatusCode::FORBIDDEN,
+            "writes require the console's own origin and an allowed host",
+        )
+    };
+    let mut origins = parts.headers.get_all(header::ORIGIN).iter();
+    let Some(origin) = origins.next() else {
+        return Ok(());
+    };
+    if origins.next().is_some() {
+        return Err(denied());
+    }
+    let origin = origin.to_str().map_err(|_| denied())?;
+    let origin_uri: Uri = origin.parse().map_err(|_| denied())?;
+    let scheme = parts.uri.scheme_str().unwrap_or("http");
+    let origin_authority = origin_uri.authority().ok_or_else(denied)?;
+    // An Origin is only a scheme and authority, never a path, query or user info.
+    if origin_uri.scheme_str() != Some(scheme)
+        || !origin.eq_ignore_ascii_case(&format!("{scheme}://{origin_authority}"))
+        || origin_authority.as_str().contains('@')
+    {
+        return Err(denied());
+    }
+    let host = request_host(parts).ok_or_else(denied)?;
+    let default_port = match scheme {
+        "http" => 80,
+        "https" => 443,
+        _ => return Err(denied()),
+    };
+    let port = |authority: &Authority| authority_port(authority, default_port);
+    if !host.host().eq_ignore_ascii_case(origin_authority.host())
+        || port(&host).is_none()
+        || port(&host) != port(origin_authority)
+    {
+        return Err(denied());
+    }
+    if !host_allowed(parts, allowed_hosts) {
+        return Err(denied());
+    }
+    Ok(())
+}
+
+fn authority_port(authority: &Authority, default_port: u16) -> Option<u16> {
+    // Authority::port() also returns None for an invalid explicit port.
+    let suffix = &authority.as_str()[authority.host().len()..];
+    if suffix.is_empty() {
+        Some(default_port)
+    } else {
+        suffix.strip_prefix(':')?.parse().ok()
+    }
+}
+
+fn request_host(parts: &Parts) -> Option<Authority> {
+    let mut hosts = parts.headers.get_all(header::HOST).iter();
+    let host: Authority = hosts.next()?.to_str().ok()?.parse().ok()?;
+    if hosts.next().is_some() || host.as_str().contains('@') || authority_port(&host, 80).is_none()
+    {
+        return None;
+    }
+    Some(host)
+}
+
+/// Exact, ASCII case-insensitive DNS names; literals and localhost need no listing.
+pub(crate) fn host_allowed(parts: &Parts, allowed_hosts: &[String]) -> bool {
+    let Some(host) = request_host(parts) else {
+        return false;
+    };
+    let name = host.host();
+    let ip = name.trim_start_matches('[').trim_end_matches(']');
+    ip.parse::<std::net::IpAddr>().is_ok()
+        || name.eq_ignore_ascii_case("localhost")
+        || allowed_hosts
+            .iter()
+            .any(|allowed| name.eq_ignore_ascii_case(allowed))
 }
 
 /// The console's routes.
@@ -346,6 +368,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/similar", get(similar))
         .route("/api/targets", get(search_targets))
         .route("/api/session", get(get_session).put(put_session))
+        .route("/api/mcp", get(get_mcp))
         .route("/api/goto", post(start_goto))
         .route("/api/track", post(set_track))
         .route("/api/stop", post(stop_mount))
@@ -362,6 +385,16 @@ pub fn router(state: AppState) -> Router {
         routes = routes
             .route("/api/sim/telescope", get(sim_telescope).post(sim_push))
             .route("/api/sim/frames", post(sim_frames));
+    }
+    if state.mcp.enabled {
+        routes = routes.merge(
+            Router::new()
+                .route_service("/mcp", crate::mcp::service(state.clone()))
+                .layer(axum::middleware::from_fn_with_state(
+                    state.clone(),
+                    crate::mcp::door::door,
+                )),
+        );
     }
     routes.with_state(state)
 }
@@ -464,7 +497,7 @@ fn sim_json<T>(result: Result<Json<T>, JsonRejection>) -> Result<T, ApiError> {
 }
 
 #[derive(Serialize)]
-struct SessionResponse {
+pub(crate) struct SessionResponse {
     #[serde(flatten)]
     session: SessionView,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -472,7 +505,15 @@ struct SessionResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     goto_refusal: Option<String>,
 }
+async fn get_mcp(State(state): State<AppState>) -> Json<crate::mcp::McpStatus> {
+    Json(state.mcp.status(&state.allowed_hosts))
+}
+
 async fn get_session(State(state): State<AppState>) -> Json<SessionResponse> {
+    Json(session_response(&state).await)
+}
+
+pub(crate) async fn session_response(state: &AppState) -> SessionResponse {
     let session = state.session.snapshot(state.clock.now());
     let goto_refusal = if session.mount.as_ref().is_some_and(|m| m.connected) {
         match &state.goto {
@@ -482,11 +523,11 @@ async fn get_session(State(state): State<AppState>) -> Json<SessionResponse> {
     } else {
         None
     };
-    Json(SessionResponse {
+    SessionResponse {
         session,
         goto: state.goto.as_ref().and_then(|g| g.progress()),
         goto_refusal,
-    })
+    }
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -597,18 +638,23 @@ async fn put_session(
     _write: SessionWrite,
     edit: Result<Json<SessionEdit>, JsonRejection>,
 ) -> Result<Json<SessionView>, ApiError> {
-    let Json(edit) = edit.map_err(|error| {
-        let status = if error.status() == StatusCode::UNPROCESSABLE_ENTITY {
-            StatusCode::BAD_REQUEST
-        } else {
-            error.status()
-        };
-        ApiError::new(status, error.body_text())
-    })?;
+    let Json(edit) = edit.map_err(session_edit_error)?;
+    edit_session(&state, edit).map(Json)
+}
+
+pub(crate) fn session_edit_error(error: JsonRejection) -> ApiError {
+    let status = if error.status() == StatusCode::UNPROCESSABLE_ENTITY {
+        StatusCode::BAD_REQUEST
+    } else {
+        error.status()
+    };
+    ApiError::new(status, error.body_text())
+}
+
+pub(crate) fn edit_session(state: &AppState, edit: SessionEdit) -> Result<SessionView, ApiError> {
     state
         .session
         .edit(edit, state.clock.now())
-        .map(Json)
         .map_err(session_error)
 }
 
@@ -695,7 +741,7 @@ fn session_error(error: SessionError) -> ApiError {
 #[derive(Debug)]
 pub struct ApiError {
     status: StatusCode,
-    message: String,
+    pub(crate) message: String,
 }
 
 impl ApiError {
