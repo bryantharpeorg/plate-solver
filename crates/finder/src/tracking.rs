@@ -97,7 +97,7 @@ struct Shared {
     link: Arc<LinkManager>,
     model: Model,
     site: Site,
-    min_alt_deg: f64,
+    min_alt_deg: Mutex<f64>,
     wind: Mutex<Wind>,
     control: Mutex<Control>,
     cancel: watch::Sender<u64>,
@@ -137,13 +137,19 @@ impl Tracker {
                 link,
                 model,
                 site,
-                min_alt_deg,
+                min_alt_deg: Mutex::new(min_alt_deg),
                 wind: Mutex::new(wind),
                 control: Mutex::new(Control::default()),
                 cancel: watch::channel(0).0,
             }),
             task: AsyncMutex::new(None),
         }
+    }
+
+    /// Update the minimum geometric altitude for ending checks and future plans.
+    /// A running target below the new limit ends as `too_low` on the next tick.
+    pub fn set_min_alt_deg(&self, deg: f64) {
+        *self.shared.min_alt_deg.lock().unwrap() = deg;
     }
 
     /// Begin sending rates immediately, then once per second. A running tracker
@@ -369,7 +375,7 @@ impl Shared {
         if sun_horizontal(self.site.lat_deg, self.site.lon_deg, now).0 >= -0.83 {
             return Some("sun_up".into());
         }
-        if self.place(target, now).0 < self.min_alt_deg {
+        if self.place(target, now).0 < *self.min_alt_deg.lock().unwrap() {
             return Some("too_low".into());
         }
         None
@@ -550,7 +556,7 @@ impl Shared {
             current,
             wind: *self.wind.lock().unwrap(),
             site: self.site,
-            min_alt: self.min_alt_deg,
+            min_alt: *self.min_alt_deg.lock().unwrap(),
             start: exit,
         };
         // Planner::plan aims at start + travel. The first plan estimates that

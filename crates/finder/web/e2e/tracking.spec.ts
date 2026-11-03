@@ -72,6 +72,8 @@ test.beforeEach(async ({ page, request }) => {
   await expect(block.getByRole("region", { name: "Track", exact: true }).getByRole("status")).toHaveText(
     "Tracking M42",
   );
+  // The tracker publishes its state before the first axis command is observed.
+  await expect.poll(async () => (await session(request)).mount?.moving).toBe(true);
   const read = await session(request);
   expect(read.mount?.connected).toBe(true);
   expect(read.mount?.moving).toBe(true);

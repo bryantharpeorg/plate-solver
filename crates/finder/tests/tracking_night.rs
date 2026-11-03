@@ -136,10 +136,10 @@ struct Rig {
     next_pointing: f64,
 }
 impl Rig {
-    async fn new(target: &Target) -> Self {
+    async fn new(target: &Target, name: &str) -> Self {
         let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../target")
-            .join(format!("tracking-night-{}", std::process::id()));
+            .join(format!("tracking-night-{name}-{}", std::process::id()));
         std::fs::create_dir_all(&folder).unwrap();
         let path = folder.join("session.json");
         std::fs::write(
@@ -332,7 +332,7 @@ async fn an_hour_covers_transit_too_low_and_keyhole_in_under_thirty_wall_seconds
     let first = target_at_transit(20.0, transit);
     let too_low = crossing(&first, transit, transit + 1800.0, 69.5, false);
     assert!((18.0 * 60.0..23.0 * 60.0).contains(&(too_low - transit)));
-    let mut rig = Rig::new(&first).await;
+    let mut rig = Rig::new(&first, "hour").await;
     rig.tracker.start(first.clone()).await.unwrap();
     rig.tick(&first).await;
     assert_eq!(rig.tracker.state().state, "tracking");
@@ -348,6 +348,7 @@ async fn an_hour_covers_transit_too_low_and_keyhole_in_under_thirty_wall_seconds
         )
         .unwrap();
     assert_eq!(updated.min_alt_deg, 69.5);
+    rig.tracker.set_min_alt_deg(updated.min_alt_deg);
     while rig.now() < too_low && rig.tracker.state().state == "tracking" {
         assert!(
             rig.error_arcsec(&first) <= 30.0,
@@ -413,4 +414,28 @@ async fn an_hour_covers_transit_too_low_and_keyhole_in_under_thirty_wall_seconds
     assert_eq!(first_end.ended_reason.as_deref(), Some("too_low"));
     assert!((0.0..=1.0).contains(&ending_delay));
     assert!(stopped_in_time);
+}
+
+#[tokio::test(start_paused = true)]
+async fn raising_the_minimum_above_a_tracked_target_ends_on_the_next_tick() {
+    let target = target_at_transit(20.0, START + 600.0);
+    let mut rig = Rig::new(&target, "raised-minimum").await;
+    rig.tracker.start(target.clone()).await.unwrap();
+    rig.tick(&target).await;
+    assert_eq!(rig.tracker.state().state, "tracking");
+    assert!(!rig.stopped().await);
+
+    assert!(geometric(&target, rig.now()).0 < 80.0);
+    let raised_at = rig.now();
+    rig.tracker.set_min_alt_deg(80.0);
+    while rig.tracker.state().state != "off" && rig.now() < raised_at + 0.1 {
+        rig.tick(&target).await;
+    }
+    assert_eq!(rig.tracker.state().state, "off");
+    assert_eq!(rig.tracker.state().ended_reason.as_deref(), Some("too_low"));
+    while !rig.stopped().await && rig.now() < raised_at + 0.5 {
+        rig.tick(&target).await;
+    }
+    assert!(rig.stopped().await);
+    rig.tracker.stop("stopped").await;
 }
