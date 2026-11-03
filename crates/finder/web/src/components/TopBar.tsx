@@ -1,7 +1,15 @@
 // The top bar: the frame being charted, the observing site, and night mode.
 
-import { thumbUrl, type GoToProgress, type SessionMount, type SessionTrack, type FrameSource } from "../api";
+import {
+  thumbUrl,
+  type GoToProgress,
+  type SessionMount,
+  type SessionTrack,
+  type SessionMotion,
+  type FrameSource,
+} from "../api";
 import { StopButton } from "./StopButton";
+import { McpNote } from "./McpNote";
 import type { Site } from "../settings";
 import { Chevron, Pin, Reticle, Torch } from "./Icons";
 
@@ -9,6 +17,7 @@ interface Props {
   mount?: SessionMount;
   goto?: GoToProgress;
   track?: SessionTrack;
+  motion?: SessionMotion;
   source: FrameSource | null;
   label: string | null;
   site: Site | null;
@@ -29,6 +38,7 @@ export function TopBar({
   mount,
   goto,
   track,
+  motion,
   source,
   label,
   site,
@@ -42,10 +52,11 @@ export function TopBar({
   setup,
   onChange,
 }: Props) {
+  const mcp = motion?.by === "mcp";
   return (
     <header className="sticky top-0 z-30 border-b border-rule bg-paper">
       <div
-        className={`page-width flex h-14 items-center ${mount ? "gap-1" : "gap-2"} px-3 sm:h-16 sm:gap-3 sm:px-5 lg:px-10`}
+        className={`page-width flex ${mcp ? "min-h-14 flex-wrap pt-2 sm:min-h-16" : "h-14 sm:h-16"} items-center ${mount ? "gap-1" : "gap-2"} px-3 sm:gap-3 sm:px-5 lg:px-10`}
       >
         <a
           href="/"
@@ -109,7 +120,14 @@ export function TopBar({
         >
           Setup
         </a>
-        <StopButton mount={mount} goto={goto} track={track} onChange={onChange} />
+        <div
+          className={
+            mcp ? "order-last flex w-full items-center justify-between gap-3 border-t border-rule py-2" : "contents"
+          }
+        >
+          <McpNote motion={motion} />
+          <StopButton mount={mount} goto={goto} track={track} motion={motion} onChange={onChange} />
+        </div>
         <label className="flex items-center gap-2 text-sm font-medium">
           <span className="hidden sm:inline">Night</span>
           <span className="sm:hidden" aria-hidden="true">

@@ -582,6 +582,22 @@
       "css": ".ds-guidance{color:var(--color-ink);border-block:1px solid var(--color-ink);padding-block:.75rem}.ds-guidance h2{font-size:1.125rem;font-weight:650}.ds-guidance p{margin-block:.5rem}"
     },
     {
+      "name": "MCP Motion Note",
+      "kind": "custom",
+      "refersTo": "list-row",
+      "description": "Built in McpNote.tsx inside GuidanceBlock and beside the single StopButton in TopBar. Plain Second Ink text says Moved by an MCP client · <tool> only while session motion.by is mcp. No status or alert role and no guidance Stop. The top bar adds a full-width ruled row for the wrapping note and 44px Stop. Any motion keeps Stop enabled before moving telemetry and disables Setup model actions. Existing red-only night tokens.",
+      "html": "<div class=\"ds-mcp-note\"><p>Moved by an MCP client · goto_target</p><button>Stop</button></div>",
+      "css": ".ds-mcp-note{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--color-ink-2);border-top:1px solid var(--color-rule);padding-block:8px}.ds-mcp-note p{font-size:.875rem;overflow-wrap:anywhere}.ds-mcp-note button{min-height:44px;color:var(--color-ink);background:transparent;border:2px solid currentColor}"
+    },
+    {
+      "name": "Setup MCP Section",
+      "kind": "custom",
+      "refersTo": "list-row",
+      "description": "Built in McpSection.tsx, last in Setup after Aim point. App reads GET /api/mcp only on entering Setup, catches every read failure and passes the optional answer. The section fetches nothing; invalid or health-shaped answers render nothing. Hairline rules and a headline frame every URL in server order, selectable wrapping text and allowed host names. Plain off or local-only notes; other devices need a LAN listener. WSL NAT note names README’s MCP under WSL2: portproxy or mirrored mode section and distinguishes WSL from Surface LAN addresses. No status or alert roles, fills, shadows or controls. Existing red-only night tokens.",
+      "html": "<section class=\"ds-mcp-section\"><h2>MCP</h2><p>Paste an endpoint URL into your MCP client:</p><ul><li>http://localhost:8080/mcp</li></ul><p>Allowed host names: surface.local</p></section>",
+      "css": ".ds-mcp-section{color:var(--color-ink);border-block:1px solid var(--color-rule);padding-block:16px}.ds-mcp-section ul{overflow-wrap:anywhere}.ds-mcp-section p{font-size:.9375rem;color:var(--color-ink-2)}"
+    },
+    {
       "name": "Target Reticle",
       "kind": "custom",
       "refersTo": "list-row",
@@ -657,7 +673,7 @@
       "name": "Stop",
       "kind": "custom",
       "refersTo": "button",
-      "description": "Built in StopButton.tsx in the sticky TopBar shared by console and Setup. Visible whenever mount.moving or a GoTo/second sync is slewing, solving or correcting. With a connected mount, Track states armed, tracking and keyhole_wait also keep Stop visible on every page, including Setup, while axes rest before autonomous motion. Absent or ended Track adds no Stop. No mount telemetry renders nothing. Always enabled, including pending, failed and repeated bodyless POST /api/stop requests. Explicit 44px minimum height, square ink border, red-only night tokens. With a mount, target and frame sheets are nonmodal dialogs fixed below the top bar (4rem inset, layer 20 below 30); Stop stays outside every dialog and inert/aria-hidden subtree. Close and Escape dismiss the sheets. Mount top-bar gaps tighten to 4px on phones; below 380px the site chip yields to Stop and remains available in Setup. Fits at 320px.",
+      "description": "Built in StopButton.tsx in the sticky TopBar shared by console and Setup. Visible whenever mount.moving or a GoTo/second sync is slewing, solving or correcting. With a connected mount, Track states armed, tracking and keyhole_wait also keep Stop visible on every page, including Setup, while axes rest before autonomous motion. Absent or ended Track adds no Stop. Any session motion also keeps Stop visible before mount telemetry arrives; without motion or mount telemetry it renders nothing. Always enabled, including pending, failed and repeated bodyless POST /api/stop requests. Explicit 44px minimum height, square ink border, red-only night tokens. With a mount, target and frame sheets are nonmodal dialogs fixed below the top bar (4rem inset, layer 20 below 30); Stop stays outside every dialog and inert/aria-hidden subtree. Close and Escape dismiss the sheets. Mount top-bar gaps tighten to 4px on phones; below 380px the site chip yields to Stop and remains available in Setup. Fits at 320px.",
       "html": "<header class=\"ds-motion-bar\"><button class=\"ds-stop\">Stop</button></header>",
       "css": ".ds-motion-bar{position:sticky;top:0;z-index:30;background:var(--color-paper)}.ds-stop{min-height:44px;border:1px solid var(--color-ink);border-radius:0;color:var(--color-ink);background:transparent}"
     },

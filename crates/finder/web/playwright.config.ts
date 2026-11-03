@@ -33,7 +33,13 @@ export default defineConfig({
   projects: [
     {
       name: "default",
-      testIgnore: ["**/session.spec.ts", "**/simulate.spec.ts", "**/goto.spec.ts", "**/tracking.spec.ts"],
+      testIgnore: [
+        "**/session.spec.ts",
+        "**/simulate.spec.ts",
+        "**/goto.spec.ts",
+        "**/tracking.spec.ts",
+        "**/mcp.spec.ts",
+      ],
     },
     {
       name: "session",
@@ -44,7 +50,7 @@ export default defineConfig({
     },
     {
       name: "simulate",
-      testMatch: ["**/simulate.spec.ts", "**/goto.spec.ts", "**/tracking.spec.ts"],
+      testMatch: ["**/simulate.spec.ts", "**/goto.spec.ts", "**/tracking.spec.ts", "**/mcp.spec.ts"],
       workers: 1,
       use: { baseURL: externalURL ?? simulateURL },
       dependencies: externalURL ? ["session"] : [],

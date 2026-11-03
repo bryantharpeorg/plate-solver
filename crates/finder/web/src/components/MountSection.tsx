@@ -7,7 +7,7 @@ export function MountSection({ session, onChange }: { session: ObservingSession;
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { mount, model, node } = session;
-  const moving = mountMayMove(mount, session.goto);
+  const moving = mountMayMove(mount, session.goto, undefined, session.motion);
   const request = async (action: () => Promise<void>, success: string) => {
     setPending(true);
     setMessage(null);

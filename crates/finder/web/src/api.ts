@@ -214,7 +214,21 @@ export interface PointingModel {
   needs: number;
 }
 
+export interface SessionMotion {
+  by: "page" | "mcp";
+  tool: string;
+  since: number;
+}
+
+export interface McpStatus {
+  enabled: boolean;
+  local_only: boolean;
+  urls: string[];
+  allowed_hosts: string[];
+}
+
 export interface ObservingSession {
+  motion?: SessionMotion;
   track?: SessionTrack;
   imaging_camera?: ImagingCamera;
   backlash?: { alt_deg?: number; az_deg?: number };

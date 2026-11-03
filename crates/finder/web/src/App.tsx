@@ -52,6 +52,26 @@ export function App() {
   const [picker, setPicker] = useState(false);
   const [targetSheet, setTargetSheet] = useState(false);
   const [path, setPath] = useState(() => window.location.pathname);
+  const [mcp, setMcp] = useState<unknown>();
+  useEffect(() => {
+    let current = true;
+    setMcp(undefined);
+    if (path === "/setup") {
+      void (async () => {
+        try {
+          const response = await fetch("/api/mcp");
+          if (!response.ok) return;
+          const status: unknown = await response.json();
+          if (current) setMcp(status);
+        } catch {
+          // Setup remains usable if this optional read fails.
+        }
+      })();
+    }
+    return () => {
+      current = false;
+    };
+  }, [path]);
   useEffect(() => {
     const popped = () => setPath(window.location.pathname);
     window.addEventListener("popstate", popped);
@@ -134,6 +154,7 @@ export function App() {
         mount={session.mount}
         goto={session.goto}
         track={session.track}
+        motion={session.motion}
         source={source}
         label={label}
         site={site}
@@ -152,7 +173,7 @@ export function App() {
         </p>
       )}
       {path === "/setup" ? (
-        <SetupPage session={session} put={put} onBack={() => navigate("/")} onChange={changed} />
+        <SetupPage session={session} mcp={mcp} put={put} onBack={() => navigate("/")} onChange={changed} />
       ) : (
         <>
           {/*
