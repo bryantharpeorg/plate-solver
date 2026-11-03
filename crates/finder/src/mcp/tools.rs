@@ -79,7 +79,47 @@ fn field_result(field: &str, value: Value) -> CallToolResult {
     result
 }
 
+fn tool_result(result: Result<Value, String>) -> CallToolResult {
+    match result {
+        Ok(value) => CallToolResult::structured(value),
+        Err(reason) => CallToolResult::error(vec![ContentBlock::text(reason)]),
+    }
+}
+
 impl Console {
+    fn mount(&self) -> Result<crate::link::MountClient, String> {
+        self.state
+            .link()
+            .and_then(|link| link.mount())
+            .ok_or_else(|| "no mount is connected".to_owned())
+    }
+
+    async fn stop_result(
+        &self,
+        name: &str,
+        arguments: JsonObject,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> CallToolResult {
+        let carried_out = context
+            .extensions
+            .get::<axum::http::request::Parts>()
+            .is_some_and(|parts| {
+                parts
+                    .extensions
+                    .get::<super::door::StopsCarriedOut>()
+                    .is_some()
+            });
+        let result = if carried_out {
+            json!({"stopped":true})
+        } else {
+            let result = api::stop(&self.state).await;
+            self.state
+                .log_call(name, &Value::Object(arguments), Ok(&result));
+            result
+        };
+        CallToolResult::structured(result)
+    }
+
     pub(crate) fn new(state: AppState) -> Self {
         Self {
             state,
@@ -90,6 +130,92 @@ impl Console {
 
 #[tool_router]
 impl Console {
+    #[tool(description = "Describe the connected mount's two axes.",
+        output_schema = object_schema(), annotations(read_only_hint = true))]
+    async fn describe_axes(&self) -> CallToolResult {
+        let result = async {
+            let mut mount = self.mount()?;
+            let description = mount
+                .describe_mount()
+                .await
+                .map_err(|error| error.message().to_owned())?;
+            let axes: Vec<_> = description
+                .axes
+                .into_iter()
+                .zip(["azimuth", "altitude"])
+                .map(|(axis, name)| {
+                    json!({
+                        "axis":name, "counts_per_revolution":axis.counts_per_revolution,
+                        "top_rate_deg_per_s":axis.top_rate_deg_per_s, "can_goto":axis.can_goto
+                    })
+                })
+                .collect();
+            Ok(json!({"axes":axes}))
+        }
+        .await;
+        tool_result(result)
+    }
+
+    #[tool(description = "Read each mount axis's position, rate and moving flag.",
+        output_schema = object_schema(), annotations(read_only_hint = true))]
+    async fn get_axis_state(&self) -> CallToolResult {
+        let result = async {
+            let mut mount = self.mount()?;
+            let mut axes = Vec::new();
+            for (axis, name) in [
+                (scope_link::proto::Axis::Azimuth, "azimuth"),
+                (scope_link::proto::Axis::Altitude, "altitude"),
+            ] {
+                let reading = mount
+                    .axis_state(axis)
+                    .await
+                    .map_err(|error| error.message().to_owned())?;
+                axes.push(json!({"axis":name, "position":reading.position,
+                    "rate_deg_per_s":reading.rate_deg_per_s, "moving":reading.moving}));
+            }
+            Ok(json!({"axes":axes}))
+        }
+        .await;
+        tool_result(result)
+    }
+
+    #[tool(description = "Move a real telescope to the session's target immediately, through the console's guarded GoTo.",
+        output_schema = object_schema())]
+    async fn goto_target(&self, arguments: JsonObject) -> CallToolResult {
+        let result = api::start_motion(&self.state, "mcp", "goto_target", || {
+            api::goto_target(&self.state)
+        })
+        .await
+        .map(|()| json!({"started":true}))
+        .map_err(|error| error.message);
+        self.state.log_call(
+            "goto_target",
+            &Value::Object(arguments),
+            result.as_ref().map_err(String::as_str),
+        );
+        tool_result(result)
+    }
+
+    #[tool(description = "Stop all telescope motion, including GoTo and tracking, in every state.",
+        output_schema = object_schema())]
+    async fn stop(
+        &self,
+        arguments: JsonObject,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> CallToolResult {
+        self.stop_result("stop", arguments, context).await
+    }
+
+    #[tool(description = "Stop both axes and end any console GoTo or tracking in every state.",
+        output_schema = object_schema())]
+    async fn stop_all(
+        &self,
+        arguments: JsonObject,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> CallToolResult {
+        self.stop_result("stop_all", arguments, context).await
+    }
+
     #[tool(description = "Read the shared observing session.", output_schema = object_schema(), annotations(read_only_hint = true))]
     async fn get_session(&self) -> CallToolResult {
         CallToolResult::structured(

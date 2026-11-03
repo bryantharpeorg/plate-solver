@@ -7,9 +7,13 @@ use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use serde_json::json;
+use serde_json::{json, Value};
 
 use crate::{api, AppState};
+
+/// Passed through rmcp's request extensions so tool dispatch never stops twice.
+#[derive(Clone)]
+pub(crate) struct StopsCarriedOut;
 
 pub(crate) async fn door(State(state): State<AppState>, request: Request, next: Next) -> Response {
     let (mut parts, body) = request.into_parts();
@@ -17,6 +21,38 @@ pub(crate) async fn door(State(state): State<AppState>, request: Request, next: 
         Ok(bytes) => bytes,
         Err(_) => return StatusCode::PAYLOAD_TOO_LARGE.into_response(),
     };
+    // The console owns Stop. Nothing in the SDK, headers or peer policy may
+    // stand before it, including the SDK's rejection of JSON-RPC batches.
+    if let Ok(message) = serde_json::from_slice::<Value>(&bytes) {
+        let messages = message
+            .as_array()
+            .map_or_else(|| std::slice::from_ref(&message), Vec::as_slice);
+        let stops: Vec<_> = messages
+            .iter()
+            .filter(|message| {
+                message["method"] == "tools/call"
+                    && matches!(
+                        message["params"]["name"].as_str(),
+                        Some("stop" | "stop_all")
+                    )
+            })
+            .collect();
+        if !stops.is_empty() {
+            let result = api::stop(&state).await;
+            for stop in stops {
+                let arguments = stop["params"]
+                    .get("arguments")
+                    .cloned()
+                    .unwrap_or_else(|| json!({}));
+                state.log_call(
+                    stop["params"]["name"].as_str().unwrap(),
+                    &arguments,
+                    Ok(&result),
+                );
+            }
+            parts.extensions.insert(StopsCarriedOut);
+        }
+    }
     if api::check_origin(&parts, &state.allowed_hosts).is_err()
         || !api::host_allowed(&parts, &state.allowed_hosts)
     {

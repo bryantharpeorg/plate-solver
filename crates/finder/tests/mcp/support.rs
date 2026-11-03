@@ -286,6 +286,66 @@ pub mod sim {
         }
     }
 
+    /// Load a pre-MCP session into a fresh duplex link, preserving the recording mount.
+    pub async fn persistent(path: &Path) -> Rig {
+        let mut rig = Rig::new(START, 50.0, 120.0, true).await;
+        let session = Session::with_state_file(path).unwrap();
+        session
+            .edit(
+                serde_json::from_value(json!({
+                    "node":{"address":"scope.local:1","token":"test-token"},
+                    "camera_settings":{"exposure_ms":200,"gain":1}
+                }))
+                .unwrap(),
+                rig.now(),
+            )
+            .unwrap();
+        session
+            .set_aim(Some(Aim { x: 700.0, y: 420.0 }), rig.now())
+            .unwrap();
+        let node = NodeService::with_controls_and_mount(
+            SimCamera::new(rig.sim.clone()),
+            Arc::new(NodeTime(rig.sim.clock().clone())),
+            "test-token",
+            Default::default(),
+            NodeControls::default(),
+            Some(Arc::new(Recorded {
+                mount: rig.mount.clone(),
+                clock: rig.sim.clock().clone(),
+                commands: rig.commands.clone(),
+            })),
+        )
+        .unwrap();
+        let controls = node.controls();
+        controls.set_frame_interval(Duration::from_millis(500));
+        let transport = Transport::connector(move || {
+            let node = node.clone();
+            async move {
+                let (client, server) = tokio::io::duplex(64 * 1024);
+                tokio::spawn(async move {
+                    memory::serve_routes_on(server, node.routes())
+                        .await
+                        .unwrap();
+                });
+                Ok::<_, std::io::Error>(client)
+            }
+        });
+        rig.state = state()
+            .with_session(session)
+            .with_clock(Arc::new(ConsoleClock(rig.sim.clock().clone())))
+            .with_link(transport)
+            .with_live_solver(Arc::new(Stars));
+        rig.app = app(rig.state.clone(), "127.0.0.1");
+        rig.controls = controls;
+        for _ in 0..100 {
+            if session_view(&rig).await["mount"]["connected"] == true {
+                return rig;
+            }
+            rig.tick().await;
+        }
+        panic!("persistent mount did not connect");
+    }
+
     async fn session_view(rig: &Rig) -> Value {
         session(&rig.app).await
     }
