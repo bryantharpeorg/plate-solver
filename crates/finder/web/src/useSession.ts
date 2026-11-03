@@ -4,6 +4,7 @@ import type { ObservingSession, SessionSite } from "./api";
 export type { ObservingSession, SessionSite } from "./api";
 
 export interface SessionEdit {
+  imaging_camera?: ObservingSession["imaging_camera"] | null;
   site?: SessionSite | null;
   min_alt_deg?: number;
   target?: string | null;
@@ -40,6 +41,9 @@ async function request(init?: RequestInit): Promise<ObservingSession> {
     ...(body?.model != null && { model: body.model }),
     ...(body?.goto != null && { goto: body.goto }),
     ...(body?.goto_refusal != null && { goto_refusal: body.goto_refusal }),
+    ...(body?.track != null && { track: body.track }),
+    ...(body?.imaging_camera != null && { imaging_camera: body.imaging_camera }),
+    ...(body?.backlash != null && { backlash: body.backlash }),
   };
 }
 

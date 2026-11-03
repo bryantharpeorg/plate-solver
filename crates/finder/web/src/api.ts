@@ -185,6 +185,24 @@ export interface SessionMount {
   moving: boolean;
 }
 
+export interface ImagingCamera {
+  width_mm: number;
+  height_mm: number;
+  pitch_um: number;
+}
+
+export interface SessionTrack {
+  wanted: boolean;
+  state: "off" | "armed" | "tracking" | "keyhole_wait";
+  target?: Target;
+  ended_reason?: string;
+  readout?: {
+    rms_arcsec: number;
+    field_rotation_deg_per_min: number;
+    longest_exposure_s?: number | "no limit";
+  };
+}
+
 export interface PointingModel {
   syncs: number;
   epoch: number;
@@ -197,6 +215,9 @@ export interface PointingModel {
 }
 
 export interface ObservingSession {
+  track?: SessionTrack;
+  imaging_camera?: ImagingCamera;
+  backlash?: { alt_deg?: number; az_deg?: number };
   goto?: GoToProgress;
   /** The planner's refusal, omitted when an idle GoTo would be accepted. */
   goto_refusal?: string;
@@ -257,6 +278,16 @@ export interface SolveSettings {
 }
 
 export class ApiError extends Error {}
+
+export async function postTrack(on: boolean): Promise<ObservingSession> {
+  return json(
+    await fetch("/api/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ on }),
+    }),
+  );
+}
 
 async function json<T>(response: Response): Promise<T> {
   if (!response.ok) {

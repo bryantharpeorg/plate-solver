@@ -7,6 +7,7 @@ import { AimTap } from "./AimTap";
 import { FieldWarning } from "./FieldWarning";
 import { ScopeNodeSection } from "./ScopeNodeSection";
 import { MountSection } from "./MountSection";
+import { ImagingCameraSection } from "./ImagingCameraSection";
 
 interface Props {
   session: ObservingSession;
@@ -171,6 +172,7 @@ export function SetupPage({ session, put, onBack, onChange }: Props) {
       </section>
       <ScopeNodeSection session={session} live={live} />
       <MountSection session={session} onChange={onChange} />
+      <ImagingCameraSection session={session} put={put} />
       <FieldWarning field={session.field} />
       <AimTap session={session} live={live} />
     </main>
