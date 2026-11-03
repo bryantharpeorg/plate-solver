@@ -43,7 +43,7 @@
     "tinybench": "6.2.0",
     "tldts": "7.4.16",
     "tldts-core": "7.4.16",
-    "undici": "8.11.2",
+    "undici": "8.12.2",
     "vitest": {
       "magic-string": "1.4.2"
     },
