@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "015-tracking"]
 # Converted 2026-10-28 from the OpenSpec change feat-16-mcp (reviewed and refined in
 # #102). This trio is now the feature's only specification. It stays draft until the
@@ -10,6 +10,8 @@ depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "0
 # Record). On 2026-11-03 the owner accepted the recommended answer to all eleven owner
 # questions, and every citation of 015 was re-read against `main` at a02dc35, where
 # 015's US1 to US9 have landed. No owner question is open.
+# Flipped to ready 2026-11-03 by the owner ("Yes flip it"), after 015 landed at
+# a02dc35 and the five re-read points were answered (9eba471).
 ---
 
 # Feature Specification: The Console's MCP Server
