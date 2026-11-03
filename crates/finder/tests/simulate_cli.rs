@@ -201,6 +201,10 @@ fn default_state_is_unchanged_and_simulation_keeps_its_own_aim_and_node() {
     server.request("POST", "/api/sim/frames", json!({"running":false}));
     // Centre just before a preview-bearing exposure, before sidereal drift.
     std::thread::sleep(Duration::from_secs(6));
+    // Frames are stopped, so this is the last frame exposed before the push. On the
+    // real clock its preview can hold some star within the tap's 10 px by chance,
+    // so only a frame exposed after the push may calibrate the aim.
+    let before = server.pointing()["pointing"]["frame_id"].as_u64().unwrap();
     server.request(
         "POST",
         "/api/sim/telescope",
@@ -212,14 +216,18 @@ fn default_state_is_unchanged_and_simulation_keeps_its_own_aim_and_node() {
         let read = server.pointing();
         // The first resumed exposure carries a preview; retry until it solves.
         let id = read["pointing"]["frame_id"].as_u64().unwrap();
-        let response = server.response("POST", "/api/aim", json!({"frame_id":id,"x":706,"y":420}));
-        if response.starts_with("HTTP/1.1 200") {
-            break;
+        if id > before {
+            let response =
+                server.response("POST", "/api/aim", json!({"frame_id":id,"x":706,"y":420}));
+            if response.starts_with("HTTP/1.1 200") {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "no calibratable preview: {response}"
+            );
         }
-        assert!(
-            Instant::now() < deadline,
-            "no calibratable preview: {response}"
-        );
+        assert!(Instant::now() < deadline, "no frame after the push: {read}");
         std::thread::sleep(Duration::from_millis(25));
     }
     drop(server);
