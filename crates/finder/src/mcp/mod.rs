@@ -1,6 +1,8 @@
 //! Stateless MCP on the console's port, behind its Origin, Host and LAN checks.
 
 pub(crate) mod door;
+pub mod guard;
+pub mod limit;
 mod tools;
 
 use std::net::{IpAddr, SocketAddr, UdpSocket};

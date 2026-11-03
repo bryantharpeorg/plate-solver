@@ -67,6 +67,34 @@ struct FrameArguments {
     name: Option<String>,
 }
 
+#[derive(Clone, Copy, serde::Deserialize, serde::Serialize, rmcp::schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+enum AxisArgument {
+    Azimuth,
+    Altitude,
+}
+impl From<AxisArgument> for scope_link::proto::Axis {
+    fn from(axis: AxisArgument) -> Self {
+        match axis {
+            AxisArgument::Azimuth => Self::Azimuth,
+            AxisArgument::Altitude => Self::Altitude,
+        }
+    }
+}
+#[derive(serde::Deserialize, serde::Serialize, rmcp::schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct PositionArguments {
+    axis: AxisArgument,
+    position: i32,
+}
+#[derive(serde::Deserialize, serde::Serialize, rmcp::schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct RateArguments {
+    axis: AxisArgument,
+    deg_per_s: f64,
+    duration_s: f64,
+}
+
 fn object_schema() -> Arc<JsonObject> {
     Arc::new(json!({"type":"object"}).as_object().unwrap().clone())
 }
@@ -182,15 +210,78 @@ impl Console {
     #[tool(description = "Move a real telescope to the session's target immediately, through the console's guarded GoTo.",
         output_schema = object_schema())]
     async fn goto_target(&self, arguments: JsonObject) -> CallToolResult {
-        let result = api::start_motion(&self.state, "mcp", "goto_target", || {
-            api::goto_target(&self.state)
-        })
-        .await
-        .map(|()| json!({"started":true}))
-        .map_err(|error| error.message);
+        let result = async {
+            self.state.limit_move()?;
+            api::start_motion(&self.state, "mcp", "goto_target", || {
+                api::goto_target(&self.state)
+            })
+            .await
+            .map_err(|error| error.message)?;
+            Ok(json!({"started":true}))
+        }
+        .await;
         self.state.log_call(
             "goto_target",
             &Value::Object(arguments),
+            result.as_ref().map_err(String::as_str),
+        );
+        tool_result(result)
+    }
+
+    #[tool(description = "Move a real telescope immediately to an absolute axis position in counts, through all console guards.",
+        output_schema = object_schema())]
+    async fn goto_axis_position(
+        &self,
+        Parameters(args): Parameters<PositionArguments>,
+    ) -> CallToolResult {
+        let result = async {
+            self.state.limit_move()?;
+            super::guard::start(
+                &self.state,
+                "goto_axis_position",
+                crate::goto::AxisMove::Position {
+                    axis: args.axis.into(),
+                    position: args.position,
+                },
+            )
+            .await
+            .map_err(|error| error.message)?;
+            Ok(json!({"started":true}))
+        }
+        .await;
+        self.state.log_call(
+            "goto_axis_position",
+            &json!(args),
+            result.as_ref().map_err(String::as_str),
+        );
+        tool_result(result)
+    }
+
+    #[tool(description = "Move a real telescope immediately at a signed axis rate for at most 30 seconds, capped at its top rate and held to all console guards.",
+        output_schema = object_schema())]
+    async fn move_axis(&self, Parameters(args): Parameters<RateArguments>) -> CallToolResult {
+        let result = async {
+            self.state.limit_move()?;
+            if !args.duration_s.is_finite() || args.duration_s <= 0.0 || args.duration_s > 30.0 {
+                return Err("duration_s must be more than 0 and at most 30".into());
+            }
+            super::guard::start(
+                &self.state,
+                "move_axis",
+                crate::goto::AxisMove::Rate {
+                    axis: args.axis.into(),
+                    deg_per_s: args.deg_per_s,
+                    duration_s: args.duration_s,
+                },
+            )
+            .await
+            .map_err(|error| error.message)?;
+            Ok(json!({"started":true}))
+        }
+        .await;
+        self.state.log_call(
+            "move_axis",
+            &json!(args),
             result.as_ref().map_err(String::as_str),
         );
         tool_result(result)
