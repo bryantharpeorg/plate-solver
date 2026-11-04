@@ -74,6 +74,46 @@ pub fn refine_solution<D>(
         }
     }
 
+    // PROTOTYPE (not cedar): iterate re-match + least squares + attitude re-fit with
+    // the refined camera model. Cedar stops after one pass, which on wide, distorted
+    // fields can leave the boresight off by many arcminutes. Opt-in for now.
+    let mut raw = raw;
+    let mut matched_stars = outcome.matched_stars.clone();
+    let mut matched_ids = outcome.matched_catalog_ids.clone();
+    let mut matched_cents = outcome.matched_centroids.clone();
+    let (mut rotation, mut ra, mut dec, mut roll) = (rotation, ra, dec, roll);
+    if std::env::var_os("PLATE_SOLVER_ITERATIVE_REFINE").is_some() {
+        for _ in 0..3 {
+            let Some(pass) = rematch(ctx, prep, &rotation, fov, k, width, height) else {
+                break;
+            };
+            raw = pass.iter().map(|&(i, _)| prep.raw_centroids[i]).collect();
+            matched_ids = pass.iter().map(|&(_, s)| s).collect();
+            matched_stars = matched_ids
+                .iter()
+                .map(|&s| {
+                    ctx.db
+                        .star_vector(pattern_database::StarId(s))
+                        .expect("valid")
+                })
+                .collect();
+            if let Some((f, kk)) = fit_focal_and_k(&rotation, &raw, &matched_stars, width, height) {
+                fov = f;
+                k = kk;
+            }
+            let und = math_core::undistort_centroids(&raw, width, height, k);
+            matched_cents = und.clone();
+            let v: Vec<UnitVector> = PinholeCamera::new(width, height, fov)
+                .unproject(&und)
+                .into_iter()
+                .map(|v| v.expect("never zero-length"))
+                .collect();
+            if let Some(fit) = fit_attitude(&v, &matched_stars) {
+                (rotation, ra, dec, roll) = fit;
+            }
+        }
+    }
+
     // 3. Residuals: matched centroids re-undistorted with k, unprojected at the
     //    refined FOV, rotated to the sky (R^T v), compared to the catalog vectors.
     let undist = math_core::undistort_centroids(&raw, width, height, k);
@@ -82,7 +122,7 @@ pub fn refine_solution<D>(
     let mut angles: Vec<f64> = camera
         .unproject(&undist)
         .into_iter()
-        .zip(outcome.matched_stars.iter())
+        .zip(matched_stars.iter())
         .map(|(v, cat)| {
             let v = v.expect("never zero-length");
             let sky = UnitVector {
@@ -102,9 +142,9 @@ pub fn refine_solution<D>(
     Solution {
         status: Some(SolveStatus::MatchFound),
         camera: Some(camera),
-        matched_centroids: outcome.matched_centroids.clone(),
-        matched_stars: outcome.matched_stars.clone(),
-        matched_catalog_ids: outcome.matched_catalog_ids.clone(),
+        matched_centroids: matched_cents,
+        matched_stars,
+        matched_catalog_ids: matched_ids,
         match_probability: outcome.match_probability,
         fov_used: Some(camera.fov),
         pattern_candidates: vec![*candidate],
@@ -117,6 +157,93 @@ pub fn refine_solution<D>(
         distortion: Some(k),
         noise_estimate: None,
     }
+}
+
+/// One re-match pass: undistort every verification centroid with `k`, project the
+/// catalog with the current attitude and FOV, and pair each centroid with the
+/// nearest unused catalog star within `match_radius * width`.
+fn rematch(
+    ctx: &crate::status::SolveContext,
+    prep: &crate::preparation::Prepared,
+    rotation: &math_core::attitude::RotationMatrix,
+    fov: f64,
+    k: f64,
+    width: f64,
+    height: f64,
+) -> Option<Vec<(usize, usize)>> {
+    let camera = PinholeCamera::new(width, height, fov);
+    let undist = math_core::undistort_centroids(&prep.raw_centroids, width, height, k);
+    let r = &rotation.rows;
+    let bore = UnitVector {
+        x: r[0][0],
+        y: r[0][1],
+        z: r[0][2],
+    };
+    let radius = math_core::fov::diagonal_fov(fov, width, height) / 2.0 * 1.05;
+    let nearby = ctx.db.nearby_stars(bore, radius);
+    let derot: Vec<UnitVector> = nearby
+        .iter()
+        .map(|&i| {
+            rotation.rotate(
+                ctx.db
+                    .star_vector(pattern_database::StarId(i))
+                    .expect("valid"),
+            )
+        })
+        .collect();
+    let (px, in_frame) = camera.project(&derot);
+    let kept: Vec<usize> = in_frame.into_iter().take(2 * undist.len()).collect();
+    let r2 = (ctx.match_radius * width).powi(2);
+    let mut used = vec![false; kept.len()];
+    let mut pairs = Vec::new();
+    for (i, c) in undist.iter().enumerate() {
+        let mut best: Option<usize> = None;
+        let mut best_d2 = r2;
+        for (q, &kk) in kept.iter().enumerate() {
+            let d2 = (px[kk].0 - c.0).powi(2) + (px[kk].1 - c.1).powi(2);
+            if !used[q] && d2 < best_d2 {
+                best_d2 = d2;
+                best = Some(q);
+            }
+        }
+        if let Some(q) = best {
+            used[q] = true;
+            pairs.push((i, nearby[kept[q]]));
+        }
+    }
+    (pairs.len() >= 4).then_some(pairs)
+}
+
+/// Cedar's least squares for focal length and distortion: `r(1 - k r^2) = f tan(theta)`
+/// with `r` in units of width/2 and catalog vectors derotated into the camera frame.
+/// Returns `(fov, k)`.
+fn fit_focal_and_k(
+    rotation: &math_core::attitude::RotationMatrix,
+    raw: &[(f64, f64)],
+    catalog: &[UnitVector],
+    width: f64,
+    height: f64,
+) -> Option<(f64, f64)> {
+    let (mut a00, mut a01, mut a11, mut b0, mut b1) = (0.0, 0.0, 0.0, 0.0, 0.0);
+    for (c, cat) in raw.iter().zip(catalog) {
+        let cam = rotation.rotate(*cat);
+        let t = (cam.y * cam.y + cam.z * cam.z).sqrt() / cam.x;
+        let r = ((c.0 - height / 2.0).powi(2) + (c.1 - width / 2.0).powi(2)).sqrt() / width * 2.0;
+        let r3 = r * r * r;
+        a00 += t * t;
+        a01 += t * r3;
+        a11 += r3 * r3;
+        b0 += t * r;
+        b1 += r3 * r;
+    }
+    let det = a00 * a11 - a01 * a01;
+    if det.abs() <= 1e-300 {
+        return None;
+    }
+    let k = (a00 * b1 - a01 * b0) / det;
+    let f = (a11 * b0 - a01 * b1) / det / (1.0 - k);
+    let fov = 2.0 * (1.0 / f).atan();
+    (fov.is_finite() && fov > 0.0).then_some((fov, k))
 }
 
 /// Solve attitude over all matched pairs and extract RA/Dec/Roll.
