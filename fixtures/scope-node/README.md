@@ -1,6 +1,7 @@
 # Scope-node bring-up fixtures and notes
 
-The operator captured these on 2026-10-31 for spec 013's US2, on the bring-up camera. The
+The operator captured these on 2026-10-31 for spec 013's US2, on the bring-up camera, and
+replaced `finder-frame.png` with a night frame on 2026-11-09. The
 finder's own camera, a mono IMX296, replaces it later. When it does, the operator swaps
 every file here, and no test changes: US2's tests take every camera value from
 `fixtures.json`.
@@ -23,19 +24,13 @@ They live here, outside `crates/`, because the workspace loads every folder unde
   one JSON array, with one object per frame, in frame order. `rpicam-vid` writes `[`
   when it starts and `]` when it exits, so a reader of a live stream parses it object by
   object. Each object also carries `FrameWallClock`, the frame's wall-clock time in ns.
-- **`finder-frame.png`**: the Y plane of the stream's third frame, 1296 × 972, 8-bit
-  gray, padding dropped, **with 40 synthetic stars added**. The frame itself is a
-  daytime frame of a ceiling, with no stars, so a test comparing two detection paths on
-  it would compare two empty lists. The stars keep the camera's real background, noise
-  and saturated light fixture:
-  - round Gaussians, sigma 1.4 px;
-  - peaks 40–130 DN above the background, never past 250;
-  - at seeded random positions (seed 13), at least 40 px apart and 48 px from the edge.
-
-  `detect_stars` with `DetectParams::cedar()`'s settings finds 27 of them; the faintest
-  fall below its threshold. `fixtures.json` records the frame as synthetic, and the
-  operator's bring-up kit keeps the generator and each star's true centre. A night
-  frame of real stars replaces it.
+- **`finder-frame.png`**: a night frame of real stars, 1296 × 972, 8-bit gray, unmodified:
+  the Y plane from `rpicam-vid`, padding dropped. It was captured on 2026-11-09 with the
+  16 mm lens at about f/1.5, 3 s at gain 8, under a light-polluted sky. `detect_stars`
+  with `DetectParams::cedar()`'s settings finds 37 stars, so a test comparing two
+  detection paths on it compares two real lists. One saturated object sits near the left
+  edge. The frame solves with 30 matched stars, and `fixtures.json` records the solution.
+  An earlier version of this file was a daytime frame with 40 synthetic stars added.
 - **`fixtures.json`**: what the files hold. It gives the camera's model, size, modes, and
   exposure and gain ranges, the stride alignment, the stream's size, stride, frame count, frame bytes and padding
   values, each frame's `SensorTimestamp` (ns) and `ExposureTime` (µs), and the finder
@@ -96,9 +91,13 @@ rpicam-vid --nopreview --codec yuv420 --mode 1296:972 --width 1296 --height 972
 **Detection time per frame on the Pi 3B+.** This is `detect-timing`, `star-detection` with
 `DetectParams::cedar()`'s settings, as the median of 10 runs:
 - the daytime 1296 × 972 frame, with 0 stars: 32.1 ms;
-- the same frame with its 40 synthetic stars, 27 found: 32.8 ms;
+- the same frame with 40 synthetic stars added, 27 found: 32.8 ms;
 - a synthetic 1456 × 1088 frame with 60 stars: 41.0 ms, with 59 found.
-- The night run adds times on real stars, in every mode.
+- `finder-frame.png`, the night frame, with 37 real stars found: 33.0 ms;
+- two other night frames at f/1.4, 1 s with 21 stars and 0.5 s with 9 stars: 31.7 ms and
+  31.5 ms.
+
+Night frames have only been timed in the 1296 × 972 mode.
 
 **Wi-Fi.**
 - The link was TharpeHouse-2.4 at 5200 MHz, 80 MHz wide. The signal was −46 to −52 dBm,

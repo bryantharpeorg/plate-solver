@@ -60,13 +60,20 @@
     "file": "finder-frame.png",
     "width": 1296,
     "height": 972,
-    "source": "stream-frame2.pgm, with synthetic stars added",
-    "synthetic_stars": {
-      "added": 40,
-      "seed": 13,
-      "sigma_px": 1.4,
-      "peak_dn_min": 40.3,
-      "peak_dn_max": 129.8
+    "source": "night frame of real stars, unmodified, captured 2026-11-09",
+    "capture": {
+      "exposure_us": 2999880,
+      "analogue_gain": 8.0,
+      "lens": "16 mm, about f/1.5"
+    },
+    "stars_detected": 37,
+    "solved": {
+      "ra_deg": 15.524,
+      "dec_deg": 2.597,
+      "roll_deg": 168.761,
+      "fov_deg": 12.999,
+      "matches": 30,
+      "rmse_arcsec": 17.4
     }
   },
   "listing": {
