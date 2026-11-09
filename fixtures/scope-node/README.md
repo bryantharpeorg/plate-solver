@@ -100,7 +100,7 @@ rpicam-vid --nopreview --codec yuv420 --mode 1296:972 --width 1296 --height 972
 Night frames have only been timed in the 1296 × 972 mode.
 
 **Wi-Fi.**
-- The link was TharpeHouse-2.4 at 5200 MHz, 80 MHz wide. The signal was −46 to −52 dBm,
+- The link was at 5200 MHz, 80 MHz wide. The signal was −46 to −52 dBm,
   at 433 Mbit/s each way.
 - TCP throughput, 40 MiB each way to a host on the wired LAN:
   - Pi to the host, the way frames travel: 121 Mbit/s;
