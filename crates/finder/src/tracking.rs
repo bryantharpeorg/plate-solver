@@ -316,8 +316,8 @@ impl Shared {
         }
         control.proportional = [0.0; 2];
         control.previous_pointing = None;
-        for i in 0..2 {
-            if control.measurement[i].take().is_some() {
+        for (i, measurement) in control.measurement.iter_mut().enumerate() {
+            if measurement.take().is_some() {
                 self.model.motion.crossing(i, false);
             }
         }
@@ -541,8 +541,8 @@ impl Shared {
             control.previous_pointing = None;
             control.solve_after = None;
             control.resume_pointing = None;
-            for i in 0..2 {
-                control.measurement[i] = None;
+            for (i, measurement) in control.measurement.iter_mut().enumerate() {
+                *measurement = None;
                 self.model.motion.crossing(i, true);
             }
         }
