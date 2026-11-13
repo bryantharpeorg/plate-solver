@@ -51,14 +51,16 @@ description: "Task list for 018-live-chart-steady: A Live Chart That Holds Still
 - [ ] T003 [US1] In `crates/finder/web/src/components/Chart.tsx`, add the `live` prop,
   `LIVE_HOLD`, `Steady`, `advance`, `useSteady`, the key, the grid paths' keys, and the
   mount-time `intro` of `Grid` and `Furniture`, exactly as in plan.md § Interfaces.
-  Leave `StarSymbol`, `ObjectSymbol` and the upload path unchanged.
+  Leave `StarSymbol`, `ObjectSymbol` and the upload path unchanged (FR-002, FR-003,
+  FR-004, FR-005, FR-006, FR-007).
 - [ ] T004 [US1] In `crates/finder/web/src/App.tsx`, pass `live={showLive}` to the
-  existing `<Chart … />`, and change nothing else.
+  existing `<Chart … />`, and change nothing else (FR-001).
 - [ ] T005 [US1] Add plan.md § Interfaces' paragraph to `DESIGN.md` § Chart (signature),
-  after "With reduced motion all animation is off."
+  after "With reduced motion all animation is off." (FR-008)
 - [ ] T006 [US1] Run the `lint` and `test` gates with every existing Vitest and
   Playwright test unchanged and green. Commit the rebuilt `crates/finder/web/dist`.
-  Commit the green story (FR-001 to FR-008; US1-S1 to US1-S8). In the story's summary,
+  Commit the green story (FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007,
+  FR-008; US1-S1 to US1-S8). In the story's summary,
   say in one line what the chart does across an unsolved live frame.
 
 ## Execution Order
