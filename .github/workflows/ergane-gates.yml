@@ -51,7 +51,8 @@ jobs:
 
   test:
     name: "test"
-    runs-on: ubuntu-latest
+    # Playwright 1.56.1 can't install Chromium on ubuntu-latest (26.04); see #196.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Install protoc
