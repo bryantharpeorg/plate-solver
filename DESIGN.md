@@ -274,6 +274,11 @@ Ruled, square and quiet. The ink does the work.
 ### Chart (signature)
 The frame sits inside a 1.4-unit ink neatline with a 30-unit paper margin. The RA/Dec graticule is drawn over the frame in Graticule, animating on in 900ms. Ticks and condensed edge labels sit in the margin on all four sides. Matched stars get solid Frame Ink rings with upright names. Expected stars get dashed rings at 70%, and detected centroids get small rings at 55%. Messier objects get atlas symbols in their object colour with italic labels, and leaders run to labels set off in open sky. Compass and scale-bar furniture are in Frame Ink. Labels are laid out to avoid each other (`src/labels.ts`). A picked object thickens to 2.4. Marks ink in over 500ms after a 250 to 300ms delay. With reduced motion all animation is off.
 
+On the live chart, the grid draws in and the furniture inks in once, on the first solved
+live frame. After that, marks that persist from frame to frame update in place, and only
+a star or object new to the chart inks in. Through up to two unsolved live frames in a
+row, the chart keeps the last live solve.
+
 ### Guidance block — built
 An ink-only ruled block leads the page when a target is set, before the doubled-rule title block. It names the target and kind, and prints the session's pointability class in Second Ink. Pointable guidance gives the whole-degree turn and tilt and the latest pointing's age, or asks for a solved frame. Down targets show the session's rising, transit and setting in device-local time to the minute; a target that never reaches the minimum altitude says so. The Sun guard refuses directions within 15° of the Sun. Without a site the block links to `/setup`. It uses no object colours, fill or shadow; night uses the existing red ink tokens.
 

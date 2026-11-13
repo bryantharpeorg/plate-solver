@@ -45,7 +45,49 @@ interface Props {
   busy: boolean;
   layers: Layers;
   onLayers: (layers: Layers) => void;
+  /** The report is the newest live frame's, not an uploaded or sample frame's. */
+  live?: boolean;
   session?: ObservingSession;
+}
+
+/** Unsolved live frames in a row that keep the last live solve on the chart. */
+export const LIVE_HOLD = 2;
+
+interface Steady {
+  live: boolean;
+  /** The report this state was last advanced for. */
+  seen: SolveReport | null;
+  /** The newest solved live report. */
+  last: SolveReport | null;
+  /** Unsolved live reports since `last`. */
+  misses: number;
+  /** A solved live chart has been drawn since the chart switched to live. */
+  settled: boolean;
+}
+
+const UNSTEADY: Steady = { live: false, seen: null, last: null, misses: 0, settled: false };
+
+/** Advance the live chart's state by one report. */
+export function advance(state: Steady, report: SolveReport | null, live: boolean): Steady {
+  if (!live || !report) return { ...UNSTEADY, live, seen: report };
+  const base = state.live ? state : { ...UNSTEADY, live };
+  if (report === base.seen) return base;
+  const settled = base.settled || base.last !== null;
+  if (report.pointing) return { live, seen: report, last: report, misses: 0, settled };
+  return { ...base, seen: report, misses: base.misses + 1, settled };
+}
+
+function useSteady(report: SolveReport | null, live: boolean) {
+  const [previous, setPrevious] = useState(UNSTEADY);
+  let state = previous;
+  if (report !== state.seen || live !== state.live) {
+    state = advance(state, report, live);
+    setPrevious(state);
+  }
+  return {
+    shown: live && !report?.pointing && state.last && state.misses <= LIVE_HOLD ? state.last : report,
+    intro: live ? !state.settled : true,
+  };
 }
 
 /** Paper margin around the frame for the grid's labels, in CSS pixels. */
@@ -80,7 +122,8 @@ function useWidth(ref: RefObject<HTMLElement | null>): number {
   return width;
 }
 
-export function Chart({ report, imageUrl, label, busy, layers, onLayers, session }: Props) {
+export function Chart({ report: newest, imageUrl, label, busy, layers, onLayers, live = false, session }: Props) {
+  const { shown: report, intro } = useSteady(newest, live);
   const box = useRef<HTMLDivElement>(null);
   const width = useWidth(box);
   const [picked, setPicked] = useState<Picked>(null);
@@ -112,7 +155,7 @@ export function Chart({ report, imageUrl, label, busy, layers, onLayers, session
   const solved = report.pointing !== null;
   // With nothing solved, the detected stars are the whole story: show them.
   const showDetected = layers.detected || !solved;
-  const key = `${report.name}:${report.pointing?.ra_deg ?? "none"}`;
+  const key = live ? "live" : `${report.name}:${report.pointing?.ra_deg ?? "none"}`;
   const stars = report.stars.filter((s) => (s.matched ? layers.matched : layers.expected));
   const objects = layers.objects ? report.objects : [];
   const detected = showDetected ? report.detected : [];
@@ -160,7 +203,7 @@ export function Chart({ report, imageUrl, label, busy, layers, onLayers, session
           <image href={imageUrl} width={W} height={H} preserveAspectRatio="none" className="photo" />
           <rect width={W} height={H} fill="none" stroke="var(--color-ink)" strokeWidth={1.4 * u} />
 
-          {layers.grid && solved && <Grid lines={report.grid} W={W} H={H} u={u} clip={clip} />}
+          {layers.grid && solved && <Grid lines={report.grid} W={W} H={H} u={u} clip={clip} intro={intro} />}
 
           <g clipPath={`url(#${clip})`} fontSize={STAR_TEXT * u}>
             {detected.map(([x, y], i) => (
@@ -187,7 +230,7 @@ export function Chart({ report, imageUrl, label, busy, layers, onLayers, session
                 onPick={() => setPicked({ kind: "star", star: s })}
               />
             ))}
-            {furniture && <Furniture geometry={furniture} u={u} />}
+            {furniture && <Furniture geometry={furniture} u={u} intro={intro} />}
             {solved &&
               session?.target &&
               session.guidance?.placement &&
@@ -215,26 +258,45 @@ function toPath(points: [number, number][]): string {
 }
 
 /** The grid lines, clipped to the frame, with their labels in the margin at its edges. */
-function Grid({ lines, W, H, u, clip }: { lines: GridLine[]; W: number; H: number; u: number; clip: string }) {
+function Grid({
+  lines,
+  W,
+  H,
+  u,
+  clip,
+  intro: introNow,
+}: {
+  lines: GridLine[];
+  W: number;
+  H: number;
+  u: number;
+  clip: string;
+  intro: boolean;
+}) {
+  const [intro] = useState(introNow);
   const gap = 6 * u;
   const labels = placeLabels(lines, W, H, u);
   return (
     <g>
       <g clipPath={`url(#${clip})`}>
-        {lines.map((line, i) =>
+        {lines.flatMap((line, i) =>
           line.paths.map((path, j) => (
             <path
-              key={`${i}.${j}`}
+              key={`${line.kind}:${line.value_deg}.${j}`}
               d={toPath(path)}
               pathLength={1}
-              className="grid-line draw"
+              className={intro ? "grid-line draw" : "grid-line"}
               strokeWidth={u}
-              style={{ animationDelay: `${i * 40}ms` }}
+              style={intro ? { animationDelay: `${i * 40}ms` } : undefined}
             />
           )),
         )}
       </g>
-      <g fontSize={11 * u} className="ink-in" style={{ animationDelay: "250ms" }}>
+      <g
+        fontSize={11 * u}
+        className={intro ? "ink-in" : undefined}
+        style={intro ? { animationDelay: "250ms" } : undefined}
+      >
         {labels.map(({ x, y, edge, text }, i) => {
           const tick =
             edge === "top"
@@ -460,7 +522,8 @@ export function furnitureGeometry(report: SolveReport, u: number): FurnitureGeom
 }
 
 /** The chart's furniture: centre reticle, north and east, and a scale bar. */
-function Furniture({ geometry: g, u }: { geometry: FurnitureGeometry; u: number }) {
+function Furniture({ geometry: g, u, intro: introNow }: { geometry: FurnitureGeometry; u: number; intro: boolean }) {
+  const [intro] = useState(introNow);
   const { cx, cy } = g;
   const at = (angle: number, length: number) => {
     const a = (angle * Math.PI) / 180;
@@ -473,7 +536,11 @@ function Furniture({ geometry: g, u }: { geometry: FurnitureGeometry; u: number 
   const [nlx, nly] = at(g.north, g.arm + 9 * u);
   const [elx, ely] = at(east, g.arm * 0.7 + 9 * u);
   return (
-    <g className="furniture ink-in" strokeWidth={1.3 * u} style={{ animationDelay: "300ms" }}>
+    <g
+      className={intro ? "furniture ink-in" : "furniture"}
+      strokeWidth={1.3 * u}
+      style={intro ? { animationDelay: "300ms" } : undefined}
+    >
       <path
         d={`M${cx - 11 * u} ${cy}H${cx - 4 * u}M${cx + 4 * u} ${cy}H${cx + 11 * u}M${cx} ${cy - 11 * u}V${cy - 4 * u}M${cx} ${cy + 4 * u}V${cy + 11 * u}`}
         fill="none"
