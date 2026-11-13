@@ -22,10 +22,11 @@ colors:
   night-ground: "#000000"
   night-ground-2: "#140000"
   night-ink: "#e00000"
-  night-ink-2: "#a80000"
-  night-ink-3: "#760000"
-  night-rule: "#3c0000"
-  night-grid: "rgb(168 0 0 / 0.6)"
+  night-ink-2: "#d40000"
+  night-ink-3: "#a80000"
+  night-rule: "#5a0000"
+  night-on-photo-2: "#c00000"
+  night-grid: "rgb(168 0 0 / 0.45)"
 typography:
   display:
     fontFamily: "Archivo Variable, Archivo, ui-sans-serif, system-ui, sans-serif"
@@ -189,6 +190,8 @@ The paper variants sit on paper in lists; the `-photo` variants are lightened to
 ### Night edition
 Under `[data-theme="night"]` every token above is reassigned. `paper` becomes Night Ground (`night-ground`), `paper-2` becomes `night-ground-2`, the inks become Night Ink, Second and Third (`night-ink`, `night-ink-2`, `night-ink-3`), and `rule` becomes `night-rule`. All three object colours, `alert`, `on-photo` and the object `-photo` colours collapse to Night Ink, and `grid` becomes `night-grid`. Object families are then told apart by symbol shape alone. Photographs, thumbnails and the survey view take the `#red-only` SVG filter (luminance into the red channel, scaled so white lands just under Night Ink), and the pre-paint script and inline style set a black ground before any stylesheet loads.
 
+The dimmer inks sit close to Night Ink so that secondary text keeps at least 3.5 : 1 on black; `on-photo-2` uses `night-on-photo-2` (`#c00000`).
+
 ### Named Rules
 **The Objects-Only Colour Rule.** Green, gold and red belong to deep-sky objects. Chrome, controls and text stay in ink.
 
@@ -203,6 +206,8 @@ Under `[data-theme="night"]` every token above is reassigned. `paper` becomes Ni
 **Label/Mono Font:** Archivo Variable, with the `wdth` axis condensed for chart edge labels and tabular figures on everywhere
 
 **Character:** A single grotesque used the way an atlas uses one face: expanded and letterspaced for the chart title, heavy and tight for coordinates, italic for object names, condensed for the margin scale. Self-hosted, so it renders offline.
+
+At night, body text is weight 540 and small text is a step larger: `text-xs` is 0.875rem (14px) and `text-sm` is 1rem (16px), up from 12px and 14px by day.
 
 ### Hierarchy
 - **Display** (680, 2.75rem on wide screens and 2.35rem on phones, line-height 1, -0.02em): RA and Dec. Unit marks (h m s, ° ′ ″) are set at 0.5em in Second Ink and raised as superscripts.
@@ -273,6 +278,8 @@ Ruled, square and quiet. The ink does the work.
 
 ### Chart (signature)
 The frame sits inside a 1.4-unit ink neatline with a 30-unit paper margin. The RA/Dec graticule is drawn over the frame in Graticule, animating on in 900ms. Ticks and condensed edge labels sit in the margin on all four sides. Matched stars get solid Frame Ink rings with upright names. Expected stars get dashed rings at 70%, and detected centroids get small rings at 55%. Messier objects get atlas symbols in their object colour with italic labels, and leaders run to labels set off in open sky. Compass and scale-bar furniture are in Frame Ink. Labels are laid out to avoid each other (`src/labels.ts`). A picked object thickens to 2.4. Marks ink in over 500ms after a 250 to 300ms delay. With reduced motion all animation is off.
+
+At night, matched rings are 2.2px at full opacity and unseen stars are plain 1.2px rings at 55%, with non-scaling strokes; a picked star thickens to 3.2px. Edge labels are 127% of their inherited size (14px on screen), weight 640, in Night Ink. Star and object labels keep their sizes at weight 680. Furniture uses 1.8px non-scaling strokes, and the grid sits at 45% so the stars lead.
 
 On the live chart, the grid draws in and the furniture inks in once, on the first solved
 live frame. After that, marks that persist from frame to frame update in place, and only

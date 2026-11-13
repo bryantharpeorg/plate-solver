@@ -310,7 +310,7 @@
       "night-ink-2": {
         "role": "neutral",
         "displayName": "Night Ink Second",
-        "canonical": "#a80000",
+        "canonical": "#d40000",
         "tonalRamp": [
           "#2a0000",
           "#3c0000",
@@ -326,7 +326,7 @@
       "night-ink-3": {
         "role": "neutral",
         "displayName": "Night Ink Third",
-        "canonical": "#760000",
+        "canonical": "#a80000",
         "tonalRamp": [
           "#2a0000",
           "#3c0000",
@@ -342,7 +342,23 @@
       "night-rule": {
         "role": "neutral",
         "displayName": "Night Rule",
-        "canonical": "#3c0000",
+        "canonical": "#5a0000",
+        "tonalRamp": [
+          "#2a0000",
+          "#3c0000",
+          "#560000",
+          "#760000",
+          "#a80000",
+          "#c40000",
+          "#e00000",
+          "#e00000"
+        ],
+        "edition": "night"
+      },
+      "night-on-photo-2": {
+        "role": "neutral",
+        "displayName": "Night Frame Ink Second",
+        "canonical": "#c00000",
         "tonalRamp": [
           "#2a0000",
           "#3c0000",
@@ -358,7 +374,7 @@
       "night-grid": {
         "role": "neutral",
         "displayName": "Night Graticule",
-        "canonical": "rgb(168 0 0 / 0.6)",
+        "canonical": "rgb(168 0 0 / 0.45)",
         "tonalRamp": [
           "#2a0000",
           "#3c0000",
@@ -391,7 +407,7 @@
       },
       "body": {
         "displayName": "Body",
-        "purpose": "List entries and prose, tabular figures, 60ch prose cap."
+        "purpose": "List entries and prose, tabular figures, 60ch prose cap. Night body weight is 540; small text steps from 12px to 14px (text-xs) and 14px to 16px (text-sm)."
       },
       "body-quiet": {
         "displayName": "Body Quiet",
@@ -403,11 +419,11 @@
       },
       "object-label": {
         "displayName": "Object Label",
-        "purpose": "Italic Messier IDs on the chart, cased in Frame Black; in chart units."
+        "purpose": "Italic Messier IDs on the chart, cased in Frame Black; in chart units. At night, star and object labels keep their size at weight 680."
       },
       "edge-label": {
         "displayName": "Edge Label",
-        "purpose": "Condensed graticule values in the chart's paper margin; in chart units."
+        "purpose": "Condensed graticule values in the chart's paper margin; in chart units. At night, 127% inherited size (14px on screen), weight 640, in Night Ink."
       }
     },
     "shadows": [],
@@ -498,12 +514,14 @@
         "alert": "night-ink",
         "photo": "night-ground",
         "on-photo": "night-ink",
-        "on-photo-2": "night-ink-2",
+        "on-photo-2": "night-on-photo-2",
         "grid": "night-grid",
         "nebula-photo": "night-ink",
         "cluster-photo": "night-ink",
         "galaxy-photo": "night-ink"
       },
+      "secondaryContrast": "Dimmer inks sit close to Night Ink so secondary text keeps at least 3.5 : 1 on black.",
+      "chart": "Matched rings: 2.2px, opacity 1. Unseen stars: plain 1.2px rings, opacity 0.55. Picked star: 3.2px. Rings use non-scaling-stroke. Edge labels: 127% inherited size (14px on screen), weight 640, Night Ink. Star and object labels: weight 680. Furniture: 1.8px non-scaling strokes. Grid: 45%.",
       "photoFilter": "feColorMatrix 0.2126 0.7152 0.0722 into R only (#red-only), applied to .photo",
       "prePaint": "inline style html[data-theme=night]{background:#000} and a localStorage/prefers-color-scheme script before first paint; theme-color meta #000000 at night"
     }

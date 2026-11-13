@@ -47,20 +47,23 @@
   --color-paper: #000000;
   --color-paper-2: #140000;
   --color-ink: #e00000;
-  --color-ink-2: #a80000;
-  --color-ink-3: #760000;
-  --color-rule: #3c0000;
+  --color-ink-2: #d40000;
+  --color-ink-3: #a80000;
+  --color-rule: #5a0000;
   --color-nebula: #e00000;
   --color-cluster: #e00000;
   --color-galaxy: #e00000;
   --color-alert: #e00000;
   --color-photo: #000000;
   --color-on-photo: #e00000;
-  --color-on-photo-2: #a80000;
-  --color-grid: rgb(168 0 0 / 0.6);
+  --color-on-photo-2: #c00000;
+  --color-grid: rgb(168 0 0 / 0.45);
   --color-nebula-photo: #e00000;
   --color-cluster-photo: #e00000;
   --color-galaxy-photo: #e00000;
+  /* Red on black reads worse than ink on paper: small text is a step larger at night. */
+  --text-xs: 0.875rem;
+  --text-sm: 1rem;
   color-scheme: dark;
 }
 
@@ -106,6 +109,10 @@
   }
   [data-theme="night"] dialog::backdrop {
     background: rgb(0 0 0 / 0.8);
+  }
+  /* Thin red strokes fade first in the dark, so night text is heavier. */
+  [data-theme="night"] body {
+    font-weight: 540;
   }
   /* Night turns photographs into red by luminance (the #red-only filter in index.html). */
   [data-theme="night"] .photo {
@@ -394,6 +401,37 @@
   [data-picked="true"] circle.ring,
   [data-picked="true"] .shape {
     stroke-width: 2.4;
+  }
+  /*
+   * The night chart. Stars lead and the grid recedes: heavier rings at a fixed on-screen
+   * width, unseen stars as plain dim rings, and larger, brighter edge labels.
+   */
+  [data-theme="night"] .edge-label {
+    fill: var(--color-ink);
+    font-size: 127%;
+    font-weight: 640;
+  }
+  [data-theme="night"] .mark-matched circle.ring {
+    stroke-width: 2.2px;
+    vector-effect: non-scaling-stroke;
+    opacity: 1;
+  }
+  [data-theme="night"] .mark-expected circle.ring {
+    stroke-width: 1.2px;
+    vector-effect: non-scaling-stroke;
+    stroke-dasharray: none;
+    opacity: 0.55;
+  }
+  [data-theme="night"] [data-picked="true"] circle.ring {
+    stroke-width: 3.2px;
+  }
+  [data-theme="night"] .mark-label,
+  [data-theme="night"] .object-label {
+    font-weight: 680;
+  }
+  [data-theme="night"] .furniture {
+    stroke-width: 1.8px;
+    vector-effect: non-scaling-stroke;
   }
   .furniture {
     stroke: var(--color-on-photo);
