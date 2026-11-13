@@ -230,6 +230,7 @@ export function App() {
                 <div className="lg:sticky lg:top-24">
                   <Chart
                     report={report}
+                    live={showLive}
                     imageUrl={imageUrl}
                     label={label ?? ""}
                     busy={busy}

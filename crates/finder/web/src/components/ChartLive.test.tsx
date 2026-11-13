@@ -72,12 +72,12 @@ describe("the live chart", () => {
     const first = { ...frame(), stars: ORION2.stars.slice(1) };
     const { container, rerender } = render(chart(first, true));
     const stars = first.stars.map((s) => star(container, s.id));
-    expect(container.querySelector(`[data-star="${ORION2.stars[0].id}"]`)).toBeNull();
+    expect(container.querySelector(`[data-star="${ORION2.stars[0]!.id}"]`)).toBeNull();
 
     rerender(chart(frame(ORION2, 0.004), true));
 
     first.stars.forEach((s, i) => expect(star(container, s.id)).toBe(stars[i]));
-    expect(star(container, ORION2.stars[0].id).classList.contains("ink-in")).toBe(true);
+    expect(star(container, ORION2.stars[0]!.id).classList.contains("ink-in")).toBe(true);
   });
 
   it("holds two unsolved frames, drops on the third and recovers without another intro (S4–S6)", () => {
@@ -103,8 +103,9 @@ describe("the live chart", () => {
     expect(container.querySelector(".grid-line.draw")).toBeNull();
     expect(container.querySelector(".furniture")).not.toBeNull();
     expect(container.querySelector(".furniture.ink-in")).toBeNull();
-    expect(container.querySelector(".edge-label")?.parentElement?.parentElement?.classList.contains("ink-in"))
-      .toBe(false);
+    expect(container.querySelector(".edge-label")?.parentElement?.parentElement?.classList.contains("ink-in")).toBe(
+      false,
+    );
   });
 
   it("mounts a fresh SVG on every switch to or from live and replays the live intro (S7, negative control)", () => {
@@ -181,7 +182,7 @@ describe("the live chart", () => {
 
   it("moves persisting marks in place and retains their mounted intro classes", () => {
     const { container, rerender } = render(chart(frame(), true));
-    const original = star(container, ORION2.stars[0].id);
+    const original = star(container, ORION2.stars[0]!.id);
     const objects = ORION2.objects.map((o) => container.querySelector(`[data-object="${o.id}"]`));
     objects.forEach((node) => expect(node).not.toBeNull());
     const next = frame(ORION2, 0.004);
@@ -190,10 +191,11 @@ describe("the live chart", () => {
 
     rerender(chart(next, true));
 
-    expect(star(container, next.stars[0].id)).toBe(original);
-    expect(original.querySelector(".ring")?.getAttribute("cx")).toBe(String(next.stars[0].x));
-    expect(original.querySelector(".ring")?.getAttribute("cy")).toBe(String(next.stars[0].y));
-    expect(original.classList.contains(next.stars[0].matched ? "mark-matched" : "mark-expected")).toBe(true);
+    const moved = next.stars[0]!;
+    expect(star(container, moved.id)).toBe(original);
+    expect(original.querySelector(".ring")?.getAttribute("cx")).toBe(String(moved.x));
+    expect(original.querySelector(".ring")?.getAttribute("cy")).toBe(String(moved.y));
+    expect(original.classList.contains(moved.matched ? "mark-matched" : "mark-expected")).toBe(true);
     next.objects.forEach((o, i) => {
       const node = container.querySelector(`[data-object="${o.id}"]`);
       expect(node).toBe(objects[i]);
