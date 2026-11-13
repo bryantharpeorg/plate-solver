@@ -53,7 +53,14 @@ async fn start(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     }
     let settings = config.settings();
     match config.adapter {
-        Adapter::Rpicam => serve(RpicamCamera::discover().await?, settings, &config).await,
+        Adapter::Rpicam => {
+            serve(
+                RpicamCamera::discover(config.mode).await?,
+                settings,
+                &config,
+            )
+            .await
+        }
         Adapter::Simulated => {
             serve(
                 SyntheticCamera::new(Arc::new(SystemClock)),

@@ -5,6 +5,7 @@ pub mod yuv;
 
 use crate::{
     camera::{check_range, FrameFuture},
+    config::CameraMode,
     Camera, CameraError, CameraInfo, RangeError, Settings,
 };
 use metadata::MetadataReader;
@@ -22,6 +23,31 @@ use tokio::{
 };
 use yuv::YuvReader;
 
+/// Run the configured size. A size the camera does not list is refused, not rounded.
+fn choose_mode(info: &mut CameraInfo, mode: CameraMode) -> Result<(), CameraError> {
+    let CameraMode::Size { width, height } = mode else {
+        return Ok(());
+    };
+    let found = info
+        .modes
+        .iter()
+        .copied()
+        .find(|m| m.width == width && m.height == height);
+    if found.is_none() {
+        let listed: Vec<_> = info
+            .modes
+            .iter()
+            .map(|m| format!("{}x{}", m.width, m.height))
+            .collect();
+        return Err(CameraError(format!(
+            "camera has no {width}x{height} mode; it lists {}",
+            listed.join(", ")
+        )));
+    }
+    info.active_mode = found;
+    Ok(())
+}
+
 pub struct RpicamCamera {
     info: CameraInfo,
     settings: Settings,
@@ -32,7 +58,7 @@ pub struct RpicamCamera {
 
 impl RpicamCamera {
     /// Query the camera stack rather than inventing sensor capabilities.
-    pub async fn discover() -> Result<Self, CameraError> {
+    pub async fn discover(mode: CameraMode) -> Result<Self, CameraError> {
         let output = Command::new("rpicam-hello")
             .args(["--list-cameras", "-v"])
             .output()
@@ -45,7 +71,9 @@ impl RpicamCamera {
             )));
         }
         let listing = format!("{}\n{stderr}", String::from_utf8_lossy(&output.stdout));
-        Self::new(listing::parse(&listing)?.remove(0))
+        let mut info = listing::parse(&listing)?.remove(0);
+        choose_mode(&mut info, mode)?;
+        Self::new(info)
     }
 
     pub fn new(mut info: CameraInfo) -> Result<Self, CameraError> {
@@ -317,5 +345,61 @@ impl FifoDirectory {
 impl Drop for FifoDirectory {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::camera::Mode;
+
+    fn listed() -> CameraInfo {
+        CameraInfo {
+            modes: vec![
+                Mode {
+                    width: 640,
+                    height: 480,
+                    fps: 62.5,
+                },
+                Mode {
+                    width: 1296,
+                    height: 972,
+                    fps: 46.34,
+                },
+            ],
+            ..CameraInfo::default()
+        }
+    }
+
+    #[test]
+    fn auto_leaves_the_mode_unchosen() {
+        let mut info = listed();
+        choose_mode(&mut info, CameraMode::Auto).unwrap();
+        assert!(info.active_mode.is_none());
+    }
+
+    #[test]
+    fn a_listed_size_becomes_the_active_mode() {
+        let mut info = listed();
+        let size = CameraMode::Size {
+            width: 1296,
+            height: 972,
+        };
+        choose_mode(&mut info, size).unwrap();
+        let mode = info.active_mode.unwrap();
+        assert_eq!((mode.width, mode.height, mode.fps), (1296, 972, 46.34));
+    }
+
+    #[test]
+    fn an_unlisted_size_is_refused_naming_what_is_listed() {
+        let mut info = listed();
+        let size = CameraMode::Size {
+            width: 1920,
+            height: 1080,
+        };
+        let error = choose_mode(&mut info, size).unwrap_err().to_string();
+        assert!(error.contains("1920x1080"), "{error}");
+        assert!(error.contains("640x480, 1296x972"), "{error}");
+        assert!(info.active_mode.is_none());
     }
 }

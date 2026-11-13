@@ -48,6 +48,7 @@ own for an observing session. This example's low-entropy token is only for testi
 listen = "0.0.0.0:50051"
 token = "test-token"
 adapter = "rpicam" # or "simulated": seeded stars, no catalog or camera required
+mode = "auto" # or a WIDTHxHEIGHT sensor mode from rpicam-hello --list-cameras
 exposure_ms = "auto" # or a positive number of milliseconds
 gain = "auto" # or a positive number
 
@@ -90,8 +91,11 @@ WantedBy=multi-user.target
 ```
 
 Run `sudo systemctl daemon-reload` and `sudo systemctl enable --now scope-node`.
+A node with a `[mount]` table also needs the serial device's `dialout` group: add it to
+`--groups` and to `SupplementaryGroups`.
 Camera subprocess failures are reported with their stderr; capture retries after one
 second inside the same service process. Settings changes reopen the rpicam subprocess.
 Discovery uses `rpicam-hello --list-cameras -v` for modes and control ranges. Capture
-defaults to the first listed mode, at up to 5 frames/s (slower for a longer shutter).
+uses the first listed mode unless `mode` names another; a size the camera does not list
+is refused. It runs at up to 5 frames/s (slower for a longer shutter).
 This story supplies capture and config; scope-link serving is added by US4.

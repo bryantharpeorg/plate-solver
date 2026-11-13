@@ -43,6 +43,38 @@ impl Control {
     }
 }
 
+/// A sensor mode named by size; `Auto` takes the first one the camera lists.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum CameraMode {
+    #[default]
+    Auto,
+    Size {
+        width: u32,
+        height: u32,
+    },
+}
+impl<'de> Deserialize<'de> for CameraMode {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let text = String::deserialize(deserializer)?;
+        if text == "auto" {
+            return Ok(Self::Auto);
+        }
+        text.split_once('x')
+            .and_then(|(width, height)| Some((width.parse().ok()?, height.parse().ok()?)))
+            .filter(|(width, height)| *width > 0 && *height > 0)
+            .map(|(width, height)| Self::Size { width, height })
+            .ok_or_else(|| serde::de::Error::custom("expected 'auto' or WIDTHxHEIGHT"))
+    }
+}
+impl fmt::Display for CameraMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Auto => f.write_str("auto"),
+            Self::Size { width, height } => write!(f, "{width}x{height}"),
+        }
+    }
+}
+
 /// Optional serial mount; unknown keys are errors just as in the camera config.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -59,6 +91,8 @@ pub struct Config {
     pub token: String,
     #[serde(default)]
     pub adapter: Adapter,
+    #[serde(default)]
+    pub mode: CameraMode,
     #[serde(default)]
     pub exposure_ms: Control,
     #[serde(default)]
@@ -160,7 +194,7 @@ impl Config {
             Control::Auto => "\"auto\"".into(),
             Control::Fixed(n) => n.to_string(),
         };
-        format!("listen = \"{}\"\ntoken = \"****\"\nadapter = \"{}\"\nexposure_ms = {}\ngain = {}\n\n[detection]\n{}", self.listen, match self.adapter { Adapter::Rpicam => "rpicam", Adapter::Simulated => "simulated" }, control(self.exposure_ms), control(self.gain), toml::to_string(&self.detection).expect("validated detection serializes"))
+        format!("listen = \"{}\"\ntoken = \"****\"\nadapter = \"{}\"\nmode = \"{}\"\nexposure_ms = {}\ngain = {}\n\n[detection]\n{}", self.listen, match self.adapter { Adapter::Rpicam => "rpicam", Adapter::Simulated => "simulated" }, self.mode, control(self.exposure_ms), control(self.gain), toml::to_string(&self.detection).expect("validated detection serializes"))
     }
 }
 
@@ -201,5 +235,27 @@ mod tests {
             .to_string()
             .contains("token"));
         assert!(Config::parse("token = ''").is_err());
+    }
+    #[test]
+    fn camera_mode_is_auto_or_a_size_and_is_printed() {
+        let config = Config::parse("token = 'test-token'").unwrap();
+        assert_eq!(config.mode, CameraMode::Auto);
+        assert!(config.masked().contains("mode = \"auto\""));
+        let config = Config::parse("token = 'test-token'\nmode = '1296x972'").unwrap();
+        assert_eq!(
+            config.mode,
+            CameraMode::Size {
+                width: 1296,
+                height: 972
+            }
+        );
+        assert!(config.masked().contains("mode = \"1296x972\""));
+        for bad in ["'1296'", "'0x972'", "'1296x'", "'1296x972x2'", "1296"] {
+            let error = Config::parse(&format!("token = 'test-token'\nmode = {bad}"))
+                .err()
+                .unwrap()
+                .to_string();
+            assert!(error.contains("mode"), "{error}");
+        }
     }
 }

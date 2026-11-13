@@ -37,6 +37,7 @@ pub struct MetadataReader<R> {
     started: bool,
     first: bool,
     ended: bool,
+    closing: bool,
 }
 impl<R: AsyncRead + Unpin> MetadataReader<R> {
     pub fn new(reader: R) -> Self {
@@ -45,6 +46,7 @@ impl<R: AsyncRead + Unpin> MetadataReader<R> {
             started: false,
             first: true,
             ended: false,
+            closing: false,
         }
     }
     async fn byte(&mut self) -> Result<u8, CameraError> {
@@ -70,6 +72,12 @@ impl<R: AsyncRead + Unpin> MetadataReader<R> {
             }
             self.started = true;
         }
+        if self.closing {
+            if self.nonspace().await? != b'}' {
+                return Err(CameraError("rpicam metadata is missing a brace".into()));
+            }
+            self.closing = false;
+        }
         let mut byte = self.nonspace().await?;
         if byte == b']' {
             self.ended = true;
@@ -85,9 +93,20 @@ impl<R: AsyncRead + Unpin> MetadataReader<R> {
             return Err(CameraError("rpicam metadata expected an object".into()));
         }
         let mut object = vec![byte];
-        let (mut depth, mut quoted, mut escaped) = (1usize, false, false);
+        let (mut depth, mut quoted, mut escaped, mut last) = (1usize, false, false, byte);
         while depth != 0 {
             byte = self.byte().await?;
+            // rpicam flushes each line but holds the closing brace until the next
+            // frame's metadata, written after that frame's pixels. Waiting for the
+            // brace would stop the pixel reads, so the last line ends the object.
+            if byte == b'\n' && depth == 1 && !quoted && last != b',' && last != b'{' {
+                object.push(b'}');
+                self.closing = true;
+                break;
+            }
+            if !byte.is_ascii_whitespace() {
+                last = byte;
+            }
             object.push(byte);
             if object.len() > 1024 * 1024 {
                 return Err(CameraError("rpicam metadata object exceeds 1 MiB".into()));
@@ -103,8 +122,8 @@ impl<R: AsyncRead + Unpin> MetadataReader<R> {
             } else {
                 match byte {
                     b'"' => quoted = true,
-                    b'{' => depth += 1,
-                    b'}' => depth -= 1,
+                    b'{' | b'[' => depth += 1,
+                    b'}' | b']' => depth -= 1,
                     _ => {}
                 }
             }
@@ -143,6 +162,32 @@ mod tests {
         .unwrap()
         .unwrap();
         assert_eq!(metadata.sensor_timestamp_ns, 1_000_000_000);
+    }
+    #[tokio::test]
+    async fn object_ends_on_its_last_line_before_the_brace_is_flushed() {
+        use tokio::io::AsyncWriteExt;
+        let object = |t: u32| {
+            format!(
+                "{{\n    \"ExposureTime\": 1000,\n    \"ColourGains\": [ 1.5, 1.2 ],\n    \"SensorTimestamp\": {t},\n    \"AnalogueGain\": 8.000000\n"
+            )
+        };
+        let wait = std::time::Duration::from_millis(100);
+        let (mut writer, reader) = tokio::io::duplex(512);
+        let mut metadata = MetadataReader::new(reader);
+        writer
+            .write_all(format!("[\n{}", object(1)).as_bytes())
+            .await
+            .unwrap();
+        let first = tokio::time::timeout(wait, metadata.next()).await.unwrap();
+        assert_eq!(first.unwrap().unwrap().sensor_timestamp_ns, 1);
+        writer
+            .write_all(format!("}},\n{}", object(2)).as_bytes())
+            .await
+            .unwrap();
+        let second = tokio::time::timeout(wait, metadata.next()).await.unwrap();
+        assert_eq!(second.unwrap().unwrap().sensor_timestamp_ns, 2);
+        writer.write_all(b"}\n]\n").await.unwrap();
+        assert!(metadata.next().await.unwrap().is_none());
     }
     #[tokio::test]
     async fn malformed_or_missing_metadata_is_not_a_frame() {
