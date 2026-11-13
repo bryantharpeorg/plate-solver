@@ -1,10 +1,12 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["016-mcp", "018-live-chart-steady"]
 # Drafted 2026-11-13 against `main` at 76d17a6, from the owner's screenshot of the night
 # page at the first real-sky test on 2026-11-12 and the mock-up he approved on 2026-11-13.
 # It stays draft until the owner has reviewed it and given the approvals listed under
 # "Owner approvals". Flipping it to `ready` is the act that dispatches it.
+# Flipped to ready 2026-11-13 by the owner ("I want to flip now for the 2 new specs"),
+# giving the five owner approvals. It dispatches only once 018 has landed.
 ---
 
 # Feature Specification: A Night Page That Reads in the Dark
