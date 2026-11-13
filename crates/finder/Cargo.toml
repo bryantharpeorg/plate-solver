@@ -9,7 +9,7 @@ description = "Finder console: a local web page that plate-solves a frame and sh
 
 [dependencies]
 base64 = "=0.23.1"
-rmcp = { version = "=3.5.1", default-features = false, features = ["server", "macros", "transport-streamable-http-server"] }
+rmcp = { version = "=3.9.0", default-features = false, features = ["server", "macros", "transport-streamable-http-server"] }
 # US7: the in-process desk node and the SSE broadcast-to-stream adapter.
 simulator = { version = "0.1.0", path = "../simulator" }
 futures-util = { version = "0.3.31", default-features = false }
