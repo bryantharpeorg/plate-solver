@@ -1,11 +1,14 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["014-goto", "015-tracking", "016-mcp"]
 # Drafted 2026-11-08 against `main` at 032b34d, from a review of the console's Stop. The
 # owner decided that day to do this as its own spec, before the first powered GoTo at
 # the telescope, whether or not the voice mode work goes ahead. It stays draft until the
 # owner has reviewed it and given the approvals listed under "Owner approvals". Flipping
 # it to `ready` is the act that dispatches it.
+# Flipped to ready 2026-11-14 by the owner ("move 017 to ready and begin working on it"),
+# giving the six owner approvals. Re-read against `main` at ce80f67 first: the cited
+# stop calls are unchanged and `ergane spec validate` passes.
 ---
 
 # Feature Specification: A Stop the Console Can Confirm
