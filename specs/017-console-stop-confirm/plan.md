@@ -40,8 +40,8 @@ page.
 Pi.
 
 **Constraints**:
-- `RUSTFLAGS="-D warnings"`, `--all-features` clippy and rustdoc, the 80% coverage floor,
-  and the red-only night mode.
+- `RUSTFLAGS="-D warnings"`, `--all-features` clippy and rustdoc, and the red-only night
+  mode.
 - `web/dist` is committed and must be the build of its source.
 - No test moves real hardware.
 
@@ -464,8 +464,8 @@ console and Setup. Page reloads lose it (spec § Assumptions).
     `CI=1 npm run e2e`.
 
   Every story runs both, and the judge sees their results.
-- **CI in the merge queue** runs every `ci.yml` job, including coverage at 80%,
-  `cargo machete`, `cargo deny` and the build on Rust 1.96.
+- **CI in the merge queue** runs every required `ci.yml` job, including `cargo machete`,
+  `cargo deny` and the build on Rust 1.96.
 
 ## Prerequisites before this spec is flipped to `ready`
 
@@ -592,7 +592,7 @@ stories:
       handoff: declared_gates
       independent: declared_pipeline
       release:
-        - "release owner: the repository owner, through the merge queue's ci.yml jobs: msrv, deny, machete and coverage at 80%"
+        - "release owner: the repository owner, through the merge queue's ci.yml jobs: msrv, deny and machete"
     writes:
       - crates/finder/README.md
       - crates/finder/src/api.rs
@@ -709,7 +709,7 @@ stories:
       handoff: declared_gates
       independent: declared_pipeline
       release:
-        - "release owner: the repository owner, through the merge queue's ci.yml jobs: msrv, deny, machete and coverage at 80%"
+        - "release owner: the repository owner, through the merge queue's ci.yml jobs: msrv, deny and machete"
     writes:
       - crates/finder/src/goto.rs
       - crates/finder/src/mcp/guard.rs
@@ -772,7 +772,7 @@ stories:
       handoff: declared_gates
       independent: declared_pipeline
       release:
-        - "release owner: the repository owner, through the merge queue's ci.yml jobs: msrv, deny, machete and coverage at 80%"
+        - "release owner: the repository owner, through the merge queue's ci.yml jobs: msrv, deny and machete"
     writes:
       - crates/scope-node/src/mount/mod.rs
       - crates/scope-node/src/mount/queue.rs
@@ -840,7 +840,7 @@ stories:
       handoff: declared_gates
       independent: declared_pipeline
       release:
-        - "release owner: the repository owner, through the merge queue's ci.yml jobs: msrv, deny, machete and coverage at 80%"
+        - "release owner: the repository owner, through the merge queue's ci.yml jobs: msrv, deny and machete"
     writes:
       - crates/finder/README.md
       - crates/finder/src/goto.rs
@@ -894,7 +894,7 @@ stories:
       handoff: declared_gates
       independent: declared_pipeline
       release:
-        - "release owner: the repository owner, through the merge queue's ci.yml jobs: finder-page and coverage at 80%"
+        - "release owner: the repository owner, through the merge queue's ci.yml jobs: finder-page"
     writes:
       - .impeccable/design.json
       - DESIGN.md

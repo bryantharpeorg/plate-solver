@@ -23,12 +23,12 @@ on:
     # nothing turned red.
     types: [opened, synchronize, reopened, labeled, unlabeled]
   # The Ergane merge queue builds each queued PR on a temporary branch and waits for
-  # every required check to report there. Branch protection requires 13 of the jobs
-  # below, all but quality-report, so without this trigger none of them would run on
-  # the queued commit and every queued PR would wait out the queue's timeout and be
-  # removed. `hold` reads PR labels, which a merge group does not carry, so it passes
-  # there; the brake still works on the PR itself, which cannot enter the queue while
-  # it is red.
+  # every required check to report there. Branch protection requires 12 of the jobs
+  # below, all but quality-report and test-coverage, so without this trigger none of
+  # them would run on the queued commit and every queued PR would wait out the queue's
+  # timeout and be removed. `hold` reads PR labels, which a merge group does not
+  # carry, so it passes there; the brake still works on the PR itself, which cannot
+  # enter the queue while it is red.
   merge_group:
   workflow_dispatch:
 
@@ -113,10 +113,15 @@ jobs:
           proves: "clippy raises zero lints across the whole workspace, all targets and all features, with warnings denied"
           measured: "0 lints"
 
+  # Runs only when started by hand (Actions > CI > Run workflow), since 2026-11-14. It
+  # ran the whole workspace suite a second time, instrumented, and took 32 to 55 minutes
+  # a run, so it set the pace of every PR and every merge-queue entry. The `test` gate
+  # (ergane-gates.yml) runs a superset of the same tests on every PR. It is no longer a
+  # required check; its 80% floor and reports are still here for a manual run.
   test-coverage:
     name: test-coverage
     needs: detect
-    if: needs.detect.outputs.has_code == 'true'
+    if: github.event_name == 'workflow_dispatch' && needs.detect.outputs.has_code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1

@@ -1,7 +1,8 @@
 # Coverage reports
 
-CI's `test-coverage` job enforces one number: workspace line coverage of at least 80%. These
-reports show what is behind it, per crate, per file and per line, for the Rust workspace and
+CI's `test-coverage` job checks one number: workspace line coverage of at least 80%. Since
+2026-11-14 it runs only when started by hand (Actions > CI > Run workflow) and is not a
+required check. These reports show what is behind it, per crate, per file and per line, for the Rust workspace and
 for the finder console's page.
 
 They are evidence, not a gate. Nothing here sets a threshold, and the 80% floor in
@@ -43,7 +44,7 @@ rustup component add llvm-tools-preview
 The page half runs `npm ci` in `crates/finder/web` if `node_modules` is missing.
 `npm run coverage` in that directory runs the page half on its own.
 
-In CI, `test-coverage` re-renders the gate's own run (`--report-only`, no second test run)
+In CI, a manual `test-coverage` run re-renders the gate's own run (`--report-only`, no second test run)
 and `finder-page` runs the page half. They upload the `coverage-rust` and `coverage-page`
 artifacts and append `summary.md` to the job summary. Both steps are `continue-on-error`, so
 neither can fail its job.
