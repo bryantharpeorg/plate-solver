@@ -22,8 +22,15 @@
 //!   Requires the console's own origin, a connected mount, a sync and a pointable
 //!   target while the Sun is down; refusals answer 409 with a JSON `error`.
 //! * `POST /api/stop`: no body or origin restriction; always answers 200 and
-//!   commands both axes to stop. Session reads retain `goto` progress and its
-//!   final error in arcseconds or halt reason.
+//!   ends tracking and cancels a GoTo concurrently, without taking the motion lock.
+//!   Sends `StopAll` at once, with 200 ms per attempt and 50 ms between attempts
+//!   in a bounded 2 s round. Its own task survives the request going away.
+//!   The reply waits for that round: exactly `{"stopped":true}` when the scope
+//!   node answers OK or there is no scope link; otherwise
+//!   `{"stopped":true,"acknowledged":false}` means the node did not answer and
+//!   the mount may still be moving. Call Stop again. MCP `stop` and `stop_all`
+//!   return the same reply. Session reads retain `goto` progress and its final
+//!   error in arcseconds or halt reason.
 //!
 //! A fresh session has no site, target or pointing and a 15° minimum altitude. Site
 //! coordinates are `lat_deg` (±90°) and `lon_deg` (±180°, east positive); the minimum

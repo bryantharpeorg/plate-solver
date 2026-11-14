@@ -832,7 +832,7 @@ impl GoTo {
         }
     }
     /// Stop bypasses planning and solving, and is safe even without a running GoTo.
-    pub async fn stop(&self) {
+    pub async fn stop(&self) -> bool {
         self.cancel.send_modify(|n| *n = n.wrapping_add(1));
         {
             let mut state = self.state.lock().unwrap();
@@ -843,9 +843,10 @@ impl GoTo {
                 }
             }
         }
-        if let Some(mut client) = self.link.mount() {
-            let _ = tokio::time::timeout(Duration::from_millis(200), client.stop_all()).await;
-        }
+        self.link
+            .clone()
+            .stop_until_acknowledged(None, crate::link::stop_deadline())
+            .await
     }
     async fn guard(&self, generation: u64) -> String {
         let mut cancel = self.cancel.subscribe();
