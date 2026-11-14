@@ -431,4 +431,15 @@ impl<S: BaudStream> Mount for SkyWatcher<S> {
             }
         })
     }
+    fn stop_confirmed(&self) -> MountFuture<'_, bool> {
+        Box::pin(async move {
+            match self.protocol.lock().await.halt().await {
+                Ok(()) => true,
+                Err(error) => {
+                    eprintln!("mount stop failed: {error}");
+                    false
+                }
+            }
+        })
+    }
 }

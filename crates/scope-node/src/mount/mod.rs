@@ -65,6 +65,14 @@ pub trait Mount: Send + Sync {
     fn rate(&self, axis: Axis, deg_per_s: f64) -> MountFuture<'_, ()>;
     /// Cancel motion on both axes and begin stopping them.
     fn stop_all(&self) -> MountFuture<'_, ()>;
+    /// Cancel motion on both axes and say whether the mount confirmed it. Adapters
+    /// with nothing to report keep this default.
+    fn stop_confirmed(&self) -> MountFuture<'_, bool> {
+        Box::pin(async move {
+            self.stop_all().await;
+            true
+        })
+    }
 }
 
 #[cfg(test)]

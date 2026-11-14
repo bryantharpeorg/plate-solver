@@ -111,7 +111,8 @@ impl MountQueue {
     /// Invalidate queued and in-flight moves, then command both axes to stop.
     /// Cancellation releases the execution barrier before the adapter's stop,
     /// so an old move can never be polled after the stop has been answered.
-    pub async fn stop_all(&self) {
+    /// Returns whether the adapter confirmed the stop.
+    pub async fn stop_all(&self) -> bool {
         let _stop = self.shared.stopping.lock().await;
         {
             let mut state = self.shared.state.lock().unwrap();
@@ -121,8 +122,9 @@ impl MountQueue {
             self.shared.changed.send_replace(state.epoch);
         }
         let _executing = self.shared.executing.lock().await;
-        self.shared.mount.stop_all().await;
+        let confirmed = self.shared.mount.stop_confirmed().await;
         self.shared.state.lock().unwrap().stopping = false;
+        confirmed
     }
 }
 
