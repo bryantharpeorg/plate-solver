@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["013-live-finder", "017-console-stop-confirm", "018-live-chart-steady", "019-night-legibility"]
 # Drafted 2026-11-13 against `main` at ce80f67, from the owner's screen recording of the
 # live chart at the lake site that night ("still blinking, that's annoying as hell").
@@ -8,6 +8,9 @@ depends_on_landed: ["013-live-finder", "017-console-stop-confirm", "018-live-cha
 # were reworded, and the owner chose the star count (60) and the tap captions. It stays
 # draft until the owner flips it to `ready` on Tharpebox, which gives the approvals listed
 # under "Owner approvals" and dispatches it.
+# Flipped to ready 2026-11-14 by the owner, giving the six owner approvals; the owner chose
+# the star count (60) and the tap captions that day. Validated against `main` at c1ed295
+# first: no validator findings, and the preflight dry run has none.
 ---
 
 # Feature Specification: A Live Chart That Stays Calm
