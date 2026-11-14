@@ -481,7 +481,15 @@ impl ScopeNodeStop for NodeService {
         _: Request<proto::StopAllRequest>,
     ) -> Result<Response<proto::StopAllReply>, Status> {
         if let Some(mount) = self.mount_queue() {
-            mount.stop_all().await;
+            // A caller that gives up must not cancel a stop halfway through the
+            // axes or leave the queue's `stopping` flag set.
+            let mount = mount.clone();
+            let confirmed = tokio::spawn(async move { mount.stop_all().await })
+                .await
+                .unwrap_or(false);
+            if !confirmed {
+                return Err(Status::unavailable("the mount did not confirm the stop"));
+            }
         }
         Ok(Response::new(proto::StopAllReply {}))
     }
