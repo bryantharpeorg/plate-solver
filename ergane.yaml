@@ -13,8 +13,9 @@ runtime: bwrap
 # workspace a second time.
 #
 # These are the fast local half of the contract. The merge queue also runs every
-# `ci.yml` job (the 13 checks branch protection already requires: coverage floor,
-# the cedar e2e eval and canary, finder-page, msrv, docs, deny, machete, secrets),
+# required `ci.yml` job (the 12 checks branch protection requires: the cedar e2e
+# eval and canary, finder-page, msrv, docs, deny, machete, secrets; the coverage
+# floor runs only by hand since 2026-11-14),
 # so a node can pass here and still be refused at the queue. The commands below are
 # the ones `ci.yml` runs, with the same `-D warnings`, so the two halves agree on
 # everything they both check. `.github/workflows/ergane-gates.yml` runs these same

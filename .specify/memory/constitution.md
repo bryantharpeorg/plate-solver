@@ -30,7 +30,7 @@ by making them weaker is worse than a red build. Do not:
 - let missing data count as success;
 - exclude a failure from a statistic;
 - mark a test ignored;
-- lower the 80% coverage floor;
+- lower the 80% coverage floor of the manual `test-coverage` run;
 - edit `scripts/ci/`, `.github/`, `CODEOWNERS` or `reference-solutions/` to get green.
 
 The oracle rule from `openspec/project.md` §7 binds every story: no story may edit an
@@ -109,11 +109,12 @@ These two rules come from Ergane's default floor and are kept on purpose.
   refactors.
 - **Local gates:** `lint` (fmt and clippy) and `test` (all targets and doctests), as
   declared in `ergane.yaml`. Both must pass before a story is proposed.
-- **The queue runs everything else.** Every `ci.yml` job is a required check:
-  `test-coverage` with its 80% floor, `e2e-eval` (E1–E3 against cedar), `e2e-canary`,
-  `finder-page`, `docs`, `msrv`, `cargo-machete`, `cargo-deny`, `secret-scan` and `hold`.
-  A change that passes the local gates but would fail one of these is not done. In
-  particular, new code needs tests that keep workspace line coverage at 80% or above.
+- **The queue runs everything else.** These `ci.yml` jobs are required checks:
+  `e2e-eval` (E1–E3 against cedar), `e2e-canary`, `finder-page`, `docs`, `msrv`,
+  `cargo-machete`, `cargo-deny`, `secret-scan` and `hold`. A change that passes the local
+  gates but would fail one of these is not done. `test-coverage` (the 80% workspace
+  line-coverage floor) runs only when the maintainer starts it by hand and is not a
+  required check. New code still needs tests.
 - **Enforcement truth:** `ENVIRONMENT.md` states what `main` actually enforces. It must
   never claim more than is enforced.
 
@@ -126,4 +127,4 @@ Amending this document is the maintainer's act, in its own PR, never part of a s
 So is amending `ergane.yaml`, `ENVIRONMENT.md` § Enforcement status, or the oracle files
 named in `.github/CODEOWNERS`.
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-28 | **Last Amended**: 2026-10-28
+**Version**: 1.1.0 | **Ratified**: 2026-10-28 | **Last Amended**: 2026-11-14
