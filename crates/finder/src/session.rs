@@ -922,6 +922,7 @@ impl Session {
     /// Clear arming before awaiting any motor operation, so Stop wins over GoTo
     /// completion and no later session tick can restart the axes.
     pub async fn stop_tracking(&self) {
+        let deadline = link::stop_deadline();
         {
             let mut values = self.values.lock().expect("observing session");
             values.track_generation = values.track_generation.wrapping_add(1);
@@ -932,11 +933,11 @@ impl Session {
             }
         }
         if let Some(tracker) = self.tracker() {
-            tracker.stop("stopped").await;
+            tracker.stop_by("stopped", deadline).await;
         }
         let _gate = self.track_gate.lock().await;
         if let Some(tracker) = self.tracker() {
-            tracker.stop("stopped").await;
+            tracker.stop_by("stopped", deadline).await;
         }
     }
 

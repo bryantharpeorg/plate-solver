@@ -94,6 +94,7 @@ struct Recorded {
     commands: Arc<Mutex<Vec<Command>>>,
     hold_state: Arc<AtomicBool>,
     held_states: Arc<AtomicUsize>,
+    hold_rate: Arc<AtomicBool>,
 }
 impl Recorded {
     fn record(&self, action: MountCommand) {
@@ -127,6 +128,9 @@ impl Mount for Recorded {
     fn rate(&self, axis: Axis, deg_per_s: f64) -> MountFuture<'_, ()> {
         Box::pin(async move {
             self.record(MountCommand::Rate { axis, deg_per_s });
+            if self.hold_rate.load(Ordering::SeqCst) {
+                std::future::pending::<()>().await;
+            }
             self.mount.rate(axis, deg_per_s).await;
         })
     }
@@ -258,6 +262,8 @@ pub struct Rig {
     pub gate: StopGate,
     pub hold_state: Arc<AtomicBool>,
     pub held_states: Arc<AtomicUsize>,
+    #[allow(dead_code)] // Used by US2's failed-start scenario.
+    pub hold_rate: Arc<AtomicBool>,
     /// US4 advances only the node's clock through this shared test fixture.
     #[allow(dead_code)]
     pub node_offset_ms: Arc<AtomicU64>,
@@ -280,6 +286,7 @@ impl Rig {
         let commands = Arc::new(Mutex::new(Vec::new()));
         let hold_state = Arc::new(AtomicBool::new(false));
         let held_states = Arc::new(AtomicUsize::new(0));
+        let hold_rate = Arc::new(AtomicBool::new(false));
         let node_offset_ms = Arc::new(AtomicU64::new(0));
         let recorded = Recorded {
             mount: mount.clone(),
@@ -287,6 +294,7 @@ impl Rig {
             commands: commands.clone(),
             hold_state: hold_state.clone(),
             held_states: held_states.clone(),
+            hold_rate: hold_rate.clone(),
         };
         let node = NodeService::with_controls_and_mount(
             SimCamera::new(sim.clone()),
@@ -363,6 +371,7 @@ impl Rig {
             gate,
             hold_state,
             held_states,
+            hold_rate,
             node_offset_ms,
             call_log,
         };
