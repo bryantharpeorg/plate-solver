@@ -407,9 +407,11 @@ one starts, retaining its result until the next GoTo. States are `slewing`,
 `solving` (including the settle wait), `correcting` (numbered 1–5), `done`,
 `failed`, and `halted`.
 The final error is in arcseconds. Stop reports the observer; heartbeat silence of
-one second reports a lost link; sunrise reports the Sun guard. Every halt stops
-both axes and cancels further motion. Stop remains available while planning,
-solving or another request is pending.
+one second reports a lost link; sunrise reports the Sun guard. A change in the
+scope node's watchdog stop count during a GoTo reports
+`halted by the scope node's watchdog`. Every halt stops both axes and cancels
+further motion. Stop remains available while planning, solving or another request
+is pending.
 
 After the first sync, the second-sync route chooses the nearest pointable spot
 in turn and tilt at least 90° in azimuth from every sync of the night, allowing

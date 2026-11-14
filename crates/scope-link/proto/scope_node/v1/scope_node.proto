@@ -115,6 +115,8 @@ message AxisState {
   int32 position = 1;
   double rate_deg_per_s = 2;
   bool moving = 3;
+  // Times the node's watchdog has stopped the mount since the node started.
+  uint64 watchdog_stops = 4;
 }
 message AxisPositions {
   int32 azimuth = 1;

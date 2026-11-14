@@ -10,6 +10,7 @@ use tokio::task::JoinHandle;
 struct State {
     last_heartbeat: f64,
     lost: bool,
+    stops: u64,
 }
 
 /// Records heartbeat receipts and owns the node's independent stop timer.
@@ -28,6 +29,7 @@ impl Watchdog {
         let state = Arc::new(Mutex::new(State {
             last_heartbeat: clock.now(),
             lost: false,
+            stops: 0,
         }));
         let observed = state.clone();
         let task = tokio::spawn(async move {
@@ -39,6 +41,7 @@ impl Watchdog {
                     let mut state = observed.lock().unwrap();
                     if !state.lost && clock.now() - state.last_heartbeat >= 1.0 {
                         state.lost = true;
+                        state.stops += 1;
                         true
                     } else {
                         false
@@ -60,5 +63,9 @@ impl Watchdog {
     /// Whether one second has elapsed without an accepted heartbeat.
     pub fn lost(&self) -> bool {
         self.state.lock().unwrap().lost
+    }
+    /// Times the watchdog commanded a stop since this node started.
+    pub fn stops(&self) -> u64 {
+        self.state.lock().unwrap().stops
     }
 }
