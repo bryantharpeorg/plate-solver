@@ -79,6 +79,10 @@ export interface StarMark {
   name: string | null;
   mag: number;
   matched: boolean;
+  /** A detected star sits where the solution puts this one (server, spec 020 US1). */
+  detected?: boolean;
+  /** How the page draws it, after the live hold. Page-only; never sent by the server. */
+  seen?: boolean;
   error_px: number | null;
 }
 
