@@ -475,9 +475,9 @@ export interface SessionRecording {
 ```
 
 `recording?: SessionRecording;` in `ObservingSession`
-(`crates/finder/web/src/api.ts:230`), and `postRecord(on: boolean)` and
+(`crates/finder/web/src/api.ts:234`), and `postRecord(on: boolean)` and
 `postRecordRaw(frames: number)`, each written as `postTrack` is
-(`crates/finder/web/src/api.ts:296`), posting `{on}` to `/api/record` and `{frames}` to
+(`crates/finder/web/src/api.ts:300`), posting `{on}` to `/api/record` and `{frames}` to
 `/api/record/raw`, and each returning `Promise<ObservingSession>`.
 
 `useSession.ts`: `request()` builds the session one known field at a time
@@ -527,7 +527,7 @@ after `<AimTap … />` (`crates/finder/web/src/components/SetupPage.tsx:179`).
 
 ### `DESIGN.md` (US3)
 
-After the Aim-point tap entry (`DESIGN.md:343`), add a plain `###` heading and one
+After the Aim-point tap entry (`DESIGN.md:347`), add a plain `###` heading and one
 paragraph, like its neighbours. The `>` marks below only set the text apart here; the
 entry is not a blockquote:
 
@@ -618,18 +618,17 @@ These are not changed by any story:
 ## Prerequisites before this spec is flipped to `ready`
 
 1. **The earlier specs have landed:** `013-live-finder`, `014-goto`, `016-mcp`,
-   `017-console-stop-confirm`, `019-night-legibility` and `020-live-chart-calm`. Not yet
-   met: 017's last story landed at c1ed295 and 020-live-chart-calm's US1 at 2508423, but
-   its US2 has not. That US2 writes `DESIGN.md`, `crates/finder/web/dist` and
+   `017-console-stop-confirm`, `019-night-legibility` and `020-live-chart-calm`. Met:
+   020-live-chart-calm completed at f8dab49 (2026-11-14, US2 #212). That US2 wrote `DESIGN.md`, `crates/finder/web/dist` and
    `crates/finder/web/src/api.ts`, as US3 does, and two rebuilds of `dist` in flight
    always conflict. Dispatching 025 first instead is the owner's call; it would mean
    dropping `020-live-chart-calm` from `depends_on_landed` and naming 025 in that spec's
    shared writes.
 2. **`main` is still as read.** Every citation here was read at c1ed295 and re-checked at
-   2508423, where only `crates/finder/src/solve.rs` had moved. Once 020-live-chart-calm's
-   US2 lands, re-read `DESIGN.md:343`, `crates/finder/web/src/api.ts:230` and
-   `crates/finder/web/src/api.ts:296`, and any other cited file `main` has changed, and
-   re-run the validator.
+   f8dab49, after 020-live-chart-calm landed: its US2 moved the cited lines of
+   `DESIGN.md` and `crates/finder/web/src/api.ts` down by four, now `DESIGN.md:347`,
+   `crates/finder/web/src/api.ts:234` and `crates/finder/web/src/api.ts:300`. If `main`
+   moves again in a cited file, re-read it and re-run the validator.
 3. **The owner decisions are settled and the approvals given** (spec § Owner decisions,
    § Owner approvals). An answer other than the recommended one is written into the trio
    and re-validated before the flip, never left to a story.
@@ -726,10 +725,11 @@ the trio was reviewed against the code:
 - **Not run:** `CI=1 npm run e2e` and the workspace-wide gates. The `test` gate runs both.
 
 The trio was then rebased onto `main` at 2508423, whose only code change since c1ed295
-is `crates/finder/src/solve.rs`; its one cited line was re-read. Writes come from the
+is `crates/finder/src/solve.rs`; its one cited line was re-read. After 020-live-chart-calm
+landed, `main` at f8dab49 was merged in and the three citations its US2 moved
+(`DESIGN.md` and two in `crates/finder/web/src/api.ts`) were re-read. Writes come from the
 task text and the probes. Shared writes name the merge edge that orders them, and the
-stories that last wrote the same file on `main`, or will once `020-live-chart-calm`
-lands. Nothing in this record is an owner approval: those are in spec.md, and flipping
+stories that last wrote the same file on `main`, `020-live-chart-calm` among them. Nothing in this record is an owner approval: those are in spec.md, and flipping
 to `ready` gives them.
 
 ```yaml

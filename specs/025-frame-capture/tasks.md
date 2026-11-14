@@ -21,7 +21,7 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
   numbers read back from a file after the `serde_json` round trip of spec.md § User
   Scenarios, never with a tolerance.
 - Keep the story's diff under 64 KiB, measured as plan.md § Plan traps 3 says.
-- Every code citation is `path:line` as read at c1ed295 and re-checked at 2508423. If a
+- Every code citation is `path:line` as read at c1ed295 and re-checked at f8dab49. If a
   cited line has moved, re-read it rather than guess.
 - Add no dependency and change no `Cargo.toml`. Change nothing under
   `crates/simulator`, and outside US2 nothing under `crates/scope-node` or

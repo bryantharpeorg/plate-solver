@@ -7,7 +7,7 @@ depends_on_landed: ["013-live-finder", "014-goto", "016-mcp", "017-console-stop-
 # and given the approvals listed under "Owner approvals". Flipping it to `ready` is the
 # act that dispatches it.
 # Refined 2026-11-14 by probe builds of all three stories in throwaway worktrees and two
-# reviews (plan.md § Refinement Record), and rebased onto `main` at 2508423; still draft.
+# reviews (plan.md § Refinement Record), and rebased onto `main` at 2508423, then main at f8dab49 merged in; still draft.
 ---
 
 # Feature Specification: Saving Live Frames at the Telescope
@@ -106,10 +106,10 @@ replay them.
   the session carries `node` only once one is paired (`crates/finder/src/session.rs:629`).
   A new check would have to join the simulate project, which means editing
   `playwright.config.ts`. See owner decision 11.
-- Q: Which other specs write the same files? → A: `020-live-chart-calm` is `ready`, and
-  its US1 landed at 2508423. Its US2 writes `DESIGN.md`, `crates/finder/web/dist` and
-  `crates/finder/web/src/api.ts`, as US3 does, so this spec waits for it to land
-  (plan.md § Prerequisites). The draft "mount-sky" (pull request 207) also writes files
+- Q: Which other specs write the same files? → A: `020-live-chart-calm` landed on
+  2026-11-14 (US2 at f8dab49). Its US2 wrote `DESIGN.md`, `crates/finder/web/dist` and
+  `crates/finder/web/src/api.ts`, as US3 does, so this spec names it in
+  `depends_on_landed` (plan.md § Prerequisites). The draft "mount-sky" (pull request 207) also writes files
   US1, US2 and US3 write (plan.md § Risks).
 
 ## Owner decisions
@@ -594,9 +594,9 @@ needs a terminal.
 ## Assumptions
 
 - **Earlier features are in place.** 013, 014, 016, 017, 019 and 020-live-chart-calm
-  have landed. Every citation here was read at c1ed295 and re-checked at 2508423, where
-  only `crates/finder/src/solve.rs` had moved. 020-live-chart-calm's US2 will move the
-  cited lines of `DESIGN.md` and `crates/finder/web/src/api.ts` (plan.md
+  have landed. Every citation here was read at c1ed295 and re-checked at f8dab49, after
+  020-live-chart-calm landed; its US2 moved the cited lines of `DESIGN.md` and
+  `crates/finder/web/src/api.ts` by four, and the citations follow them (plan.md
   § Prerequisites).
 - **Out of scope:**
   - a replay tool, loader or replaying node;
