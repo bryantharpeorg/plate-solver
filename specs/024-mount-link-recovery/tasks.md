@@ -79,16 +79,18 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
   bit into `Status`, record it on each `state` read and clear it on a failed one, and
   add `SkyWatcher::initialised` (plan.md § Interfaces).
 - [ ] T012 [US2] In `crates/scope-node/src/mount/skywatcher/mount_link.rs`, add the loss
-  rule (three failed `state` reads in a row across both axes) and the connect task's
-  loop, the `io` lock, the bit rule and the jump rule of spec.md FR-006, the
-  re-initialisation that takes the board out first, one count per event, and the
+  rule (three failed `state` reads in a row across both axes; a read while the link has
+  no board is not a failed read) and the connect task's loop, the `io` lock, the bit
+  rule and the jump rule of spec.md FR-006, the re-initialisation that takes the board
+  out first and wakes the connect task when it fails, one count per event, and the
   reset's log line (plan.md § Interfaces).
 - [ ] T013 [US2] Add `mount_resets = 5` to `AxisState` in
   `crates/scope-link/proto/scope_node/v1/scope_node.proto`, and fill it in
   `crates/scope-node/src/service.rs`.
 - [ ] T014 [US2] Add US2's part to the `## The mount link` section of
-  `crates/scope-node/README.md`: resets, FR-007's line, the console's refusal until a
-  sync, and that a console restarted after a power cycle needs a sync before GoTo.
+  `crates/scope-node/README.md`: resets, FR-007's line, and that a console restarted
+  after a power cycle needs a sync before GoTo. The console's refusal is US3's, so this
+  part does not describe it.
 - [ ] T015 [US2] Run the `lint` and `test` gates with every existing test unchanged and
   green. Commit the green story (US2-S1, US2-S2, US2-S3, US2-S4, US2-S5, US2-S6,
   US2-S7, US2-S8).
@@ -111,9 +113,12 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
   `crates/scope-link/proto/scope_node/v1/scope_node.proto`, and fill them from
   `identity()` while connected in `crates/scope-node/src/service.rs`.
 - [ ] T019 [US3] In `crates/finder/src/live.rs` and `crates/finder/src/session.rs`, add
-  `MountReading`, the identity, the `resets` field, the sync-needed flag that only a
-  frame exposed after the rise clears, `POWER_CYCLED`, and Track's refusal in
-  `Session::track_target` (plan.md § Interfaces).
+  `MountReading` and the poll's console time to `set_mount`, the identity, the `resets`
+  field, the sync-needed flag that only a sync from a frame whose exposure started after
+  the rise was seen clears, `POWER_CYCLED`, and Track's refusal in
+  `Session::track_target`; in `crates/finder/src/api.rs`, pass `self.clock.clone()` to
+  `MountMonitor::start` in `with_simulation` and `with_link`, and add the refusal after a
+  reset to the module docs' second-sync and Track paragraphs (plan.md § Interfaces).
 - [ ] T020 [US3] In `crates/finder/src/goto.rs`, add the refusal to
   `GoTo::check_request` and the abort against the count seen when the GoTo was
   accepted; in `crates/finder/src/tracking.rs`, stop tracking when the count changes

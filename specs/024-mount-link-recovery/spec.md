@@ -2,8 +2,9 @@
 state: draft
 depends_on_landed: ["013-live-finder", "014-goto", "015-tracking", "017-console-stop-confirm"]
 # Drafted 2026-11-14 by the plate-solver operator against `main` at c1ed295, from the
-# lake-night field findings of 13-14 November (gap 1: the mount link after a power cycle).
-# Refined 2026-11-14 from four probe builds of its stories and two reviews (anchors, scenarios).
+# dark-site field findings of 13-14 November (gap 1: the mount link after a power cycle).
+# Refined 2026-11-14 from four probe builds of its stories and two reviews (anchors, scenarios),
+# then once more the same day from a completeness review of that refinement.
 # It stays draft until the owner has reviewed it, settled the owner decisions and given
 # the approvals listed under "Owner approvals". Flipping it to `ready` is the act that
 # dispatches it.
@@ -73,8 +74,9 @@ made stale.
   between two reads than the top rate allows.
 - Q: What does a reset cost the observer? → A: One sync. The counts after a power cycle
   start from the board's power-on zero, so the night's zero points no longer apply. The
-  console refuses GoTo and Track until a sync from a frame exposed after the reset, and
-  the 014 model then opens a new epoch at that sync as it already does for a slip.
+  console refuses GoTo, second sync and Track until it records a sync from a frame whose
+  exposure started after it saw the reset, and the 014 model then opens a new epoch at
+  that sync as it already does for a slip.
 
 ### Session 2026-11-14 (probe builds and review)
 
@@ -257,7 +259,7 @@ model probably went wrong without anyone seeing it.
 6. **Given** the link of US2-S2 after its fifth poll, before `power_on`, while
    `link.connected()` is false, **When** the test calls `link.goto(Axis::Azimuth, 1000)`
    and `link.rate(Axis::Altitude, 0.5)`, **Then** it asserts that no move is on the
-   wire.
+   wire after `power_off` (the GoTo before it put its own on the wire).
 7. **Given** the setup, connected, after a GoTo on axis 1 to 100,000 counts, **When** the
    test calls `handle.power_cycle()` and polls four times sleeping 1 s before each,
    **Then** it asserts that `link.resets()` is 1 and that `:F3\r` appears exactly once

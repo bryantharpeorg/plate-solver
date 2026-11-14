@@ -77,6 +77,7 @@ crates/scope-node/
 ├── tests/mount_reset.rs                        # US2: new
 └── tests/mount_garble.rs                       # US4: new
 crates/finder/
+├── src/api.rs                                  # US3: the console clock to the mount poll; docs
 ├── src/live.rs                                 # US3: identity and resets from the node
 ├── src/session.rs                              # US3: MountView fields, sync-needed flag, Track's refusal
 ├── src/goto.rs                                 # US3: GoTo and second-sync refusal, abort on a reset
@@ -87,7 +88,11 @@ crates/finder/
 ## Interfaces
 
 Every story was probe-built from this section on 2026-11-14; where a probe had to differ,
-the section now says what compiled and passed.
+the section now says what compiled and passed. The reviews after the probes added parts
+that no probe has compiled yet: in US1, Stop through the queue while disconnected; in
+US2, the bit rule's need for a set bit first, releasing `io` before an in-line connect
+and waking the connect task when that connect fails; in US3, the frame cutoff for
+clearing the refusal and the console clock it needs.
 
 ### The `Mount` trait (`crates/scope-node/src/mount/mod.rs`, US1)
 
@@ -154,8 +159,8 @@ impl<S: BaudStream + 'static> Mount for MountLink<S> { /* delegates to the SkyWa
   attempt takes 3 s (two bauds, `crates/scope-node/src/mount/skywatcher/protocol.rs:81`,
   each tried five times, `crates/scope-node/src/mount/skywatcher/transport.rs:43`, with
   a 300 ms timeout, `crates/scope-node/src/mount/skywatcher/transport.rs:6`), so
-  attempts start 5 s apart and a board that comes on answers within about 3.5 s. US1's
-  task returns after its first connect.
+  attempts start 5 s apart and a board that comes on is connected within about 4 s (the
+  US1 probe measured 2.9 to 3.8 s). US1's task returns after its first connect.
 - **FR-003's line (US1)** is written by the connect task, never by `main.rs`:
   `mount connected: <firmware> at <baud> baud; azimuth <cpr> counts/rev, timer <hz> Hz,
   high-speed ratio <n>, auxiliary encoders, :W sent; altitude ...`, with
@@ -176,8 +181,11 @@ impl<S: BaudStream + 'static> Mount for MountLink<S> { /* delegates to the SkyWa
   `format!("0x{:02X}", board)`.
 - **Lost (US2).** Three failed `state` reads in a row, counted across both axes and
   cleared by any good read, drop the stored `SkyWatcher` and wake the connect task. A
-  read failed when `SkyWatcher::initialised` (below) is none after it. From US2 the
-  connect task loops: connect, wait on a `tokio::sync::Notify` for a loss, connect again.
+  read failed when `SkyWatcher::initialised` (below) is none after it. A read while the
+  link has no board, from the capture loop or `axis_state`, is not a failed read: it
+  reaches no board and counts toward nothing. From US2 the connect task loops: connect,
+  wait on a `tokio::sync::Notify` for a wake, connect again. Wakes use `notify_one`, which
+  keeps a wake that comes before the task waits.
 - **Resets (US2).** A `tokio::sync::Mutex` (`io`) is held through each `state` read and
   by `goto` and `rate`, so no move is under way on the board when a reset takes it out.
   After each good read the link checks that axis:
@@ -197,8 +205,11 @@ impl<S: BaudStream + 'static> Mount for MountLink<S> { /* delegates to the SkyWa
   awaited by the read that found the reset. The count goes up when the
   re-initialisation succeeds, with the log line
   `mount reset (<cause>): re-initialised <firmware> at <baud> baud`; if it fails, the
-  cause is kept and the connect task's next successful connect counts it, so one event
-  counts once. A connect after the first with no cause kept counts as `link lost`.
+  cause is kept, the link wakes the connect task, and that task's next successful
+  connect counts the cause, so one event counts once. A connect after the first with no
+  cause kept counts as `link lost`. While the in-line connect runs the link has no
+  board, so no read can count toward a loss and the connect task stays waiting: only
+  one connect is ever under way.
   Every connect clears the jump baselines, the failure count and the init-bit history.
   Stop does not take `io`: while the link has no board it answers at once (owner
   decision 4). A Stop that took the old board just before still finishes on it.
@@ -331,20 +342,32 @@ The live loop records a sync from every solved frame at rest or tracking slowly
 frames running a refusal lasts until the next solved frame. That sync is the one the
 spec asks for, and it opens the new epoch.
 
-- **`live.rs`**: the mount poll (`crates/finder/src/live.rs:296`) passes a
-  `MountReading` with the reply's `firmware` and `board` (none when empty) and the
-  azimuth reply's `mount_resets`. A failed poll passes `MountReading::default()`
+- **`live.rs`**: `MountMonitor::start` (`crates/finder/src/live.rs:286`) gains a third
+  argument, the console clock `clock: Arc<dyn Clock>`. Each mount poll
+  (`crates/finder/src/live.rs:296`) passes `set_mount` a `MountReading` with the reply's
+  `firmware` and `board` (none when empty) and the azimuth reply's `mount_resets`, and
+  the poll's console time `clock.now()`. A failed poll passes `MountReading::default()`
   (`crates/finder/src/live.rs:320`), which leaves the last-seen count as it was.
+- **`api.rs`**: the two builders that start the monitor pass `self.clock.clone()`:
+  `with_simulation` (`crates/finder/src/api.rs:196`), just after it sets the simulation's
+  clock (`crates/finder/src/api.rs:194`), and `with_link`
+  (`crates/finder/src/api.rs:217`), whose callers already set the clock first
+  (`crates/finder/src/api.rs:210`). The clock has to come from here: `Session` holds
+  none (`crates/finder/src/session.rs:662`), `LinkManager` keeps its own clock private,
+  and `LinkStatus.last_frame_at` is the last frame's arrival, not the poll's time. The
+  module docs' second-sync and Track paragraphs (`crates/finder/src/api.rs:3`,
+  `crates/finder/src/api.rs:17`) gain the refusal after a reset.
 - **`session.rs`**: `set_mount` stays `pub(crate)` and takes a
   `pub(crate) struct MountReading { counts, connected, moving, firmware, board, resets }`
-  in place of its three arguments. `MountView` gains
-  `#[serde(skip_serializing_if = "is_zero")] resets: u64`. The session keeps the last
-  count a good poll saw (none before the first, so the first poll only learns it), and
-  a `sync_needed` flag with the console time it was set, set when a good poll's count
-  is above the last seen. `record_frame_sync` clears the flag only when it records a
-  sync from a frame that started after that time (the frame's start on the console
-  clock is its sync time less half the exposure, `frame.end_s - frame.start_s`), as
-  `crates/finder/src/goto.rs:950` waits for an exposure starting after settle.
+  and `time: f64`, the poll's console time, in place of its three arguments. `MountView`
+  gains `#[serde(skip_serializing_if = "is_zero")] resets: u64`. The session keeps the
+  last count a good poll saw (none before the first, so the first poll only learns it),
+  and a `sync_needed` flag with the `time` of the poll that set it, set when a good
+  poll's count is above the last seen. `record_frame_sync` clears the flag only when it
+  records a sync from a frame that started after that time (the frame's start on the
+  console clock is its sync time less half the exposure,
+  `frame.end_s - frame.start_s`), as `crates/finder/src/goto.rs:950` waits for an
+  exposure starting after settle.
   `Session::sync_needed()` is `pub`, and `pub(crate) const POWER_CYCLED` holds
   `The mount was power-cycled: sync again first`. `Session::track_target`
   (`crates/finder/src/session.rs:759`) returns it as its error when `sync_needed()`,
@@ -374,9 +397,10 @@ spec asks for, and it opens the new epoch.
 
 A `## The mount link` section, written by the story that builds each part. US1: the node
 starts without the mount and connects when it answers, and FR-003's line. US2: a power
-cycle is recognised and the board is initialised again, the reset line of FR-007, the
-console's refusal until a sync, and that a console restarted after a power cycle needs a
-sync before GoTo. US4: FR-017's two lines.
+cycle is recognised and the board is initialised again, the reset line of FR-007, and
+that a console restarted after a power cycle needs a sync before GoTo. US4: FR-017's two
+lines. The console's refusal is US3's and is documented in the console's own API docs
+(`crates/finder/src/api.rs`), not in the node's README.
 
 ### Log lines
 
@@ -417,7 +441,8 @@ These are not changed by any story:
 | Jump rule at 1.5 × top rate + 1,000 counts | Any change while at rest | Polls are not instants, and the board may still be finishing a stop. |
 | One reading is enough | Confirm with a second read | Owner decision 1. |
 | Refuse GoTo, second sync and Track until a sync | Re-zero the model from the new counts | The counts after power-on are an unknown offset from the old ones; only a sync measures it. |
-| Only a frame exposed after the rise clears the flag | Any recorded sync clears it | A frame exposed before the cycle carries the old zero points. |
+| Only a frame whose exposure started after the rise was seen clears the flag | Any recorded sync clears it | A frame exposed before the cycle carries the old zero points. |
+| The monitor gets the console clock from `api.rs` | Time the rise from `LinkStatus.last_frame_at` or `SystemTime` | The last frame's arrival can be older than the poll, and `SystemTime` is not the clock the tests and the simulation run on. |
 | A session flag, not a persisted one | Store the count with each sync | It changes the session file's format; a console restart after a cycle is rare and the README covers it. |
 | Stop still goes through the queue while disconnected | Answer without the queue | Stop must clear queued moves whatever the link's state. |
 | Retry reads in `protocol.rs`, one transmission a try | Retry in the transport | The transport can't tell a short status from a valid empty acknowledgement, and nested retries would allow 25 transmissions. |
@@ -495,7 +520,7 @@ that keeps it from recurring. They bind every story.
 | The real board's goto speed was never measured; above 5.1°/s every long GoTo would trip the jump rule. | Owner decision 1; the first powered night should include a move over 10°. |
 | A reset during a long slew isn't seen until the next poll. | The motors lose power with the board; the GoTo reads the count every 50 ms while slewing and the console's poll runs every 250 ms. |
 | Reconnecting while a move is queued sends a stale move. | `goto` and `rate` send nothing while not connected (FR-008), and the console aborts on a reset (FR-015); owner decision 3. |
-| Two open descriptors on one serial device split its replies. | A reset takes the old board out under `io` and drops every handle on it before `open()`; only a Stop already under way can still finish on it. |
+| Two open descriptors on one serial device split its replies. | A reset takes the old board out under `io` and drops every handle on it before `open()`; only a Stop already under way can still finish on it. Reads while there is no board are not failed reads, so the connect task wakes only for a loss or a failed in-line connect, never beside one. |
 | The retry hides a real fault. | Every wrong-length reply is counted and logged with its bytes (FR-017). |
 
 ## Refinement Record
@@ -511,9 +536,13 @@ crates' tests, clippy and fmt, with no undeclared write and no existing test tou
 read until `initialised()` read none after one; `identity` had no story; the refusal
 is cleared by the next solved frame, so its scenarios stop frames; the init-bit rule
 would count a reset on every poll of a board that never sets the bit; and several
-waits, imports and oracles needed fixing. Writes come from the task text. Shared writes
-name the merge edge that orders them, and the 013, 014 and 017 stories that last wrote
-the same file on `main`. Nothing in this record is an owner approval: those are in
+waits, imports and oracles needed fixing. A completeness review of that revision then
+found that the rule clearing the console's refusal needs the console clock in the mount
+poll, which only `crates/finder/src/api.rs` can pass, so US3 now writes it, and that a
+failed in-line re-initialisation must wake the connect task. § Interfaces names the
+parts no probe has compiled. Writes come from the task text. Shared writes name the
+merge edge that orders them, and the 013, 014, 015 and 017 stories that last wrote the
+same file on `main`. Nothing in this record is an owner approval: those are in
 spec.md, and flipping to `ready` gives them.
 
 ```yaml
@@ -743,6 +772,7 @@ stories:
       release:
         - "release owner: the repository owner, through the merge queue's ci.yml jobs"
     writes:
+      - crates/finder/src/api.rs
       - crates/finder/src/goto.rs
       - crates/finder/src/live.rs
       - crates/finder/src/session.rs
@@ -752,6 +782,11 @@ stories:
       - crates/scope-node/src/service.rs
     no_write_reason: ""
     shared_writes:
+      - path: crates/finder/src/api.rs
+        other_spec: 017-console-stop-confirm
+        other_story: US1
+        disposition: merge_order
+        reason: "024 depends_on_landed 017, whose US1 last changed api.rs"
       - path: crates/finder/src/goto.rs
         other_spec: 017-console-stop-confirm
         other_story: US4
