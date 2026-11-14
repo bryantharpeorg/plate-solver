@@ -864,7 +864,7 @@ impl GoTo {
     async fn run(
         self: Arc<Self>,
         target: Option<Target>,
-        mut client: MountClient,
+        client: MountClient,
         plan: Plan,
         generation: u64,
     ) {
@@ -875,7 +875,6 @@ impl GoTo {
             result = self.motion(target.as_ref(), &mut movement, plan, generation) => result.map_err(|reason| (false, reason)),
         };
         if let Err((halted, reason)) = result {
-            let _ = tokio::time::timeout(Duration::from_millis(200), client.stop_all()).await;
             let progress = self.progress().unwrap();
             self.update(
                 generation,
@@ -884,6 +883,10 @@ impl GoTo {
                 progress.error_arcsec,
                 Some(reason),
             );
+            self.link
+                .clone()
+                .stop_until_acknowledged(Some(client), crate::link::stop_deadline())
+                .await;
         }
         let mut state = self.state.lock().unwrap();
         if state.generation == generation {

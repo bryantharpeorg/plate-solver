@@ -6,7 +6,7 @@
 use crate::{
     ephemeris,
     goto::{sun_horizontal, Planner, Wind},
-    link::{LinkManager, MountClient},
+    link::{stop_deadline, LinkManager, MountClient},
     model::Model,
     session::{Clock, Site},
     sky::{self, Observer},
@@ -20,12 +20,11 @@ use std::{
 use tokio::{
     sync::{watch, Mutex as AsyncMutex},
     task::JoinHandle,
-    time::{interval, sleep, timeout, MissedTickBehavior},
+    time::{interval, sleep, timeout, Instant, MissedTickBehavior},
 };
 
 const TICK: Duration = Duration::from_millis(50);
 const SECOND: Duration = Duration::from_secs(1);
-const STOP_TIMEOUT: Duration = Duration::from_millis(200);
 const AXES: [Axis; 2] = [Axis::Azimuth, Axis::Altitude];
 const PROPORTIONAL_GAIN: f64 = 0.6;
 const INTEGRAL_TIME_S: f64 = 60.0;
@@ -202,8 +201,12 @@ impl Tracker {
     }
 
     /// Record the reason and cancel the rate loop before sending StopAll. Wait
-    /// for that run's bounded stop attempt; a lost link's watchdog is independent.
+    /// for that run's bounded stop round; a lost link's watchdog is independent.
     pub async fn stop(&self, reason: impl Into<String>) {
+        self.stop_by(reason, stop_deadline()).await;
+    }
+
+    pub(crate) async fn stop_by(&self, reason: impl Into<String>, deadline: Instant) {
         let reason = reason.into();
         self.shared.end(reason.clone());
         let mut task = self.task.lock().await;
@@ -212,8 +215,12 @@ impl Tracker {
         self.shared.end(reason);
         if let Some(previous) = task.take() {
             let _ = previous.await;
-        } else if let Some(mut client) = self.shared.link.mount() {
-            let _ = timeout(STOP_TIMEOUT, client.stop_all()).await;
+        } else {
+            self.shared
+                .link
+                .clone()
+                .stop_until_acknowledged(None, deadline)
+                .await;
         }
     }
 
@@ -711,7 +718,7 @@ impl Shared {
     async fn run(
         self: Arc<Self>,
         target: Target,
-        mut client: MountClient,
+        client: MountClient,
         axes: [AxisInfo; 2],
         generation: u64,
     ) {
@@ -856,6 +863,9 @@ impl Shared {
         // Publish the ending before StopAll; dropping the selected-out rate
         // future and invalidating the node queue prevents any later refresh.
         self.end(reason);
-        let _ = timeout(STOP_TIMEOUT, client.stop_all()).await;
+        self.link
+            .clone()
+            .stop_until_acknowledged(Some(client), stop_deadline())
+            .await;
     }
 }

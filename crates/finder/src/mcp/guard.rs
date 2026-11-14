@@ -2,6 +2,7 @@
 use crate::{
     api::{self, ApiError},
     goto::{AxisMove, GoTo, TICK},
+    link::stop_deadline,
     AppState,
 };
 use axum::http::StatusCode;
@@ -30,6 +31,9 @@ async fn begin(state: &AppState, tool: &'static str, request: AxisMove) -> Resul
     let goto = state
         .goto()
         .ok_or_else(|| conflict("no mount is connected".to_owned()))?;
+    let link = state
+        .link()
+        .ok_or_else(|| conflict("no mount is connected".to_owned()))?;
     let mut stops = goto.stops();
     let (mut client, request) = goto.check_axis_move(request).await.map_err(conflict)?;
     if stops.has_changed().unwrap_or(true) {
@@ -52,7 +56,8 @@ async fn begin(state: &AppState, tool: &'static str, request: AxisMove) -> Resul
                 .and_then(|reply| reply.map_err(|error| error.message().to_owned())),
     };
     if let Err(reason) = result {
-        let _ = tokio::time::timeout(Duration::from_millis(200), client.stop_all()).await;
+        link.stop_until_acknowledged(Some(client), stop_deadline())
+            .await;
         return Err(conflict(reason));
     }
     *state.axis_move.lock().unwrap() = Some(Progress {
@@ -69,11 +74,21 @@ async fn begin(state: &AppState, tool: &'static str, request: AxisMove) -> Resul
             _ = duration(&state, request, started) => Ok(()),
             result = path(&state, &goto, request, started) => result,
         };
-        let _ = tokio::time::timeout(Duration::from_millis(200), client.stop_all()).await;
+        let acknowledged = link
+            .stop_until_acknowledged(Some(client), stop_deadline())
+            .await;
+        let (name, reason) = match (result, acknowledged) {
+            (Err(reason), _) => ("halted", Some(reason)),
+            (Ok(()), true) => ("done", None),
+            (Ok(()), false) => (
+                "halted",
+                Some("the mount did not confirm the stop".to_owned()),
+            ),
+        };
         *state.axis_move.lock().unwrap() = Some(Progress {
             tool,
-            state: if result.is_ok() { "done" } else { "halted" },
-            reason: result.err(),
+            state: name,
+            reason,
         });
     });
     Ok(())
