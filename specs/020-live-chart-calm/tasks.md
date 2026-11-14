@@ -49,10 +49,11 @@ description: "Task list for 020-live-chart-calm: A Live Chart That Stays Calm"
 ### Tests first
 
 - [ ] T004 [US2] Create `crates/finder/web/src/calm.test.ts` with failing tests for
-  US2-S1 to US2-S4, calling `calm` directly with hand-built reports, times and history.
+  US2-S1, US2-S2, US2-S3 and US2-S4, calling `calm` directly with hand-built reports,
+  times and history.
 - [ ] T005 [US2] Create `crates/finder/web/src/App.calm.test.tsx` with failing tests for
-  US2-S5 to US2-S8, with its own copy of the `FakeEventSource`, `CONNECTED` and `serve`
-  harness from `crates/finder/web/src/App.live.test.tsx`, and a distinct `time` on each
+  US2-S5, US2-S6, US2-S7 and US2-S8, with its own copy of the `FakeEventSource`,
+  `CONNECTED` and `serve` harness from `crates/finder/web/src/App.live.test.tsx`, and a distinct `time` on each
   emitted report.
 - [ ] T006 [US2] Create `crates/finder/web/src/components/ChartSeen.test.tsx` with failing
   tests for US2-S9 (ring class and radius) and US2-S10 (tap captions).

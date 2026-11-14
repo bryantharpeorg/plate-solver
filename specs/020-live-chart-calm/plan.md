@@ -201,7 +201,7 @@ scenario says otherwise.
 
 ### `DESIGN.md` § Chart (signature)
 
-After 018's live-chart paragraph (`DESIGN.md:284` to `:287`), add a paragraph of its own:
+After 018's live-chart paragraph (`DESIGN.md:284` to `DESIGN.md:287`), add a paragraph of its own:
 
 > A star keeps its solid ring on the live chart through a frame that misses it, if it
 > was seen in two of the three frames before, for at most 10 s after it was last seen.
