@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { getHealth, type FrameSource, type Health, type SolveSettings } from "./api";
+import { useCalm } from "./calm";
 import { Chart, DEFAULT_LAYERS, type Layers } from "./components/Chart";
 import { ChartHeader, ChartHeaderPlaceholder } from "./components/ChartHeader";
 import { FieldList, FieldRoster } from "./components/FieldList";
@@ -127,7 +128,7 @@ export function App() {
       },
     [live],
   );
-  const report = showLive ? liveReport : uploadedReport;
+  const report = useCalm(showLive ? liveReport : uploadedReport, live?.time ?? null, showLive);
   const reference = useMemo(() => {
     const objects = report?.objects ?? [];
     return objects.find((o) => o.id === selected) ?? objects.find((o) => o.inside) ?? objects[0] ?? null;
@@ -248,7 +249,7 @@ export function App() {
                 className={`space-y-3 pt-3 lg:col-start-1 ${session.target ? "lg:row-start-3" : "lg:row-start-2"} lg:pt-0`}
               >
                 {session.target && <FieldRoster report={report} />}
-                <FieldList report={report} selected={reference?.id ?? null} onSelect={setSelected} />
+                <FieldList report={report} live={showLive} selected={reference?.id ?? null} onSelect={setSelected} />
               </div>
             )}
 

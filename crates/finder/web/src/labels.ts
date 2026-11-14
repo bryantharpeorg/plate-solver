@@ -5,6 +5,7 @@
 // name finds no room goes without.
 
 import type { ObjectMark, StarMark } from "./api";
+import { seenNow } from "./calm";
 
 /** A rectangle in image pixels. */
 export interface Box {
@@ -49,7 +50,7 @@ export const OBJECT_TEXT = 13;
 export const STAR_TEXT = 12;
 
 /** A star ring's radius in CSS pixels. */
-export const ringRadius = (s: StarMark) => (s.matched ? 7.5 : 4.5);
+export const ringRadius = (s: StarMark) => ((s.seen ?? seenNow(s)) ? 7.5 : 4.5);
 
 /** An object symbol's radius in image pixels: its true size, but never smaller than a mark. */
 export const objectRadius = (o: ObjectMark, u: number) => Math.max(o.radius_px, 9 * u);

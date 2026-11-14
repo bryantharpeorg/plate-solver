@@ -286,6 +286,10 @@ live frame. After that, marks that persist from frame to frame update in place, 
 a star or object new to the chart inks in. Through up to two unsolved live frames in a
 row, the chart keeps the last live solve.
 
+A star keeps its solid ring on the live chart through a frame that misses it, if it
+was seen in two of the three frames before, for at most 10 s after it was last seen.
+Tapping a solid ring the solver did not use says why it is solid.
+
 ### Guidance block — built
 An ink-only ruled block leads the page when a target is set, before the doubled-rule title block. It names the target and kind, and prints the session's pointability class in Second Ink. Pointable guidance gives the whole-degree turn and tilt and the latest pointing's age, or asks for a solved frame. Down targets show the session's rising, transit and setting in device-local time to the minute; a target that never reaches the minimum altitude says so. The Sun guard refuses directions within 15° of the Sun. Without a site the block links to `/setup`. It uses no object colours, fill or shadow; night uses the existing red ink tokens.
 
