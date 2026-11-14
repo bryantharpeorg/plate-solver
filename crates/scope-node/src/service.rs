@@ -439,6 +439,8 @@ impl ScopeNodeMount for NodeService {
             position: state.position,
             rate_deg_per_s: state.rate_deg_per_s,
             moving: state.moving,
+            // Sample after the axes so watchdog-induced rest carries its count.
+            watchdog_stops: self.runtime.watchdog.as_ref().map_or(0, Watchdog::stops),
         }))
     }
     async fn goto_axis(

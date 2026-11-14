@@ -24,6 +24,7 @@ const APPROACH: f64 = 0.5;
 const ACCELERATION: f64 = 3.0;
 pub(crate) const TICK: Duration = Duration::from_millis(50);
 const AXES: [Axis; 2] = [Axis::Azimuth, Axis::Altitude];
+const WATCHDOG_HALT: &str = "halted by the scope node's watchdog";
 fn wrap(angle: f64) -> f64 {
     (angle + 180.0).rem_euclid(360.0) - 180.0
 }
@@ -872,7 +873,7 @@ impl GoTo {
         let result = tokio::select! {
             biased;
             reason = self.guard(generation) => Err((true, reason)),
-            result = self.motion(target.as_ref(), &mut movement, plan, generation) => result.map_err(|reason| (false, reason)),
+            result = self.motion(target.as_ref(), &mut movement, plan, generation) => result.map_err(|reason| (reason == WATCHDOG_HALT, reason)),
         };
         if let Err((halted, reason)) = result {
             let progress = self.progress().unwrap();
@@ -903,6 +904,11 @@ impl GoTo {
         let mut reports = self.live.subscribe();
         let mut correction = 0;
         let mut error = None;
+        let watchdog_stops = client
+            .axis_state(AXES[0])
+            .await
+            .map_err(|_| "mount did not answer")?
+            .watchdog_stops;
         loop {
             self.update(generation, "slewing", correction, error, None);
             for waypoint in &plan.waypoints {
@@ -921,6 +927,9 @@ impl GoTo {
                         .axis_state(Axis::Altitude)
                         .await
                         .map_err(|_| "mount did not answer")?;
+                    if az.watchdog_stops != watchdog_stops || alt.watchdog_stops != watchdog_stops {
+                        return Err(WATCHDOG_HALT.into());
+                    }
                     if !az.moving && !alt.moving {
                         break;
                     }
