@@ -386,6 +386,16 @@ export async function postMotion(route: "/api/goto" | "/api/stop" | "/api/model/
   await json(await fetch(route, { method: "POST" }));
 }
 
+export interface StopReply {
+  stopped: boolean;
+  acknowledged?: boolean;
+}
+
+/** Stop deliberately carries no bearer token. */
+export async function postStop(): Promise<StopReply> {
+  return json(await fetch("/api/stop", { method: "POST" }));
+}
+
 export async function resetModel(what: "night" | "fixed"): Promise<void> {
   await json(
     await fetch("/api/model/reset", {
