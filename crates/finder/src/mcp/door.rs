@@ -13,7 +13,7 @@ use crate::{api, AppState};
 
 /// Passed through rmcp's request extensions so tool dispatch never stops twice.
 #[derive(Clone)]
-pub(crate) struct StopsCarriedOut;
+pub(crate) struct StopsCarriedOut(pub(crate) serde_json::Value);
 
 pub(crate) async fn door(State(state): State<AppState>, request: Request, next: Next) -> Response {
     let (mut parts, body) = request.into_parts();
@@ -50,7 +50,7 @@ pub(crate) async fn door(State(state): State<AppState>, request: Request, next: 
                     Ok(&result),
                 );
             }
-            parts.extensions.insert(StopsCarriedOut);
+            parts.extensions.insert(StopsCarriedOut(result));
         }
     }
     if api::check_origin(&parts, &state.allowed_hosts).is_err()

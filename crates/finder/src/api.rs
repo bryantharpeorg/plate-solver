@@ -21,6 +21,15 @@
 //! or starts a GoTo first when the target is more than one arcminute off the aim
 //! point. Track off stops both axes; the bodiless, any-origin `POST /api/stop`
 //! also clears arming and ends tracking with `ended_reason: "stopped"`.
+//! Stop cancels a GoTo concurrently with ending tracking and takes no motion lock.
+//! It sends `StopAll` immediately, allowing 200 ms per attempt and pausing 50 ms
+//! between attempts in a bounded 2 s round. The round runs in its own task so
+//! dropping the request cannot cancel it. Stop always answers 200 after the round:
+//! exactly `{"stopped":true}` when the scope node answers OK or there is no scope
+//! link, otherwise `{"stopped":true,"acknowledged":false}`. An unacknowledged stop
+//! means the node did not answer and the mount may still be moving; call it again.
+//! MCP `stop` and `stop_all` return the same reply, including stops carried out
+//! before the MCP door's checks.
 //!
 //! Session reads include run-only `track: {wanted, state, target, ended_reason?,
 //! readout?}` after the first accepted Track-on request. `state` is `armed` or
@@ -59,7 +68,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::catalog::{self, SimilarReport};
-use crate::link::{LinkManager, Transport};
+use crate::link::{stop_deadline, LinkManager, Transport};
 use crate::live::{DbSolver, Live, Solver};
 use crate::samples::{self, SampleInfo, Samples};
 use crate::session::{Clock, Session, SessionEdit, SessionError, SessionView, SystemClock};
@@ -771,13 +780,24 @@ async fn stop_mount(State(state): State<AppState>) -> Json<serde_json::Value> {
 }
 
 pub(crate) async fn stop(state: &AppState) -> serde_json::Value {
-    state.session.stop_tracking().await;
-    if let Some(goto) = &state.goto {
-        goto.stop().await;
-    } else if let Some(mut mount) = state.link.as_ref().and_then(|link| link.mount()) {
-        let _ = tokio::time::timeout(Duration::from_millis(200), mount.stop_all()).await;
+    // Neither side waits for the other: a GoTo is cancelled and the first attempt
+    // sent even while tracking is still finishing.
+    let (_, acknowledged) = tokio::join!(state.session.stop_tracking(), async {
+        match (&state.goto, &state.link) {
+            (Some(goto), _) => goto.stop().await,
+            (None, Some(link)) => {
+                link.clone()
+                    .stop_until_acknowledged(None, stop_deadline())
+                    .await
+            }
+            (None, None) => true,
+        }
+    });
+    if acknowledged {
+        serde_json::json!({"stopped": true})
+    } else {
+        serde_json::json!({"stopped": true, "acknowledged": false})
     }
-    serde_json::json!({"stopped": true})
 }
 
 async fn put_session(

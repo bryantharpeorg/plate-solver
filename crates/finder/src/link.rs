@@ -28,6 +28,16 @@ use crate::session::{CameraSettings, Clock, LinkConfig, Session};
 
 const HEARTBEAT: Duration = Duration::from_millis(250);
 const SILENCE: Duration = Duration::from_secs(1);
+/// One attempt's limit, the pause between attempts and the whole round.
+pub(crate) const STOP_ATTEMPT: Duration = Duration::from_millis(200);
+pub(crate) const STOP_PAUSE: Duration = Duration::from_millis(50);
+pub(crate) const STOP_WINDOW: Duration = Duration::from_secs(2);
+
+/// The end of a stop round that starts now.
+pub(crate) fn stop_deadline() -> Instant {
+    Instant::now() + STOP_WINDOW
+}
+
 type Connect = Pin<Box<dyn Future<Output = Result<Channel, tonic::transport::Error>> + Send>>;
 type Client = ScopeNodeClient<InterceptedService<Channel, BearerToken>>;
 type Configure =
@@ -211,6 +221,39 @@ impl LinkManager {
     /// Mount calls on the current connection; absent while unpaired or disconnected.
     pub fn mount(&self) -> Option<MountClient> {
         self.mount.borrow().clone()
+    }
+
+    /// Send StopAll until the node answers OK or `deadline` passes. The first
+    /// attempt starts at once. It runs in a task of its own, so a caller that
+    /// goes away can't end it. A caller holding a client passes it: it's used
+    /// when the manager no longer offers one.
+    pub(crate) async fn stop_until_acknowledged(
+        self: Arc<Self>,
+        client: Option<MountClient>,
+        deadline: Instant,
+    ) -> bool {
+        tokio::spawn(async move {
+            let mut client = client;
+            loop {
+                if let Some(current) = self.mount() {
+                    client = Some(current);
+                }
+                if let Some(stop) = &mut client {
+                    if matches!(
+                        time::timeout(STOP_ATTEMPT, stop.stop_all()).await,
+                        Ok(Ok(()))
+                    ) {
+                        return true;
+                    }
+                }
+                if Instant::now() + STOP_PAUSE >= deadline {
+                    return false;
+                }
+                time::sleep(STOP_PAUSE).await;
+            }
+        })
+        .await
+        .unwrap_or(false)
     }
 }
 

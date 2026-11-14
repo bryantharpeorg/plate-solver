@@ -137,14 +137,14 @@ impl Console {
         let carried_out = context
             .extensions
             .get::<axum::http::request::Parts>()
-            .is_some_and(|parts| {
+            .and_then(|parts| {
                 parts
                     .extensions
                     .get::<super::door::StopsCarriedOut>()
-                    .is_some()
+                    .map(|stops| stops.0.clone())
             });
-        let result = if carried_out {
-            json!({"stopped":true})
+        let result = if let Some(result) = carried_out {
+            result
         } else {
             let result = api::stop(&self.state).await;
             self.state
@@ -324,7 +324,7 @@ impl Console {
         tool_result(result)
     }
 
-    #[tool(description = "Stop all telescope motion, including GoTo and tracking, in every state.",
+    #[tool(description = "Stop all telescope motion, including GoTo and tracking, in every state. A reply with acknowledged: false means the scope node did not answer and the mount may still be moving; call it again.",
         output_schema = object_schema())]
     async fn stop(
         &self,
@@ -334,7 +334,7 @@ impl Console {
         self.stop_result("stop", arguments, context).await
     }
 
-    #[tool(description = "Stop both axes and end any console GoTo or tracking in every state.",
+    #[tool(description = "Stop both axes and end any console GoTo or tracking in every state. A reply with acknowledged: false means the scope node did not answer and the mount may still be moving; call it again.",
         output_schema = object_schema())]
     async fn stop_all(
         &self,
