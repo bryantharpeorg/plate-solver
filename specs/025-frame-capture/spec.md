@@ -1,11 +1,13 @@
 ---
 state: draft
-depends_on_landed: ["013-live-finder", "014-goto", "016-mcp", "017-console-stop-confirm", "019-night-legibility"]
+depends_on_landed: ["013-live-finder", "014-goto", "016-mcp", "017-console-stop-confirm", "019-night-legibility", "020-live-chart-calm"]
 # Drafted 2026-11-14 by the plate-solver operator against `main` at c1ed295, from gap 3 of
 # the field findings of the night of 13–14 November 2026: no live frames from that night
 # survive. It stays draft until the owner has reviewed it, settled the owner decisions
 # and given the approvals listed under "Owner approvals". Flipping it to `ready` is the
 # act that dispatches it.
+# Refined 2026-11-14 by probe builds of all three stories in throwaway worktrees and two
+# reviews (plan.md § Refinement Record), and rebased onto `main` at 2508423; still draft.
 ---
 
 # Feature Specification: Saving Live Frames at the Telescope
@@ -69,7 +71,7 @@ replay them.
      (`crates/scope-node/tests/detect.rs:31`).
 - Q: What does each later use need? → A: The live chart's replay needs the frames'
   centroids, ids and arrival times, and the live reports in order. The up-direction check
-  needs each solve's `north_deg` (`crates/finder/src/solve.rs:246`), its time, the site
+  needs each solve's `north_deg` (`crates/finder/src/solve.rs:247`), its time, the site
   and the aim point. A detection fixture needs raw frames with their exposure, gain and
   detection settings and the centroids the node found in them. US1 records the first
   two; US2 adds the third.
@@ -80,6 +82,35 @@ replay them.
 - Q: Why not save `GET /api/live` with curl, as on that night? → A: Its events lack the
   centroids' brightness, the camera settings, the axis counts, the clock offset and the
   previews, and the capture lives wherever the shell happened to be.
+
+### Session 2026-11-14 (probe builds at c1ed295, review, and `main` at 2508423)
+
+- Q: Which scenarios could not pass as drafted? → A: Two, now reworded. The workspace's
+  `serde_json` (`crates/finder/Cargo.toml:32`) parses without `float_roundtrip`, so a
+  number a test reads back from a file is often one ULP from the `f64` that was written:
+  the US1 probe saw `1175.6363636363635` come back as `1175.6363636363637`, and the US2
+  probe saw 6 to 10 of 36 centroids differ. The file holds the exact shortest form; only
+  the test's parse is lossy, and no `Cargo.toml` may change. US1-S2 and US2-S3 now
+  compare as the shared setup's **Comparing numbers** says.
+- Q: What did the page probe find missing? → A: `useSession` builds the session one known
+  field at a time (`crates/finder/web/src/useSession.ts:29`) and would drop `recording`,
+  so the real page would never show a running recording while every component test
+  passed. US3 writes that file, and US3-S5 drives the page through it.
+- Q: Does the shared setup point where it says? → A: Only in the right order. Connecting a
+  mount re-points the sky along the mount (`crates/simulator/src/controls.rs:34`), whose
+  default zero points are near altitude −2° (`crates/simulator/src/mount.rs:34`), while
+  `push_to` after the mount moves the tube and keeps the counts
+  (`crates/simulator/src/controls.rs:80`). The setup now connects first and pushes after.
+- Q: Does any gate see the Recording section at night? → A: No. The one night check of
+  Setup (`crates/finder/web/e2e/session.spec.ts:191`) runs on a console with no node, and
+  the session carries `node` only once one is paired (`crates/finder/src/session.rs:629`).
+  A new check would have to join the simulate project, which means editing
+  `playwright.config.ts`. See owner decision 11.
+- Q: Which other specs write the same files? → A: `020-live-chart-calm` is `ready`, and
+  its US1 landed at 2508423. Its US2 writes `DESIGN.md`, `crates/finder/web/dist` and
+  `crates/finder/web/src/api.ts`, as US3 does, so this spec waits for it to land
+  (plan.md § Prerequisites). The draft "mount-sky" (pull request 207) also writes files
+  US1, US2 and US3 write (plan.md § Risks).
 
 ## Owner decisions
 
@@ -96,8 +127,9 @@ owner may pick another before flipping, and the trio is then refined again.
    absent, so a console that dies mid-night still leaves a readable recording.
    Instead: one JSON document, or protobuf.
 3. **A size cap.** Recommended: a recording ends by itself after 3,600 star frames: an
-   hour at 1 s exposures, three hours at 3 s; an estimated 0.2 GB an hour at one frame a
-   second. Instead: no cap, or a cap in bytes.
+   hour at 1 s exposures, three hours at 3 s, but about 12 minutes at the node's default
+   of 200 ms (`crates/scope-node/src/service.rs:55`); an estimated 0.2 GB an hour at one
+   frame a second. Instead: no cap, a cap in bytes, or a cap in time.
 4. **Raw pixels need an additive scope-link change.** Recommended: a new service,
    `ScopeNodeRaw`, with one call, `RawFrame`, whose answer the console saves into the
    recording (Clarification 5 rules out a call on `ScopeNode`). Instead: the scope node
@@ -110,8 +142,9 @@ owner may pick another before flipping, and the trio is then refined again.
 6. **Raw frames only on request, 1 to 10 at a time.** Recommended. Instead: a switch
    that saves every frame raw, about 1.5 MB a frame.
 7. **A page control.** Recommended: a Recording section on the Setup page (US3), with
-   `Start recording`, `Stop recording` and `Save 3 raw frames`. Instead: drop US3 and
-   use curl.
+   `Start recording`, `Stop recording` and `Save 3 raw frames`, worded as plan.md § The
+   page gives. Its counts have no singular, so a new recording reads `1 frames · 1
+   solves`. Instead: drop US3 and use curl, or singular words for a count of 1.
 8. **An MCP tool.** Recommended: none in this spec. Instead: `start_recording` and
    `stop_recording` tools.
 9. **What a recording may hold.** Recommended: the site, times and solves as the console
@@ -120,6 +153,24 @@ owner may pick another before flipping, and the trio is then refined again.
    The README says to review a recording before committing it to this public
    repository. Instead: round the site, which would also mean dropping each solve line's
    guidance.
+10. **Raw frames share the scope link's one connection.** Recommended: yes, as drafted.
+    A raw reply (about 1.5 MB at 1456 × 1088, 5 MB at 2592 × 1944) travels from the node
+    on the same HTTP/2 connection as the heartbeat's answer, Stop's acknowledgement and
+    the star frames. The console sends the next heartbeat only after an answer, and only
+    an answer renews its deadline (`crates/finder/src/link.rs:473`); both it
+    (`crates/finder/src/link.rs:30`) and the node's mount watchdog
+    (`crates/scope-node/src/mount/watchdog.rs:42`) act after 1 s without one. On slow
+    Wi-Fi a raw transfer can therefore drop the link, and the node then stops the mount,
+    ending a GoTo, Track or axis move: the safe direction, but an interruption. The
+    README says raw frames are best asked for while the mount is still (FR-015).
+    Instead: `POST /api/record/raw` answers 409 while a GoTo, Track or axis move runs;
+    or a second connection only for raw frames.
+11. **No night check of the Recording section.** Recommended: none. The section uses only
+    the classes other Setup sections use (`section-title`, `button`, `button-primary`,
+    `quiet`), and the US3 probe's build left the CSS unchanged. No Playwright project
+    renders Setup with a node at night, and adding one means editing
+    `crates/finder/web/playwright.config.ts`, which no story may. Instead: the owner adds
+    such a check outside the factory.
 
 ## Owner approvals
 
@@ -131,37 +182,53 @@ or CI file changes.
    (FR-001 to FR-009).
 2. **An additive scope-link service, `ScopeNodeRaw`**, with one call, `RawFrame`
    (FR-011, FR-012). The scope node on the Pi must be rebuilt before raw frames work.
-3. **`POST /api/record/raw`** and its 16 MiB reply limit (FR-013 to FR-015).
-4. **The Setup page's Recording section** and its words (FR-016, FR-017).
+3. **`POST /api/record/raw`**, its 16 MiB reply limit, and raw replies on the scope
+   link's one connection (FR-013 to FR-015, owner decision 10).
+4. **The Setup page's Recording section** and its words (FR-016, FR-017), with no night
+   check of its own (owner decision 11).
 5. **Two new `GLOSSARY.md` terms**, Recording and Raw frame (FR-010, FR-015).
 
 ## User Scenarios & Testing *(mandatory)*
 
 All Rust scenarios of US1 and US2 share one setup unless a scenario says otherwise:
 - **The console** is built in-process. A `Simulator` over the test database at the site
-  40° N 75° W, on a `VirtualClock` from `2026-01-16T02:00:00Z` (Unix 1768528800), pointed
-  at altitude 50° and azimuth 120°, as `crates/finder/tests/live/support.rs:41` builds
-  it, with a `SimMount` (`crates/simulator/src/mount.rs:232`) connected before the node
-  is built, so frames carry axis counts. A `SimNode` over it with a 500 ms frame
-  interval and the token `test-token`, served with `routes()` over a fresh duplex for
-  each connection, as `crates/finder/tests/mcp/support.rs:220` serves its node. A
-  session paired to it, with the host name `scope.local`, the token `test-token`, that
-  site and camera settings of 200 ms and gain 1. Then `AppState::shared` with
-  `with_session`, `with_clock` on the simulator's clock, `with_link`, `with_live()` (the
-  real solver) and `with_recordings(R)`.
+  40° N 75° W, on a `VirtualClock` from `2026-01-16T02:00:00Z` (Unix 1768528800), as
+  `crates/finder/tests/live/support.rs:41` builds it but in this order: first
+  `connect_mount` with `SimMount::new` (`crates/simulator/src/mount.rs:232`) on the
+  simulator's clock, so frames carry axis counts, then `push_to(50.0, 120.0)`, which
+  points the camera at altitude 50° and azimuth 120° and keeps the counts. A `SimNode`
+  over it with a 500 ms frame interval and the token `test-token`, served over a fresh
+  duplex for each connection with `memory::serve_routes_on` and the node service's
+  `routes()`, as `crates/finder/tests/mcp/support.rs:225` serves its node. A session
+  paired to it, with the host name `scope.local`, the token `test-token`, that site and
+  camera settings of 200 ms and gain 1. Then `AppState::shared` with `with_session`,
+  `with_clock` on the simulator's clock, `with_link`, `with_live()` (the real solver) and
+  `with_recordings(R)`.
+- Each such test runs under `#[tokio::test(start_paused = true)]`, as
+  `crates/finder/tests/live.rs:20` does with the real solver, so every wait below is in
+  virtual time. US1-S7 is a plain `#[test]`. A test file may share the test database,
+  the start and the console clock by including `crates/finder/tests/live/support.rs`
+  with `#[path]`, as `crates/finder/tests/live.rs:3` does.
 - Before its steps, a scenario on a console whose link can connect waits until the
   session's `node.connected` is true and `node.offset_s` is not null, as
   `crates/finder/tests/mcp/support.rs:263` waits for its link.
 - **R** is a path under the workspace's `target/` that does not exist yet, named as
   `crates/finder/tests/simulate_cli.rs:13` names its folders, and removed afterwards.
 - Requests go through the router in-process, as `crates/finder/tests/live/support.rs:82`
-  sends them, with `Content-Type: application/json` and no `Origin` unless a scenario
-  says otherwise.
+  sends them, with `Content-Type: application/json`, a `Host` of localhost on port 8080
+  and no `Origin` unless a scenario says otherwise. A foreign `Origin` is
+  `http://elsewhere.example`.
 - **Waiting until** a condition means reading `GET /api/session` every 100 ms until it
   holds, for at most 30 s, and failing otherwise.
 - **The folder** is R joined with the session's `recording.folder`. **A frame line** and
   **a solve line** are lines of its `frames.jsonl` and `solves.jsonl`, each parsed by the
   test itself with `serde_json`.
+- **Comparing numbers.** The workspace's `serde_json` parses without `float_roundtrip`,
+  so a number read back from a file can be one ULP from the `f64` that was written. A
+  test compares a number it parsed from a file with one it holds by first passing its
+  own through `serde_json::to_string` and `serde_json::from_str`, and then compares
+  exactly. "After the round trip" below means this. No comparison uses a tolerance, and
+  no feature is added.
 
 ### User Story 1 - Record a stretch of the night on the console (Priority: P1)
 
@@ -187,9 +254,12 @@ console already receives, and the next clear night may be weeks away.
      `started_at` equal to the session's `recording.since`, a `started_utc` that
      `finder::simulate::parse_start` reads as `started_at` rounded down to the whole
      second, and the folder's name equal to `started_utc` with each `:` made `-`;
-   - after the stop, `recording.json` has `ended_reason` `stopped` and `frames` and
-     `solves` equal to the number of frame lines and solve lines, which equal the
-     session's `recording.frames` and `recording.solves`;
+   - `recording.json` has `aim` null, a `model` key, `camera_settings` equal to the first
+     answer's `camera_settings`, and `camera` equal to the first answer's `node.camera`;
+   - after the stop, `recording.json` has `ended_reason` `stopped`, a `stopped_at` at
+     least its `started_at`, `previews` equal to the number of `preview-*.jpg` files in
+     the folder, and `frames` and `solves` equal to the number of frame lines and solve
+     lines, which equal the session's `recording.frames` and `recording.solves`;
    - frame-line ids strictly increase, and every solve line's `frame_id` is the id of a
      frame line;
    - 1.5 s after the stop, both files have the lines they had at the stop;
@@ -200,20 +270,22 @@ console already receives, and the next clear night may be weeks away.
    `recording.frames` at least 3, and is stopped, **Then** a committed test asserts
    that:
    - at least two frame lines have ids the test also saw, and each such line's `id`,
-     `start_s`, `end_s`, `width`, `height`, `exposure_ms`, `gain`, `settings`,
-     `axis_start` and `axis_end` equal the frame's, with `axis_start` not null;
+     `width`, `height`, `axis_start` and `axis_end` equal the frame's, with
+     `axis_start` not null, and its `start_s`, `end_s`, `exposure_ms`, `gain` and
+     `settings` equal the frame's after the round trip, in the shapes FR-003 gives;
    - each such line's `centroids` are the frame's as `[x, y, brightness]` triples, in
-     order, with every number equal;
+     order, each number equal after the round trip;
    - each such line has `preview` exactly when the frame carried one, naming a file
      whose bytes equal the frame's `preview_jpeg`;
-   - each solve line equals the JSON of the report with that `frame_id` the test
-     received;
+   - each solve line is, character for character, `serde_json::to_string` of the
+     report with that `frame_id` the test received;
    - the folder holds as many `preview-*.jpg` files as the session's
      `recording.previews`.
 3. **Given** a recording made as in US1-S1, **When** a test builds a `StarFrame` from
    the first frame line whose solve line has a non-null `pointing_seq`, and feeds it to
    a new `Live` over a new `Session` through a watch channel, with a `LinkStatus` that
-   is connected and has that frame line's `offset_s`, and a `DbSolver` on the test
+   is connected and has that frame line's `offset_s`, a `FixedClock` at that line's
+   `received_at` (`crates/finder/src/session.rs:41`) and a `DbSolver` on the test
    database, as `crates/finder/tests/live.rs:181` feeds frames, **Then** a committed
    test asserts that the new report's `report.pointing.ra_deg` and `dec_deg` are within
    0.01° of that solve line's, and its `time` within 0.05 s of that solve line's `time`.
@@ -227,8 +299,8 @@ console already receives, and the next clear night may be weeks away.
      409 and the error `this console has no recordings folder`, and one built with
      `with_recordings` but no link or live loop answers 409 and
      `this console has no live link`;
-   - with a regular file at R, `{"on":true}` answers 500 with an `error` containing
-     `recording folder`.
+   - a console built the same way whose R is a regular file answers `{"on":true}` with
+     500 and an `error` containing `recording folder`.
 5. **Given** the setup, **When** a test sends `{"on":true}` twice, then `{"on":false}`,
    then `{"on":true}`, **Then** a committed test asserts that the first two answers name
    the same folder, the third start names a different one, and both folders exist
@@ -263,35 +335,48 @@ the scope node on the Pi.
 
 **Acceptance Scenarios**:
 
-1. **Given** a `NodeService` over a `SyntheticCamera` with default settings, served with
-   `routes()` over `scope_link::memory::channel_pair`, as
-   `crates/simulator/tests/stop_finishes.rs:101` serves one, and a test reading its
-   `Frames` stream, **When** the test calls `RawFrame` with the token, **Then** a
-   committed test asserts that the reply's `pixels` hold `width × height` bytes, that a
-   star frame on the stream has the reply's `id`, `width` and `height`, and that
-   `star_detection::detect_stars` over those pixels, with that frame's
-   `settings.detection` sigma, binning, `normalize_rows` and `detect_hot_pixels` and cut
-   to the first 200, gives exactly that frame's centroids, which are not empty.
+1. **Given** a `NodeService::new` over a `SyntheticCamera` on
+   `scope_node::clock::SystemClock` (`crates/scope-node/src/clock.rs:8`) with default
+   settings, served with `routes()` over `scope_link::memory::channel_pair`, as
+   `crates/simulator/tests/stop_finishes.rs:101` serves one, under
+   `#[tokio::test(start_paused = true)]`, and a test reading its `Frames` stream,
+   **When** the test calls `RawFrame` with the token, **Then** a committed test asserts
+   that the reply's `pixels` hold `width × height` bytes, that a star frame on the stream
+   has the reply's `id`, `width` and `height`, and that `star_detection::detect_stars`
+   over those pixels, with that frame's `settings.detection` sigma, binning,
+   `normalize_rows` and `detect_hot_pixels` and cut to the first 200, gives exactly, bit
+   for bit, that frame's centroids, which are not empty. No JSON is involved here.
 2. **Given** the same node, **Then** a committed test asserts that `RawFrame` with the
-   token `wrong-token` answers `Unauthenticated`, and that two `RawFrame` calls made
-   together are both answered, with the same `id`.
+   token `wrong-token` answers `Unauthenticated`; and that with the node's frames stopped
+   (`NodeControls::stop_frames`, `crates/scope-node/src/service.rs:62`) and 2 s allowed
+   for a frame already being taken, two `RawFrame` calls started together, with frames
+   started again 300 ms later (`NodeControls::start_frames`), are both answered, with the
+   same `id`.
 3. **Given** the setup with a recording on, **When** a test sends `POST /api/record/raw`
    with `{"frames":2}` and waits until `recording.raw.saved` is 2, **Then** a committed
    test asserts that the answer was 200, that `recording.raw` is
    `{"wanted":2,"saved":2}`, and that the folder holds exactly two `raw-<id>.png` files
    and no `.part` file. For each, `image` decodes an 8-bit gray image of the frame
    line's `width` and `height` for that id, and `star_detection::detect_stars` over it,
-   with that line's detection settings and cut to 200, gives exactly the line's
-   centroids.
+   with that line's detection settings and cut to 200, gives the line's centroids, each
+   detected `[x, y, brightness]` compared after the round trip.
 4. **Given** the setup, **Then** a committed test asserts that:
-   - `POST /api/record/raw` with no recording on answers 409 and
+   - `POST /api/record/raw` with `{"frames":1}` and no recording on answers 409 and
      `start a recording first`;
+   - a console built the same way without `with_recordings` answers `{"frames":1}` with
+     409 and `this console has no recordings folder`;
    - with a recording on, it answers 400 for `{"frames":0}`, `{"frames":11}`,
-     `{"frames":2.5}` and `{}`, and 403 with a foreign `Origin`;
+     `{"frames":2.5}` and `{}`, and 403 for `{"frames":1}` with a foreign `Origin`;
    - with a request of `{"frames":10}` running, it answers a second request with 409
      and `raw frames are already being saved`;
-   - on a console whose transport never connects, with a recording on, it answers 409
-     and `the scope node is not connected`;
+   - on a console whose transport's connector always answers an I/O error
+     (`Transport::connector`), with a recording on, it answers 409 and
+     `the scope node is not connected`;
+   - with a recording on, the simulator's frames stopped (`Simulator::stop_frames`,
+     `crates/simulator/src/controls.rs:105`) and 2 s waited, `{"frames":1}` answers 200,
+     and within 20 s `recording.raw` is
+     `{"wanted":1,"saved":0,"error":"no raw frame arrived within 15 s"}` and the folder
+     holds no `raw-` file;
    - a request of `{"frames":10}` followed at once by `{"on":false}` leaves fewer than
      three `raw-` files in the folder 8 s later.
 5. **Given** the setup with the node served by `into_server()` alone, as
@@ -299,12 +384,20 @@ the scope node on the Pi.
    sends `{"frames":1}` and waits until `recording.raw.error` is present, **Then** a
    committed test asserts that `recording.raw` is
    `{"wanted":1,"saved":0,"error":"this scope node cannot send raw frames"}` and that
-   the folder holds no `raw-` file.
+   the folder holds no `raw-` file. **Given** instead the node's `into_server()` and a
+   `ScopeNodeRaw` of the test's own that answers a 4 × 4 frame with 15 pixel bytes, both
+   served with `memory::serve_routes_on` (`crates/scope-link/src/memory.rs:70`), **When**
+   the same is done, **Then** the committed test asserts that `recording.raw` is
+   `{"wanted":1,"saved":0,"error":"the raw frame request failed"}` and that the folder
+   holds no `raw-` file.
 6. **Given** the setup with the console paired instead to a `NodeService` over a camera
    of the test's own that answers 2592 × 1944 frames of uniform value 10, every 2 s,
-   **When** a test starts a recording, sends `{"frames":1}` and waits until
-   `recording.raw.saved` is 1, **Then** a committed test asserts that the one
-   `raw-<id>.png` decodes to a 2592 × 1944 8-bit gray image whose every pixel is 10.
+   with ranges that allow the session's 200 ms and gain 1, on a `NodeClock` of the
+   test's own that reads the simulator's `VirtualClock::node_now`
+   (`crates/simulator/src/clock.rs:28`), **When** a test starts a recording, sends
+   `{"frames":1}` and waits until `recording.raw.saved` is 1, **Then** a committed test
+   asserts that the one `raw-<id>.png` decodes to a 2592 × 1944 8-bit gray image whose
+   every pixel is 10.
 
 ---
 
@@ -324,33 +417,45 @@ needs a terminal.
 1. **Given** `SetupPage` rendered with a session holding a connected `node` and no
    `recording`, with `EventSource` stubbed as
    `crates/finder/web/src/components/MountSection.test.tsx:13` stubs it, **Then** a
-   committed test asserts one region named `Recording`, holding a button named
-   `Start recording` and no `status` or `alert`. **When** the test clicks it, **Then**
-   the committed test asserts that `fetch` was called with `/api/record` and
+   committed test asserts one region named `Recording`, after the region named
+   `Aim point` in document order, holding a button named `Start recording`, and that
+   the region holds no `status` or `alert`. **When** the test clicks it, with `fetch`
+   answering 200 and a session, **Then** the committed test asserts that `fetch` was
+   called with `/api/record` and
    `{"method":"POST","headers":{"Content-Type":"application/json"},"body":"{\"on\":true}"}`,
    then `onChange`; and that a 409 answer with
-   `{"error":"this console has no recordings folder"}` shows an alert with that text.
-   **Given** `SetupPage` with no `node`, **Then** a committed test asserts no region
-   named `Recording`.
+   `{"error":"this console has no recordings folder"}` shows an alert with exactly that
+   text and calls no `onChange`. **Given** `SetupPage` with no `node`, **Then** a
+   committed test asserts no region named `Recording`.
 2. **Given** `RecordingSection` rendered with a session holding a connected `node` and
    `recording` `{"on":true,"folder":"2026-01-16T02-00-00Z","since":1768528800,"frames":12,"solves":9,"previews":2}`,
-   **Then** a committed test asserts that its status reads
+   **Then** a committed test asserts that its status reads exactly
    `Recording to 2026-01-16T02-00-00Z · 12 frames · 9 solves`, that `Stop recording`
-   posts `{"on":false}` to `/api/record`, and that `Save 3 raw frames` posts
-   `{"frames":3}` to `/api/record/raw`.
+   calls `fetch` with `/api/record` and
+   `{"method":"POST","headers":{"Content-Type":"application/json"},"body":"{\"on\":false}"}`,
+   and that `Save 3 raw frames` calls it with `/api/record/raw` and
+   `{"method":"POST","headers":{"Content-Type":"application/json"},"body":"{\"frames\":3}"}`,
+   each answered 200 with a session and followed by `onChange`. With the node's
+   `connected` false and the same recording, it still shows `Stop recording`.
 3. **Given** the same with `raw` `{"wanted":3,"saved":1}`, **Then** a committed test
-   asserts that the status also reads `Raw frames: 1 of 3 saved` and that
-   `Save 3 raw frames` is disabled. **Given** `raw`
+   asserts that the status's text holds both its US3-S2 line and
+   `Raw frames: 1 of 3 saved`, and that `Save 3 raw frames` is disabled. **Given** `raw`
    `{"wanted":3,"saved":0,"error":"this scope node cannot send raw frames"}`, **Then** a
-   committed test asserts an alert reading
+   committed test asserts an alert reading exactly
    `Raw frames stopped: this scope node cannot send raw frames.` and that the button is
    enabled.
-4. **Given** a session holding a connected `node` and a `recording` with `on` false, `folder` `2026-01-16T02-00-00Z`, 12 frames, 9
-   solves and `ended_reason` `stopped`, **Then** a committed test asserts the status
-   `Saved 2026-01-16T02-00-00Z: 12 frames, 9 solves.` and a `Start recording` button.
-   With `ended_reason` `limit`, the committed test asserts the status also says
-   `It stopped at its frame limit.`; with `write_failed`, an alert reading
+4. **Given** `RecordingSection` with the recording of US3-S2 but `on` false and
+   `ended_reason` `stopped`, **Then** a committed test asserts the status reads exactly
+   `Saved 2026-01-16T02-00-00Z: 12 frames, 9 solves.`, a `Start recording` button and no
+   alert. With `ended_reason` `limit`, the committed test asserts the status also holds
+   `It stopped at its frame limit.`; with `write_failed`, an alert reading exactly
    `Recording stopped: the console could not write to its folder.`
+5. **Given** `SetupPage` fed by `useSession`, as
+   `crates/finder/web/src/components/ScopeNodeSection.test.tsx:70` feeds it, with
+   `fetch` answering every request with a session holding a connected `node` and the
+   recording of US3-S2, **Then** a committed test asserts that the region named
+   `Recording` shows a status reading exactly
+   `Recording to 2026-01-16T02-00-00Z · 12 frames · 9 solves`.
 
 ---
 
@@ -369,6 +474,11 @@ needs a terminal.
 - **A solve of a frame from before the start or after the stop** is not written.
 - **Raw frames from an older scope node.** The node lacks the service and the raw
   request ends with its error (US2-S5); the recording carries on.
+- **A recording that ends during a raw request.** The request stops with it, and
+  `recording.raw` keeps the counts it had, with no `error`. The page shows an ended
+  recording, so it reads no progress from it.
+- **Raw frames on slow Wi-Fi.** A raw reply shares the connection with the heartbeat, so
+  it can drop the link and make the node stop the mount (owner decision 10).
 - **A raw frame's size.** 1.3 MB for 1296 × 972 and about 5 MB for 2592 × 1944 before
   compression; the repository's saved night frame compressed to about 0.6 MB.
 
@@ -384,15 +494,21 @@ needs a terminal.
   with `-2`, `-3` and so on added when that name is taken. With a recording on it SHALL
   keep that recording. `{"on":false}` SHALL end the recording on, and otherwise change
   nothing.
-- **FR-003**: A recording SHALL append to `frames.jsonl` one line per star frame the
-  link publishes after its start, holding the frame's `id`, `start_s`, `end_s`, `width`,
-  `height`, `exposure_ms`, `gain`, `settings`, its `centroids` as `[x, y, brightness]`
-  triples in the frame's order, `axis_start` and `axis_end` (null when absent), the
-  console's `received_at` and the link's `offset_s` at arrival (null when unknown). A
-  frame with a preview SHALL also have `preview` naming `preview-<id>.jpg`, which holds
-  the preview's bytes unchanged.
-- **FR-004**: A recording SHALL append to `solves.jsonl` each live report of a frame it
-  recorded, as the JSON that a `live` event of `GET /api/live` carries.
+- **FR-003**: A recording SHALL append to `frames.jsonl` one line per star frame it reads
+  from the link's newest-frame channel after its start; a frame replaced before it is
+  read is missing, and shows as a gap in the ids. A line holds the frame's `id`,
+  `start_s`, `end_s`, `width`, `height`, `exposure_ms`, `gain`, `settings`, its
+  `centroids` as `[x, y, brightness]` triples in the frame's order, `axis_start` and
+  `axis_end`, the console's `received_at` and the link's `offset_s` at arrival (null
+  when unknown). `settings` is `{exposure_ms, gain, detection}`, or null when the frame
+  has none, with `exposure_ms` and `gain` null when automatic and `detection`
+  `{sigma, binning, normalize_rows, detect_hot_pixels}` or null when absent. Each axis
+  field is `{azimuth, altitude}`, or null when absent. A frame with a preview SHALL also
+  have `preview` naming `preview-<id>.jpg`, which holds the preview's bytes unchanged
+  and is written before the line. Lines and `recording.json` are written with
+  `serde_json`.
+- **FR-004**: A recording SHALL append to `solves.jsonl` each live report it receives of
+  a frame it recorded, as the JSON that a `live` event of `GET /api/live` carries.
 - **FR-005**: Each line SHALL be written by one write to a file opened for appending each
   time, so a line is whole or absent and a deleted folder fails the next write.
 - **FR-006**: `recording.json` SHALL be written at the start with `format`
@@ -402,8 +518,10 @@ needs a terminal.
   SHALL be rewritten at the end with `stopped_at`, `ended_reason`, `frames`, `solves` and
   `previews` added. No file of a recording SHALL hold the node's address or token.
 - **FR-007**: A recording SHALL end with `ended_reason` `stopped` on `{"on":false}`,
-  `limit` after its 3,600th star frame, and `write_failed` when a write fails.
-  `AppState::with_recording_limit(n)` SHALL set another limit.
+  `limit` after its 3,600th star frame, and `write_failed` when a write fails. No line
+  SHALL be written after the answer to `{"on":false}`.
+  `AppState::with_recording_limit(n)` SHALL set another limit; the scenarios use it
+  (US1-S6), and the default of 3,600 is a constant that no scenario runs to.
 - **FR-008**: `GET /api/session` SHALL carry
   `recording: {on, folder, since, frames, solves, previews, ended_reason?}` from the
   first accepted start until the console exits, and omit it before. Every start of the
@@ -423,6 +541,7 @@ needs a terminal.
   waiting `RawFrame` call with the pixels its detector read for that star frame.
 - **FR-013**: `POST /api/record/raw` SHALL accept exactly `{"frames":N}`, N a whole
   number from 1 to 10, under the same-origin rule. It SHALL answer 409 with
+  `this console has no recordings folder` when the console has none,
   `start a recording first` when no recording is on, `the scope node is not connected`
   when the link offers no raw client, and `raw frames are already being saved` while a
   request runs; and 400 for any other body. Otherwise it SHALL answer 200 with the
@@ -433,19 +552,23 @@ needs a terminal.
   latest raw request. A request SHALL end at its first failure, with `error`
   `this scope node cannot send raw frames` when the node lacks the service,
   `no raw frame arrived within 15 s` after 15 s without an answer, and
-  `the raw frame request failed` otherwise. It SHALL also end when its recording ends.
-- **FR-015**: The console's raw calls SHALL accept replies of up to 16 MiB.
-  `crates/finder/README.md` SHALL document the route and that the scope node must be
-  rebuilt for it, and `GLOSSARY.md` SHALL define **Raw frame**.
+  `the raw frame request failed` otherwise, a reply whose pixels are not
+  `width × height` bytes included. It SHALL also end when its recording ends, leaving
+  `recording.raw` as it was, with no `error`.
+- **FR-015**: The console's raw calls SHALL accept replies of up to 16 MiB, on the scope
+  link's paired connection (owner decision 10). `crates/finder/README.md` SHALL document
+  the route, that the scope node must be rebuilt for it, and that raw frames are best
+  asked for while the mount is still, and `GLOSSARY.md` SHALL define **Raw frame**.
 - **FR-016**: The Setup page SHALL show a section headed Recording, after the aim-point
-  section, whenever the session has `node`. With no recording on it SHALL offer
+  section, whenever `session.node` is present, connected or not, reading `recording`
+  from `GET /api/session` as it reads `track`. With no recording on it SHALL offer
   `Start recording`. While one is on, it SHALL show a status naming the folder and
   counts, `Stop recording`, and `Save 3 raw frames`, disabled while a raw request runs,
   with that request's progress or error. After a recording ends it SHALL say what was
   saved and why it ended, unless the observer stopped it. With a node and no
   `recording`, it SHALL show no `status` or `alert`.
-- **FR-017**: `DESIGN.md` SHALL describe the section, and `crates/finder/web/dist` SHALL
-  be the build of its source.
+- **FR-017**: `DESIGN.md` SHALL describe the section, `.impeccable/design.json` SHALL
+  list it as a component, and `crates/finder/web/dist` SHALL be the build of its source.
 
 ### Key Entities
 
@@ -464,12 +587,17 @@ needs a terminal.
 - **SC-002**: No existing test, golden, `scripts/ci/` file, `.github/` file, `CODEOWNERS`
   entry, `ergane.yaml` or `playwright.config.ts` is edited.
 - **SC-003**: A recorded star frame replays to its live solve within 0.01° (US1-S3), and
-  a saved raw frame reproduces its frame's centroids exactly (US2-S1, US2-S3).
+  a saved raw frame reproduces its frame's centroids exactly: bit for bit over the scope
+  link (US2-S1), and after the shared setup's round trip against its frame line
+  (US2-S3).
 
 ## Assumptions
 
-- **Earlier features are in place.** 013, 014, 016, 017 and 019 have landed. Every
-  citation here was read at c1ed295.
+- **Earlier features are in place.** 013, 014, 016, 017, 019 and 020-live-chart-calm
+  have landed. Every citation here was read at c1ed295 and re-checked at 2508423, where
+  only `crates/finder/src/solve.rs` had moved. 020-live-chart-calm's US2 will move the
+  cited lines of `DESIGN.md` and `crates/finder/web/src/api.ts` (plan.md
+  § Prerequisites).
 - **Out of scope:**
   - a replay tool, loader or replaying node;
   - dark-sky detection, the noise floor and auto-exposure (spec 023);
@@ -482,7 +610,8 @@ needs a terminal.
   - any change to `--simulate`.
 - **Outside the factory:** rebuilding the console on the Surface and, for US2, the scope
   node on the Pi; the first recording at the telescope; choosing which recordings become
-  fixtures and committing them, by the owner.
+  fixtures and committing them, by the owner; and any night check of the Recording
+  section (owner decision 11).
 - **The factory's gates and CI:** the gates are `lint` and `test`, copied in plan.md
   § Verification. CI's other jobs run only in the merge queue, so no scenario's Then
   clause rests on them.
@@ -504,5 +633,5 @@ US3:
 ```
 
 Both edges are merge edges. US2 writes into US1's recording folder and extends its
-`Recorder`, route table, README section and glossary. US3 reads the `recording` field
-of both and calls both routes. The stories run one after another.
+`Recorder`, route table, route list, README section and glossary. US3 reads the
+`recording` field of both and calls both routes. The stories run one after another.
