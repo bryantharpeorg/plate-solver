@@ -30,7 +30,7 @@ function pendingReply() {
   const response = new Promise<Response>((done) => {
     resolve = done;
   });
-  const fetch = vi.fn(() => response);
+  const fetch = vi.fn(async () => (await response).clone());
   vi.stubGlobal("fetch", fetch);
   return {
     fetch,
