@@ -6,7 +6,7 @@ depends_on_landed: ["013-live-finder", "017-console-stop-confirm", "018-live-cha
 # Refined 2026-11-14 against `main` at c1ed295: both stories were built in throwaway
 # worktrees (plan.md § Refinement Record), the scenarios they showed to be unsatisfiable
 # were reworded, and the owner chose the star count (60) and the tap captions. It stays
-# draft until the owner flips it to `ready` on Tharpebox, which gives the approvals listed
+# draft until the owner flips it to `ready`, which gives the approvals listed
 # under "Owner approvals" and dispatches it.
 # Flipped to ready 2026-11-14 by the owner, giving the six owner approvals; the owner chose
 # the star count (60) and the tap captions that day. Validated against `main` at c1ed295
