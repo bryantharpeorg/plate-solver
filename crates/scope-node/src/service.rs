@@ -441,13 +441,15 @@ impl ScopeNodeMount for NodeService {
         request: Request<proto::AxisStateRequest>,
     ) -> Result<Response<proto::AxisState>, Status> {
         let axis = axis(request.into_inner().axis)?;
-        let state = self.connected_mount()?.mount().state(axis).await;
+        let mount = self.connected_mount()?.mount();
+        let state = mount.state(axis).await;
         Ok(Response::new(proto::AxisState {
             position: state.position,
             rate_deg_per_s: state.rate_deg_per_s,
             moving: state.moving,
             // Sample after the axes so watchdog-induced rest carries its count.
             watchdog_stops: self.runtime.watchdog.as_ref().map_or(0, Watchdog::stops),
+            mount_resets: mount.resets(),
         }))
     }
     async fn goto_axis(
