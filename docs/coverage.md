@@ -30,9 +30,9 @@ to take as long as a cold `cargo test` or longer; the page takes seconds. Everyt
 | `summary.md` | One page: each crate, the page, and the weakest files. The script also prints it. |
 | `summary.json` | `summary.md` as data, per file and per crate, with the commit. Diff two to track movement. |
 
-Options: `--rust` or `--web` runs one half. `--report-only` re-renders the Rust reports from
-the last `cargo llvm-cov` run without running the tests again. `--branch` adds Rust branch
-coverage (below). `COVERAGE_DIR=...` writes somewhere other than `target/coverage`.
+Options: `--rust` or `--web` runs one half. `--report-only` re-renders from the last
+measured run without running tests again: the last `cargo llvm-cov` run for Rust, and the page
+reports already in the output folder. `--branch` adds Rust branch coverage (below). `COVERAGE_DIR=...` writes somewhere other than `target/coverage`.
 
 It needs the tools CI installs:
 
@@ -45,9 +45,10 @@ The page half runs `npm ci` in `crates/finder/web` if `node_modules` is missing.
 `npm run coverage` in that directory runs the page half on its own.
 
 In CI, a manual `test-coverage` run re-renders the gate's own run (`--report-only`, no second test run)
-and `finder-page` runs the page half. They upload the `coverage-rust` and `coverage-page`
-artifacts and append `summary.md` to the job summary. Both steps are `continue-on-error`, so
-neither can fail its job.
+and `finder-page` does the same for the page: its unit-test step is `npm run coverage`, which
+is both the gate and the measurement, and the report step re-renders it. They upload the
+`coverage-rust` and `coverage-page` artifacts and append `summary.md` to the job summary. Both
+report steps are `continue-on-error`, so neither can fail its job.
 
 ## Read it
 

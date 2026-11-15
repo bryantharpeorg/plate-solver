@@ -123,6 +123,11 @@ jobs:
     needs: detect
     if: github.event_name == 'workflow_dispatch' && needs.detect.outputs.has_code == 'true'
     runs-on: ubuntu-latest
+    env:
+      # The root Cargo.toml optimizes test builds, which makes the `test` gate fast but lets
+      # the compiler merge and drop lines. Coverage is measured without it, as it always
+      # was, so the 80% floor keeps its meaning. scripts/coverage.sh sets the same.
+      CARGO_PROFILE_TEST_OPT_LEVEL: "0"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Install protoc
@@ -300,23 +305,27 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run format:check
+      # One run is both the gate and the measurement: `npm run coverage` is `npm test`
+      # with v8 coverage collected (no threshold), and its exit code is the tests'. Until
+      # 2026-11-14 the suite ran twice here, once plain and once for the report.
       - name: Unit and component tests
         id: unit
         env:
           NO_COLOR: "1" # Vitest colours its summary on CI; the count below is read from it
+          COVERAGE_DIR: ${{ runner.temp }}/coverage
         run: |
           set -o pipefail
-          npm test 2>&1 | tee "$RUNNER_TEMP/vitest.log"
+          npm run coverage -- --coverage.reportsDirectory="$COVERAGE_DIR/web" 2>&1 | tee "$RUNNER_TEMP/vitest.log"
           echo "tests=$(grep -oE 'Tests +[0-9]+ passed' "$RUNNER_TEMP/vitest.log" | grep -oE '[0-9]+')" >> "$GITHUB_OUTPUT"
-      # The same unit tests again with v8 coverage, as a report to read (docs/coverage.md).
-      # A few seconds. Evidence only: no threshold, and it never fails this check.
+      # The report to read (docs/coverage.md), rendered from the run above: no tests run
+      # again. Evidence only: it never fails this check.
       - name: Unit-test coverage report
         continue-on-error: true
         working-directory: .
         env:
           COVERAGE_DIR: ${{ runner.temp }}/coverage
         run: |
-          bash scripts/coverage.sh --web
+          bash scripts/coverage.sh --web --report-only
           cat "$COVERAGE_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
       - name: Keep the page's coverage report
         continue-on-error: true

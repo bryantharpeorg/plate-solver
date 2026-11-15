@@ -222,8 +222,14 @@ CI runs, among other checks:
 ```sh
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-cargo test --workspace --locked
+cargo nextest run --workspace --all-targets --all-features --locked
+cargo test --workspace --locked --doc
 ```
+
+The tests run under [cargo-nextest](https://nexte.st), which runs them in parallel across
+test binaries (`.config/nextest.toml`); `cargo test --workspace --locked` runs the same tests
+one binary at a time and needs nothing installed. Test builds are optimized
+(`[profile.test]` in the root `Cargo.toml`) because the simulator's frames are slow without it.
 
 `scripts/coverage.sh` writes browsable coverage reports for the workspace and the page, with
 per-crate tables, to `target/coverage/`. [`docs/coverage.md`](docs/coverage.md) explains
