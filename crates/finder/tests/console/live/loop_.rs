@@ -239,17 +239,20 @@ async fn tap_six_pixels_off_snaps_to_the_eyepiece_and_later_pointings_follow_it(
 #[tokio::test(start_paused = true)]
 async fn rich_frames_failing_for_thirty_seconds_report_the_whole_unsolved_interval() {
     let sim = sim();
-    let state = state(&sim, Some(Arc::new(Fail)), false);
+    let state = state_with_interval(&sim, Some(Arc::new(Fail)), false, Duration::from_secs(5));
     let mut events = state.live().unwrap().subscribe();
     let app = finder::router(state);
     let first = event(&mut events).await;
     assert!(first.stars >= 25, "{}", first.stars);
     let begin = sim.clock().now();
+    let mut frames = 0;
     while sim.clock().now() - begin < 30.0 {
         let e = event(&mut events).await;
+        frames += 1;
         assert!(e.stars >= 25);
         assert!(e.pointing_seq.is_none());
     }
+    assert!(frames <= 7, "received {frames} frames after the first");
     let (_, read) = request(&app, "GET", "/api/session", json!(null)).await;
     assert!(
         read["field"]["unsolved_s"].as_f64().unwrap() >= 30.0,

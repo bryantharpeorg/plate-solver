@@ -75,6 +75,23 @@ async fn ticks(rig: &Rig, n: usize) {
         rig.tick().await;
     }
 }
+/// The id of the newest frame the console's link holds.
+fn newest_frame(rig: &Rig) -> u64 {
+    rig.state
+        .link()
+        .unwrap()
+        .frames()
+        .borrow()
+        .as_ref()
+        .map(|f| f.id)
+        .unwrap()
+}
+/// Stop the camera and return the newest frame id at that moment. One capture
+/// already under way may still arrive, so callers allow one more frame.
+fn camera_off(rig: &Rig) -> u64 {
+    rig.controls.stop_frames();
+    newest_frame(rig)
+}
 async fn positions(rig: &Rig) -> [i32; 2] {
     [
         rig.mount.state(Axis::Azimuth).await.position,
@@ -318,6 +335,7 @@ async fn below_minimum_only_altitude_can_climb_and_duration_is_twenty_seconds() 
 #[tokio::test(start_paused = true)]
 async fn cable_wind_refuses_one_point_two_turns_and_accepts_point_eight() {
     let rig = ready().await;
+    let stopped = camera_off(&rig);
     let before = positions(&rig).await;
     let turn = rig.mount.axes()[0].counts_per_revolution as f64;
     error(
@@ -341,11 +359,16 @@ async fn cable_wind_refuses_one_point_two_turns_and_accepts_point_eight() {
     );
     finish(&rig, 110).await;
     assert_eq!(rig.mount.state(Axis::Azimuth).await.position, destination);
+    assert!(
+        newest_frame(&rig) <= stopped + 1,
+        "frames arrived with the camera off"
+    );
 }
 
 #[tokio::test(start_paused = true)]
 async fn rate_duration_and_acceleration_ramp_match_the_simulator_and_bad_duration_moves_nothing() {
     let rig = ready().await;
+    let stopped = camera_off(&rig);
     let before = positions(&rig).await;
     let start = rig.now();
     accepted(tool(&rig.app, "move_axis", rate("altitude", 0.5, 10.0)).await);
@@ -368,11 +391,16 @@ async fn rate_duration_and_acceleration_ramp_match_the_simulator_and_bad_duratio
         "duration_s must be more than 0 and at most 30",
     );
     quiet(&rig, before).await;
+    assert!(
+        newest_frame(&rig) <= stopped + 1,
+        "frames arrived with the camera off"
+    );
 }
 
 #[tokio::test(start_paused = true)]
 async fn disconnected_client_does_not_end_heartbeats_or_leave_a_rate_running() {
     let rig = ready().await;
+    let stopped = camera_off(&rig);
     let client = app(rig.state.clone(), "192.168.1.30");
     let link = rig.state.link().unwrap();
     let heartbeats = link.status().borrow().heartbeats;
@@ -388,6 +416,10 @@ async fn disconnected_client_does_not_end_heartbeats_or_leave_a_rate_running() {
     assert!((stop_time(&rig, start) - start - 20.0).abs() <= 0.1);
     assert!(!rig.mount.state(Axis::Azimuth).await.moving);
     assert_eq!(session(&rig.app).await["axis_move"]["state"], "done");
+    assert!(
+        newest_frame(&rig) <= stopped + 1,
+        "frames arrived with the camera off"
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -395,6 +427,7 @@ async fn sunrise_halts_with_the_page_guard_reason_within_one_second() {
     let sunrise = crossing(-0.83, START, START + 12.0 * 3600.0, true);
     let rig = Rig::new(sunrise - 12.0, 50.0, 120.0, true).await;
     rig.sync().await;
+    let last_frame = camera_off(&rig);
     assert!(rig.now() < sunrise);
     let start = rig.now();
     accepted(tool(&rig.app, "move_axis", rate("altitude", 0.5, 30.0)).await);
@@ -408,6 +441,10 @@ async fn sunrise_halts_with_the_page_guard_reason_within_one_second() {
     assert_eq!(
         session(&rig.app).await["axis_move"],
         json!({"tool":"move_axis","state":"halted","reason":"halted by the Sun guard"})
+    );
+    assert!(
+        newest_frame(&rig) <= last_frame + 1,
+        "frames arrived with the camera off"
     );
 }
 
@@ -520,8 +557,30 @@ async fn direct_tools_are_listed_describe_real_motion_and_never_leak_the_token()
 
 #[tokio::test(start_paused = true)]
 async fn track_through_the_page_blocks_all_three_mcp_moves_and_keeps_tracking() {
-    let rig = ready().await;
+    let rig = Rig::new(START, 50.0, 120.0, true).await;
+    let target = finder::targets::find("M42").unwrap();
+    rig.sim.point_eyepiece_at(target.ra_deg, target.dec_deg);
+    rig.sync().await;
+    assert_eq!(session(&rig.app).await["mount"]["connected"], true);
+    // The first frame was exposed before the push: wait for a solve on M42.
+    for _ in 0..10 {
+        let p = session(&rig.app).await["pointing"].clone();
+        let (ra, dec) = (
+            p["ra_deg"].as_f64().unwrap(),
+            p["dec_deg"].as_f64().unwrap(),
+        );
+        if separation(ra, dec, target.ra_deg, target.dec_deg) < 1.0 / 60.0 {
+            break;
+        }
+        rig.tick().await;
+    }
     page(&rig, "/api/track", json!({"on":true})).await;
+    let view = session(&rig.app).await;
+    assert_eq!(view["track"]["state"], "tracking", "{view}");
+    assert!(
+        view.get("goto").is_none(),
+        "a centred Track ran a GoTo: {view}"
+    );
     let mut tracking = false;
     for _ in 0..2000 {
         if session(&rig.app).await["track"]["state"] == "tracking" {
@@ -596,6 +655,7 @@ async fn signed_rate_is_capped_and_duration_boundary_refusals_do_not_move() {
 #[tokio::test(start_paused = true)]
 async fn braking_distance_is_checked_at_the_cable_limit() {
     let rig = ready().await;
+    let stopped = camera_off(&rig);
     let turn = f64::from(rig.mount.axes()[0].counts_per_revolution);
     accepted(
         tool(
@@ -616,6 +676,10 @@ async fn braking_distance_is_checked_at_the_cable_limit() {
         PATH,
     );
     quiet(&rig, before).await;
+    assert!(
+        newest_frame(&rig) <= stopped + 1,
+        "frames arrived with the camera off"
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -650,6 +714,7 @@ async fn direct_move_state_is_absent_until_first_move_and_never_persisted() {
 #[tokio::test(start_paused = true)]
 async fn a_zero_rate_still_reserves_motion_until_its_duration_ends() {
     let rig = ready().await;
+    let stopped = camera_off(&rig);
     accepted(tool(&rig.app, "move_axis", rate("altitude", 0.0, 5.0)).await);
     error(
         tool(&rig.app, "goto_target", json!({})).await,
@@ -662,4 +727,8 @@ async fn a_zero_rate_still_reserves_motion_until_its_duration_ends() {
         .iter()
         .any(|c| matches!(c.action, MountCommand::GoTo { .. })));
     finish(&rig, 6).await;
+    assert!(
+        newest_frame(&rig) <= stopped + 1,
+        "frames arrived with the camera off"
+    );
 }

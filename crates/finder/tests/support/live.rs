@@ -58,6 +58,14 @@ pub fn transport(node: Arc<SimNode>) -> Transport {
     })
 }
 pub fn state(sim: &Simulator, solver: Option<Arc<dyn Solver>>, aim: bool) -> AppState {
+    state_with_interval(sim, solver, aim, Duration::from_millis(500))
+}
+pub fn state_with_interval(
+    sim: &Simulator,
+    solver: Option<Arc<dyn Solver>>,
+    aim: bool,
+    interval: Duration,
+) -> AppState {
     let session = Session::default();
     session.edit(serde_json::from_value(json!({"node":{"address":"scope.local:50051","token":"test-token"},"camera_settings":{"exposure_ms":200,"gain":1},"site":{"lat_deg":40,"lon_deg":-75},"target":"M78"})).unwrap(), START).unwrap();
     if aim {
@@ -68,7 +76,7 @@ pub fn state(sim: &Simulator, solver: Option<Arc<dyn Solver>>, aim: bool) -> App
     let node = Arc::new(
         SimNode::new(sim.clone(), "test-token", Default::default())
             .unwrap()
-            .with_frame_interval(Duration::from_millis(500)),
+            .with_frame_interval(interval),
     );
     let state = AppState::shared(DB.clone(), Samples::default())
         .with_session(session)
