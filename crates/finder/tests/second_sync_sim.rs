@@ -1,6 +1,6 @@
 //! Oracle: the simulator's true direction and exact 1° base tilt toward 130°.
 //! Azimuth separation is at least 90°; both fitted tilt coordinates are within 1′.
-#[path = "goto_api.rs"]
+#[path = "support/goto.rs"]
 mod api;
 use api::Rig;
 use scope_node::mount::{Axis, Mount};

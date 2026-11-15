@@ -1,6 +1,6 @@
 //! Oracle: a backlash actually measured in paused time, retained bit for bit on
 //! two next-day restarts of the built binary on the same state folder.
-#[path = "backlash_sim.rs"]
+#[path = "support/tracker.rs"]
 mod backlash_sim;
 
 use std::io::{BufRead, BufReader, Read, Write};

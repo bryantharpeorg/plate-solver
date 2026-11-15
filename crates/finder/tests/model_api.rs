@@ -1,5 +1,5 @@
 //! Route oracles: saved model terms and simulator axis counts (exact equality).
-#[path = "goto_api.rs"]
+#[path = "support/goto.rs"]
 mod api;
 use api::Rig;
 use axum::{

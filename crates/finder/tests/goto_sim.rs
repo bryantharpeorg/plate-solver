@@ -1,5 +1,5 @@
 //! Paused-time motion scenarios share the mounted route harness and its controls.
-#[path = "goto_api.rs"]
+#[path = "support/goto.rs"]
 mod api;
 use api::Rig;
 use finder::sky;
