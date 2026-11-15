@@ -99,6 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state = AppState::new(db, samples)
         .with_session(session)
+        .with_recordings(state_dir.join("recordings"))
         .with_allowed_hosts(args.allow_host);
     let state = if args.simulate {
         state
