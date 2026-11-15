@@ -154,6 +154,16 @@ impl Tracker {
     /// Begin sending rates immediately, then once per second. A running tracker
     /// cannot be replaced implicitly; an ended one requires an explicit start.
     pub async fn start(&self, target: Target) -> Result<(), String> {
+        self.start_with_resets(target, None).await
+    }
+
+    /// Begin with the reset count last seen by the console. With no count yet,
+    /// the first tick's read supplies the baseline before any rate is sent.
+    pub async fn start_with_resets(
+        &self,
+        target: Target,
+        resets: Option<u64>,
+    ) -> Result<(), String> {
         let mut task = self.task.lock().await;
         if self.state().state != "off" {
             return Err("tracking is already running".into());
@@ -195,7 +205,7 @@ impl Tracker {
         }
         let shared = self.shared.clone();
         *task = Some(tokio::spawn(async move {
-            shared.run(target, client, axes, generation).await;
+            shared.run(target, client, axes, generation, resets).await;
         }));
         Ok(())
     }
@@ -510,16 +520,23 @@ impl Shared {
         &self,
         client: &mut MountClient,
         counts: [u32; 2],
+        resets: u64,
     ) -> Result<[i32; 2], String> {
         loop {
             let az = client
                 .axis_state(Axis::Azimuth)
                 .await
                 .map_err(|_| "link_lost")?;
+            if az.mount_resets != resets {
+                return Err("the mount was power-cycled".into());
+            }
             let alt = client
                 .axis_state(Axis::Altitude)
                 .await
                 .map_err(|_| "link_lost")?;
+            if alt.mount_resets != resets {
+                return Err("the mount was power-cycled".into());
+            }
             let positions = [az.position, alt.position];
             if let Some(p) = self.model.predict(positions.map(f64::from), counts) {
                 self.wind.lock().unwrap().observe(p.az_deg);
@@ -536,6 +553,7 @@ impl Shared {
         target: &Target,
         client: &mut MountClient,
         axes: [AxisInfo; 2],
+        resets: u64,
     ) -> Result<[f64; 2], String> {
         {
             let mut control = self.control.lock().unwrap();
@@ -555,7 +573,7 @@ impl Shared {
         }
         client.stop_all().await.map_err(|_| "link_lost")?;
         let counts = axes.map(|a| a.counts_per_revolution);
-        let mut current = self.at_rest(client, counts).await?;
+        let mut current = self.at_rest(client, counts, resets).await?;
         let exit = self.keyhole_exit(target)?;
         let mut planner = Planner {
             model: &self.model,
@@ -582,7 +600,7 @@ impl Shared {
                     .await
                     .map_err(|_| "mount refused the slew")?;
             }
-            current = self.at_rest(client, counts).await?;
+            current = self.at_rest(client, counts, resets).await?;
         }
         for i in 0..2 {
             self.model.motion.crossing(i, false);
@@ -721,6 +739,7 @@ impl Shared {
         client: MountClient,
         axes: [AxisInfo; 2],
         generation: u64,
+        mut resets: Option<u64>,
     ) {
         let mut movement = client.clone();
         let counts = axes.map(|a| a.counts_per_revolution);
@@ -734,6 +753,14 @@ impl Shared {
             let mut refresh_at = 0.0;
             loop {
                 second.tick().await;
+                let state = match movement.axis_state(Axis::Azimuth).await {
+                    Ok(state) => state,
+                    Err(_) => return "link_lost".into(),
+                };
+                let resets = *resets.get_or_insert(state.mount_resets);
+                if state.mount_resets != resets {
+                    return "the mount was power-cycled".into();
+                }
                 let now = self.clock.now();
                 if now >= refresh_at {
                     keyhole_entry = self.keyhole_entry(&target);
@@ -741,7 +768,7 @@ impl Shared {
                     refresh_at = now + 60.0;
                 }
                 if keyhole_entry.is_some_and(|entry| now >= entry) {
-                    direction = match self.keyhole(&target, &mut movement, axes).await {
+                    direction = match self.keyhole(&target, &mut movement, axes, resets).await {
                         Ok(direction) => direction,
                         Err(reason) => return reason,
                     };

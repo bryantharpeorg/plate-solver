@@ -99,3 +99,57 @@ Discovery uses `rpicam-hello --list-cameras -v` for modes and control ranges. Ca
 uses the first listed mode unless `mode` names another; a size the camera does not list
 is refused. It runs at up to 5 frames/s (slower for a longer shutter).
 This story supplies capture and config; scope-link serving is added by US4.
+
+## The mount link
+
+With `[mount]` configured, the scope node starts and serves the camera even when
+the mount is off or its serial device is missing. It opens the device and tries the
+connect sequence in the background, waiting 2 seconds after each failed attempt.
+Switch the mount on when ready; it connects automatically. A failure is logged as
+`mount not connected: <error>`, once per changed error until a successful connect.
+
+While disconnected, the mount describes no axes, axis reads and moves return
+`mount not connected`, and star frames carry no axis counts. Before the link's first
+connect, Stop answers unconfirmed at once and sends nothing; the watchdog also
+sends nothing.
+
+Each successful connect logs one line with the board's firmware, baud and each
+axis's parameters, for example:
+
+```text
+mount connected: 3.40 (board 0x90) at 9600 baud; azimuth 1620000 counts/rev, timer 16000000 Hz, high-speed ratio 16, auxiliary encoders, :W sent; altitude 1620000 counts/rev, timer 16000000 Hz, high-speed ratio 16, auxiliary encoders, :W sent
+```
+
+An axis without auxiliary-encoder support reads `no auxiliary encoders, no :W`.
+`:W sent` means the connect sequence disabled that axis's auxiliary encoders.
+Any existing firmware warnings follow as `mount warning: <text>`.
+
+The link recognises a power cycle when an axis's initialisation bit clears after
+having read set, or when counts jump farther than 1.5 times the axis's top rate
+over the elapsed time plus 1,000 counts (with the count difference wrapped at 24
+bits). Three failed state reads in a row across the two axes lose the link and
+log `mount link lost: 3 failed reads in a row`; any good read clears that streak.
+The node then connects again automatically.
+
+A detected reset runs the connect sequence again, including `:F3` and disabling
+supported auxiliary encoders with `:W`, before accepting further moves. GoTo and
+rate commands send nothing while connecting or initialising again. Stop and the
+watchdog still reach both axes over the last successful connect's stream, making
+any connect attempt under way give the device up first. While disconnected, Stop
+sends `:K` on both axes before `:L` on either unacknowledged axis, once per command;
+it confirms only when both axes acknowledge.
+
+Each successful re-initialisation counts one reset, even when the same read found
+both a cleared bit and a count jump. Reconnecting after link loss also counts one;
+the first connect after node startup does not. Every axis state reports the node
+process's total as `mount_resets`. After the connect line, the node logs:
+
+```text
+mount reset (<cause>): re-initialised <firmware> at <baud> baud
+```
+
+The cause is `not initialised`, `counts jumped on Azimuth` (or `Altitude`), or
+`link lost`. A failed re-initialisation logs
+`mount reset (<cause>): re-initialisation failed: <error>` and retries in the
+background, keeping the cause to count once on success. A console restarted after
+a power cycle needs a sync before GoTo.
