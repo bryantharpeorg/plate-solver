@@ -46,6 +46,15 @@ pub struct AxisState {
     pub moving: bool,
 }
 
+/// The board's own name for itself, when the adapter can read it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MountIdentity {
+    /// Version as major.minor with two minor digits, e.g. "3.40".
+    pub firmware: String,
+    /// Board code in hex, e.g. "0x90".
+    pub board: String,
+}
+
 /// Object-safe asynchronous operation, usable by services through `dyn Mount`.
 pub type MountFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -55,6 +64,18 @@ pub type MountFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 /// within their reported top rate. Positive rates increase axis counts. A stop
 /// cancels positioning and rate commands on both axes and may decelerate to rest.
 pub trait Mount: Send + Sync {
+    /// False while the adapter has no working link to the board.
+    fn connected(&self) -> bool {
+        true
+    }
+    /// Resets seen since the node started.
+    fn resets(&self) -> u64 {
+        0
+    }
+    /// Firmware and board, once known.
+    fn identity(&self) -> Option<MountIdentity> {
+        None
+    }
     /// Capabilities in azimuth, altitude order.
     fn axes(&self) -> [AxisInfo; 2];
     /// Read position, rate and motion status on the axis's own clock.

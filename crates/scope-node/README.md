@@ -99,3 +99,27 @@ Discovery uses `rpicam-hello --list-cameras -v` for modes and control ranges. Ca
 uses the first listed mode unless `mode` names another; a size the camera does not list
 is refused. It runs at up to 5 frames/s (slower for a longer shutter).
 This story supplies capture and config; scope-link serving is added by US4.
+
+## The mount link
+
+With `[mount]` configured, the scope node starts and serves the camera even when
+the mount is off or its serial device is missing. It opens the device and tries the
+connect sequence in the background, waiting 2 seconds after each failed attempt.
+Switch the mount on when ready; it connects automatically. A failure is logged as
+`mount not connected: <error>`, once per changed error until a successful connect.
+
+While disconnected, the mount describes no axes, axis reads and moves return
+`mount not connected`, and star frames carry no axis counts. Before the link's first
+connect, Stop answers unconfirmed at once and sends nothing; the watchdog also
+sends nothing.
+
+Each successful connect logs one line with the board's firmware, baud and each
+axis's parameters, for example:
+
+```text
+mount connected: 3.40 (board 0x90) at 9600 baud; azimuth 1620000 counts/rev, timer 16000000 Hz, high-speed ratio 16, auxiliary encoders, :W sent; altitude 1620000 counts/rev, timer 16000000 Hz, high-speed ratio 16, auxiliary encoders, :W sent
+```
+
+An axis without auxiliary-encoder support reads `no auxiliary encoders, no :W`.
+`:W sent` means the connect sequence disabled that axis's auxiliary encoders.
+Any existing firmware warnings follow as `mount warning: <text>`.

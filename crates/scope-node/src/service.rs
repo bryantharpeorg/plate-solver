@@ -199,16 +199,22 @@ impl NodeService {
             .add_service(ScopeNodeStopServer::new(self.clone()))
     }
     fn connected_mount(&self) -> Result<&Arc<MountQueue>, Status> {
-        self.mount_queue()
-            .ok_or_else(|| Status::failed_precondition("no mount connected"))
+        let mount = self
+            .mount_queue()
+            .ok_or_else(|| Status::failed_precondition("no mount connected"))?;
+        if !mount.mount().connected() {
+            return Err(Status::failed_precondition("mount not connected"));
+        }
+        Ok(mount)
     }
     fn moving_mount(&self) -> Result<&Arc<MountQueue>, Status> {
+        let mount = self.connected_mount()?;
         if self.runtime.watchdog.as_ref().is_some_and(Watchdog::lost) {
             return Err(Status::failed_precondition(
                 "heartbeat required after link loss",
             ));
         }
-        self.connected_mount()
+        Ok(mount)
     }
     /// Every method, including Describe and Heartbeat, uses the pairing interceptor.
     pub fn into_server(
@@ -415,6 +421,7 @@ impl ScopeNodeMount for NodeService {
     ) -> Result<Response<proto::DescribeMountReply>, Status> {
         let axes = self
             .mount_queue()
+            .filter(|q| q.mount().connected())
             .map(|q| {
                 q.mount()
                     .axes()
