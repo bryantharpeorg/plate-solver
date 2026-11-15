@@ -107,6 +107,15 @@ These two rules come from Ergane's default floor and are kept on purpose.
 - **One story, one PR.** The PR title is the landing commit's subject: it is squashed onto
   `main` through the merge queue. Keep the diff to what the story needs, with no drive-by
   refactors.
+- **A new finder test joins an existing test binary.** `crates/finder/tests` holds four
+  test binaries, and a test goes in the one that matches what it needs: `motion/` if it
+  moves or reads the simulated mount in paused time, `console/` if it calls the router in
+  process, `mcp/` if it goes through the MCP endpoint, `cli/` if it starts the built
+  `finder`. A story adds the module file and one `mod` line to that binary's `main.rs`
+  (or a folder's `mod.rs`), reaches shared helpers through `crate::support`, and cites
+  the test as `--test <binary> <module>::`. The `layout` test fails on any test file at
+  the top level of `crates/finder/tests`. Stories that add neighbouring `mod` lines to
+  the same file are ordered in the Work Graph.
 - **Local gates:** `lint` (fmt and clippy) and `test` (all targets and doctests), as
   declared in `ergane.yaml`. Both must pass before a story is proposed.
 - **The queue runs everything else.** These `ci.yml` jobs are required checks:
@@ -127,4 +136,4 @@ Amending this document is the maintainer's act, in its own PR, never part of a s
 So is amending `ergane.yaml`, `ENVIRONMENT.md` § Enforcement status, or the oracle files
 named in `.github/CODEOWNERS`.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-28 | **Last Amended**: 2026-11-14
+**Version**: 1.2.0 | **Ratified**: 2026-10-28 | **Last Amended**: 2026-11-15
