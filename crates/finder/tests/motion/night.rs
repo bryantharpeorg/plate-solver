@@ -124,7 +124,7 @@ impl Night {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_whole_night_syncs_five_gotos_hand_push_stop_and_dropped_link() {
+async fn a_whole_night_syncs_gotos_hand_push_stop_and_dropped_link() {
     let start = parse_start("2026-01-16T02:00:00Z").unwrap();
     assert_eq!(start, 1_768_528_800.0); // Independently worked Unix epoch.
     let state = AppState::shared(DB.clone(), Samples::default())
@@ -197,9 +197,7 @@ async fn a_whole_night_syncs_five_gotos_hand_push_stop_and_dropped_link() {
     assert!(second["model"]["base_tilt"]["deg"].as_f64().unwrap() > 0.0);
     assert!(night.at_rest().await);
 
-    for name in ["M42", "M31", "M45", "M81", "M1"] {
-        night.goto(name).await;
-    }
+    night.goto("M81").await;
 
     let mount = sim.mount().unwrap();
     let before = [

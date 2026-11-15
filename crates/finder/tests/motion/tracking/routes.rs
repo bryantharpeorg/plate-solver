@@ -287,14 +287,15 @@ async fn readout_uses_live_errors_last_sixty_seconds_and_fr001_fr002() {
         .0,
         200
     );
+    let tracker = rig.state.session().tracker().unwrap();
     for _ in 0..750 {
+        if tracker.state().samples.len() > 30 {
+            break;
+        }
         rig.tick().await;
     }
-    let tracker = rig.state.session().tracker().unwrap();
     let samples = tracker.state().samples;
     assert!(samples.len() > 30, "live solves must reach the tracker");
-    assert!(samples.iter().all(|s| rig.now() - s.time <= 60.0));
-    assert!(samples.first().unwrap().time < rig.now() - 50.0);
     let expected = (samples
         .iter()
         .map(|s| s.east_arcsec.powi(2) + s.north_arcsec.powi(2))
@@ -328,6 +329,23 @@ async fn readout_uses_live_errors_last_sixty_seconds_and_fr001_fr002() {
         panic!("finite M42 exposure");
     };
     assert!((readout["longest_exposure_s"].as_f64().unwrap() - exposure).abs() <= 1e-9);
+    rig.controls.stop_frames();
+    for _ in 0..610 {
+        rig.tick().await;
+    }
+    // A 12″ east, −9″ north sample has a 15″ error (the 3–4–5 triangle).
+    tracker.pointing(12.0, -9.0);
+    for _ in 0..599 {
+        rig.tick().await;
+    }
+    let rms = rig.view().await["track"]["readout"]["rms_arcsec"]
+        .as_f64()
+        .unwrap();
+    assert!((rms - 15.0).abs() <= 1e-9, "{rms}");
+    for _ in 0..2 {
+        rig.tick().await;
+    }
+    assert_eq!(rig.view().await["track"]["readout"]["rms_arcsec"], 0.0);
     track(&rig, false).await;
 }
 
