@@ -197,22 +197,6 @@ async fn uploaded_frame_updates_pointing_with_a_connected_mount_but_never_syncs(
     assert!(session.model(sim.clock().now()).syncs.is_empty());
 }
 #[tokio::test(start_paused = true)]
-async fn second_sync_fits_the_simulator_base_without_opening_an_epoch() {
-    let (sim, mount, state) = setup(Session::default());
-    let state = state.with_live();
-    let mut events = state.live().unwrap().subscribe();
-    second(&state, &mount, &mut events).await;
-    let model = state.session().model(sim.clock().now());
-    assert_eq!(model.epochs.len(), 1);
-    let base = model.base_tilt.unwrap();
-    assert!((base.deg() - 1.0).abs() * 60.0 < 1.0);
-    assert!(
-        (base.toward_deg() - 130.0).abs() * 60.0 < 1.0,
-        "base: {base:?}, direction {}",
-        base.toward_deg()
-    );
-}
-#[tokio::test(start_paused = true)]
 async fn durable_night_survives_local_midnight_then_expires_at_solar_noon() {
     let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target")
@@ -225,7 +209,13 @@ async fn durable_night_survives_local_midnight_then_expires_at_solar_noon() {
     second(&state, &mount, &mut events).await;
     let before = state.session().model(sim.clock().now());
     assert_eq!(before.epochs.len(), 1);
-    assert!(before.base_tilt.is_some());
+    let base = before.base_tilt.unwrap();
+    assert!((base.deg() - 1.0).abs() * 60.0 < 1.0);
+    assert!(
+        (base.toward_deg() - 130.0).abs() * 60.0 < 1.0,
+        "base: {base:?}, direction {}",
+        base.toward_deg()
+    );
     drop(state);
     // A stored fixed calibration is an independent fixture; its values must be
     // preserved bit for bit even when the night's fitted terms expire.

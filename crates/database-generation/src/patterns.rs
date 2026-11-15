@@ -174,16 +174,6 @@ mod tests {
     }
 
     #[test]
-    fn breadth_first_yields_brightest_first() {
-        let seq = vec![0, 1, 2, 3, 4];
-        let combos: Vec<Pattern> = breadth_first_combinations(&seq, 4).collect();
-        assert_eq!(combos.len(), 5);
-        // First combination should be [0,1,2,3]; last should include 4.
-        assert_eq!(combos[0], [0, 1, 2, 3]);
-        assert_eq!(combos[4], [1, 2, 3, 4]);
-    }
-
-    #[test]
     fn field_radius_bounds_pattern_size() {
         // Two tight clusters separated by 20 degrees, with a 10-degree FOV.
         // Only one cluster should fit in any single lattice field.
@@ -235,11 +225,6 @@ mod tests {
             patterns.len()
         );
     }
-}
-
-#[cfg(test)]
-mod bfc_order_tests {
-    use super::breadth_first_combinations;
 
     #[test]
     fn matches_cedar_order_and_visits_each_combination_once() {

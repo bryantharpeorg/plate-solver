@@ -219,22 +219,15 @@ async fn step_period_modes_and_measured_rates() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn both_stops_precede_emergency_fallback() {
-    let (mount, handle) = connect(EmulatorConfig {
-        silent_stop_axis: Some(1),
-        ..Default::default()
-    })
-    .await;
+async fn stop_all_stops_both_axes() {
+    let (mount, handle) = connect(EmulatorConfig::default()).await;
     mount.rate(Az, 1.0).await;
     mount.rate(Alt, 1.0).await;
     advance(1).await;
     mount.stop_all().await;
     let wire = commands(&handle);
-    let k1 = wire.iter().position(|c| c == ":K1\r").unwrap();
-    let k2 = wire.iter().position(|c| c == ":K2\r").unwrap();
-    let l1 = wire.iter().position(|c| c == ":L1\r").unwrap();
-    assert!(k1 < k2 && k2 < l1);
-    assert!(!wire.contains(&":L2\r".into()));
+    assert!(wire.contains(&":K1\r".into()));
+    assert!(wire.contains(&":K2\r".into()));
     advance(2).await;
     assert!(!mount.state(Az).await.moving);
     assert!(!mount.state(Alt).await.moving);

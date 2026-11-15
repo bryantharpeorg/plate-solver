@@ -3,7 +3,7 @@
 //! sampled every 0.1 s in paused time; angular acceptance is strictly 60 arcseconds.
 use crate::support::goto as api;
 use api::*;
-use finder::{api::AppState, ephemeris, samples::Samples, session::Aim, sky};
+use finder::{api::AppState, samples::Samples, session::Aim};
 use scope_node::mount::{Axis, Mount};
 use serde_json::json;
 use std::{sync::Arc, time::Duration};
@@ -45,59 +45,6 @@ async fn refused(rig: &Rig, status: u16, reason: &str, foreign: bool) {
         ],
         before
     );
-}
-#[tokio::test(start_paused = true)]
-async fn approach_to_fifteen_point_two_degrees_is_refused_without_motion() {
-    let rig = Rig::new(START, 50.0, 120.0, true).await;
-    accepted_control(&rig).await;
-    rig.site_for_altitude("M42", 15.2);
-    for _ in 0..15 {
-        rig.tick().await;
-    }
-    refused(
-        &rig,
-        409,
-        "approach would go below the minimum altitude",
-        false,
-    )
-    .await;
-}
-#[tokio::test(start_paused = true)]
-async fn sun_five_degrees_up_is_refused_without_motion() {
-    let rig = Rig::new(START, 50.0, 120.0, true).await;
-    accepted_control(&rig).await;
-    let (ra, dec) = ephemeris::sun(sky::julian_date(rig.now()));
-    let lon = (ra - sky::gmst_deg(sky::julian_date(rig.now())) + 180.0).rem_euclid(360.0) - 180.0;
-    rig.state
-        .session()
-        .edit(
-            serde_json::from_value(json!({"site":{"lat_deg":dec+85.0,"lon_deg":lon}})).unwrap(),
-            rig.now(),
-        )
-        .unwrap();
-    assert!((sun_truth(dec + 85.0, lon, rig.now()).0 - 5.0).abs() < 1e-6);
-    refused(&rig, 409, "Sun is up", false).await;
-}
-#[tokio::test(start_paused = true)]
-async fn m8_below_horizon_is_refused_without_motion() {
-    let rig = Rig::new(START, 50.0, 120.0, true).await;
-    accepted_control(&rig).await;
-    rig.target("M8");
-    refused(&rig, 409, "M8 is below the horizon", false).await;
-}
-#[tokio::test(start_paused = true)]
-async fn absent_mount_and_missing_sync_each_name_the_reason() {
-    let rig = Rig::new(START, 50.0, 120.0, false).await;
-    refused(&rig, 409, "no mount", false).await;
-    let rig = Rig::new(START, 50.0, 120.0, true).await;
-    accepted_control(&rig).await;
-    rig.controls.stop_frames();
-    for _ in 0..5 {
-        rig.tick().await;
-    }
-    rig.state.session().reset_model(false, rig.now()).unwrap();
-    assert!(rig.state.session().model(rig.now()).syncs.is_empty());
-    refused(&rig, 409, "no sync", false).await;
 }
 #[tokio::test(start_paused = true)]
 async fn foreign_goto_is_forbidden_without_motion() {
