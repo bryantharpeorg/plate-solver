@@ -2,7 +2,7 @@
 use crate::{
     link::LinkStatus,
     pushto::Guidance,
-    session::{Clock, Session},
+    session::{Clock, MountReading, Session},
     sky::Frame,
     solve::{self, SolveOptions, SolveReport},
 };
@@ -283,7 +283,11 @@ impl Drop for MountMonitor {
     }
 }
 impl MountMonitor {
-    pub(crate) fn start(link: Arc<crate::link::LinkManager>, session: Arc<Session>) -> Self {
+    pub(crate) fn start(
+        link: Arc<crate::link::LinkManager>,
+        session: Arc<Session>,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
         Self(tokio::spawn(async move {
             let mut status = link.status();
             loop {
@@ -307,17 +311,21 @@ impl MountMonitor {
                         .axis_state(scope_link::proto::Axis::Altitude)
                         .await
                         .ok()?;
-                    Some((
-                        [
+                    Some(MountReading {
+                        counts: Some([
                             info.axes[0].counts_per_revolution,
                             info.axes[1].counts_per_revolution,
-                        ],
-                        az.moving || alt.moving,
-                    ))
+                        ]),
+                        connected: true,
+                        moving: az.moving || alt.moving,
+                        firmware: (!info.firmware.is_empty()).then_some(info.firmware),
+                        board: (!info.board.is_empty()).then_some(info.board),
+                        resets: Some(az.mount_resets),
+                    })
                 };
                 match tokio::time::timeout(std::time::Duration::from_millis(200), read).await {
-                    Ok(Some((counts, moving))) => session.set_mount(Some(counts), true, moving),
-                    _ => session.set_mount(None, false, false),
+                    Ok(Some(reading)) => session.set_mount(reading, clock.now()),
+                    _ => session.set_mount(MountReading::default(), clock.now()),
                 }
                 tokio::select! {
                     _ = tokio::time::sleep(std::time::Duration::from_millis(250)) => {},

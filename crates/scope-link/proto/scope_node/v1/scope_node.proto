@@ -128,6 +128,9 @@ message DescribeMountRequest {}
 message DescribeMountReply {
   // Azimuth first, altitude second; empty when no mount is connected.
   repeated AxisInfo axes = 1;
+  // Firmware as major.minor and board code, empty when unknown.
+  string firmware = 2;
+  string board = 3;
 }
 message AxisStateRequest { Axis axis = 1; }
 message GotoAxisRequest {

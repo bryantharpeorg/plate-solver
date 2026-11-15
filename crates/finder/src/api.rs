@@ -4,6 +4,9 @@
 //! nearest pointable spot at least 90° in azimuth from every nightly sync. It
 //! settles, solves and takes a sync without corrections or changing the target.
 //! Answers 200 with `{"started":true}`, or 409 with a JSON `error` on refusal.
+//! After a mount reset it refuses with `The mount was power-cycled: sync again first`
+//! until a sync from a star frame exposed after the console saw the reset.
+//! `POST /api/goto` refuses the same way.
 //!
 //! `GET /api/session` includes `backlash: {alt_deg?, az_deg?}` once measured.
 //! It survives nights and restarts; resetting fixed terms clears it.
@@ -17,7 +20,10 @@
 //! `POST /api/track` accepts exactly `{"on":true}` or `{"on":false}` and
 //! returns the session. It enforces the same-origin rule. Track on answers 409
 //! with a JSON `error` without moving unless a mount, a nightly sync, a site,
-//! a set Sun and a pointable target are available. It arms behind a running GoTo,
+//! a set Sun and a pointable target are available.
+//! It refuses after a mount reset with `The mount was power-cycled: sync again first`
+//! until a sync from a star frame exposed after the console saw the reset.
+//! It arms behind a running GoTo,
 //! or starts a GoTo first when the target is more than one arcminute off the aim
 //! point. Track off stops both axes; the bodiless, any-origin `POST /api/stop`
 //! also clears arming and ends tracking with `ended_reason: "stopped"`.
@@ -196,6 +202,7 @@ impl AppState {
         self.mount_monitor = Some(Arc::new(crate::live::MountMonitor::start(
             simulation.link.clone(),
             self.session.clone(),
+            self.clock.clone(),
         )));
         self.simulation = Some(simulation);
         Ok(self)
@@ -217,6 +224,7 @@ impl AppState {
         self.mount_monitor = Some(Arc::new(crate::live::MountMonitor::start(
             self.link.as_ref().unwrap().clone(),
             self.session.clone(),
+            self.clock.clone(),
         )));
         self
     }

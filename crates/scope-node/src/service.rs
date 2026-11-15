@@ -419,9 +419,12 @@ impl ScopeNodeMount for NodeService {
         &self,
         _: Request<proto::DescribeMountRequest>,
     ) -> Result<Response<proto::DescribeMountReply>, Status> {
-        let axes = self
-            .mount_queue()
-            .filter(|q| q.mount().connected())
+        let mount = self.mount_queue().filter(|q| q.mount().connected());
+        let (firmware, board) = mount
+            .and_then(|q| q.mount().identity())
+            .map(|identity| (identity.firmware, identity.board))
+            .unwrap_or_default();
+        let axes = mount
             .map(|q| {
                 q.mount()
                     .axes()
@@ -434,7 +437,11 @@ impl ScopeNodeMount for NodeService {
                     .collect()
             })
             .unwrap_or_default();
-        Ok(Response::new(proto::DescribeMountReply { axes }))
+        Ok(Response::new(proto::DescribeMountReply {
+            axes,
+            firmware,
+            board,
+        }))
     }
     async fn axis_state(
         &self,
