@@ -8,6 +8,7 @@ mod support;
 mod goto;
 mod model;
 mod mount_calls;
+mod mount_identity;
 mod night;
 mod simulate;
 mod stop;

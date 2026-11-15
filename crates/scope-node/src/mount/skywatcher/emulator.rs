@@ -66,6 +66,13 @@ struct Motor {
     auxiliary: bool,
 }
 impl Motor {
+    fn new(auxiliary: bool) -> Self {
+        Self {
+            auxiliary,
+            mode: 2,
+            ..Default::default()
+        }
+    }
     fn moving(&self) -> bool {
         self.rate != 0.0 || !self.segments.is_empty()
     }
@@ -127,18 +134,26 @@ impl Motor {
         }
     }
 }
+enum Fault {
+    Refuse(u8),
+    Silence,
+    Reply(String),
+}
 struct Board {
     config: EmulatorConfig,
     axes: [Motor; 2],
     exchanges: Vec<Exchange>,
     bauds: Vec<u32>,
-    faults: Vec<(u8, u8, Option<u8>)>,
+    faults: Vec<(u8, u8, Fault)>,
+    powered: bool,
     now: f64,
 }
 impl Board {
     fn advance(&mut self, now: f64) {
-        for axis in &mut self.axes {
-            axis.advance((now - self.now).max(0.0));
+        if self.powered {
+            for axis in &mut self.axes {
+                axis.advance((now - self.now).max(0.0));
+            }
         }
         self.now = now;
     }
@@ -289,6 +304,50 @@ fn value(n: u32) -> String {
 #[derive(Clone)]
 pub struct EmulatorHandle(Arc<Mutex<Board>>);
 impl EmulatorHandle {
+    /// A new stream on the same board, as reopening the serial device would give.
+    pub fn reopen(&self, clock: Arc<dyn NodeClock>) -> Emulator {
+        Emulator {
+            board: self.0.clone(),
+            clock,
+            baud: 9600,
+            input: Vec::new(),
+            output: VecDeque::new(),
+            reader: None,
+        }
+    }
+    /// The board stops answering; commands are recorded with no reply.
+    pub fn power_off(&self) {
+        let mut board = self.0.lock().unwrap();
+        board.powered = false;
+        for axis in &mut board.axes {
+            axis.segments.clear();
+            axis.target = None;
+            axis.rate = 0.0;
+        }
+    }
+    /// Restore power-on positions, motors, initialisation and configured encoders.
+    /// Injected faults survive, just as they do across a serial device reopen.
+    pub fn power_on(&self) {
+        let mut board = self.0.lock().unwrap();
+        board.axes = std::array::from_fn(|_| Motor::new(board.config.auxiliary_encoders));
+        board.powered = true;
+    }
+    /// `power_off` then `power_on`.
+    pub fn power_cycle(&self) {
+        self.power_off();
+        self.power_on();
+    }
+    /// Overwrite counts without cancelling an in-flight GoTo. The next exchange
+    /// adds motion since the last exchange; callers normally use an axis at rest.
+    pub fn set_position(&self, axis: u8, counts: i32) {
+        self.0.lock().unwrap().axes[usize::from(axis - 1)].position = f64::from(counts);
+    }
+    /// Execute the command, replacing its next `count` replies with these bytes.
+    pub fn inject_reply(&self, command: u8, axis: u8, reply: &str, count: usize) {
+        self.0.lock().unwrap().faults.extend(
+            std::iter::repeat_with(|| (command, axis, Fault::Reply(reply.into()))).take(count),
+        );
+    }
     pub fn exchanges(&self) -> Vec<Exchange> {
         self.0.lock().unwrap().exchanges.clone()
     }
@@ -306,14 +365,14 @@ impl EmulatorHandle {
             .lock()
             .unwrap()
             .faults
-            .extend(std::iter::repeat_n((command, axis, Some(code)), count));
+            .extend(std::iter::repeat_with(|| (command, axis, Fault::Refuse(code))).take(count));
     }
     pub fn drop_replies(&self, command: u8, axis: u8, count: usize) {
         self.0
             .lock()
             .unwrap()
             .faults
-            .extend(std::iter::repeat_n((command, axis, None), count));
+            .extend(std::iter::repeat_with(|| (command, axis, Fault::Silence)).take(count));
     }
 }
 
@@ -328,15 +387,12 @@ pub struct Emulator {
 impl Emulator {
     pub fn new(config: EmulatorConfig, clock: Arc<dyn NodeClock>) -> (Self, EmulatorHandle) {
         let board = Arc::new(Mutex::new(Board {
-            axes: std::array::from_fn(|_| Motor {
-                auxiliary: config.auxiliary_encoders,
-                mode: 2,
-                ..Default::default()
-            }),
+            axes: std::array::from_fn(|_| Motor::new(config.auxiliary_encoders)),
             config,
             exchanges: Vec::new(),
             bauds: Vec::new(),
             faults: Vec::new(),
+            powered: true,
             now: clock.now(),
         }));
         (
@@ -363,25 +419,27 @@ impl Emulator {
         board.advance(self.clock.now());
         let command = &self.input;
         let mut response = None;
-        if self.baud == board.config.baud {
+        if board.powered && self.baud == board.config.baud {
             let fault = board
                 .faults
                 .iter()
                 .position(|(cmd, axis, _)| command.get(1..3) == Some(&[*cmd, b'0' + axis]))
                 .map(|i| board.faults.remove(i).2);
-            let result = match fault {
-                Some(Some(code)) => Err(code),
+            let result = match fault.as_ref() {
+                Some(Fault::Refuse(code)) => Err(*code),
                 _ => board.execute(command),
             };
-            let silent = fault == Some(None)
+            let silent = matches!(fault, Some(Fault::Silence))
                 || (command.get(1) == Some(&b'K')
                     && command.get(2).copied().map(|v| v - b'0') == board.config.silent_stop_axis);
-            if !silent {
-                response = Some(match result {
+            response = match fault {
+                Some(Fault::Reply(reply)) => Some(reply),
+                _ if silent => None,
+                _ => Some(match result {
                     Ok(data) => format!("={data}\r"),
                     Err(code) => format!("!{code:X}\r"),
-                });
-            }
+                }),
+            };
         }
         board.exchanges.push(Exchange {
             baud: self.baud,
@@ -419,7 +477,10 @@ impl AsyncWrite for Emulator {
         _: &mut Context<'_>,
         bytes: &[u8],
     ) -> Poll<io::Result<usize>> {
-        let echo = self.board.lock().unwrap().config.echo;
+        let echo = {
+            let board = self.board.lock().unwrap();
+            board.powered && board.config.echo
+        };
         for byte in bytes {
             if echo {
                 self.output.push_back(*byte);

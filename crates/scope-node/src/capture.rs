@@ -43,6 +43,9 @@ impl<C: Camera> CaptureLoop<C> {
     }
     async fn positions(&mut self) -> Option<AxisPositions> {
         let mount = self.mount.as_ref()?;
+        if !mount.connected() {
+            return None;
+        }
         Some(AxisPositions {
             azimuth: mount.state(Axis::Azimuth).await.position,
             altitude: mount.state(Axis::Altitude).await.position,
