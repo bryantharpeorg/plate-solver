@@ -86,3 +86,76 @@ fn support_holds_helpers_and_no_tests() {
         assert!(!declares_a_test(&text), "{} holds a test", file.display());
     }
 }
+
+/// The lines of a source file that are neither blank nor comments.
+fn code_lines(file: &Path) -> Vec<String> {
+    fs::read_to_string(file)
+        .unwrap()
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with("//"))
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn tests_are_grouped_into_one_binary_per_system() {
+    let mut entries: Vec<String> = fs::read_dir(tests_dir())
+        .unwrap()
+        .map(|entry| {
+            let entry = entry.unwrap();
+            assert!(
+                entry.path().is_dir(),
+                "tests/{} is a file: a test belongs in a module of cli, console, mcp or motion",
+                entry.file_name().to_string_lossy()
+            );
+            entry.file_name().to_string_lossy().into_owned()
+        })
+        .collect();
+    entries.sort();
+    assert_eq!(
+        entries,
+        ["cli", "console", "layout", "mcp", "motion", "support"]
+    );
+
+    let mut helpers: Vec<String> = fs::read_dir(tests_dir().join("support"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    helpers.sort();
+    assert_eq!(
+        helpers,
+        [
+            "goto.rs",
+            "live.rs",
+            "mcp.rs",
+            "mod.rs",
+            "stop.rs",
+            "tracker.rs"
+        ]
+    );
+
+    for binary in ["cli", "console", "mcp", "motion"] {
+        let main = tests_dir().join(binary).join("main.rs");
+        let lines = code_lines(&main);
+        assert_eq!(
+            lines[..3],
+            [
+                "#[allow(dead_code, unused_imports)]",
+                "#[path = \"../support/mod.rs\"]",
+                "mod support;"
+            ],
+            "{binary}/main.rs starts with the shared support tree"
+        );
+        for line in &lines[3..] {
+            let module = line
+                .strip_prefix("mod ")
+                .and_then(|rest| rest.strip_suffix(';'));
+            assert!(
+                module.is_some_and(|name| name.chars().all(|c| c.is_ascii_lowercase() || c == '_')),
+                "{binary}/main.rs holds only module declarations, found: {line}"
+            );
+        }
+        assert!(lines.len() > 3, "{binary}/main.rs declares no module");
+    }
+}

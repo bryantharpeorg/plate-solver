@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 //! Oracles: configured 0.3 degree mechanical play and the simulator's independent
 //! eyepiece ray. Exact command ordering; 60/30 arcsecond sky bounds in paused time.
-#[path = "../live/support.rs"]
-pub mod support;
+pub use super::live as support;
 
 use finder::{
     link::Transport,
