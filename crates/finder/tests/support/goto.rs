@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 //! Oracles: rendered catalog stars, simulator mechanics and true eyepiece,
 //! sampled every 0.1 s in paused time; angular acceptance is strictly 60 arcseconds.
-#[path = "../live/support.rs"]
-pub mod support;
+pub use super::live as support;
 use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
