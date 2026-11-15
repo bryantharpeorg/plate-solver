@@ -17,6 +17,11 @@ depends_on_landed: ["013-live-finder", "014-goto", "016-mcp", "017-console-stop-
 # flips first. This spec stays draft until 024 has landed; it is then re-anchored to
 # 024's code and re-validated (plan.md § Prerequisites), and flipping it to `ready` gives
 # the approvals listed under "Owner approvals" and dispatches it.
+# Refined 2026-11-14 (round 3) by probe builds of all three stories from the trio with the
+# owner's answers, and two reviews (anchors, scenarios); this round's clauses were run on
+# the probe branches under the `test` gate's cargo-nextest. `main` is now at 1104b7d:
+# e62ffc2 (pull request 214) runs the gate's Rust half under nextest, and 1104b7d makes
+# 027-finder-tests-by-system ready, to land before 024 and this spec; no cited line moved.
 ---
 
 # Feature Specification: Saving Live Frames at the Telescope
@@ -167,6 +172,29 @@ replay them.
   § Prerequisites). Until then it names 024 in neither `depends_on_landed` nor its shared
   writes.
 
+### Session 2026-11-14 (round 3: probe builds with the owner's answers, and review)
+
+- Q: Is the trio buildable with the owner's answers? → A: Yes. Each story was built again
+  from this trio, tests first, with no existing test edited and no undeclared write, and
+  every scenario passed as written with every interface as plan.md gives it, US1-S8 and
+  US3-S6 included. Four checks that could not fail now can: `recording.json`'s `model`
+  (US1-S1) and `aim` (US1-S8), each frame line's `received_at` (US1-S1), and US2-S5's
+  reply, now 17 bytes for a 4 × 4 frame, since `GrayImage::from_raw` already refuses 15
+  and the length check never ran. Each was run on the probe builds merged with `main`,
+  and failed under the fault it guards against.
+- Q: What changed on `main`? → A: Pull request 214 landed at e62ffc2: the `test` gate
+  runs the Rust tests with `cargo nextest run`, each test in its own process, on a test
+  build at opt-level 1 (plan.md § Verification). Every new test of US1 and US2 passed
+  under it. Then 1104b7d made `027-finder-tests-by-system` ready, and the owner's order is
+  027, then 024, then this spec. 027 moves finder's tests into five binaries and fails a
+  new top-level test file, so this trio is refreshed against its layout before the flip
+  (plan.md § Prerequisites 7). No cited line moved.
+- Q: Who else reads `recording`? → A: The MCP tools that return the session,
+  `get_session` (`crates/finder/src/mcp/tools.rs:348`) and `set_tracking`
+  (`crates/finder/src/mcp/tools.rs:314`), serialize the same `session_response`, so they
+  carry it too (FR-008, owner approval 1). It is read-only, and no MCP tool is added
+  (owner decision 8).
+
 ## Owner decisions
 
 Each is a design or taste call, and the owner has settled every one: decisions 1 to 10 on
@@ -243,7 +271,8 @@ Flipping this spec to `ready` approves the settled answer to every owner decisio
 and the following. Each is named in the FR that makes it. No existing test, golden
 or CI file changes.
 
-1. **`POST /api/record`** and the run-only `recording` field of `GET /api/session`
+1. **`POST /api/record`** and the run-only `recording` field of `GET /api/session`, which
+   the MCP tools that return the session, `get_session` and `set_tracking`, carry too
    (FR-001 to FR-009).
 2. **An additive scope-link service, `ScopeNodeRaw`**, with one call, `RawFrame`
    (FR-011, FR-012). The scope node on the Pi must be rebuilt before raw frames work.
@@ -280,7 +309,9 @@ All Rust scenarios of US1 and US2 share one setup unless a scenario says otherwi
   `connect_mount` with `SimMount::new` (`crates/simulator/src/mount.rs:232`) on the
   simulator's clock, so frames carry axis counts, then `push_to(50.0, 120.0)`, which
   points the camera at altitude 50° and azimuth 120° and keeps the counts. A `SimNode`
-  over it with a 500 ms frame interval and the token `test-token`, served over a fresh
+  over it, built after the mount is connected, since `SimNode::new` reads the simulator's
+  mount when it is built (`crates/simulator/src/node.rs:46`), with a 500 ms frame
+  interval and the token `test-token`, served over a fresh
   duplex for each connection with `memory::serve_routes_on` and the node service's
   `routes()`, as `crates/finder/tests/mcp/support.rs:225` serves its node. A session
   paired to it, with the host name `scope.local`, the token `test-token`, that site and
@@ -292,9 +323,11 @@ All Rust scenarios of US1 and US2 share one setup unless a scenario says otherwi
   virtual time. US1-S7 is a plain `#[test]`. A test file may share the test database,
   the start and the console clock by including `crates/finder/tests/live/support.rs`
   with `#[path]`, as `crates/finder/tests/live.rs:3` does.
-- Before its steps, a scenario on a console whose link can connect waits until the
-  session's `node.connected` is true and `node.offset_s` is not null, as
-  `crates/finder/tests/mcp/support.rs:263` waits for its link.
+- Before its steps, a scenario on a console whose link can connect waits, as
+  `crates/finder/tests/mcp/support.rs:263` waits for its link, until the session's
+  `node.connected` is true, and also until `node.offset_s` is not null.
+- These scenarios run in `cargo nextest run --workspace --all-targets --all-features --locked`,
+  the `test` gate's first command, which runs each test in its own process.
 - **R** is a path under the workspace's `target/` that does not exist yet, named from
   the test's name and the process id as `crates/finder/tests/simulate_cli.rs:13` names
   its folders, but not made by the test (that helper makes its folder and fails to drop
@@ -325,30 +358,36 @@ it. Later, a test can read that folder and replay what the console saw.
 **Why this priority**: Spec 020's replay and spec 022's sign check need only what the
 console already receives, and the next clear night may be weeks away.
 
-**Independent Test**: `cargo test -p finder --test recording --locked`.
+**Independent Test**: `crates/finder/tests/recording.rs`, which the `test` gate's
+`cargo nextest run --workspace --all-targets --all-features --locked` runs; during
+development, `cargo test -p finder --test recording --locked`.
 
 **Acceptance Scenarios**:
 
-1. **Given** the setup, **When** a test reads `state.link().unwrap().frames()` every
-   100 ms until it holds a star frame and keeps that frame's id, sends
-   `POST /api/record` with `{"on":true}`, waits until `recording.solves` is at least 2
-   and sends `{"on":false}`, **Then** a committed test asserts that:
+1. **Given** the setup, **When** a test waits until the session's `model` is not null,
+   reads `state.link().unwrap().frames()` every 100 ms until it holds a star frame and
+   keeps that frame's id, sends `POST /api/record` with `{"on":true}`, waits until
+   `recording.solves` is at least 2 and sends `{"on":false}`, **Then** a committed test
+   asserts that:
    - both answers are 200; the first has `recording.on` true and a `recording.folder`
      of the form `YYYY-MM-DDTHH-MM-SSZ` beginning `2026-01-16T02-`, and the second has
-     `recording.on` false and `ended_reason` `stopped`;
+     `recording.on` false and `recording.ended_reason` `stopped`;
    - `recording.json` has `format` `finder-recording/1`, `finder` equal to the
      `version` of `GET /api/health`, `site` `{"lat_deg":40.0,"lon_deg":-75.0}`,
      `started_at` equal to the first answer's `recording.since`, a `started_utc` that
      `finder::simulate::parse_start` reads as `started_at` rounded down to the whole
      second, and the folder's name equal to `started_utc` with each `:` made `-`;
-   - `recording.json` has `aim` null, a `model` key, `camera_settings` equal to the first
-     answer's `camera_settings`, and `camera` equal to the first answer's `node.camera`;
+   - `recording.json` has `aim` null, `model` equal to the first answer's `model`,
+     `camera_settings` equal to the first answer's `camera_settings`, and `camera` equal
+     to the first answer's `node.camera`;
    - after the stop, `recording.json` has `ended_reason` `stopped`, a `stopped_at` at
      least its `started_at`, `previews` equal to the number of `preview-*.jpg` files in
      the folder, and `frames` and `solves` equal to the number of frame lines and solve
      lines, which equal the second answer's `recording.frames` and `recording.solves`;
    - frame-line ids strictly increase, the first above the id the test kept before the
-     start, and every solve line's `frame_id` is the id of a frame line;
+     start; each frame line's `received_at` is at least the first answer's
+     `recording.since` and at most the second answer's `time`; and every solve line's
+     `frame_id` is the id of a frame line;
    - 1.5 s after the stop, both files have the lines they had at the stop;
    - no file in the folder contains `scope.local` or `test-token`.
 2. **Given** the setup, with the test also keeping every star frame it sees on
@@ -394,11 +433,11 @@ console already receives, and the next clear night may be weeks away.
    under R.
 6. **Given** the setup built with `with_recording_limit(3)` after `with_recordings`,
    **When** a test starts a recording and waits until `recording.on` is false, **Then**
-   a committed test asserts `ended_reason` `limit`, `recording.frames` 3 and exactly
-   three frame lines. **Given** the setup, **When** a test starts a recording, waits
-   until `recording.frames` is at least 1 and deletes the folder, **Then** a committed
-   test asserts that `recording.on` becomes false within 5 s with `ended_reason`
-   `write_failed`, and that the folder has not been made again.
+   a committed test asserts `recording.ended_reason` `limit`, `recording.frames` 3 and
+   exactly three frame lines. **Given** the setup, **When** a test starts a recording,
+   waits until `recording.frames` is at least 1 and deletes the folder, **Then** a
+   committed test asserts that `recording.on` becomes false within 5 s with
+   `recording.ended_reason` `write_failed`, and that the folder has not been made again.
 7. **Given** the built `finder` binary run with `--simulate`, `--state S` and
    `--listen` on port 0 of `127.0.0.1`, S a fresh folder under `target/`, **When** a
    test sends `POST /api/record` with `{"on":true}` and reads `GET /api/session`,
@@ -410,7 +449,9 @@ console already receives, and the next clear night may be weeks away.
    starts with `Sources` of its own: a watch channel of `Option<StarFrame>` that it sends
    on, the watch channel of a `LinkStatus::default()`, a broadcast channel of
    `LiveReport` whose sender it keeps, a `FixedClock` at 1768528800 and a
-   `Session::default()`, **When** the test sends a star frame with id 5 and the preview
+   `Session::default()` given the aim `Aim { x: 700.0, y: 420.0 }` with `set_aim`
+   (`crates/finder/src/session.rs:1180`) at 1768528800, **When** the test sends a star
+   frame with id 5 and the preview
    bytes `[1, 2, 3]`, then one with id 6 and no preview, then `None`, as the link does
    when the pairing changes (`crates/finder/src/link.rs:360`), and then one with id 5 and
    the preview bytes `[9, 9, 9]`, as a restarted node's would be, sending each frame once
@@ -421,8 +462,8 @@ console already receives, and the next clear night may be weeks away.
      `node_restarted`, `frames` 2 and `previews` 1;
    - the folder, R joined with `view()`'s `folder`, holds exactly two frame lines, with
      ids 5 and 6, and one preview file, `preview-5.jpg`, whose bytes are `[1, 2, 3]`;
-   - `recording.json` has `ended_reason` `node_restarted`, a `stopped_at`, `frames` 2,
-     `solves` 0 and `previews` 1;
+   - `recording.json` has `aim` `{"x":700.0,"y":420.0}`, `ended_reason`
+     `node_restarted`, a `stopped_at`, `frames` 2, `solves` 0 and `previews` 1;
    - a frame with id 7 sent afterwards leaves the same two frame lines 1 s later;
    - a second `start` of the same recorder, with new channels, that is sent a frame with
      id 3 and, once `view()` counts it, id 3 again, ends with `ended_reason`
@@ -439,7 +480,10 @@ and settings, as a fixture for detection work.
 **Why this priority**: Only a detection fixture needs pixels, and it needs a rebuild of
 the scope node on the Pi.
 
-**Independent Test**: `cargo test -p scope-node --test raw_frame --locked` and
+**Independent Test**: `crates/scope-node/tests/raw_frame.rs` and
+`crates/finder/tests/recording_raw.rs`, which the `test` gate's
+`cargo nextest run --workspace --all-targets --all-features --locked` runs; during
+development, `cargo test -p scope-node --test raw_frame --locked` and
 `cargo test -p finder --test recording_raw --locked`.
 
 **Acceptance Scenarios**:
@@ -459,8 +503,8 @@ the scope node on the Pi.
    token `wrong-token` answers `Unauthenticated`; and that with the node's frames stopped
    (`NodeControls::stop_frames`, `crates/scope-node/src/service.rs:62`) and 2 s allowed
    for a frame already being taken, two `RawFrame` calls started together, with frames
-   started again 300 ms later (`NodeControls::start_frames`), are both answered, with the
-   same `id`.
+   started again 300 ms later (`NodeControls::start_frames`), are both answered within
+   10 s, with the same `id`.
 3. **Given** the setup with a recording on, **When** a test sends `POST /api/record/raw`
    with `{"frames":2}` and waits until `recording.raw.saved` is 2, **Then** a committed
    test asserts that the answer was 200, that `recording.raw` is
@@ -495,14 +539,15 @@ the scope node on the Pi.
    committed test asserts that `recording.raw` is
    `{"wanted":1,"saved":0,"error":"this scope node cannot send raw frames"}` and that
    the folder holds no `raw-` file. **Given** instead the node's `into_server()` and a
-   `ScopeNodeRaw` of the test's own that answers a 4 × 4 frame with 15 pixel bytes, both
+   `ScopeNodeRaw` of the test's own that answers a 4 × 4 frame with 17 pixel bytes, both
    served with `memory::serve_routes_on` (`crates/scope-link/src/memory.rs:70`), **When**
    the same is done, **Then** the committed test asserts that `recording.raw` is
    `{"wanted":1,"saved":0,"error":"the raw frame request failed"}` and that the folder
    holds no `raw-` file.
 6. **Given** the setup with the console paired instead to a `NodeService` over a camera
-   of the test's own that answers 2592 × 1944 frames of uniform value 10, every 2 s,
-   with ranges that allow the session's 200 ms and gain 1, on a `NodeClock` of the
+   of the test's own whose `next_frame` (`crates/scope-node/src/camera.rs:34`) waits 2 s
+   and answers a 2592 × 1944 frame of uniform value 10, with ranges that allow the
+   session's 200 ms and gain 1, on a `NodeClock` of the
    test's own that reads the simulator's `VirtualClock::node_now`
    (`crates/simulator/src/clock.rs:28`), **When** a test starts a recording, sends
    `{"frames":1}` and waits until `recording.raw.saved` is 1, **Then** a committed test
@@ -574,7 +619,9 @@ needs a terminal.
    `Recording stopped: the console could not write to its folder.`
 5. **Given** `SetupPage` fed by `useSession`, as
    `crates/finder/web/src/components/ScopeNodeSection.test.tsx:70` feeds it, with
-   `fetch` answering every request with a session holding a connected `node` and the
+   `EventSource` stubbed as in US3-S1, since the connected node makes the page open
+   `/api/live`, and `fetch` answering every request with a session holding a connected
+   `node` and the
    recording of US3-S2, **Then** a committed test asserts that the region named
    `Recording` shows a status reading exactly
    `Recording to 2026-01-16T02-00-00Z · 12 frames · 9 solves`.
@@ -604,10 +651,11 @@ needs a terminal.
   no line (owner approval 6, FR-007). No `preview-<id>.jpg` is replaced, and every
   solve line's `frame_id` names one frame line. A raw request then running ends at its
   failed call or with the recording (FR-014). The page says that the scope node
-  restarted and to start a new recording (US3-S6). A restarted node whose first frame
-  to arrive already has an id above the last frame line's goes unnoticed and the
-  recording carries on; its frame-line ids still rise, so no preview is replaced either
-  way.
+  restarted and to start a new recording (US3-S6). A restarted node, or another node,
+  whose first frame to arrive already has an id above the last frame line's goes
+  unnoticed: its frames join the recording, `recording.json`'s `camera` still names the
+  first node's camera, and the lines' `offset_s` tell the nodes apart. Its frame-line
+  ids still rise, so no preview is replaced either way.
 - **The console exits mid-recording.** The lines written so far stay readable, and
   `recording.json` has no `stopped_at`. Nothing resumes at the next start.
 - **`--simulate`.** Its state folder is the simulated one, so by default its recordings
@@ -630,8 +678,9 @@ needs a terminal.
 ### Functional Requirements
 
 - **FR-001**: `POST /api/record` SHALL accept exactly `{"on":true}` or `{"on":false}`
-  under the same-origin rule and answer 200 with the session. Any other body SHALL
-  answer 400 and a foreign origin 403, each with a JSON `error` and no change.
+  under the same-origin rule and answer 200 with the session. Any other JSON body SHALL
+  answer 400 (a request that is not JSON answers 415, as other session writes do) and a
+  foreign origin 403, each with a JSON `error` and no change.
 - **FR-002**: `{"on":true}` with no recording on SHALL start one in a new folder under
   the recordings folder, named for the console's UTC then as `YYYY-MM-DDTHH-MM-SSZ`,
   with `-2`, `-3` and so on added when that name is taken. With a recording on it SHALL
@@ -670,7 +719,8 @@ needs a terminal.
   written after the answer to `{"on":false}`, or after any other end.
   `AppState::with_recording_limit(n)` SHALL set another limit; the scenarios use it
   (US1-S6), and the default of 3,600 is a constant that no scenario runs to.
-- **FR-008**: `GET /api/session` SHALL carry
+- **FR-008**: `GET /api/session`, and the MCP tools that return the session
+  (`get_session`, `set_tracking`), SHALL carry
   `recording: {on, folder, since, frames, solves, previews, ended_reason?}` from the
   first accepted start until the console exits, and omit it before. Every start of the
   console begins with no recording.
@@ -695,7 +745,8 @@ needs a terminal.
   request runs, and `wait until the mount is still` while anything moves: an axis move,
   a GoTo or Track the session reports as running (the test
   `crates/finder/src/api.rs:656` makes), or `mount.moving`; and 400 for any other
-  body. Otherwise it SHALL answer 200 with the
+  JSON body (a request that is not JSON answers 415). Otherwise it SHALL answer 200 with
+  the
   session and ask for N raw frames one after another, saving each as an 8-bit gray PNG
   `raw-<id>.png` in the recording's folder, written under a `.part` name and then
   renamed.
@@ -752,8 +803,15 @@ needs a terminal.
   have landed. Every citation here was read at c1ed295 and re-checked at f8dab49, after
   020-live-chart-calm landed; its US2 moved the cited lines of `DESIGN.md` and
   `crates/finder/web/src/api.ts` by four, and the citations follow them (plan.md
-  § Prerequisites). `main` has since moved to 870b332, which changes only CI workflow
-  files and the page's Playwright version; no cited line moved.
+  § Prerequisites). `main` has since moved to 1104b7d, and no cited line moved: 870b332
+  changes only CI workflow files and the page's Playwright version, e62ffc2 (pull
+  request 214) runs the `test` gate's Rust half under cargo-nextest on a test build at
+  opt-level 1, and 1104b7d adds the ready spec `027-finder-tests-by-system`.
+- **027 and 024 land first.** The owner's order is 027, then 024, then this spec. 027
+  moves finder's tests into five binaries and fails a new top-level file in
+  `crates/finder/tests`, so US1's and US2's test files, their commands and the cited
+  tests are refreshed against its layout before the flip (plan.md § Prerequisites 6
+  and 7).
 - **Out of scope:**
   - a replay tool, loader or replaying node;
   - dark-sky detection, the noise floor and auto-exposure (spec 023);
@@ -788,6 +846,6 @@ US3:
   implements: [FR-016, FR-017]
 ```
 
-Both edges are merge edges. US2 writes into US1's recording folder and extends its
+Every edge is a merge edge. US2 writes into US1's recording folder and extends its
 `Recorder`, route table, route list, README section and glossary. US3 reads the
 `recording` field of both and calls both routes. The stories run one after another.

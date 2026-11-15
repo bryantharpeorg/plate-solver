@@ -113,8 +113,10 @@ pub const FORMAT: &str = "finder-recording/1";
 /// Star frames after which a recording ends by itself (owner decision 3).
 pub const FRAME_LIMIT: u64 = 3600;
 
-/// A recording as `GET /api/session` reports it.
+/// A recording as `GET /api/session` reports it. Non-exhaustive, so a test outside the
+/// crate reads it field by field and never builds a whole one, and US2 can add `raw`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[non_exhaustive]
 pub struct RecordingView {
     pub on: bool,
     /// The folder's name under the recordings folder.
@@ -130,7 +132,7 @@ pub struct RecordingView {
 }
 
 /// What a recording reads. The route builds it from the link and the live loop; US1-S8
-/// builds one from channels of its own.
+/// builds one by literal from channels of its own, so no story adds a field.
 pub struct Sources {
     pub frames: watch::Receiver<Option<StarFrame>>,
     pub status: watch::Receiver<LinkStatus>,
@@ -277,7 +279,10 @@ recording: Option<crate::recording::RecordingView>,
 ```
 
 filled in `session_response` (`crates/finder/src/api.rs:643`) from
-`state.recordings.as_ref().and_then(|r| r.view())`.
+`state.recordings.as_ref().and_then(|r| r.view())`. The MCP tools `get_session`
+(`crates/finder/src/mcp/tools.rs:348`) and `set_tracking`
+(`crates/finder/src/mcp/tools.rs:314`) return `session_response` too, so their bodies
+carry `recording` as well (spec FR-008); no MCP code changes.
 
 ### The binary (`crates/finder/src/main.rs`, US1)
 
@@ -409,6 +414,7 @@ pub const MAX_RAW_FRAMES: u8 = 10;
 pub const RAW_WAIT: Duration = Duration::from_secs(15);
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[non_exhaustive]
 pub struct RawView {
     pub wanted: u8,
     pub saved: u8,
@@ -447,8 +453,11 @@ mismatch either way is `the raw frame request failed`), saved with `ImageFormat:
 the run is on, `saved += 1`. `Unimplemented` sets `this scope node cannot send raw
 frames`, a timeout `no raw frame arrived within 15 s`, any other status `the raw frame
 request failed`, and a failed write ends the recording with `write_failed` (its
-`stopped_at` from the run's clock). Every end of the recording aborts the raw task and
-leaves `raw` as it was, with no `error`.
+`stopped_at` from the run's clock). Every `error` is set as `saved` is, under the lock
+and only while the run is on: an abort takes effect only at the task's next await, so
+on a multi-thread runtime a stop can land between a reply or timeout and the lock, and
+must still leave no `error` (spec FR-014). Every end of the recording aborts the raw
+task and leaves `raw` as it was, with no `error`.
 
 ### The raw route (`crates/finder/src/api.rs`, US2)
 
@@ -616,8 +625,14 @@ These are not changed by any story:
   through `with_link`; `crates/finder/tests/link.rs:187` and
   `crates/finder/tests/keyhole_sim.rs:229` call `LinkManager::start` directly, and
   `crates/finder/tests/mount_calls.rs:54` builds `MountClient` itself.
-- **`GET /api/session` without a recording.** `recording` is skipped when absent, so
-  every existing body is byte for byte what it was.
+- **`GET /api/session`, and the MCP session bodies, without a recording.** `recording`
+  is skipped when absent, so every existing body, including what the MCP tools
+  `get_session` and `set_tracking` return, is byte for byte what it was.
+- **US1's own test, for US2.** `crates/finder/tests/recording.rs` builds `Sources` by
+  literal and calls `Recorder::new`, `start` and `view` (US1-S8), so US2 adds no field
+  to `Sources` and changes none of those signatures. `RecordingView` and `RawView` are
+  `#[non_exhaustive]`, so that test reads a view field by field, never builds or compares
+  a whole one, and keeps compiling when US2 adds `raw`.
 - **`GET /api/live`.** The recorder is one more subscriber of the same broadcast.
 - **The binary's start-up lines.** `crates/finder/tests/simulate_cli.rs` reads the
   address line `finder console: http://`; nothing new is printed.
@@ -656,18 +671,22 @@ These are not changed by any story:
 
 ## Verification (every story, before proposing)
 
-- **The factory gates** (`ergane.yaml` at c1ed295):
+- **The factory gates** (`ergane.yaml` at e62ffc2, after pull request 214):
   - `lint` = `cargo fmt --all --check`,
     `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`,
     `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked`
     and `RUSTDOCFLAGS="-D warnings" cargo doc -p finder --no-deps`;
-  - `test` = `cargo test --workspace --all-targets --all-features --locked`,
+  - `test` = `cargo nextest run --workspace --all-targets --all-features --locked`,
     `cargo test --workspace --locked --doc`, and then, in `crates/finder/web`,
     `npm ci --no-audit --no-fund`, `npm run typecheck`, `npm run format:check`,
     `npm test`, `npm run build`, `git status --porcelain -- dist | (! grep .)` and
     `CI=1 npm run e2e`.
 
-  Every story runs both, and the judge sees their results.
+  Every story runs both, and the judge sees their results. nextest runs every test as
+  its own process, as many at once as the host has CPUs, reports every failure and ends
+  a test after 5 minutes (`.config/nextest.toml`), on the root `Cargo.toml`'s test
+  profile at opt-level 1. The stories' development checks name `cargo test`, which
+  builds the same test profile.
 - **CI in the merge queue** runs every `ci.yml` job, including the finder-page
   build-freshness check and the build on Rust 1.96. Coverage runs only by hand
   (constitution 1.1.0).
@@ -682,11 +701,13 @@ These are not changed by any story:
 2. **`main` is still as read.** Every citation here was read at c1ed295 and re-checked at
    f8dab49, after 020-live-chart-calm landed: its US2 moved the cited lines of
    `DESIGN.md` and `crates/finder/web/src/api.ts` down by four, now `DESIGN.md:347`,
-   `crates/finder/web/src/api.ts:234` and `crates/finder/web/src/api.ts:300`. `main` at
-   870b332 changes only CI workflow files and the page's Playwright version. If `main`
-   moves again in a cited file, re-read it and re-run the validator. Open pull request
-   214 would run the `test` gate's Rust half with `cargo nextest` (`ergane.yaml`); if it
-   lands first, § Verification is copied again from `ergane.yaml`.
+   `crates/finder/web/src/api.ts:234` and `crates/finder/web/src/api.ts:300`. `main` is
+   now at 1104b7d, and no cited line moved: 870b332 changes only CI workflow files and
+   the page's Playwright version; e62ffc2 (pull request 214) runs the `test` gate's Rust
+   half with `cargo nextest run` on an optimized test profile, so § Verification was
+   copied again from its `ergane.yaml`; and 1104b7d adds the ready spec 027
+   (Prerequisite 7). If `main` moves again in a cited file, re-read it and re-run the
+   validator.
 3. **The owner decisions are settled and the approvals given** (spec § Owner decisions,
    § Owner approvals). Met for the decisions: the owner settled decisions 1 to 10 on
    2026-11-14 and decision 11 and approvals 4 and 6 on 2026-11-15, and those answers are
@@ -703,6 +724,20 @@ These are not changed by any story:
    `mount.moving`, `with_link`, the link) is re-read against 024's code, 024 joins
    `depends_on_landed` and the shared writes of those files with `merge_order`, and the
    validator is re-run. Until then this trio names 024 in neither.
+7. **`027-finder-tests-by-system` has landed, and this trio is refreshed against its
+   layout.** Not met. 027 is ready since 1104b7d, and the owner's order is 027, then 024,
+   then this spec. It moves finder's integration tests into the binaries `cli`,
+   `console`, `layout`, `mcp` and `motion`, the helpers this trio cites among them
+   (`crates/finder/tests/live/support.rs` and `crates/finder/tests/mcp/support.rs` to
+   `crates/finder/tests/support/`), and its `layout` test fails any new top-level file in
+   `crates/finder/tests`. Once it lands, US1's `crates/finder/tests/recording.rs` and
+   US2's `crates/finder/tests/recording_raw.rs` become modules of one of its binaries,
+   each story's writes gain that binary's shared `main.rs` or `mod.rs` with the matching
+   shared write, their Independent Tests and development checks name the binary and
+   module, every citation of a moved test is re-read, the Refinement Record's existing
+   test paths follow the moves, and 027 joins `depends_on_landed`. US3 and
+   `crates/scope-node/tests/raw_frame.rs` are unaffected. Until then this trio names 027
+   in neither.
 
 ## Plan traps
 
@@ -772,11 +807,12 @@ that keeps it from recurring. They bind every story.
 | A recorded frame is missed. | Gaps show in the ids; the cadence of 200 ms or more leaves the writer idle most of the time. |
 | An older scope node. | It answers `Unimplemented`, which the page and session report as `this scope node cannot send raw frames`. |
 | A raw reply on slow Wi-Fi delays the heartbeat past 1 s, the link drops and the node's watchdog stops the mount mid-GoTo, Track or axis move. | Spec owner decision 10: refused with 409 while anything moves (FR-013), and a running request stops before its next frame once a move starts (FR-014). Only a frame already on its way can overlap a move; the failure stops the mount, the safe direction. |
-| A node restart or a re-pairing mid-recording repeats frame ids, and a repeated id's preview or raw PNG replaces the earlier file. | Spec owner approval 6 (settled 2026-11-15): the first frame whose id is not above the last line's ends the recording as `node_restarted` and writes nothing of it (US1-S8), and the page asks for a new recording (US3-S6). A raw request running then ends at its failed call or with the recording. Left over: a restarted node whose first frame to arrive is already above the last id goes unnoticed, though its ids still rise. |
+| A node restart or a re-pairing mid-recording repeats frame ids, and a repeated id's preview or raw PNG replaces the earlier file. | Spec owner approval 6 (settled 2026-11-15): the first frame whose id is not above the last line's ends the recording as `node_restarted` and writes nothing of it (US1-S8), and the page asks for a new recording (US3-S6). A raw request running then ends at its failed call or with the recording. Left over: a restarted node, or another node, whose first frame to arrive is already above the last id goes unnoticed; its frames join the recording, `recording.json`'s `camera` still names the first node's camera, and the lines' `offset_s` tell the nodes apart, though the ids still rise. |
 | `020-live-chart-calm` writes `DESIGN.md`, `dist` and `api.ts`, as US3 does. | Landed at f8dab49; its three moved citations were re-read (Prerequisite 2). |
 | Draft `024-mount-link-recovery` writes `crates/finder/src/api.rs` (its US3; 025's US1 and US2), the scope-link proto and `crates/scope-node/src/service.rs` (its US1 to US3; 025's US2). It also changes the mount poll that sets the session's `mount.moving` (`crates/finder/src/live.rs:319`), which FR-013 reads, and `with_link`, which every 025 test builds on. With `max_concurrent_epics: 2` both could run at once, and either landing moves the other's citations. | Settled by the owner on 2026-11-15: 024 flips first, and 025 flips only after 024 has landed. 025 is then re-read against 024's code, declares 024 in `depends_on_landed` and its shared writes, and is re-validated (Prerequisite 6), as 024's plan asks of whichever flips second (its Prerequisite 5). |
 | Draft `026-mount-sky` (pull request 207) writes `link.rs` (its frame arm, and a filter on `LinkManager`), `api.rs`, `lib.rs`, `main.rs`, `crates/finder/README.md`, `GLOSSARY.md`, `DESIGN.md`, `dist` and `api.ts`: files of US1, US2 and US3. | Whichever is flipped second is re-read, declares the other in `depends_on_landed` and its shared writes, and is re-validated. |
-| A story's diff nears 64 KiB. | The round-2 probes, built from this trio, measured US1 at 49,579 bytes, US2 at 49,638 and US3 at 19,151 (round 1: 51,667, 46,881 and 16,699). The owner's answers of 2026-11-15 add US1-S8's test, the recorder's id check and a README sentence to US1, and US3-S3's clause and US3-S6 to US3, not yet measured. Tests may share `crates/finder/tests/live/support.rs` with `#[path]`; US2's test repeats US1's setup, about 6 KB. |
+| `027-finder-tests-by-system` (ready since 1104b7d) moves the finder tests and helpers this trio cites, and its `layout` test fails US1's and US2's new top-level test files. | It lands before 024 and this spec, in the owner's order; this trio is then refreshed against its layout and re-validated (Prerequisite 7). |
+| A story's diff nears 64 KiB. | The round-3 probes, built from this trio with the owner's answers and then given this round's clauses, measured US1 at 57,433 bytes (8.1 KB under), US2 at 54,397 and US3 at 20,580 (round 2: 49,579, 49,638 and 19,151). Most of US1's growth is US1-S8's test. Tests may share `crates/finder/tests/live/support.rs` with `#[path]`; US2's test repeats US1's setup, about 6 KB. |
 
 ## Refinement Record
 
@@ -860,11 +896,49 @@ answers were written in before any further probe build:
 - **The order with 024**: 024 flips first, and this spec after 024 lands, re-anchored to
   its code (Prerequisite 6). No `depends_on_landed` or shared write names 024 yet.
 
-None of these clauses has been compiled yet; US1-S8 rests on `Recorder::new`,
-`Recorder::start`, `Sources`' public fields, `LinkStatus`'s `Default`
-(`crates/finder/src/link.rs:165`), `FixedClock` (`crates/finder/src/session.rs:41`) and
-`Session::default()` (`crates/finder/src/session.rs:668`), each read for this change.
-The writes are unchanged.
+US1-S8 rests on `Recorder::new`, `Recorder::start`, `Sources`' public fields,
+`LinkStatus`'s `Default` (`crates/finder/src/link.rs:165`), `FixedClock`
+(`crates/finder/src/session.rs:41`) and `Session::default()`
+(`crates/finder/src/session.rs:668`), each read for this change. The writes are
+unchanged. Round 3 compiled every one of these clauses.
+
+**Round 3.** On 2026-11-14 the three stories were probe-built again from scratch, from
+the trio with the owner's answers, in throwaway worktrees (branches `probe/025-r3-us1`,
+`probe/025-r3-us2` on it, `probe/025-r3-us3` on that), tests first, with no existing
+test edited and no undeclared write, and the trio was reviewed again for anchors and
+scenarios:
+
+- **US1**: eight tests passing, stable over six runs, and `cargo test -p finder` (396),
+  `clippy -p finder`, `fmt` and both `cargo doc -p finder` commands clean; diff 56,793
+  bytes. Every interface compiled as written. US1-S8 failed with the restart check
+  removed, with `<` for `<=`, and with the preview written before the check.
+- **US2**: seven tests passing, and the `scope-link`, `scope-node`, `finder` and
+  `simulator` tests (6, 55, 403 and 48) with their `clippy`, `fmt` and docs clean; diff
+  54,378 bytes. Every interface compiled as written. With 15 bytes, US2-S5 passed with
+  the reply's length check deleted, since `GrayImage::from_raw` refuses a shorter
+  buffer, so it now sends 17. The raw task's errors are set, like `saved`, under the
+  run's lock and only while the run is on.
+- **US3**: eight new Vitest tests passing, stable over ten runs, with all 283 of the
+  page's, typecheck, `format:check`, the build, an unchanged CSS bundle and a clean
+  `dist`; diff 20,580 bytes. Every interface compiled as written.
+- **Under the new gate.** `main` moved to e62ffc2 and 1104b7d during the round. In a
+  further throwaway worktree (branch `probe/025-r3-check`) the US1 and US2 probes were
+  merged with `main` at 1104b7d and given this round's clauses (`model`, `received_at` and the wait for a model in
+  US1-S1, `aim` in US1-S8, 17 bytes in US2-S5, both views `#[non_exhaustive]`). Under
+  `cargo nextest run` on the opt-level 1 test profile the 17 new tests passed, the 15
+  in `finder` over seven runs, and all 512 tests of `finder`, `scope-node`,
+  `scope-link` and `simulator` passed, with the workspace's `clippy`, `fmt` and docs
+  clean. Each new clause failed
+  under the fault it guards against: `model` or `aim` written null, `received_at`
+  written 0, and the length check deleted.
+- **Review**: US1's test builds `Sources` and reads `RecordingView`, so both views are
+  `#[non_exhaustive]` and § Shapes that existing tests pin says what US2 keeps; the MCP
+  session tools carry `recording` (spec FR-008, owner approval 1); FR-001 and FR-013 name
+  the 415 for a body that is not JSON; another node with higher ids is named in the edge
+  case it falls under; § Verification is copied again from `ergane.yaml` at e62ffc2; and
+  027 lands first (Prerequisite 7).
+- **Not run:** `CI=1 npm run e2e` and the workspace-wide `cargo nextest run`. The `test`
+  gate runs both.
 
 Writes come from the task text and the probes. Shared writes name the merge edge that
 orders them, and the stories that last wrote the same file on `main`,
@@ -880,7 +954,7 @@ stories:
       - path: crates/finder/tests/recording.rs
         status: new
         disposition: add
-        assertion: "a start and stop write recording.json with the format, version, site, settings, camera, UTC name, stop time and counts, frames.jsonl and solves.jsonl whose counts match the session, a first frame after the one on the channel at the start, every solve naming a recorded frame, nothing after the stop, and no address or token"
+        assertion: "a start and stop write recording.json with the format, version, site, model, settings, camera, UTC name, stop time and counts, frames.jsonl and solves.jsonl whose counts match the session, a first frame after the one on the channel at the start, arrival times between the start and the stop, every solve naming a recorded frame, nothing after the stop, and no address or token"
         decision: "spec.md:US1-S1"
       - path: crates/finder/tests/recording.rs
         status: new
@@ -915,12 +989,17 @@ stories:
       - path: crates/finder/tests/recording.rs
         status: new
         disposition: add
-        assertion: "a frame id that does not rise after None ends a recorder fed by the test as node_restarted, writing nothing of that frame: two frame lines, the first preview's bytes kept, recording.json's counts and end, no line after the end, and an equal id ends a second recording too"
+        assertion: "a frame id that does not rise after None ends a recorder fed by the test as node_restarted, writing nothing of that frame: two frame lines, the first preview's bytes kept, recording.json's aim, counts and end, no line after the end, and an equal id ends a second recording too"
         decision: "spec.md:US1-S8"
       - path: crates/finder/tests/live.rs
         status: existing
         disposition: preserve
         assertion: "live solving and its reports are unchanged with a recorder subscribed"
+        decision: "plan.md:Shapes that existing tests pin"
+      - path: crates/finder/tests/mcp_endpoint.rs
+        status: existing
+        disposition: preserve
+        assertion: "get_session over MCP still returns the session body unchanged when no recording exists"
         decision: "plan.md:Shapes that existing tests pin"
       - path: crates/finder/tests/session_api.rs
         status: existing
@@ -934,7 +1013,7 @@ stories:
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
       - "live solving, the link and GET /api/live behave as without a recording (spec.md FR-004, plan.md Shapes that existing tests pin)"
-      - "GET /api/session without a recording is byte for byte unchanged"
+      - "GET /api/session, and the MCP tools that return the session, without a recording are byte for byte unchanged"
       - "nothing about a recording is persisted in session.json"
     checks:
       development:
@@ -1024,7 +1103,7 @@ stories:
       - path: crates/finder/tests/recording_raw.rs
         status: new
         disposition: add
-        assertion: "a node without ScopeNodeRaw gives the error this scope node cannot send raw frames, a short reply gives the raw frame request failed, and neither leaves a file"
+        assertion: "a node without ScopeNodeRaw gives the error this scope node cannot send raw frames, a reply longer than width x height gives the raw frame request failed, and neither leaves a file"
         decision: "spec.md:US2-S5"
       - path: crates/finder/tests/recording_raw.rs
         status: new

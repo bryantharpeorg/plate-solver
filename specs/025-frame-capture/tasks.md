@@ -10,6 +10,8 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
 - the owner decisions in spec.md are settled and its owner approvals given;
 - `024-mount-link-recovery` has landed and this trio has been re-anchored to it
   (plan.md § Prerequisites 6);
+- `027-finder-tests-by-system` has landed and this trio has been refreshed against its
+  test layout (plan.md § Prerequisites 7);
 - no operator-staged file is needed.
 
 **Rules for every story:**
@@ -24,8 +26,8 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
   Scenarios, exactly. The only tolerances are US1-S3's 0.01° and 0.05 s, which bound a
   fresh solve of a replayed frame.
 - Keep the story's diff under 64 KiB, measured as plan.md § Plan traps 3 says.
-- Every code citation is `path:line` as read at c1ed295 and re-checked at f8dab49. If a
-  cited line has moved, re-read it rather than guess.
+- Every code citation is `path:line` as read at c1ed295 and re-checked at f8dab49 and
+  1104b7d. If a cited line has moved, re-read it rather than guess.
 - Add no dependency and change no `Cargo.toml`. Change nothing under
   `crates/simulator`, and outside US2 nothing under `crates/scope-node` or
   `crates/scope-link`.
@@ -51,12 +53,15 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
 - [ ] T003 [US1] Add failing tests to `crates/finder/tests/recording.rs` for a repeated
   start (US1-S5), the frame limit and a deleted folder (US1-S6), the built binary
   under `--simulate --state` (US1-S7), and a frame id that does not rise, fed to a
-  `Recorder` the test starts with channels of its own (US1-S8).
+  `Recorder` the test starts with channels of its own (US1-S8). That test builds
+  `Sources` by literal and reads `RecordingView` field by field, never building or
+  comparing a whole one, since US2 adds `raw` (plan.md § Shapes that existing tests pin).
 
 ### Implementation
 
-- [ ] T004 [US1] Create `crates/finder/src/recording.rs` with `Recorder`,
-  `RecordingView`, `Sources`, `FolderError`, the folder name and the recording task,
+- [ ] T004 [US1] Create `crates/finder/src/recording.rs` with `Recorder`, the
+  `#[non_exhaustive]` `RecordingView`, `Sources`, `FolderError`, the folder name and the
+  recording task,
   exactly as plan.md § Interfaces gives them, with every write, count and end under the
   run's one lock, `stop` ending before it aborts the task, and the `node_restarted`
   check under that lock before a frame's preview or line is written, and export it from
@@ -83,7 +88,8 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
 - [ ] T009 [US2] Create `crates/finder/tests/recording_raw.rs` with the shared setup of
   spec.md § User Scenarios. Write failing tests for the saved raw frames (US2-S3); the
   refusals, a console without a recorder, a node sending no frame and a stop during a
-  request (US2-S4); a node without the service and a short reply (US2-S5); and a
+  request (US2-S4); a node without the service and a reply of 17 bytes for a 4 × 4
+  frame (US2-S5); and a
   2592 × 1944 frame from a camera of the test's own (US2-S6); and raw frames refused
   while the mount moves and stopped with `the mount started moving` when a move starts
   (US2-S7).
@@ -98,9 +104,11 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
 - [ ] T011 [US2] In `crates/finder/src/link.rs`, add `RAW_MESSAGE_LIMIT`, `RawClient`,
   `LinkManager::raw` and the private `Paired` struct, publishing the raw client where
   the mount client is published.
-- [ ] T012 [US2] In `crates/finder/src/recording.rs`, add `RawView`, `RawRefusal`,
-  `Moving`, `request_raw` and the raw task, checking each reply's length before
-  `GrayImage::from_raw`. In `crates/finder/src/api.rs`, move the motion test into
+- [ ] T012 [US2] In `crates/finder/src/recording.rs`, add the `#[non_exhaustive]`
+  `RawView`, `RawRefusal`, `Moving`, `request_raw` and the raw task, checking each
+  reply's length before `GrayImage::from_raw` and setting each `error`, like `saved`,
+  under the run's lock and only while the run is on. Add no field to `Sources` and
+  change no signature US1's test calls. In `crates/finder/src/api.rs`, move the motion test into
   `motion_running` and add the `/api/record/raw` route with its `moving` closure, which
   calls `motion_running` (plan.md § The raw route).
 - [ ] T013 [US2] Add the raw route's row and paragraph to `crates/finder/README.md`, its
