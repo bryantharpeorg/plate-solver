@@ -8,6 +8,8 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
 - `013-live-finder`, `014-goto`, `016-mcp`, `017-console-stop-confirm`,
   `019-night-legibility` and `020-live-chart-calm` have landed on `main`;
 - the owner decisions in spec.md are settled and its owner approvals given;
+- `024-mount-link-recovery` has landed and this trio has been re-anchored to it
+  (plan.md § Prerequisites 6);
 - no operator-staged file is needed.
 
 **Rules for every story:**
@@ -47,15 +49,17 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
 - [ ] T002 [US1] Add failing tests to `crates/finder/tests/recording.rs` for the replay
   of a recorded frame through a new `Live` (US1-S3) and for the refusals (US1-S4).
 - [ ] T003 [US1] Add failing tests to `crates/finder/tests/recording.rs` for a repeated
-  start (US1-S5), the frame limit and a deleted folder (US1-S6), and the built binary
-  under `--simulate --state` (US1-S7).
+  start (US1-S5), the frame limit and a deleted folder (US1-S6), the built binary
+  under `--simulate --state` (US1-S7), and a frame id that does not rise, fed to a
+  `Recorder` the test starts with channels of its own (US1-S8).
 
 ### Implementation
 
 - [ ] T004 [US1] Create `crates/finder/src/recording.rs` with `Recorder`,
   `RecordingView`, `Sources`, `FolderError`, the folder name and the recording task,
   exactly as plan.md § Interfaces gives them, with every write, count and end under the
-  run's one lock and `stop` ending before it aborts the task, and export it from
+  run's one lock, `stop` ending before it aborts the task, and the `node_restarted`
+  check under that lock before a frame's preview or line is written, and export it from
   `crates/finder/src/lib.rs` with the route's doc line.
 - [ ] T005 [US1] In `crates/finder/src/api.rs`, add `with_recordings`,
   `with_recording_limit`, the `/api/record` route and the `recording` field of
@@ -65,8 +69,8 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
   `crates/finder/README.md`, and the **Recording** entry to `GLOSSARY.md`
   (plan.md § Interfaces).
 - [ ] T007 [US1] Run the `lint` and `test` gates with every existing test unchanged and
-  green. Commit the green story (US1-S1, US1-S2, US1-S3, US1-S4, US1-S5, US1-S6 and
-  US1-S7).
+  green. Commit the green story (US1-S1, US1-S2, US1-S3, US1-S4, US1-S5, US1-S6, US1-S7
+  and US1-S8).
 
 ## Phase 2: User Story 2 — Save the scope node's raw frames into the recording (Priority: P2)
 
@@ -81,7 +85,8 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
   refusals, a console without a recorder, a node sending no frame and a stop during a
   request (US2-S4); a node without the service and a short reply (US2-S5); and a
   2592 × 1944 frame from a camera of the test's own (US2-S6); and raw frames refused
-  while the mount moves and stopped when a move starts (US2-S7).
+  while the mount moves and stopped with `the mount started moving` when a move starts
+  (US2-S7).
 
 ### Implementation
 
@@ -110,8 +115,8 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
 ### Tests first
 
 - [ ] T015 [US3] Create `crates/finder/web/src/components/RecordingSection.test.tsx` with
-  failing tests for US3-S1, US3-S2, US3-S3, US3-S4 and US3-S5, stubbing `fetch` and
-  `EventSource` as the existing Setup page tests do.
+  failing tests for US3-S1, US3-S2, US3-S3, US3-S4, US3-S5 and US3-S6, stubbing `fetch`
+  and `EventSource` as the existing Setup page tests do.
 
 ### Implementation
 
@@ -124,7 +129,7 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
 - [ ] T017 [US3] Add the Recording entry to `DESIGN.md` and the Recording component to
   `.impeccable/design.json`. Run the `lint` and `test` gates with every existing Vitest
   and Playwright test unchanged and green, commit the rebuilt `crates/finder/web/dist`,
-  and commit the green story (US3-S1, US3-S2, US3-S3, US3-S4 and US3-S5).
+  and commit the green story (US3-S1, US3-S2, US3-S3, US3-S4, US3-S5 and US3-S6).
 
 ## Execution Order
 
