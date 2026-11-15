@@ -350,6 +350,10 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: End to end in Chromium against the release binary
         id: e2e
+        env:
+          # TEMPORARY, removed before merge: this job restores its build cache with a full
+          # key match and then compiles all 153 crates anyway. Ask cargo why.
+          CARGO_LOG: cargo::core::compiler::fingerprint=info
         run: |
           set -o pipefail
           npm run e2e 2>&1 | tee "$RUNNER_TEMP/e2e.log"
