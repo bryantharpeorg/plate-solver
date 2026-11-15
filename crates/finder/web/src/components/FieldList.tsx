@@ -1,19 +1,21 @@
-// What is in the field: the deep-sky objects on the frame, and the named stars matched. The
+// What is in the field: the deep-sky objects on the frame, and the named stars seen. The
 // roster says it in a line under the coordinates on a phone; the list says it in full.
 
 import type { ObjectMark, SolveReport } from "../api";
+import { seenNow } from "../calm";
 import { mag, objectTitle } from "../format";
 import { FamilyIcon } from "./Symbol";
 
 interface Props {
   report: SolveReport;
+  live?: boolean;
   selected: string | null;
   onSelect: (id: string) => void;
 }
 
-/** The matched stars with proper names, brightest first. */
+/** The seen stars with proper names, brightest first. */
 const namedStars = (report: SolveReport) =>
-  report.stars.filter((s) => s.matched && s.name).sort((a, b) => a.mag - b.mag);
+  report.stars.filter((s) => (s.seen ?? seenNow(s)) && s.name).sort((a, b) => a.mag - b.mag);
 
 /** Named stars as the chart marks them: a ring, then the names, brightest first. */
 function NamedStars({ names }: { names: string[] }) {
@@ -27,7 +29,7 @@ function NamedStars({ names }: { names: string[] }) {
   );
 }
 
-export function FieldList({ report, selected, onSelect }: Props) {
+export function FieldList({ report, live = false, selected, onSelect }: Props) {
   const named = namedStars(report);
   const objects = report.objects;
   return (
@@ -46,9 +48,9 @@ export function FieldList({ report, selected, onSelect }: Props) {
           ))}
         </ul>
       )}
-      {named.length > 0 && (
-        <p className="pt-1 text-[0.9375rem]">
-          <NamedStars names={named.map((s) => s.name ?? "")} />
+      {(live || named.length > 0) && (
+        <p className="pt-1 text-[0.9375rem]" data-named-stars={live ? "" : undefined}>
+          {named.length > 0 ? <NamedStars names={named.map((s) => s.name ?? "")} /> : "\u00a0"}
         </p>
       )}
     </section>

@@ -5,6 +5,7 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import type { Edge, Family, GridLine, ObjectMark, SolveReport, StarMark } from "../api";
+import { seenNow } from "../calm";
 import { mag, objectTitle, scaleBar } from "../format";
 import {
   galaxyMinor,
@@ -25,7 +26,7 @@ import type { ObservingSession } from "../useSession";
 /** What the chart draws; each is a chip in the legend. */
 export interface Layers {
   grid: boolean;
-  /** Catalog stars the solve matched to a detected star. */
+  /** Catalog stars seen in this report or held from recent live reports. */
   matched: boolean;
   /** Catalog stars in the frame that were not detected. */
   expected: boolean;
@@ -156,7 +157,7 @@ export function Chart({ report: newest, imageUrl, label, busy, layers, onLayers,
   // With nothing solved, the detected stars are the whole story: show them.
   const showDetected = layers.detected || !solved;
   const key = live ? "live" : `${report.name}:${report.pointing?.ra_deg ?? "none"}`;
-  const stars = report.stars.filter((s) => (s.matched ? layers.matched : layers.expected));
+  const stars = report.stars.filter((s) => ((s.seen ?? seenNow(s)) ? layers.matched : layers.expected));
   const objects = layers.objects ? report.objects : [];
   const detected = showDetected ? report.detected : [];
   const furniture = solved ? furnitureGeometry(report, u) : null;
@@ -459,10 +460,11 @@ function StarSymbol({
   picked: boolean;
   onPick: () => void;
 }) {
+  const seen = s.seen ?? seenNow(s);
   return (
     <g
-      className={`${s.matched ? "mark-matched" : "mark-expected"} ink-in`}
-      style={{ animationDelay: s.matched ? "350ms" : "600ms" }}
+      className={`${seen ? "mark-matched" : "mark-expected"} ink-in`}
+      style={{ animationDelay: seen ? "350ms" : "600ms" }}
       data-picked={picked}
       data-star={s.id}
       onClick={(e) => {
@@ -599,7 +601,7 @@ function Legend({
   fixed: boolean;
   onLayers: (l: Layers) => void;
 }) {
-  const matched = report.stars.filter((s) => s.matched).length;
+  const matched = report.stars.filter((s) => s.seen ?? seenNow(s)).length;
   // Matched and Unseen split the catalog stars in the frame; Centroids are what the
   // detector found, a different set, so its name does not pair with theirs.
   // The deep-sky key shows the symbols actually on this chart, up to three of them.
@@ -647,7 +649,11 @@ function PickedLine({ picked }: { picked: NonNullable<Picked> }) {
         <span className={fact}>
           {s.matched
             ? `Matched; the solution puts it ${s.error_px?.toFixed(2) ?? "—"} px from where it was found`
-            : "In the catalog but not detected"}
+            : s.detected
+              ? "Detected; not used in the solve"
+              : s.seen
+                ? "Seen in recent frames, not in this one"
+                : "In the catalog but not detected"}
         </span>
       </p>
     );

@@ -20,6 +20,8 @@ runtime: bwrap
 # the ones `ci.yml` runs, with the same `-D warnings`, so the two halves agree on
 # everything they both check. `.github/workflows/ergane-gates.yml` runs these same
 # commands under the job names `lint` and `test`; keep the two files in lockstep.
+# The one part it leaves out is `test`'s finder-page half, which `ci.yml`'s
+# `finder-page` job already runs for every pull request and merge group.
 #
 # `cargo` is not on the boundary's PATH: the gate boundary binds only uv, node,
 # git, the agent runner and /usr, under a tmpfs HOME. The toolchain arrives through
@@ -61,6 +63,17 @@ runtime: bwrap
 # reusing whatever already listens on 8097, and the release build reuses the
 # worktree's own target directory.
 #
+# The Rust tests run under cargo-nextest, since 2026-11-14. `cargo test` runs the
+# workspace's 90 test binaries one after another; nextest runs every test as its
+# own process, as many at once as the host has CPUs (settings and the per-test
+# time limit: `.config/nextest.toml`). Together with the optimized test profile in
+# the root `Cargo.toml` that took the cargo half of this gate from 626 s to 87 s
+# on this host, with the same 659 tests passing. nextest does not run doc tests, so
+# `cargo test --doc` still follows it. A scenario that names the command its tests
+# run in must name the nextest line below, word for word; specs written before
+# this date name `cargo test --workspace --all-targets --all-features --locked`,
+# which no gate runs any more.
+#
 # Each command builds into the worktree's own `target/`. A target directory
 # shared between worktrees let one story's gate run another story's test binary:
 # cargo hashes workspace crates by their path relative to the workspace, so two
@@ -82,7 +95,7 @@ gates:
     CC=gcc CXX=g++ CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc &&
     export RUSTFLAGS="-D warnings -C link-arg=-fuse-ld=lld
     -C link-arg=-B$(rustc --print sysroot)/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld" &&
-    cargo test --workspace --all-targets --all-features --locked &&
+    cargo nextest run --workspace --all-targets --all-features --locked &&
     cargo test --workspace --locked --doc &&
     cd crates/finder/web &&
     npm ci --no-audit --no-fund &&
@@ -113,6 +126,14 @@ timeouts:
 #
 #     CARGO_HOME=~/.cache/ergane/rust/cargo RUSTUP_HOME=~/.cache/ergane/rust/rustup \
 #       ~/.cache/ergane/rust/cargo/bin/rustup update stable
+#
+# cargo-nextest, which the `test` gate runs, lives in the same install, at the
+# version `.github/workflows/ergane-gates.yml` pins (CARGO_NEXTEST_VERSION). Without
+# it the gate fails at once with "no such command: `nextest`". Install or update
+# it with:
+#
+#     CARGO_HOME=~/.cache/ergane/rust/cargo RUSTUP_HOME=~/.cache/ergane/rust/rustup \
+#       ~/.cache/ergane/rust/cargo/bin/cargo install cargo-nextest --version 0.9.152 --locked
 #
 # There is deliberately no shared CARGO_TARGET_DIR (see the gates above): agents
 # and gates both build into the worktree's own `target/`, at the cost of one cold
