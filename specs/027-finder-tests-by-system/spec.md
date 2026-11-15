@@ -101,6 +101,12 @@ these are those edits.
 6. **A new test binary, `layout`**, with three tests that read the source tree (FR-004,
    FR-009). After this spec, a new test file placed at the top level of
    `crates/finder/tests` fails it.
+7. **Adding a finder test will mean editing a shared file.** Today a story adds a test by
+   adding a file and touching nothing else. After this spec it adds a module file under
+   one of the four binaries and one `mod` line to that binary's `main.rs` or to a
+   folder's `mod.rs`, a file other stories also edit. Two stories that add neighbouring
+   lines to the same file conflict unless one waits for the other to merge (plan.md
+   § Risks).
 
 ## User Scenarios & Testing *(mandatory)*
 

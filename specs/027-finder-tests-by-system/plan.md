@@ -559,6 +559,7 @@ Totals: 49 files, 261 tests; `motion` 102, `console` 84, `mcp` 59, `cli` 16.
 | A guard test in a `layout` binary of finder. | A script in the `lint` gate; no guard. | A story cannot add a gate command, and without a guard the next story adds a top-level file again. |
 | `use crate::support::x as name;` | Rewriting each file's `use support::...` lines. | One changed line a file, and every test body stays byte for byte. |
 | `pub use super::live as support;` in the two rigs. | Including `live.rs` a second time by path. | A second include compiles a second database fixture into the binary. |
+| A `mod` line for every module, written out. | A macro or build script that declares a module for every file in a folder. | Cargo does not rebuild a test binary because a file appeared beside it, so a new test file could go uncompiled and its tests unrun while the gate passed. A written `mod` line cannot be skipped that way. The price is approval 7 in spec.md: one shared line for each new module. |
 | Leave `rates.rs` and `notices.rs` as integration tests. | Move them into `crates/finder/src`. | They are pure tests and would be better inline, but that edits product source files; out of scope. |
 
 ## Verification (every story, before proposing)
@@ -621,6 +622,7 @@ Totals: 49 files, 261 tests; `motion` 102, `console` 84, `mcp` 59, `cli` 16.
 | Another story adds a test file to `crates/finder/tests` while this epic runs. | 024, 025 and 026 wait for it; nothing else is ready. A file that does arrive fails US2's guard by name. |
 | The split helper files drift from this plan's line numbers. | Prerequisite 3; the split points are also given as text, not only as numbers. |
 | A builder tidies a helper while moving it. | FR-002, FR-006 and FR-007 list the only edits; US1-S4 and US2-S6 are read from the diff. |
+| A later story's `mod` line conflicts with another story's. Each new test module adds one line to `main.rs` or a folder's `mod.rs`; two stories adding neighbouring lines to one file do not merge cleanly. | A spec whose stories add modules to the same file orders them with `depends_on_merged` and lists the file under `shared_writes`, naming this spec's US2 as its last writer. Lines are alphabetical, one module a line, so only neighbours collide. 024, 025 and 026 as drafted already order the stories that add finder tests. Two epics in flight that add neighbours to one file remain possible; the later one would need its story rebuilt on the new `main`. |
 | The recorders rot, since nothing compiles them. | They are edited in both stories (FR-010, FR-011); re-recording is by hand and rare. |
 
 ## Refinement Record
