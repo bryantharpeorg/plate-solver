@@ -11,6 +11,13 @@
 # if they drift, a node can pass locally and be refused at the queue, or the
 # reverse.
 #
+# One part of the contract is kept by another workflow, since 2026-11-14: the
+# finder-page half of the local `test` gate (`npm ci` through Playwright) is not
+# repeated here. ci.yml's `finder-page` job runs those same commands on every pull
+# request and merge group and is a required check itself, so running them in this
+# job too only made the slowest check five minutes slower (315 s of a 23-minute
+# `test` on 2026-11-14). Local `test` = `test` here plus `finder-page` there.
+#
 # ci.yml stays the full verification (its 13 jobs are required by branch
 # protection and also run on `merge_group`). Same supply-chain rules as ci.yml:
 # actions pinned by commit SHA, least-privilege token, --locked everywhere.
@@ -19,6 +26,13 @@ name: ergane gates
 on:
   pull_request:
   merge_group:
+  # Also on main, for the build cache. A cache saved by a pull request or a merge
+  # group can be read only by that same ref, so with no run on main every run of
+  # these jobs compiled the whole dependency graph from nothing (2 min 08 s of
+  # `test` on 2026-11-14, and a dozen unreadable 500 MB caches a day). The runs on
+  # main save the cache; every other run only reads it.
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -30,6 +44,11 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
+  # cargo-nextest, pinned by version and by the checksum of its release archive, as
+  # ci.yml pins its tools. The factory host carries the same version in its own
+  # toolchain (ergane.yaml, under `caches:`); change the two together.
+  CARGO_NEXTEST_VERSION: "0.9.152"
+  CARGO_NEXTEST_SHA256: "d039b43c3e0958441b6ad0a39c8884d018b3d2e8fb9928f209074b1100b5e17a"
 
 jobs:
   lint:
@@ -42,6 +61,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with: { components: "clippy, rustfmt" }
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with: { save-if: "${{ github.ref == 'refs/heads/main' }}" }
       - name: "lint"
         run: |
           cargo fmt --all --check
@@ -51,32 +71,25 @@ jobs:
 
   test:
     name: "test"
-    # Playwright 1.56.1 can't install Chromium on ubuntu-latest (26.04); see #196.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: crates/finder/web/package-lock.json
+        with: { save-if: "${{ github.ref == 'refs/heads/main' }}" }
+      - name: Install cargo-nextest
+        run: |
+          archive="cargo-nextest-${CARGO_NEXTEST_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          curl -LsSf -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${CARGO_NEXTEST_VERSION}/$archive"
+          echo "${CARGO_NEXTEST_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archive" -C "${CARGO_HOME:-$HOME/.cargo}/bin"
+          cargo nextest --version
+      # The cargo half of ergane.yaml's `test` gate, command for command. Its
+      # finder-page half is ci.yml's `finder-page` job (see the top of this file).
       - name: "test"
         run: |
-          cargo test --workspace --all-targets --all-features --locked
+          cargo nextest run --workspace --all-targets --all-features --locked
           cargo test --workspace --locked --doc
-      # The finder-page half of the `test` gate, as ci.yml's finder-page job runs it.
-      - name: "test: finder page"
-        working-directory: crates/finder/web
-        run: |
-          npm ci --no-audit --no-fund
-          npm run typecheck
-          npm run format:check
-          npm test
-          npm run build
-          git status --porcelain -- dist | (! grep .)
-          npx playwright install --with-deps chromium
-          npm run e2e

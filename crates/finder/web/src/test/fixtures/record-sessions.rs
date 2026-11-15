@@ -3,8 +3,10 @@
 //! cargo test -p finder --locked --test us8_capture -- --nocapture,
 //! then remove the temporary test file. No existing oracle is edited.
 //! Uses US6's real solver / simulated node harness in paused virtual time.
-#[path = "goto_api.rs"]
-mod api;
+#[allow(dead_code, unused_imports)]
+#[path = "support/mod.rs"]
+mod support;
+use support::goto as api;
 use api::Rig;
 use serde_json::{json, Value};
 const START: f64 = 1_768_528_800.0;
