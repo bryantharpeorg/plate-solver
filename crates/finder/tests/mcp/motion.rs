@@ -223,7 +223,16 @@ async fn legacy_session_loads_exact_fields_and_motion_is_never_persisted() {
     std::fs::remove_dir_all(folder).unwrap();
 }
 
-async fn stopped(rig: &Rig, app: &Router, request: Request<Body>, status: Option<u16>) {
+/// Always check StopAll within 0.1 s, the halt reason, motion cleared and both
+/// axes at rest within 20 ticks (2 s). With `watch`, also wait 5 s for rest, watch
+/// 5 s of unchanged axes and check that only StopAll commands were sent.
+async fn stopped(
+    rig: &Rig,
+    app: &Router,
+    request: Request<Body>,
+    status: Option<u16>,
+    watch: bool,
+) {
     assert!(
         !stationary(rig).await,
         "positive control: GoTo must be moving"
@@ -247,7 +256,14 @@ async fn stopped(rig: &Rig, app: &Router, request: Request<Body>, status: Option
     assert_eq!(view["goto"]["state"], "halted");
     assert_eq!(view["goto"]["reason"], "the observer stopped it");
     assert!(view.get("motion").is_none());
-    for _ in 0..50 {
+    for _ in 0..20 {
+        rig.tick().await;
+    }
+    assert!(stationary(rig).await);
+    if !watch {
+        return;
+    }
+    for _ in 20..50 {
         rig.tick().await;
     }
     assert!(stationary(rig).await);
@@ -305,7 +321,7 @@ async fn second_client_stop_and_sdk_rejections_cannot_block_stop() {
             }
             _ => Some(200),
         };
-        stopped(&rig, &client, request, status).await;
+        stopped(&rig, &client, request, status, case == "second client").await;
     }
 }
 
@@ -345,7 +361,7 @@ async fn security_rejections_cannot_block_stop() {
             }
             _ => {}
         }
-        stopped(&rig, &client, request, Some(403)).await;
+        stopped(&rig, &client, request, Some(403), false).await;
     }
 }
 

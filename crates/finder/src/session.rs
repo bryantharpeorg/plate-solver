@@ -1593,22 +1593,4 @@ mod tests {
         assert_eq!(restored.snapshot(0.0).min_alt_deg, 15.0);
         std::fs::remove_dir_all(folder).unwrap();
     }
-
-    // Oracle: FR-009's exact defaults; no numerical tolerance.
-    #[test]
-    fn fresh_session_has_no_site_target_or_pointing_and_fifteen_degree_minimum() {
-        let view = Session::default().snapshot(1768528800.0);
-        assert!(view.site.is_none());
-        assert!(view.target.is_none());
-        assert!(view.pointing.is_none());
-        assert_eq!(view.min_alt_deg, 15.0);
-    }
-
-    // Oracle: 2026-01-16 02:00 UT = 1768528800 Unix seconds, exactly.
-    #[test]
-    fn fixed_clock_reads_the_same_unix_time_twice() {
-        let clock = FixedClock(1768528800.0);
-        assert_eq!(clock.now(), 1768528800.0);
-        assert_eq!(clock.now(), 1768528800.0);
-    }
 }

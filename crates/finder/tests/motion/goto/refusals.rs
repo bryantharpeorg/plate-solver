@@ -116,7 +116,12 @@ async fn no_sync_matches_the_route_without_moving() {
 async fn no_mount_omits_refusal_and_second_sync_omits_it_while_running() {
     let rig = Rig::new(START, 50.0, 120.0, false).await;
     assert!(rig.view().await.get("goto_refusal").is_none());
-    assert_eq!(rig.call("/api/goto", false).await.0, 409);
+    let (status, body) = rig.call("/api/goto", false).await;
+    assert_eq!(status, 409, "{body}");
+    assert!(
+        body["error"].as_str().unwrap().contains("no mount"),
+        "{body}"
+    );
     let rig = Rig::new(START, 50.0, 120.0, true).await;
     rig.sync().await;
     assert_eq!(rig.call("/api/model/second-sync", false).await.0, 200);

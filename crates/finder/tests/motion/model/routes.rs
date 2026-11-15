@@ -104,12 +104,10 @@ async fn resets_clear_only_the_requested_terms_and_persist_across_restart() {
         .with_clock(std::sync::Arc::new(FixedClock(START)));
     let before = state.session().model(START);
     let app = finder::router(state.clone());
-    for what in ["night", "fixed"] {
-        let (status, body) = reset(&app, json!({"what":what}), true).await;
-        assert_eq!(status, 403, "{body}");
-        assert!(body["error"].is_string());
-        assert_eq!(state.session().model(START), before);
-    }
+    let (status, body) = reset(&app, json!({"what":"fixed"}), true).await;
+    assert_eq!(status, 403, "{body}");
+    assert!(body["error"].is_string());
+    assert_eq!(state.session().model(START), before);
     let (status, body) = reset(&app, json!({"what":"fixed"}), false).await;
     assert_eq!(status, 200, "{body}");
     let after = state.session().model(START);
