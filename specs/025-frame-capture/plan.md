@@ -262,14 +262,14 @@ frame carried one.
  "model":{…},"camera":{…}}
 ```
 
-taken from `session.snapshot(now)` (`crates/finder/src/session.rs:976`): `site`, `aim`,
+taken from `session.snapshot(now)` (`crates/finder/src/session.rs:1002`): `site`, `aim`,
 `camera_settings` and `model` as `GET /api/session` shows them, and `camera` as its
 `node.camera` (`crates/finder/src/session.rs:341`). At the end it gains `stopped_at`,
 `ended_reason`, `frames`, `solves` and `previews`.
 
 ### The console (`crates/finder/src/api.rs`, US1)
 
-`AppState` (`crates/finder/src/api.rs:93`) gains `recordings: Option<Arc<Recorder>>`, and:
+`AppState` (`crates/finder/src/api.rs:99`) gains `recordings: Option<Arc<Recorder>>`, and:
 
 ```rust
 /// Record on request under `root` (025). The binary passes `recordings/` in its state folder.
@@ -283,9 +283,9 @@ pub fn with_recording_limit(mut self, frames: u64) -> Self;
 frames)`, and does nothing without one.
 
 The route `.route("/api/record", post(set_record))` sits beside `/api/track`
-(`crates/finder/src/api.rs:428`). Its body is a `#[serde(deny_unknown_fields)]
-RecordEdit { on: bool }`, read through `sim_json` (`crates/finder/src/api.rs:541`) as
-`set_track` reads `TrackEdit` (`crates/finder/src/api.rs:677`), behind `SessionWrite`.
+(`crates/finder/src/api.rs:436`). Its body is a `#[serde(deny_unknown_fields)]
+RecordEdit { on: bool }`, read through `sim_json` (`crates/finder/src/api.rs:549`) as
+`set_track` reads `TrackEdit` (`crates/finder/src/api.rs:685`), behind `SessionWrite`.
 `on: true`, in this order: no recorder answers 409 `this console has no recordings
 folder`; no link or live loop answers 409 `this console has no live link`; otherwise
 `start` with `Sources` from `link.frames()`, `link.status()`, `live.subscribe()`, the
@@ -293,14 +293,14 @@ state's clock and session, and a `FolderError` answers 500 with its `to_string()
 `cannot make the recording folder: <io error>`. `on: false` calls `stop` when there is a
 recorder. Both then answer `get_session`.
 
-`SessionResponse` (`crates/finder/src/api.rs:623`) gains
+`SessionResponse` (`crates/finder/src/api.rs:631`) gains
 
 ```rust
 #[serde(skip_serializing_if = "Option::is_none")]
 recording: Option<crate::recording::RecordingView>,
 ```
 
-filled in `session_response` (`crates/finder/src/api.rs:643`) from
+filled in `session_response` (`crates/finder/src/api.rs:651`) from
 `state.recordings.as_ref().and_then(|r| r.view())`. The MCP tools `get_session`
 (`crates/finder/src/mcp/tools.rs:348`) and `set_tracking`
 (`crates/finder/src/mcp/tools.rs:314`) return `session_response` too, so their bodies
@@ -352,7 +352,7 @@ _Avoid_: capture, log, session
 ### The scope link (`crates/scope-link/proto/scope_node/v1/scope_node.proto`, US2)
 
 Appended at the end of the file, after `StopAllReply`
-(`crates/scope-link/proto/scope_node/v1/scope_node.proto:142`), not beside
+(`crates/scope-link/proto/scope_node/v1/scope_node.proto:147`), not beside
 `ScopeNodeStop` (`crates/scope-link/proto/scope_node/v1/scope_node.proto:100`), which the
 mount's messages follow:
 
@@ -378,14 +378,14 @@ message RawFrameReply {
 
 - `Commands` (`crates/scope-node/src/service.rs:83`) gains
   `raw: Vec<tokio::sync::oneshot::Sender<proto::RawFrameReply>>`.
-- In `run` (`crates/scope-node/src/service.rs:223`), inside the same
+- In `run` (`crates/scope-node/src/service.rs:229`), inside the same
   `if !unresponsive` block that sends the star frame
-  (`crates/scope-node/src/service.rs:279`), right after the send: take every waiting
+  (`crates/scope-node/src/service.rs:285`), right after the send: take every waiting
   sender (`std::mem::take`) and answer each with that frame's `id`, `width`, `height`
   and pixels, through a private helper that clones the pixels for each extra waiter and
   moves them into the last. A frame the node doesn't send answers nobody.
 - `impl ScopeNodeRaw for NodeService`: `raw_frame` waits for `controls.ready(false)`,
-  as `request_preview` does (`crates/scope-node/src/service.rs:386`), pushes a new
+  as `request_preview` does (`crates/scope-node/src/service.rs:392`), pushes a new
   sender and awaits its receiver, mapping a dropped sender to
   `Status::unavailable("the scope node stopped capturing")`. Waiters live in the
   service's shared commands, which outlive a stopped capture task, so in practice the
@@ -493,11 +493,11 @@ answer 409 with `start a recording first`, `raw frames are already being saved`,
 `wait until the mount is still` and `the scope node is not connected`. Success answers
 `get_session`. The `moving` closure holds a clone of the shared state and reads, each
 time it is called, the test `running` already makes for the session's motion record
-(`crates/finder/src/api.rs:656`): an axis move `moving`, a GoTo `slewing`, `solving` or
+(`crates/finder/src/api.rs:664`): an axis move `moving`, a GoTo `slewing`, `solving` or
 `correcting`, or Track `armed`, `tracking` or `keyhole_wait`; or the session's
 `mount.moving`. That test moves into a private `fn motion_running(axis_move:
 Option<&mcp::guard::Progress>, goto: Option<&goto::Progress>, session: &SessionView) ->
-bool` (`crates/finder/src/mcp/guard.rs:14`, `crates/finder/src/goto.rs:493`), which
+bool` (`crates/finder/src/mcp/guard.rs:14`, `crates/finder/src/goto.rs:494`), which
 `session_response` and the closure both call, with no change to the motion record.
 The closure is `motion_running(..) || mount.moving` over a fresh snapshot each call. No
 scenario isolates the `motion_running` half: every real move also sets `mount.moving`
@@ -737,10 +737,13 @@ These are not changed by any story:
    files and the page's Playwright version; e62ffc2 (pull request 214) runs the `test`
    gate's Rust half with `cargo nextest run` on an optimized test profile, so
    § Verification was copied again from its `ergane.yaml`; and 1104b7d adds the ready
-   spec 027. `main` is now at b8dceaa, merged in: 6c0e640 and b8dceaa land 027
+   spec 027. `main` then moved to b8dceaa, merged in: 6c0e640 and b8dceaa land 027
    (Prerequisite 7), which moved every cited test and helper under `crates/finder/tests`,
    and each of those citations was re-read at b8dceaa. 027 changed nothing else this
-   trio cites. If `main` moves again in a cited file, re-read it and re-run the
+   trio cites. `main` is now at f0ea2d5, merged in: 1c977a3 and 06a7d4e change only
+   spec files, and de9bfe6, fc7d2bf, 2083915 and f0ea2d5 land 024 (Prerequisite 6),
+   which moved cited lines of `crates/finder/src` and the scope node, each re-read at
+   f0ea2d5. If `main` moves again in a cited file, re-read it and re-run the
    validator.
 3. **The owner decisions are settled and the approvals given** (spec § Owner decisions,
    § Owner approvals). Met for the decisions: the owner settled decisions 1 to 10 on
@@ -750,15 +753,36 @@ These are not changed by any story:
 4. **No operator-staged files are needed.**
 5. **Outside the factory, after US2 lands:** rebuild the console and the scope node from
    that `main` before raw frames are asked for at the telescope.
-6. **`024-mount-link-recovery` has landed, and this trio is re-anchored to it.** Not met.
-   The owner settled the order on 2026-11-15: 024 flips first, and this spec flips only
-   after 024 has landed. Then every citation in the files both specs write
-   (`crates/finder/src/api.rs`, the scope-link proto, `crates/scope-node/src/service.rs`,
-   and the `main.rs` of any finder test binary both add a module to) and in the code
-   024 changes that this spec reads (the mount poll behind
-   `mount.moving`, `with_link`, the link) is re-read against 024's code, 024 joins
-   `depends_on_landed` and the shared writes of those files with `merge_order`, and the
-   validator is re-run. Until then this trio names 024 in neither.
+6. **`024-mount-link-recovery` has landed, and this trio is re-anchored to it.** Met:
+   the owner settled on 2026-11-15 that 024 flips first, and 024 completed at f0ea2d5
+   (2026-11-15, US4 #226) after US1 at de9bfe6 (#222), US2 at fc7d2bf (#224) and US3 at
+   2083915 (#225); `main` at f0ea2d5 was merged in. Every citation of a file 024 changed
+   was re-read at f0ea2d5. Its US3 moved the cited lines of `crates/finder/src/api.rs`
+   down by six to eight (`AppState` to :99, the `/api/track` route to :436,
+   `live_stream` to :465, `sim_json` to :549, `SessionResponse` to :631,
+   `session_response` to :651, the motion test to :664 and `set_track` to :685),
+   `crates/finder/src/goto.rs:494` (`Progress`) by one, and
+   `crates/finder/src/session.rs` by 23 to 54 (:652, :691, :1002 and :1234), and
+   rewrote the mount poll in `crates/finder/src/live.rs`, which now hands `set_mount` a
+   `MountReading` (:327). Its US2 and US3 added three fields to the scope-link proto,
+   so `StopAllReply`, still its last message, is at :147. Its US1 moved
+   `crates/scope-node/src/capture.rs:84` by three and the cited lines of `run` and
+   `request_preview` in `crates/scope-node/src/service.rs` by six (:229, :285 and
+   :392). Every other cited line of those files is where it was and means what this
+   trio says. 024 changed no `Commands` field, `routes`, `AppState` field,
+   `SessionResponse`, `StarFrame`, `Live`, `LinkManager` or `MountClient`, and no
+   running state the motion test reads; `mount.moving` is still either axis moving,
+   false when the poll fails; and `with_link` now also hands the console clock to the
+   mount poll, which the shared setup already sets before it. US4 changed only
+   `crates/scope-node/README.md`, `crates/scope-node/src/mount/skywatcher/mount_link.rs`,
+   `crates/scope-node/src/mount/skywatcher/protocol.rs` and
+   `crates/scope-node/tests/mount_garble.rs`, none of which this trio cites or writes.
+   So no story's design changes. 024 is in `depends_on_landed`; the shared writes of the
+   four files both specs write, `crates/finder/src/api.rs` (US1), the scope-link proto,
+   `crates/scope-node/src/service.rs` and `crates/finder/tests/motion/main.rs` (US2),
+   name 024's US3 as each file's last writer (in `motion/main.rs` it added
+   `mod mount_identity;` before `mod night;`, after which US2's line still goes);
+   spec.md owner approval 7 names the `mod` lines; and the validator was re-run.
 7. **`027-finder-tests-by-system` has landed, and this trio is refreshed against its
    layout.** Met: 027 completed at b8dceaa (2026-11-15, US2 #218), and `main` at b8dceaa
    was merged in. Finder's integration tests are now the binaries `cli`, `console`,
@@ -852,9 +876,9 @@ that keeps it from recurring. They bind every story.
 | A raw reply on slow Wi-Fi delays the heartbeat past 1 s, the link drops and the node's watchdog stops the mount mid-GoTo, Track or axis move. | Spec owner decision 10: refused with 409 while anything moves (FR-013), and a running request stops before its next frame once a move starts (FR-014). Only a frame already on its way can overlap a move; the failure stops the mount, the safe direction. |
 | A node restart or a re-pairing mid-recording repeats frame ids, and a repeated id's preview or raw PNG replaces the earlier file. | Spec owner approval 6 (settled 2026-11-15): the first frame whose id is not above the last line's ends the recording as `node_restarted` and writes nothing of it (US1-S8), and the page asks for a new recording (US3-S6). A raw request running then ends at its failed call or with the recording. Left over: a restarted node, or another node, whose first frame to arrive is already above the last id goes unnoticed; its frames join the recording, `recording.json`'s `camera` still names the first node's camera, and the lines' `offset_s` tell the nodes apart, though the ids still rise. |
 | `020-live-chart-calm` writes `DESIGN.md`, `dist` and `api.ts`, as US3 does. | Landed at f8dab49; its three moved citations were re-read (Prerequisite 2). |
-| Draft `024-mount-link-recovery` writes `crates/finder/src/api.rs` (its US3; 025's US1 and US2), the scope-link proto and `crates/scope-node/src/service.rs` (its US1 to US3; 025's US2). It also changes the mount poll that sets the session's `mount.moving` (`crates/finder/src/live.rs:319`), which FR-013 reads, and `with_link`, which every 025 test builds on. With `max_concurrent_epics: 2` both could run at once, and either landing moves the other's citations. | Settled by the owner on 2026-11-15: 024 flips first, and 025 flips only after 024 has landed. 025 is then re-read against 024's code, declares 024 in `depends_on_landed` and its shared writes, and is re-validated (Prerequisite 6), as 024's plan asks of whichever flips second (its Prerequisite 5). |
+| `024-mount-link-recovery` writes `crates/finder/src/api.rs` (its US3; 025's US1 and US2) and, as 025's US2 does, the scope-link proto (its US2 and US3), `crates/scope-node/src/service.rs` (its US1 to US3) and `crates/finder/tests/motion/main.rs` (its US3). It also changes the mount poll that sets the session's `mount.moving` (`crates/finder/src/live.rs:327`), which FR-013 reads, and `with_link`, which every 025 test builds on. | Settled by the owner on 2026-11-15: 024 flips first, and 025 flips only after 024 has landed. Landed at f0ea2d5; 025 is re-read against its code, declares 024 in `depends_on_landed` and its shared writes, and is re-validated (Prerequisite 6), as 024's plan asks of whichever flips second (its Prerequisite 5). |
 | Draft `026-mount-sky` (pull request 207) writes `link.rs` (its frame arm, and a filter on `LinkManager`), `api.rs`, `lib.rs`, `main.rs`, `crates/finder/README.md`, `GLOSSARY.md`, `DESIGN.md`, `dist` and `api.ts`: files of US1, US2 and US3. | Whichever is flipped second is re-read, declares the other in `depends_on_landed` and its shared writes, and is re-validated. |
-| `027-finder-tests-by-system` moves the finder tests and helpers this trio cites, and its `layout` test fails a new top-level test file. Each new module adds a `mod` line to a binary's `main.rs`, which other stories edit too, and two stories adding neighbouring lines to one file do not merge cleanly. | Landed at b8dceaa; this trio is refreshed against its layout and re-validated (Prerequisite 7). US2's `mod recording_raw;` follows US1's `mod recording;` in `crates/finder/tests/console/main.rs`, which US2's `depends_on_merged` on US1 orders and US1's shared writes declare. 024 lands before this spec is flipped, and Prerequisite 6 then re-reads any `main.rs` both add a module to. |
+| `027-finder-tests-by-system` moves the finder tests and helpers this trio cites, and its `layout` test fails a new top-level test file. Each new module adds a `mod` line to a binary's `main.rs`, which other stories edit too, and two stories adding neighbouring lines to one file do not merge cleanly. | Landed at b8dceaa; this trio is refreshed against its layout and re-validated (Prerequisite 7). US2's `mod recording_raw;` follows US1's `mod recording;` in `crates/finder/tests/console/main.rs`, which US2's `depends_on_merged` on US1 orders and US1's shared writes declare. 024 landed first, and its US3 added `mod mount_identity;` to `crates/finder/tests/motion/main.rs`, where US2's `mod recording_raw;` still goes after `mod night;` and US2's shared writes name 024's US3 (Prerequisite 6). |
 | A story's diff nears 64 KiB. | The round-3 probes, built from this trio with the owner's answers and then given this round's clauses, measured US1 at 57,433 bytes (8.1 KB under), US2 at 54,397 and US3 at 20,580 (round 2: 49,579, 49,638 and 19,151). Most of US1's growth is US1-S8's test. Re-homed into 027's layout (§ Refinement Record), US1 measures about 59,200 bytes and US2 about 61,400, both under 64 KiB: each module binds `crates/finder/tests/support/live.rs` with `use crate::support::live as support;` and writes the rest of its setup, so US2's `console` module repeats US1's setup, about 6 KB, and its `motion` module the part US2-S7 uses, about 6 KB more. |
 
 ## Refinement Record
@@ -943,7 +967,7 @@ answers were written in before any further probe build:
 US1-S8 rests on `Recorder::new`, `Recorder::start`, `Sources`' public fields,
 `LinkStatus`'s `Default` (`crates/finder/src/link.rs:165`), `FixedClock`
 (`crates/finder/src/session.rs:41`) and `Session::default()`
-(`crates/finder/src/session.rs:668`), each read for this change. The writes are
+(`crates/finder/src/session.rs:691`), each read for this change. The writes are
 unchanged. Round 3 compiled every one of these clauses.
 
 **Round 3.** On 2026-11-14 the three stories were probe-built again from scratch, from
@@ -1011,10 +1035,20 @@ clean. `cargo nextest` was not run on this probe; round 3 ran the same tests und
 Measured as plan trap 3 says, the re-homed tests add about 1.8 KB to US1's diff and
 7.0 KB to US2's (§ Risks).
 
+**Re-anchored to 024 (2026-11-15).** 024 landed at f0ea2d5, and `main` was merged in.
+Every citation of a file 024 changed was re-read there, and the moved ones follow it
+(Prerequisite 6). 024 joined `depends_on_landed`, and the shared writes of
+`crates/finder/src/api.rs`, the scope-link proto, `crates/scope-node/src/service.rs` and
+`crates/finder/tests/motion/main.rs` name 024's US3, each file's last writer, in place of
+the 017 and 027 stories that wrote them before it. No interface, scenario, write or
+test changed, and nothing was probe-built: 024 changed no type or signature a story
+extends or calls.
+
 Writes come from the task text and the probes. Shared writes name the merge edge that
 orders them, and the stories that last wrote the same file on `main`,
-`020-live-chart-calm` and `027-finder-tests-by-system` among them. Nothing in this
-record is an owner approval: those are in spec.md, and flipping to `ready` gives them.
+`020-live-chart-calm`, `024-mount-link-recovery` and `027-finder-tests-by-system` among
+them. Nothing in this record is an owner approval: those are in spec.md, and flipping to
+`ready` gives them.
 
 ```yaml
 version: 1
@@ -1149,10 +1183,10 @@ stories:
         disposition: merge_order
         reason: "025 depends_on_landed 017, whose US4 last changed the README"
       - path: crates/finder/src/api.rs
-        other_spec: 017-console-stop-confirm
-        other_story: US1
+        other_spec: 024-mount-link-recovery
+        other_story: US3
         disposition: merge_order
-        reason: "025 depends_on_landed 017, whose US1 last changed api.rs"
+        reason: "025 depends_on_landed 024, whose US3 last changed api.rs, after 017's US1 did"
       - path: crates/finder/src/lib.rs
         other_spec: 017-console-stop-confirm
         other_story: US1
@@ -1272,20 +1306,20 @@ stories:
         disposition: merge_order
         reason: "025 depends_on_landed 017, whose US1 last changed link.rs"
       - path: crates/scope-link/proto/scope_node/v1/scope_node.proto
-        other_spec: 017-console-stop-confirm
-        other_story: US4
+        other_spec: 024-mount-link-recovery
+        other_story: US3
         disposition: merge_order
-        reason: "025 depends_on_landed 017, whose US4 last changed the scope link proto"
+        reason: "025 depends_on_landed 024, whose US3 last changed the scope link proto, after its US2 and 017's US4 did"
       - path: crates/scope-node/src/service.rs
-        other_spec: 017-console-stop-confirm
-        other_story: US4
+        other_spec: 024-mount-link-recovery
+        other_story: US3
         disposition: merge_order
-        reason: "025 depends_on_landed 017, whose US4 last changed service.rs"
+        reason: "025 depends_on_landed 024, whose US3 last changed service.rs, after its US1 and US2 and 017's US4 did"
       - path: crates/finder/tests/motion/main.rs
-        other_spec: 027-finder-tests-by-system
-        other_story: US2
+        other_spec: 024-mount-link-recovery
+        other_story: US3
         disposition: merge_order
-        reason: "025 depends_on_landed 027, whose US2 last changed motion/main.rs"
+        reason: "025 depends_on_landed 024, whose US3 last changed motion/main.rs, adding mod mount_identity after 027's US2 made the file"
     open_questions: []
   US3:
     tests:

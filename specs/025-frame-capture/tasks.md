@@ -8,8 +8,8 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
 - `013-live-finder`, `014-goto`, `016-mcp`, `017-console-stop-confirm`,
   `019-night-legibility` and `020-live-chart-calm` have landed on `main`;
 - the owner decisions in spec.md are settled and its owner approvals given;
-- `024-mount-link-recovery` has landed and this trio has been re-anchored to it
-  (plan.md § Prerequisites 6);
+- `024-mount-link-recovery` has landed and this trio has been re-anchored to it: met,
+  at f0ea2d5 (plan.md § Prerequisites 6);
 - `027-finder-tests-by-system` has landed and this trio has been refreshed against its
   test layout: met, at b8dceaa (plan.md § Prerequisites 7);
 - no operator-staged file is needed.
@@ -35,8 +35,9 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
   fresh solve of a replayed frame.
 - Keep the story's diff under 64 KiB, measured as plan.md § Plan traps 3 says.
 - Every code citation is `path:line` as read at c1ed295 and re-checked at f8dab49 and
-  1104b7d, and those under `crates/finder/tests` re-read at b8dceaa, after 027 moved
-  them. If a cited line has moved, re-read it rather than guess.
+  1104b7d, those under `crates/finder/tests` re-read at b8dceaa, after 027 moved them,
+  and those in files 024 changed re-read at f0ea2d5. If a cited line has moved, re-read
+  it rather than guess.
 - Add no dependency and change no `Cargo.toml`. Change nothing under
   `crates/simulator`, and outside US2 nothing under `crates/scope-node` or
   `crates/scope-link`.

@@ -1,6 +1,6 @@
 ---
 state: draft
-depends_on_landed: ["013-live-finder", "014-goto", "016-mcp", "017-console-stop-confirm", "019-night-legibility", "020-live-chart-calm", "027-finder-tests-by-system"]
+depends_on_landed: ["013-live-finder", "014-goto", "016-mcp", "017-console-stop-confirm", "019-night-legibility", "020-live-chart-calm", "024-mount-link-recovery", "027-finder-tests-by-system"]
 # Drafted 2026-11-14 by the plate-solver operator against `main` at c1ed295, from gap 3 of
 # the field findings of the night of 13–14 November 2026: no live frames from that night
 # survive. The owner settled the owner decisions on 2026-11-14: every recommended answer
@@ -26,6 +26,13 @@ depends_on_landed: ["013-live-finder", "014-goto", "016-mcp", "017-console-stop-
 # merged in: US1's and US2's finder tests are modules of its `console`, `cli` and
 # `motion` test binaries, every cited test and helper is re-read at its new path, and
 # 027 joins `depends_on_landed` (plan.md § Prerequisites 7). 024 is still to land first.
+# Re-anchored 2026-11-15 to 024-mount-link-recovery, landed at f0ea2d5 and merged in:
+# every citation of a file 024 changed is re-read, the moved lines of
+# `crates/finder/src/api.rs`, `goto.rs`, `live.rs` and `session.rs`, the scope-link
+# proto, and the scope node's `capture.rs` and `service.rs` follow them, 024 joins
+# `depends_on_landed` and the shared writes of the four files both specs write, and
+# owner approval 7 names this spec's `mod` lines (plan.md § Prerequisites 6). No story's
+# design changes.
 ---
 
 # Feature Specification: Saving Live Frames at the Telescope
@@ -64,7 +71,7 @@ replay them.
      (`crates/finder/src/link.rs:218`). Live solving reads that channel and broadcasts
      each `LiveReport` (`crates/finder/src/live.rs:53`), 16 deep
      (`crates/finder/src/live.rs:160`), to `GET /api/live`
-     (`crates/finder/src/api.rs:457`). Besides the newest frame, the console keeps only
+     (`crates/finder/src/api.rs:465`). Besides the newest frame, the console keeps only
      the last eight previews (`crates/finder/src/live.rs:110`).
   3. The preview is a 640-pixel, quality-80 JPEG (`crates/scope-node/src/preview.rs:22`),
      sent every 5 s or on request (`crates/scope-node/src/preview.rs:11`). It is lossy
@@ -72,8 +79,8 @@ replay them.
   4. Only the scope node has the pixels: the 8-bit gray frame
      (`crates/scope-node/src/camera.rs:17`), rpicam's luminance plane with its padding
      and colour dropped (`crates/scope-node/src/rpicam/yuv.rs:1`). The detector reads it
-     (`crates/scope-node/src/capture.rs:81`) and the service drops it once the centroids
-     are sent (`crates/scope-node/src/service.rs:279`). No call on the scope link
+     (`crates/scope-node/src/capture.rs:84`) and the service drops it once the centroids
+     are sent (`crates/scope-node/src/service.rs:285`). No call on the scope link
      returns pixels.
   5. Two existing tests implement the `ScopeNode` service trait by hand
      (`crates/finder/tests/cli/aim.rs:22`, `crates/scope-link/tests/link.rs:55`), and
@@ -122,7 +129,7 @@ replay them.
 - Q: Does any gate see the Recording section at night? → A: None checks it (corrected in
   round 2). The one night check of the whole Setup page
   (`crates/finder/web/e2e/session.spec.ts:191`) runs on a console with no node, and the
-  session carries `node` only once one is paired (`crates/finder/src/session.rs:629`).
+  session carries `node` only once one is paired (`crates/finder/src/session.rs:652`).
   The simulate project's checks open Setup with the simulated node, so they render the
   section with no recording (`crates/finder/web/e2e/simulate.spec.ts:288`), one of them
   at night (`crates/finder/web/e2e/mcp.spec.ts:75`), but that one screenshots only the
@@ -298,10 +305,8 @@ flip, never left to a story.
 ## Owner approvals
 
 Flipping this spec to `ready` approves the settled answer to every owner decision above,
-and the following. Each is named in the FR that makes it. No existing test, golden
-or CI file changes. Each new finder test module adds one `mod` line to its test binary's
-`main.rs`, which holds no test: the edit 027's owner approval 7 approved for every later
-finder test (SC-002).
+and the following. Each is named in the FR or success criterion that makes it. No
+existing test, golden or CI file changes but for the `mod` lines of approval 7 (SC-002).
 
 1. **`POST /api/record`** and the run-only `recording` field of `GET /api/session`, which
    the MCP tools that return the session, `get_session` and `set_tracking`, carry too
@@ -331,6 +336,13 @@ finder test (SC-002).
    PNGs only under new names (`create_new`), ending with `write_failed` on a clash; (c)
    name files by a count of the recording's own, which changes owner decision 2's
    names; or keep recording and let a repeated id replace the earlier file.
+7. **US1's and US2's test modules are declared in existing test files** (SC-002). Each
+   new finder test module is declared by one line in its binary's `main.rs`: US1 adds
+   `mod recording;` in `crates/finder/tests/console/main.rs` and
+   `crates/finder/tests/cli/main.rs`, and US2 adds `mod recording_raw;` in
+   `crates/finder/tests/console/main.rs` and `crates/finder/tests/motion/main.rs`, each
+   in its alphabetical place, as 027's layout asks of every new finder test (027's owner
+   approval 7). No other line of those files and no other existing test changes.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -490,7 +502,7 @@ both; during development,
    on, the watch channel of a `LinkStatus::default()`, a broadcast channel of
    `LiveReport` whose sender it keeps, a `FixedClock` at 1768528800 and a
    `Session::default()` given the aim `Aim { x: 700.0, y: 420.0 }` with `set_aim`
-   (`crates/finder/src/session.rs:1180`) at 1768528800, **When** the test sends a star
+   (`crates/finder/src/session.rs:1234`) at 1768528800, **When** the test sends a star
    frame with id 5 and the preview
    bytes `[1, 2, 3]`, then one with id 6 and no preview, then `None`, as the link does
    when the pairing changes (`crates/finder/src/link.rs:360`), and then one with id 5 and
@@ -787,7 +799,7 @@ needs a terminal.
   when the link offers no raw client, `raw frames are already being saved` while a
   request runs, and `wait until the mount is still` while anything moves: an axis move,
   a GoTo or Track the session reports as running (the test
-  `crates/finder/src/api.rs:656` makes), or `mount.moving`; and 400 for any other
+  `crates/finder/src/api.rs:664` makes), or `mount.moving`; and 400 for any other
   JSON body (a request that is not JSON answers 415). Otherwise it SHALL answer 200 with
   the
   session and ask for N raw frames one after another, saving each as an 8-bit gray PNG
@@ -846,21 +858,23 @@ needs a terminal.
 
 ## Assumptions
 
-- **Earlier features are in place.** 013, 014, 016, 017, 019, 020-live-chart-calm and
-  027-finder-tests-by-system have landed. Every citation here was read at c1ed295 and
-  re-checked at f8dab49, after 020-live-chart-calm landed; its US2 moved the cited lines
-  of `DESIGN.md` and `crates/finder/web/src/api.ts` by four, and the citations follow
-  them (plan.md § Prerequisites). `main` then moved to 1104b7d, and no cited line moved:
+- **Earlier features are in place.** 013, 014, 016, 017, 019, 020-live-chart-calm,
+  024-mount-link-recovery and 027-finder-tests-by-system have landed. Every citation
+  here was read at c1ed295 and re-checked at f8dab49, after 020-live-chart-calm landed;
+  its US2 moved the cited lines of `DESIGN.md` and `crates/finder/web/src/api.ts` by
+  four, and the citations follow them (plan.md § Prerequisites). `main` then moved to 1104b7d, and no cited line moved:
   870b332 changes only CI workflow files and the page's Playwright version, e62ffc2
   (pull request 214) runs the `test` gate's Rust half under cargo-nextest on a test
   build at opt-level 1, and 1104b7d adds the ready spec `027-finder-tests-by-system`.
   027 landed at b8dceaa and moved every cited test and helper under
   `crates/finder/tests`; each citation there was re-read at b8dceaa, and no other cited
-  line moved.
-- **027 has landed, and 024 lands first.** The owner's order is 027, then 024, then this
+  line moved. 024 landed at f0ea2d5 and moved cited lines of `crates/finder/src` and
+  the scope node; each citation of a file it changed was re-read at f0ea2d5 (plan.md
+  § Prerequisites 6).
+- **027 and 024 have landed.** The owner's order is 027, then 024, then this
   spec. 027 landed at b8dceaa, and this trio is refreshed against its layout: US1's and
   US2's finder tests are modules of its binaries, and their commands and the cited tests
-  follow its moves (plan.md § Prerequisites 7). 024 lands next, and this trio is then
+  follow its moves (plan.md § Prerequisites 7). 024 landed at f0ea2d5, and this trio is
   re-anchored to it (plan.md § Prerequisites 6).
 - **Out of scope:**
   - a replay tool, loader or replaying node;
