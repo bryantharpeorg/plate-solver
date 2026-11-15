@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "015-tracking", "016-mcp", "017-console-stop-confirm", "018-live-chart-steady", "019-night-legibility", "020-live-chart-calm", "024-mount-link-recovery", "025-frame-capture", "027-finder-tests-by-system"]
 # Drafted 2026-11-15 against `main` at 06a7d4e, after spec 027 landed, from the test-layer
 # audit of 2026-11-14 and the owner's answers of 2026-11-15. It builds after 024 and 025
@@ -31,6 +31,11 @@ depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "0
 # the cross-references are new. The comments above name the stories as they were numbered
 # then; plan.md § Refinement Record "Round 5" maps them to the new ones. Round 5's probe
 # then built the six stories, each on its round's base, and measured each diff there.
+# Flipped to ready 2026-11-15 on the owner's go ("flip it, keep US6 whole"), giving the
+# seventeen owner approvals, the optional US6 kept with all three trims. Round 5's probe
+# built the six stories on their bases; the final tree passed the workspace's 662 tests,
+# clippy, fmt and the doc tests. Validated against `main` at 820c558: no findings,
+# preflight 0, US1 to US4 at once, then US5 and US6.
 ---
 
 # Feature Specification: Finder's Tests Do Less Work
