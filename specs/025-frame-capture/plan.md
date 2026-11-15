@@ -31,12 +31,18 @@ Nothing about a recording is kept in `session.json`: it is run-only.
 - US2: `crates/scope-node/tests/raw_frame.rs` (new) for the node, and
   `crates/finder/tests/recording_raw.rs` (new) for the console.
 - US3: `crates/finder/web/src/components/RecordingSection.test.tsx` (new), Vitest.
-- No Playwright test, and no existing one renders the section: the one night check of
-  Setup (`crates/finder/web/e2e/session.spec.ts:191`) runs on the session project's
-  console, which never pairs a node, and the simulate project's Setup checks are day
-  only. A new e2e file would join the default project, which has no node either, and
-  joining the simulate project means editing `playwright.config.ts`. Night mode for the
-  section rests on its using only existing classes (spec owner decision 11).
+- No new Playwright test. No existing one checks the section, and none checks it at
+  night: the one night check of the whole Setup page
+  (`crates/finder/web/e2e/session.spec.ts:191`) runs on the session project's console,
+  which never pairs a node. The simulate project's checks open Setup with the simulated
+  node (`crates/finder/web/e2e/simulate.spec.ts:288`,
+  `crates/finder/web/e2e/goto.spec.ts:132`), so they render the section with no
+  recording, one at night (`crates/finder/web/e2e/mcp.spec.ts:75`), whose screenshot is
+  of the MCP region only (`crates/finder/web/e2e/mcp.spec.ts:131`). A check of the
+  section would join the simulate project, which means editing `playwright.config.ts`,
+  or pair a node that never connects on the default project's console, which its other
+  checks share. Night mode for the section rests on its using only existing classes
+  (spec owner decision 11).
 - Numbers read back from a file are compared after a `serde_json` round trip (spec
   § User Scenarios, **Comparing numbers**): the workspace's `serde_json` 1.0.150
   (`Cargo.lock:2509`) has no `float_roundtrip`, and no `Cargo.toml` may change.
@@ -137,7 +143,7 @@ pub struct Sources {
 pub struct FolderError(pub std::io::Error);
 // impl Display for FolderError, impl std::error::Error for FolderError
 
-pub struct Recorder { /* root, limit, Mutex<Option<Run>> */ }
+pub struct Recorder { /* root, limit, run: Mutex<Option<Arc<Mutex<Run>>>> */ }
 
 impl Recorder {
     pub fn new(root: PathBuf, limit: u64) -> Self;
@@ -164,8 +170,10 @@ impl Recorder {
    here is a `FolderError` too.
 4. Spawn the recording task and keep its handle with the run.
 
-The run's view, folder and `recording.json` fields sit behind one `std::sync::Mutex`
-shared by the task and the `Recorder`. The task loops on a `biased` `tokio::select!`
+The run (its view, folder, `recording.json` fields and the console clock from
+`Sources.clock`) sits behind one `std::sync::Mutex` in an `Arc`, shared by the task and
+the `Recorder`; every end writes `stopped_at` from that clock, and the task reads its
+own clone of it for `received_at`. The task loops on a `biased` `tokio::select!`
 with `frames.changed()` first, so a report ready at the same poll as its frame finds the
 frame recorded, and `reports.recv()` second:
 - **A frame**: read the clock and `status.borrow().offset_s`, then take the lock; if the
@@ -413,25 +421,28 @@ impl Recorder {
 
 Refusals in this order: no recording on is `NotRecording`; a request whose `saved` is
 below `wanted` and has no `error` is `Busy`; `moving()` true is `Moving` (owner decision
-10); no client is `NotConnected`. An accepted
-request sets `raw` to `{wanted, saved: 0}` and spawns a task whose `AbortHandle` the run
-keeps under its lock: for each frame, first `moving()`, which ends the request with
-`stopped: the mount started moving` when true, then `time::timeout(RAW_WAIT, client.raw_frame())`,
-then on the blocking pool `image::GrayImage::from_raw(width, height, pixels)` (a size
-mismatch is `the raw frame request failed`), saved with `ImageFormat::Png` as
+10); no client is `NotConnected`. An accepted request sets `raw` to `{wanted, saved: 0}`
+and spawns a task whose `AbortHandle` the run keeps under its lock (`raw_task:
+Option<AbortHandle>`; US1's view starts with `raw: None`): for each frame, first
+`moving()`, which ends the request with `stopped: the mount started moving` when true,
+then `time::timeout(RAW_WAIT, client.raw_frame())`, then on the blocking pool a check
+that `pixels` hold exactly `width × height` bytes, since
+`image::GrayImage::from_raw(width, height, pixels)` alone accepts a longer buffer (a
+mismatch either way is `the raw frame request failed`), saved with `ImageFormat::Png` as
 `raw-<id>.png.part` and renamed to `raw-<id>.png`; then, under the lock and only while
 the run is on, `saved += 1`. `Unimplemented` sets `this scope node cannot send raw
 frames`, a timeout `no raw frame arrived within 15 s`, any other status `the raw frame
-request failed`, and a failed write ends the recording with `write_failed` (the task
-takes the clock for `stopped_at`). Every end of the recording aborts the raw task and
+request failed`, and a failed write ends the recording with `write_failed` (its
+`stopped_at` from the run's clock). Every end of the recording aborts the raw task and
 leaves `raw` as it was, with no `error`.
 
 ### The raw route (`crates/finder/src/api.rs`, US2)
 
 `.route("/api/record/raw", post(record_raw))` behind `SessionWrite`, with
-`#[serde(deny_unknown_fields)] RawEdit { frames: u8 }` read through `sim_json`; a value
-outside 1 to `MAX_RAW_FRAMES` answers 400 with
-`frames must be a whole number from 1 to 10`. Then, in this order: no recorder answers
+`#[serde(deny_unknown_fields)] RawEdit { frames: u8 }` read through `sim_json`; 0 or 11
+to 255 answers 400 with `frames must be a whole number from 1 to 10`, and any other bad
+body (a fraction, a value that is not a `u8`, a missing field) answers 400 as `sim_json`
+answers it. Then, in this order: no recorder answers
 409 `this console has no recordings folder`; `NotRecording`, `Busy`, `Moving` and `NotConnected`
 answer 409 with `start a recording first`, `raw frames are already being saved`,
 `wait until the mount is still` and `the scope node is not connected`. Success answers
@@ -439,10 +450,15 @@ answer 409 with `start a recording first`, `raw frames are already being saved`,
 time it is called, the test `running` already makes for the session's motion record
 (`crates/finder/src/api.rs:656`): an axis move `moving`, a GoTo `slewing`, `solving` or
 `correcting`, or Track `armed`, `tracking` or `keyhole_wait`; or the session's
-`mount.moving`. That test moves into a private `fn motion_running` used by both, with no
-change to the motion record. This part was added after the probe builds, from owner
-decision 10. The client comes from
-`state.link().and_then(|link| link.raw())`.
+`mount.moving`. That test moves into a private `fn motion_running(axis_move:
+Option<&mcp::guard::Progress>, goto: Option<&goto::Progress>, session: &SessionView) ->
+bool` (`crates/finder/src/mcp/guard.rs:14`, `crates/finder/src/goto.rs:493`), which
+`session_response` and the closure both call, with no change to the motion record.
+The closure is `motion_running(..) || mount.moving` over a fresh snapshot each call. No
+scenario isolates the `motion_running` half: every real move also sets `mount.moving`
+(US2-S7 drives that one), and a Track `armed` or a GoTo `solving` with a still mount is
+hard to hold in a test, so the diff shows the closure calling `motion_running`. The
+client comes from `state.link().and_then(|link| link.raw())`.
 
 ### `crates/finder/src/lib.rs` (US2)
 
@@ -458,10 +474,11 @@ A row after US1's:
 ```
 
 and a paragraph in `## Recording a night` on raw frames, their PNGs, `recording.raw`
-and its three errors, and that a raw reply shares the scope link's connection, so raw
-frames are best asked for while the mount is still: on slow Wi-Fi a transfer can delay
-the heartbeat past one second, and the scope node then stops the mount. After
-**Recording** in `GLOSSARY.md`:
+and its four errors, and that raw frames are refused with `wait until the mount is
+still` while anything moves, and a running request stops before its next frame once a
+move starts, because a raw reply shares the scope link's connection with the heartbeat:
+on slow Wi-Fi a transfer can delay the heartbeat past one second, and the scope node
+then stops the mount. After **Recording** in `GLOSSARY.md`:
 
 ```markdown
 **Raw frame**:
@@ -521,10 +538,13 @@ Its states, with these words exactly:
   recordings folder, to test with later.` and no `status` or `alert`.
 - **On**: one `role="status"` element holding
   `Recording to {folder} · {frames} frames · {solves} solves`, and while `raw` is
-  present and has no `error`, a second line `Raw frames: {saved} of {wanted} saved`.
+  present and has no `error`, a second line inside that same element,
+  `Raw frames: {saved} of {wanted} saved`.
   The buttons `Stop recording` and `Save 3 raw frames` (`button`); the second is
   disabled while `saved` is below `wanted` and there is no `error`. A raw `error` shows
-  as `role="alert"`: `Raw frames stopped: {error}.`
+  as `role="alert"`: `Raw frames stopped: {error}.`, the error unchanged, so a request
+  stopped by a move reads `Raw frames stopped: stopped: the mount started moving.` (spec
+  owner approval 4 leaves this open).
 - **Ended**: the status `Saved {folder}: {frames} frames, {solves} solves.`, followed
   for `limit` by ` It stopped at its frame limit.`; for `write_failed`, an alert
   `Recording stopped: the console could not write to its folder.`
@@ -547,7 +567,7 @@ entry is not a blockquote:
 > On the Setup page, after the aim point, while a scope node is paired: a section titled
 > Recording with one primary button, Start recording. While recording, one status line
 > names the folder and counts, with Stop recording and Save 3 raw frames as secondary
-> buttons; raw progress sits under the status and a failure is an alert. After a
+> buttons; raw progress is a second line of the status and a failure is an alert. After a
 > recording the status says what was saved. Ink on paper with existing tokens only; at
 > night it is red like every other section.
 
@@ -582,8 +602,10 @@ These are not changed by any story:
   address line `finder console: http://`; nothing new is printed.
 - **The Setup page with no `node`, or with a `node` and no `recording`.** Existing tests
   read the page's only `status` (`crates/finder/web/src/components/SetupPage.test.tsx:37`)
-  and only `alert` (`crates/finder/web/src/components/AimTap.test.tsx:102`); the new
-  section adds neither then, and no button whose name another test uses.
+  and only `alert` (`crates/finder/web/src/components/AimTap.test.tsx:102`), and in a
+  real browser the simulate console's aim-tap check reads Setup's only `status`
+  page-wide with the node paired (`crates/finder/web/e2e/simulate.spec.ts:318`); the
+  new section adds neither then, and no button whose name another test uses.
 - **`useSession`'s other fields.** The one new line copies `recording` only; a test that
   drives the page through the hook
   (`crates/finder/web/src/components/ScopeNodeSection.test.tsx:70`) reads the same
@@ -631,16 +653,17 @@ These are not changed by any story:
 
 1. **The earlier specs have landed:** `013-live-finder`, `014-goto`, `016-mcp`,
    `017-console-stop-confirm`, `019-night-legibility` and `020-live-chart-calm`. Met:
-   020-live-chart-calm completed at f8dab49 (2026-11-14, US2 #212). That US2 wrote `DESIGN.md`, `crates/finder/web/dist` and
-   `crates/finder/web/src/api.ts`, as US3 does, and two rebuilds of `dist` in flight
-   always conflict. Dispatching 025 first instead is the owner's call; it would mean
-   dropping `020-live-chart-calm` from `depends_on_landed` and naming 025 in that spec's
-   shared writes.
+   020-live-chart-calm completed at f8dab49 (2026-11-14, US2 #212). That US2 wrote
+   `DESIGN.md`, `crates/finder/web/dist` and `crates/finder/web/src/api.ts`, as US3
+   does.
 2. **`main` is still as read.** Every citation here was read at c1ed295 and re-checked at
    f8dab49, after 020-live-chart-calm landed: its US2 moved the cited lines of
    `DESIGN.md` and `crates/finder/web/src/api.ts` down by four, now `DESIGN.md:347`,
-   `crates/finder/web/src/api.ts:234` and `crates/finder/web/src/api.ts:300`. If `main`
-   moves again in a cited file, re-read it and re-run the validator.
+   `crates/finder/web/src/api.ts:234` and `crates/finder/web/src/api.ts:300`. `main` at
+   870b332 changes only CI workflow files and the page's Playwright version. If `main`
+   moves again in a cited file, re-read it and re-run the validator. Open pull request
+   214 would run the `test` gate's Rust half with `cargo nextest` (`ergane.yaml`); if it
+   lands first, § Verification is copied again from `ergane.yaml`.
 3. **The owner decisions are settled and the approvals given** (spec § Owner decisions,
    § Owner approvals). An answer other than the recommended one is written into the trio
    and re-validated before the flip, never left to a story.
@@ -666,8 +689,10 @@ that keeps it from recurring. They bind every story.
    with `serde_json` themselves and compare them with frames and reports they received
    on their own subscriptions, re-run `star_detection::detect_stars` on saved pixels,
    and decode PNGs with `image`. No test reads a recording through `Recorder`. Numbers
-   are compared after the round trip of spec § User Scenarios, never with a tolerance:
-   the workspace's `serde_json` parses about one `f64` in eight back one ULP off.
+   read back from a file are compared after the round trip of spec § User Scenarios,
+   exactly: the workspace's `serde_json` parses about one `f64` in eight back one ULP
+   off. The only tolerances are US1-S3's 0.01° and 0.05 s, which bound a fresh solve of
+   a replayed frame.
 7. **A new call on `ScopeNode` breaks two tests.** *Check:* the call is in the new
    `ScopeNodeRaw` service, and `ScopeNode`, `StarFrame` and every existing message keep
    their calls and fields.
@@ -675,7 +700,11 @@ that keeps it from recurring. They bind every story.
    *Check:* US2-S6 sends a 2592 × 1944 frame.
 9. **The newest-frame channel.** A recorder that writes the frame already on the channel
    at its start, or a solve of an earlier frame, gives solve lines without frame lines.
-   *Check:* US1-S1 asserts every solve line names a frame line.
+   *Check:* US1-S1 asserts that the first frame line's id is above that of the frame on
+   the channel before the start; a run on the round-2 probe branch saw it fail with the
+   start's `borrow_and_update` removed. Its check that every solve line names a frame line is a
+   guard only: in the shared setup no earlier frame's solve is still running at the
+   start.
 10. **A cut line, or a line after the stop.** Aborting a task at an await can leave half
     a line, and an abort does not wait for a write already running on another worker.
     *Check:* lines are written synchronously, one call each, under the run's lock that
@@ -702,10 +731,12 @@ that keeps it from recurring. They bind every story.
 | Raw requests slow the scope node. | One pixel clone per waiting call; at most ten frames a request, one request at a time. |
 | A recorded frame is missed. | Gaps show in the ids; the cadence of 200 ms or more leaves the writer idle most of the time. |
 | An older scope node. | It answers `Unimplemented`, which the page and session report as `this scope node cannot send raw frames`. |
-| A raw reply on slow Wi-Fi delays the heartbeat past 1 s, the link drops and the node's watchdog stops the mount mid-GoTo, Track or axis move. | Spec owner decision 10: at most ten frames a request, one request at a time, and the README says to ask while the mount is still. The failure stops the mount, the safe direction. |
-| `020-live-chart-calm` US2 (`ready`) writes `DESIGN.md`, `dist` and `api.ts`, as US3 does. | 025 depends on it landing (Prerequisite 1), and its cited lines are re-read then (Prerequisite 2). |
-| Draft 020 "mount-sky" (pull request 207) writes `link.rs` (its frame arm, and a filter on `LinkManager`), `api.rs`, `lib.rs`, `main.rs`, `crates/finder/README.md`, `GLOSSARY.md`, `DESIGN.md`, `dist` and `api.ts`: files of US1, US2 and US3. | Whichever is flipped second is re-read, declares the other in `depends_on_landed` and its shared writes, and is re-validated. |
-| A story's diff nears 64 KiB. | The probes measured US1 at 51,667 bytes, US2 at 46,881 and US3 at 16,699. Tests may share `crates/finder/tests/live/support.rs` with `#[path]`; US2's test repeats US1's setup, about 6 KB. |
+| A raw reply on slow Wi-Fi delays the heartbeat past 1 s, the link drops and the node's watchdog stops the mount mid-GoTo, Track or axis move. | Spec owner decision 10: refused with 409 while anything moves (FR-013), and a running request stops before its next frame once a move starts (FR-014). Only a frame already on its way can overlap a move; the failure stops the mount, the safe direction. |
+| A node restart or a re-pairing mid-recording repeats frame ids, and a repeated id's preview or raw PNG replaces the earlier file. | Open owner question (spec owner approval 6). US1-S1's ids increase only because its node never restarts. |
+| `020-live-chart-calm` writes `DESIGN.md`, `dist` and `api.ts`, as US3 does. | Landed at f8dab49; its three moved citations were re-read (Prerequisite 2). |
+| Draft `024-mount-link-recovery` writes `crates/finder/src/api.rs` (its US3; 025's US1 and US2), the scope-link proto and `crates/scope-node/src/service.rs` (its US1 to US3; 025's US2). It also changes the mount poll that sets the session's `mount.moving` (`crates/finder/src/live.rs:319`), which FR-013 reads, and `with_link`, which every 025 test builds on. With `max_concurrent_epics: 2` both could run at once, and either landing moves the other's citations. | Whichever is flipped second is re-read, declares the other in `depends_on_landed` and its shared writes, and is re-validated; 024's plan says the same (its Prerequisite 5). Which dispatches first is the owner's call. |
+| Draft `026-mount-sky` (pull request 207) writes `link.rs` (its frame arm, and a filter on `LinkManager`), `api.rs`, `lib.rs`, `main.rs`, `crates/finder/README.md`, `GLOSSARY.md`, `DESIGN.md`, `dist` and `api.ts`: files of US1, US2 and US3. | Whichever is flipped second is re-read, declares the other in `depends_on_landed` and its shared writes, and is re-validated. |
+| A story's diff nears 64 KiB. | The round-2 probes, built from this trio, measured US1 at 49,579 bytes, US2 at 49,638 and US3 at 19,151 (round 1: 51,667, 46,881 and 16,699). Tests may share `crates/finder/tests/live/support.rs` with `#[path]`; US2's test repeats US1's setup, about 6 KB. |
 
 ## Refinement Record
 
@@ -736,13 +767,48 @@ the trio was reviewed against the code:
   decision 10); `020-live-chart-calm` writes three of US3's files.
 - **Not run:** `CI=1 npm run e2e` and the workspace-wide gates. The `test` gate runs both.
 
-The trio was then rebased onto `main` at 2508423, whose only code change since c1ed295
-is `crates/finder/src/solve.rs`; its one cited line was re-read. After 020-live-chart-calm
-landed, `main` at f8dab49 was merged in and the three citations its US2 moved
-(`DESIGN.md` and two in `crates/finder/web/src/api.ts`) were re-read. Writes come from the
-task text and the probes. Shared writes name the merge edge that orders them, and the
-stories that last wrote the same file on `main`, `020-live-chart-calm` among them. Nothing in this record is an owner approval: those are in spec.md, and flipping
-to `ready` gives them.
+The trio was then rebased onto `main` at 2508423, whose only source change since c1ed295
+is `crates/finder/src/solve.rs` (with a new test, `crates/finder/tests/star_detected.rs`);
+the one cited line of `solve.rs` was re-read. After 020-live-chart-calm landed, `main` at
+f8dab49 was merged in and the three citations its US2 moved (`DESIGN.md` and two in
+`crates/finder/web/src/api.ts`) were re-read. The owner then settled the owner decisions,
+and decision 10's answer added the raw route's motion test, US2-S7 and FR-013's and
+FR-014's refusals, none of it compiled yet.
+
+**Round 2.** On 2026-11-14 the three stories were probe-built again from scratch, from
+the trio as it then stood on `main` at f8dab49, in throwaway worktrees (branches
+`probe/025-r2-us1`, `probe/025-r2-us2` on it, `probe/025-r2-us3` on that), tests first,
+with no existing test edited and no undeclared write, and the trio was reviewed again for
+anchors and scenarios:
+
+- **US1**: eight tests passing, stable over six runs, and `cargo test -p finder` (396),
+  `clippy -p finder`, `fmt` and `cargo doc -p finder` with and without
+  `--all-features` clean; diff 49,579 bytes. Every interface compiled as written; the
+  `Recorder`'s run is an `Arc` its task shares, and keeps the console clock. Two of
+  US1-S1's readings are now explicit, and its check of plan trap 9 now bites (a clause
+  run on the probe branch, which failed with the start's `borrow_and_update` removed).
+- **US2**: seven tests passing (two in `scope-node`, five in `finder`), and the
+  `scope-link`, `scope-node`, `simulator` and `finder` tests (6, 55, 48 and 401) with
+  their `clippy`, `fmt` and docs clean; diff 49,638 bytes. Every interface compiled as
+  written, `motion_running` included. Mutations showed the 16 MiB limit (US2-S6), the
+  per-frame motion check and `mount.moving` (US2-S7) are real checks; the plan now says
+  no scenario isolates `motion_running`, and that a reply's length is checked before
+  `GrayImage::from_raw`, which accepts a longer buffer. US2-S4's new `recording.raw`
+  clause was run on the probe branch and passed.
+- **US3**: seven new Vitest tests passing, with all 282 of the page's, typecheck,
+  `format:check`, the build and a clean `dist`; diff 19,151 bytes, `.impeccable/design.json` written this
+  time. Every interface compiled as written.
+- **Review**: the tolerance rule now names US1-S3's bounds as the only ones; the README
+  paragraph and the slow-Wi-Fi risk follow decision 10; the simulate project's Setup
+  checks render the section, one at night, and `crates/finder/web/e2e/simulate.spec.ts`
+  pins its one status; drafts 024 and 026 share files; and two owner questions are open
+  (spec owner approvals 4 and 6).
+- **Not run:** `CI=1 npm run e2e` and the workspace-wide gates. The `test` gate runs both.
+
+Writes come from the task text and the probes. Shared writes name the merge edge that
+orders them, and the stories that last wrote the same file on `main`,
+`020-live-chart-calm` among them. Nothing in this record is an owner approval: those are
+in spec.md, and flipping to `ready` gives them.
 
 ```yaml
 version: 1
@@ -753,7 +819,7 @@ stories:
       - path: crates/finder/tests/recording.rs
         status: new
         disposition: add
-        assertion: "a start and stop write recording.json with the format, version, site, settings, camera, UTC name, stop time and counts, frames.jsonl and solves.jsonl whose counts match the session, every solve naming a recorded frame, nothing after the stop, and no address or token"
+        assertion: "a start and stop write recording.json with the format, version, site, settings, camera, UTC name, stop time and counts, frames.jsonl and solves.jsonl whose counts match the session, a first frame after the one on the channel at the start, every solve naming a recorded frame, nothing after the stop, and no address or token"
         decision: "spec.md:US1-S1"
       - path: crates/finder/tests/recording.rs
         status: new
@@ -887,7 +953,7 @@ stories:
       - path: crates/finder/tests/recording_raw.rs
         status: new
         disposition: add
-        assertion: "the raw route refuses without a recorder, without a recording, with bad bodies, a foreign origin, a running request or no node, a node sending no frame ends the request after 15 s, and a stop ends a request"
+        assertion: "the raw route refuses without a recorder, without a recording, with bad bodies, a foreign origin, a running request or no node, a node sending no frame ends the request after 15 s, and a stop ends a request with its counts and no error"
         decision: "spec.md:US2-S4"
       - path: crates/finder/tests/recording_raw.rs
         status: new
@@ -1012,6 +1078,11 @@ stories:
         disposition: preserve
         assertion: "the Setup page without a node is still red only at night; it never renders the Recording section"
         decision: "plan.md:Shapes that existing tests pin"
+      - path: crates/finder/web/e2e/simulate.spec.ts
+        status: existing
+        disposition: preserve
+        assertion: "Setup with the simulated node and no recording still shows exactly one status, the aim tap's"
+        decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
       - "the page adds no npm package (plan.md Technical Context, Primary Dependencies)"
       - "red-only night mode: the section uses existing tokens and classes; no gate checks it at night (spec.md owner decision 11)"
@@ -1019,6 +1090,7 @@ stories:
       development:
         - "npm test"
         - "npm run typecheck"
+        - "npm run build"
       handoff: declared_gates
       independent: declared_pipeline
       release:

@@ -4,11 +4,16 @@ depends_on_landed: ["013-live-finder", "014-goto", "016-mcp", "017-console-stop-
 # Drafted 2026-11-14 by the plate-solver operator against `main` at c1ed295, from gap 3 of
 # the field findings of the night of 13–14 November 2026: no live frames from that night
 # survive. The owner settled the owner decisions on 2026-11-14: every recommended answer
-# except decision 10, where raw frames are refused while anything moves. It stays draft
-# until those answers are probe-built; flipping it to `ready` gives the approvals listed
-# under "Owner approvals" and dispatches it.
+# except decision 10, where raw frames are refused while anything moves.
 # Refined 2026-11-14 by probe builds of all three stories in throwaway worktrees and two
-# reviews (plan.md § Refinement Record), and rebased onto `main` at 2508423, then main at f8dab49 merged in; still draft.
+# reviews (plan.md § Refinement Record), rebased onto `main` at 2508423, then `main` at
+# f8dab49 merged in.
+# Refined 2026-11-14 (round 2) by probe builds of all three stories from the trio as it
+# stood, on `main` at f8dab49, and two reviews (anchors, scenarios); the clauses this
+# refinement added were run on the probe branches.
+# It stays draft until the owner answers the round-2 questions (owner approvals 4 and 6,
+# owner decision 11's basis, and which of 024 and 025 goes first); flipping it to `ready`
+# gives the approvals listed under "Owner approvals" and dispatches it.
 ---
 
 # Feature Specification: Saving Live Frames at the Telescope
@@ -102,16 +107,43 @@ replay them.
   default zero points are near altitude −2° (`crates/simulator/src/mount.rs:34`), while
   `push_to` after the mount moves the tube and keeps the counts
   (`crates/simulator/src/controls.rs:80`). The setup now connects first and pushes after.
-- Q: Does any gate see the Recording section at night? → A: No. The one night check of
-  Setup (`crates/finder/web/e2e/session.spec.ts:191`) runs on a console with no node, and
-  the session carries `node` only once one is paired (`crates/finder/src/session.rs:629`).
-  A new check would have to join the simulate project, which means editing
-  `playwright.config.ts`. See owner decision 11.
+- Q: Does any gate see the Recording section at night? → A: None checks it (corrected in
+  round 2). The one night check of the whole Setup page
+  (`crates/finder/web/e2e/session.spec.ts:191`) runs on a console with no node, and the
+  session carries `node` only once one is paired (`crates/finder/src/session.rs:629`).
+  The simulate project's checks open Setup with the simulated node, so they render the
+  section with no recording (`crates/finder/web/e2e/simulate.spec.ts:288`), one of them
+  at night (`crates/finder/web/e2e/mcp.spec.ts:75`), but that one screenshots only the
+  MCP region (`crates/finder/web/e2e/mcp.spec.ts:131`). A check of the section would
+  join the simulate project, which means editing `playwright.config.ts`, or pair a node
+  that never connects on the default project's console, which its other checks share.
+  See owner decision 11.
 - Q: Which other specs write the same files? → A: `020-live-chart-calm` landed on
   2026-11-14 (US2 at f8dab49). Its US2 wrote `DESIGN.md`, `crates/finder/web/dist` and
   `crates/finder/web/src/api.ts`, as US3 does, so this spec names it in
-  `depends_on_landed` (plan.md § Prerequisites). The draft "mount-sky" (pull request 207) also writes files
-  US1, US2 and US3 write (plan.md § Risks).
+  `depends_on_landed` (plan.md § Prerequisites). Two drafts write files of this spec:
+  `024-mount-link-recovery` writes `crates/finder/src/api.rs` (US1, US2), the scope-link
+  proto and `crates/scope-node/src/service.rs` (US2), and changes the mount poll that
+  sets the session's `mount.moving`, which FR-013 reads; `026-mount-sky` (pull request
+  207) writes files of US1, US2 and US3. Whichever is flipped second orders against the
+  other (plan.md § Risks).
+
+### Session 2026-11-14 (round 2: probe builds at f8dab49 and review)
+
+- Q: Is the trio buildable as written? → A: Yes. Each story was built again from this
+  trio, tests first, with no existing test edited, and every scenario passed as written
+  with every interface as plan.md gives it. Three readings were made explicit (US1-S1's
+  two answers, US3-S3's button); US1-S1's check of the frame on the channel at the
+  start, which could not fail, now can; and US2-S4 now checks `recording.raw` after a
+  stop. Both new clauses were run on the probe branches and passed.
+- Q: Which comparisons may use a tolerance? → A: Only US1-S3's 0.01° and 0.05 s, which
+  bound a fresh solve of a replayed frame, not a number read back from a file. Every
+  other comparison is exact, after the round trip where the shared setup says.
+- Q: What happens to file names when the scope node restarts? → A: Ids repeat (Edge
+  Cases). Open owner question: owner approval 6.
+- Q: How does the page word a raw request stopped by a move? → A: With the settled words,
+  `Raw frames stopped: stopped: the mount started moving.` Open owner question: owner
+  approval 4.
 
 ## Owner decisions
 
@@ -169,10 +201,15 @@ owner may pick another before flipping, and the trio is then refined again.
     runs (chosen); or a second connection only for raw frames.
 11. **No night check of the Recording section.** Recommended: none. The section uses only
     the classes other Setup sections use (`section-title`, `button`, `button-primary`,
-    `quiet`), and the US3 probe's build left the CSS unchanged. No Playwright project
-    renders Setup with a node at night, and adding one means editing
-    `crates/finder/web/playwright.config.ts`, which no story may. Instead: the owner adds
-    such a check outside the factory.
+    `quiet`), and both US3 probes' builds left the CSS unchanged. No existing check looks
+    at the section at night: the simulate project renders it, once at night
+    (`crates/finder/web/e2e/mcp.spec.ts:75`), but screenshots only the MCP region. A
+    check of its own would join the simulate project, which means editing
+    `crates/finder/web/playwright.config.ts`, which no story may, or pair a node that
+    never connects on the default project's shared console. *Round 2 corrected this
+    basis, which had said no project renders Setup with a node at night and that any
+    check needs a config edit. Open owner question: keep the settled answer.* Instead:
+    the owner adds such a check outside the factory, or US3 adds a default-project one.
 
 ## Owner approvals
 
@@ -188,8 +225,25 @@ or CI file changes.
    link's one connection, refused while anything moves and stopped when a move starts
    (FR-013 to FR-015, owner decision 10).
 4. **The Setup page's Recording section** and its words (FR-016, FR-017), with no night
-   check of its own (owner decision 11).
+   check of its own (owner decision 11). *Open owner question (round 2); the drafted
+   default is to accept it:* the raw alert `Raw frames stopped: {error}.` (plan.md § The
+   page) with FR-014's settled `stopped: the mount started moving` reads
+   `Raw frames stopped: stopped: the mount started moving.` Instead: the page drops a
+   leading `stopped: ` from a raw error, or FR-014's words lose it. Whichever is chosen,
+   US3-S3 gains a clause with the exact alert.
 5. **Two new `GLOSSARY.md` terms**, Recording and Raw frame (FR-010, FR-015).
+6. **Files named by the scope node's frame ids** (FR-003, FR-013). *Open owner question
+   (round 2); the drafted default is to accept it:* the node's frame ids start again at
+   1 when its process restarts, and another node counts its own, so a recording that
+   spans a node restart or a re-pairing repeats ids. A repeated id's `preview-<id>.jpg`
+   or `raw-<id>.png` then replaces the earlier file, and a solve line's `frame_id` can
+   match two frame lines (Edge Cases). The observer avoids it by starting a new
+   recording after either. Instead: (a) end the recording when a frame's id is not above
+   the last one recorded, with a new `ended_reason` and page words for it; (b) write
+   previews and raw PNGs only under new names (`create_new`), ending with `write_failed`
+   on a clash; or (c) name files by a count of the recording's own, which changes owner
+   decision 2's names. Of these, (a) keeps every file name and each recording one node
+   run.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -215,8 +269,10 @@ All Rust scenarios of US1 and US2 share one setup unless a scenario says otherwi
 - Before its steps, a scenario on a console whose link can connect waits until the
   session's `node.connected` is true and `node.offset_s` is not null, as
   `crates/finder/tests/mcp/support.rs:263` waits for its link.
-- **R** is a path under the workspace's `target/` that does not exist yet, named as
-  `crates/finder/tests/simulate_cli.rs:13` names its folders, and removed afterwards.
+- **R** is a path under the workspace's `target/` that does not exist yet, named from
+  the test's name and the process id as `crates/finder/tests/simulate_cli.rs:13` names
+  its folders, but not made by the test (that helper makes its folder and fails to drop
+  a missing one), and removed afterwards, whether a folder or a file, if present.
 - Requests go through the router in-process, as `crates/finder/tests/live/support.rs:82`
   sends them, with `Content-Type: application/json`, a `Host` of localhost on port 8080
   and no `Origin` unless a scenario says otherwise. A foreign `Origin` is
@@ -230,8 +286,9 @@ All Rust scenarios of US1 and US2 share one setup unless a scenario says otherwi
   so a number read back from a file can be one ULP from the `f64` that was written. A
   test compares a number it parsed from a file with one it holds by first passing its
   own through `serde_json::to_string` and `serde_json::from_str`, and then compares
-  exactly. "After the round trip" below means this. No comparison uses a tolerance, and
-  no feature is added.
+  exactly. "After the round trip" below means this. No feature is added. Every
+  comparison is exact except US1-S3's 0.01° and 0.05 s, which bound a fresh solve of a
+  replayed frame, not a number read back from a file.
 
 ### User Story 1 - Record a stretch of the night on the console (Priority: P1)
 
@@ -246,15 +303,16 @@ console already receives, and the next clear night may be weeks away.
 
 **Acceptance Scenarios**:
 
-1. **Given** the setup, **When** a test sends `POST /api/record` with `{"on":true}`,
-   waits until `recording.solves` is at least 2 and sends `{"on":false}`, **Then** a
-   committed test asserts that:
+1. **Given** the setup, **When** a test reads `state.link().unwrap().frames()` every
+   100 ms until it holds a star frame and keeps that frame's id, sends
+   `POST /api/record` with `{"on":true}`, waits until `recording.solves` is at least 2
+   and sends `{"on":false}`, **Then** a committed test asserts that:
    - both answers are 200; the first has `recording.on` true and a `recording.folder`
      of the form `YYYY-MM-DDTHH-MM-SSZ` beginning `2026-01-16T02-`, and the second has
      `recording.on` false and `ended_reason` `stopped`;
    - `recording.json` has `format` `finder-recording/1`, `finder` equal to the
      `version` of `GET /api/health`, `site` `{"lat_deg":40.0,"lon_deg":-75.0}`,
-     `started_at` equal to the session's `recording.since`, a `started_utc` that
+     `started_at` equal to the first answer's `recording.since`, a `started_utc` that
      `finder::simulate::parse_start` reads as `started_at` rounded down to the whole
      second, and the folder's name equal to `started_utc` with each `:` made `-`;
    - `recording.json` has `aim` null, a `model` key, `camera_settings` equal to the first
@@ -262,9 +320,9 @@ console already receives, and the next clear night may be weeks away.
    - after the stop, `recording.json` has `ended_reason` `stopped`, a `stopped_at` at
      least its `started_at`, `previews` equal to the number of `preview-*.jpg` files in
      the folder, and `frames` and `solves` equal to the number of frame lines and solve
-     lines, which equal the session's `recording.frames` and `recording.solves`;
-   - frame-line ids strictly increase, and every solve line's `frame_id` is the id of a
-     frame line;
+     lines, which equal the second answer's `recording.frames` and `recording.solves`;
+   - frame-line ids strictly increase, the first above the id the test kept before the
+     start, and every solve line's `frame_id` is the id of a frame line;
    - 1.5 s after the stop, both files have the lines they had at the stop;
    - no file in the folder contains `scope.local` or `test-token`.
 2. **Given** the setup, with the test also keeping every star frame it sees on
@@ -381,7 +439,8 @@ the scope node on the Pi.
      `{"wanted":1,"saved":0,"error":"no raw frame arrived within 15 s"}` and the folder
      holds no `raw-` file;
    - a request of `{"frames":10}` followed at once by `{"on":false}` leaves fewer than
-     three `raw-` files in the folder 8 s later.
+     three `raw-` files in the folder 8 s later, and `recording.raw` then has `wanted`
+     10, `saved` below 3 and no `error` key.
 5. **Given** the setup with the node served by `into_server()` alone, as
    `crates/finder/tests/live/support.rs:52` serves it, and a recording on, **When** a test
    sends `{"frames":1}` and waits until `recording.raw.error` is present, **Then** a
@@ -455,8 +514,8 @@ needs a terminal.
    `Raw frames: 1 of 3 saved`, and that `Save 3 raw frames` is disabled. **Given** `raw`
    `{"wanted":3,"saved":0,"error":"this scope node cannot send raw frames"}`, **Then** a
    committed test asserts an alert reading exactly
-   `Raw frames stopped: this scope node cannot send raw frames.` and that the button is
-   enabled.
+   `Raw frames stopped: this scope node cannot send raw frames.` and that
+   `Save 3 raw frames` is enabled.
 4. **Given** `RecordingSection` with the recording of US3-S2 but `on` false and
    `ended_reason` `stopped`, **Then** a committed test asserts the status reads exactly
    `Saved 2026-01-16T02-00-00Z: 12 frames, 9 solves.`, a `Start recording` button and no
@@ -480,6 +539,14 @@ needs a terminal.
 - **The link drops or is re-paired.** The recording carries on and its lines resume
   with the frames. A new pairing's frames go into the same recording; their `offset_s`
   tells the clocks apart.
+- **The scope node restarts mid-recording.** A frame's id is the node's own count, which
+  begins again at 1 each time the node builds its capture loop
+  (`crates/scope-node/src/capture.rs:30`), once a process
+  (`crates/scope-node/src/service.rs:156`), and another node counts its own. A
+  recording that spans a node restart or a re-pairing therefore repeats ids: a repeated
+  id's `preview-<id>.jpg` or `raw-<id>.png` replaces the earlier file, and a solve
+  line's `frame_id` can match two frame lines. US1-S1's ids increase because its node
+  never restarts. Open owner question: owner approval 6.
 - **The console exits mid-recording.** The lines written so far stay readable, and
   `recording.json` has no `stopped_at`. Nothing resumes at the next start.
 - **`--simulate`.** Its state folder is the simulated one, so by default its recordings
@@ -617,7 +684,8 @@ needs a terminal.
   have landed. Every citation here was read at c1ed295 and re-checked at f8dab49, after
   020-live-chart-calm landed; its US2 moved the cited lines of `DESIGN.md` and
   `crates/finder/web/src/api.ts` by four, and the citations follow them (plan.md
-  § Prerequisites).
+  § Prerequisites). `main` has since moved to 870b332, which changes only CI workflow
+  files and the page's Playwright version; no cited line moved.
 - **Out of scope:**
   - a replay tool, loader or replaying node;
   - dark-sky detection, the noise floor and auto-exposure (spec 023);

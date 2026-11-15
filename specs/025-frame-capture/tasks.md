@@ -19,7 +19,8 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
   § Refinement Record. A story that needs another file escalates.
 - Tests compute their expected values themselves (plan.md § Plan traps 6), and compare
   numbers read back from a file after the `serde_json` round trip of spec.md § User
-  Scenarios, never with a tolerance.
+  Scenarios, exactly. The only tolerances are US1-S3's 0.01° and 0.05 s, which bound a
+  fresh solve of a replayed frame.
 - Keep the story's diff under 64 KiB, measured as plan.md § Plan traps 3 says.
 - Every code citation is `path:line` as read at c1ed295 and re-checked at f8dab49. If a
   cited line has moved, re-read it rather than guess.
@@ -39,9 +40,9 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
   with a `SimMount` connected first and `push_to(50.0, 120.0)` after, a `SimNode`
   served with `memory::serve_routes_on` and `routes()` as
   `crates/finder/tests/mcp/support.rs` serves its node, the paired session,
-  `with_live()` and `with_recordings(R)` with R under `target/`, under
-  `#[tokio::test(start_paused = true)]`, and helpers to wait on the session, to read
-  the folder's lines with `serde_json` and to pass a held value through the
+  `with_live()` and `with_recordings(R)` with R under `target/` and not made by the
+  test, under `#[tokio::test(start_paused = true)]`, and helpers to wait on the session,
+  to read the folder's lines with `serde_json` and to pass a held value through the
   `serde_json` round trip. Write failing tests for US1-S1 and US1-S2.
 - [ ] T002 [US1] Add failing tests to `crates/finder/tests/recording.rs` for the replay
   of a recorded frame through a new `Live` (US1-S3) and for the refusals (US1-S4).
@@ -93,9 +94,10 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
   `LinkManager::raw` and the private `Paired` struct, publishing the raw client where
   the mount client is published.
 - [ ] T012 [US2] In `crates/finder/src/recording.rs`, add `RawView`, `RawRefusal`,
-  `Moving`, `request_raw` and the raw task. In `crates/finder/src/api.rs`, move the
-  motion test into `motion_running` and add the `/api/record/raw` route with its
-  `moving` closure (plan.md § The raw route).
+  `Moving`, `request_raw` and the raw task, checking each reply's length before
+  `GrayImage::from_raw`. In `crates/finder/src/api.rs`, move the motion test into
+  `motion_running` and add the `/api/record/raw` route with its `moving` closure, which
+  calls `motion_running` (plan.md § The raw route).
 - [ ] T013 [US2] Add the raw route's row and paragraph to `crates/finder/README.md`, its
   line to the route list in `crates/finder/src/lib.rs`, and the **Raw frame** entry to
   `GLOSSARY.md` (plan.md § Interfaces).
