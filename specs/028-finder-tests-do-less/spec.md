@@ -199,10 +199,12 @@ file, workflow, `CODEOWNERS` entry, `ergane.yaml` or `.config/nextest.toml` is e
     arcsec over a full minute of closed-loop tracking rather than ~16 s." The route keeps
     a proof of the window with one injected sample.
 
-Deleting an optional story before the flip deletes its phase in tasks.md, its entry and
-row in the Work Graph, its line in tasks.md § Execution Order, its story in the
-Refinement Record, its FR, its approval and its row in plan.md § Measurements; the other
-approvals keep their numbers. Nothing else changes.
+Deleting an optional story before the flip deletes its User Story section, its phase in
+tasks.md, its entry and row in the Work Graph, its line in tasks.md § Execution Order,
+its story in the Refinement Record, its FR, its approval, its row in plan.md
+§ Measurements, its row in plan.md § Project Structure and its section of plan.md
+§ Interfaces; the other approvals keep their numbers. Other sentences that name it stay
+as the record of what was offered. Nothing else changes.
 
 ## User Scenarios & Testing *(mandatory)*
 
