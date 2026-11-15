@@ -9,9 +9,10 @@ depends_on_landed: ["013-live-finder", "014-goto", "015-tracking", "017-console-
 # answer.
 # Refined 2026-11-14 (round 2) by probe builds of all four stories from the trio as it
 # stood and two reviews; the scenarios this refinement added were run on the probe branches.
-# It stays draft until the owner answers the round-2 questions (owner decision 4's note,
-# owner approval 6); flipping it to `ready` gives the approvals listed under "Owner
-# approvals" and dispatches it.
+# On 2026-11-15 the owner answered the round-2 questions: owner decision 4 now sends Stop
+# over the last stream even while the link is lost or initialising again, and owner
+# approval 6 closes its first two gaps. Flipping it to `ready` gives the approvals listed
+# under "Owner approvals" and dispatches it.
 ---
 
 # Feature Specification: The Mount Link Survives a Power Cycle
@@ -106,10 +107,23 @@ made stale.
   task, which the read waits for (US2-S10), as the node's Stop already does
   (`crates/scope-node/src/service.rs:489`).
 
+### Session 2026-11-15 (the owner's answers to round 2)
+
+- Q: Does Stop reach a board the link has lost, or one it is initialising again? → A: Yes
+  (owner decision 4, changed). Stop and the node's watchdog send 017's halt over the
+  stream of the link's last connect, which the link keeps for them, and a connect under
+  way gives the device up to them. Only before the first connect, or with the device
+  gone, does Stop answer at once (US2-S11, US2-S12, US2-S13).
+- Q: Which of owner approval 6's gaps stay open? → A: Only the third (owner approval 6).
+  A GoTo reads the count after each correction's plan, before that correction's slew
+  (US3-S7), and tracking's waits for rest in the keyhole read it (US3-S8). A console
+  restarted after a reset still does not refuse; the README covers it.
+
 ## Owner decisions
 
 Each is a design or safety call. *Settled 2026-11-14: the owner accepted the recommended
-answer to all five.* The alternatives stay listed for the record.
+answer to all five; on 2026-11-15 the owner changed decision 4 (below).* The alternatives
+stay listed for the record.
 
 1. **How sure the node must be before it acts on a reset** (FR-006). Recommended: one
    reading is enough, as drafted. A false reset costs a re-initialisation, an aborted
@@ -135,14 +149,25 @@ answer to all five.* The alternatives stay listed for the record.
    reaches it after goes to the new board; the console's abort (FR-015) and its
    `StopAll` follow within one poll. Instead: the link also drops a move that was
    queued before the reset and runs after it, logging it.
-4. **Stop during a re-initialisation.** Recommended: Stop never waits for it. While the
-   link has no board it answers "the mount did not confirm the stop" at once; the board
-   has just powered up at rest. Instead: Stop waits for the connect sequence to finish,
-   which takes seconds on a silent board, then stops.
-   *Round 2 note, to re-confirm at the flip:* the same rule holds after a lost link (three
-   failed reads), not only during a re-initialisation. There the board may still be
-   powered and running a `:J` move, such as an MCP `move_axis`, and Stop sends it nothing
-   until a reconnect (plan.md § Risks). The answer above is unchanged.
+4. **Stop while the link is lost or initialising again** (FR-002, FR-018). *Settled
+   2026-11-15: the owner chose "Always send stop".* Stop and the node's mount watchdog
+   send the stop command to both axes over the last open stream to the board, the stream
+   of the link's last successful connect, even while the link is lost (three failed
+   reads) or initialising again, keeping 017's halt rule: `:K` on both axes before `:L`
+   on either (`crates/scope-node/src/mount/skywatcher/protocol.rs:297`). `StopAll`
+   answers OK only if the board acknowledges, and otherwise `UNAVAILABLE` with "the mount
+   did not confirm the stop". Only when no stream to the board has been opened (no connect
+   has succeeded since the node started, because `SkyWatcher::connect` takes the stream
+   and drops it when it fails, `crates/scope-node/src/mount/skywatcher/protocol.rs:321`),
+   or when the device can't be opened (it is gone, and the kept stream fails at once),
+   does Stop answer `UNAVAILABLE` at once without the board hearing it. A connect attempt
+   under way, the connect task's or a spawned re-initialisation's, gives the device up to
+   Stop, which never waits seconds for it, and with no board connected Stop sends each
+   command once, so a board that answers nothing costs it 1.2 s (plan.md § Interfaces).
+   Rejected: the round-2 answer, Stop answering at once while the link has no board,
+   because after a lost link the board may still be powered and running a `:J` move,
+   such as an MCP `move_axis`; and Stop waiting for the connect sequence to finish, which
+   takes seconds on a silent board.
 5. **Tracking's end reason after a reset** (FR-015). Recommended: `the mount was
    power-cycled`, which the page shows as it is
    (`crates/finder/web/src/components/TrackControl.tsx:78`). Instead: a code such as
@@ -150,13 +175,13 @@ answer to all five.* The alternatives stay listed for the record.
 
 ## Owner approvals
 
-Flipping this spec to `ready` approves the recommended answer to every owner decision
+Flipping this spec to `ready` approves the settled answer to every owner decision
 above, and the following. Each is named in the FR that makes it. No existing test,
 golden or CI file changes.
 
 1. **The node starts without the mount** and tries again 2 s after each failed attempt
-   (FR-001, FR-002). Until it connects, Stop still clears queued moves and answers "the
-   mount did not confirm the stop", as for any unconfirmed stop.
+   (FR-001, FR-002). Until it first connects, Stop still clears queued moves and answers
+   "the mount did not confirm the stop", as for any unconfirmed stop.
 2. **Every reconnect after a lost link counts as a reset**, and so do a cleared init
    bit on an axis that read it set, and a jump in counts beyond 1.5 times the top
    rate's travel plus 1,000 counts (FR-006, FR-007). The first connect after start is
@@ -169,21 +194,22 @@ golden or CI file changes.
    running Track stops when a reset is seen (FR-014, FR-015).
 5. **Wrong-length replies to status and position reads are retried**, sharing five
    transmissions in all, and each one's bytes are kept for the log (FR-016, FR-017).
-6. **Three gaps after a reset stay open** (FR-014, FR-015). *Open owner question
-   (round 2); the drafted default is to accept them:*
-   - a reset seen while a GoTo is solving or correcting is caught only at the next
-     slew's first read, after that slew's `goto_axis` pair, planned through the stale
-     model (`crates/finder/src/goto.rs:1010`), has been sent
-     (`crates/finder/src/goto.rs:917`);
-   - tracking's keyhole slews (`crates/finder/src/tracking.rs:581`) and their waits in
-     `at_rest` (`crates/finder/src/tracking.rs:509`) don't read the count, so a keyhole
-     slew can run to its end through stale zero points;
-   - the console's sync-needed flag is not persisted, so a console restarted after a
-     reset never refuses; the node's README says to sync first (FR-007).
+6. **Two of the three gaps after a reset are closed, and one stays open** (FR-014,
+   FR-015). *Settled 2026-11-15: the owner chose "Close (a) and (b)".* Both are closed
+   within US3's writes:
+   - (a) a reset seen while a GoTo is solving or correcting. GoTo compares the node's
+     `mount_resets` with its baseline on a read it makes after each correction's plan
+     (`crates/finder/src/goto.rs:1010`) and before sending that correction's
+     `goto_axis` pair (`crates/finder/src/goto.rs:917`), and a difference ends the GoTo
+     `failed` with a reason containing `power-cycled` and sends `StopAll` (US3-S7);
+   - (b) tracking's keyhole slews (`crates/finder/src/tracking.rs:581`) and their waits
+     in `at_rest` (`crates/finder/src/tracking.rs:509`). `at_rest` compares the count
+     with the rate loop's baseline on every read, and a difference stops tracking with
+     the power-cycled end reason before any further keyhole waypoint (US3-S8).
 
-   Instead, US3 closes the first two within its writes: GoTo's `prepare` reads and
-   tracking's `at_rest` reads compare `mount_resets` with the baseline before each
-   correction or keyhole waypoint.
+   Gap (c) stays open: the console's sync-needed flag is not persisted, so a console
+   restarted after a reset never refuses; the node's README says to sync first (FR-007).
+   Rejected: the round-2 default, leaving all three open.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -208,7 +234,7 @@ The Rust scenarios of US1, US2 and US4 share one setup unless a scenario says ot
   `:H`, `:M`, `:I` or `:J`. Commands are recorded with their carriage return, as
   `:F3\r`.
 
-The console scenarios of US3 (S2 to S6) share one setup:
+The console scenarios of US3 (S2 to S8) share one setup:
 - An in-process console built as `crates/finder/tests/mcp/support.rs:188` builds its
   `Rig`, copied into the new test file because that `Rig` hard-wires its own private
   mount, with a test `Mount` that wraps the `SimMount`, records the commands it
@@ -327,14 +353,17 @@ model probably went wrong without anyone seeing it.
 9. **Given** the setup, connected and polled once, with `handle.drop_replies(b'e', 1, 10)`
    (enough to fail the re-initialisation and the connect task's next attempt), **When**
    the test calls `handle.power_cycle()`, polls 1 s later on a spawned task, and 0.5 s
-   after that calls `link.stop_confirmed()`, `link.goto(Axis::Azimuth, 1000)` and
+   after that notes whether the poll is still running and then calls
+   `link.stop_confirmed()`, `link.goto(Axis::Azimuth, 1000)` and
    `link.rate(Axis::Altitude, 0.5)`, each inside
    `tokio::time::timeout(Duration::from_millis(10), ...)`, **Then** it asserts that the
-   poll is still running, that `link.connected()` is false, that each timeout returns
-   `Ok`, `stop_confirmed` with false, that `link.resets()` is 0 when the poll returns,
-   that 10 s later `link.connected()` is true and `link.resets()` is 1, and that no move
-   is on the wire after the cycle: a failed re-initialisation wakes the connect task and
-   is counted once.
+   poll was still running and `link.connected()` false before those calls, that each
+   timeout returns `Ok`, `stop_confirmed` with true, that `:K1\r` and `:K2\r` were sent
+   after the cycle and each answered `=\r` (Stop goes over the last connect's stream, and
+   the re-initialisation under way gives the device up to it), that `link.resets()` is 0
+   when the poll returns, that 10 s later `link.connected()` is true and `link.resets()`
+   is 1, and that no move is on the wire after the cycle: a failed re-initialisation
+   wakes the connect task and is counted once.
 10. **Given** the setup, connected and polled once, **When** the test calls
     `handle.power_cycle()` and `handle.drop_replies(b'e', 1, 2)` (the re-initialisation
     then takes over 0.6 s), and 1 s later polls inside
@@ -343,6 +372,33 @@ model probably went wrong without anyone seeing it.
     elapsed, and that 5 s later `link.connected()` is true, `link.resets()` is 1 and
     `:F3\r` appears exactly once in the exchanges after the cycle: a read dropped by its
     caller does not cancel the re-initialisation it started.
+11. **Given** the setup, connected and polled once, with `link.rate(Axis::Azimuth, 1.0)`
+    sent (a `:J` move that runs until it is stopped) and then
+    `handle.drop_replies(b'e', 1, 5)` (so the link can't connect again at once),
+    `handle.drop_replies(b'f', 1, 10)` and `handle.drop_replies(b'f', 2, 5)`, **When**
+    the test polls twice, so that three reads in a row fail and the link is lost while
+    the board stays powered and the azimuth keeps moving, and then calls
+    `link.stop_confirmed()` inside
+    `tokio::time::timeout(Duration::from_millis(100), ...)`, **Then** it asserts that
+    `link.connected()` was false before the call, that the timeout returns `Ok(true)`,
+    that the exchanges after the injection include `:K1\r` and `:K2\r`, each answered
+    `=\r`, and that 10 s later `link.connected()` is true and two polls 1 s apart read the
+    azimuth not `moving`, at the same position: Stop reaches a board the link has lost.
+12. **Given** the setup, connected and polled once, **When** the test calls
+    `handle.power_off()`, polls twice (three reads in a row fail and the link is lost)
+    and then calls `link.stop_confirmed()` inside
+    `tokio::time::timeout(Duration::from_millis(1500), ...)`, **Then** it asserts that
+    the timeout returns `Ok(false)`, and that the exchanges after the power-off whose
+    command starts with `:K` or `:L` are exactly `:K1\r`, `:K2\r`, `:L1\r` and `:L2\r` in
+    that order, none answered: with no board connected Stop sends each command once, so a
+    board that answers nothing costs it 1.2 s, not the 6 s of five tries each.
+13. **Given** a second emulator and link, made lost as in US2-S11 and not yet stopped,
+    and a `NodeService` built over that link with `with_mount` as US2-S5 builds one,
+    **When** the test calls the service's `stop_all` directly inside
+    `tokio::time::timeout(Duration::from_millis(500), ...)`, **Then** it asserts that the
+    call answers OK and that `:K1\r` and `:K2\r` were sent after the injection, each
+    answered `=\r`: the node's `StopAll` over a lost link answers OK when the board
+    acknowledges.
 
 ---
 
@@ -389,6 +445,27 @@ after an unnoticed reset aims with zero points from before it.
    `track.ended_reason` containing `power-cycled` and the session shows `mount.resets`
    1, and that `POST /api/track` `{"on":true}` then answers `409` with the error exactly
    `The mount was power-cycled: sync again first`.
+7. **Given** the US3 console after a sync, with `POST /api/goto` accepted, **When**
+   `goto.state` first reads `solving` and the test pushes the `SimMount` 0.1° in azimuth
+   (`rig.mount.push_by(0.1, 0.0)`, as `crates/finder/tests/goto_sim.rs:21` does) so that
+   a correction follows, and then, when `goto.state` first reads `correcting` (the test
+   reads `GET /api/session` every 10 ms), sets the reset count to 1, **Then** it asserts
+   that within 3 s `goto.state` is `failed` with a reason containing `power-cycled`, and
+   that the test `Mount` recorded a `StopAll` and no `GotoAxis` after the count was set:
+   a correction planned through the stale zero points is never sent.
+8. **Given** the US3 console built as the setup builds it but at the first whole minute
+   after `START` at which M42 moved to declination 39° (as
+   `crates/finder/tests/keyhole_sim.rs:115` moves it) stands at least 88.5° high by
+   `simulator::sky::horizontal` with `simulator::Site::default()`, after a sync, and a
+   `Tracker` built with `Tracker::new` over the console's own link (`AppState::link`,
+   `crates/finder/src/api.rs:225`), a console clock on the rig's virtual clock, the
+   session's model, the site at latitude 40° and longitude −75° and a 15° minimum
+   altitude, then started on that target, which stands inside the zenith circle, **When**
+   its state reads `keyhole_wait` and the test `Mount` has recorded the keyhole slew's
+   `GotoAxis` pair, and the test sets the reset count to 1 while that slew runs, **Then**
+   it asserts that within 2 s the tracker's state is `off` with an end reason containing
+   `power-cycled`, and that the test `Mount` recorded a `StopAll` after the count was
+   set: a keyhole slew's wait for rest reads the count.
 
 ---
 
@@ -465,9 +542,20 @@ their cause is unknown until their bytes are seen.
 - **A move in flight when the mount loses power.** The motors stop with the power; the
   console's slewing GoTo or running Track stops when it sees the reset (US3-S5,
   US3-S6).
-- **Stop while disconnected.** It clears the node's queued moves and answers "the mount
-  did not confirm the stop" (US1-S3); the page already treats that as an unconfirmed
-  stop (017). After a lost link the board may still be moving (owner decision 4's note).
+- **A reset while a GoTo solves or corrects.** The read after the correction's plan sees
+  it before that correction's slew is sent (US3-S7). A GoTo whose last solve lands within
+  60″ ends `done` and sends nothing more.
+- **A reset during a keyhole slew.** The keyhole's waits for rest read the count, so
+  tracking stops before the next waypoint (US3-S8). The wait for the target to leave the
+  circle reads nothing; the rate loop's next tick read stops tracking, after at most a
+  backlash take-up and one second of tracking rates, neither of them a slew.
+- **Stop while disconnected.** It clears the node's queued moves. Before the link's first
+  connect it answers "the mount did not confirm the stop" at once (US1-S3); the page
+  already treats that as an unconfirmed stop (017). After a lost link, when the board may
+  still be powered and running a `:J` move, or while the link initialises the board
+  again, Stop still goes over the last connect's stream: OK when the board acknowledges
+  (US2-S9, US2-S11, US2-S13), unconfirmed within 1.2 s when it answers nothing (US2-S12),
+  and unconfirmed at once when the device is gone (owner decision 4).
 - **The console gives up on a read mid-re-initialisation.** The re-initialisation runs on
   in its own task and the link connects (US2-S10).
 
@@ -478,11 +566,12 @@ their cause is unknown until their bytes are seen.
 - **FR-001**: With `[mount]` configured, `scope-node` SHALL start and serve the camera
   whether or not the mount answers, and SHALL try to open the device and run the
   connect sequence again 2 s after each failed attempt until it succeeds.
-- **FR-002**: Until the link is connected, `DescribeMount` SHALL return no axes,
+- **FR-002**: While the link is not connected, `DescribeMount` SHALL return no axes,
   `AxisState`, `GotoAxis` and `RateAxis` SHALL fail with `FAILED_PRECONDITION` and
-  `mount not connected`, `StopAll` SHALL clear queued moves and fail with
-  `UNAVAILABLE`, frames SHALL carry no axis counts, and nothing SHALL be sent to the
-  board but the connect sequence.
+  `mount not connected`, `StopAll` SHALL clear queued moves, frames SHALL carry no axis
+  counts, and nothing SHALL be sent to the board but the connect sequence and Stop's
+  commands (FR-018). Before the link's first connect, `StopAll` and the node's watchdog
+  SHALL send nothing, and `StopAll` SHALL fail with `UNAVAILABLE` at once.
 - **FR-003**: Each successful connect SHALL log one line naming the firmware, the baud,
   each axis's counts per revolution, timer, high-speed ratio and auxiliary-encoder
   support, and whether `:W` was sent, followed by the existing warnings.
@@ -501,7 +590,7 @@ their cause is unknown until their bytes are seen.
   it with its cause. `crates/scope-node/README.md` SHALL describe resets, this line, and
   that a console started after a power cycle needs a sync before GoTo.
 - **FR-008**: While connecting or initialising again, `goto` and `rate` SHALL send
-  nothing to the board.
+  nothing to the board. Stop is FR-018's.
 - **FR-009**: `AxisState` SHALL carry `uint64 mount_resets = 5`, the link's reset count.
 - **FR-010**: The `Mount` trait SHALL gain `connected`, `resets` and `identity` methods
   with defaults (true, 0, none), so other adapters are unchanged.
@@ -518,9 +607,12 @@ their cause is unknown until their bytes are seen.
   `The mount was power-cycled: sync again first`, until the console records a sync from
   a frame whose exposure started after it saw the rise.
 - **FR-015**: A GoTo SHALL end `failed` with a reason containing `power-cycled` and send
-  `StopAll` when a read it makes while slewing carries a `mount_resets` other than the
-  count the console had seen when it accepted the GoTo; running tracking SHALL stop,
-  with an end reason containing `power-cycled`, when the count changes.
+  `StopAll` when a read it makes while slewing, or the read it makes after a correction's
+  plan and before sending that correction's `goto_axis` pair, carries a `mount_resets`
+  other than the count the console had seen when it accepted the GoTo. Running tracking
+  SHALL stop, with an end reason containing `power-cycled`, when the count changes on the
+  rate loop's tick read or on any read of the keyhole's waits for rest, and then SHALL
+  send no further keyhole waypoint (owner approval 6).
 - **FR-016**: A status or position read whose framed reply has the wrong length SHALL be
   sent again, its tries sharing five transmissions in all; a motion start (`:J`) SHALL
   never be sent again.
@@ -528,6 +620,15 @@ their cause is unknown until their bytes are seen.
   position reads, keep the last one's bytes escaped, log each with its command, and
   record per axis whether GoTo used `:S` or the `:H`/`:M` fallback, logging the path
   when it changes on each board. `crates/scope-node/README.md` SHALL name both lines.
+- **FR-018**: After the link's first connect, while it is lost or initialising again,
+  `StopAll` and the node's watchdog SHALL send the stop to both axes over the stream of
+  the link's last successful connect, in 017's order (`:K` on both axes before `:L` on
+  either, `crates/scope-node/src/mount/skywatcher/protocol.rs:297`) and with one
+  transmission per command, once any connect attempt under way has given the device up.
+  `StopAll` SHALL answer OK only if each axis acknowledged, and otherwise `UNAVAILABLE`
+  with `the mount did not confirm the stop`. Stop SHALL never wait on a connect, and a
+  board that answers nothing SHALL cost it at most four reply timeouts (1.2 s); when the
+  device is gone it SHALL answer at once (owner decision 4).
 
 ### Key Entities
 
@@ -576,7 +677,7 @@ US1:
 US2:
   depends_on: []
   depends_on_merged: [US1]
-  implements: [FR-006, FR-007, FR-008, FR-009]
+  implements: [FR-006, FR-007, FR-008, FR-009, FR-018]
 US3:
   depends_on: []
   depends_on_merged: [US2]

@@ -6,9 +6,15 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
 
 **Prerequisites** (plan.md § Prerequisites):
 - `013-live-finder`, `014-goto`, `015-tracking` and `017-console-stop-confirm` have
-  landed on `main`;
-- the owner decisions in spec.md are settled and the owner approvals given;
-- no operator-staged file is needed.
+  landed on `main` (plan.md § Prerequisites 1);
+- `main` is still as read: every citation is at c1ed295, and a later `main` that moved
+  in 024's files or citations needs them re-read (plan.md § Prerequisites 2);
+- the owner decisions in spec.md are settled, including the owner's 2026-11-15 answers,
+  and the owner approvals given (plan.md § Prerequisites 3);
+- no operator-staged file is needed (plan.md § Prerequisites 4);
+- draft `025-frame-capture` is ordered against this spec, because it also writes
+  `crates/finder/src/api.rs`, `crates/scope-link/proto/scope_node/v1/scope_node.proto`
+  and `crates/scope-node/src/service.rs` (plan.md § Prerequisites 5).
 
 **Rules for every story:**
 - Never edit an existing test, golden, fixture, `scripts/ci/`, `.github/`, `deny.toml`,
@@ -76,23 +82,33 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
   no reset): it is a preserving test, not a failing one.
 - [ ] T010 [US2] Add failing tests to `crates/scope-node/tests/mount_reset.rs` for
   `mount_resets` on `axis_state` (US2-S5), moves dropped while disconnected (US2-S6),
-  one reset for a cycle after a move (US2-S7), a failed re-initialisation (US2-S9) and
-  a dropped read during one (US2-S10), and a test for a bit that never read set
-  (US2-S8), which like US2-S4 is a preserving test, not a failing one.
+  one reset for a cycle after a move (US2-S7), a failed re-initialisation with a Stop
+  the board acknowledges (US2-S9) and a dropped read during one (US2-S10), Stop over a
+  lost link to a powered board running a `:J` move (US2-S11), to a powered-off board
+  (US2-S12) and through the service's `stop_all` (US2-S13), and a test for a bit that
+  never read set (US2-S8), which like US2-S4 is a preserving test, not a failing one.
 
 ### Implementation
 
 - [ ] T011 [US2] In `crates/scope-node/src/mount/skywatcher/protocol.rs`, read the init
-  bit into `Status`, record it on each `state` read and clear it on a failed one, and
-  add `SkyWatcher::initialised` (plan.md § Interfaces).
+  bit into `Status`, record it on each `state` read and clear it on a failed one, add
+  `SkyWatcher::initialised`, make `wrapped_delta` `pub(super)` for the link's jump rule,
+  and add `SkyWatcher::halt_once`, which sets the board's baud and sends `halt`'s order
+  with one transmission a command, leaving `halt` and `stop_confirmed` unchanged
+  (plan.md § Interfaces).
 - [ ] T012 [US2] In `crates/scope-node/src/mount/skywatcher/mount_link.rs`, add the loss
   rule (three failed `state` reads in a row across both axes; a read while the link has
   no board is not a failed read) and the connect task's loop, the `io` lock, the bit
   rule and the jump rule of spec.md FR-006, the re-initialisation that takes the board
   out first, runs in a spawned task the finding read awaits through its `JoinHandle`
   (so a dropped read leaves it running) and wakes the connect task when it fails, one
-  count per event, and the loss, reset and failed re-initialisation log lines (plan.md
-  § Interfaces).
+  count per event, and the loss, reset and failed re-initialisation log lines; and Stop
+  over the last connect's stream: the kept `stop_board`, the `device` hold that every
+  connect attempt takes from `open()` until its board is stored, the `give_way`
+  notification that makes an attempt drop its connect, and `stop_confirmed` and
+  `stop_all` that notify, take `device`, and then delegate to a connected board, call
+  `stop_board.halt_once()`, or answer false at once before the first connect (plan.md
+  § Interfaces, **Stop**).
 - [ ] T013 [US2] Add `mount_resets = 5` to `AxisState` in
   `crates/scope-link/proto/scope_node/v1/scope_node.proto`, and fill it in
   `crates/scope-node/src/service.rs`.
@@ -103,7 +119,7 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
   part does not describe it.
 - [ ] T015 [US2] Run the `lint` and `test` gates with every existing test unchanged and
   green. Commit the green story (US2-S1, US2-S2, US2-S3, US2-S4, US2-S5, US2-S6,
-  US2-S7, US2-S8, US2-S9, US2-S10).
+  US2-S7, US2-S8, US2-S9, US2-S10, US2-S11, US2-S12, US2-S13).
 
 ## Phase 3: User Story 3 — The console knows the board and its resets (Priority: P2)
 
@@ -116,7 +132,10 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
 - [ ] T017 [US3] Add failing tests to `crates/finder/tests/mount_identity.rs` for the
   refusals with frames stopped and their end once frames start again (US3-S3, US3-S4),
   the GoTo abort (US3-S5) and tracking (US3-S6), whose test waits for the session's
-  `mount.resets` to read 1 as well as for tracking to end before it posts Track again.
+  `mount.resets` to read 1 as well as for tracking to end before it posts Track again,
+  a reset seen while a GoTo corrects (US3-S7), and a reset during a keyhole slew of a
+  `Tracker` built over the console's link at a time its target stands inside the zenith
+  circle (US3-S8).
 
 ### Implementation
 
@@ -133,10 +152,13 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
   reset to the module docs' second-sync and Track paragraphs (plan.md § Interfaces).
 - [ ] T020 [US3] In `crates/finder/src/goto.rs`, add the refusal to
   `GoTo::check_request` and the abort against the count seen when the GoTo was
-  accepted; in `crates/finder/src/tracking.rs`, add the azimuth read on every tick of
-  the rate loop and stop tracking when the count changes (plan.md § Interfaces).
+  accepted, on its first and slewing reads and on a read after each correction's plan,
+  before that correction's `goto_axis` pair; in `crates/finder/src/tracking.rs`, add the
+  azimuth read on every tick of the rate loop, pass its baseline to `keyhole` and
+  `at_rest`, and stop tracking when the count changes on either (plan.md § Interfaces).
 - [ ] T021 [US3] Run the `lint` and `test` gates with every existing test unchanged and
-  green. Commit the green story (US3-S1, US3-S2, US3-S3, US3-S4, US3-S5, US3-S6).
+  green. Commit the green story (US3-S1, US3-S2, US3-S3, US3-S4, US3-S5, US3-S6,
+  US3-S7, US3-S8).
 
 ## Phase 4: User Story 4 — Garbled replies are retried and kept (Priority: P3)
 
