@@ -27,8 +27,10 @@ const MATCH_THRESHOLD: f64 = 1e-5;
 const MATCH_MAX_ERROR: f64 = 0.002;
 /// Detected stars reported, brightest first.
 const MAX_DETECTED: usize = 500;
-/// Unmatched catalog stars drawn as "expected here", brightest first.
-const MAX_EXPECTED_STARS: usize = 25;
+/// Catalog stars listed in a report, brightest first, besides the solver's matches.
+const FIELD_STARS: usize = 60;
+/// A catalog star counts as detected when a detected star sits this close, in pixels.
+const DETECTED_RADIUS_PX: f64 = 2.0;
 /// How far beyond the frame's corners a deep-sky object counts as nearby, in degrees.
 const NEARBY_DEG: f64 = 15.0;
 /// Nearby objects reported, nearest first.
@@ -279,6 +281,9 @@ pub struct StarMark {
     pub mag: f64,
     /// Whether the solve matched it to a detected star.
     pub matched: bool,
+    /// Whether any detected star lies within `DETECTED_RADIUS_PX` of `x`, `y`. True
+    /// whenever `matched` is.
+    pub detected: bool,
     /// For a matched star, pixels between where it was detected and where the solution
     /// puts it: the fit, star by star.
     pub error_px: Option<f64>,
@@ -460,7 +465,7 @@ fn solve_detected(
         .flatten();
     if let Some(frame) = &frame {
         report.pointing = Some(pointing(&solution, frame));
-        report.stars = star_marks(db, &solution, frame, options.distortion);
+        report.stars = star_marks(db, &solution, frame, options.distortion, &report.detected);
         (report.objects, report.nearby) = object_marks(frame);
         report.grid = graticule(frame);
     }
@@ -507,11 +512,12 @@ fn star_marks(
     solution: &Solution,
     frame: &Frame,
     initial_distortion: f64,
+    detected: &[[f64; 2]],
 ) -> Vec<StarMark> {
     let (width, height) = frame.size();
     // The solver hands back centroids undistorted with the caller's starting `k`;
     // distort them back to where they sit in the image.
-    let detected = distort_centroids(
+    let centroids = distort_centroids(
         &solution.matched_centroids,
         width,
         height,
@@ -521,7 +527,7 @@ fn star_marks(
     );
     let mut marks = Vec::new();
     let mut matched = HashSet::new();
-    for ((&(y, x), &star), &index) in detected
+    for ((&(y, x), &star), &index) in centroids
         .iter()
         .zip(&solution.matched_stars)
         .zip(&solution.matched_catalog_ids)
@@ -535,18 +541,19 @@ fn star_marks(
             name,
             mag,
             matched: true,
+            detected: true,
             error_px: frame.project(star).map(|(px, py)| (px - x).hypot(py - y)),
         });
     }
     let expected = db
         .nearby_stars(frame.center, frame.half_diagonal())
         .into_iter()
-        .filter(|index| !matched.contains(index))
         .filter_map(|index| {
             let point = frame.project(db.star_vector(StarId(index))?)?;
             frame.contains(point, 0.0).then_some((index, point))
         })
-        .take(MAX_EXPECTED_STARS);
+        .take(FIELD_STARS)
+        .filter(|(index, _)| !matched.contains(index));
     for (index, (x, y)) in expected {
         let (id, name, mag) = describe(db, index);
         marks.push(StarMark {
@@ -556,6 +563,9 @@ fn star_marks(
             name,
             mag,
             matched: false,
+            detected: detected
+                .iter()
+                .any(|[px, py]| (px - x).hypot(py - y) <= DETECTED_RADIUS_PX),
             error_px: None,
         });
     }
