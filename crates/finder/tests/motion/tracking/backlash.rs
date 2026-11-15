@@ -6,23 +6,6 @@ use scope_node::mount::{Axis, Mount};
 use tracker::*;
 
 #[tokio::test(start_paused = true)]
-async fn first_transit_measures_then_fixed_reset_removes_the_observed_value() {
-    let rig = measured(Session::default()).await;
-    assert!(rig.body().await["backlash"]["alt_deg"].as_f64().unwrap() > 0.0);
-    let (status, body) = support::request(
-        &rig.app,
-        "POST",
-        "/api/model/reset",
-        serde_json::json!({"what":"fixed"}),
-    )
-    .await;
-    assert_eq!(status, axum::http::StatusCode::OK);
-    assert!(body.get("backlash").is_none());
-    assert!(rig.body().await.get("backlash").is_none());
-    rig.tracker.stop("stopped").await;
-}
-
-#[tokio::test(start_paused = true)]
 async fn first_azimuth_reversal_measures_its_own_dead_band() {
     let target = targets::find("M81").unwrap().clone();
     let turn = reversal(&target, 0);

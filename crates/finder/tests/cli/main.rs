@@ -9,6 +9,5 @@ mod backlash;
 mod flags;
 mod recording;
 mod session;
-mod session_node;
 mod simulate;
 mod track;

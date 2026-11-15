@@ -148,7 +148,7 @@ impl<R: AsyncRead + Unpin> MetadataReader<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn first_object_arrives_before_closing_array_or_eof() {
         use tokio::io::AsyncWriteExt;
         let (mut writer, reader) = tokio::io::duplex(512);
@@ -163,7 +163,7 @@ mod tests {
         .unwrap();
         assert_eq!(metadata.sensor_timestamp_ns, 1_000_000_000);
     }
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn object_ends_on_its_last_line_before_the_brace_is_flushed() {
         use tokio::io::AsyncWriteExt;
         let object = |t: u32| {
@@ -189,7 +189,7 @@ mod tests {
         writer.write_all(b"}\n]\n").await.unwrap();
         assert!(metadata.next().await.unwrap().is_none());
     }
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn malformed_or_missing_metadata_is_not_a_frame() {
         for input in [
             "{}",

@@ -11,7 +11,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use serde_json::Value;
+use serde_json::{json, Value};
 
 struct Folder(PathBuf);
 impl Folder {
@@ -92,7 +92,7 @@ impl Server {
         }
     }
 
-    fn request(&self, edit: Option<Value>) -> Value {
+    fn request(&self, method: &str, path: &str, body: Value) -> Value {
         let mut stream = TcpStream::connect(self.address).unwrap();
         stream
             .set_read_timeout(Some(Duration::from_secs(10)))
@@ -100,8 +100,8 @@ impl Server {
         stream
             .set_write_timeout(Some(Duration::from_secs(10)))
             .unwrap();
-        let (method, body) = edit.map_or(("GET", String::new()), |v| ("PUT", v.to_string()));
-        write!(stream, "{method} /api/session HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}", self.address, body.len()).unwrap();
+        let body = body.to_string();
+        write!(stream, "{method} {path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}", self.address, body.len()).unwrap();
         let mut response = String::new();
         stream.read_to_string(&mut response).unwrap();
         assert!(response.starts_with("HTTP/1.1 200"), "{response}");
@@ -137,10 +137,23 @@ async fn measured_altitude_backlash_survives_two_next_day_binary_restarts_exactl
         Some(measured)
     );
     drop(rig);
-    for _ in 0..2 {
+    let restart = || {
         let server = Server::start(&folder);
-        let body = server.request(None);
+        let body = server.request("GET", "/api/session", Value::Null);
         assert!(body["time"].as_f64().unwrap() >= 1_768_615_200.0);
         assert_eq!(body["backlash"]["alt_deg"].as_f64(), Some(measured));
-    }
+        server
+    };
+    drop(restart());
+    let server = restart();
+    let reset = server.request("POST", "/api/model/reset", json!({"what": "fixed"}));
+    assert!(reset.get("backlash").is_none());
+    assert!(server
+        .request("GET", "/api/session", Value::Null)
+        .get("backlash")
+        .is_none());
+    drop(server);
+    let stored: Value =
+        serde_json::from_slice(&std::fs::read(folder.0.join("session.json")).unwrap()).unwrap();
+    assert!(stored.get("backlash").is_none());
 }

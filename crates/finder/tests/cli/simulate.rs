@@ -139,6 +139,7 @@ fn simulated_epoch_frames_and_real_rate_never_connect_to_the_stored_node() {
         "/api/session",
         json!({"node":{"address":address,"token":"other-test-token"}}),
     );
+    let before_window = server.session()["time"].as_f64().unwrap();
     let at = Instant::now();
     while at.elapsed() < Duration::from_secs(5) {
         assert_eq!(
@@ -152,7 +153,7 @@ fn simulated_epoch_frames_and_real_rate_never_connect_to_the_stored_node() {
         next["pointing"]["frame_id"].as_u64().unwrap()
             > read["pointing"]["frame_id"].as_u64().unwrap()
     );
-    assert!((next["time"].as_f64().unwrap() - first - 5.0).abs() < 2.0);
+    assert!((next["time"].as_f64().unwrap() - before_window - 5.0).abs() < 2.0);
     assert_eq!(
         listener.accept().unwrap_err().kind(),
         std::io::ErrorKind::WouldBlock

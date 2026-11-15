@@ -1,7 +1,8 @@
 use std::{
     path::PathBuf,
-    process::{Command, Output},
+    process::{Command, Output, Stdio},
     sync::atomic::{AtomicUsize, Ordering},
+    time::{Duration, Instant},
 };
 
 fn run(config: &str, check: bool) -> Output {
@@ -18,7 +19,26 @@ fn run(config: &str, check: bool) -> Output {
     if check {
         command.arg("--check-config");
     }
-    let output = command.output().unwrap();
+    let started = Instant::now();
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    while child.try_wait().unwrap().is_none() {
+        if started.elapsed() >= Duration::from_secs(10) {
+            let _ = child.kill();
+            child.wait().unwrap();
+            std::fs::remove_file(&path).unwrap();
+            panic!(
+                "scope-node did not exit within 10 s: {:?}",
+                command.get_args().collect::<Vec<_>>()
+            );
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let output = child.wait_with_output().unwrap();
     std::fs::remove_file(path).unwrap();
     output
 }
