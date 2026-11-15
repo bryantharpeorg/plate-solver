@@ -1,9 +1,11 @@
 //! Sky-Watcher motor-controller protocol, independent of the serial device.
 pub mod codec;
 pub mod emulator;
+pub mod mount_link;
 mod protocol;
 pub mod serial;
 pub mod transport;
+pub use mount_link::{MountLink, Opener};
 pub use protocol::{probe, BoardReport, Firmware, Parameters, ProbeReport, SkyWatcher};
 
 /// A transport failure, malformed message, or motor-controller refusal.
