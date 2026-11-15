@@ -2,7 +2,7 @@
 //! cargo test -p finder --locked --test us8_capture record_tracking -- --nocapture,
 //! then remove that temporary test. Captures the real router in paused time,
 //! using 014's catalog-rendering/solver/in-process simulated mount harness.
-#[path = "goto_api.rs"]
+#[path = "support/goto.rs"]
 mod api;
 use api::Rig;
 use axum::{

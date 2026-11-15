@@ -1,6 +1,6 @@
 //! US7 oracles: rendered catalog stars and the simulator's true direction in
 //! paused time; FR-001/002 rates and the tracker's timestamped 60-second samples.
-#[path = "goto_api.rs"]
+#[path = "support/goto.rs"]
 mod goto_api;
 use axum::{
     body::{to_bytes, Body},

@@ -1,6 +1,6 @@
 //! Oracle: the real GoTo route's 409 error, with exact simulator axis counts.
 //! Every refusal first proves an accepted GoTo moves the connected mount.
-#[path = "goto_api.rs"]
+#[path = "support/goto.rs"]
 mod api;
 use api::Rig;
 use scope_node::mount::{Axis, Mount};

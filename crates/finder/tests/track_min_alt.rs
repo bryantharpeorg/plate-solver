@@ -1,6 +1,6 @@
 //! A minimum altitude raised through `PUT /api/session` while M42 is tracked
 //! reaches the running tracker: tracking ends as too low and both axes rest.
-#[path = "goto_api.rs"]
+#[path = "support/goto.rs"]
 mod goto_api;
 use axum::{
     body::{to_bytes, Body},
