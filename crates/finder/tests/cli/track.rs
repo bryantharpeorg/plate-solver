@@ -8,9 +8,8 @@ use axum::{
 use finder::{model::separation, session::Session};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -18,34 +17,13 @@ use std::time::Duration;
 use serde_json::Value;
 use tower::ServiceExt;
 
-struct Folder(PathBuf);
-impl Folder {
-    fn new() -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target")
-            .join(format!(
-                "track-cli-{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
-        std::fs::create_dir_all(&path).unwrap();
-        Self(path)
-    }
-}
-impl Drop for Folder {
-    fn drop(&mut self) {
-        std::fs::remove_dir_all(&self.0).unwrap();
-    }
-}
-
 struct Server {
     child: Child,
     address: SocketAddr,
     reader: Option<JoinHandle<()>>,
 }
 impl Server {
-    fn start(folder: &Folder) -> Self {
+    fn start(folder: &crate::support::Scratch) -> Self {
         let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let mut command = Command::new(env!("CARGO_BIN_EXE_finder"));
         command
@@ -136,7 +114,7 @@ impl Drop for Server {
 
 #[test]
 fn imaging_camera_survives_restart_and_null_clears_it() {
-    let folder = Folder::new();
+    let folder = crate::support::Scratch::new("track-cli");
     let camera = serde_json::json!({"width_mm":23.5,"height_mm":15.6,"pitch_um":3.76});
     {
         let server = Server::start(&folder);
@@ -171,7 +149,7 @@ fn imaging_camera_survives_restart_and_null_clears_it() {
 // owns "Track is off and nothing moves after a restart".
 #[tokio::test(start_paused = true)]
 async fn tracking_that_moved_the_mount_is_off_and_quiet_after_restart() {
-    let folder = Folder::new();
+    let folder = crate::support::Scratch::new("track-cli");
     {
         let rig = goto::Rig::with_session(
             goto::START,

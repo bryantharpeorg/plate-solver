@@ -22,22 +22,6 @@ use std::{
 };
 use tower::ServiceExt;
 
-struct Folder(PathBuf);
-impl Folder {
-    fn new(name: &str) -> Self {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join(format!("../../target/raw-{name}-{}", std::process::id()));
-        assert!(!path.exists(), "stale test folder: {}", path.display());
-        Self(path)
-    }
-}
-impl Drop for Folder {
-    fn drop(&mut self) {
-        if self.0.exists() {
-            std::fs::remove_dir_all(&self.0).unwrap();
-        }
-    }
-}
 fn simulator() -> Simulator {
     let sim = support::sim();
     sim.connect_mount(SimMount::new(sim.clock().clone()));
@@ -153,7 +137,7 @@ async fn record(app: &Router, on: bool) -> Value {
 async fn raw(app: &Router, frames: u8) -> (StatusCode, Value) {
     request(app, "POST", "/api/record/raw", json!({"frames":frames})).await
 }
-fn folder(root: &Folder, value: &Value) -> PathBuf {
+fn folder(root: &crate::support::Scratch, value: &Value) -> PathBuf {
     root.0.join(value["recording"]["folder"].as_str().unwrap())
 }
 fn raw_files(dir: &Path) -> Vec<PathBuf> {
@@ -178,7 +162,7 @@ async fn refused(app: &Router, error: &str) {
 
 #[tokio::test(start_paused = true)]
 async fn pngs_preserve_the_pixels_that_produced_each_frame_lines_centroids() {
-    let root = Folder::new("pixels");
+    let root = crate::support::Scratch::new("raw-pixels");
     let (app, _sim) = setup(Some(&root.0), Service::Current);
     connected(&app).await;
     record(&app, true).await;
@@ -244,7 +228,7 @@ async fn pngs_preserve_the_pixels_that_produced_each_frame_lines_centroids() {
 
 #[tokio::test(start_paused = true)]
 async fn route_refuses_invalid_unconfigured_busy_and_disconnected_requests() {
-    let root = Folder::new("refusals");
+    let root = crate::support::Scratch::new("raw-refusals");
     let (app, _sim) = setup(Some(&root.0), Service::Current);
     connected(&app).await;
     refused(&app, "start a recording first").await;
@@ -298,7 +282,7 @@ async fn route_refuses_invalid_unconfigured_busy_and_disconnected_requests() {
 
 #[tokio::test(start_paused = true)]
 async fn silent_node_times_out_after_fifteen_seconds_without_writing_a_raw_file() {
-    let root = Folder::new("timeout");
+    let root = crate::support::Scratch::new("raw-timeout");
     let (app, sim) = setup(Some(&root.0), Service::Current);
     connected(&app).await;
     let start = record(&app, true).await;
@@ -321,7 +305,7 @@ async fn silent_node_times_out_after_fifteen_seconds_without_writing_a_raw_file(
 
 #[tokio::test(start_paused = true)]
 async fn ending_recording_cancels_raw_request_without_adding_an_error() {
-    let root = Folder::new("stop");
+    let root = crate::support::Scratch::new("raw-stop");
     let (app, _sim) = setup(Some(&root.0), Service::Current);
     connected(&app).await;
     record(&app, true).await;
@@ -360,7 +344,7 @@ impl proto::scope_node_raw_server::ScopeNodeRaw for Malformed {
 }
 #[tokio::test(start_paused = true)]
 async fn legacy_node_and_oversized_pixel_buffer_report_exact_errors_without_files() {
-    let root = Folder::new("incompatible");
+    let root = crate::support::Scratch::new("raw-incompatible");
     for (service, error) in [
         (Service::Legacy, "this scope node cannot send raw frames"),
         (Service::Malformed, "the raw frame request failed"),
@@ -423,7 +407,7 @@ impl Camera for LargeCamera {
 }
 #[tokio::test(start_paused = true)]
 async fn paired_raw_client_accepts_a_five_megabyte_gray_frame() {
-    let root = Folder::new("large");
+    let root = crate::support::Scratch::new("raw-large");
     let sim = simulator();
     let node = NodeService::new(
         LargeCamera {

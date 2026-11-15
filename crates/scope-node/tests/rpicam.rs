@@ -6,6 +6,15 @@ use scope_node::{
 use serde::Deserialize;
 use std::{path::PathBuf, time::Duration};
 
+#[cfg(unix)]
+struct Scratch(PathBuf);
+#[cfg(unix)]
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 #[derive(Deserialize)]
 struct Fixture {
     camera: ExpectedCamera,
@@ -120,10 +129,12 @@ async fn padded_stream_and_metadata_match_saved_oracles_byte_for_byte() {
 async fn subprocess_exit_reports_stderr_and_capture_restarts_without_restarting_service() {
     use std::os::unix::fs::PermissionsExt;
     let f = fixture();
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join(format!("../../target/rpicam-test-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let script = dir.join("rpicam-vid");
+    let dir = Scratch(
+        PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+            .join(format!("rpicam-test-{}", std::process::id())),
+    );
+    std::fs::create_dir_all(&dir.0).unwrap();
+    let script = dir.0.join("rpicam-vid");
     // The fake accepts precisely the adapter's metadata destination. PATH is set
     // on the child command, avoiding process-global environment races in tests.
     std::fs::write(&script, format!("#!/bin/sh\nwhile [ $# -gt 0 ]; do\n if [ \"$1\" = --metadata ]; then shift; metadata=$1; fi\n shift\ndone\ncat '{}' > \"$metadata\" &\ncat '{}'\nwait\necho fixture-camera-exit >&2\nexit 7\n", root().join(&f.stream.metadata).display(), root().join(&f.stream.file).display())).unwrap();
@@ -139,7 +150,7 @@ async fn subprocess_exit_reports_stderr_and_capture_restarts_without_restarting_
             .unwrap(),
     );
     let path = std::env::join_paths(
-        std::iter::once(dir.clone())
+        std::iter::once(dir.0.clone())
             .chain(std::env::split_paths(&std::env::var_os("PATH").unwrap())),
     )
     .unwrap();
@@ -188,5 +199,4 @@ async fn subprocess_exit_reports_stderr_and_capture_restarts_without_restarting_
     );
     assert_eq!(reopened.id, next.id + 1);
     drop(capture);
-    std::fs::remove_dir_all(dir).unwrap();
 }

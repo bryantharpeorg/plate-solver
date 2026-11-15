@@ -684,12 +684,8 @@ async fn braking_distance_is_checked_at_the_cable_limit() {
 
 #[tokio::test(start_paused = true)]
 async fn direct_move_state_is_absent_until_first_move_and_never_persisted() {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
-        "../../target/us5-axis-session-{}",
-        std::process::id()
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("session.json");
+    let dir = crate::support::Scratch::new("us5-axis-session");
+    let path = dir.0.join("session.json");
     std::fs::write(
         &path,
         json!({"site":{"lat_deg":40.0,"lon_deg":-75.0},"min_alt_deg":15.0,"target":"NGC 1976"})
@@ -708,7 +704,6 @@ async fn direct_move_state_is_absent_until_first_move_and_never_persisted() {
     }
     assert_eq!(session(&rig.app).await["axis_move"]["state"], "done");
     drop(rig);
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[tokio::test(start_paused = true)]

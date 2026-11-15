@@ -5,17 +5,24 @@ use std::{
     time::{Duration, Instant},
 };
 
+struct Scratch(PathBuf);
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
 fn run(config: &str, check: bool) -> Output {
     static NEXT: AtomicUsize = AtomicUsize::new(0);
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!(
-        "../../target/scope-node-cli-{}-{}.toml",
+    let path = Scratch(PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!(
+        "scope-node-cli-{}-{}.toml",
         std::process::id(),
         NEXT.fetch_add(1, Ordering::Relaxed)
-    ));
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(&path, config).unwrap();
+    )));
+    std::fs::create_dir_all(path.0.parent().unwrap()).unwrap();
+    std::fs::write(&path.0, config).unwrap();
     let mut command = Command::new(env!("CARGO_BIN_EXE_scope-node"));
-    command.arg("--config").arg(&path);
+    command.arg("--config").arg(&path.0);
     if check {
         command.arg("--check-config");
     }
@@ -30,7 +37,6 @@ fn run(config: &str, check: bool) -> Output {
         if started.elapsed() >= Duration::from_secs(10) {
             let _ = child.kill();
             child.wait().unwrap();
-            std::fs::remove_file(&path).unwrap();
             panic!(
                 "scope-node did not exit within 10 s: {:?}",
                 command.get_args().collect::<Vec<_>>()
@@ -38,9 +44,7 @@ fn run(config: &str, check: bool) -> Output {
         }
         std::thread::sleep(Duration::from_millis(50));
     }
-    let output = child.wait_with_output().unwrap();
-    std::fs::remove_file(path).unwrap();
-    output
+    child.wait_with_output().unwrap()
 }
 
 const CONFIG: &str = "listen = '127.0.0.1:50051'\ntoken = 'test-token'\nadapter = 'simulated'\nexposure_ms = 20\ngain = 'auto'\n";

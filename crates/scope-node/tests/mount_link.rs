@@ -22,6 +22,13 @@ use std::{net::TcpListener, path::PathBuf, process::Stdio, sync::Arc, time::Dura
 use tokio_stream::StreamExt;
 use tonic::{Code, Request};
 
+struct Scratch(PathBuf);
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 // Same clock as skywatcher.rs: paused Tokio time is the independent test clock.
 struct Clock(tokio::time::Instant);
 impl NodeClock for Clock {
@@ -156,14 +163,14 @@ async fn binary_keeps_running_with_a_missing_mount_device() {
         .local_addr()
         .unwrap();
     // The temporary listener was dropped, so the binary can bind this free port.
-    let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!(
-        "../../target/mount-link-process-{}",
-        std::process::id()
-    ));
-    std::fs::create_dir_all(&directory).unwrap();
-    let device = directory.join("missing-device");
+    let directory = Scratch(
+        PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+            .join(format!("mount-link-process-{}", std::process::id())),
+    );
+    std::fs::create_dir_all(&directory.0).unwrap();
+    let device = directory.0.join("missing-device");
     assert!(!device.exists());
-    let config = directory.join("config.toml");
+    let config = directory.0.join("config.toml");
     std::fs::write(
         &config,
         format!(
@@ -186,7 +193,6 @@ async fn binary_keeps_running_with_a_missing_mount_device() {
         child.kill().await.unwrap();
     }
     let output = child.wait_with_output().await.unwrap();
-    std::fs::remove_dir_all(directory).unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(running, "scope-node exited: {stderr}");
     assert!(stderr.contains("mount not connected"), "{stderr}");

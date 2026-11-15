@@ -135,6 +135,7 @@ fn circle_crossings(target: &Target, start: f64) -> (f64, f64) {
 }
 
 struct Rig {
+    _folder: crate::support::Scratch,
     clock: VirtualClock,
     mount: SimMount,
     target: Target,
@@ -146,11 +147,8 @@ impl Rig {
         Self::with_wind(start, target, name, false).await
     }
     async fn with_wind(start: f64, target: Target, name: &str, wound: bool) -> Self {
-        let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target")
-            .join(format!("keyhole-{name}-{}", std::process::id()));
-        std::fs::create_dir_all(&folder).unwrap();
-        let path = folder.join("session.json");
+        let folder = crate::support::Scratch::new(&format!("keyhole-{name}"));
+        let path = folder.0.join("session.json");
         std::fs::write(
             &path,
             r#"{"site":null,"target":null,"min_alt_deg":15,"backlash":{"alt_deg":0.3}}"#,
@@ -267,8 +265,8 @@ impl Rig {
             15.0,
         );
         tracker.start(target.clone()).await.unwrap();
-        std::fs::remove_dir_all(folder).unwrap();
         Self {
+            _folder: folder,
             clock,
             mount,
             target,

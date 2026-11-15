@@ -3,35 +3,13 @@
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
-
-struct Folder(PathBuf);
-impl Folder {
-    fn new() -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target")
-            .join(format!(
-                "session-cli-{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
-        std::fs::create_dir_all(&path).unwrap();
-        Self(path)
-    }
-}
-impl Drop for Folder {
-    fn drop(&mut self) {
-        std::fs::remove_dir_all(&self.0).unwrap();
-    }
-}
 
 struct Server {
     child: Child,
@@ -40,7 +18,7 @@ struct Server {
     reader: Option<JoinHandle<()>>,
 }
 impl Server {
-    fn start(folder: &Folder, explicit_state: bool) -> Self {
+    fn start(folder: &crate::support::Scratch, explicit_state: bool) -> Self {
         Self::launch(
             folder,
             explicit_state.then_some(folder.0.as_path()),
@@ -48,7 +26,7 @@ impl Server {
         )
     }
 
-    fn launch(folder: &Folder, state: Option<&Path>, xdg: Option<&Path>) -> Self {
+    fn launch(folder: &crate::support::Scratch, state: Option<&Path>, xdg: Option<&Path>) -> Self {
         let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let mut command = Command::new(env!("CARGO_BIN_EXE_finder"));
         command
@@ -132,7 +110,7 @@ fn fresh(body: &Value) {
 
 #[test]
 fn session_survives_a_binary_restart_without_a_pointing() {
-    let folder = Folder::new();
+    let folder = crate::support::Scratch::new("session-cli");
     let server = Server::start(&folder, true);
     fresh(&server.request(None));
     let expected = server.request(Some(
@@ -164,7 +142,7 @@ fn session_survives_a_binary_restart_without_a_pointing() {
 
 #[test]
 fn corrupt_state_is_kept_beside_a_fresh_file_and_reported() {
-    let folder = Folder::new();
+    let folder = crate::support::Scratch::new("session-cli");
     std::fs::write(folder.0.join("session.json"), "not json").unwrap();
     let server = Server::start(&folder, true);
     fresh(&server.request(None));
@@ -186,7 +164,7 @@ fn corrupt_state_is_kept_beside_a_fresh_file_and_reported() {
 
 #[test]
 fn xdg_state_home_is_the_default_folder() {
-    let folder = Folder::new();
+    let folder = crate::support::Scratch::new("session-cli");
     let server = Server::start(&folder, false);
     server.request(Some(json!({"target": "M31"})));
     assert!(folder.0.join("finder/session.json").is_file());
@@ -198,7 +176,7 @@ fn xdg_state_home_is_the_default_folder() {
 
 #[test]
 fn binary_session_time_uses_the_system_clock() {
-    let folder = Folder::new();
+    let folder = crate::support::Scratch::new("session-cli");
     let server = Server::start(&folder, true);
     let before = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -217,7 +195,7 @@ fn binary_session_time_uses_the_system_clock() {
 
 #[test]
 fn home_is_used_when_xdg_state_home_is_unset() {
-    let folder = Folder::new();
+    let folder = crate::support::Scratch::new("session-cli");
     let server = Server::launch(&folder, None, None);
     server.request(Some(json!({"target": "M42"})));
     assert!(folder.0.join(".local/state/finder/session.json").is_file());
@@ -229,7 +207,7 @@ fn syntactically_valid_but_invalid_session_files_are_also_preserved() {
         json!({"site": null, "min_alt_deg": 85, "target": "M31"}),
         json!({"site": null, "min_alt_deg": 15, "target": "NGC 99999"}),
     ] {
-        let folder = Folder::new();
+        let folder = crate::support::Scratch::new("session-cli");
         std::fs::write(folder.0.join("session.json"), fixture.to_string()).unwrap();
         let server = Server::start(&folder, true);
         fresh(&server.request(None));

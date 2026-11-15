@@ -180,15 +180,12 @@ async fn missing_host_and_duplicate_origins_are_forbidden_before_reading_a_body(
 #[test]
 fn repeated_allow_host_flags_enable_only_the_named_hosts_in_the_binary() {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let folder = repo
-        .join("target")
-        .join(format!("write-hosts-{}", std::process::id()));
-    std::fs::create_dir_all(&folder).unwrap();
+    let folder = crate::support::Scratch::new("write-hosts");
     let mut child = Command::new(env!("CARGO_BIN_EXE_finder"))
         .arg("--db")
         .arg(repo.join("reference-solutions/cedar-solve/tetra3/data/default_database.npz"))
         .arg("--state")
-        .arg(&folder)
+        .arg(&folder.0)
         .args([
             "--listen",
             "127.0.0.1:0",
@@ -245,7 +242,6 @@ fn repeated_allow_host_flags_enable_only_the_named_hosts_in_the_binary() {
     let _ = child.kill();
     child.wait().unwrap();
     reader.join().unwrap();
-    std::fs::remove_dir_all(folder).unwrap();
     if let Err(error) = result {
         std::panic::resume_unwind(error);
     }

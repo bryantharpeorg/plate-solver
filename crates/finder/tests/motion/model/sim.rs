@@ -198,11 +198,8 @@ async fn uploaded_frame_updates_pointing_with_a_connected_mount_but_never_syncs(
 }
 #[tokio::test(start_paused = true)]
 async fn durable_night_survives_local_midnight_then_expires_at_solar_noon() {
-    let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target")
-        .join(format!("model-session-{}", std::process::id()));
-    std::fs::create_dir_all(&folder).unwrap();
-    let path = folder.join("session.json");
+    let folder = crate::support::Scratch::new("model-session");
+    let path = folder.0.join("session.json");
     let (sim, mount, state) = setup(Session::with_state_file(&path).unwrap());
     let state = state.with_live();
     let mut events = state.live().unwrap().subscribe();
@@ -265,5 +262,4 @@ async fn durable_night_survives_local_midnight_then_expires_at_solar_noon() {
     let again = Session::with_state_file(&path).unwrap().model(noon + 2.0);
     assert!(again.syncs.is_empty());
     assert_eq!(again.fixed, fixed);
-    std::fs::remove_dir_all(folder).unwrap();
 }

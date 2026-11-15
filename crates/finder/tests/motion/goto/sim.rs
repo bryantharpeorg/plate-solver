@@ -8,11 +8,8 @@ const START: f64 = 1_768_528_800.0;
 
 #[tokio::test(start_paused = true)]
 async fn five_catalog_targets_converge_after_two_syncs_and_report_progress() {
-    let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target")
-        .join(format!("goto-session-{}", std::process::id()));
-    std::fs::create_dir_all(&folder).unwrap();
-    let path = folder.join("session.json");
+    let folder = crate::support::Scratch::new("goto-session");
+    let path = folder.0.join("session.json");
     api::far_sync(&path, START, 50.0, 120.0).await;
     let rig = Rig::with_session(
         START,
@@ -73,7 +70,6 @@ async fn five_catalog_targets_converge_after_two_syncs_and_report_progress() {
         expected.push("done");
         assert_eq!(states, expected, "{name}: {progress:?}");
     }
-    std::fs::remove_dir_all(folder).unwrap();
 }
 #[tokio::test(start_paused = true)]
 async fn sixteen_degree_target_never_drops_below_fifteen() {

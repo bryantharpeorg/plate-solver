@@ -30,26 +30,6 @@ use std::{
 use tokio::sync::{broadcast, watch, Semaphore};
 use tower::ServiceExt;
 
-struct Folder(PathBuf);
-impl Folder {
-    fn new(name: &str) -> Self {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
-            "../../target/recording-{name}-{}",
-            std::process::id()
-        ));
-        assert!(!path.exists(), "stale test folder: {}", path.display());
-        Self(path)
-    }
-}
-impl Drop for Folder {
-    fn drop(&mut self) {
-        if self.0.is_dir() {
-            std::fs::remove_dir_all(&self.0).unwrap();
-        } else if self.0.exists() {
-            std::fs::remove_file(&self.0).unwrap();
-        }
-    }
-}
 fn state() -> AppState {
     AppState::shared(support::DB.clone(), Samples::default())
         .with_clock(Arc::new(FixedClock(support::START)))
@@ -170,7 +150,7 @@ fn axis(value: &Option<proto::AxisPositions>) -> Value {
 
 #[tokio::test(start_paused = true)]
 async fn start_stop_metadata_counts_arrival_times_and_no_writes_after_stop() {
-    let root = Folder::new("metadata");
+    let root = crate::support::Scratch::new("recording-metadata");
     let state = setup(&root.0);
     let app = finder::router(state.clone());
     wait(&app, |s| !s["model"].is_null()).await;
@@ -253,7 +233,7 @@ async fn start_stop_metadata_counts_arrival_times_and_no_writes_after_stop() {
 
 #[tokio::test(start_paused = true)]
 async fn files_equal_independently_observed_frames_reports_and_previews() {
-    let root = Folder::new("payloads");
+    let root = crate::support::Scratch::new("recording-payloads");
     let state = setup(&root.0);
     let mut incoming = state.link().unwrap().frames();
     let mut reports = state.live().unwrap().subscribe();
@@ -375,7 +355,7 @@ fn restore_frame(line: &Value, dir: &Path) -> StarFrame {
 
 #[tokio::test(start_paused = true)]
 async fn saved_star_frame_replays_through_a_fresh_live_solver() {
-    let root = Folder::new("replay");
+    let root = crate::support::Scratch::new("recording-replay");
     let state = setup(&root.0);
     let app = finder::router(state);
     wait(&app, |s| !s["model"].is_null()).await;
@@ -427,8 +407,9 @@ async fn saved_star_frame_replays_through_a_fresh_live_solver() {
 
 #[tokio::test(start_paused = true)]
 async fn invalid_requests_and_missing_recording_sources_leave_no_recording() {
-    let root = Folder::new("refusals");
-    let app = finder::router(setup(&root.0));
+    let scratch = crate::support::Scratch::new("recording-refusals");
+    let root = scratch.0.join("root");
+    let app = finder::router(setup(&root));
     for body in [
         json!({}),
         json!({"on":"yes"}),
@@ -460,7 +441,7 @@ async fn invalid_requests_and_missing_recording_sources_leave_no_recording() {
         assert!(value["error"].is_string());
     }
     assert!(read(&app).await.get("recording").is_none());
-    assert!(!root.0.exists());
+    assert!(!root.exists());
     assert!(post(&app, false).await.get("recording").is_none());
     for (app, error) in [
         (
@@ -468,7 +449,7 @@ async fn invalid_requests_and_missing_recording_sources_leave_no_recording() {
             "this console has no recordings folder",
         ),
         (
-            finder::router(state().with_recordings(&root.0)),
+            finder::router(state().with_recordings(&root)),
             "this console has no live link",
         ),
     ] {
@@ -478,9 +459,9 @@ async fn invalid_requests_and_missing_recording_sources_leave_no_recording() {
         assert_eq!(value["error"], error);
         assert!(read(&app).await.get("recording").is_none());
     }
-    assert!(!root.0.exists());
-    std::fs::write(&root.0, b"a regular file").unwrap();
-    let app = finder::router(setup(&root.0));
+    assert!(!root.exists());
+    std::fs::write(&root, b"a regular file").unwrap();
+    let app = finder::router(setup(&root));
     let (status, value) = support::request(&app, "POST", "/api/record", json!({"on":true})).await;
     assert_eq!(status, 500);
     assert!(value["error"]
@@ -492,7 +473,7 @@ async fn invalid_requests_and_missing_recording_sources_leave_no_recording() {
 
 #[tokio::test(start_paused = true)]
 async fn repeated_start_keeps_folder_and_next_start_uses_a_new_folder() {
-    let root = Folder::new("starts");
+    let root = crate::support::Scratch::new("recording-starts");
     let app = finder::router(setup(&root.0));
     let first = post(&app, true).await;
     let second = post(&app, true).await;
@@ -512,14 +493,14 @@ async fn repeated_start_keeps_folder_and_next_start_uses_a_new_folder() {
 
 #[tokio::test(start_paused = true)]
 async fn frame_limit_and_deleted_folder_end_without_extra_lines_or_recreation() {
-    let root = Folder::new("limit");
+    let root = crate::support::Scratch::new("recording-limit");
     let app = finder::router(setup(&root.0).with_recording_limit(3));
     post(&app, true).await;
     let ended = wait(&app, |s| s["recording"]["on"] == false).await;
     assert_eq!(ended["recording"]["ended_reason"], "limit");
     assert_eq!(ended["recording"]["frames"], 3);
     assert_eq!(lines(&folder(&root.0, &ended), "frames.jsonl").len(), 3);
-    let root = Folder::new("deleted");
+    let root = crate::support::Scratch::new("recording-deleted");
     let app = finder::router(setup(&root.0));
     post(&app, true).await;
     let running = wait(&app, |s| {
@@ -580,7 +561,7 @@ fn own_sources(
 
 #[tokio::test(start_paused = true)]
 async fn lower_or_equal_ids_end_before_writing_and_none_keeps_recording_on() {
-    let root = Folder::new("restart");
+    let root = crate::support::Scratch::new("recording-restart");
     let recorder = Recorder::new(root.0.clone(), FRAME_LIMIT);
     let session = Arc::new(Session::default());
     session

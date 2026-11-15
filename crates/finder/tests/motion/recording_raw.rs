@@ -18,22 +18,6 @@ use std::{
 };
 use tower::ServiceExt;
 
-struct Folder(PathBuf);
-impl Folder {
-    fn new() -> Self {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join(format!("../../target/raw-moving-{}", std::process::id()));
-        assert!(!path.exists(), "stale test folder: {}", path.display());
-        Self(path)
-    }
-}
-impl Drop for Folder {
-    fn drop(&mut self) {
-        if self.0.exists() {
-            std::fs::remove_dir_all(&self.0).unwrap();
-        }
-    }
-}
 fn setup(root: &Path) -> (Router, Simulator) {
     let sim = support::sim();
     sim.connect_mount(SimMount::new(sim.clock().clone()));
@@ -116,7 +100,7 @@ fn raw_files(dir: &Path) -> Vec<PathBuf> {
 }
 #[tokio::test(start_paused = true)]
 async fn raw_frames_are_refused_while_moving_and_a_move_ends_a_running_request() {
-    let root = Folder::new();
+    let root = crate::support::Scratch::new("raw-moving");
     let (app, sim) = setup(&root.0);
     wait(&app, |v| {
         v["node"]["connected"] == true && v["node"]["offset_s"].is_number()

@@ -4,27 +4,32 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
+struct Scratch(PathBuf);
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
 fn check(mount: &str) -> std::process::Output {
     static NEXT: AtomicUsize = AtomicUsize::new(0);
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!(
-        "../../target/mount-config-{}-{}.toml",
+    let path = Scratch(PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!(
+        "mount-config-{}-{}.toml",
         std::process::id(),
         NEXT.fetch_add(1, Ordering::Relaxed)
-    ));
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    )));
+    std::fs::create_dir_all(path.0.parent().unwrap()).unwrap();
     std::fs::write(
-        &path,
+        &path.0,
         format!("token = 'test-token'\nadapter = 'simulated'\n{mount}"),
     )
     .unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_scope-node"))
+    Command::new(env!("CARGO_BIN_EXE_scope-node"))
         .arg("--config")
-        .arg(&path)
+        .arg(&path.0)
         .arg("--check-config")
         .output()
-        .unwrap();
-    std::fs::remove_file(path).unwrap();
-    output
+        .unwrap()
 }
 
 #[test]
