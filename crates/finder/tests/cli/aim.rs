@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use std::{
     io::{BufRead, BufReader, Read, Write},
     net::{SocketAddr, TcpStream},
-    path::{Path, PathBuf},
+    path::Path,
     process::{Child, Command, Stdio},
     sync::{mpsc, Arc, Mutex},
     time::Duration,
@@ -161,12 +161,6 @@ impl Drop for Server {
         assert!(!self.logs.lock().unwrap().contains("test-token"));
     }
 }
-struct Folder(PathBuf);
-impl Drop for Folder {
-    fn drop(&mut self) {
-        std::fs::remove_dir_all(&self.0).unwrap();
-    }
-}
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn calibrated_aim_survives_binary_restart_exactly_and_reset_removes_it() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -184,11 +178,7 @@ async fn calibrated_aim_survives_binary_restart_exactly_and_reset_removes_it() {
             .await
             .unwrap();
     });
-    let folder = Folder(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join(format!("../../target/aim-cli-{}", std::process::id())),
-    );
-    std::fs::create_dir_all(&folder.0).unwrap();
+    let folder = crate::support::Scratch::new("aim-cli");
     let binary = Server::start(&folder.0);
     assert_eq!(
         binary

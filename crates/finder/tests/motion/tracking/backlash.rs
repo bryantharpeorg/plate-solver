@@ -64,11 +64,8 @@ async fn another_target_on_the_same_mount_takes_up_the_measured_altitude_play() 
 
 #[tokio::test(start_paused = true)]
 async fn m81_takes_up_azimuth_play_at_greatest_elongation() {
-    let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target")
-        .join(format!("backlash-az-{}", std::process::id()));
-    std::fs::create_dir_all(&folder).unwrap();
-    let path = folder.join("session.json");
+    let folder = crate::support::Scratch::new("backlash-az");
+    let path = folder.0.join("session.json");
     std::fs::write(
         &path,
         r#"{"site":null,"target":null,"min_alt_deg":15,"backlash":{"az_deg":0.3,"alt_deg":0.3}}"#,
@@ -100,7 +97,6 @@ async fn m81_takes_up_azimuth_play_at_greatest_elongation() {
     rig.follow(turn + 120.0, 30.0).await;
     rig.assert_reversal(Axis::Azimuth, start, true);
     rig.tracker.stop("stopped").await;
-    std::fs::remove_dir_all(folder).unwrap();
 }
 
 #[tokio::test(start_paused = true)]

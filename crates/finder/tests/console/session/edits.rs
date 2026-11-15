@@ -167,11 +167,8 @@ async fn library_without_a_state_file_leaves_home_and_xdg_empty() {
         return;
     }
     // Child-only environment: parallel tests never mutate the process environment.
-    let empty = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target")
-        .join(format!("session-library-home-{}", std::process::id()));
-    std::fs::create_dir_all(&empty).unwrap();
-    assert_eq!(std::fs::read_dir(&empty).unwrap().count(), 0);
+    let empty = crate::support::Scratch::new("session-library-home");
+    assert_eq!(std::fs::read_dir(&empty.0).unwrap().count(), 0);
     let out = Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -182,12 +179,11 @@ async fn library_without_a_state_file_leaves_home_and_xdg_empty() {
             "--nocapture",
         ])
         .env(CHILD, "1")
-        .env("HOME", &empty)
-        .env("XDG_STATE_HOME", &empty)
+        .env("HOME", &empty.0)
+        .env("XDG_STATE_HOME", &empty.0)
         .output()
         .unwrap();
-    let count = std::fs::read_dir(&empty).unwrap().count();
-    std::fs::remove_dir_all(&empty).unwrap();
+    let count = std::fs::read_dir(&empty.0).unwrap().count();
     assert!(
         String::from_utf8_lossy(&out.stdout).contains("test result: ok. 1 passed"),
         "the child ran no test: {}",

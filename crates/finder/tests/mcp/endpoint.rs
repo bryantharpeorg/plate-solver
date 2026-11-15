@@ -47,10 +47,8 @@ async fn initialize_and_list_are_json_without_authorization_or_session_id() {
 
 #[tokio::test]
 async fn get_is_405_and_preserves_the_state_file_bytes() {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join(format!("../../target/mcp-state-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("session.json");
+    let dir = crate::support::Scratch::new("mcp-state");
+    let path = dir.0.join("session.json");
     let app = app(
         state().with_session(Session::with_state_file(&path).unwrap()),
         "127.0.0.1",
@@ -65,7 +63,6 @@ async fn get_is_405_and_preserves_the_state_file_bytes() {
     assert_eq!(response.status(), 405);
     assert_eq!(response.headers()["allow"], "POST");
     assert_eq!(std::fs::read(&path).unwrap(), before);
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[tokio::test]

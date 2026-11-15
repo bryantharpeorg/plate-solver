@@ -186,11 +186,8 @@ async fn page_goto_and_track_have_page_attribution() {
 
 #[tokio::test(start_paused = true)]
 async fn legacy_session_loads_exact_fields_and_motion_is_never_persisted() {
-    let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target")
-        .join(format!("mcp-motion-{}", std::process::id()));
-    std::fs::create_dir_all(&folder).unwrap();
-    let path = folder.join("session.json");
+    let folder = crate::support::Scratch::new("mcp-motion");
+    let path = folder.0.join("session.json");
     let saved =
         json!({"site":{"lat_deg":40.0,"lon_deg":-75.0},"min_alt_deg":15.0,"target":"NGC 1976"});
     std::fs::write(&path, saved.to_string()).unwrap();
@@ -220,7 +217,6 @@ async fn legacy_session_loads_exact_fields_and_motion_is_never_persisted() {
             .is_none()
     );
     drop(rig);
-    std::fs::remove_dir_all(folder).unwrap();
 }
 
 /// Always check StopAll within 0.1 s, the halt reason, motion cleared and both

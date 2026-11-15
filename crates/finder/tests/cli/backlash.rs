@@ -4,35 +4,13 @@ use crate::support::tracker as backlash_sim;
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use serde_json::{json, Value};
-
-struct Folder(PathBuf);
-impl Folder {
-    fn new() -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target")
-            .join(format!(
-                "backlash-cli-{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
-        std::fs::create_dir_all(&path).unwrap();
-        Self(path)
-    }
-}
-impl Drop for Folder {
-    fn drop(&mut self) {
-        std::fs::remove_dir_all(&self.0).unwrap();
-    }
-}
 
 struct Server {
     child: Child,
@@ -40,7 +18,7 @@ struct Server {
     reader: Option<JoinHandle<()>>,
 }
 impl Server {
-    fn start(folder: &Folder) -> Self {
+    fn start(folder: &crate::support::Scratch) -> Self {
         let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let mut command = Command::new(env!("CARGO_BIN_EXE_finder"));
         command
@@ -118,7 +96,7 @@ impl Drop for Server {
 
 #[tokio::test(start_paused = true)]
 async fn measured_altitude_backlash_survives_two_next_day_binary_restarts_exactly() {
-    let folder = Folder::new();
+    let folder = crate::support::Scratch::new("backlash-cli");
     let session = finder::session::Session::with_state_file(folder.0.join("session.json")).unwrap();
     let rig = backlash_sim::measured(session).await;
     let measured = rig.body().await["backlash"]["alt_deg"].as_f64().unwrap();

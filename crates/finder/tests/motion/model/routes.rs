@@ -51,11 +51,8 @@ async fn resets_clear_only_the_requested_terms_and_persist_across_restart() {
     // A persisted fixture of a night's state with explicit nonzero terms. Loading it
     // exercises the same persisted format as a restarted console, without fitting
     // expectations with the implementation under test.
-    let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target")
-        .join(format!("model-api-{}", std::process::id()));
-    std::fs::create_dir_all(&folder).unwrap();
-    let path = folder.join("session.json");
+    let folder = crate::support::Scratch::new("model-api");
+    let path = folder.0.join("session.json");
     let fixed = json!({"ca":0.02,"npae":-0.03,"tf":0.01,"camera":4.0});
     let capture = json!({"site":{"lat_deg":40,"lon_deg":-75},"min_alt_deg":15,
         "model":{"syncs":[{"time":START,"axis":[0,0],"counts_per_revolution":[1620000,1620000],
@@ -116,7 +113,6 @@ async fn resets_clear_only_the_requested_terms_and_persist_across_restart() {
     assert_eq!(after.base_tilt, before.base_tilt);
     assert!(after.fixed.is_none());
     assert_eq!(Session::with_state_file(&path).unwrap().model(START), after);
-    std::fs::remove_dir_all(folder).unwrap();
 }
 
 #[tokio::test(start_paused = true)]

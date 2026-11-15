@@ -103,11 +103,8 @@ async fn search_works_from_an_empty_working_directory() {
     let (status, expected) = get(QUERY).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(expected[0]["id"], "NGC 224");
-    let empty = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target")
-        .join(format!("targets-empty-cwd-{}", std::process::id()));
-    std::fs::create_dir_all(&empty).unwrap();
-    assert_eq!(std::fs::read_dir(&empty).unwrap().count(), 0);
+    let empty = crate::support::Scratch::new("targets-empty-cwd");
+    assert_eq!(std::fs::read_dir(&empty.0).unwrap().count(), 0);
     let output = Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -117,11 +114,11 @@ async fn search_works_from_an_empty_working_directory() {
             ),
             "--nocapture",
         ])
-        .current_dir(&empty)
+        .current_dir(&empty.0)
         .env(EXPECTED, expected.to_string())
         .output()
         .expect("child test process");
-    std::fs::remove_dir(&empty).unwrap();
+    assert_eq!(std::fs::read_dir(&empty.0).unwrap().count(), 0);
     assert!(
         String::from_utf8_lossy(&output.stdout).contains("test result: ok. 1 passed"),
         "the child ran no test: {}",

@@ -4,28 +4,12 @@ use serde_json::{json, Value};
 use std::{
     io::{BufRead, BufReader, Read, Write},
     net::{SocketAddr, TcpListener, TcpStream},
-    path::{Path, PathBuf},
+    path::Path,
     process::{Child, Command, Stdio},
     sync::mpsc,
     time::{Duration, Instant},
 };
 
-struct Folder(PathBuf);
-impl Folder {
-    fn new(name: &str) -> Self {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
-            "../../target/simulate-{name}-{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&path).unwrap();
-        Self(path)
-    }
-}
-impl Drop for Folder {
-    fn drop(&mut self) {
-        std::fs::remove_dir_all(&self.0).unwrap();
-    }
-}
 fn command() -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_finder"));
     cmd.current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
@@ -109,7 +93,7 @@ impl Drop for Server {
 
 #[test]
 fn simulated_epoch_frames_and_real_rate_never_connect_to_the_stored_node() {
-    let folder = Folder::new("isolation");
+    let folder = crate::support::Scratch::new("simulate-isolation");
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
     let address = listener.local_addr().unwrap().to_string();
@@ -162,7 +146,7 @@ fn simulated_epoch_frames_and_real_rate_never_connect_to_the_stored_node() {
 
 #[test]
 fn sim_start_without_simulate_is_refused_before_serving_or_writing_state() {
-    let folder = Folder::new("refused");
+    let folder = crate::support::Scratch::new("simulate-refused");
     let output = command()
         .arg("--state")
         .arg(&folder.0)
@@ -183,7 +167,7 @@ fn sim_start_without_simulate_is_refused_before_serving_or_writing_state() {
 
 #[test]
 fn default_state_is_unchanged_and_simulation_keeps_its_own_aim_and_node() {
-    let folder = Folder::new("xdg");
+    let folder = crate::support::Scratch::new("simulate-xdg");
     let default = folder.0.join("finder/session.json");
     std::fs::create_dir_all(default.parent().unwrap()).unwrap();
     let bytes = b"{\n  \"site\":null,\"target\":\"M78\",\"min_alt_deg\":25\n}\n";

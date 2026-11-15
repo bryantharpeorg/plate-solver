@@ -17,7 +17,6 @@ impl Drop for Console {
     fn drop(&mut self) {
         let _ = self.child.kill();
         self.child.wait().unwrap();
-        std::fs::remove_dir_all(&self.root).unwrap();
     }
 }
 fn request(address: SocketAddr, method: &str, route: &str, body: Value) -> Value {
@@ -34,10 +33,8 @@ fn request(address: SocketAddr, method: &str, route: &str, body: Value) -> Value
 }
 #[test]
 fn simulated_binary_records_in_its_explicit_state_folder() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
-        "../../target/recording-binary-{}",
-        std::process::id()
-    ));
+    let scratch = crate::support::Scratch::new("recording-binary");
+    let root = scratch.0.join("state");
     assert!(!root.exists());
     let child = Command::new(env!("CARGO_BIN_EXE_finder"))
         .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))

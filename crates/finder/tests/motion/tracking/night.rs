@@ -122,6 +122,7 @@ impl NodeClock for NodeTime {
 }
 
 struct Rig {
+    _folder: crate::support::Scratch,
     clock: VirtualClock,
     mount: SimMount,
     session: Arc<Session>,
@@ -133,11 +134,8 @@ struct Rig {
 }
 impl Rig {
     async fn new(target: &Target, name: &str) -> Self {
-        let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target")
-            .join(format!("tracking-night-{name}-{}", std::process::id()));
-        std::fs::create_dir_all(&folder).unwrap();
-        let path = folder.join("session.json");
+        let folder = crate::support::Scratch::new(&format!("tracking-night-{name}"));
+        let path = folder.0.join("session.json");
         std::fs::write(
             &path,
             r#"{"site":{"lat_deg":40,"lon_deg":-75},"target":null,"min_alt_deg":15,"backlash":{"alt_deg":0.3}}"#,
@@ -236,6 +234,7 @@ impl Rig {
             view.min_alt_deg,
         );
         Self {
+            _folder: folder,
             clock,
             mount,
             session,

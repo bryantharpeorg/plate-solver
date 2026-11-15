@@ -1,24 +1,12 @@
 //! Oracle: exact written fields at a fixed time, and Unix permission bits 0600.
-use std::{os::unix::fs::PermissionsExt, path::PathBuf};
+use std::os::unix::fs::PermissionsExt;
 
 use finder::session::{Aim, Clock, FixedClock, Session};
 use serde_json::{json, Value};
 
-struct Folder(PathBuf);
-impl Drop for Folder {
-    fn drop(&mut self) {
-        std::fs::remove_dir_all(&self.0).unwrap();
-    }
-}
-
 #[tokio::test]
 async fn durable_fields_survive_reopening_the_state_file_in_owner_only_mode() {
-    let folder = Folder(
-        std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
-            .join(format!("session-durable-{}", std::process::id())),
-    );
-    let _ = std::fs::remove_dir_all(&folder.0);
-    std::fs::create_dir_all(&folder.0).unwrap();
+    let folder = crate::support::Scratch::new("session-durable");
     let path = folder.0.join("session.json");
     drop(Session::with_state_file(&path).unwrap());
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
