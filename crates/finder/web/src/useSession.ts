@@ -43,6 +43,7 @@ async function request(init?: RequestInit): Promise<ObservingSession> {
     ...(body?.goto_refusal != null && { goto_refusal: body.goto_refusal }),
     ...(body?.motion != null && { motion: body.motion }),
     ...(body?.track != null && { track: body.track }),
+    ...(body?.recording != null && { recording: body.recording }),
     ...(body?.imaging_camera != null && { imaging_camera: body.imaging_camera }),
     ...(body?.backlash != null && { backlash: body.backlash }),
   };

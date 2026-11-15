@@ -9,6 +9,7 @@ import { ScopeNodeSection } from "./ScopeNodeSection";
 import { MountSection } from "./MountSection";
 import { ImagingCameraSection } from "./ImagingCameraSection";
 import { McpSection } from "./McpSection";
+import { RecordingSection } from "./RecordingSection";
 
 interface Props {
   session: ObservingSession;
@@ -177,6 +178,7 @@ export function SetupPage({ session, put, onBack, onChange, mcp }: Props) {
       <ImagingCameraSection session={session} put={put} />
       <FieldWarning field={session.field} />
       <AimTap session={session} live={live} />
+      <RecordingSection session={session} onChange={onChange} />
       {mcp !== undefined && <McpSection status={mcp} />}
     </main>
   );

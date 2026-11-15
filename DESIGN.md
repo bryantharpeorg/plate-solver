@@ -347,6 +347,9 @@ The camera's last solved field is printed beside the loaded database's range. Wi
 ### Aim-point tap — built
 Setup's Aim point section asks the observer to centre a star in the eyepiece and tap it on the live preview. The full-width ruled photograph uses `.photo` in the night edition. Each tap scales from the displayed image rectangle to that preview's full-frame pixels and sends its frame id; later frames without a preview do not change that coordinate system. The console snaps to a star. A refusal such as “no star is close enough to the tap,” or an expired frame, stays visible in ink and leaves the aim point unchanged. Unloaded or failed photographs accept no tap. The saved pixel coordinates are printed above the preview; Reset aim point immediately returns them to “frame centre,” even before a preview arrives. Moving the finder camera is the cue to reset.
 
+### Recording — built
+On the Setup page, after the aim point, while a scope node is paired: a section titled Recording with one primary button, Start recording. While recording, one status line names the folder and counts, with Stop recording and Save 3 raw frames as secondary buttons; raw progress is a second line of the status and a failure is an alert, such as Raw frames stopped: the mount started moving. After a recording the status says what was saved, and why when it hit its frame limit or the scope node restarted, which asks for a new recording. Ink on paper with existing tokens only; at night it is red like every other section.
+
 ## Do's and Don'ts
 
 ### Do:
