@@ -13,6 +13,10 @@ depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "0
 # plan.md § Refinement Record. The same day it was
 # re-anchored to `main` at f0ea2d5 (024 landed): every citation in a file 024 changed was
 # re-read there. It still builds after 025, which re-anchors it again.
+# Refined again 2026-11-15 (round 3) after a review of the folded trio: a delta probe
+# rebuilt US2, US3, US5, US8, US9 and US10 on the round-2 tree, and its findings and the
+# review's fixes are folded in (plan.md § Refinement Record). US8 now also covers 024's
+# `motion/mount_identity.rs`. The trio is still anchored at f0ea2d5.
 ---
 
 # Feature Specification: Finder's Tests Do Less Work
@@ -72,9 +76,10 @@ waste comes back.
   says it does unless the spec names it for the owner's approval. Every deletion, every
   edit to a test body and every coverage given up is named under "Owner approvals", with
   the coverage-lost text of the audit's skeptic.
-- Q: Why does each scenario name `cargo nextest run`? → A: It is the first command of the
-  `test` gate, word for word. Under nextest every test is its own process, so a test's
-  cost is its own duration: removing work from any test counts, wherever it is.
+- Q: Why does each story's Independent Test name `cargo nextest run`? → A: It is the
+  first command of the `test` gate, word for word. Under nextest every test is its own
+  process, so a test's cost is its own duration: removing work from any test counts,
+  wherever it is.
 
 ## Owner approvals
 
@@ -87,12 +92,13 @@ file, workflow, `CODEOWNERS` entry, `ergane.yaml` or `.config/nextest.toml` is e
    story in plan.md § Interfaces.
 2. **The camera stops in six MCP direct-move tests, one MCP Track test starts centred on
    M42, and the simulator crate's Stop and watchdog rig uses the synthetic camera** (US1,
-   FR-001 to FR-003; findings mcp-S2, mcp-S5, node-S5). Coverage lost: none. `frame_positions.rs` stays on the catalog
-   camera, so it still exercises the rendered camera's exposure times with mount
-   sampling.
+   FR-001 to FR-003; findings mcp-S2, mcp-S5, node-S5). Coverage lost: none.
+   `frame_positions.rs` stays on the catalog camera, so it still exercises the rendered
+   camera's exposure times with mount sampling.
 3. **Track tests start centred on M42 where their claim is not the GoTo handoff** (US2,
    FR-004 to FR-007; findings trk-S2, trk-S3, trk-S4, trk-S9). Coverage lost: none; the
-   handoff's own checks stay in the three tests that are about it.
+   four routes tests no longer make `tracking()`'s handoff checks (GoTo done, Track
+   within 2 s of it), which stay in the three tests about the handoff.
 4. **The five-target GoTo test loads both syncs of its old setup from a state file, and
    the cable-wind test samples its 350° move every 2 s** (US3, FR-008 to FR-010; findings
    simA-S2, simA-S4). Coverage lost: two of the model's three syncs, the near one and the
@@ -137,15 +143,18 @@ file, workflow, `CODEOWNERS` entry, `ergane.yaml` or `.config/nextest.toml` is e
     `.config/nextest.toml` (ended after 300 s) catches a runaway. Spec 015's US9-S1,
     FR-020 and SC-003 keep their text; no test asserts their 30 s any more.
 11. **Four hazards are removed without changing what is asserted** (US8, FR-022 to
-    FR-025; findings mcp-H1, simA-H2, node-H1, node-H3): the test rigs' inline solvers
-    get a solve deadline that cannot fire; `cli/simulate.rs` reads the session time just
+    FR-025; findings mcp-H1, simA-H2, node-H1, node-H3): the test rigs' inline solvers,
+    and the one 024 added in `crates/finder/tests/motion/mount_identity.rs`, get a solve
+    deadline that cannot fire; `cli/simulate.rs` reads the session time just
     before its 5 s window; scope-node's CLI helper kills a child that has not exited
     after 10 s; three `rpicam::metadata` unit tests run on a paused clock. Coverage lost:
     none.
 12. **Duplicates and tests that cannot fail are deleted or reduced** (US10, FR-029 to
     FR-035), as one story. Confirmed by the skeptic with nothing lost: core-D3, core-D4,
     core-D7, node-D1, node-D3, api-D9, simA-D5. Applied with the skeptic's correction
-    only: core-D5, core-D6, node-D2, simA-D4, simA-D9, mcp-D3. Coverage lost: none, with
+    only: core-D5, core-D6, node-D2, simA-D4, simA-D9, mcp-D3. Coverage lost: the 8×8
+    image size of `inline_image_bytes_used_when_shmem_absent`, whose twin
+    `extract_centroids_reports_wire_x_as_column` sends inline bytes of another size; and
     one statement kept on record: `SolveStatus::Cancelled` has no test and no public way
     to trigger it (core-D5). Of core-D6, `detection_parameters_do_not_perturb_solve_math`
     stays: it is the only test outside the oracle that detects isolated peaks on a zero
@@ -160,8 +169,8 @@ file, workflow, `CODEOWNERS` entry, `ergane.yaml` or `.config/nextest.toml` is e
 13. **Scratch folders move under `CARGO_TARGET_TMPDIR` and are removed on drop** (US9,
     FR-026 to FR-028; findings api-H2, mcp-H2, simA-H1, trk-H4, node-H2), including
     those of US6's `console/session/durable.rs` and of 024's
-    `crates/scope-node/tests/mount_link.rs`. Coverage lost: none. Where a test's removal of its folder was itself a check, the check stays as an
-    assertion.
+    `crates/scope-node/tests/mount_link.rs`. Coverage lost: none. Where a test's removal
+    of its folder was itself a check, the check stays as an assertion.
 14. **Code outside test files**: `crates/simulator/src/controls.rs` gains
     `Simulator::set_frame_interval` (FR-011). Test modules inside four product source
     files change: `crates/scope-node/src/rpicam/metadata.rs` (FR-025),
@@ -175,12 +184,14 @@ file, workflow, `CODEOWNERS` entry, `ergane.yaml` or `.config/nextest.toml` is e
     eyepiece) on the production simulate wiring with the default mount mechanics and a
     model fitted by the one-tap second sync; the hand push after five GoTos (state
     carried across the whole night)." As drafted M81 is kept, so the lost convergences
-    are M42 as the first GoTo, M31, M45 and M1.
+    are M42 as the first GoTo, M31, M45 and M1. The test is renamed
+    `a_whole_night_syncs_gotos_hand_push_stop_and_dropped_link`.
 16. **Optional, US12: the MCP hold is shortened from ten minutes to 75 s** (FR-037;
     findings mcp-D1, trk-D6). Kept, it amends spec 016 US6-S1's "10 min, sampled every
     1 s". Coverage lost: "The only ten-minute 1 arcminute full-pipeline hold, and 016
     US6-S1's '10 min, sampled every 1 s'. A 60-75 s window cannot show slow closed-loop
-    drift."
+    drift." The test is renamed
+    `track_first_goto_keeps_mcp_source_and_holds_m42_for_seventy_five_seconds`.
 17. **Optional, US13: the sixty-second window is proven below the route** (FR-038;
     finding trk-D2). Kept, it amends how spec 015 US7-S7 is proven. Coverage lost: "At
     the route with live rendered solves: samples older than 60 s excluded and at least
@@ -188,8 +199,10 @@ file, workflow, `CODEOWNERS` entry, `ergane.yaml` or `.config/nextest.toml` is e
     arcsec over a full minute of closed-loop tracking rather than ~16 s." The route keeps
     a proof of the window with one injected sample.
 
-Deleting an optional story before the flip deletes its phase in tasks.md, its entry in
-the Work Graph and the Refinement Record, its FR and its approval; nothing else changes.
+Deleting an optional story before the flip deletes its phase in tasks.md, its entry and
+row in the Work Graph, its line in tasks.md § Execution Order, its story in the
+Refinement Record, its FR, its approval and its row in plan.md § Measurements; the other
+approvals keep their numbers. Nothing else changes.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -239,8 +252,8 @@ and `crates/finder/tests/motion/stop/watchdog.rs`.
 
 **Acceptance Scenarios**:
 
-1. **Given** the `motion` binary, **When** `tracking::routes::below_horizon_and_foreign_origin_refuse_after_positive_track_control`, `tracking::routes::foreign_bodiless_stop_ends_tracking_and_no_rate_restarts_it`, `tracking::routes::track_names_missing_mount_sync_site_target_and_sun_refusals` and `tracking::routes::dropping_console_cancels_tracking_without_retaining_the_session` reach tracking, **Then** each committed test starts with the eyepiece centred on M42 before the first sync and asserts that Track's reply reads `tracking` and holds no `goto`, then keeps every assertion it made before.
-2. **Given** the `motion` binary, **When** `tracking::min_alt::raised_minimum_altitude_ends_running_tracking_as_too_low` reaches tracking, **Then** the committed test does the same and keeps its off, at-rest and `too_low` assertions.
+1. **Given** the `motion` binary, **When** `tracking::routes::below_horizon_and_foreign_origin_refuse_after_positive_track_control`, `tracking::routes::foreign_bodiless_stop_ends_tracking_and_no_rate_restarts_it`, `tracking::routes::track_names_missing_mount_sync_site_target_and_sun_refusals` and `tracking::routes::dropping_console_cancels_tracking_without_retaining_the_session` reach tracking, **Then** each committed test starts with the eyepiece centred on M42 before the first sync and asserts that Track's reply reads `tracking`, names M42 with `wanted` true and holds no `goto`, then keeps every assertion of its own body; only `tracking()`'s GoTo-handoff checks (GoTo done, Track within 2 s of it) are no longer made.
+2. **Given** the `motion` binary, **When** `tracking::min_alt::raised_minimum_altitude_ends_running_tracking_as_too_low` reaches tracking, **Then** the committed test starts with the eyepiece centred on M42 before the first sync, asserts that Track's reply reads `tracking` and holds no `goto`, and keeps its off, at-rest and `too_low` assertions.
 3. **Given** the `motion` binary, **When** `stop::motion_ends::track_stop_starts_promptly_and_retries_to_the_exact_acknowledged_body`, `stop::motion_ends::track_stop_shares_one_deadline_across_both_tracker_calls` and `stop::retry::retained_tracker_cannot_delay_goto_cancellation_or_first_attempt` reach tracking, **Then** each committed test centres the eyepiece on M42 before the first sync and asserts that the command log holds no GoTo command when tracking starts.
 4. **Given** the `motion` binary, **When** `stop::watchdog::past_watchdog_firing_is_the_baseline_for_a_successful_later_goto` starts its later GoTo, **Then** the committed test asserts that the telescope's true direction is within 6° of M42 before it, and asserts that the session's pointing is within 6° of M42 before the watchdog fires, and keeps its assertions that the GoTo ends `done` within 60″ by the true eyepiece, that the watchdog count is unchanged and that a GoTo command was recorded.
 5. **Given** the story's diff, **When** it is read, **Then** `tracking::routes::track_arms_during_goto_then_starts_within_two_seconds`, `tracking::routes::five_degree_error_starts_goto_and_off_leaves_telescope_where_it_is`, `tracking::routes::armed_stop_cancels_handoff_and_failed_goto_keeps_its_reason` and `tracking::routes::readout_uses_live_errors_last_sixty_seconds_and_fr001_fr002` are unchanged and still reach tracking through the GoTo handoff.
@@ -260,10 +273,10 @@ the 129° slew that builds it, and the cable-wind test sample its long move less
 
 **Acceptance Scenarios**:
 
-1. **Given** the `motion` binary, **When** `goto::sim::five_catalog_targets_converge_after_two_syncs_and_report_progress` builds its rig, **Then** the committed test starts from a state file holding the two syncs of the old setup, at axis counts (4500, 4500) and (580000, 4500), whose directions are computed from a simulated mount with the rig's own configuration, makes only the first 1° move of the old setup, and asserts before the first GoTo that the azimuth axis reads 4500 counts and that the model has a base tilt within 1′ of the simulator's 1° toward 130°, at least two syncs and one epoch.
+1. **Given** the `motion` binary, **When** `goto::sim::five_catalog_targets_converge_after_two_syncs_and_report_progress` builds its rig, **Then** the committed test starts from a state file holding the two syncs of the old setup, at axis counts (4500, 4500) and (580000, 4500), whose directions are computed from a simulated mount with the rig's own configuration, makes only the first 1° move of the old setup, and asserts before the first GoTo that the azimuth axis reads 4500 counts and that the model has a base tilt within 1′ of the simulator's 1° toward 130°, three syncs and one epoch.
 2. **Given** the same test, **When** its five GoTos run, **Then** it asserts for each target in the same order on the same session everything it asserted before: the ordered progress states, at most five corrections, a correction on M42, and an error under 60″ reported and by the true eyepiece.
 3. **Given** the `motion` binary, **When** `goto::sim::continuously_observed_cable_wind_survives_real_simulator_power_cycle` makes its 350° move, **Then** the committed test sets a 2 s frame interval before the move and 500 ms after it, asserts that the frame id of the session's pointing advanced by at least 20 and at most 60 during the move, and keeps its assertions after the power cycle.
-4. **Given** the story's diff, **When** it is read, **Then** `crates/finder/tests/support/goto.rs` gains `Rig::with_session`, `Rig::new` keeps its signature and only calls it with `Session::default()`, and no other test changes.
+4. **Given** the story's diff, **When** it is read, **Then** `crates/finder/tests/support/goto.rs` gains `Rig::with_session`, `Rig::new` keeps its signature and its body is one call of it with `Session::default()`, and no test outside `crates/finder/tests/motion/goto/sim.rs` changes.
 
 ---
 
@@ -360,7 +373,7 @@ busy.
 **Acceptance Scenarios**:
 
 1. **Given** the `motion` binary, **When** `tracking::night::an_hour_covers_transit_too_low_and_keyhole` runs, **Then** the committed test makes every assertion it made before except its own wall-clock bound, and `crates/finder/tests/motion/tracking/night.rs` no longer reads `std::time::Instant`.
-2. **Given** the story's diff, **When** it is read, **Then** each inline rig solver, in `crates/finder/tests/support/goto.rs`, `crates/finder/tests/support/mcp.rs`, `crates/finder/tests/support/stop.rs` and `crates/finder/tests/motion/night.rs`, passes `timeout_ms: u64::MAX` to the solver.
+2. **Given** the story's diff, **When** it is read, **Then** each inline rig solver, in `crates/finder/tests/support/goto.rs`, `crates/finder/tests/support/mcp.rs`, `crates/finder/tests/support/stop.rs`, `crates/finder/tests/motion/night.rs` and `crates/finder/tests/motion/mount_identity.rs`, passes `timeout_ms: u64::MAX` to the solver.
 3. **Given** the `cli` binary, **When** `simulate::simulated_epoch_frames_and_real_rate_never_connect_to_the_stored_node` checks that 5 s of real time is 5 s of simulated time within 2 s, **Then** the committed test reads the session time it compares against immediately before its 5 s window.
 4. **Given** the story's diff, **When** it is read, **Then** `run` in `crates/scope-node/tests/cli.rs` spawns the child, kills it if it has not exited 10 s after it started, and fails the test naming the child's command-line arguments.
 5. **Given** the `scope-node` library tests, **When** the three `rpicam::metadata` tests run, **Then** each runs on a paused clock, and the two that wrap a read in a 100 ms timeout keep it, with every assertion.
@@ -551,7 +564,8 @@ flip.
   US7-S2.
 - **FR-021**: The hour of tracking SHALL drop its wall-clock read and assertion, and its
   name SHALL drop `_in_under_thirty_wall_seconds`.
-- **FR-022**: Each inline rig solver named in US8-S2 SHALL pass `timeout_ms: u64::MAX`.
+- **FR-022**: Each of the five inline rig solvers named in US8-S2, including the one in
+  `crates/finder/tests/motion/mount_identity.rs`, SHALL pass `timeout_ms: u64::MAX`.
 - **FR-023**: `cli/simulate.rs` SHALL take the time it compares against immediately
   before its 5 s window.
 - **FR-024**: The child helper of `crates/scope-node/tests/cli.rs` SHALL kill a child
@@ -601,7 +615,7 @@ flip.
   workflow, `CODEOWNERS` entry, `ergane.yaml` or `.config/nextest.toml` is edited, and no
   product source changes outside a test module except `crates/simulator/src/controls.rs`.
 - **SC-003**: With every story kept, 16 test functions are removed and one is added, and
-  no assertion is removed except those owner approvals 6, 7, 10, 12 and 15 to 17 name.
+  no assertion is removed except those owner approvals 3, 6, 7, 10, 12 and 15 to 17 name.
 - **SC-004**: The owner reads the per-test durations of the first GitHub `test` job after
   the last story lands and compares them with plan.md § Measurements. This is not a gate.
 

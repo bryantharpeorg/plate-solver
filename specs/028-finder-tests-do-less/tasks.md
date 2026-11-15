@@ -26,8 +26,8 @@ description: "Task list for 028-finder-tests-do-less: Finder's Tests Do Less Wor
   `CODEOWNERS`, `ergane.yaml` or anything under `specs/`. If the build needs one of them
   changed, stop and escalate with the exact output.
 - Run no tool the gates don't run, except `cargo fmt --all` to apply the formatting that
-  `cargo fmt --all --check` checks, and the narrower `cargo nextest run` filters of your
-  story's development checks. Do not set `CARGO_TARGET_DIR`.
+  `cargo fmt --all --check` checks, and the commands of your story's development checks.
+  Do not set `CARGO_TARGET_DIR`.
 
 ## Phase 1: User Story 1 — The camera stops where no assertion reads a frame (Priority: P1)
 
@@ -68,8 +68,9 @@ description: "Task list for 028-finder-tests-do-less: Finder's Tests Do Less Wor
 
 - [ ] T007 [US2] In `crates/finder/tests/motion/tracking/routes.rs`, add `centred()` as
   plan.md § Interfaces "US2" item 1 gives it, with the centred-start wait of "Shared
-  helpers" and its assertion that Track's reply reads `tracking` and holds no `goto`, and
-  check that the assertion fails with the `point_eyepiece_at` line removed (US2-S1).
+  helpers" and its assertions that Track's reply reads `tracking`, names M42 with
+  `wanted` true and holds no `goto`, and check that the reply no longer reads `tracking`
+  with no `goto` when the `point_eyepiece_at` line is removed (US2-S1).
 
 ### Implementation
 
@@ -102,8 +103,8 @@ description: "Task list for 028-finder-tests-do-less: Finder's Tests Do Less Wor
 - [ ] T014 [US3] In `crates/finder/tests/support/goto.rs`, add `mount_config`,
   `far_sync` (writing the near and far syncs) and `second_from_file` as plan.md
   § Interfaces "US3" item 2 gives them, with the assertions of US3-S1: 4500 azimuth
-  counts, a base tilt within 1′ of the simulator's 1° toward 130°, at least two syncs and
-  one epoch.
+  counts, a base tilt within 1′ of the simulator's 1° toward 130°, three syncs (the two
+  stored and the live one) and one epoch.
 
 ### Implementation
 
@@ -209,8 +210,8 @@ description: "Task list for 028-finder-tests-do-less: Finder's Tests Do Less Wor
   comment, as plan.md § Interfaces "US8" item 1 says (FR-021, US8-S1).
 - [ ] T035 [US8] Pass `timeout_ms: u64::MAX` from the inline solver in
   `crates/finder/tests/support/goto.rs`, `crates/finder/tests/support/mcp.rs`,
-  `crates/finder/tests/support/stop.rs` and `crates/finder/tests/motion/night.rs`
-  (FR-022, US8-S2).
+  `crates/finder/tests/support/stop.rs`, `crates/finder/tests/motion/night.rs` and
+  `crates/finder/tests/motion/mount_identity.rs` (FR-022, US8-S2).
 - [ ] T036 [US8] In `crates/finder/tests/cli/simulate.rs`, read the session time again
   immediately before the 5 s window and compare against it (FR-023, US8-S3).
 - [ ] T037 [US8] In `crates/scope-node/tests/cli.rs`, make `run` spawn the child with
@@ -255,7 +256,8 @@ description: "Task list for 028-finder-tests-do-less: Finder's Tests Do Less Wor
   `crates/scope-node/tests/mount_config.rs`, `crates/scope-node/tests/rpicam.rs` and
   `crates/scope-node/tests/mount_link.rs`, build each scratch path under
   `CARGO_TARGET_TMPDIR` and remove it on drop, with the guards plan.md § Interfaces "US9"
-  item 3 describes (FR-028, US9-S4).
+  item 3 describes; `mount_link.rs`'s guard is a file-local `Scratch`, and its own
+  `remove_dir_all` goes (FR-028, US9-S4).
 - [ ] T046 [US9] Check that no file under `crates/finder/tests` still joins
   `CARGO_MANIFEST_DIR` with `../../target` (US9-S2). Run `cargo fmt --all`, then the
   `lint` and `test` gates. Commit the green story.
@@ -331,19 +333,20 @@ description: "Task list for 028-finder-tests-do-less: Finder's Tests Do Less Wor
 ## Execution Order
 
 ```text
-US1, US2, US3, US4, US6, US7, US12 (optional)   start at once
+US1, US2, US3, US4, US6, US7      start at once
 US3 ──────────────────────────────► US5
 US3, US4 ─────────────────────────► US8
 US1, US3, US5, US6, US8 ──────────► US9 ──► US10
 US4, US8 ─────────────────────────► US11 (optional)
+US12 (optional)                   starts at once
 US2 ──────────────────────────────► US13 (optional)
 ```
 
-- **US1, US2, US3, US4, US6, US7 and US12** start at once: no two write one file.
+- **US1, US2, US3, US4, US6 and US7** start at once: no two write one file.
 - **US5** waits for US3, whose `Rig::with_session` it uses.
 - **US8** waits for US3 and US4: it edits the goto rig and the whole night after them.
 - **US9** waits for US1, US3, US5, US6 and US8: it moves the scratch folders of files
   those stories edit.
 - **US10** waits for US9, which edits three of its files first.
-- **US11** waits for US4 and US8, **US13** for US2. **US12** waits for nothing. No story
-  waits for an optional one, so the owner can delete any of the three before the flip.
+- **The optional stories** are the lines marked optional above. No story waits for one,
+  so the owner can delete any of them before the flip.
