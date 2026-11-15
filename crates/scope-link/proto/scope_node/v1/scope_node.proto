@@ -117,6 +117,8 @@ message AxisState {
   bool moving = 3;
   // Times the node's watchdog has stopped the mount since the node started.
   uint64 watchdog_stops = 4;
+  // Resets of the motor board the node has seen since it started.
+  uint64 mount_resets = 5;
 }
 message AxisPositions {
   int32 azimuth = 1;
