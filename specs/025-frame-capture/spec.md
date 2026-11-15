@@ -1,6 +1,6 @@
 ---
 state: draft
-depends_on_landed: ["013-live-finder", "014-goto", "016-mcp", "017-console-stop-confirm", "019-night-legibility", "020-live-chart-calm"]
+depends_on_landed: ["013-live-finder", "014-goto", "016-mcp", "017-console-stop-confirm", "019-night-legibility", "020-live-chart-calm", "027-finder-tests-by-system"]
 # Drafted 2026-11-14 by the plate-solver operator against `main` at c1ed295, from gap 3 of
 # the field findings of the night of 13–14 November 2026: no live frames from that night
 # survive. The owner settled the owner decisions on 2026-11-14: every recommended answer
@@ -22,6 +22,10 @@ depends_on_landed: ["013-live-finder", "014-goto", "016-mcp", "017-console-stop-
 # the probe branches under the `test` gate's cargo-nextest. `main` is now at 1104b7d:
 # e62ffc2 (pull request 214) runs the gate's Rust half under nextest, and 1104b7d makes
 # 027-finder-tests-by-system ready, to land before 024 and this spec; no cited line moved.
+# Refreshed 2026-11-15 for 027-finder-tests-by-system, which landed at b8dceaa and was
+# merged in: US1's and US2's finder tests are modules of its `console`, `cli` and
+# `motion` test binaries, every cited test and helper is re-read at its new path, and
+# 027 joins `depends_on_landed` (plan.md § Prerequisites 7). 024 is still to land first.
 ---
 
 # Feature Specification: Saving Live Frames at the Telescope
@@ -72,7 +76,7 @@ replay them.
      are sent (`crates/scope-node/src/service.rs:279`). No call on the scope link
      returns pixels.
   5. Two existing tests implement the `ScopeNode` service trait by hand
-     (`crates/finder/tests/aim_cli.rs:22`, `crates/scope-link/tests/link.rs:55`), and
+     (`crates/finder/tests/cli/aim.rs:22`, `crates/scope-link/tests/link.rs:55`), and
      tonic generates no default for a new call, so a new call on `ScopeNode` would stop
      both compiling. A new service would not: the mount and Stop services were added
      that way (`crates/scope-link/proto/scope_node/v1/scope_node.proto:92`,
@@ -91,8 +95,8 @@ replay them.
   two; US2 adds the third.
 - Q: How is a recording replayed? → A: `Live::start` takes any frame channel
   (`crates/finder/src/live.rs:151`), and an existing test feeds it hand-made frames that
-  way (`crates/finder/tests/live.rs:181`). US1-S3 replays a recorded frame through it.
-  A replay tool is out of scope.
+  way (`crates/finder/tests/console/live/loop_.rs:180`). US1-S3 replays a recorded frame
+  through it. A replay tool is out of scope.
 - Q: Why not save `GET /api/live` with curl, as on that night? → A: Its events lack the
   centroids' brightness, the camera settings, the axis counts, the clock offset and the
   previews, and the capture lives wherever the shell happened to be.
@@ -195,6 +199,32 @@ replay them.
   carry it too (FR-008, owner approval 1). It is read-only, and no MCP tool is added
   (owner decision 8).
 
+### Session 2026-11-15 (027 landed: finder's tests by system)
+
+- Q: Where do US1's and US2's finder tests live? → A: In modules of finder's test
+  binaries. 027 landed at b8dceaa: finder's integration tests are the binaries `motion`,
+  `console`, `mcp` and `cli`, chosen by what a test needs to run, and its `layout` test
+  fails any file at the top level of `crates/finder/tests`
+  (`crates/finder/tests/layout/main.rs:109`). `console` calls the router in process and
+  moves no mount (`crates/finder/tests/console/main.rs:2`), `cli` starts the built
+  `finder` (`crates/finder/tests/cli/main.rs:1`), and `motion` drives the simulated mount
+  in paused time (`crates/finder/tests/motion/main.rs:1`). So US1's tests are the module
+  `recording` of `console`, except US1-S7's, which starts the built `finder` and is the
+  module `recording` of `cli`. US2's finder tests are the module `recording_raw` of
+  `console`, except US2-S7's, which moves the simulated mount and is the module
+  `recording_raw` of `motion`. Each module is declared by one `mod` line in its binary's
+  `main.rs`, which its story writes (027's owner approval 7), and binds the live helpers
+  it uses with `use crate::support::live as support;`.
+- Q: Did any cited line move? → A: Only in `crates/finder/tests`. 027 moved every test
+  and helper this trio cites, and each is re-read at its new path. Three anchors moved up
+  one line, `crates/finder/tests/console/live/loop_.rs:19`,
+  `crates/finder/tests/console/live/loop_.rs:180` and
+  `crates/finder/tests/motion/tracking/keyhole.rs:228`, where a two-line `#[path]`
+  include became one `use` line, and `crates/finder/tests/console/live/loop_.rs:3`,
+  which named that `#[path]` line, now names the `use` line. Outside
+  `crates/finder/tests`, 027 edited only the page's two fixture recorders, which this
+  trio does not cite.
+
 ## Owner decisions
 
 Each is a design or taste call, and the owner has settled every one: decisions 1 to 10 on
@@ -269,7 +299,9 @@ flip, never left to a story.
 
 Flipping this spec to `ready` approves the settled answer to every owner decision above,
 and the following. Each is named in the FR that makes it. No existing test, golden
-or CI file changes.
+or CI file changes. Each new finder test module adds one `mod` line to its test binary's
+`main.rs`, which holds no test: the edit 027's owner approval 7 approved for every later
+finder test (SC-002).
 
 1. **`POST /api/record`** and the run-only `recording` field of `GET /api/session`, which
    the MCP tools that return the session, `get_session` and `set_tracking`, carry too
@@ -305,7 +337,7 @@ or CI file changes.
 All Rust scenarios of US1 and US2 share one setup unless a scenario says otherwise:
 - **The console** is built in-process. A `Simulator` over the test database at the site
   40° N 75° W, on a `VirtualClock` from `2026-01-16T02:00:00Z` (Unix 1768528800), as
-  `crates/finder/tests/live/support.rs:41` builds it but in this order: first
+  `crates/finder/tests/support/live.rs:41` builds it but in this order: first
   `connect_mount` with `SimMount::new` (`crates/simulator/src/mount.rs:232`) on the
   simulator's clock, so frames carry axis counts, then `push_to(50.0, 120.0)`, which
   points the camera at altitude 50° and azimuth 120° and keeps the counts. A `SimNode`
@@ -313,26 +345,29 @@ All Rust scenarios of US1 and US2 share one setup unless a scenario says otherwi
   mount when it is built (`crates/simulator/src/node.rs:46`), with a 500 ms frame
   interval and the token `test-token`, served over a fresh
   duplex for each connection with `memory::serve_routes_on` and the node service's
-  `routes()`, as `crates/finder/tests/mcp/support.rs:225` serves its node. A session
+  `routes()`, as `crates/finder/tests/support/mcp.rs:225` serves its node. A session
   paired to it, with the host name `scope.local`, the token `test-token`, that site and
   camera settings of 200 ms and gain 1. Then `AppState::shared` with `with_session`,
   `with_clock` on the simulator's clock, `with_link`, `with_live()` (the real solver) and
   `with_recordings(R)`.
 - Each such test runs under `#[tokio::test(start_paused = true)]`, as
-  `crates/finder/tests/live.rs:20` does with the real solver, so every wait below is in
-  virtual time. US1-S7 is a plain `#[test]`. A test file may share the test database,
-  the start and the console clock by including `crates/finder/tests/live/support.rs`
-  with `#[path]`, as `crates/finder/tests/live.rs:3` does.
+  `crates/finder/tests/console/live/loop_.rs:19` does with the real solver, so every
+  wait below is in virtual time. US1-S7 is a plain `#[test]`. A test module may share
+  the test database, the start and the console clock of
+  `crates/finder/tests/support/live.rs` by binding it with
+  `use crate::support::live as support;`, as
+  `crates/finder/tests/console/live/loop_.rs:3` does, and writes the rest of the setup
+  itself.
 - Before its steps, a scenario on a console whose link can connect waits, as
-  `crates/finder/tests/mcp/support.rs:263` waits for its link, until the session's
+  `crates/finder/tests/support/mcp.rs:263` waits for its link, until the session's
   `node.connected` is true, and also until `node.offset_s` is not null.
 - These scenarios run in `cargo nextest run --workspace --all-targets --all-features --locked`,
   the `test` gate's first command, which runs each test in its own process.
 - **R** is a path under the workspace's `target/` that does not exist yet, named from
-  the test's name and the process id as `crates/finder/tests/simulate_cli.rs:13` names
+  the test's name and the process id as `crates/finder/tests/cli/simulate.rs:13` names
   its folders, but not made by the test (that helper makes its folder and fails to drop
   a missing one), and removed afterwards, whether a folder or a file, if present.
-- Requests go through the router in-process, as `crates/finder/tests/live/support.rs:82`
+- Requests go through the router in-process, as `crates/finder/tests/support/live.rs:82`
   sends them, with `Content-Type: application/json`, a `Host` of localhost on port 8080
   and no `Origin` unless a scenario says otherwise. A foreign `Origin` is
   `http://elsewhere.example`.
@@ -358,9 +393,13 @@ it. Later, a test can read that folder and replay what the console saw.
 **Why this priority**: Spec 020's replay and spec 022's sign check need only what the
 console already receives, and the next clear night may be weeks away.
 
-**Independent Test**: `crates/finder/tests/recording.rs`, which the `test` gate's
-`cargo nextest run --workspace --all-targets --all-features --locked` runs; during
-development, `cargo test -p finder --test recording --locked`.
+**Independent Test**: `crates/finder/tests/console/recording.rs`, the module
+`recording` of finder's `console` test binary, and, for US1-S7, which starts the built
+`finder`, `crates/finder/tests/cli/recording.rs`, the module `recording` of `cli`. The
+`test` gate's `cargo nextest run --workspace --all-targets --all-features --locked` runs
+both; during development,
+`cargo nextest run -p finder --locked --test console recording::` and
+`cargo nextest run -p finder --locked --test cli recording::`.
 
 **Acceptance Scenarios**:
 
@@ -412,9 +451,10 @@ development, `cargo test -p finder --test recording --locked`.
    a new `Live` over a new `Session` through a watch channel, with a `LinkStatus` that
    is connected and has that frame line's `offset_s`, a `FixedClock` at that line's
    `received_at` (`crates/finder/src/session.rs:41`) and a `DbSolver` on the test
-   database, as `crates/finder/tests/live.rs:181` feeds frames, **Then** a committed
-   test asserts that the new report's `report.pointing.ra_deg` and `dec_deg` are within
-   0.01° of that solve line's, and its `time` within 0.05 s of that solve line's `time`.
+   database, as `crates/finder/tests/console/live/loop_.rs:180` feeds frames, **Then** a
+   committed test asserts that the new report's `report.pointing.ra_deg` and `dec_deg`
+   are within 0.01° of that solve line's, and its `time` within 0.05 s of that solve
+   line's `time`.
 4. **Given** the setup, **Then** a committed test asserts that:
    - `POST /api/record` with `{}`, `{"on":"yes"}` and `{"on":true,"raw":true}` each
      answers 400, and `{"on":true}` with a foreign `Origin` answers 403, each with a
@@ -480,11 +520,14 @@ and settings, as a fixture for detection work.
 **Why this priority**: Only a detection fixture needs pixels, and it needs a rebuild of
 the scope node on the Pi.
 
-**Independent Test**: `crates/scope-node/tests/raw_frame.rs` and
-`crates/finder/tests/recording_raw.rs`, which the `test` gate's
-`cargo nextest run --workspace --all-targets --all-features --locked` runs; during
-development, `cargo test -p scope-node --test raw_frame --locked` and
-`cargo test -p finder --test recording_raw --locked`.
+**Independent Test**: `crates/scope-node/tests/raw_frame.rs`;
+`crates/finder/tests/console/recording_raw.rs`, the module `recording_raw` of finder's
+`console` test binary; and, for US2-S7, which moves the simulated mount,
+`crates/finder/tests/motion/recording_raw.rs`, the module `recording_raw` of `motion`.
+The `test` gate's `cargo nextest run --workspace --all-targets --all-features --locked`
+runs all three; during development, `cargo test -p scope-node --test raw_frame --locked`,
+`cargo nextest run -p finder --locked --test console recording_raw::` and
+`cargo nextest run -p finder --locked --test motion recording_raw::`.
 
 **Acceptance Scenarios**:
 
@@ -534,7 +577,7 @@ development, `cargo test -p scope-node --test raw_frame --locked` and
      three `raw-` files in the folder 8 s later, and `recording.raw` then has `wanted`
      10, `saved` below 3 and no `error` key.
 5. **Given** the setup with the node served by `into_server()` alone, as
-   `crates/finder/tests/live/support.rs:52` serves it, and a recording on, **When** a test
+   `crates/finder/tests/support/live.rs:52` serves it, and a recording on, **When** a test
    sends `{"frames":1}` and waits until `recording.raw.error` is present, **Then** a
    committed test asserts that `recording.raw` is
    `{"wanted":1,"saved":0,"error":"this scope node cannot send raw frames"}` and that
@@ -791,7 +834,11 @@ needs a terminal.
 - **SC-001**: Every acceptance scenario has a committed test that asserts it, and the
   `lint` and `test` gates pass.
 - **SC-002**: No existing test, golden, `scripts/ci/` file, `.github/` file, `CODEOWNERS`
-  entry, `ergane.yaml` or `playwright.config.ts` is edited.
+  entry, `ergane.yaml` or `playwright.config.ts` is edited. The only edit to an existing
+  file under `crates/finder/tests` is one `mod` line for each new module, in alphabetical
+  order, in `crates/finder/tests/console/main.rs`, `crates/finder/tests/cli/main.rs` and
+  `crates/finder/tests/motion/main.rs`, none of which holds a test (027's owner approval
+  7).
 - **SC-003**: A recorded star frame replays to its live solve within 0.01° (US1-S3), and
   a saved raw frame reproduces its frame's centroids exactly: bit for bit over the scope
   link (US2-S1), and after the shared setup's round trip against its frame line
@@ -799,19 +846,22 @@ needs a terminal.
 
 ## Assumptions
 
-- **Earlier features are in place.** 013, 014, 016, 017, 019 and 020-live-chart-calm
-  have landed. Every citation here was read at c1ed295 and re-checked at f8dab49, after
-  020-live-chart-calm landed; its US2 moved the cited lines of `DESIGN.md` and
-  `crates/finder/web/src/api.ts` by four, and the citations follow them (plan.md
-  § Prerequisites). `main` has since moved to 1104b7d, and no cited line moved: 870b332
-  changes only CI workflow files and the page's Playwright version, e62ffc2 (pull
-  request 214) runs the `test` gate's Rust half under cargo-nextest on a test build at
-  opt-level 1, and 1104b7d adds the ready spec `027-finder-tests-by-system`.
-- **027 and 024 land first.** The owner's order is 027, then 024, then this spec. 027
-  moves finder's tests into five binaries and fails a new top-level file in
-  `crates/finder/tests`, so US1's and US2's test files, their commands and the cited
-  tests are refreshed against its layout before the flip (plan.md § Prerequisites 6
-  and 7).
+- **Earlier features are in place.** 013, 014, 016, 017, 019, 020-live-chart-calm and
+  027-finder-tests-by-system have landed. Every citation here was read at c1ed295 and
+  re-checked at f8dab49, after 020-live-chart-calm landed; its US2 moved the cited lines
+  of `DESIGN.md` and `crates/finder/web/src/api.ts` by four, and the citations follow
+  them (plan.md § Prerequisites). `main` then moved to 1104b7d, and no cited line moved:
+  870b332 changes only CI workflow files and the page's Playwright version, e62ffc2
+  (pull request 214) runs the `test` gate's Rust half under cargo-nextest on a test
+  build at opt-level 1, and 1104b7d adds the ready spec `027-finder-tests-by-system`.
+  027 landed at b8dceaa and moved every cited test and helper under
+  `crates/finder/tests`; each citation there was re-read at b8dceaa, and no other cited
+  line moved.
+- **027 has landed, and 024 lands first.** The owner's order is 027, then 024, then this
+  spec. 027 landed at b8dceaa, and this trio is refreshed against its layout: US1's and
+  US2's finder tests are modules of its binaries, and their commands and the cited tests
+  follow its moves (plan.md § Prerequisites 7). 024 lands next, and this trio is then
+  re-anchored to it (plan.md § Prerequisites 6).
 - **Out of scope:**
   - a replay tool, loader or replaying node;
   - dark-sky detection, the noise floor and auto-exposure (spec 023);
@@ -847,5 +897,6 @@ US3:
 ```
 
 Every edge is a merge edge. US2 writes into US1's recording folder and extends its
-`Recorder`, route table, route list, README section and glossary. US3 reads the
-`recording` field of both and calls both routes. The stories run one after another.
+`Recorder`, route table, route list, README section and glossary, and adds its test
+module's `mod` line next to US1's in `crates/finder/tests/console/main.rs`. US3 reads
+the `recording` field of both and calls both routes. The stories run one after another.

@@ -27,10 +27,27 @@ running recording as PNGs. US3 adds a Recording section to the Setup page.
 Nothing about a recording is kept in `session.json`: it is run-only.
 
 **Testing**:
-- US1: `crates/finder/tests/recording.rs` (new), in-process and against the built binary,
-  and for US1-S8 on a `Recorder` the test starts with channels of its own.
-- US2: `crates/scope-node/tests/raw_frame.rs` (new) for the node, and
-  `crates/finder/tests/recording_raw.rs` (new) for the console.
+- US1: `crates/finder/tests/console/recording.rs` (new), the module `recording` of
+  finder's `console` test binary, in-process, and for US1-S8 on a `Recorder` the test
+  starts with channels of its own; and `crates/finder/tests/cli/recording.rs` (new), the
+  module `recording` of `cli`, for US1-S7 against the built binary.
+- US2: `crates/scope-node/tests/raw_frame.rs` (new) for the node;
+  `crates/finder/tests/console/recording_raw.rs` (new), the module `recording_raw` of
+  `console`, for the console; and `crates/finder/tests/motion/recording_raw.rs` (new),
+  the module `recording_raw` of `motion`, for US2-S7, which moves the simulated mount.
+- Where a finder test goes is 027's rule, by what it needs to run: `console` calls the
+  router in process and moves no mount (`crates/finder/tests/console/main.rs:2`), `cli`
+  starts the built `finder` (`crates/finder/tests/cli/main.rs:1`), and `motion` drives
+  the simulated mount in paused time (`crates/finder/tests/motion/main.rs:1`). Only the
+  tests that need another binary leave `console`: one in each story. Each module is
+  declared by one `mod` line, in alphabetical order, in its binary's `main.rs`, which
+  otherwise holds only the support include (`crates/finder/tests/layout/main.rs:156`).
+  It binds the live helpers it uses with `use crate::support::live as support;`
+  (`crates/finder/tests/console/live/loop_.rs:3`), never with `#[path]`, and writes the
+  rest of its setup itself, only the parts its own tests use:
+  `crates/finder/tests/support` takes no new file
+  (`crates/finder/tests/layout/main.rs:127`), and an unused helper fails
+  `clippy -D warnings`.
 - US3: `crates/finder/web/src/components/RecordingSection.test.tsx` (new), Vitest.
 - No new Playwright test. No existing one checks the section, and none checks it at
   night: the one night check of the whole Setup page
@@ -68,7 +85,7 @@ section.
 | Principle | How this plan honours it |
 |---|---|
 | I. Agreeing with cedar is correctness | Nothing touches the solver, detection or `crates/math-core`. |
-| II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. New tests go in new files. |
+| II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. New tests go in new module files; each adds one `mod` line to its test binary's `main.rs`, which holds no test, the edit 027's owner approval 7 approved for every later finder test. |
 | III. Tests first, independent expectations | The oracles are the frames and reports each test receives itself, cedar's detector re-run on saved pixels, the image decoder, the simulated start of `2026-01-16T02:00:00Z` and `finder::simulate::parse_start`. No new virtual clock. |
 | IV. Critical paths | No `unsafe`, no dependency or `Cargo.toml` change, no database-format change, nothing under `proto/`. The one scope-link change is an additive service in `crates/scope-link/proto`, named for the owner (spec approval 2), as 017 did for its field. |
 | V. Standalone Rust, honest licensing | Unaffected. |
@@ -83,8 +100,13 @@ crates/finder/
 ├── src/main.rs                         # US1: recordings/ in the state folder
 ├── src/link.rs                         # US2: RawClient, LinkManager::raw
 ├── README.md                           # US1: route and section; US2: raw route
-├── tests/recording.rs                  # US1: new
-├── tests/recording_raw.rs              # US2: new
+├── tests/cli/main.rs                   # US1: mod recording
+├── tests/cli/recording.rs              # US1: new, US1-S7 (the built binary)
+├── tests/console/main.rs               # US1: mod recording; US2: mod recording_raw
+├── tests/console/recording.rs          # US1: new, every scenario but US1-S7
+├── tests/console/recording_raw.rs      # US2: new, US2-S3 to US2-S6
+├── tests/motion/main.rs                # US2: mod recording_raw
+├── tests/motion/recording_raw.rs       # US2: new, US2-S7 (the mount moves)
 └── web/
     ├── src/api.ts                      # US3: SessionRecording, postRecord, postRecordRaw
     ├── src/useSession.ts               # US3: copy `recording` from the session
@@ -314,8 +336,8 @@ that does not rise, as after a scope node restart or a pairing with another node
 the recording with `node_restarted`, so the observer starts a new one; that `recording`
 in the session is run-only; that a recording holds the site, times and solves, never the
 node's address or token, so review one before committing it to this public repository;
-and that `Live::start` replays frame lines, as `crates/finder/tests/live.rs:181` feeds
-frames.
+and that `Live::start` replays frame lines, as
+`crates/finder/tests/console/live/loop_.rs:180` feeds frames.
 
 ### `GLOSSARY.md` (US1)
 
@@ -617,25 +639,33 @@ Every earlier Setup section added a component here with its `DESIGN.md` entry. A
 
 These are not changed by any story:
 - **The `ScopeNode` service and every existing message.** Two hand-written
-  implementations of the trait (`crates/finder/tests/aim_cli.rs:22`,
+  implementations of the trait (`crates/finder/tests/cli/aim.rs:22`,
   `crates/scope-link/tests/link.rs:55`) compile unchanged because the new call is in a
   new service. `StarFrame` gains no field: a test builds it as a literal naming every
   field (`crates/scope-link/tests/link.rs:25`).
 - **`LinkManager::start`'s signature and `MountClient`.** Many tests reach the link
-  through `with_link`; `crates/finder/tests/link.rs:187` and
-  `crates/finder/tests/keyhole_sim.rs:229` call `LinkManager::start` directly, and
-  `crates/finder/tests/mount_calls.rs:54` builds `MountClient` itself.
+  through `with_link`; `crates/finder/tests/console/link.rs:187` and
+  `crates/finder/tests/motion/tracking/keyhole.rs:228` call `LinkManager::start`
+  directly, and `crates/finder/tests/motion/mount_calls.rs:54` builds `MountClient`
+  itself.
 - **`GET /api/session`, and the MCP session bodies, without a recording.** `recording`
   is skipped when absent, so every existing body, including what the MCP tools
   `get_session` and `set_tracking` return, is byte for byte what it was.
-- **US1's own test, for US2.** `crates/finder/tests/recording.rs` builds `Sources` by
-  literal and calls `Recorder::new`, `start` and `view` (US1-S8), so US2 adds no field
-  to `Sources` and changes none of those signatures. `RecordingView` and `RawView` are
-  `#[non_exhaustive]`, so that test reads a view field by field, never builds or compares
-  a whole one, and keeps compiling when US2 adds `raw`.
+- **US1's own test, for US2.** `crates/finder/tests/console/recording.rs` builds
+  `Sources` by literal and calls `Recorder::new`, `start` and `view` (US1-S8), so US2
+  adds no field to `Sources` and changes none of those signatures. `RecordingView` and
+  `RawView` are `#[non_exhaustive]`, so that test reads a view field by field, never
+  builds or compares a whole one, and keeps compiling when US2 adds `raw`.
 - **`GET /api/live`.** The recorder is one more subscriber of the same broadcast.
-- **The binary's start-up lines.** `crates/finder/tests/simulate_cli.rs` reads the
+- **The binary's start-up lines.** `crates/finder/tests/cli/simulate.rs` reads the
   address line `finder console: http://`; nothing new is printed.
+- **Finder's test layout.** `crates/finder/tests/layout/main.rs` fails a file at the top
+  level of `crates/finder/tests` (`crates/finder/tests/layout/main.rs:109`), any file
+  added to `crates/finder/tests/support` (`crates/finder/tests/layout/main.rs:127`) and
+  a binary's `main.rs` holding anything but its support include and `mod` lines
+  (`crates/finder/tests/layout/main.rs:156`). Each new module is a file in its binary's
+  folder and one `mod` line in that `main.rs`; no existing module, helper or test
+  changes.
 - **The Setup page with no `node`, or with a `node` and no `recording`.** Existing tests
   read the page's only `status` (`crates/finder/web/src/components/SetupPage.test.tsx:37`)
   and only `alert` (`crates/finder/web/src/components/AimTap.test.tsx:102`), and in a
@@ -685,8 +715,9 @@ These are not changed by any story:
   Every story runs both, and the judge sees their results. nextest runs every test as
   its own process, as many at once as the host has CPUs, reports every failure and ends
   a test after 5 minutes (`.config/nextest.toml`), on the root `Cargo.toml`'s test
-  profile at opt-level 1. The stories' development checks name `cargo test`, which
-  builds the same test profile.
+  profile at opt-level 1. The stories' development checks run one finder module with
+  `cargo nextest run -p finder --locked --test <binary> <module>::`, and the scope
+  node's new test file with `cargo test`, which builds the same test profile.
 - **CI in the merge queue** runs every `ci.yml` job, including the finder-page
   build-freshness check and the build on Rust 1.96. Coverage runs only by hand
   (constitution 1.1.0).
@@ -701,12 +732,15 @@ These are not changed by any story:
 2. **`main` is still as read.** Every citation here was read at c1ed295 and re-checked at
    f8dab49, after 020-live-chart-calm landed: its US2 moved the cited lines of
    `DESIGN.md` and `crates/finder/web/src/api.ts` down by four, now `DESIGN.md:347`,
-   `crates/finder/web/src/api.ts:234` and `crates/finder/web/src/api.ts:300`. `main` is
-   now at 1104b7d, and no cited line moved: 870b332 changes only CI workflow files and
-   the page's Playwright version; e62ffc2 (pull request 214) runs the `test` gate's Rust
-   half with `cargo nextest run` on an optimized test profile, so § Verification was
-   copied again from its `ergane.yaml`; and 1104b7d adds the ready spec 027
-   (Prerequisite 7). If `main` moves again in a cited file, re-read it and re-run the
+   `crates/finder/web/src/api.ts:234` and `crates/finder/web/src/api.ts:300`. `main`
+   then moved to 1104b7d, and no cited line moved: 870b332 changes only CI workflow
+   files and the page's Playwright version; e62ffc2 (pull request 214) runs the `test`
+   gate's Rust half with `cargo nextest run` on an optimized test profile, so
+   § Verification was copied again from its `ergane.yaml`; and 1104b7d adds the ready
+   spec 027. `main` is now at b8dceaa, merged in: 6c0e640 and b8dceaa land 027
+   (Prerequisite 7), which moved every cited test and helper under `crates/finder/tests`,
+   and each of those citations was re-read at b8dceaa. 027 changed nothing else this
+   trio cites. If `main` moves again in a cited file, re-read it and re-run the
    validator.
 3. **The owner decisions are settled and the approvals given** (spec § Owner decisions,
    § Owner approvals). Met for the decisions: the owner settled decisions 1 to 10 on
@@ -719,25 +753,28 @@ These are not changed by any story:
 6. **`024-mount-link-recovery` has landed, and this trio is re-anchored to it.** Not met.
    The owner settled the order on 2026-11-15: 024 flips first, and this spec flips only
    after 024 has landed. Then every citation in the files both specs write
-   (`crates/finder/src/api.rs`, the scope-link proto, `crates/scope-node/src/service.rs`)
-   and in the code 024 changes that this spec reads (the mount poll behind
+   (`crates/finder/src/api.rs`, the scope-link proto, `crates/scope-node/src/service.rs`,
+   and the `main.rs` of any finder test binary both add a module to) and in the code
+   024 changes that this spec reads (the mount poll behind
    `mount.moving`, `with_link`, the link) is re-read against 024's code, 024 joins
    `depends_on_landed` and the shared writes of those files with `merge_order`, and the
    validator is re-run. Until then this trio names 024 in neither.
 7. **`027-finder-tests-by-system` has landed, and this trio is refreshed against its
-   layout.** Not met. 027 is ready since 1104b7d, and the owner's order is 027, then 024,
-   then this spec. It moves finder's integration tests into the binaries `cli`,
-   `console`, `layout`, `mcp` and `motion`, the helpers this trio cites among them
-   (`crates/finder/tests/live/support.rs` and `crates/finder/tests/mcp/support.rs` to
-   `crates/finder/tests/support/`), and its `layout` test fails any new top-level file in
-   `crates/finder/tests`. Once it lands, US1's `crates/finder/tests/recording.rs` and
-   US2's `crates/finder/tests/recording_raw.rs` become modules of one of its binaries,
-   each story's writes gain that binary's shared `main.rs` or `mod.rs` with the matching
-   shared write, their Independent Tests and development checks name the binary and
-   module, every citation of a moved test is re-read, the Refinement Record's existing
-   test paths follow the moves, and 027 joins `depends_on_landed`. US3 and
-   `crates/scope-node/tests/raw_frame.rs` are unaffected. Until then this trio names 027
-   in neither.
+   layout.** Met: 027 completed at b8dceaa (2026-11-15, US2 #218), and `main` at b8dceaa
+   was merged in. Finder's integration tests are now the binaries `cli`, `console`,
+   `layout`, `mcp` and `motion`, the helpers this trio cites are
+   `crates/finder/tests/support/live.rs` and `crates/finder/tests/support/mcp.rs`, and
+   the `layout` test fails any new top-level file in `crates/finder/tests`. So US1's
+   tests are `crates/finder/tests/console/recording.rs` and, for US1-S7,
+   `crates/finder/tests/cli/recording.rs`; US2's finder tests are
+   `crates/finder/tests/console/recording_raw.rs` and, for US2-S7,
+   `crates/finder/tests/motion/recording_raw.rs` (§ Technical Context). Each story's
+   writes gain the `main.rs` of every binary it adds a module to, with a shared write
+   naming 027's US2 as that file's last writer, and US1's shared writes name US2 for
+   `crates/finder/tests/console/main.rs`. The Independent Tests and development checks
+   name the binary and module, every citation of a moved test was re-read at b8dceaa,
+   the Refinement Record's existing test paths follow the moves, and 027 is in
+   `depends_on_landed`. US3 and `crates/scope-node/tests/raw_frame.rs` are unaffected.
 
 ## Plan traps
 
@@ -796,6 +833,12 @@ that keeps it from recurring. They bind every story.
     preview or misses an equal id. *Check:* US1-S8 sends a lower id carrying a preview
     of its own and asserts the earlier `preview-5.jpg` kept, then an equal id, and
     asserts `recording.json`'s counts and that nothing follows the end.
+17. **027's layout.** A test file at the top level of `crates/finder/tests`, or a file
+    added to `crates/finder/tests/support`, fails 027's `layout` test, and a helper a
+    module does not use fails `clippy -D warnings`. *Check:* each new test is in the
+    module § Technical Context names, declared by one alphabetical `mod` line in its
+    binary's `main.rs`, binding the live helpers with
+    `use crate::support::live as support;` and holding only the setup its own tests use.
 
 ## Risks
 
@@ -811,8 +854,8 @@ that keeps it from recurring. They bind every story.
 | `020-live-chart-calm` writes `DESIGN.md`, `dist` and `api.ts`, as US3 does. | Landed at f8dab49; its three moved citations were re-read (Prerequisite 2). |
 | Draft `024-mount-link-recovery` writes `crates/finder/src/api.rs` (its US3; 025's US1 and US2), the scope-link proto and `crates/scope-node/src/service.rs` (its US1 to US3; 025's US2). It also changes the mount poll that sets the session's `mount.moving` (`crates/finder/src/live.rs:319`), which FR-013 reads, and `with_link`, which every 025 test builds on. With `max_concurrent_epics: 2` both could run at once, and either landing moves the other's citations. | Settled by the owner on 2026-11-15: 024 flips first, and 025 flips only after 024 has landed. 025 is then re-read against 024's code, declares 024 in `depends_on_landed` and its shared writes, and is re-validated (Prerequisite 6), as 024's plan asks of whichever flips second (its Prerequisite 5). |
 | Draft `026-mount-sky` (pull request 207) writes `link.rs` (its frame arm, and a filter on `LinkManager`), `api.rs`, `lib.rs`, `main.rs`, `crates/finder/README.md`, `GLOSSARY.md`, `DESIGN.md`, `dist` and `api.ts`: files of US1, US2 and US3. | Whichever is flipped second is re-read, declares the other in `depends_on_landed` and its shared writes, and is re-validated. |
-| `027-finder-tests-by-system` (ready since 1104b7d) moves the finder tests and helpers this trio cites, and its `layout` test fails US1's and US2's new top-level test files. | It lands before 024 and this spec, in the owner's order; this trio is then refreshed against its layout and re-validated (Prerequisite 7). |
-| A story's diff nears 64 KiB. | The round-3 probes, built from this trio with the owner's answers and then given this round's clauses, measured US1 at 57,433 bytes (8.1 KB under), US2 at 54,397 and US3 at 20,580 (round 2: 49,579, 49,638 and 19,151). Most of US1's growth is US1-S8's test. Tests may share `crates/finder/tests/live/support.rs` with `#[path]`; US2's test repeats US1's setup, about 6 KB. |
+| `027-finder-tests-by-system` moves the finder tests and helpers this trio cites, and its `layout` test fails a new top-level test file. Each new module adds a `mod` line to a binary's `main.rs`, which other stories edit too, and two stories adding neighbouring lines to one file do not merge cleanly. | Landed at b8dceaa; this trio is refreshed against its layout and re-validated (Prerequisite 7). US2's `mod recording_raw;` follows US1's `mod recording;` in `crates/finder/tests/console/main.rs`, which US2's `depends_on_merged` on US1 orders and US1's shared writes declare. 024 lands before this spec is flipped, and Prerequisite 6 then re-reads any `main.rs` both add a module to. |
+| A story's diff nears 64 KiB. | The round-3 probes, built from this trio with the owner's answers and then given this round's clauses, measured US1 at 57,433 bytes (8.1 KB under), US2 at 54,397 and US3 at 20,580 (round 2: 49,579, 49,638 and 19,151). Most of US1's growth is US1-S8's test. Re-homed into 027's layout (§ Refinement Record), US1 measures about 59,200 bytes and US2 about 61,400, both under 64 KiB: each module binds `crates/finder/tests/support/live.rs` with `use crate::support::live as support;` and writes the rest of its setup, so US2's `console` module repeats US1's setup, about 6 KB, and its `motion` module the part US2-S7 uses, about 6 KB more. |
 
 ## Refinement Record
 
@@ -844,8 +887,9 @@ the trio was reviewed against the code:
 - **Not run:** `CI=1 npm run e2e` and the workspace-wide gates. The `test` gate runs both.
 
 The trio was then rebased onto `main` at 2508423, whose only source change since c1ed295
-is `crates/finder/src/solve.rs` (with a new test, `crates/finder/tests/star_detected.rs`);
-the one cited line of `solve.rs` was re-read. After 020-live-chart-calm landed, `main` at
+is `crates/finder/src/solve.rs` (with a new test, now
+`crates/finder/tests/console/star_detected.rs`); the one cited line of `solve.rs` was
+re-read. After 020-live-chart-calm landed, `main` at
 f8dab49 was merged in and the three citations its US2 moved (`DESIGN.md` and two in
 `crates/finder/web/src/api.ts`) were re-read. The owner then settled the owner decisions,
 and decision 10's answer added the raw route's motion test, US2-S7 and FR-013's and
@@ -912,9 +956,10 @@ scenarios:
   `clippy -p finder`, `fmt` and both `cargo doc -p finder` commands clean; diff 56,793
   bytes. Every interface compiled as written. US1-S8 failed with the restart check
   removed, with `<` for `<=`, and with the preview written before the check.
-- **US2**: seven tests passing, and the `scope-link`, `scope-node`, `finder` and
-  `simulator` tests (6, 55, 403 and 48) with their `clippy`, `fmt` and docs clean; diff
-  54,378 bytes. Every interface compiled as written. With 15 bytes, US2-S5 passed with
+- **US2**: nine tests passing, seven in finder's `recording_raw.rs` and two in the scope
+  node's `raw_frame.rs`, and the `scope-link`, `scope-node`, `finder` and `simulator`
+  tests (6, 55, 403 and 48) with their `clippy`, `fmt` and docs clean; diff 54,378
+  bytes. Every interface compiled as written. With 15 bytes, US2-S5 passed with
   the reply's length check deleted, since `GrayImage::from_raw` refuses a shorter
   buffer, so it now sends 17. The raw task's errors are set, like `saved`, under the
   run's lock and only while the run is on.
@@ -940,10 +985,36 @@ scenarios:
 - **Not run:** `CI=1 npm run e2e` and the workspace-wide `cargo nextest run`. The `test`
   gate runs both.
 
+**Re-homed for 027 (2026-11-15).** 027 landed at b8dceaa, and `main` was merged in. The
+test-layer audit's refresh script rewrote every path of a moved test or helper, 31 of
+them, carried 15 line anchors over by their text, and added 027 to `depends_on_landed`.
+By hand:
+- the home of each new test, by 027's rule (§ Technical Context): US1-S7, which starts
+  the built `finder`, goes to `cli`, and US2-S7, which moves the simulated mount, to
+  `motion`; every other new finder test stays in `console`;
+- the `mod` lines, the three `main.rs` files in the writes and their shared writes, the
+  Independent Tests and the development checks;
+- the module header, `use crate::support::live as support;`, which re-anchors
+  `crates/finder/tests/console/live/loop_.rs:3` from the `#[path]` line it named before
+  027 to the `use` line that replaced it;
+- SC-002, the tasks' rules, § Shapes that existing tests pin and plan trap 17 for the
+  layout, and the layout guard as a preserved test of US1 and US2;
+- the round-3 US2 count above, which had said seven tests.
+
+In a throwaway worktree (branch `probe/025-r4-layout`), the round-3 check branch was
+merged with `main` at b8dceaa and its two finder test files re-homed this way, every
+test body unchanged. The 7 tests of `console`'s `recording`, the 6 of its
+`recording_raw`, the one of `cli`'s `recording`, the one of `motion`'s `recording_raw`
+and `layout`'s 3 passed, as did all 365 of finder's tests under `cargo test`, one
+process a binary, with `clippy -p finder` over all targets and features and `fmt`
+clean. `cargo nextest` was not run on this probe; round 3 ran the same tests under it.
+Measured as plan trap 3 says, the re-homed tests add about 1.8 KB to US1's diff and
+7.0 KB to US2's (§ Risks).
+
 Writes come from the task text and the probes. Shared writes name the merge edge that
 orders them, and the stories that last wrote the same file on `main`,
-`020-live-chart-calm` among them. Nothing in this record is an owner approval: those are
-in spec.md, and flipping to `ready` gives them.
+`020-live-chart-calm` and `027-finder-tests-by-system` among them. Nothing in this
+record is an owner approval: those are in spec.md, and flipping to `ready` gives them.
 
 ```yaml
 version: 1
@@ -951,65 +1022,70 @@ reviewed_revision: c1ed295734253c7d6121052b0a14beb2ee64bc17
 stories:
   US1:
     tests:
-      - path: crates/finder/tests/recording.rs
+      - path: crates/finder/tests/console/recording.rs
         status: new
         disposition: add
         assertion: "a start and stop write recording.json with the format, version, site, model, settings, camera, UTC name, stop time and counts, frames.jsonl and solves.jsonl whose counts match the session, a first frame after the one on the channel at the start, arrival times between the start and the stop, every solve naming a recorded frame, nothing after the stop, and no address or token"
         decision: "spec.md:US1-S1"
-      - path: crates/finder/tests/recording.rs
+      - path: crates/finder/tests/console/recording.rs
         status: new
         disposition: add
         assertion: "each frame line equals the star frame the test saw after a serde_json round trip, centroids as triples in order, previews byte for byte, and each solve line is serde_json::to_string of the live report"
         decision: "spec.md:US1-S2"
-      - path: crates/finder/tests/recording.rs
+      - path: crates/finder/tests/console/recording.rs
         status: new
         disposition: add
         assertion: "a recorded frame fed to a new Live solves within 0.01 deg of its recorded solve and within 0.05 s of its time"
         decision: "spec.md:US1-S3"
-      - path: crates/finder/tests/recording.rs
+      - path: crates/finder/tests/console/recording.rs
         status: new
         disposition: add
         assertion: "bad bodies answer 400, a foreign origin 403, no recordings folder or no live loop 409, and an unmakeable folder 500, each leaving no recording"
         decision: "spec.md:US1-S4"
-      - path: crates/finder/tests/recording.rs
+      - path: crates/finder/tests/console/recording.rs
         status: new
         disposition: add
         assertion: "a repeated start keeps its folder and a start after a stop makes a new one"
         decision: "spec.md:US1-S5"
-      - path: crates/finder/tests/recording.rs
+      - path: crates/finder/tests/console/recording.rs
         status: new
         disposition: add
         assertion: "a limit of three ends the recording as limit after three frame lines, and a deleted folder ends it as write_failed without making the folder again"
         decision: "spec.md:US1-S6"
-      - path: crates/finder/tests/recording.rs
+      - path: crates/finder/tests/cli/recording.rs
         status: new
         disposition: add
         assertion: "the binary under --simulate --state S records into S/recordings/<folder>/recording.json"
         decision: "spec.md:US1-S7"
-      - path: crates/finder/tests/recording.rs
+      - path: crates/finder/tests/console/recording.rs
         status: new
         disposition: add
         assertion: "a frame id that does not rise after None ends a recorder fed by the test as node_restarted, writing nothing of that frame: two frame lines, the first preview's bytes kept, recording.json's aim, counts and end, no line after the end, and an equal id ends a second recording too"
         decision: "spec.md:US1-S8"
-      - path: crates/finder/tests/live.rs
+      - path: crates/finder/tests/console/live/loop_.rs
         status: existing
         disposition: preserve
         assertion: "live solving and its reports are unchanged with a recorder subscribed"
         decision: "plan.md:Shapes that existing tests pin"
-      - path: crates/finder/tests/mcp_endpoint.rs
+      - path: crates/finder/tests/mcp/endpoint.rs
         status: existing
         disposition: preserve
         assertion: "get_session over MCP still returns the session body unchanged when no recording exists"
         decision: "plan.md:Shapes that existing tests pin"
-      - path: crates/finder/tests/session_api.rs
+      - path: crates/finder/tests/console/session/edits.rs
         status: existing
         disposition: preserve
         assertion: "GET /api/session bodies without a recording are unchanged"
         decision: "plan.md:Shapes that existing tests pin"
-      - path: crates/finder/tests/simulate_cli.rs
+      - path: crates/finder/tests/cli/simulate.rs
         status: existing
         disposition: preserve
         assertion: "the binary's refusals and address line are unchanged"
+        decision: "plan.md:Shapes that existing tests pin"
+      - path: crates/finder/tests/layout/main.rs
+        status: existing
+        disposition: preserve
+        assertion: "no file at the top level of crates/finder/tests or new file in its support folder, and each binary's main.rs holds only its support include and mod lines, with recording added to console's and cli's"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
       - "live solving, the link and GET /api/live behave as without a recording (spec.md FR-004, plan.md Shapes that existing tests pin)"
@@ -1017,7 +1093,9 @@ stories:
       - "nothing about a recording is persisted in session.json"
     checks:
       development:
-        - "cargo test -p finder --test recording --locked"
+        - "cargo nextest run -p finder --locked --test console recording::"
+        - "cargo nextest run -p finder --locked --test cli recording::"
+        - "cargo nextest run -p finder --locked --test layout"
       handoff: declared_gates
       independent: declared_pipeline
       release:
@@ -1029,7 +1107,10 @@ stories:
       - crates/finder/src/lib.rs
       - crates/finder/src/main.rs
       - crates/finder/src/recording.rs
-      - crates/finder/tests/recording.rs
+      - crates/finder/tests/cli/main.rs
+      - crates/finder/tests/cli/recording.rs
+      - crates/finder/tests/console/main.rs
+      - crates/finder/tests/console/recording.rs
     no_write_reason: ""
     shared_writes:
       - path: GLOSSARY.md
@@ -1057,6 +1138,11 @@ stories:
         other_story: US2
         disposition: merge_order
         reason: "US2 depends_on_merged US1, and adds the raw route's line after US1's"
+      - path: crates/finder/tests/console/main.rs
+        other_spec: 025-frame-capture
+        other_story: US2
+        disposition: merge_order
+        reason: "US2 depends_on_merged US1, and adds mod recording_raw right after US1's mod recording"
       - path: crates/finder/README.md
         other_spec: 017-console-stop-confirm
         other_story: US4
@@ -1077,6 +1163,16 @@ stories:
         other_story: US1
         disposition: merge_order
         reason: "025 depends_on_landed 016, whose US1 last changed main.rs"
+      - path: crates/finder/tests/cli/main.rs
+        other_spec: 027-finder-tests-by-system
+        other_story: US2
+        disposition: merge_order
+        reason: "025 depends_on_landed 027, whose US2 last changed cli/main.rs"
+      - path: crates/finder/tests/console/main.rs
+        other_spec: 027-finder-tests-by-system
+        other_story: US2
+        disposition: merge_order
+        reason: "025 depends_on_landed 027, whose US2 last changed console/main.rs"
     open_questions: []
   US2:
     tests:
@@ -1090,27 +1186,27 @@ stories:
         disposition: add
         assertion: "RawFrame needs the token, and two calls waiting while frames are stopped are both answered with the same id"
         decision: "spec.md:US2-S2"
-      - path: crates/finder/tests/recording_raw.rs
+      - path: crates/finder/tests/console/recording_raw.rs
         status: new
         disposition: add
         assertion: "two requested raw frames are saved as gray PNGs of their frame lines' size whose detected centroids equal the lines' after a serde_json round trip, with no .part file left"
         decision: "spec.md:US2-S3"
-      - path: crates/finder/tests/recording_raw.rs
+      - path: crates/finder/tests/console/recording_raw.rs
         status: new
         disposition: add
         assertion: "the raw route refuses without a recorder, without a recording, with bad bodies, a foreign origin, a running request or no node, a node sending no frame ends the request after 15 s, and a stop ends a request with its counts and no error"
         decision: "spec.md:US2-S4"
-      - path: crates/finder/tests/recording_raw.rs
+      - path: crates/finder/tests/console/recording_raw.rs
         status: new
         disposition: add
         assertion: "a node without ScopeNodeRaw gives the error this scope node cannot send raw frames, a reply longer than width x height gives the raw frame request failed, and neither leaves a file"
         decision: "spec.md:US2-S5"
-      - path: crates/finder/tests/recording_raw.rs
+      - path: crates/finder/tests/console/recording_raw.rs
         status: new
         disposition: add
         assertion: "a 2592 x 1944 raw frame arrives through the 16 MiB limit and decodes to its uniform pixels"
         decision: "spec.md:US2-S6"
-      - path: crates/finder/tests/recording_raw.rs
+      - path: crates/finder/tests/motion/recording_raw.rs
         status: new
         disposition: add
         assertion: "raw frames are refused with wait until the mount is still while the mount moves, and a running request stops with exactly the mount started moving once a move starts"
@@ -1120,20 +1216,25 @@ stories:
         disposition: preserve
         assertion: "its hand-written ScopeNode implementation compiles and behaves unchanged"
         decision: "plan.md:Shapes that existing tests pin"
-      - path: crates/finder/tests/aim_cli.rs
+      - path: crates/finder/tests/cli/aim.rs
         status: existing
         disposition: preserve
         assertion: "its hand-written ScopeNode node compiles and the aim tap behaves unchanged"
         decision: "plan.md:Shapes that existing tests pin"
-      - path: crates/finder/tests/link.rs
+      - path: crates/finder/tests/console/link.rs
         status: existing
         disposition: preserve
         assertion: "LinkManager::start, the link's frames and its status are unchanged"
         decision: "plan.md:Shapes that existing tests pin"
-      - path: crates/finder/tests/mount_calls.rs
+      - path: crates/finder/tests/motion/mount_calls.rs
         status: existing
         disposition: preserve
         assertion: "MountClient built on its own channel, and its token checks, are unchanged"
+        decision: "plan.md:Shapes that existing tests pin"
+      - path: crates/finder/tests/layout/main.rs
+        status: existing
+        disposition: preserve
+        assertion: "no file at the top level of crates/finder/tests or new file in its support folder, and each binary's main.rs holds only its support include and mod lines, with recording_raw added to console's and motion's"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
       - "no existing scope-link message, field or call changes (spec.md FR-011)"
@@ -1142,7 +1243,9 @@ stories:
     checks:
       development:
         - "cargo test -p scope-node --test raw_frame --locked"
-        - "cargo test -p finder --test recording_raw --locked"
+        - "cargo nextest run -p finder --locked --test console recording_raw::"
+        - "cargo nextest run -p finder --locked --test motion recording_raw::"
+        - "cargo nextest run -p finder --locked --test layout"
       handoff: declared_gates
       independent: declared_pipeline
       release:
@@ -1154,7 +1257,10 @@ stories:
       - crates/finder/src/lib.rs
       - crates/finder/src/link.rs
       - crates/finder/src/recording.rs
-      - crates/finder/tests/recording_raw.rs
+      - crates/finder/tests/console/main.rs
+      - crates/finder/tests/console/recording_raw.rs
+      - crates/finder/tests/motion/main.rs
+      - crates/finder/tests/motion/recording_raw.rs
       - crates/scope-link/proto/scope_node/v1/scope_node.proto
       - crates/scope-node/src/service.rs
       - crates/scope-node/tests/raw_frame.rs
@@ -1175,6 +1281,11 @@ stories:
         other_story: US4
         disposition: merge_order
         reason: "025 depends_on_landed 017, whose US4 last changed service.rs"
+      - path: crates/finder/tests/motion/main.rs
+        other_spec: 027-finder-tests-by-system
+        other_story: US2
+        disposition: merge_order
+        reason: "025 depends_on_landed 027, whose US2 last changed motion/main.rs"
     open_questions: []
   US3:
     tests:

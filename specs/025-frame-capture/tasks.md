@@ -11,14 +11,22 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
 - `024-mount-link-recovery` has landed and this trio has been re-anchored to it
   (plan.md § Prerequisites 6);
 - `027-finder-tests-by-system` has landed and this trio has been refreshed against its
-  test layout (plan.md § Prerequisites 7);
+  test layout: met, at b8dceaa (plan.md § Prerequisites 7);
 - no operator-staged file is needed.
 
 **Rules for every story:**
 - Never edit an existing test, golden, fixture, `scripts/ci/`, `.github/`, `deny.toml`,
   `CODEOWNERS`, `ergane.yaml`, `.specify/` or `crates/finder/web/playwright.config.ts`.
   If an existing test fails, stop and escalate with its exact output. Do not edit it.
-- New tests go in new files: the ones your story's tasks name.
+  The one exception is the `mod` line of each new finder test module, added in
+  alphabetical order to the binary's `main.rs` your story's tasks name, which holds no
+  test (027's owner approval 7). Change nothing else there.
+- New tests go in new files: the ones your story's tasks name. A new finder test is a
+  module file in the binary's folder plan.md § Technical Context names, never a file at
+  the top level of `crates/finder/tests` or in `crates/finder/tests/support`, either of
+  which fails the `layout` test. It binds the live helpers with
+  `use crate::support::live as support;`, never with `#[path]`, and holds only the
+  setup its own tests use, since an unused helper fails `clippy -D warnings`.
 - Write only the files your story's tasks name; they are its `writes` in plan.md
   § Refinement Record. A story that needs another file escalates.
 - Tests compute their expected values themselves (plan.md § Plan traps 6), and compare
@@ -27,7 +35,8 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
   fresh solve of a replayed frame.
 - Keep the story's diff under 64 KiB, measured as plan.md § Plan traps 3 says.
 - Every code citation is `path:line` as read at c1ed295 and re-checked at f8dab49 and
-  1104b7d. If a cited line has moved, re-read it rather than guess.
+  1104b7d, and those under `crates/finder/tests` re-read at b8dceaa, after 027 moved
+  them. If a cited line has moved, re-read it rather than guess.
 - Add no dependency and change no `Cargo.toml`. Change nothing under
   `crates/simulator`, and outside US2 nothing under `crates/scope-node` or
   `crates/scope-link`.
@@ -39,23 +48,28 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
 
 ### Tests first
 
-- [ ] T001 [US1] Create `crates/finder/tests/recording.rs` with the shared setup of
-  spec.md § User Scenarios: the `Simulator` of `crates/finder/tests/live/support.rs`
+- [ ] T001 [US1] Create `crates/finder/tests/console/recording.rs`, the module
+  `recording` of finder's `console` test binary, and add `mod recording;` after
+  `mod rates;` in `crates/finder/tests/console/main.rs`. Give it the shared setup of
+  spec.md § User Scenarios: the `Simulator` of `crates/finder/tests/support/live.rs`
   with a `SimMount` connected first and `push_to(50.0, 120.0)` after, a `SimNode`
   served with `memory::serve_routes_on` and `routes()` as
-  `crates/finder/tests/mcp/support.rs` serves its node, the paired session,
+  `crates/finder/tests/support/mcp.rs` serves its node, the paired session,
   `with_live()` and `with_recordings(R)` with R under `target/` and not made by the
   test, under `#[tokio::test(start_paused = true)]`, and helpers to wait on the session,
   to read the folder's lines with `serde_json` and to pass a held value through the
   `serde_json` round trip. Write failing tests for US1-S1 and US1-S2.
-- [ ] T002 [US1] Add failing tests to `crates/finder/tests/recording.rs` for the replay
-  of a recorded frame through a new `Live` (US1-S3) and for the refusals (US1-S4).
-- [ ] T003 [US1] Add failing tests to `crates/finder/tests/recording.rs` for a repeated
-  start (US1-S5), the frame limit and a deleted folder (US1-S6), the built binary
-  under `--simulate --state` (US1-S7), and a frame id that does not rise, fed to a
-  `Recorder` the test starts with channels of its own (US1-S8). That test builds
-  `Sources` by literal and reads `RecordingView` field by field, never building or
-  comparing a whole one, since US2 adds `raw` (plan.md § Shapes that existing tests pin).
+- [ ] T002 [US1] Add failing tests to `crates/finder/tests/console/recording.rs` for the
+  replay of a recorded frame through a new `Live` (US1-S3) and for the refusals (US1-S4).
+- [ ] T003 [US1] Add failing tests to `crates/finder/tests/console/recording.rs` for a
+  repeated start (US1-S5), the frame limit and a deleted folder (US1-S6), and a frame id
+  that does not rise, fed to a `Recorder` the test starts with channels of its own
+  (US1-S8). That test builds `Sources` by literal and reads `RecordingView` field by
+  field, never building or comparing a whole one, since US2 adds `raw` (plan.md
+  § Shapes that existing tests pin). Create `crates/finder/tests/cli/recording.rs`, the
+  module `recording` of `cli`, with `mod recording;` after `mod flags;` in
+  `crates/finder/tests/cli/main.rs`, and in it a failing test for the built binary under
+  `--simulate --state` (US1-S7).
 
 ### Implementation
 
@@ -85,14 +99,18 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
   a `SyntheticCamera` on `SystemClock` served with `routes()` over
   `scope_link::memory::channel_pair`, as `crates/simulator/tests/stop_finishes.rs`
   serves one. Write failing tests for US2-S1 and US2-S2.
-- [ ] T009 [US2] Create `crates/finder/tests/recording_raw.rs` with the shared setup of
+- [ ] T009 [US2] Create `crates/finder/tests/console/recording_raw.rs`, the module
+  `recording_raw` of `console`, with `mod recording_raw;` right after US1's
+  `mod recording;` in `crates/finder/tests/console/main.rs`, and the shared setup of
   spec.md § User Scenarios. Write failing tests for the saved raw frames (US2-S3); the
   refusals, a console without a recorder, a node sending no frame and a stop during a
   request (US2-S4); a node without the service and a reply of 17 bytes for a 4 × 4
-  frame (US2-S5); and a
-  2592 × 1944 frame from a camera of the test's own (US2-S6); and raw frames refused
-  while the mount moves and stopped with `the mount started moving` when a move starts
-  (US2-S7).
+  frame (US2-S5); and a 2592 × 1944 frame from a camera of the test's own (US2-S6).
+  Create `crates/finder/tests/motion/recording_raw.rs`, the module `recording_raw` of
+  `motion`, with `mod recording_raw;` after `mod night;` in
+  `crates/finder/tests/motion/main.rs`, holding the part of the shared setup it uses
+  and a failing test for raw frames refused while the mount moves and stopped with
+  `the mount started moving` when a move starts (US2-S7).
 
 ### Implementation
 
@@ -146,7 +164,8 @@ US1 ──► US2 ──► US3
 ```
 
 - **US1** comes first: US2 writes into its recordings and extends its `Recorder`, route
-  table, route list, README section and glossary.
+  table, route list, README section and glossary, and adds its `mod` line right after
+  US1's in `crates/finder/tests/console/main.rs`.
 - **US2** comes next: it adds the raw route and `recording.raw`, which US3's page calls
   and shows.
 - **US3** comes last and touches only `crates/finder/web/`, `DESIGN.md` and
