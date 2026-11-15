@@ -14,6 +14,7 @@ mod notices;
 mod pointing;
 mod pushto;
 mod rates;
+mod recording;
 mod session;
 mod star_detected;
 mod targets;

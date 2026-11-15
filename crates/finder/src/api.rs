@@ -54,6 +54,7 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::future::Future;
 use std::io::Write;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -76,6 +77,7 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use crate::catalog::{self, SimilarReport};
 use crate::link::{stop_deadline, LinkManager, Transport};
 use crate::live::{DbSolver, Live, Solver};
+use crate::recording::{Recorder, Sources, FRAME_LIMIT};
 use crate::samples::{self, SampleInfo, Samples};
 use crate::session::{Clock, Session, SessionEdit, SessionError, SessionView, SystemClock};
 use crate::simulate::{Push, Simulation, SimulationTransport, Telescope};
@@ -111,6 +113,7 @@ pub struct AppState {
     mcp: crate::mcp::McpConfig,
     link: Option<Arc<LinkManager>>,
     live: Option<Arc<Live>>,
+    recordings: Option<Arc<Recorder>>,
     mount_monitor: Option<Arc<crate::live::MountMonitor>>,
     simulation: Option<Arc<Simulation>>,
     goto: Option<Arc<crate::goto::GoTo>>,
@@ -141,6 +144,7 @@ impl AppState {
             mcp: crate::mcp::McpConfig::default(),
             link: None,
             live: None,
+            recordings: None,
             mount_monitor: None,
             simulation: None,
             goto: None,
@@ -270,6 +274,21 @@ impl AppState {
             link.clone(),
             self.live.as_ref().unwrap().clone(),
         )));
+        self
+    }
+
+    /// Record on request under `root` (025). The binary passes `recordings/` in its state folder.
+    pub fn with_recordings(mut self, root: impl Into<PathBuf>) -> Self {
+        self.recordings = Some(Arc::new(Recorder::new(root.into(), FRAME_LIMIT)));
+        self
+    }
+
+    /// End each recording after `frames` star frames instead of `FRAME_LIMIT`.
+    /// Call after `with_recordings`; without it this changes nothing.
+    pub fn with_recording_limit(mut self, frames: u64) -> Self {
+        if let Some(old) = &self.recordings {
+            self.recordings = Some(Arc::new(Recorder::new(old.root().to_path_buf(), frames)));
+        }
         self
     }
 
@@ -434,6 +453,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/mcp", get(get_mcp))
         .route("/api/goto", post(start_goto))
         .route("/api/track", post(set_track))
+        .route("/api/record", post(set_record))
         .route("/api/stop", post(stop_mount))
         .route("/api/model/second-sync", post(second_sync))
         .route("/api/model/reset", post(reset_model))
@@ -632,6 +652,8 @@ pub(crate) struct SessionResponse {
     #[serde(flatten)]
     pub(crate) session: SessionView,
     #[serde(skip_serializing_if = "Option::is_none")]
+    recording: Option<crate::recording::RecordingView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     goto: Option<crate::goto::Progress>,
     #[serde(skip_serializing_if = "Option::is_none")]
     goto_refusal: Option<String>,
@@ -670,6 +692,7 @@ pub(crate) async fn session_response(state: &AppState) -> SessionResponse {
             .as_ref()
             .is_some_and(|t| matches!(t.state, "armed" | "tracking" | "keyhole_wait"));
     SessionResponse {
+        recording: state.recordings.as_ref().and_then(|r| r.view()),
         session,
         goto,
         goto_refusal,
@@ -677,6 +700,43 @@ pub(crate) async fn session_response(state: &AppState) -> SessionResponse {
         axis_move,
     }
 }
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RecordEdit {
+    on: bool,
+}
+async fn set_record(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    edit: Result<Json<RecordEdit>, JsonRejection>,
+) -> Result<Json<SessionResponse>, ApiError> {
+    if sim_json(edit)?.on {
+        let recorder = state.recordings.as_ref().ok_or_else(|| {
+            ApiError::new(
+                StatusCode::CONFLICT,
+                "this console has no recordings folder",
+            )
+        })?;
+        let (link, live) = state
+            .link
+            .as_ref()
+            .zip(state.live.as_ref())
+            .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "this console has no live link"))?;
+        recorder
+            .start(Sources {
+                frames: link.frames(),
+                status: link.status(),
+                reports: live.subscribe(),
+                clock: state.clock.clone(),
+                session: state.session.clone(),
+            })
+            .map_err(|error| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?;
+    } else if let Some(recorder) = &state.recordings {
+        recorder.stop();
+    }
+    Ok(get_session(State(state)).await)
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct TrackEdit {
