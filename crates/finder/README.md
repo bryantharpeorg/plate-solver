@@ -177,6 +177,7 @@ The page uses the API types in `web/src/api.ts`, which mirror the Rust structs i
 | `PUT /api/session` | JSON partial edit: `{site?, min_alt_deg?, target?}`. Answers the updated observing session. |
 | `POST /api/track` | JSON `{"on":true}` or `{"on":false}`. Answers 200 with the session; on refusal, 409 with a JSON `error`. Same-origin writes only. |
 | `POST /api/record` | JSON `{"on":true}` or `{"on":false}`. Start or stop a recording; answers 200 with the session, 409 or 500 with a JSON `error`. Same-origin writes only. |
+| `POST /api/record/raw` | JSON `{"frames":N}`, N from 1 to 10. While recording, save the next N star frames' 8-bit pixels as `raw-<id>.png`; progress is `recording.raw` in the session. Needs a scope node built with 025. Refused while the mount moves. Same-origin writes only. |
 | `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
 | `POST /api/stop` | No body. Always 200, ending tracking, clearing arming and commanding both axes to stop, from any origin, without taking the motion lock. Sends `StopAll` immediately, retrying in its own task with 200 ms per attempt and 50 ms between attempts for a bounded 2 s window, even if the request goes away. Waits for the round and answers exactly `{"stopped":true}` when the scope node answers OK or there is no scope link; otherwise answers `{"stopped":true,"acknowledged":false}`. This means the node did not answer and the mount may still be moving; press Stop again. The MCP tools `stop` and `stop_all` return the same reply. |
 | `POST /api/model/second-sync` | No body. Start the second sync; 200 with `{"started":true}`, or 409 with a JSON `error` naming the refusal. Same-origin writes only. |
@@ -468,6 +469,22 @@ ends it without making a deleted folder again. No lines follow a stop's answer.
 The session's `recording` holds the folder, start time, counts and end reason from
 the first start until the console exits; it is run-only and never saved in
 `session.json`. Every console start begins without a recording.
+
+While recording, `POST /api/record/raw` with `{"frames":N}`, a whole number from
+1 to 10, saves the next N star frames' raw frames as lossless 8-bit gray PNGs,
+`raw-<id>.png`, beside their frame lines. Each PNG is written under a `.part` name
+and renamed when complete. Rebuild the scope node with 025 before using this route.
+The session's `recording.raw` holds `wanted`, `saved` and an optional `error`:
+`this scope node cannot send raw frames`, `no raw frame arrived within 15 s`,
+`the raw frame request failed` or `the mount started moving`. A request ends at its
+first failure, or with its recording, retaining its progress without adding an
+error when the recording ends. Only one raw-frame request runs at a time.
+Raw frames are refused with `wait until the mount is still` while an axis move,
+GoTo or Track runs, or the mount reports movement. Once a move starts, a running
+request stops before its next raw frame with `the mount started moving`; one
+already on its way can finish. A raw reply shares the scope link's connection
+with the heartbeat: on slow Wi-Fi a transfer can delay the heartbeat past one
+second, and the scope node then stops the mount.
 
 A recording holds the site, times and solves, never the node's address or token.
 Review one before committing it to this public repository (owner decision 9).

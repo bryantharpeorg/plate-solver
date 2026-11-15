@@ -32,6 +32,7 @@
 //!   return the same reply. Session reads retain `goto` progress and its final
 //!   error in arcseconds or halt reason.
 //! * POST /api/record: {"on":true} or {"on":false}; records star frames, live reports and previews to a folder.
+//! * POST /api/record/raw: {"frames":N}, N from 1 to 10; saves the next N star frames' pixels into the recording on.
 //!
 //! A fresh session has no site, target or pointing and a 15° minimum altitude. Site
 //! coordinates are `lat_deg` (±90°) and `lon_deg` (±180°, east positive); the minimum

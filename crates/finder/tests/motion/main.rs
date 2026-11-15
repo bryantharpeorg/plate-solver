@@ -10,6 +10,7 @@ mod model;
 mod mount_calls;
 mod mount_identity;
 mod night;
+mod recording_raw;
 mod simulate;
 mod stop;
 mod tracking;

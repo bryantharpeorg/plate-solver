@@ -1,11 +1,11 @@
 //! Recordings (025): star frames, live reports and previews written to a folder on request.
 
 use crate::{
-    link::LinkStatus,
+    link::{LinkStatus, RawClient},
     live::LiveReport,
     session::{Clock, Session},
 };
-use scope_link::proto::StarFrame;
+use scope_link::proto::{RawFrameReply, StarFrame};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::{
@@ -15,16 +15,51 @@ use std::{
     io::{self, Write},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
+    time::Duration,
 };
 use tokio::{
     sync::{broadcast, watch},
-    task::JoinHandle,
+    task::{AbortHandle, JoinHandle},
+    time,
 };
 
 /// The `format` of every `recording.json` this console writes.
 pub const FORMAT: &str = "finder-recording/1";
 /// Star frames after which a recording ends by itself (owner decision 3).
 pub const FRAME_LIMIT: u64 = 3600;
+/// Most raw frames one request may ask for (owner decision 6).
+pub const MAX_RAW_FRAMES: u8 = 10;
+/// How long one raw frame may take to arrive.
+pub const RAW_WAIT: Duration = Duration::from_secs(15);
+
+/// Progress of the recording's latest raw-frame request.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[non_exhaustive]
+pub struct RawView {
+    /// Raw frames requested.
+    pub wanted: u8,
+    /// PNGs saved.
+    pub saved: u8,
+    /// Why the request ended early; absent on completion or recording end.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<&'static str>,
+}
+
+/// Why a raw-frame request cannot begin, checked in this order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RawRefusal {
+    /// No recording is on.
+    NotRecording,
+    /// The paired link has no raw client.
+    NotConnected,
+    /// A raw-frame request is still running.
+    Busy,
+    /// An axis move, GoTo, Track or the mount is moving.
+    Moving,
+}
+
+/// True while anything moves (spec FR-013); built in api.rs.
+pub type Moving = Arc<dyn Fn() -> bool + Send + Sync>;
 
 /// A recording as `GET /api/session` reports it.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -45,6 +80,9 @@ pub struct RecordingView {
     /// `stopped`, `limit`, `write_failed` or `node_restarted`; absent while on.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ended_reason: Option<&'static str>,
+    /// Latest raw-frame request, retained when the recording ends.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw: Option<RawView>,
 }
 
 /// What a recording reads, from the link and the live loop.
@@ -79,6 +117,7 @@ struct Run {
     last_id: Option<u64>,
     ids: HashSet<u64>,
     task: Option<JoinHandle<()>>,
+    raw_task: Option<AbortHandle>,
 }
 impl Run {
     fn write_metadata(&self) -> io::Result<()> {
@@ -90,6 +129,9 @@ impl Run {
     // Called under the same lock as every write and count, including from stop.
     fn end(&mut self, reason: &'static str) {
         self.view.on = false;
+        if let Some(task) = self.raw_task.take() {
+            task.abort();
+        }
         self.view.ended_reason = Some(reason);
         self.metadata["stopped_at"] = json!(self.clock.now());
         self.metadata["ended_reason"] = json!(reason);
@@ -218,6 +260,7 @@ impl Recorder {
                 solves: 0,
                 previews: 0,
                 ended_reason: None,
+                raw: None,
             },
             folder: self.root.join(folder_name),
             metadata,
@@ -225,6 +268,7 @@ impl Recorder {
             last_id: None,
             ids: HashSet::new(),
             task: None,
+            raw_task: None,
         };
         run.write_metadata().map_err(FolderError)?;
         let view = run.view.clone();
@@ -249,6 +293,41 @@ impl Recorder {
         }
     }
 
+    /// Save `frames` raw frames into the recording on, one after another.
+    pub fn request_raw(
+        &self,
+        frames: u8,
+        client: Option<RawClient>,
+        moving: Moving,
+    ) -> Result<RecordingView, RawRefusal> {
+        let latest = self.run.lock().expect("recorder");
+        let shared = latest.as_ref().ok_or(RawRefusal::NotRecording)?;
+        let mut run = shared.lock().expect("recording");
+        if !run.view.on {
+            return Err(RawRefusal::NotRecording);
+        }
+        if run
+            .view
+            .raw
+            .as_ref()
+            .is_some_and(|r| r.saved < r.wanted && r.error.is_none())
+        {
+            return Err(RawRefusal::Busy);
+        }
+        if moving() {
+            return Err(RawRefusal::Moving);
+        }
+        let client = client.ok_or(RawRefusal::NotConnected)?;
+        run.view.raw = Some(RawView {
+            wanted: frames,
+            saved: 0,
+            error: None,
+        });
+        let task = tokio::spawn(record_raw(shared.clone(), frames, client, moving));
+        run.raw_task = Some(task.abort_handle());
+        Ok(run.view.clone())
+    }
+
     /// The latest recording, on or ended; `None` before the first start.
     pub fn view(&self) -> Option<RecordingView> {
         self.run
@@ -262,6 +341,84 @@ impl Drop for Recorder {
     fn drop(&mut self) {
         self.stop();
     }
+}
+
+// Stop may acquire the lock after a timeout/reply but before this task can.
+// An ended recording retains its progress and never acquires a new raw error.
+fn raw_error(run: &Mutex<Run>, error: &'static str) {
+    let mut run = run.lock().expect("recording");
+    if run.view.on {
+        if let Some(raw) = &mut run.view.raw {
+            raw.error = Some(error);
+        }
+    }
+}
+
+async fn record_raw(run: Arc<Mutex<Run>>, frames: u8, mut client: RawClient, moving: Moving) {
+    for _ in 0..frames {
+        if moving() {
+            raw_error(&run, "the mount started moving");
+            return;
+        }
+        let reply = match time::timeout(RAW_WAIT, client.raw_frame()).await {
+            Ok(Ok(reply)) => reply,
+            Ok(Err(status)) => {
+                raw_error(
+                    &run,
+                    if status.code() == tonic::Code::Unimplemented {
+                        "this scope node cannot send raw frames"
+                    } else {
+                        "the raw frame request failed"
+                    },
+                );
+                return;
+            }
+            Err(_) => {
+                raw_error(&run, "no raw frame arrived within 15 s");
+                return;
+            }
+        };
+        let shared = run.clone();
+        match tokio::task::spawn_blocking(move || save_raw(&shared, reply)).await {
+            Ok(true) => {}
+            Ok(false) => return,
+            Err(_) => {
+                raw_error(&run, "the raw frame request failed");
+                return;
+            }
+        }
+    }
+}
+
+// Encoding belongs on the blocking pool. The same lock orders each complete
+// write, rename and count before stop; a queued blocking job checks on first.
+fn save_raw(shared: &Mutex<Run>, reply: RawFrameReply) -> bool {
+    // GrayImage::from_raw accepts a buffer that is too long, so check exactly.
+    if u64::from(reply.width) * u64::from(reply.height) != reply.pixels.len() as u64 {
+        raw_error(shared, "the raw frame request failed");
+        return false;
+    }
+    let Some(image) = image::GrayImage::from_raw(reply.width, reply.height, reply.pixels) else {
+        raw_error(shared, "the raw frame request failed");
+        return false;
+    };
+    let mut run = shared.lock().expect("recording");
+    if !run.view.on {
+        return false;
+    }
+    let name = format!("raw-{}.png", reply.id);
+    let part = run.folder.join(format!("{name}.part"));
+    let result = image
+        .save_with_format(&part, image::ImageFormat::Png)
+        .map_err(io::Error::other)
+        .and_then(|()| fs::rename(&part, run.folder.join(name)));
+    if let Err(error) = result {
+        let _ = fs::remove_file(&part);
+        run.write_failed(error);
+        return false;
+    }
+    run.view.raw.as_mut().expect("raw request").saved += 1;
+    true
 }
 
 async fn record(run: Arc<Mutex<Run>>, mut sources: Sources, limit: u64) {
