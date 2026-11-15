@@ -3,9 +3,10 @@ state: draft
 depends_on_landed: ["013-live-finder", "014-goto", "016-mcp", "017-console-stop-confirm", "019-night-legibility", "020-live-chart-calm"]
 # Drafted 2026-11-14 by the plate-solver operator against `main` at c1ed295, from gap 3 of
 # the field findings of the night of 13–14 November 2026: no live frames from that night
-# survive. It stays draft until the owner has reviewed it, settled the owner decisions
-# and given the approvals listed under "Owner approvals". Flipping it to `ready` is the
-# act that dispatches it.
+# survive. The owner settled the owner decisions on 2026-11-14: every recommended answer
+# except decision 10, where raw frames are refused while anything moves. It stays draft
+# until those answers are probe-built; flipping it to `ready` gives the approvals listed
+# under "Owner approvals" and dispatches it.
 # Refined 2026-11-14 by probe builds of all three stories in throwaway worktrees and two
 # reviews (plan.md § Refinement Record), and rebased onto `main` at 2508423, then main at f8dab49 merged in; still draft.
 ---
@@ -153,7 +154,9 @@ owner may pick another before flipping, and the trio is then refined again.
    The README says to review a recording before committing it to this public
    repository. Instead: round the site, which would also mean dropping each solve line's
    guidance.
-10. **Raw frames share the scope link's one connection.** Recommended: yes, as drafted.
+10. **Raw frames share the scope link's one connection.** *Settled 2026-11-14: the owner
+    chose the first alternative below, so raw frames are refused while anything moves
+    (FR-013, FR-014, US2-S7).* The drafted recommendation was to allow them.
     A raw reply (about 1.5 MB at 1456 × 1088, 5 MB at 2592 × 1944) travels from the node
     on the same HTTP/2 connection as the heartbeat's answer, Stop's acknowledgement and
     the star frames. The console sends the next heartbeat only after an answer, and only
@@ -162,9 +165,8 @@ owner may pick another before flipping, and the trio is then refined again.
     (`crates/scope-node/src/mount/watchdog.rs:42`) act after 1 s without one. On slow
     Wi-Fi a raw transfer can therefore drop the link, and the node then stops the mount,
     ending a GoTo, Track or axis move: the safe direction, but an interruption. The
-    README says raw frames are best asked for while the mount is still (FR-015).
-    Instead: `POST /api/record/raw` answers 409 while a GoTo, Track or axis move runs;
-    or a second connection only for raw frames.
+    Alternatives: `POST /api/record/raw` answers 409 while a GoTo, Track or axis move
+    runs (chosen); or a second connection only for raw frames.
 11. **No night check of the Recording section.** Recommended: none. The section uses only
     the classes other Setup sections use (`section-title`, `button`, `button-primary`,
     `quiet`), and the US3 probe's build left the CSS unchanged. No Playwright project
@@ -183,7 +185,8 @@ or CI file changes.
 2. **An additive scope-link service, `ScopeNodeRaw`**, with one call, `RawFrame`
    (FR-011, FR-012). The scope node on the Pi must be rebuilt before raw frames work.
 3. **`POST /api/record/raw`**, its 16 MiB reply limit, and raw replies on the scope
-   link's one connection (FR-013 to FR-015, owner decision 10).
+   link's one connection, refused while anything moves and stopped when a move starts
+   (FR-013 to FR-015, owner decision 10).
 4. **The Setup page's Recording section** and its words (FR-016, FR-017), with no night
    check of its own (owner decision 11).
 5. **Two new `GLOSSARY.md` terms**, Recording and Raw frame (FR-010, FR-015).
@@ -398,6 +401,16 @@ the scope node on the Pi.
    `{"frames":1}` and waits until `recording.raw.saved` is 1, **Then** a committed test
    asserts that the one `raw-<id>.png` decodes to a 2592 × 1944 8-bit gray image whose
    every pixel is 10.
+7. **Given** the setup with a recording on, **When** the test calls
+   `rate(Axis::Azimuth, 1.0)` on the simulator's mount (`Simulator::mount`,
+   `crates/simulator/src/controls.rs:47`) and waits until the session's `mount.moving`
+   is true, **Then** a committed test asserts that `POST /api/record/raw` with
+   `{"frames":1}` answers 409 with `wait until the mount is still` and that the folder
+   holds no `raw-` file; and, with the mount stopped (`rate(Axis::Azimuth, 0.0)`) and
+   `mount.moving` false again, that a request of `{"frames":10}` answers 200 and, once
+   the test sets the azimuth rate to 1.0 again, ends within 30 s with
+   `recording.raw.error` equal to `stopped: the mount started moving` and
+   `recording.raw.saved` below 10, the folder holding exactly `saved` `raw-` files.
 
 ---
 
@@ -478,7 +491,9 @@ needs a terminal.
   `recording.raw` keeps the counts it had, with no `error`. The page shows an ended
   recording, so it reads no progress from it.
 - **Raw frames on slow Wi-Fi.** A raw reply shares the connection with the heartbeat, so
-  it can drop the link and make the node stop the mount (owner decision 10).
+  it can drop the link and make the node stop the mount. That is why raw frames are
+  refused while anything moves, and a request stops before its next frame once a move
+  starts (owner decision 10). One frame already on its way still finishes.
 - **A raw frame's size.** 1.3 MB for 1296 × 972 and about 5 MB for 2592 × 1944 before
   compression; the repository's saved night frame compressed to about 0.6 MB.
 
@@ -543,8 +558,11 @@ needs a terminal.
   number from 1 to 10, under the same-origin rule. It SHALL answer 409 with
   `this console has no recordings folder` when the console has none,
   `start a recording first` when no recording is on, `the scope node is not connected`
-  when the link offers no raw client, and `raw frames are already being saved` while a
-  request runs; and 400 for any other body. Otherwise it SHALL answer 200 with the
+  when the link offers no raw client, `raw frames are already being saved` while a
+  request runs, and `wait until the mount is still` while anything moves: an axis move,
+  a GoTo or Track the session reports as running (the test
+  `crates/finder/src/api.rs:656` makes), or `mount.moving`; and 400 for any other
+  body. Otherwise it SHALL answer 200 with the
   session and ask for N raw frames one after another, saving each as an 8-bit gray PNG
   `raw-<id>.png` in the recording's folder, written under a `.part` name and then
   renamed.
@@ -553,12 +571,14 @@ needs a terminal.
   `this scope node cannot send raw frames` when the node lacks the service,
   `no raw frame arrived within 15 s` after 15 s without an answer, and
   `the raw frame request failed` otherwise, a reply whose pixels are not
-  `width × height` bytes included. It SHALL also end when its recording ends, leaving
-  `recording.raw` as it was, with no `error`.
+  `width × height` bytes included, and before its next frame with `error`
+  `stopped: the mount started moving` once anything moves, as FR-013 defines it. It
+  SHALL also end when its recording ends, leaving `recording.raw` as it was, with no
+  `error`.
 - **FR-015**: The console's raw calls SHALL accept replies of up to 16 MiB, on the scope
   link's paired connection (owner decision 10). `crates/finder/README.md` SHALL document
-  the route, that the scope node must be rebuilt for it, and that raw frames are best
-  asked for while the mount is still, and `GLOSSARY.md` SHALL define **Raw frame**.
+  the route, that the scope node must be rebuilt for it, and that raw frames are
+  refused while the mount moves, and `GLOSSARY.md` SHALL define **Raw frame**.
 - **FR-016**: The Setup page SHALL show a section headed Recording, after the aim-point
   section, whenever `session.node` is present, connected or not, reading `recording`
   from `GET /api/session` as it reads `track`. With no recording on it SHALL offer

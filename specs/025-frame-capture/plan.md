@@ -399,19 +399,24 @@ pub struct RawView {
 //   pub raw: Option<RawView>,
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RawRefusal { NotRecording, NotConnected, Busy }
+pub enum RawRefusal { NotRecording, NotConnected, Busy, Moving }
+
+/// True while anything moves (spec FR-013); built in api.rs.
+pub type Moving = Arc<dyn Fn() -> bool + Send + Sync>;
 
 impl Recorder {
     /// Save `frames` raw frames into the recording on, one after another.
-    pub fn request_raw(&self, frames: u8, client: Option<RawClient>)
+    pub fn request_raw(&self, frames: u8, client: Option<RawClient>, moving: Moving)
         -> Result<RecordingView, RawRefusal>;
 }
 ```
 
 Refusals in this order: no recording on is `NotRecording`; a request whose `saved` is
-below `wanted` and has no `error` is `Busy`; no client is `NotConnected`. An accepted
+below `wanted` and has no `error` is `Busy`; `moving()` true is `Moving` (owner decision
+10); no client is `NotConnected`. An accepted
 request sets `raw` to `{wanted, saved: 0}` and spawns a task whose `AbortHandle` the run
-keeps under its lock: for each frame, `time::timeout(RAW_WAIT, client.raw_frame())`,
+keeps under its lock: for each frame, first `moving()`, which ends the request with
+`stopped: the mount started moving` when true, then `time::timeout(RAW_WAIT, client.raw_frame())`,
 then on the blocking pool `image::GrayImage::from_raw(width, height, pixels)` (a size
 mismatch is `the raw frame request failed`), saved with `ImageFormat::Png` as
 `raw-<id>.png.part` and renamed to `raw-<id>.png`; then, under the lock and only while
@@ -427,9 +432,16 @@ leaves `raw` as it was, with no `error`.
 `#[serde(deny_unknown_fields)] RawEdit { frames: u8 }` read through `sim_json`; a value
 outside 1 to `MAX_RAW_FRAMES` answers 400 with
 `frames must be a whole number from 1 to 10`. Then, in this order: no recorder answers
-409 `this console has no recordings folder`; `NotRecording`, `Busy` and `NotConnected`
-answer 409 with `start a recording first`, `raw frames are already being saved` and
-`the scope node is not connected`. Success answers `get_session`. The client comes from
+409 `this console has no recordings folder`; `NotRecording`, `Busy`, `Moving` and `NotConnected`
+answer 409 with `start a recording first`, `raw frames are already being saved`,
+`wait until the mount is still` and `the scope node is not connected`. Success answers
+`get_session`. The `moving` closure holds a clone of the shared state and reads, each
+time it is called, the test `running` already makes for the session's motion record
+(`crates/finder/src/api.rs:656`): an axis move `moving`, a GoTo `slewing`, `solving` or
+`correcting`, or Track `armed`, `tracking` or `keyhole_wait`; or the session's
+`mount.moving`. That test moves into a private `fn motion_running` used by both, with no
+change to the motion record. This part was added after the probe builds, from owner
+decision 10. The client comes from
 `state.link().and_then(|link| link.raw())`.
 
 ### `crates/finder/src/lib.rs` (US2)
@@ -442,7 +454,7 @@ One line after US1's in the route list, written as it stands here, with no backt
 A row after US1's:
 
 ```markdown
-| `POST /api/record/raw` | JSON `{"frames":N}`, N from 1 to 10. While recording, save the next N star frames' 8-bit pixels as `raw-<id>.png`; progress is `recording.raw` in the session. Needs a scope node built with 025. Same-origin writes only. |
+| `POST /api/record/raw` | JSON `{"frames":N}`, N from 1 to 10. While recording, save the next N star frames' 8-bit pixels as `raw-<id>.png`; progress is `recording.raw` in the session. Needs a scope node built with 025. Refused while the mount moves. Same-origin writes only. |
 ```
 
 and a paragraph in `## Recording a night` on raw frames, their PNGs, `recording.raw`
@@ -583,7 +595,7 @@ These are not changed by any story:
 |---|---|---|
 | Record from the link's frame channel and the live broadcast | A writer inside `active` in `link.rs` | The channel already feeds two readers; a writer in the link loop shares a task with the heartbeat, whose 1 s silence deadline a slow write could trip. A missed frame shows as a gap in the ids. |
 | Writes, counts and ends under one lock; `stop` ends before it aborts | Abort the task, then rewrite `recording.json` | An abort does not wait: on a multi-thread runtime the task can finish a line and count it after the rewrite, so the counts and the files disagree. |
-| Raw replies on the paired connection | A second connection; a 409 while the mount moves | Spec owner decision 10: no new transport and nothing refused, at the cost of a possible dropped link on slow Wi-Fi, which stops the mount. |
+| Raw replies on the paired connection, refused while anything moves | A second connection; allowing them during moves | Spec owner decision 10 (the owner, 2026-11-14): no new transport, and no raw reply can starve the heartbeat and stop the mount mid-move. One frame already on its way when a move starts still finishes. |
 | Tests compare numbers after a `serde_json` round trip | A tolerance; the `float_roundtrip` feature | A tolerance weakens "exactly", and the feature is a `Cargo.toml` change. The files hold the exact shortest form. |
 | Record on the console | Save `GET /api/live` with curl | Its events lack brightness, settings, axis counts, the offset and previews. |
 | JSON Lines, one synchronous write per line, the file reopened each time | One JSON document | A console that dies mid-night would leave nothing readable, and a deleted folder would go unnoticed behind an open handle. |
@@ -887,6 +899,11 @@ stories:
         disposition: add
         assertion: "a 2592 x 1944 raw frame arrives through the 16 MiB limit and decodes to its uniform pixels"
         decision: "spec.md:US2-S6"
+      - path: crates/finder/tests/recording_raw.rs
+        status: new
+        disposition: add
+        assertion: "raw frames are refused with wait until the mount is still while the mount moves, and a running request stops with stopped: the mount started moving once a move starts"
+        decision: "spec.md:US2-S7"
       - path: crates/scope-link/tests/link.rs
         status: existing
         disposition: preserve

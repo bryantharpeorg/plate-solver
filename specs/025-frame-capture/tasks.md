@@ -79,7 +79,8 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
   spec.md § User Scenarios. Write failing tests for the saved raw frames (US2-S3); the
   refusals, a console without a recorder, a node sending no frame and a stop during a
   request (US2-S4); a node without the service and a short reply (US2-S5); and a
-  2592 × 1944 frame from a camera of the test's own (US2-S6).
+  2592 × 1944 frame from a camera of the test's own (US2-S6); and raw frames refused
+  while the mount moves and stopped when a move starts (US2-S7).
 
 ### Implementation
 
@@ -92,13 +93,15 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
   `LinkManager::raw` and the private `Paired` struct, publishing the raw client where
   the mount client is published.
 - [ ] T012 [US2] In `crates/finder/src/recording.rs`, add `RawView`, `RawRefusal`,
-  `request_raw` and the raw task. In `crates/finder/src/api.rs`, add the
-  `/api/record/raw` route.
+  `Moving`, `request_raw` and the raw task. In `crates/finder/src/api.rs`, move the
+  motion test into `motion_running` and add the `/api/record/raw` route with its
+  `moving` closure (plan.md § The raw route).
 - [ ] T013 [US2] Add the raw route's row and paragraph to `crates/finder/README.md`, its
   line to the route list in `crates/finder/src/lib.rs`, and the **Raw frame** entry to
   `GLOSSARY.md` (plan.md § Interfaces).
 - [ ] T014 [US2] Run the `lint` and `test` gates with every existing test unchanged and
-  green. Commit the green story (US2-S1, US2-S2, US2-S3, US2-S4, US2-S5 and US2-S6).
+  green. Commit the green story (US2-S1, US2-S2, US2-S3, US2-S4, US2-S5, US2-S6 and
+  US2-S7).
 
 ## Phase 3: User Story 3 — Start and stop a recording from the Setup page (Priority: P3)
 
