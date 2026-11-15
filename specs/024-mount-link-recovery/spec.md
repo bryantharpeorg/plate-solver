@@ -5,8 +5,9 @@ depends_on_landed: ["013-live-finder", "014-goto", "015-tracking", "017-console-
 # dark-site field findings of 13-14 November (gap 1: the mount link after a power cycle).
 # Refined 2026-11-14 from four probe builds of its stories and two reviews (anchors, scenarios),
 # then once more the same day from a completeness review of that refinement.
-# It stays draft until the owner has reviewed it, settled the owner decisions and given
-# the approvals listed under "Owner approvals". Flipping it to `ready` is the act that
+# The owner settled the owner decisions on 2026-11-14 by accepting every recommended
+# answer. It stays draft until the text added after the probe builds is probe-built;
+# flipping it to `ready` gives the approvals listed under "Owner approvals" and
 # dispatches it.
 ---
 
@@ -95,8 +96,8 @@ made stale.
 
 ## Owner decisions
 
-Each is a design or safety call. The trio is complete with the recommended answer; the
-owner may pick another before flipping, and the trio is then refined again.
+Each is a design or safety call. *Settled 2026-11-14: the owner accepted the recommended
+answer to all five.* The alternatives stay listed for the record.
 
 1. **How sure the node must be before it acts on a reset** (FR-006). Recommended: one
    reading is enough, as drafted. A false reset costs a re-initialisation, an aborted
