@@ -20,7 +20,7 @@ description: "Task list for 025-frame-capture: Saving Live Frames at the Telesco
   If an existing test fails, stop and escalate with its exact output. Do not edit it.
   The one exception is the `mod` line of each new finder test module, added in
   alphabetical order to the binary's `main.rs` your story's tasks name, which holds no
-  test (027's owner approval 7). Change nothing else there.
+  test (owner approval 7). Change nothing else there.
 - New tests go in new files: the ones your story's tasks name. A new finder test is a
   module file in the binary's folder plan.md § Technical Context names, never a file at
   the top level of `crates/finder/tests` or in `crates/finder/tests/support`, either of

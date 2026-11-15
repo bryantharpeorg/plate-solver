@@ -849,8 +849,8 @@ needs a terminal.
   entry, `ergane.yaml` or `playwright.config.ts` is edited. The only edit to an existing
   file under `crates/finder/tests` is one `mod` line for each new module, in alphabetical
   order, in `crates/finder/tests/console/main.rs`, `crates/finder/tests/cli/main.rs` and
-  `crates/finder/tests/motion/main.rs`, none of which holds a test (027's owner approval
-  7).
+  `crates/finder/tests/motion/main.rs`, none of which holds a test (owner approval 7, which 027's
+  owner approval 7 asks of every new finder test).
 - **SC-003**: A recorded star frame replays to its live solve within 0.01° (US1-S3), and
   a saved raw frame reproduces its frame's centroids exactly: bit for bit over the scope
   link (US2-S1), and after the shared setup's round trip against its frame line

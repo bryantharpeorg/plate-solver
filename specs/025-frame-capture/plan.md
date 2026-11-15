@@ -85,7 +85,7 @@ section.
 | Principle | How this plan honours it |
 |---|---|
 | I. Agreeing with cedar is correctness | Nothing touches the solver, detection or `crates/math-core`. |
-| II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. New tests go in new module files; each adds one `mod` line to its test binary's `main.rs`, which holds no test, the edit 027's owner approval 7 approved for every later finder test. |
+| II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. New tests go in new module files; each adds one `mod` line to its test binary's `main.rs`, which holds no test: owner approval 7, the edit 027's owner approval 7 asks of every later finder test. |
 | III. Tests first, independent expectations | The oracles are the frames and reports each test receives itself, cedar's detector re-run on saved pixels, the image decoder, the simulated start of `2026-01-16T02:00:00Z` and `finder::simulate::parse_start`. No new virtual clock. |
 | IV. Critical paths | No `unsafe`, no dependency or `Cargo.toml` change, no database-format change, nothing under `proto/`. The one scope-link change is an additive service in `crates/scope-link/proto`, named for the owner (spec approval 2), as 017 did for its field. |
 | V. Standalone Rust, honest licensing | Unaffected. |
