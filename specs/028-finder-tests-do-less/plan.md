@@ -949,8 +949,8 @@ already applied. api-H1 was fixed by 027.
    `crates/finder/tests/console/recording_raw.rs` and
    `crates/finder/tests/motion/recording_raw.rs`; the Refinement Record's
    `shared_writes` name those 025 stories. No 025 test holds an inline rig solver. 025's
-   US3, the page's recording controls, was still building at the re-anchor; it writes
-   only web files (`DESIGN.md`, `.impeccable/design.json` and files under
+   US3, the page's recording controls, landed at 820c558 (#230), completing 025, and
+   `main` there was merged into this branch; it writes only web files (`DESIGN.md`, `.impeccable/design.json` and files under
    `crates/finder/web`), none of which this spec writes or cites by line. Both specs add
    modules to finder's binaries, which this spec does not reorder.
 2. **The owner keeps or deletes US11, US12 and US13**, and the approvals they carry.
@@ -1186,7 +1186,8 @@ and owner approval 13. Two of their tests assert their folder absent, so there t
 is a path inside the `Scratch` that does not exist yet. None of them holds an inline rig
 solver, so US8 gains no site; § Interfaces "US8" and spec.md's Assumptions name the
 `Live::start` with `DbSolver` that one of them builds among the out-of-scope deadlines.
-025's US3 writes only web files, none of which this trio cites.
+025's US3 writes only web files, none of which this trio cites; it landed at 820c558
+(#230), completing 025, and `main` there was merged in with no cited line moved.
 
 **Round 4 (probe on 025's code), 2026-11-15.** Every story's round-3 probe code, merged
 with `main` at 9d8cc4e (probe/028-r4-025, no conflicts), passed the workspace's 662

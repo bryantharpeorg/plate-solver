@@ -21,9 +21,10 @@ depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "0
 # `depends_on_landed`: every citation in a file 025 changed was re-read there and moved
 # with its line, US6's shared write of `crates/finder/tests/cli/main.rs` names 025 US1,
 # and US9 also takes the scratch folders of 025's four new test modules, which build them
-# under `../../target`. None of 025's tests holds an inline rig solver. 025's US3, still
-# building, writes only web files this trio does not cite. The trio is now anchored at
-# 9d8cc4e (plan.md § Prerequisites 1 and § Refinement Record).
+# under `../../target`. None of 025's tests holds an inline rig solver. 025's US3, which
+# landed at 820c558 and completed 025, writes only web files this trio does not cite;
+# `main` there was merged in. Citations are read at 9d8cc4e, unchanged at 820c558
+# (plan.md § Prerequisites 1 and § Refinement Record).
 ---
 
 # Feature Specification: Finder's Tests Do Less Work
@@ -518,8 +519,8 @@ flip.
   and `motion/recording_raw.rs`, declared in their binaries' `main.rs`, and each builds
   a scratch folder that US9 moves. Both are in `depends_on_landed`. Every citation in a
   file 024 changed was re-read at f0ea2d5, and every citation in a file 025 changed was
-  re-read at 9d8cc4e, where 025's US1 and US2 landed; 025's US3 writes only web files
-  this spec does not cite (plan.md § Prerequisites).
+  re-read at 9d8cc4e, where 025's US1 and US2 landed; 025's US3 (820c558) writes only web
+  files this spec does not cite (plan.md § Prerequisites).
 
 ## Requirements *(mandatory)*
 

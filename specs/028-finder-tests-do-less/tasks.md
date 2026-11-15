@@ -7,7 +7,7 @@ description: "Task list for 028-finder-tests-do-less: Finder's Tests Do Less Wor
 **Prerequisites** (plan.md § Prerequisites):
 - `027-finder-tests-by-system`, `024-mount-link-recovery` (at f0ea2d5) and
   `025-frame-capture` have landed on `main`: 025's US1 and US2 at 9d8cc4e, where this
-  trio was re-anchored, and its US3 writes only web files;
+  trio was re-anchored, and its US3 at 820c558, which writes only web files;
 - the owner has kept or deleted the optional stories US11, US12 and US13;
 - the owner approvals in spec.md are given;
 - no operator-staged file is needed.
