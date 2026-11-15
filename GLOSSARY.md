@@ -132,6 +132,10 @@ _Avoid_: frame (alone), image
 An occasional small JPEG of a star frame's image, for the page to show under the chart.
 _Avoid_: thumbnail, live view
 
+**Recording**:
+One folder of what the console saw between the observer's start and stop: each star frame's centroids, settings and axis counts, each live solve and each preview, kept for later tests.
+_Avoid_: capture, log, session
+
 **Clock offset**:
 Node time less console time, taken from the least-delay heartbeat exchange of the last 8 s.
 _Avoid_: clock skew, drift

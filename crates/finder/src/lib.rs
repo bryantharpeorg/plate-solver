@@ -31,6 +31,7 @@
 //!   the mount may still be moving. Call Stop again. MCP `stop` and `stop_all`
 //!   return the same reply. Session reads retain `goto` progress and its final
 //!   error in arcseconds or halt reason.
+//! * POST /api/record: {"on":true} or {"on":false}; records star frames, live reports and previews to a folder.
 //!
 //! A fresh session has no site, target or pointing and a 15° minimum altitude. Site
 //! coordinates are `lat_deg` (±90°) and `lon_deg` (±180°, east positive); the minimum
@@ -70,6 +71,7 @@ pub mod link;
 pub mod live;
 pub mod mcp;
 pub mod pushto;
+pub mod recording;
 pub mod samples;
 pub mod session;
 pub mod simulate;
