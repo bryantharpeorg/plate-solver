@@ -9,3 +9,31 @@ edition = "2021"
 rust-version = "1.96"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/bryantharpeorg/plate-solver"
+
+# Test builds are optimized a little and carry line tables instead of full debug info.
+#
+# The slow tests are not waiting on anything. For every simulated camera frame the
+# simulator renders 1456x1088 pixels with per-pixel noise and the console detects and
+# solves it, and at opt-level 0 that work is most of the `test` gate. Measured on the
+# factory host on 2026-11-14 (cold build, then all 659 tests under cargo-nextest):
+#
+#     opt-level 0, full debug info (cargo's default)   27 s build   194 s tests   21 GB target/
+#     opt-level 1, full debug info                     45 s         88 s          23 GB
+#     opt-level 1, line tables only (this profile)     33 s         87 s          9.5 GB
+#     opt-level 2, full debug info                     73 s         86 s          28 GB
+#
+# Optimizing only the simulator, detection, solver and database crates was slower than
+# opt-level 1 everywhere (109 s), and adding opt-level 3 for them on top of it bought
+# nothing measurable (84 s).
+#
+# Debug assertions and overflow checks stay on: they belong to the profile, not to the
+# optimization level. Line tables keep the file and line in a panic's backtrace; for a
+# debugger session that needs local variables, set CARGO_PROFILE_TEST_DEBUG=true.
+#
+# Only `cargo test` and `cargo nextest` builds use this profile. `cargo build`, the
+# release binary and the release-profile e2e tiers (scripts/ci/) are untouched, and
+# coverage is still measured at opt-level 0 (scripts/coverage.sh and ci.yml's
+# `test-coverage` job say why).
+[profile.test]
+opt-level = 1
+debug = "line-tables-only"

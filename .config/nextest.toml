@@ -1,0 +1,33 @@
+# How the `test` gate runs the Rust tests. `cargo nextest run` is the command in
+# ergane.yaml and in .github/workflows/ergane-gates.yml; this file is its settings.
+#
+# Why nextest and not `cargo test`: `cargo test` runs the workspace's 90 test binaries
+# one after another, and only the tests inside one binary share the machine. nextest
+# runs every test as its own process, as many at once as there are CPUs. Measured on
+# the factory host on 2026-11-14 (659 tests, all passing either way): 626 s under
+# `cargo test`, 194 s under nextest, and 87 s with the optimized test profile in the
+# root Cargo.toml as well.
+#
+# nextest does not run doc tests, so the gate still runs `cargo test --doc` after it.
+# `cargo test` itself keeps working for anyone who prefers it; nothing here changes
+# what a test asserts.
+
+[profile.default]
+# Run every test and report every failure. A gate that stops at the first failure
+# hands a builder one failure per attempt.
+fail-fast = false
+
+# A test is reported as slow after 60 s and ended after 5 minutes. The longest test
+# today takes about 80 s on the factory host (finder's night_sim); a test that passes
+# this ceiling is stuck, and one that creeps toward it shows up in the summary first.
+slow-timeout = { period = "60s", terminate-after = 5 }
+
+# One line per test with its duration, so the gate's output names each test it ran.
+status-level = "pass"
+# The slow tests again at the end, where a truncated log still shows them.
+final-status-level = "slow"
+failure-output = "immediate-final"
+
+# Every test's result and duration, at target/nextest/default/junit.xml.
+[profile.default.junit]
+path = "junit.xml"
