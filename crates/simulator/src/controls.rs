@@ -9,6 +9,7 @@ use scope_node::service::NodeControls;
 use std::{
     ops::Deref,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 /// The catalog sky together with the running node's capture and response controls.
@@ -107,6 +108,9 @@ impl Simulator {
     }
     pub fn start_frames(&self) {
         self.controls.start_frames();
+    }
+    pub fn set_frame_interval(&self, interval: Duration) {
+        self.controls.set_frame_interval(interval);
     }
     pub fn set_unresponsive(&self, value: bool) {
         self.controls.set_unresponsive(value);

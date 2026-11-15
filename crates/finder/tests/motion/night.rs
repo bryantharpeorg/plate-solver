@@ -26,7 +26,10 @@ impl Solver for Stars {
                 &DB,
                 &frame.centroids,
                 (frame.width as usize, frame.height as usize),
-                &options,
+                &SolveOptions {
+                    timeout_ms: u64::MAX,
+                    ..options
+                },
             )
         })
     }
@@ -134,6 +137,7 @@ async fn a_whole_night_syncs_five_gotos_hand_push_stop_and_dropped_link() {
         .set_aim(Some(Aim { x: 700.0, y: 420.0 }), start)
         .unwrap();
     let sim = state.simulator().unwrap().clone();
+    sim.set_frame_interval(Duration::from_millis(500));
     sim.push_to(50.0, 120.0);
     let night = Night {
         app: finder::router(state.clone()),
@@ -162,6 +166,28 @@ async fn a_whole_night_syncs_five_gotos_hand_push_stop_and_dropped_link() {
     assert_eq!(first["pointing"]["source"], "live");
     assert_eq!(first["mount"]["connected"], true);
     assert!(first["model"]["base_tilt"].is_null());
+    let mut frames = Vec::new();
+    for _ in 0..30 {
+        let pointing = night.view().await["pointing"].clone();
+        let frame = (
+            pointing["frame_id"].as_u64().unwrap(),
+            pointing["time"].as_f64().unwrap(),
+        );
+        if frames.last().map(|f: &(u64, f64)| f.0) != Some(frame.0) {
+            frames.push(frame);
+        }
+        night.tick().await;
+    }
+    // The interval change can leave the first capture at the old cadence.
+    let frames: Vec<_> = frames.into_iter().skip(1).collect();
+    assert!(frames.len() >= 4, "too few solved frames: {frames:?}");
+    for pair in frames.windows(2) {
+        let seconds_per_frame = (pair[1].1 - pair[0].1) / (pair[1].0 - pair[0].0) as f64;
+        assert!(
+            (seconds_per_frame - 0.5).abs() <= 0.05,
+            "solved frame cadence {seconds_per_frame} s: {pair:?}"
+        );
+    }
     night
         .call("POST", "/api/model/second-sync", Value::Null)
         .await;

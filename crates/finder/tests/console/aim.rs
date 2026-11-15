@@ -62,7 +62,12 @@ async fn rejected_tap_keeps_aim_and_reset_returns_pointings_to_the_camera_centre
 #[tokio::test(start_paused = true)]
 async fn aim_writes_enforce_origin_json_and_strict_shape_and_preview_retention_is_eight() {
     let sim = sim();
-    let state = state(&sim, Some(std::sync::Arc::new(Fail)), true);
+    let state = state_with_interval(
+        &sim,
+        Some(std::sync::Arc::new(Fail)),
+        true,
+        std::time::Duration::from_secs(3),
+    );
     let live = state.live().unwrap();
     let mut events = live.subscribe();
     let app = finder::router(state);
@@ -113,6 +118,10 @@ async fn aim_writes_enforce_origin_json_and_strict_shape_and_preview_retention_i
             }
         }
     }
+    assert!(
+        previews.windows(2).all(|w| w[1] - w[0] == 2),
+        "{previews:?}"
+    );
     assert!(live.preview(id).is_none());
     for id in &previews[1..] {
         assert!(live.preview(*id).is_some());
