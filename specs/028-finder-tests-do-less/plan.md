@@ -264,7 +264,8 @@ round-2 and round-3 probes of it had to do differently from the earlier text
 #### US1, the night's solver
 
 The inline rig solver `Stars` in `crates/finder/tests/motion/night.rs:21` calls
-`solve::solve_centroids(.., &options)` with the 5000 ms default
+`solve::solve_centroids(.., &options)`, its `&options` argument at
+`crates/finder/tests/motion/night.rs:29`, with the 5000 ms default
 (`crates/finder/src/solve.rs:69`), which the solver checks against the real clock
 (`crates/plate-solver/src/status.rs:125`). It passes
 `&SolveOptions { timeout_ms: u64::MAX, ..options }` instead, as § Interfaces "US3,
@@ -495,7 +496,8 @@ other tests of the file are unchanged.
 
 The inline rig solver `Stars` in `crates/finder/tests/support/goto.rs:42` (its line as
 "US2, stored syncs" leaves the file; on `main` `pub struct Stars;` is one line up)
-calls `solve::solve_centroids(.., &options)` with the 5000 ms default
+calls `solve::solve_centroids(.., &options)`, its `&options` argument at
+`crates/finder/tests/support/goto.rs:50` (line 49 on `main`), with the 5000 ms default
 (`crates/finder/src/solve.rs:69`), which the solver checks against the real clock
 (`crates/plate-solver/src/status.rs:125`). It passes
 `&SolveOptions { timeout_ms: u64::MAX, ..options }` instead, as § Interfaces "US3,
@@ -851,10 +853,11 @@ revert; the diff is the evidence (US6-S4). Spec 016 US6-S1's "10 min"
    and keep today's check that it is gone.
 2. `crates/finder/tests/motion/tracking/routes.rs`:
    `readout_uses_live_errors_last_sixty_seconds_and_fr001_fr002`
-   (`crates/finder/tests/motion/tracking/routes.rs:244`) ends its 750 ticks
-   (`crates/finder/tests/motion/tracking/routes.rs:259`) as soon as the tracker holds
-   more than 30 samples, and drops the two window assertions
-   (`crates/finder/tests/motion/tracking/routes.rs:265` and the line after). The loop
+   (`crates/finder/tests/motion/tracking/routes.rs:275` as US2 leaves the file, line 244
+   on `main`) ends its 750 ticks (`crates/finder/tests/motion/tracking/routes.rs:290`,
+   line 259 on `main`) as soon as the tracker holds more than 30 samples, and drops the
+   two window assertions (`crates/finder/tests/motion/tracking/routes.rs:296` and the
+   line after, lines 265 and 266 on `main`). The loop
    keeps 750 ticks as its upper bound, so a regression fails at the kept "more than 30"
    assertion instead of hanging; `let tracker` moves above the loop. Its RMS,
    field-rotation and longest-exposure assertions stay. Then it stops the camera
@@ -993,16 +996,16 @@ already applied. api-H1 was fixed by 027.
 2. **The owner keeps or deletes US6, or any one of its three trims**, and the approvals
    they carry, by spec.md's two deletion rules.
 3. **The owner approvals are given.** Flipping gives them.
-4. **The probes have built every kept story** in a throwaway worktree and measured each
-   diff. Rounds 2 to 4 did so on 2026-11-15 for the thirteen stories the trio held then
+4. **The probes have built every kept story. Met.** Each was built in a throwaway
+   worktree and its diff measured. Rounds 2 to 4 did so on 2026-11-15 for the thirteen
+   stories the trio held then
    (§ Refinement Record, whose rounds 1 to 4 name them as they were numbered then, and
    whose round 5 maps them to the six here); § Measurements holds the probes'
    machine-independent counts. Round 4 built every story's code on 9d8cc4e, US3's edit
    of `crates/finder/tests/cli/main.rs` and US5's edits to 025's four recording modules
-   among it. Round 5's probe builds the six stories as regrouped here, each in its round,
-   and measures each diff and the line US4 moves in
-   `crates/finder/tests/motion/model/sim.rs`; until it does, § Risks's diff sizes are
-   estimates.
+   among it. Round 5's probe then built the six stories as regrouped here, each on its
+   round's base, the first four on `main` at 820c558, and measured each diff (§ Risks);
+   its final tree is identical to round 4's.
 5. **`crates/finder/tests` is still as read.** If a file there changes after 9d8cc4e,
    re-read it and re-run the probe.
 
@@ -1044,8 +1047,8 @@ already applied. api-H1 was fixed by 027.
 | A frame interval change takes one frame to apply. | Every count and cadence bound allows one frame. |
 | A change landing on `main` after 9d8cc4e touches a file this spec cites. | Prerequisites 1 and 5: re-read on `main` and re-probe. 025's US3 writes only web files. |
 | US6, or one of its trims, is deleted after the probes built on it. | Nothing depends on US6; its files are its own or come after the stories it waits for. |
-| US5 and US4 are long lists across crates. | Each is a list of small, mechanical edits; the probes measured their diffs at 41 KB (US5, round 3) and 26 KB (US4, round 2, before it kept a test), under the 64 KiB preferred size, and US5's two added files are a few lines each. 025's four recording modules add 12,349 B of such edits to US5, whose whole diff is 53,272 B, under 64 KiB. |
-| A regrouped story's diff is the sum of its parts'. | Summed from round 2's diffs (§ Refinement Record), the six are about: US1 18,045 B (11,041 + 2,526 + 3,925, and 553 B for the night's solver edit); US2 23,950 B (10,664 + 8,104 + 4,629, and 553 B for the goto rig's solver edit); US3 23,283 B (16,600, and the other 6,683 B of the hazards, before round 3 added `mount_identity.rs`); US4 25,543 B (before it kept a test); US5 37,169 B (53,272 B as round 4 measured it with 025's modules); US6 5,470 B (1,026 + 1,480 + 2,964). Each is under the 64 KiB preferred size. They are estimates until round 5's probe builds the six stories and measures each diff. |
+| US5 and US4 are long lists across crates. | Each is a list of small, mechanical edits; round 5's probe measured them at 53,272 B (US5, 12,349 B of it in 025's four recording modules) and 23,836 B (US4), under the 64 KiB preferred size, and US5's two added files are a few lines each. |
+| A regrouped story's diff is larger than any of its parts'. | Round 5's probe measured each against its base: US1 17,844 B, US2 24,985 B, US3 23,878 B and US4 23,836 B on `main` at 820c558; US5 53,272 B on US1 to US4 merged; US6 5,470 B on US1 and US2 merged. Each is under the 64 KiB preferred size. |
 
 ## Refinement Record
 
@@ -1276,11 +1279,12 @@ What changed:
   US8-S1, US3-S6 old US8-S2's other three solvers, and US3-S7 to S9 old US8-S3 to S5;
   US4-S1 to S6 are old US10-S1 to S6; US5-S1 to S5 old US9-S1 to S5; US6-S1 and S2 old
   US11-S1 and S2, US6-S3 and S4 old US12-S1 and S2, and US6-S5 and S6 old US13-S1 and
-  S2. Labels inside scenarios moved with them. Two scenarios read from "the story's diff"
-  are scoped so they stay true of the larger story: US2-S9 (old US3-S4) now says no test
-  changes but those US2-S1 to US2-S12 name, where it said none outside
-  `motion/goto/sim.rs`; and US6-S4 (old US12-S2) names `crates/finder/tests/mcp/tracking.rs`
-  as the file whose only changes it lists.
+  S2. Labels inside scenarios moved with them. Three scenarios read from "the story's
+  diff" are scoped so they stay true of the larger story: US1-S7 (old US4-S2) says the
+  whole-night test function's only changes are its two, since US1's solver edit (US1-S11)
+  is in the same file; US2-S9 (old US3-S4) now says no test changes but those US2-S1 to
+  US2-S12 name, where it said none outside `motion/goto/sim.rs`; and US6-S4 (old US12-S2)
+  names `crates/finder/tests/mcp/tracking.rs` as the file whose only changes it lists.
 - **Requirements:** FR-001 to FR-038 keep their numbers and words, with labels moved.
   FR-022, the five inline solvers, splits as the solvers do: FR-022 keeps US3's three
   (`support/mcp.rs`, `support/stop.rs`, `motion/mount_identity.rs`), FR-039 is US2's
@@ -1302,7 +1306,14 @@ What changed:
   leaves the file, line 217 at 9d8cc4e. US4's edits in `mcp/motion.rs` (from line 226)
   and `motion/model/routes.rs` (at line 107) are below US5's sites there, lines 189 and
   54, which do not move. These were counted from § Interfaces "US4" against the files at
-  9d8cc4e; the round-5 probe reports them.
+  9d8cc4e, and the round-5 probe found the same lines, with US4's own citations at `main`
+  still right. It also gave the lines later edits meet, now in § Interfaces: the solver's
+  `&options` argument at line 29 of `motion/night.rs` and at line 50 of `support/goto.rs`
+  as US2's stored syncs leave it (49 on `main`); and, for US6's window trim,
+  `motion/tracking/routes.rs` as US2 leaves it, with the readout test at line 275, its
+  750-tick loop at 290 and the two window assertions at 296 and 297 (244, 259, 265 and 266
+  on `main`). The whole night's loop is at line 198 once US1 has landed, as § Interfaces
+  already said.
 - **Tasks** are renumbered T001 to T056 in the new order, each old task's text carried
   with its labels moved, and each story ends with one task that runs `cargo fmt --all`
   and the gates and commits, so the optional trims share one.
@@ -1318,8 +1329,26 @@ What changed:
 - **Checks:** each story's development checks are the union of its parts', without
   duplicates; US1 and US2 also carry the whole-`finder` run that came with their solver
   edits.
-- **Diff sizes:** § Risks sums round 2's diffs per new story. They are estimates until the
-  round-5 probe builds the six stories and measures each diff.
+- **Diff sizes:** § Risks gives the diffs the round-5 probe measured.
+
+**The round-5 probe**, 2026-11-15, built the six stories as regrouped here from this trio,
+each on its round's base. US1 to US4 were each built on `main` at 820c558, and their merge
+(`probe/028-r5-round1` at 55a8306) had no conflicts; US5 was built on that merge, and US6
+on US1 and US2 merged. Every story passed the workspace gates on its base. The final tree
+(`probe/028-r5-final` at 0681f85) is identical to round 4's reference tree
+(`probe/028-r5-ref`, round 4's code merged with `main` at 820c558): 662 tests, and SC-003's
+count holds. Each story's diff, against its base:
+
+| Story | Branch | Built on | Diff |
+|---|---|---|---|
+| US1 | `probe/028-r5-us1` at 5aadf38 | 820c558 | 17,844 B |
+| US2 | `probe/028-r5-us2` at 0e9798b | 820c558 | 24,985 B |
+| US3 | `probe/028-r5-us3` at e07fa4e | 820c558 | 23,878 B |
+| US4 | `probe/028-r5-us4` at a2b4113 | 820c558 | 23,836 B |
+| US5 | `probe/028-r5-us5` at d5d65ce | US1 to US4 merged (55a8306) | 53,272 B |
+| US6 (optional) | `probe/028-r5-us6` at 511a0a1 | US1 and US2 merged | 5,470 B |
+
+Round 5's timings are not part of this trio.
 
 `reviewed_revision` stays 9d8cc4e. Deleting US6 whole, and each of its three trims in
 turn, from scratch copies by spec.md's two rules validates with 0 refusals.

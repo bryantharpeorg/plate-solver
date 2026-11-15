@@ -73,8 +73,9 @@ description: "Task list for 028-finder-tests-do-less: Finder's Tests Do Less Wor
   `Simulator::set_frame_interval`, one call to the shared `NodeControls` (FR-011,
   US1-S7).
 - [ ] T008 [US1] In `crates/finder/tests/motion/night.rs`, call it with 500 ms right
-  after the test takes the simulator from the console's state. The night test's only
-  changes are that call and the cadence assertion of T006 (FR-012, US1-S7).
+  after the test takes the simulator from the console's state. The whole-night test
+  function's only changes are that call and the cadence assertion of T006; the solver
+  edit of T012 is outside it (FR-012, US1-S7).
 
 ### Console nodes: tests first
 

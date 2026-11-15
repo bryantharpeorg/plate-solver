@@ -29,7 +29,8 @@ depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "0
 # so the spec builds in two rounds, US1 to US4 at once and then US5 and the optional US6.
 # The code each story writes is unchanged; only the grouping, the numbering, the order and
 # the cross-references are new. The comments above name the stories as they were numbered
-# then; plan.md § Refinement Record "Round 5" maps them to the new ones.
+# then; plan.md § Refinement Record "Round 5" maps them to the new ones. Round 5's probe
+# then built the six stories, each on its round's base, and measured each diff there.
 ---
 
 # Feature Specification: Finder's Tests Do Less Work
@@ -286,7 +287,7 @@ two console tests take 17.9 s in run 43683194483, nothing lost.
 4. **Given** the simulator crate's shared test rig, **When** `Rig::new` builds the node, **Then** it builds it on the synthetic camera with no pattern database and asserts that the node's `Describe` names the camera `simulated`, and every test of `stop_and_watchdog.rs` and `watchdog_report.rs` passes unchanged on it.
 5. **Given** the story's diff, **When** it is read, **Then** `frame_positions.rs` builds its rig with `Rig::rendered`, on the catalog camera, and its only changed lines are that call and its clock reads.
 6. **Given** the `motion` binary, **When** `night::a_whole_night_syncs_five_gotos_hand_push_stop_and_dropped_link` takes the simulator from the console's state, **Then** the committed test sets a 500 ms frame interval on it and, after the first sync, asserts over at least four solved frames that the session's pointing time advances by 0.5 s per frame id, within 0.05 s.
-7. **Given** the story's diff, **When** it is read, **Then** `Simulator::set_frame_interval` is one call to the `NodeControls` the simulator shares with its node, and the night test's only changes are that call, right after it takes the simulator, and the cadence assertion of US1-S6.
+7. **Given** the story's diff, **When** it is read, **Then** `Simulator::set_frame_interval` is one call to the `NodeControls` the simulator shares with its node, and the whole-night test function's only changes are that call, right after it takes the simulator, and the cadence assertion of US1-S6; the inline solver's edit, outside that function, is US1-S11's.
 8. **Given** the `console` binary, **When** `aim::aim_writes_enforce_origin_json_and_strict_shape_and_preview_retention_is_eight` waits for nine previews, **Then** the committed test runs its node at a 3 s frame interval, asserts that consecutive preview frame ids differ by exactly 2, and keeps every retention assertion, including the 409 for the evicted preview.
 9. **Given** the `console` binary, **When** `live::loop_::rich_frames_failing_for_thirty_seconds_report_the_whole_unsolved_interval` runs, **Then** the committed test runs its node at a 5 s frame interval, counts the frames its wait loop receives after the first and asserts at most 7, and keeps its assertions that the unsolved interval is at least 30 s and the field is null.
 10. **Given** the story's diff, **When** it is read, **Then** `state` in `crates/finder/tests/support/live.rs` keeps its signature and its 500 ms interval, so its other callers are unchanged.
