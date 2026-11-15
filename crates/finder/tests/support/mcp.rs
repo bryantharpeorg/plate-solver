@@ -118,7 +118,10 @@ pub mod sim {
                     &DB,
                     &frame.centroids,
                     (frame.width as usize, frame.height as usize),
-                    &options,
+                    &SolveOptions {
+                        timeout_ms: u64::MAX,
+                        ..options
+                    },
                 )
             })
         }

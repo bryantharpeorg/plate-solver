@@ -13,7 +13,7 @@ use std::{
     net::{SocketAddr, TcpStream},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
-    sync::mpsc,
+    sync::{mpsc, Arc, Mutex},
     time::Duration,
 };
 use tonic::{Request, Response, Status};
@@ -92,6 +92,7 @@ impl ScopeNode for Node {
 struct Server {
     child: Child,
     address: SocketAddr,
+    logs: Arc<Mutex<String>>,
     reader: Option<std::thread::JoinHandle<()>>,
 }
 impl Server {
@@ -109,10 +110,13 @@ impl Server {
             .spawn()
             .unwrap();
         let stderr = child.stderr.take().unwrap();
+        let logs = Arc::new(Mutex::new(String::new()));
+        let output = logs.clone();
         let (tx, rx) = mpsc::channel();
         let reader = std::thread::spawn(move || {
             for line in BufReader::new(stderr).lines() {
                 let line = line.unwrap();
+                output.lock().unwrap().push_str(&format!("{line}\n"));
                 if let Some(a) = line.strip_prefix("finder console: http://") {
                     let _ = tx.send(a.parse().unwrap());
                 }
@@ -129,6 +133,7 @@ impl Server {
         Self {
             child,
             address,
+            logs,
             reader: Some(reader),
         }
     }
@@ -153,6 +158,7 @@ impl Drop for Server {
         let _ = self.child.kill();
         self.child.wait().unwrap();
         self.reader.take().unwrap().join().unwrap();
+        assert!(!self.logs.lock().unwrap().contains("test-token"));
     }
 }
 struct Folder(PathBuf);

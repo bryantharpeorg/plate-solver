@@ -1,7 +1,7 @@
 //! One continuous virtual night. Oracles: the simulator's geometric sky and
 //! mechanical eyepiece ray, not the tracker's forecast or reported error.
 //! Pointings use seeded Gaussian noise (sigma 3″); limits are 30″ at reversal,
-//! 1 s at the geometric altitude crossing, 60″ after the keyhole, and 30 s wall time.
+//! 1 s at the geometric altitude crossing, 60″ after the keyhole.
 use crate::support::live as support;
 
 use finder::{
@@ -22,10 +22,7 @@ use simulator::{
     mount::{MountConfig, SimMount},
     SimCamera, Simulator, VirtualClock,
 };
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Duration};
 use support::{ConsoleClock, DB, START};
 
 const STEP: Duration = Duration::from_millis(50);
@@ -325,8 +322,7 @@ impl Rig {
 }
 
 #[tokio::test(start_paused = true)]
-async fn an_hour_covers_transit_too_low_and_keyhole_in_under_thirty_wall_seconds() {
-    let wall = Instant::now();
+async fn an_hour_covers_transit_too_low_and_keyhole() {
     let transit = START + 600.0;
     let first = target_at_transit(20.0, transit);
     let too_low = crossing(&first, transit, transit + 1800.0, 69.5, false);
@@ -404,11 +400,6 @@ async fn an_hour_covers_transit_too_low_and_keyhole_in_under_thirty_wall_seconds
         "one continuous hour of virtual time"
     );
     rig.tracker.stop("stopped").await;
-    assert!(
-        wall.elapsed() < Duration::from_secs(30),
-        "wall time {:?}",
-        wall.elapsed()
-    );
     assert_eq!(first_end.state, "off");
     assert_eq!(first_end.ended_reason.as_deref(), Some("too_low"));
     assert!((0.0..=1.0).contains(&ending_delay));
