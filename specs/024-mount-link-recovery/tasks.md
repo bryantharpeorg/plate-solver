@@ -5,24 +5,27 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
 # Tasks: The Mount Link Survives a Power Cycle
 
 **Prerequisites** (plan.md § Prerequisites):
-- `013-live-finder`, `014-goto`, `015-tracking` and `017-console-stop-confirm` have
-  landed on `main` (plan.md § Prerequisites 1);
-- `main` is still as read: every citation is at c1ed295, `main` at 1104b7d moved in
-  none of 024's files or citations, and a later `main` that moves in them needs them
-  re-read (plan.md § Prerequisites 2);
-- the owner decisions in spec.md are settled, including the owner's 2026-11-15 answers,
-  and the owner approvals given (plan.md § Prerequisites 3);
+- `013-live-finder`, `014-goto`, `015-tracking`, `017-console-stop-confirm` and
+  `027-finder-tests-by-system` have landed on `main` (plan.md § Prerequisites 1);
+- `main` is still as read: every citation was read at c1ed295 and again at b8dceaa,
+  where only the finder test paths 027 moved had changed, and a later `main` that moves
+  in 024's files needs them re-read (plan.md § Prerequisites 2);
+- the owner decisions in spec.md are settled, including the owner's 2026-11-15 answers
+  and gap (d) closed, and the owner approvals given (plan.md § Prerequisites 3);
 - no operator-staged file is needed (plan.md § Prerequisites 4);
 - the drafts `025-frame-capture` and `026-mount-sky`, which also write 024's files, wait
   for this spec to land and then name it themselves, so this spec names neither (plan.md
   § Prerequisites 5);
-- `027-finder-tests-by-system` has landed and US3's test and citations are re-anchored
-  to its layout (plan.md § Prerequisites 6).
+- `027-finder-tests-by-system` has landed (b8dceaa), and US3's test and citations are
+  re-anchored to its layout: the test is a module of finder's `motion` binary (plan.md
+  § Prerequisites 6). Met.
 
 **Rules for every story:**
 - Never edit an existing test, golden, fixture, `scripts/ci/`, `.github/`, `deny.toml`,
-  `CODEOWNERS`, `ergane.yaml`, `.specify/` or `crates/finder/web/playwright.config.ts`.
-  If an existing test fails, stop and escalate with its exact output. Do not edit it.
+  `CODEOWNERS`, `ergane.yaml`, `.specify/` or `crates/finder/web/playwright.config.ts`,
+  but for US3's one `mod mount_identity;` line in `crates/finder/tests/motion/main.rs`
+  (spec.md owner approval 7). If an existing test fails, stop and escalate with its
+  exact output. Do not edit it.
 - Write only the files your story's tasks name; they are its `writes` in plan.md
   § Refinement Record. A story that needs another file escalates.
 - Add no field to `EmulatorConfig`, the node's `AxisState`, the Sky-Watcher `Error` or
@@ -132,17 +135,25 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
 
 ### Tests first
 
-- [ ] T016 [US3] Create `crates/finder/tests/mount_identity.rs` with a copy of the `Rig`
-  of `crates/finder/tests/mcp/support.rs:188` whose test `Mount` wraps the `SimMount`,
-  records its commands and reports an identity and a reset count the test sets, and
-  failing tests for US3-S1 and US3-S2.
-- [ ] T017 [US3] Add failing tests to `crates/finder/tests/mount_identity.rs` for the
-  refusals with frames stopped and their end once frames start again (US3-S3, US3-S4),
-  the GoTo abort (US3-S5) and tracking (US3-S6), whose test waits for the session's
-  `mount.resets` to read 1 as well as for tracking to end before it posts Track again,
-  a reset seen while a GoTo corrects (US3-S7), and a reset during a keyhole slew of a
-  `Tracker` built over the console's link at a time its target stands inside the zenith
-  circle (US3-S8).
+- [ ] T016 [US3] Create `crates/finder/tests/motion/mount_identity.rs`, a module of
+  finder's `motion` test binary, and add `mod mount_identity;` to
+  `crates/finder/tests/motion/main.rs` in its alphabetical place, after
+  `mod mount_calls;`, changing no other line (spec.md owner approval 7). Give the module
+  a copy of the `Rig` of `crates/finder/tests/support/mcp.rs:179`, built as
+  `crates/finder/tests/support/mcp.rs:188` builds it, whose test `Mount` wraps the
+  `SimMount`, records its commands and reports an identity and a reset count the test
+  sets, and failing tests for US3-S1 and US3-S2. The module includes no file with
+  `#[path]`; a helper it reuses from `crates/finder/tests/support/` it reaches with
+  `use crate::support::mcp as support;` (or `stop`), and it adds no file there, since
+  027's layout guard pins that folder's files (`crates/finder/tests/layout/main.rs:102`).
+- [ ] T017 [US3] Add failing tests to `crates/finder/tests/motion/mount_identity.rs` for
+  the refusals with frames stopped and their end once frames start again (US3-S3,
+  US3-S4), the GoTo abort (US3-S5) and tracking (US3-S6), whose test waits for the
+  session's `mount.resets` to read 1 as well as for tracking to end before it posts
+  Track again, a reset seen while a GoTo corrects (US3-S7), a reset during a keyhole
+  slew of a `Tracker` built over the console's link at a time its target stands inside
+  the zenith circle (US3-S8), and a `Tracker` started with `start_with_resets` and the
+  count the session last saw while the node already reports one more (US3-S9).
 
 ### Implementation
 
@@ -151,22 +162,28 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
   `identity()` while connected in `crates/scope-node/src/service.rs`.
 - [ ] T019 [US3] In `crates/finder/src/live.rs` and `crates/finder/src/session.rs`, add
   `MountReading` (with `pub(crate)` fields) and the poll's console time to `set_mount`,
-  the identity, the `resets` field and its `is_zero` helper, `Session::mount_resets`,
-  the sync-needed flag that only a sync from a frame whose exposure started after the
-  rise was seen clears, `POWER_CYCLED`, and Track's refusal in
-  `Session::track_target`; in `crates/finder/src/api.rs`, pass `self.clock.clone()` to
-  `MountMonitor::start` in `with_simulation` and `with_link`, and add the refusal after a
-  reset to the module docs' second-sync and Track paragraphs, with one sentence that
-  `POST /api/goto` refuses the same way (plan.md § Interfaces).
+  the identity, the `resets` field and its `is_zero` helper, `Session::mount_resets`
+  (also tracking's baseline, T020), the sync-needed flag that only a sync from a frame
+  whose exposure started after the rise was seen clears, `POWER_CYCLED`, and Track's
+  refusal in `Session::track_target`; in `crates/finder/src/api.rs`, pass
+  `self.clock.clone()` to `MountMonitor::start` in `with_simulation` and `with_link`, and
+  add the refusal after a reset to the module docs' second-sync and Track paragraphs,
+  with one sentence that `POST /api/goto` refuses the same way (plan.md § Interfaces).
 - [ ] T020 [US3] In `crates/finder/src/goto.rs`, add the refusal to
   `GoTo::check_request` and the abort against the count seen when the GoTo was
   accepted, on its first and slewing reads and on a read after each correction's plan,
-  before that correction's `goto_axis` pair; in `crates/finder/src/tracking.rs`, add the
-  azimuth read on every tick of the rate loop, pass its baseline to `keyhole` and
-  `at_rest`, and stop tracking when the count changes on either (plan.md § Interfaces).
+  before that correction's `goto_axis` pair; in `crates/finder/src/tracking.rs`, add
+  `Tracker::start_with_resets`, which takes `start`'s body and hands its count to `run`,
+  with `start` keeping its signature and calling it with none, the azimuth read on
+  every tick of the rate loop, right after the tick, whose baseline is the given count
+  or else the first read's, and pass that baseline to `keyhole` and `at_rest`, stopping
+  tracking when the count differs on any of them; and in `Session::begin_tracking`
+  (`crates/finder/src/session.rs`), start the new tracker with
+  `start_with_resets(target, self.mount_resets())` in place of `start(target)` (plan.md
+  § Interfaces).
 - [ ] T021 [US3] Run the `lint` and `test` gates with every existing test unchanged and
-  green. Commit the green story (US3-S1, US3-S2, US3-S3, US3-S4, US3-S5, US3-S6,
-  US3-S7, US3-S8).
+  green but for T016's one `mod` line. Commit the green story (US3-S1, US3-S2, US3-S3,
+  US3-S4, US3-S5, US3-S6, US3-S7, US3-S8, US3-S9).
 
 ## Phase 4: User Story 4 — Garbled replies are retried and kept (Priority: P3)
 

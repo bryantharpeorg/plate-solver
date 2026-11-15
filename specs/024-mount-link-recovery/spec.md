@@ -1,6 +1,6 @@
 ---
 state: draft
-depends_on_landed: ["013-live-finder", "014-goto", "015-tracking", "017-console-stop-confirm"]
+depends_on_landed: ["013-live-finder", "014-goto", "015-tracking", "017-console-stop-confirm", "027-finder-tests-by-system"]
 # Drafted 2026-11-14 by the plate-solver operator against `main` at c1ed295, from the
 # dark-site field findings of 13-14 November (gap 1: the mount link after a power cycle).
 # Refined 2026-11-14 from four probe builds of its stories and two reviews (anchors, scenarios),
@@ -14,9 +14,12 @@ depends_on_landed: ["013-live-finder", "014-goto", "015-tracking", "017-console-
 # approval 6 closes its first two gaps.
 # Refined 2026-11-14 local time (round 3, after those answers) by probe builds of all four
 # stories from the trio as it stood and two reviews (anchors, scenarios); the clauses this
-# refinement added were run on copies of the round-3 probe branches. It waits for
-# 027-finder-tests-by-system to land (plan.md § Prerequisites 6). Flipping it to `ready`
-# gives the approvals listed under "Owner approvals" and dispatches it.
+# refinement added were run on copies of the round-3 probe branches.
+# Refreshed 2026-11-15 once 027-finder-tests-by-system had landed (b8dceaa): US3's test is
+# a module of finder's `motion` test binary, and every citation was re-read at b8dceaa
+# (plan.md § Prerequisites 6). The same day the owner closed gap (d) under owner approval
+# 6; that clause and US3-S9 were not probe-built. Flipping it to `ready` gives the
+# approvals listed under "Owner approvals" and dispatches it.
 ---
 
 # Feature Specification: The Mount Link Survives a Power Cycle
@@ -133,7 +136,22 @@ made stale.
 - Q: Is any reset left that a running Track does not see? → A: Yes, one narrow window,
   recorded under owner approval 6 as gap (d) and open to the owner: tracking takes its
   baseline from its first tick's read, so a reset after the console's last mount poll and
-  before that read becomes the baseline. The recommended default leaves it open.
+  before that read becomes the baseline. The recommended default leaves it open. The owner
+  closed it on 2026-11-15 (below).
+
+### Session 2026-11-15 (027 landed; the owner's answer on gap (d))
+
+- Q: Where does US3's test live now that 027 has landed? → A: In finder's `motion` test
+  binary, as the module `crates/finder/tests/motion/mount_identity.rs`, declared by one
+  `mod mount_identity;` line in `crates/finder/tests/motion/main.rs` (owner approval 7). A
+  file at the top level of `crates/finder/tests` fails 027's layout guard
+  (`crates/finder/tests/layout/main.rs:102`). The helpers this trio cites moved, unchanged,
+  under `crates/finder/tests/support/`.
+- Q: Does tracking see a reset that lands after the console's last mount poll and before
+  tracking's first read (gap (d))? → A: Yes; the owner chose "Close it" (owner approval 6).
+  Tracking takes its baseline from the count the session last saw when tracking begins,
+  as a GoTo takes the count it saw when it was accepted, so that first read ends it with
+  the power-cycled reason before it sends a rate (US3-S9).
 
 ## Owner decisions
 
@@ -192,8 +210,8 @@ stay listed for the record.
 ## Owner approvals
 
 Flipping this spec to `ready` approves the settled answer to every owner decision
-above, and the following. Each is named in the FR that makes it. No existing test,
-golden or CI file changes.
+above, and the following. Each is named in the FR or success criterion that makes it.
+No existing test, golden or CI file changes but for the one line of approval 7.
 
 1. **The node starts without the mount** and tries again 2 s after each failed attempt
    (FR-001, FR-002). Until it first connects, Stop still clears queued moves and answers
@@ -210,9 +228,9 @@ golden or CI file changes.
    running Track stops when a reset is seen (FR-014, FR-015).
 5. **Wrong-length replies to status and position reads are retried**, sharing five
    transmissions in all, and each one's bytes are kept for the log (FR-016, FR-017).
-6. **Two of the three gaps after a reset are closed, and one stays open** (FR-014,
-   FR-015). *Settled 2026-11-15: the owner chose "Close (a) and (b)".* Both are closed
-   within US3's writes:
+6. **Three of the four gaps after a reset are closed, and one stays open** (FR-014,
+   FR-015). *Settled 2026-11-15: the owner chose "Close (a) and (b)", and later that day
+   "Close it" for gap (d), found in round 3.* All three are closed within US3's writes:
    - (a) a reset seen while a GoTo is solving or correcting. GoTo compares the node's
      `mount_resets` with its baseline on a read it makes after each correction's plan
      (`crates/finder/src/goto.rs:1010`) and before sending that correction's
@@ -221,20 +239,26 @@ golden or CI file changes.
    - (b) tracking's keyhole slews (`crates/finder/src/tracking.rs:581`) and their waits
      in `at_rest` (`crates/finder/src/tracking.rs:509`). `at_rest` compares the count
      with the rate loop's baseline on every read, and a difference stops tracking with
-     the power-cycled end reason before any further keyhole waypoint (US3-S8).
+     the power-cycled end reason before any further keyhole waypoint (US3-S8);
+   - (d) a reset that lands after the console's last mount poll (every 250 ms) and before
+     tracking's first read. Tracking takes its baseline from the session's last-seen
+     count, `Session::mount_resets()`, when it begins: `Session::begin_tracking`
+     (`crates/finder/src/session.rs:879`) hands that count to the new tracker through one
+     new `Tracker` method (plan.md § Interfaces), as a GoTo takes the count it saw when it
+     was accepted. That first read then ends tracking with the power-cycled end reason
+     before any tracking rate is sent (US3-S9).
 
    Gap (c) stays open: the console's sync-needed flag is not persisted, so a console
    restarted after a reset never refuses; the node's README says to sync first (FR-007).
-   Rejected: the round-2 default, leaving all three open.
-
-   A narrower gap (d), found in round 3, also stays open by default (open owner question):
-   tracking takes its baseline from the rate loop's first tick read, so a reset that
-   lands after the console's last mount poll (every 250 ms) and before that read becomes
-   the baseline and never stops that tracking, which then tracks on the old zero points,
-   and may slew through the keyhole on them, until it is stopped. From its next poll the
-   console still refuses GoTo, second sync and a new Track until a new sync. Instead: start the
-   tracker's baseline from the session's last-seen count, as a GoTo takes its own
-   (plan.md § Interfaces), which needs one new `Tracker` method within US3's writes.
+   Rejected: the round-2 default, leaving (a), (b) and (c) open; and the round-3 default
+   for (d), tracking's baseline from its first tick read, which made such a reset the
+   baseline, so that tracking went on with the old zero points, and might slew through
+   the keyhole on them, until it was stopped.
+7. **US3's test module is declared in an existing test file** (SC-002). US3 adds one
+   line, `mod mount_identity;`, in its alphabetical place in
+   `crates/finder/tests/motion/main.rs`, as 027's layout asks of every new finder test
+   (027's owner approval 7). No other line of that file and no other existing test
+   changes.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -259,21 +283,21 @@ The Rust scenarios of US1, US2 and US4 share one setup unless a scenario says ot
   `:H`, `:M`, `:I` or `:J`. Commands are recorded with their carriage return, as
   `:F3\r`.
 
-The console scenarios of US3 (S2 to S8) share one setup:
-- An in-process console built as `crates/finder/tests/mcp/support.rs:188` builds its
-  `Rig`, copied into the new test file because that `Rig` hard-wires its own private
+The console scenarios of US3 (S2 to S9) share one setup:
+- An in-process console built as `crates/finder/tests/support/mcp.rs:188` builds its
+  `Rig`, copied into the new test module because that `Rig` hard-wires its own private
   mount, with a test `Mount` that wraps the `SimMount`, records the commands it
   receives, and reports firmware `3.40`, board `0x90` and a reset count the test sets.
   It is built as `Rig::new(START, 50.0, 120.0, true)` with `START` 1,768,528,800
-  (`crates/finder/tests/mcp/support.rs:97`) and target M42
-  (`crates/finder/tests/mcp/support.rs:237`), as the existing GoTo and Track tests build
-  it. Time is paused.
+  (`crates/finder/tests/support/mcp.rs:97`) and target M42
+  (`crates/finder/tests/support/mcp.rs:237`), as the existing GoTo and Track tests
+  build it. Time is paused.
 - The copied `Rig` has no helper for `/api` writes, so each `POST` is built as the
-  `post` helper in `crates/finder/tests/stop/support.rs:232` builds it: a `host` header
+  `post` helper in `crates/finder/tests/support/stop.rs:232` builds it: a `host` header
   naming `localhost` on port 8080, and a JSON body, or an empty body where a scenario
   says so.
 - "After a sync" means the model holds a sync, as `Rig::sync` waits for
-  (`crates/finder/tests/mcp/support.rs:278`).
+  (`crates/finder/tests/support/mcp.rs:278`).
 - "With frames stopped" means the test called `controls.stop_frames()`
   (`crates/scope-node/src/service.rs:62`) and then let 2 s pass, so no frame is still in
   flight.
@@ -440,7 +464,7 @@ cycle the console tells me to sync before it will GoTo or Track.
 **Why this priority**: The session showed null for the board all night, and a GoTo
 after an unnoticed reset aims with zero points from before it.
 
-**Independent Test**: `cargo test -p finder --test mount_identity --locked`.
+**Independent Test**: `cargo nextest run -p finder --locked --test motion mount_identity::`.
 
 **Acceptance Scenarios**:
 
@@ -477,26 +501,38 @@ after an unnoticed reset aims with zero points from before it.
    `The mount was power-cycled: sync again first`.
 7. **Given** the US3 console after a sync, with `POST /api/goto` accepted, **When**
    `goto.state` first reads `solving` and the test pushes the `SimMount` 0.1° in azimuth
-   (`rig.mount.push_by(0.1, 0.0)`, as `crates/finder/tests/goto_sim.rs:21` does) so that
-   a correction follows, and then, when `goto.state` first reads `correcting` (the test
-   reads `GET /api/session` every 10 ms), sets the reset count to 1, **Then** it asserts
-   that within 3 s `goto.state` is `failed` with a reason containing `power-cycled`, and
-   that the test `Mount` recorded a `StopAll` and no `GotoAxis` after the count was set:
-   a correction planned through the stale zero points is never sent.
+   (`rig.mount.push_by(0.1, 0.0)`, as `crates/finder/tests/motion/goto/sim.rs:20`
+   does) so that a correction follows, and then, when `goto.state` first reads
+   `correcting` (the test reads `GET /api/session` every 10 ms), sets the reset count to
+   1, **Then** it asserts that within 3 s `goto.state` is `failed` with a reason
+   containing `power-cycled`, and that the test `Mount` recorded a `StopAll` and no
+   `GotoAxis` after the count was set: a correction planned through the stale zero
+   points is never sent.
 8. **Given** the US3 console built as the setup builds it but at the first whole minute
    after `START` at which M42 moved to declination 39° (as
-   `crates/finder/tests/keyhole_sim.rs:115` moves it) stands at least 88.5° high by
-   `simulator::sky::horizontal` with `simulator::Site::default()`, after a sync, and a
-   `Tracker` built with `Tracker::new` over the console's own link (`AppState::link`,
-   `crates/finder/src/api.rs:225`), a console clock on the rig's virtual clock, the
-   session's model, the site at latitude 40° and longitude −75° and a 15° minimum
-   altitude, then started on that target, which stands inside the zenith circle, **When**
+   `crates/finder/tests/motion/tracking/keyhole.rs:114` moves it) stands at least 88.5°
+   high by `simulator::sky::horizontal` with `simulator::Site::default()`, after a sync,
+   and a `Tracker` built with `Tracker::new` over the console's own link
+   (`AppState::link`, `crates/finder/src/api.rs:225`), a console clock on the rig's
+   virtual clock, the session's model, the site at latitude 40° and longitude −75° and a
+   15° minimum altitude, then started on that target, which stands inside the zenith
+   circle, **When**
    its state reads `keyhole_wait` and the test `Mount` has recorded the keyhole slew's
    `GotoAxis` pair, and the test sets the reset count to 1 while that slew runs, **Then**
    it asserts that within 2 s the tracker's state is `off` with an end reason containing
    `power-cycled`, and that the test `Mount` recorded a `StopAll` and no `GotoAxis` after
    the count was set: a keyhole slew's wait for rest reads the count, and no further
    waypoint is sent.
+9. **Given** the US3 console after a sync, whose session shows no `mount.resets` (the
+   count it last saw is 0), and a `Tracker` built as US3-S8 builds one but on this
+   console at its own time, **When** the test sets the reset count to 1 and then starts
+   the tracker on M42 with `start_with_resets(target, Some(0))`, the session's last-seen
+   count, as `Session::begin_tracking` starts its own (plan.md § Interfaces), **Then** it
+   asserts that the call answers `Ok`, that within 2 s the tracker's state is `off` with
+   an end reason containing `power-cycled`, and that the test `Mount` recorded a
+   `StopAll` and no `RateAxis` after the count was set: tracking's first read compares
+   the node's count with the one the session last saw, so a reset the console's poll has
+   not yet seen ends tracking before it sends a rate.
 
 ---
 
@@ -578,8 +614,10 @@ their cause is unknown until their bytes are seen.
   way the motion stops, and once the node has connected again the console refuses until
   a new sync.
 - **A reset just before tracking starts.** One that lands after the console's last mount
-  poll and before tracking's first tick read becomes tracking's baseline and does not
-  stop it; the console refuses from its next poll (owner approval 6, gap (d)).
+  poll and before tracking's first tick read still stops it: tracking's baseline is the
+  count the session last saw when tracking began, so that first read ends it with the
+  power-cycled reason before any tracking rate is sent (US3-S9, owner approval 6, gap
+  (d)). One the console's poll has already seen is refused by Track itself (FR-014).
 - **A reset while a GoTo solves or corrects.** The read after the correction's plan sees
   it before that correction's slew is sent (US3-S7). A GoTo whose last solve lands within
   60″ ends `done` and sends nothing more.
@@ -648,10 +686,12 @@ their cause is unknown until their bytes are seen.
 - **FR-015**: A GoTo SHALL end `failed` with a reason containing `power-cycled` and send
   `StopAll` when a read it makes while slewing, or the read it makes after a correction's
   plan and before sending that correction's `goto_axis` pair, carries a `mount_resets`
-  other than the count the console had seen when it accepted the GoTo. Running tracking
-  SHALL stop, with an end reason containing `power-cycled`, when the count changes on the
-  rate loop's tick read or on any read of the keyhole's waits for rest, and then SHALL
-  send no further keyhole waypoint (owner approval 6).
+  other than the count the console had seen when it accepted the GoTo. Tracking SHALL
+  take as its baseline the count the console had last seen when tracking began (the
+  count of its first read when the console had seen none), and running tracking SHALL
+  stop, with an end reason containing `power-cycled`, when the rate loop's tick read,
+  its first included, or any read of the keyhole's waits for rest carries another count,
+  and then SHALL send no further tracking rate or keyhole waypoint (owner approval 6).
 - **FR-016**: A status or position read whose framed reply has the wrong length SHALL be
   sent again, its tries sharing five transmissions in all; a motion start (`:J`) SHALL
   never be sent again.
@@ -683,15 +723,18 @@ their cause is unknown until their bytes are seen.
 - **SC-001**: Every acceptance scenario has a committed test that asserts it, and the
   `lint` and `test` gates pass.
 - **SC-002**: No existing test, golden, `scripts/ci/` file, `.github/` file, `CODEOWNERS`
-  entry, `ergane.yaml` or `playwright.config.ts` is edited.
+  entry, `ergane.yaml` or `playwright.config.ts` is edited, but for the one
+  `mod mount_identity;` line US3 adds to `crates/finder/tests/motion/main.rs` (owner
+  approval 7).
 - **SC-003**: A power cycle is recognised and the board initialised again within one
   poll of the board answering after a blip (US2-S1), and within 6 s of it answering
   after a lost link (US2-S2).
 
 ## Assumptions
 
-- **Earlier features are in place.** 013, 014, 015 and 017 have landed. Every citation here
-  was read at c1ed295.
+- **Earlier features are in place.** 013, 014, 015, 017 and 027 have landed. Every
+  citation here was read at c1ed295, and again at b8dceaa, after 027 had moved finder's
+  tests (plan.md § Prerequisites 2 and 6).
 - **Out of scope:**
   - dark-sky detection and exposure (spec 023);
   - saving live frames (drafted separately as 025-frame-capture);

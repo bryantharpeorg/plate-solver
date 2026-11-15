@@ -28,8 +28,9 @@ needed" flag lives for the console process.
 **Testing**:
 - US1: `crates/scope-node/tests/mount_link.rs` (new), over the emulator and the built binary.
 - US2: `crates/scope-node/tests/mount_reset.rs` (new).
-- US3: `crates/finder/tests/mount_identity.rs` (new), in-process console over a memory
-  transport, plus a `describe_mount` check on the node's service.
+- US3: `crates/finder/tests/motion/mount_identity.rs` (new), a module of finder's
+  `motion` test binary declared in `crates/finder/tests/motion/main.rs`: an in-process
+  console over a memory transport, plus a `describe_mount` check on the node's service.
 - US4: `crates/scope-node/tests/mount_garble.rs` (new).
 - No Playwright or Vitest test: the page is unchanged.
 
@@ -55,7 +56,7 @@ console refusal.
 | Principle | How this plan honours it |
 |---|---|
 | I. Agreeing with cedar is correctness | Nothing touches the solver or `crates/math-core`. |
-| II. Never weaken a gate | No existing test, golden, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. New tests go in new files. |
+| II. Never weaken a gate | No existing test, golden, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. New tests go in new files; US3's module adds one `mod mount_identity;` line to `crates/finder/tests/motion/main.rs`, which spec.md owner approval 7 names. |
 | III. Tests first, independent expectations | The oracles are the emulator's own board state (`auxiliary_enabled`, positions set with `set_position`, the exchanges it recorded) and fixed numbers in the scenarios, never the link's own arithmetic. |
 | IV. Critical paths | No `unsafe`, no dependency change, no database-format change. The proto change adds three fields to two messages; nothing is renumbered. |
 | V. Standalone Rust, honest licensing | Unaffected. |
@@ -80,10 +81,11 @@ crates/scope-node/
 crates/finder/
 ├── src/api.rs                                  # US3: the console clock to the mount poll; docs
 ├── src/live.rs                                 # US3: identity and resets from the node
-├── src/session.rs                              # US3: MountView fields, sync-needed flag, Track's refusal
+├── src/session.rs                              # US3: MountView fields, sync-needed flag, Track's refusal, tracking's baseline
 ├── src/goto.rs                                 # US3: GoTo and second-sync refusal, abort on a reset while slewing or correcting
-├── src/tracking.rs                             # US3: stop on a reset, at the tick read and in the keyhole's waits
-└── tests/mount_identity.rs                     # US3: new
+├── src/tracking.rs                             # US3: start_with_resets; stop on a reset, at the tick read and in the keyhole's waits
+├── tests/motion/main.rs                        # US3: one line, mod mount_identity;
+└── tests/motion/mount_identity.rs              # US3: new
 ```
 
 ## Interfaces
@@ -99,6 +101,8 @@ cutoff and its console clock). The third built the parts the owner's answers of
 `halt_once`), GoTo's read after each correction's plan, and the count in tracking's
 `at_rest` (US3). Where a probe had to add to the text, this section says what it built:
 the re-initialisation runs in a spawned task, and the helpers and accessors named below.
+Tracking's baseline from the session's count (`Tracker::start_with_resets`, US3), added
+on 2026-11-15 when the owner closed gap (d), was not probe-built.
 
 ### The `Mount` trait (`crates/scope-node/src/mount/mod.rs`, US1)
 
@@ -485,6 +489,12 @@ spec asks for, and it opens the new epoch.
   `The mount was power-cycled: sync again first`. `Session::track_target`
   (`crates/finder/src/session.rs:759`) returns it as its error when `sync_needed()`,
   right after its "the night has no sync yet" check; the API maps that to `409`.
+  `Session::begin_tracking` (`crates/finder/src/session.rs:879`) starts the tracker it
+  builds with `tracker.start_with_resets(target, self.mount_resets())` in place of
+  `tracker.start(target)` (`crates/finder/src/session.rs:905`), so tracking's baseline is
+  the session's last-seen count when tracking begins, as a GoTo's is the count when it
+  was accepted (spec.md owner approval 6, gap (d)). `POST /api/track` and MCP
+  `set_tracking` both start tracking through it.
 - **`goto.rs`**: `GoTo::check_request` (`crates/finder/src/goto.rs:645`) returns
   `POWER_CYCLED` as its `String` error when `sync_needed()`, after its "a GoTo is already
   running" check and its `self.link.mount().ok_or("no mount is connected")?` line
@@ -510,15 +520,25 @@ spec asks for, and it opens the new epoch.
   approval 6, US3-S7). The read is `motion`'s own, after `prepare`, so `prepare_with`,
   which `check_request` and `check_axis_move` share, is unchanged. A reset between that
   read and the pair is seen at the slew's first read, as before.
-- **`tracking.rs`**: the rate loop (`crates/finder/src/tracking.rs:735`) gains an
-  `axis_state` read of the azimuth on every 1 s tick, right after the tick (today it
-  reads `axis_state` only in two conditional branches,
-  `crates/finder/src/tracking.rs:796` and `crates/finder/src/tracking.rs:820`). The first
-  read sets the baseline, so a reset after the console's last poll and before that read
-  is not seen by tracking (spec.md owner approval 6, gap (d)); a change ends tracking
-  with `the mount was power-cycled` (owner decision 5), and a failed read ends it
-  `link_lost`, as the loop's other reads do. The keyhole's waits for rest check it too (owner approval 6, US3-S8): the rate
-  loop passes its baseline, a `u64` once the first tick has read it, to
+- **`tracking.rs`**: `Tracker` gains one method,
+  `pub async fn start_with_resets(&self, target: Target, resets: Option<u64>) -> Result<(), String>`,
+  `start` with the rate loop's baseline given. `start`'s body
+  (`crates/finder/src/tracking.rs:156`) moves into it and passes `resets` on to the
+  private `run` (`crates/finder/src/tracking.rs:718`) as a trailing argument; `start`
+  keeps its signature and calls `self.start_with_resets(target, None)`, so the existing
+  tracker tests and US3-S8 start as before. The rate loop
+  (`crates/finder/src/tracking.rs:735`) gains an `axis_state` read of the azimuth on
+  every 1 s tick, right after the tick and so before that tick's keyhole check,
+  take-ups and rates (today it reads `axis_state` only in two conditional branches,
+  `crates/finder/src/tracking.rs:796` and `crates/finder/src/tracking.rs:820`). The
+  baseline is the given count, or the first read's when none was given (through
+  `start`, or from `begin_tracking` before the console's first poll). A reset after the
+  console's last poll and before tracking's first read therefore ends tracking at that
+  read, before the loop sends any rate (spec.md owner approval 6, gap (d), US3-S9). A
+  count other than the baseline ends tracking with `the mount was power-cycled` (owner
+  decision 5), and a failed read ends it `link_lost`, as the loop's other reads do. The
+  keyhole's waits for rest check it too (owner approval 6, US3-S8): the rate loop passes
+  its baseline, a `u64` once the first tick has read the count, to
   `keyhole(&self, target, client, axes, resets: u64)`
   (`crates/finder/src/tracking.rs:534`, called at `crates/finder/src/tracking.rs:744`),
   which passes it to `at_rest(&self, client, counts, resets: u64)`
@@ -560,10 +580,16 @@ is US3's and is documented in the console's own API docs
   round-3 probe confirmed it: with "any recorded sync" all eight US3 tests stay green.
 - **US3's other paths no scenario reaches.** GoTo's first-read comparison before the
   first slew (the first slewing read catches the same reset one pair later); the
-  baseline taken from the first read when the console has not polled yet; `at_rest`
-  right after the keyhole's `stop_all` (US3-S8 reaches the one after a waypoint); the
-  tick read's `link_lost` branch; and `MountReading::default()` leaving the last-seen
-  count.
+  baselines GoTo and tracking take from their first read when the console has not
+  polled yet; `at_rest` right after the keyhole's `stop_all` (US3-S8 reaches the one
+  after a waypoint); the tick read's `link_lost` branch; and `MountReading::default()`
+  leaving the last-seen count.
+- **That `begin_tracking` hands the session's count to its tracker (US3).** US3-S9 gives
+  a `Tracker` the count through `start_with_resets` itself. Staged through
+  `POST /api/track`, the reset would have to land between the console's mount poll,
+  250 ms apart (`crates/finder/src/live.rs:323`), and tracking's first read, a race with
+  that poll's timer in the test's one paused runtime; and a Track off its target starts
+  a GoTo first, whose own baseline would end it the same way.
 - **That every connect clears the jump baselines and the init-bit history (US2).** The
   probe showed no scenario fails without either: US2-S2's reconnect comes about 10 s
   after the last good read, when the jump limit is far above the 100,000 counts the
@@ -608,15 +634,22 @@ These are not changed by any story:
   `SkyWatcher::stop_confirmed` keeps the transport's five tries a command. US2's
   `halt_once` is a new method beside it, used only by the link with no board connected.
 - **GoTo's corrections and tracking's keyhole with no reset**
-  (`crates/finder/tests/goto_sim.rs`, `crates/finder/tests/keyhole_sim.rs`): US3's added
-  read and comparisons see an unchanged count and send nothing.
+  (`crates/finder/tests/motion/goto/sim.rs`,
+  `crates/finder/tests/motion/tracking/keyhole.rs`): US3's added read and comparisons
+  see an unchanged count and send nothing.
+- **Finder's test layout** (`crates/finder/tests/layout/main.rs:102`, 027's guard): no
+  file at the top level of `crates/finder/tests`, the same helper files under
+  `crates/finder/tests/support/`, and nothing in a binary's `main.rs` after its support
+  tree but `mod` lines. US3's test is a module of `motion` with its own copy of the
+  `Rig`, declared by one `mod mount_identity;` line (spec.md owner approval 7), and adds
+  no helper file.
 - **`EmulatorConfig`'s fields** and `Emulator::new`'s signature.
 - **`GET /api/session` with no reset.** `resets` is skipped at 0 and `firmware` and
   `board` stay null with nodes that report none, so existing bodies are unchanged.
 - **A node with no `[mount]`** behaves exactly as before: no link, no axes,
   `axis_state` and `goto_axis` refused, Stop answers OK
-  (`crates/finder/tests/mount_calls.rs:239`); `--check-config` still reports the mount
-  device without opening it (`crates/scope-node/tests/mount_config.rs:31`).
+  (`crates/finder/tests/motion/mount_calls.rs:239`); `--check-config` still reports the
+  mount device without opening it (`crates/scope-node/tests/mount_config.rs:31`).
 
 ## Decisions and the alternatives rejected
 
@@ -640,6 +673,7 @@ These are not changed by any story:
 | With no board connected Stop sends each command once (`halt_once`) | The transport's five tries a command, or a timeout around `halt` | Five tries make a board that answers nothing hold Stop for 6 s; a timeout around `halt` can cut it off before `:K2`, breaking 017's order. Once each, both axes hear `:K` within 0.6 s and the whole stop ends within 1.2 s. |
 | GoTo reads the count after each correction's plan, before its slew | Catch it at the next slew's first read | Owner approval 6: that slew's pair, planned through the stale zero points, would already be on the wire. |
 | `at_rest` compares the count on every read | Leave the keyhole's waits unchecked | Owner approval 6: a keyhole slew could run to its end through stale zero points. |
+| Tracking's baseline is the session's last-seen count when it begins, handed over by one new `Tracker` method | The first tick read's count (the round-3 default) | Owner approval 6, gap (d): a reset between the console's last poll and that read would become the baseline, and tracking would go on with the old zero points. `start` keeps its signature, so no existing caller or test changes. |
 | The re-initialisation runs in a spawned task the finding read awaits | Await `SkyWatcher::connect` inside the read | The read is often a console `axis_state` call bounded at 200 ms; a dropped read must not cancel the connect (US2-S10). |
 | US1-S6 proves the emulator helpers through a bare `SkyWatcher` | Through the link | Later stories change what the link does after a jump or a cleared bit, and may not edit US1's test. |
 | Retry reads in `protocol.rs`, one transmission a try | Retry in the transport | The transport can't tell a short status from a valid empty acknowledgement, and nested retries would allow 25 transmissions. |
@@ -647,7 +681,7 @@ These are not changed by any story:
 
 ## Verification (every story, before proposing)
 
-- **The factory gates** (`ergane.yaml` at 1104b7d, after pull request 214):
+- **The factory gates** (`ergane.yaml` at b8dceaa, unchanged since pull request 214):
   - `lint` = `cargo fmt --all --check`,
     `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`,
     `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked`
@@ -666,23 +700,29 @@ These are not changed by any story:
 
 ## Prerequisites before this spec is flipped to `ready`
 
-1. **The earlier specs have landed:** `013-live-finder`, `014-goto`, `015-tracking` and
-   `017-console-stop-confirm`. Met: 017's last story landed at c1ed295.
-2. **`main` is still as read.** Every citation here is at c1ed295. `main` at 1104b7d
-   adds `specs/020-live-chart-calm/` and its two stories (`crates/finder/web`,
-   `crates/finder/src/solve.rs`, `crates/finder/tests/star_detected.rs`, `DESIGN.md`);
-   Playwright 1.64.1 (#213: `.github/workflows/ci.yml`,
-   `.github/workflows/ergane-gates.yml` and the page's package files); the nextest
-   `test` gate (#214: `ergane.yaml`, the root `Cargo.toml` and `README.md`,
-   `.config/nextest.toml`, both workflows, `docs/coverage.md`, `scripts/coverage.sh`);
-   and `specs/027-finder-tests-by-system/` (#216). None is one of 024's files or
-   citations. `ergane.yaml`'s `test` gate now runs `cargo nextest run` first, which
-   § Verification copies. If `main` has moved in 024's files since, re-read them and
-   re-run the validator.
+1. **The earlier specs have landed:** `013-live-finder`, `014-goto`, `015-tracking`,
+   `017-console-stop-confirm` and `027-finder-tests-by-system`. Met: 017's last story
+   landed at c1ed295, and 027's at b8dceaa.
+2. **`main` is still as read.** Every citation here was read at c1ed295, and again at
+   b8dceaa. Since c1ed295 `main` has added `specs/020-live-chart-calm/` and its two
+   stories (`crates/finder/web`, `crates/finder/src/solve.rs`, the test now at
+   `crates/finder/tests/console/star_detected.rs`, `DESIGN.md`); Playwright 1.64.1
+   (#213: `.github/workflows/ci.yml`, `.github/workflows/ergane-gates.yml` and the page's
+   package files); the nextest `test` gate (#214: `ergane.yaml`, the root `Cargo.toml`
+   and `README.md`, `.config/nextest.toml`, both workflows, `docs/coverage.md`,
+   `scripts/coverage.sh`); and spec 027 and its two stories (#216, #217, #218: every
+   file under `crates/finder/tests` and the page's two recorder fixtures). Of 024's
+   files and citations, only the finder test paths that 027 moved have changed
+   (Prerequisite 6); every other file this trio cites or writes is as at c1ed295.
+   `ergane.yaml`'s `test` gate runs `cargo nextest run` first, which § Verification
+   copies. If `main` has moved in 024's files since b8dceaa, re-read them and re-run the
+   validator.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
    decisions, § Owner approvals). The owner answered the round-2 questions on
    2026-11-15: owner decision 4 changed to always send Stop, and owner approval 6 closes
-   gaps (a) and (b). Flipping to `ready` records every answer.
+   gaps (a) and (b); later that day the owner closed gap (d) too ("Close it"). Owner
+   approval 7 names US3's one `mod` line in an existing test file. Flipping to `ready`
+   records every answer.
 4. **No operator-staged files are needed.**
 5. **The drafts that write 024's files wait for it.** Met. `025-frame-capture` writes
    three of them (its US1 `crates/finder/src/api.rs`; its US2 `crates/finder/src/api.rs`,
@@ -693,22 +733,20 @@ These are not changed by any story:
    `depends_on_landed`, so 024 names neither, in `depends_on_landed` or in
    `shared_writes`.
 6. **`027-finder-tests-by-system` has landed, and US3 is re-anchored to its layout.**
-   Not met. The owner chose the order 027, then 024, then 025 (recorded in 027's
-   frontmatter), and 027 is `ready` on `main` at 1104b7d with neither story landed.
-   After its US2 a test file at the top level of `crates/finder/tests` fails its layout
-   guard, and the finder tests this trio cites move: `mcp/support.rs` and
-   `stop/support.rs` to `support/mcp.rs` and `support/stop.rs`, `goto_sim.rs` to
-   `motion/goto/sim.rs`, `keyhole_sim.rs` to `motion/tracking/keyhole.rs`,
-   `goto_refusal_api.rs` to `motion/goto/refusals.rs`, `watchdog_goto.rs` to
-   `motion/stop/watchdog.rs` and `mount_calls.rs` to `motion/mount_calls.rs`. Once it has
-   landed, merge `main` into this branch and, before the flip: put US3's test in the
-   `motion` binary as a module (`crates/finder/tests/motion/mount_identity.rs` and a
-   `mod mount_identity;` line in `crates/finder/tests/motion/main.rs`, a new US3 write
-   shared with 027's US2), re-read every `crates/finder/tests` citation and the
-   Refinement Record's existing finder test paths at the new `main`, rename US3's
-   development check to the nextest filter for that module, add 027 to
-   `depends_on_landed`, and re-run the validator. No other story writes
-   `crates/finder/tests`.
+   Met: 027's US2 landed at b8dceaa (#218), the owner's order being 027, then 024, then
+   025 (recorded in 027's frontmatter), and `main` at b8dceaa was merged into this
+   branch. The finder tests this trio cites moved by 027's move map: `mcp/support.rs`
+   and `stop/support.rs` to `support/mcp.rs` and `support/stop.rs`, unchanged;
+   `goto_sim.rs` to `motion/goto/sim.rs`, `keyhole_sim.rs` to
+   `motion/tracking/keyhole.rs`, `goto_refusal_api.rs` to `motion/goto/refusals.rs`,
+   `watchdog_goto.rs` to `motion/stop/watchdog.rs` and `mount_calls.rs` to
+   `motion/mount_calls.rs`. US3's test is a module of the `motion` binary,
+   `crates/finder/tests/motion/mount_identity.rs`, declared by a `mod mount_identity;`
+   line in `crates/finder/tests/motion/main.rs`, a US3 write shared with 027's US2 and
+   named by spec.md owner approval 7. Every `crates/finder/tests` citation and the
+   Refinement Record's finder test paths were re-read at b8dceaa, US3's development
+   check is the nextest filter for that module, 027 is in `depends_on_landed`, and the
+   validator was re-run. No other story writes `crates/finder/tests`.
 
 ## Plan traps
 
@@ -827,12 +865,26 @@ is met by the owner's order; and `main` moved to 1104b7d, whose `test` gate runs
 nextest and whose 027 must land first (Prerequisite 6). The changed scenarios and Stop
 were run on copies of the round-3 probe branches: all US1 and US2 tests pass under
 `cargo test` and `cargo nextest`, as do US3's and US4's, and without the give-way
-US2-S9, US2-S11, US2-S12 and US2-S13 fail. One owner question is open, gap (d) under
-spec.md owner approval 6; the recommended default leaves it open.
+US2-S9, US2-S11, US2-S12 and US2-S13 fail. One owner question was then open, gap (d)
+under spec.md owner approval 6, whose recommended default left it open.
+
+Refreshed on 2026-11-15, once 027 had landed: `main` at b8dceaa was merged into this
+branch, 027's move map was applied to every finder test path, and every citation in the
+trio was re-read at b8dceaa. Of the files this trio cites or writes, only those under
+`crates/finder/tests` had moved, and each cited line still says what the trio says of
+it. US3's test became a module of finder's `motion` binary, which adds
+`crates/finder/tests/motion/main.rs` to US3's writes, shared with 027's US2, and owner
+approval 7 for its one `mod` line; US3's development check became the nextest filter for
+that module, and 027's layout guard joined US3's preserved tests. The same day the owner
+closed gap (d) under owner approval 6 ("Close it"): tracking's baseline is the session's
+last-seen count when it begins, handed over by `Session::begin_tracking` through one new
+method, `Tracker::start_with_resets`, within US3's writes, with FR-015, the edge case,
+T019 and T020 to match and one scenario, US3-S9. The round-3 probes were built on the old
+layout and were not rebuilt; the new baseline and US3-S9 were not probe-built.
 
 ```yaml
 version: 1
-reviewed_revision: c1ed295734253c7d6121052b0a14beb2ee64bc17
+reviewed_revision: b8dceaa9370a77e7012dd91debc2bef192c411b1
 stories:
   US1:
     tests:
@@ -861,7 +913,7 @@ stories:
         disposition: preserve
         assertion: "SkyWatcher::connect's exchanges, probe()'s order and the lost-telemetry rule are unchanged"
         decision: "plan.md:Shapes that existing tests pin"
-      - path: crates/finder/tests/mount_calls.rs
+      - path: crates/finder/tests/motion/mount_calls.rs
         status: existing
         disposition: preserve
         assertion: "a node with no mount describes no axes, refuses axis_state and goto_axis, and answers Stop OK"
@@ -1046,45 +1098,55 @@ stories:
     open_questions: []
   US3:
     tests:
-      - path: crates/finder/tests/mount_identity.rs
+      - path: crates/finder/tests/motion/mount_identity.rs
         status: new
         disposition: add
         assertion: "describe_mount carries firmware 3.40 and board 0x90; the session shows them and omits resets at 0"
         decision: "spec.md:US3-S1"
-      - path: crates/finder/tests/mount_identity.rs
+      - path: crates/finder/tests/motion/mount_identity.rs
         status: new
         disposition: add
         assertion: "after a reset GoTo, second sync and Track answer 409 with the power-cycled words and no GotoAxis reaches the node, until a sync from a later frame"
         decision: "spec.md:US3-S3"
-      - path: crates/finder/tests/mount_identity.rs
+      - path: crates/finder/tests/motion/mount_identity.rs
         status: new
         disposition: add
         assertion: "a slewing GoTo ends failed with power-cycled and sends StopAll; running tracking ends off with power-cycled"
         decision: "spec.md:US3-S5"
-      - path: crates/finder/tests/mount_identity.rs
+      - path: crates/finder/tests/motion/mount_identity.rs
         status: new
         disposition: add
         assertion: "a reset seen while a GoTo corrects ends it failed with power-cycled and sends StopAll with no further GotoAxis; a reset during a keyhole slew ends tracking off with power-cycled and sends no further waypoint"
         decision: "spec.md:US3-S7"
-      - path: crates/finder/tests/goto_refusal_api.rs
+      - path: crates/finder/tests/motion/mount_identity.rs
+        status: new
+        disposition: add
+        assertion: "a tracker given the session's last-seen count 0 while the node already reports 1 ends off with power-cycled at its first read, sends StopAll and sends no RateAxis"
+        decision: "spec.md:US3-S9"
+      - path: crates/finder/tests/motion/goto/refusals.rs
         status: existing
         disposition: preserve
         assertion: "GoTo's existing refusals and their words are unchanged"
         decision: "plan.md:Shapes that existing tests pin"
-      - path: crates/finder/tests/watchdog_goto.rs
+      - path: crates/finder/tests/motion/stop/watchdog.rs
         status: existing
         disposition: preserve
         assertion: "a GoTo still aborts when the node's watchdog stops the mount"
         decision: "plan.md:Shapes that existing tests pin"
-      - path: crates/finder/tests/goto_sim.rs
+      - path: crates/finder/tests/motion/goto/sim.rs
         status: existing
         disposition: preserve
         assertion: "GoTo's numbered corrections converge unchanged with no reset"
         decision: "plan.md:Shapes that existing tests pin"
-      - path: crates/finder/tests/keyhole_sim.rs
+      - path: crates/finder/tests/motion/tracking/keyhole.rs
         status: existing
         disposition: preserve
         assertion: "the keyhole's stop, slew, wait and resume are unchanged with no reset"
+        decision: "plan.md:Shapes that existing tests pin"
+      - path: crates/finder/tests/layout/main.rs
+        status: existing
+        disposition: preserve
+        assertion: "no test file at the top level of crates/finder/tests, the same helper files under support/, and only mod lines after the support tree in motion/main.rs"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
       - "GET /api/session with no reset and a node with no identity is byte-for-byte unchanged"
@@ -1092,7 +1154,7 @@ stories:
       - "MCP direct axis moves are not refused after a reset (owner decision 2)"
     checks:
       development:
-        - "cargo test -p finder --test mount_identity --locked"
+        - "cargo nextest run -p finder --locked --test motion mount_identity::"
       handoff: declared_gates
       independent: declared_pipeline
       release:
@@ -1103,7 +1165,8 @@ stories:
       - crates/finder/src/live.rs
       - crates/finder/src/session.rs
       - crates/finder/src/tracking.rs
-      - crates/finder/tests/mount_identity.rs
+      - crates/finder/tests/motion/main.rs
+      - crates/finder/tests/motion/mount_identity.rs
       - crates/scope-link/proto/scope_node/v1/scope_node.proto
       - crates/scope-node/src/service.rs
     no_write_reason: ""
@@ -1133,6 +1196,11 @@ stories:
         other_story: US2
         disposition: merge_order
         reason: "024 depends_on_landed 017, whose US2 last changed tracking.rs"
+      - path: crates/finder/tests/motion/main.rs
+        other_spec: 027-finder-tests-by-system
+        other_story: US2
+        disposition: merge_order
+        reason: "024 depends_on_landed 027, whose US2 created motion/main.rs and last changed it; US3 adds one mod line"
       - path: crates/scope-link/proto/scope_node/v1/scope_node.proto
         other_spec: 017-console-stop-confirm
         other_story: US4
