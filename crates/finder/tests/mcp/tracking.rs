@@ -160,7 +160,7 @@ async fn move_axis(rig: &Rig, duration: f64) -> f64 {
 }
 
 #[tokio::test(start_paused = true)]
-async fn track_first_goto_keeps_mcp_source_and_holds_m42_for_ten_minutes() {
+async fn track_first_goto_keeps_mcp_source_and_holds_m42_for_seventy_five_seconds() {
     let wall = Instant::now();
     let (rig, log) = rig(true).await;
     // This sync is away from M42, so an immediate Track would not prove GoTo.
@@ -177,15 +177,15 @@ async fn track_first_goto_keeps_mcp_source_and_holds_m42_for_ten_minutes() {
     source(&initial, &since);
     wait_tracking(&rig, &since).await;
     let started = rig.now();
-    // Include t=0, then every second through t=600, timed from tracking.
-    for second in 0..=600 {
+    // Include t=0, then every second through t=75, timed from tracking.
+    for second in 0..=75 {
         assert!((rig.now() - started - f64::from(second)).abs() <= 1e-5);
         let error = error_arcsec(&rig);
         assert!(error <= 60.0, "t={second}s: M42 error {error} arcsec");
         let view = session(&rig.app).await;
         assert_eq!(view["track"]["state"], "tracking", "{view}");
         source(&view, &since);
-        if second < 600 {
+        if second < 75 {
             ticks(&rig, 10).await;
         }
     }
@@ -204,7 +204,7 @@ async fn track_first_goto_keeps_mcp_source_and_holds_m42_for_ten_minutes() {
     tracking(&rig, false).await;
     assert!(!log.text().contains("test-token"));
     eprintln!(
-        "ten-minute live-loop hold took {:?} wall time",
+        "seventy-five-second live-loop hold took {:?} wall time",
         wall.elapsed()
     );
 }

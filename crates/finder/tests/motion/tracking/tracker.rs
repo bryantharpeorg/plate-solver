@@ -497,7 +497,11 @@ async fn pointing_samples_age_on_console_time_and_are_ignored_after_ending() {
     assert_eq!(state.tracking_offset, [0.0; 2]);
     assert_eq!(state.target.unwrap().id, target.id);
     // Feed-forward continues while samples expire, without changing the rates.
-    for _ in 0..1202 {
+    for _ in 0..1198 {
+        rig.tick().await;
+    }
+    assert_eq!(rig.tracker.state().samples.len(), 1);
+    for _ in 0..4 {
         rig.tick().await;
     }
     assert!(rig.tracker.state().samples.is_empty());
