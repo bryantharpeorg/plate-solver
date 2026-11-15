@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "015-tracking", "016-mcp", "017-console-stop-confirm", "018-live-chart-steady", "019-night-legibility", "020-live-chart-calm"]
 # Drafted 2026-11-14 against `main` at 870b332 with the gate change of pull request 214
 # applied, from the test-layer audit the owner asked for that day. Both stories were built
@@ -7,6 +7,9 @@ depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "0
 # draft until the owner flips it to `ready` on Tharpebox, which gives the approvals listed
 # under "Owner approvals" and dispatches it. The owner asked for it to run before 024, 025
 # and 026, so that those are written against the layout it leaves.
+# Flipped to ready 2026-11-15 on the owner's go (the owner chose to have the operator flip it
+# and the order 027, then 024, then 025), giving the seven owner approvals. Validated against
+# `main` at e62ffc2, after pull request 214: no findings, preflight 0, US1 then US2.
 ---
 
 # Feature Specification: Finder's Tests, Organized by System
