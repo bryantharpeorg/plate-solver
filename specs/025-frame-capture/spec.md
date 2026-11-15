@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["013-live-finder", "014-goto", "016-mcp", "017-console-stop-confirm", "019-night-legibility", "020-live-chart-calm", "024-mount-link-recovery", "027-finder-tests-by-system"]
 # Drafted 2026-11-14 by the plate-solver operator against `main` at c1ed295, from gap 3 of
 # the field findings of the night of 13–14 November 2026: no live frames from that night
@@ -33,6 +33,11 @@ depends_on_landed: ["013-live-finder", "014-goto", "016-mcp", "017-console-stop-
 # `depends_on_landed` and the shared writes of the four files both specs write, and
 # owner approval 7 names this spec's `mod` lines (plan.md § Prerequisites 6). No story's
 # design changes.
+# Flipped to ready 2026-11-15 under the owner's go ("Re-probe, then flip both"; 024
+# first, this spec once 024 had landed and the trio was re-anchored to it), giving the
+# seven owner approvals. US1 and US2's probe code merged with `main` at f0ea2d5 passed
+# the workspace's 677 tests, clippy and fmt. Validated against `main` at f0ea2d5: no
+# findings, preflight 0, US1, then US2, then US3.
 ---
 
 # Feature Specification: Saving Live Frames at the Telescope
