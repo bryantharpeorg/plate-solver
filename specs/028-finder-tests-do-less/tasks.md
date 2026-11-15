@@ -5,8 +5,9 @@ description: "Task list for 028-finder-tests-do-less: Finder's Tests Do Less Wor
 # Tasks: Finder's Tests Do Less Work
 
 **Prerequisites** (plan.md § Prerequisites):
-- `027-finder-tests-by-system` and `024-mount-link-recovery` have landed on `main` (024
-  at f0ea2d5, where this trio was re-anchored), and so has 025;
+- `027-finder-tests-by-system`, `024-mount-link-recovery` (at f0ea2d5) and
+  `025-frame-capture` have landed on `main`: 025's US1 and US2 at 9d8cc4e, where this
+  trio was re-anchored, and its US3 writes only web files;
 - the owner has kept or deleted the optional stories US11, US12 and US13;
 - the owner approvals in spec.md are given;
 - no operator-staged file is needed.
@@ -235,13 +236,21 @@ description: "Task list for 028-finder-tests-do-less: Finder's Tests Do Less Wor
 - [ ] T041 [US9] Use `Scratch` in `crates/finder/tests/cli/aim.rs`,
   `crates/finder/tests/cli/session.rs`, `crates/finder/tests/cli/backlash.rs`,
   `crates/finder/tests/cli/simulate.rs` and `crates/finder/tests/cli/track.rs`, removing
-  each file's own folder type (FR-027).
+  each file's own folder type (FR-027). In `crates/finder/tests/cli/recording.rs`, give
+  the binary's `--state` a path inside a `Scratch` that does not exist yet, declared
+  before the `Console` guard, which keeps killing and reaping the child and loses its
+  `remove_dir_all` (FR-027; plan.md § Interfaces "US9" item 2).
 - [ ] T042 [US9] Use `Scratch` in `crates/finder/tests/console/session/writes.rs`,
   `crates/finder/tests/console/targets.rs`, `crates/finder/tests/console/session/edits.rs`
   and `crates/finder/tests/console/session/durable.rs` (as
   `Scratch::new("session-durable")`, dropping its `Folder` type, its first
   `remove_dir_all` and its `create_dir_all`), keeping, in `targets.rs` and `edits.rs`, the
-  explicit assertion that the child left its folder empty (FR-027, US9-S3).
+  explicit assertion that the child left its folder empty (FR-027, US9-S3). Use it too in
+  `crates/finder/tests/console/recording.rs` and
+  `crates/finder/tests/console/recording_raw.rs`, dropping their `Folder` types; in
+  `console/recording.rs`'s refusal test the recordings root stays a path inside its
+  `Scratch` that does not exist yet, so its absence assertions and its regular-file case
+  stay (FR-027; plan.md § Interfaces "US9" item 2).
 - [ ] T043 [US9] Use `Scratch` in `crates/finder/tests/mcp/endpoint.rs`,
   `crates/finder/tests/mcp/motion.rs` and `crates/finder/tests/mcp/axis_moves.rs`
   (FR-027).
@@ -249,8 +258,9 @@ description: "Task list for 028-finder-tests-do-less: Finder's Tests Do Less Wor
   `crates/finder/tests/motion/model/routes.rs`,
   `crates/finder/tests/motion/tracking/backlash.rs`,
   `crates/finder/tests/motion/tracking/keyhole.rs`,
-  `crates/finder/tests/motion/tracking/night.rs` and
-  `crates/finder/tests/motion/goto/sim.rs`; the keyhole and tracking-night rigs hold
+  `crates/finder/tests/motion/tracking/night.rs`,
+  `crates/finder/tests/motion/goto/sim.rs` and
+  `crates/finder/tests/motion/recording_raw.rs`; the keyhole and tracking-night rigs hold
   their `Scratch` for their lifetime (FR-027).
 - [ ] T045 [US9] In `crates/scope-node/tests/cli.rs`,
   `crates/scope-node/tests/mount_config.rs`, `crates/scope-node/tests/rpicam.rs` and

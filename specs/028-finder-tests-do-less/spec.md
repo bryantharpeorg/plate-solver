@@ -1,6 +1,6 @@
 ---
 state: draft
-depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "015-tracking", "016-mcp", "017-console-stop-confirm", "018-live-chart-steady", "019-night-legibility", "020-live-chart-calm", "024-mount-link-recovery", "027-finder-tests-by-system"]
+depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "015-tracking", "016-mcp", "017-console-stop-confirm", "018-live-chart-steady", "019-night-legibility", "020-live-chart-calm", "024-mount-link-recovery", "025-frame-capture", "027-finder-tests-by-system"]
 # Drafted 2026-11-15 against `main` at 06a7d4e, after spec 027 landed, from the test-layer
 # audit of 2026-11-14 and the owner's answers of 2026-11-15. It builds after 024 and 025
 # have landed (plan.md § Prerequisites). It stays draft until the owner flips it to
@@ -17,6 +17,13 @@ depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "0
 # rebuilt US2, US3, US5, US8, US9 and US10 on the round-2 tree, and its findings and the
 # review's fixes are folded in (plan.md § Refinement Record). US8 now also covers 024's
 # `motion/mount_identity.rs`. The trio is still anchored at f0ea2d5.
+# Re-anchored 2026-11-15 to 025-frame-capture's US1 and US2 (main 9d8cc4e), and 025 joins
+# `depends_on_landed`: every citation in a file 025 changed was re-read there and moved
+# with its line, US6's shared write of `crates/finder/tests/cli/main.rs` names 025 US1,
+# and US9 also takes the scratch folders of 025's four new test modules, which build them
+# under `../../target`. None of 025's tests holds an inline rig solver. 025's US3, still
+# building, writes only web files this trio does not cite. The trio is now anchored at
+# 9d8cc4e (plan.md § Prerequisites 1 and § Refinement Record).
 ---
 
 # Feature Specification: Finder's Tests Do Less Work
@@ -55,7 +62,7 @@ waste comes back.
   goto::sim::five_catalog_targets_converge_after_two_syncs_and_report_progress`,
   80.944 s). The whole night runs its node at the production 200 ms frame interval
   (`crates/finder/src/simulate.rs:66` builds the node with no interval; the default is
-  `crates/scope-node/src/service.rs:55`), against 500 ms in every test rig.
+  `crates/scope-node/src/service.rs:56`), against 500 ms in every test rig.
 - Q: What did the owner decide? → A: On 2026-11-15:
   1. Two specs. This one is the Rust side; the page's Playwright tests are spec 029.
      This one builds after 024 and 025 have landed.
@@ -168,9 +175,12 @@ file, workflow, `CODEOWNERS` entry, `ergane.yaml` or `.config/nextest.toml` is e
     § Interfaces "US10").
 13. **Scratch folders move under `CARGO_TARGET_TMPDIR` and are removed on drop** (US9,
     FR-026 to FR-028; findings api-H2, mcp-H2, simA-H1, trk-H4, node-H2), including
-    those of US6's `console/session/durable.rs` and of 024's
-    `crates/scope-node/tests/mount_link.rs`. Coverage lost: none. Where a test's removal
-    of its folder was itself a check, the check stays as an assertion.
+    those of US6's `console/session/durable.rs`, of 024's
+    `crates/scope-node/tests/mount_link.rs`, and of 025's `cli/recording.rs`,
+    `console/recording.rs`, `console/recording_raw.rs` and `motion/recording_raw.rs`.
+    Coverage lost: none. Where a test's removal of its folder was itself a check, the
+    check stays as an assertion, and where a test asserts its folder absent, the folder
+    is a path inside the scratch folder that does not exist yet.
 14. **Code outside test files**: `crates/simulator/src/controls.rs` gains
     `Simulator::set_frame_interval` (FR-011). Test modules inside four product source
     files change: `crates/scope-node/src/rpicam/metadata.rs` (FR-025),
@@ -502,12 +512,14 @@ flip.
 - **A test under `cargo test` instead of nextest.** Every change here keeps a test
   passing when its binary runs all its tests in one process: scratch folders carry a
   counter as well as the process id.
-- **Specs 024 and 025 land first.** They add modules to `cli/main.rs`, `console/main.rs`
-  and `motion/main.rs` and edit `crates/scope-node/src/mount/mod.rs` and
-  `crates/finder/src/session.rs`. 024 has landed and is in `depends_on_landed`; every
-  citation here was re-read at f0ea2d5, where it landed. 025 is not yet in this tree, so
-  it is not in `depends_on_landed`; every citation is re-read on `main` again after it
-  lands (plan.md § Prerequisites).
+- **Specs 024 and 025 land first.** 024 added a module to `motion/main.rs` and edited
+  `crates/scope-node/src/mount/mod.rs` and `crates/finder/src/session.rs`; 025 added
+  four modules, `cli/recording.rs`, `console/recording.rs`, `console/recording_raw.rs`
+  and `motion/recording_raw.rs`, declared in their binaries' `main.rs`, and each builds
+  a scratch folder that US9 moves. Both are in `depends_on_landed`. Every citation in a
+  file 024 changed was re-read at f0ea2d5, and every citation in a file 025 changed was
+  re-read at 9d8cc4e, where 025's US1 and US2 landed; 025's US3 writes only web files
+  this spec does not cite (plan.md § Prerequisites).
 
 ## Requirements *(mandatory)*
 
@@ -623,10 +635,11 @@ flip.
 
 ## Assumptions
 
-- **Earlier features are in place.** 012 through 020, 024 and 027 have landed; 025
-  lands before this is dispatched. Every citation here holds at f0ea2d5, where 024
-  landed: those in files 024 changed were re-read there, and the rest are in files
-  unchanged since 06a7d4e, where the trio was drafted.
+- **Earlier features are in place.** 012 through 020, 024, 025 and 027 have landed:
+  025's US1 and US2 at 9d8cc4e, and its US3, the page's recording controls, writes only
+  web files. Every citation here holds at 9d8cc4e: those in files 025 changed were
+  re-read there, those in files 024 changed were re-read at f0ea2d5 and are unchanged
+  since, and the rest are in files unchanged since 06a7d4e, where the trio was drafted.
 - **Out of scope:**
   - the page's tests, Playwright and its servers (spec 029);
   - the oracle files and the audit's findings core-S1 to core-S3, which would edit them;
@@ -636,7 +649,8 @@ flip.
   - the two scratch folders made by unit tests in `crates/finder/src` (`session.rs` and
     `samples.rs`), where cargo does not set `CARGO_TARGET_TMPDIR`;
   - the other 5 s solver deadlines, which tests still reach: the production live
-    solver's, through `AppState::with_live`; uploaded-frame solves; and direct calls of
+    solver's, through `AppState::with_live` or, in 025's `console/recording.rs`,
+    `Live::start` with `DbSolver`; uploaded-frame solves; and direct calls of
     `solve::solve_frame_with_frame`;
   - the 15 s wait for the first live pointing in `cli/simulate.rs`'s `Server::pointing`
     (`crates/finder/tests/cli/simulate.rs:97`), another wall-clock bound;

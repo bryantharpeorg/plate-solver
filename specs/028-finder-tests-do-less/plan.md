@@ -79,7 +79,7 @@ The new assertions are listed per story in § Interfaces.
 | US6 | `crates/finder/tests/console/session/durable.rs` (new), `crates/finder/tests/console/session/mod.rs`, `crates/finder/tests/cli/session_node.rs` (deleted), `crates/finder/tests/cli/main.rs`, `crates/finder/tests/cli/aim.rs`, `crates/finder/tests/cli/backlash.rs`, `crates/finder/tests/motion/tracking/backlash.rs` |
 | US7 | `crates/finder/tests/support/live.rs`, `crates/finder/tests/console/aim.rs`, `crates/finder/tests/console/live/loop_.rs` |
 | US8 | `crates/finder/tests/motion/tracking/night.rs`, `crates/finder/tests/support/goto.rs`, `crates/finder/tests/support/mcp.rs`, `crates/finder/tests/support/stop.rs`, `crates/finder/tests/motion/night.rs`, `crates/finder/tests/motion/mount_identity.rs`, `crates/finder/tests/cli/simulate.rs`, `crates/scope-node/tests/cli.rs`, `crates/scope-node/src/rpicam/metadata.rs` |
-| US9 | `crates/finder/tests/support/mod.rs` and the twenty-two files of § Interfaces "US9" |
+| US9 | `crates/finder/tests/support/mod.rs` and the twenty-six files of § Interfaces "US9" |
 | US10 | the twelve files of § Interfaces "US10" |
 | US11 | `crates/finder/tests/motion/night.rs` |
 | US12 | `crates/finder/tests/mcp/tracking.rs` |
@@ -87,16 +87,17 @@ The new assertions are listed per story in § Interfaces.
 
 ## Interfaces
 
-Line numbers are at f0ea2d5, where 024 landed, except where a line says it is as an
-earlier story here leaves the file. A story re-reads each line before it edits it; the
-text is given as well as the number. Each story's list includes what the round-2 and
-round-3 probes of it had to do differently from the earlier text (§ Refinement Record).
+Line numbers are at 9d8cc4e, where 025's US1 and US2 landed, except where a line says it
+is as an earlier story here leaves the file. A story re-reads each line before it edits
+it; the text is given as well as the number. Each story's list includes what the
+round-2 and round-3 probes of it had to do differently from the earlier text
+(§ Refinement Record).
 
 ### Shared helpers this plan names
 
 - **The newest frame id (MCP rig).** `LinkManager::frames()`
-  (`crates/finder/src/link.rs:218`) is a watch that every frame from the node replaces
-  (`crates/finder/src/link.rs:486`). Its `id` is the node's capture counter, which counts
+  (`crates/finder/src/link.rs:250`) is a watch that every frame from the node replaces
+  (`crates/finder/src/link.rs:537`). Its `id` is the node's capture counter, which counts
   every capture, solved or not. `crates/finder/tests/mcp/frames.rs:180` already reads it.
   US1 adds to `crates/finder/tests/mcp/axis_moves.rs`:
 
@@ -129,7 +130,7 @@ round-3 probes of it had to do differently from the earlier text (§ Refinement 
   `rig.controls` is the node's own controls (`crates/finder/tests/support/mcp.rs:218`);
   `rig.sim.stop_frames()` would do nothing here, because the node was built with its own
   `NodeControls` (`crates/finder/tests/support/mcp.rs:214`). With frames stopped the
-  capture loop waits before its next capture (`crates/scope-node/src/service.rs:233`), so
+  capture loop waits before its next capture (`crates/scope-node/src/service.rs:240`), so
   nothing is rendered.
 
 - **A centred start.** As `already_centred_track_is_immediate_and_repeated_on_is_idempotent`
@@ -400,9 +401,9 @@ and records GoTo, Rate and StopAll commands (`crates/finder/tests/support/stop.r
 
    with `time::Duration` added to the file's existing `use std::{...}` group. The
    simulator's controls are the node's (`crates/simulator/src/node.rs:45`);
-   `NodeControls::set_frame_interval` (`crates/scope-node/src/service.rs:71`) refuses
+   `NodeControls::set_frame_interval` (`crates/scope-node/src/service.rs:72`) refuses
    zero; the capture loop reads the interval before every frame
-   (`crates/scope-node/src/service.rs:235`).
+   (`crates/scope-node/src/service.rs:242`).
 2. `crates/finder/tests/motion/night.rs`: after
    `let sim = state.simulator().unwrap().clone();` (`crates/finder/tests/motion/night.rs:136`),
    `sim.set_frame_interval(Duration::from_millis(500));` (the file already imports
@@ -480,7 +481,7 @@ other tests of the file are unchanged.
    `Session::with_state_file` on the empty folder (a fresh default session), dropped, and
    then set to mode 0644 before the stale `.tmp` is written beside it.
 2. **Delete** `crates/finder/tests/cli/session_node.rs` and `mod session_node;`
-   (`crates/finder/tests/cli/main.rs:11`). Its stderr check
+   (`crates/finder/tests/cli/main.rs:12`). Its stderr check
    (`crates/finder/tests/cli/session_node.rs:80`) moves to item 3; its restart, mode and
    exposure checks are item 1's.
 3. `crates/finder/tests/cli/aim.rs`: its server pipes the child's stderr
@@ -550,7 +551,7 @@ the real binary.
    module comment (`crates/finder/tests/motion/tracking/night.rs:4`). A runaway is ended
    by nextest (`.config/nextest.toml:23`, slow at 60 s, ended after five periods).
 2. The inline rig solvers: `Stars` in `crates/finder/tests/support/goto.rs:42` (its line
-   as US3 leaves the file; at f0ea2d5 `pub struct Stars;` is one line up), in
+   as US3 leaves the file; on `main` `pub struct Stars;` is one line up), in
    `crates/finder/tests/support/mcp.rs:113`, in `crates/finder/tests/support/stop.rs:65`,
    in `crates/finder/tests/motion/night.rs:21` and in
    `crates/finder/tests/motion/mount_identity.rs:58` (024 US3's file, whose call is at
@@ -563,10 +564,14 @@ the real binary.
    (`crates/plate-solver/src/status.rs:125`), so `u64::MAX` cannot overflow.
    Out of scope, and named so: the other 5 s solver deadlines tests still reach, which
    are the production live solver's through `AppState::with_live`
-   (`crates/finder/src/api.rs:243`), uploaded-frame solves (whose `timeout_ms` the upload
-   route parses, `crates/finder/src/api.rs:1130`), and direct calls of
-   `solve::solve_frame_with_frame` (`crates/finder/src/solve.rs:382`). Round 3's
-   solve-stall mutation, a deadline that starts 5 s early, failed:
+   (`crates/finder/src/api.rs:247`), uploaded-frame solves (whose `timeout_ms` the upload
+   route parses, `crates/finder/src/api.rs:1244`), and direct calls of
+   `solve::solve_frame_with_frame` (`crates/finder/src/solve.rs:382`). 025's new test
+   modules hold no inline rig solver: they solve through `AppState::with_live`, and one
+   test of `crates/finder/tests/console/recording.rs` builds `Live::start` with the
+   production `DbSolver` (`crates/finder/tests/console/recording.rs:411`), so all of
+   them are on the first of those paths. Round 3's solve-stall mutation, a deadline that
+   starts 5 s early, failed, on round 3's tree before 025:
 
    | State | finder's tests (351) | `mcp` and `motion` (164) |
    |---|---|---|
@@ -655,6 +660,10 @@ the real binary.
    | `crates/finder/tests/motion/tracking/night.rs:139` | `tracking-night-<name>` | never |
    | `crates/finder/tests/motion/goto/sim.rs:9` | US3's folder | as US3 left it |
    | `crates/finder/tests/console/session/durable.rs` (US6's new file) | `session-durable` | by its own `Folder` guard |
+   | `crates/finder/tests/cli/recording.rs:37` (025 US1's) | `recording-binary` | on drop, by its `Console` guard |
+   | `crates/finder/tests/console/recording.rs:36` (025 US1's) | `recording-<name>` | on drop |
+   | `crates/finder/tests/console/recording_raw.rs:28` (025 US2's) | `raw-<name>` | on drop |
+   | `crates/finder/tests/motion/recording_raw.rs:24` (025 US2's) | `raw-moving` | on drop |
 
    The keyhole and tracking-night rigs build their folders in `Rig::new`
    (`crates/finder/tests/motion/tracking/keyhole.rs:149`,
@@ -672,8 +681,39 @@ the real binary.
    (`crates/finder/tests/console/targets.rs:124`) also proved the child left the folder
    empty; it becomes `assert_eq!(std::fs::read_dir(&empty.0).unwrap().count(), 0)`.
    `crates/finder/tests/console/session/edits.rs` already counts the entries before it
-   removes the folder, and keeps that count. Imports a removed type or call leaves
-   unused are removed.
+   removes the folder, and keeps that count.
+
+   025's four modules each name a path under `../../target` that does not exist yet and
+   let the recorder or the binary create it. In `crates/finder/tests/console/recording_raw.rs`
+   and `crates/finder/tests/motion/recording_raw.rs`, and in every test of
+   `crates/finder/tests/console/recording.rs` but one, the `Scratch` is the recordings
+   folder itself: `Folder::new(..)` becomes `crate::support::Scratch::new` of the prefix
+   above, the `root.0` reads are unchanged, and the file's `Folder` type goes with its
+   stale-folder assertion and its `Drop`; `console/recording_raw.rs`'s
+   `fn folder(root: &Folder, ..)` (`crates/finder/tests/console/recording_raw.rs:156`)
+   takes `&crate::support::Scratch`. The folder now exists before the first start, which
+   the recorder's `create_dir_all` (`crates/finder/src/recording.rs:231`) accepts. The
+   exception is `invalid_requests_and_missing_recording_sources_leave_no_recording`
+   (`crates/finder/tests/console/recording.rs:429`), which asserts that refused requests
+   leave no recordings folder (`crates/finder/tests/console/recording.rs:463` and
+   `crates/finder/tests/console/recording.rs:481`) and then writes a regular file in its
+   place (`crates/finder/tests/console/recording.rs:482`). Its root is
+   `scratch.0.join("root")`, after `let scratch = crate::support::Scratch::new("recording-refusals");`,
+   a path that does not exist yet; the test's `root.0` reads become `root`, and those
+   assertions stay. `crates/finder/tests/cli/recording.rs` gives the binary's `--state`
+   the same kind of path, `scratch.0.join("state")` of a
+   `crate::support::Scratch::new("recording-binary")` declared before its `Console`
+   guard, so the folder is removed after the guard has killed and reaped the child.
+   `assert!(!root.exists())` (`crates/finder/tests/cli/recording.rs:41`) stays, so the
+   binary still creates its state folder, and only the guard's `remove_dir_all`
+   (`crates/finder/tests/cli/recording.rs:20`) goes. Its `current_dir`,
+   `CARGO_MANIFEST_DIR` joined with `../..` (`crates/finder/tests/cli/recording.rs:43`),
+   is the repository root, not a scratch folder, and stays. The three in-process modules
+   alias `crate::support::live` as `support` (`crates/finder/tests/console/recording.rs:3`),
+   so the helper is written `crate::support::Scratch` in full. Written out against
+   9d8cc4e, these edits make a diff of about 11 KB; no probe has built them yet.
+
+   Imports a removed type or call leaves unused are removed.
 3. The scope-node files have no shared helper and get none: in
    `crates/scope-node/tests/cli.rs:9`, `crates/scope-node/tests/mount_config.rs:9`,
    `crates/scope-node/tests/rpicam.rs:123` and `crates/scope-node/tests/mount_link.rs:159`
@@ -697,7 +737,8 @@ The two unit tests in `crates/finder/src` that make folders are left alone: carg
 
 ### US10: duplicates
 
-Every edit below was read at f0ea2d5; none touches an oracle file.
+Every edit below was read at f0ea2d5, and 025 changed none of these files, so each holds
+at 9d8cc4e; none touches an oracle file.
 
 | Finding | File | Edit | The stricter twin |
 |---|---|---|---|
@@ -729,7 +770,9 @@ becomes `solve_context_reports_a_set_cancel_flag`, and
 `patterns::bfc_order_tests::matches_cedar_order_and_visits_each_combination_once` moves
 to `patterns::tests::matches_cedar_order_and_visits_each_combination_once`. With every
 story kept, nextest runs 645 tests: the 660 of `main` at f0ea2d5, less 16, plus one
-(SC-003). `stop_all_stops_both_axes`, like the test it reduces, has no
+(SC-003). 025's US1 and US2 add 17 test functions, none of which a story here removes,
+so on 9d8cc4e the same sum is 677 less 16 plus one, 662; that count is taken from the
+source, not from a run. `stop_all_stops_both_axes`, like the test it reduces, has no
 positive control that the axes were moving before the stop. In `simA-D4`, the deleted
 no-mount ticks could not fail: a rig built with `connected` false has no mount. The
 probe found each new or moved assertion failing under a mutation of what it checks;
@@ -843,7 +886,7 @@ US3's far sync alone (374 frames in the five-target test, against 446 with both)
 | The stored syncs are computed from a second `SimMount`, and `second_from_file` checks the fitted tilt within 1′. | Type their numbers; check only that a tilt exists. | Numbers typed by hand would be an oracle nobody can check; the simulator's mount is the truth the test already uses. Round 2 found that a wrong fixture passes the five GoTos, which correct themselves, so only the tilt check catches it. |
 | One centred-start recipe: after the sync, tick at most 10 times until the session's pointing is within 1′ of M42, then post Track. | Post Track at once after the sync (round 1's text). | The node starts capturing when the rig is built, so the first sync comes from the start direction and Track posted at once arms a GoTo; round 2 saw that at every centred site. |
 | US10 keeps `detection_parameters_do_not_perturb_solve_math`. | Delete it with `explicit_detection_parameters_honored` (round 1's core-D6). | Round 2 found it holds the only assertion outside the oracle that detection finds isolated peaks on a zero background. The owner's approval covers only deletions that lose nothing or lose only what the skeptic's correction names. |
-| US9 also moves the scratch folders of US6's `durable.rs` and 024's `crates/scope-node/tests/mount_link.rs`. | Leave them on their own paths. | With `durable.rs`'s own `Folder`, FR-026's one helper would not be literally true of finder's tests; `mount_link.rs` landed after the audit with the same hazard. |
+| US9 also moves the scratch folders of US6's `durable.rs`, 024's `crates/scope-node/tests/mount_link.rs` and 025's four recording test modules. | Leave them on their own paths. | With `durable.rs`'s own `Folder`, FR-026's one helper would not be literally true of finder's tests; `mount_link.rs` and 025's modules landed after the audit with the same hazard, and 025's would fail US9-S2's `../../target` check. |
 | US11 and US12 add no guard assertion. | Assert the shortened span. | Their savings are read from the diff (US11-S2, US12-S2); US12's "more than 30 samples" holds at either span. |
 | Five GoTos stay chained in one test. | One test per target. | Chaining carries backlash, wind and correction state between targets, which only this test and the night check. |
 | 2 s for the cable-wind move. | 5 s. | The skeptic's corrected figure keeps steps near 7°; 5 s would be 17°. |
@@ -881,7 +924,7 @@ already applied. api-H1 was fixed by 027.
 
 ## Prerequisites before this spec is flipped to `ready`
 
-1. **024 and 025 have landed.** The owner's order is 024, 025, then 028 and 029.
+1. **024 and 025 have landed. Met.** The owner's order is 024, 025, then 028 and 029.
    024 has landed (`main` at f0ea2d5) and is in `depends_on_landed`; `main` was merged
    into this branch there, every citation in a file 024 changed was re-read at f0ea2d5,
    and the Refinement Record's `shared_writes` name 024's stories where they last wrote a
@@ -892,10 +935,22 @@ already applied. api-H1 was fixed by 027.
    solver a deadline that cannot fire) and `crates/scope-node/tests/mount_link.rs` (024
    US1, new; US9 moves its scratch folder). 024 also moved lines this spec cites in
    `crates/scope-node/src/service.rs`, `crates/finder/src/goto.rs`,
-   `crates/finder/src/tracking.rs` and `crates/finder/src/session.rs`. 025 is not in this
-   tree, so it is not in `depends_on_landed` yet: when its spec lands on `main`, add it,
-   re-read every citation of this trio on `main`, and update the `shared_writes`. It
-   writes `crates/finder/tests/cli/main.rs`, which US6 also writes (025's draft). Both add
+   `crates/finder/src/tracking.rs` and `crates/finder/src/session.rs`. 025 has landed
+   its Rust stories, its spec flipped `ready` at ed7f581, its US1 at 101fa04 (#228) and
+   its US2 at 9d8cc4e (#229), and is in `depends_on_landed`. `main` was merged into this
+   branch at 9d8cc4e and every citation in a file 025 changed was re-read there: lines
+   moved in `crates/finder/src/link.rs`, `crates/finder/src/api.rs`,
+   `crates/scope-node/src/service.rs` and `crates/finder/tests/cli/main.rs`, and no cited
+   fact changed. 025 US1 last wrote `crates/finder/tests/cli/main.rs` (`mod recording;`),
+   which US6 writes to remove `mod session_node;`, and US9 now also moves the scratch
+   folders of 025's four new test modules, US1's `crates/finder/tests/cli/recording.rs`
+   and `crates/finder/tests/console/recording.rs` and US2's
+   `crates/finder/tests/console/recording_raw.rs` and
+   `crates/finder/tests/motion/recording_raw.rs`; the Refinement Record's
+   `shared_writes` name those 025 stories. No 025 test holds an inline rig solver. 025's
+   US3, the page's recording controls, was still building at the re-anchor; it writes
+   only web files (`DESIGN.md`, `.impeccable/design.json` and files under
+   `crates/finder/web`), none of which this spec writes or cites by line. Both specs add
    modules to finder's binaries, which this spec does not reorder.
 2. **The owner keeps or deletes US11, US12 and US13**, and the approvals they carry.
 3. **The owner approvals are given.** Flipping gives them.
@@ -903,8 +958,10 @@ already applied. api-H1 was fixed by 027.
    each diff. Done on 2026-11-15 for all thirteen, and round 3 rebuilt US2, US3, US5,
    US8, US9 and US10 on their merged tree the same day (§ Refinement Record);
    § Measurements holds the probes' machine-independent counts. A story whose files 025
-   changes is probe-built again after 025 lands.
-5. **`crates/finder/tests` is still as read.** If a file there changed since f0ea2d5,
+   changed is probe-built again on 9d8cc4e or later: US6, for
+   `crates/finder/tests/cli/main.rs`, and US9, with 025's four recording modules, which
+   no probe has built yet.
+5. **`crates/finder/tests` is still as read.** If a file there changes after 9d8cc4e,
    re-read it and re-run the probe.
 
 ## Plan traps
@@ -943,9 +1000,9 @@ already applied. api-H1 was fixed by 027.
 |---|---|
 | US3's stored syncs do not match what solved frames would record (apparent altitude, flank). | They are computed from the simulator's mount, not typed; `second_from_file` asserts one epoch and a base tilt within 1′ of the simulator's, which round 2 saw fail for each wrong fixture it tried. If it still fails, US3 escalates rather than loosening a bound. |
 | A frame interval change takes one frame to apply. | Every count and cadence bound allows one frame. |
-| 024 or 025 changes a file this spec cites. | Prerequisite 1: re-read on `main` after they land. |
+| A change landing on `main` after 9d8cc4e touches a file this spec cites. | Prerequisites 1 and 5: re-read on `main` and re-probe. 025's US3 writes only web files. |
 | An optional story is deleted after round 2 built on it. | Nothing depends on an optional story; its files are its own or come after the stories it waits for. |
-| US9 and US10 are long lists across crates. | Each is a list of small, mechanical edits; the probes measured their diffs at 41 KB (US9, round 3) and 26 KB (US10, round 2, before it kept a test), under the 64 KiB preferred size, and US9's two added files are a few lines each. |
+| US9 and US10 are long lists across crates. | Each is a list of small, mechanical edits; the probes measured their diffs at 41 KB (US9, round 3) and 26 KB (US10, round 2, before it kept a test), under the 64 KiB preferred size, and US9's two added files are a few lines each. 025's four recording modules add about 11 KB of such edits to US9, which stays under 64 KiB. |
 
 ## Refinement Record
 
@@ -1106,17 +1163,33 @@ owner's settled answers.
   `with_session` and that no test outside `motion/goto/sim.rs` changes; trap 5 says the
   watchdog test's wait lets the watchdog fire; tasks.md's rules allow every command of
   a story's development checks; and four citations were corrected
-  (`crates/finder/src/link.rs:218`, `crates/finder/tests/motion/stop/watchdog.rs:205`,
-  the night's loop at line 198 once US4 and US8 have landed, and `state`'s other six
-  callers).
+  (`LinkManager::frames()` in `crates/finder/src/link.rs`,
+  `crates/finder/tests/motion/stop/watchdog.rs:205`, the night's loop at line 198 once
+  US4 and US8 have landed, and `state`'s other six callers).
 - **Counts:** § Measurements gives finder's frame and solve totals, counted on round 2's
   merged tree, and US10's "before" is the GitHub log's sum, 47.783 s.
 
 Round 3's wall-clock timings are not part of this trio either.
 
+**Re-anchored to `main` at 9d8cc4e, 2026-11-15**, once 025's US1 and US2 had landed:
+`main` was merged into this branch, and every citation in a file 025 changed was re-read
+at 9d8cc4e and moved with its line: in `crates/finder/src/link.rs` (218 to 250, 486 to
+537), `crates/finder/src/api.rs` (243 to 247, 1130 to 1244),
+`crates/scope-node/src/service.rs` (55 to 56, 71 to 72, 233 to 240, 235 to 242) and
+`crates/finder/tests/cli/main.rs` (11 to 12). No cited fact changed. 025 joins
+`depends_on_landed`, `reviewed_revision` is 9d8cc4e, and US6's shared write of
+`cli/main.rs` names 025 US1, its last writer. 025's four new test modules build their
+scratch folders under `../../target`, so US9 takes them: its writes, shared writes naming
+025 US1 and US2, four rows and a paragraph in § Interfaces "US9", T041, T042 and T044,
+and owner approval 13. Two of their tests assert their folder absent, so there the folder
+is a path inside the `Scratch` that does not exist yet. None of them holds an inline rig
+solver, so US8 gains no site; § Interfaces "US8" and spec.md's Assumptions name the
+`Live::start` with `DbSolver` that one of them builds among the out-of-scope deadlines.
+025's US3 writes only web files, none of which this trio cites.
+
 ```yaml
 version: 1
-reviewed_revision: f0ea2d54028ce3c97ab262ce6743ef777a8ed43a
+reviewed_revision: 9d8cc4e78c7a0762976303d5295caafd7fbada2f
 stories:
   US1:
     tests:
@@ -1429,10 +1502,10 @@ stories:
       disposition: merge_order
       reason: "028 depends_on_landed 027-finder-tests-by-system, whose US2 last wrote this file"
     - path: crates/finder/tests/cli/main.rs
-      other_spec: 027-finder-tests-by-system
-      other_story: US2
+      other_spec: 025-frame-capture
+      other_story: US1
       disposition: merge_order
-      reason: "028 depends_on_landed 027-finder-tests-by-system, whose US2 last wrote this file"
+      reason: "028 depends_on_landed 025-frame-capture, whose US1 last wrote this file, adding mod recording"
     - path: crates/finder/tests/cli/aim.rs
       other_spec: 027-finder-tests-by-system
       other_story: US2
@@ -1614,6 +1687,7 @@ stories:
       decision: "spec.md:US9"
     preserved_behavior:
     - "every assertion of every test whose scratch folder moves (spec.md FR-027)"
+    - "025's console/recording.rs still asserts that refused requests leave no recordings folder, and cli/recording.rs that the binary creates its state folder"
     - "the layout tests pass unchanged (spec.md US9-S5)"
     checks:
       development:
@@ -1649,6 +1723,10 @@ stories:
     - crates/scope-node/tests/mount_config.rs
     - crates/scope-node/tests/rpicam.rs
     - crates/scope-node/tests/mount_link.rs
+    - crates/finder/tests/cli/recording.rs
+    - crates/finder/tests/console/recording.rs
+    - crates/finder/tests/console/recording_raw.rs
+    - crates/finder/tests/motion/recording_raw.rs
     no_write_reason: ""
     shared_writes:
     - path: crates/finder/tests/support/mod.rs
@@ -1731,6 +1809,26 @@ stories:
       other_story: US1
       disposition: merge_order
       reason: "028 depends_on_landed 024-mount-link-recovery, whose US1 added this file"
+    - path: crates/finder/tests/cli/recording.rs
+      other_spec: 025-frame-capture
+      other_story: US1
+      disposition: merge_order
+      reason: "028 depends_on_landed 025-frame-capture, whose US1 added this file"
+    - path: crates/finder/tests/console/recording.rs
+      other_spec: 025-frame-capture
+      other_story: US1
+      disposition: merge_order
+      reason: "028 depends_on_landed 025-frame-capture, whose US1 added this file"
+    - path: crates/finder/tests/console/recording_raw.rs
+      other_spec: 025-frame-capture
+      other_story: US2
+      disposition: merge_order
+      reason: "028 depends_on_landed 025-frame-capture, whose US2 added this file"
+    - path: crates/finder/tests/motion/recording_raw.rs
+      other_spec: 025-frame-capture
+      other_story: US2
+      disposition: merge_order
+      reason: "028 depends_on_landed 025-frame-capture, whose US2 added this file"
     open_questions: []
   US10:
     tests:
