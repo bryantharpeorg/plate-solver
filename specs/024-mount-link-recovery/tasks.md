@@ -29,11 +29,13 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
 
 - [ ] T001 [US1] Create `crates/scope-node/tests/mount_link.rs` with the shared setup of
   spec.md § User Scenarios (a `MountLink` whose opener returns
-  `handle.reopen(clock.clone())`, paused time, a copy of the `Clock` in
+  `Ok(handle.reopen(clock.clone()))`, paused time, a copy of the `Clock` in
   `crates/scope-node/tests/skywatcher.rs:18`) and failing tests for US1-S1 and US1-S2.
 - [ ] T002 [US1] Add failing tests to `crates/scope-node/tests/mount_link.rs` for the
-  service and the frame over a disconnected link (US1-S3, US1-S4), and for the built
-  binary with a missing device on a free loopback port (US1-S5).
+  service and the frame over a disconnected link (US1-S3, US1-S4), for the built
+  binary with a missing device on a free loopback port (US1-S5), and for the emulator
+  handle's `set_position`, `inject_reply` and `power_cycle` on a bare `SkyWatcher`
+  (US1-S6).
 
 ### Implementation
 
@@ -43,11 +45,12 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
   `power_off`, `power_on`, `power_cycle`, `set_position` and `inject_reply` to
   `EmulatorHandle` exactly as plan.md § Interfaces gives them, with the behaviour it
   states for a powered-off board, injected replies, faults across a cycle and
-  `set_position`.
+  `set_position`. US2 and US4 depend on all six and may not write this file.
 - [ ] T005 [US1] Create `crates/scope-node/src/mount/skywatcher/mount_link.rs` with
-  `MountLink`, its `std::sync::Mutex` snapshot, its connect task (aborted on drop) and
-  FR-003's line, and its `Mount` impl including `connected` and `identity()` from
-  `report().firmware`; add `pub mod mount_link;` and
+  `MountLink`, its `std::sync::Mutex` snapshot, its connect task (aborted on drop, and
+  holding only the link's inner state) and FR-003's line, and its `Mount` impl
+  including `connected` and `identity()` from `report().firmware`, but not `health`,
+  which is US4's; add `pub mod mount_link;` and
   `pub use mount_link::{MountLink, Opener};` to
   `crates/scope-node/src/mount/skywatcher/mod.rs`.
 - [ ] T006 [US1] In `crates/scope-node/src/service.rs`, refuse and describe as plan.md
@@ -60,7 +63,7 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
   with US1's part only: starting without the mount, and FR-003's line (plan.md
   § Interfaces).
 - [ ] T008 [US1] Run the `lint` and `test` gates with every existing test unchanged and
-  green. Commit the green story (US1-S1, US1-S2, US1-S3, US1-S4, US1-S5).
+  green. Commit the green story (US1-S1, US1-S2, US1-S3, US1-S4, US1-S5, US1-S6).
 
 ## Phase 2: User Story 2 — A power cycle initialises the board again (Priority: P1)
 
@@ -68,10 +71,14 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
 
 - [ ] T009 [US2] Create `crates/scope-node/tests/mount_reset.rs` with the shared setup
   and failing tests for a power cycle (US2-S1), a lost and recovered link after a move
-  (US2-S2), a counts jump (US2-S3) and a GoTo that is not a jump (US2-S4).
+  (US2-S2) and a counts jump (US2-S3), and a test for a GoTo that is not a jump
+  (US2-S4). US2-S4 guards behaviour the story must keep (travel within the top rate is
+  no reset): it is a preserving test, not a failing one.
 - [ ] T010 [US2] Add failing tests to `crates/scope-node/tests/mount_reset.rs` for
   `mount_resets` on `axis_state` (US2-S5), moves dropped while disconnected (US2-S6),
-  one reset for a cycle after a move (US2-S7) and a bit that never read set (US2-S8).
+  one reset for a cycle after a move (US2-S7), a failed re-initialisation (US2-S9) and
+  a dropped read during one (US2-S10), and a test for a bit that never read set
+  (US2-S8), which like US2-S4 is a preserving test, not a failing one.
 
 ### Implementation
 
@@ -82,18 +89,21 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
   rule (three failed `state` reads in a row across both axes; a read while the link has
   no board is not a failed read) and the connect task's loop, the `io` lock, the bit
   rule and the jump rule of spec.md FR-006, the re-initialisation that takes the board
-  out first and wakes the connect task when it fails, one count per event, and the
-  reset's log line (plan.md § Interfaces).
+  out first, runs in a spawned task the finding read awaits through its `JoinHandle`
+  (so a dropped read leaves it running) and wakes the connect task when it fails, one
+  count per event, and the loss, reset and failed re-initialisation log lines (plan.md
+  § Interfaces).
 - [ ] T013 [US2] Add `mount_resets = 5` to `AxisState` in
   `crates/scope-link/proto/scope_node/v1/scope_node.proto`, and fill it in
   `crates/scope-node/src/service.rs`.
 - [ ] T014 [US2] Add US2's part to the `## The mount link` section of
-  `crates/scope-node/README.md`: resets, FR-007's line, and that a console restarted
-  after a power cycle needs a sync before GoTo. The console's refusal is US3's, so this
+  `crates/scope-node/README.md`: resets, FR-007's line, the loss and failed
+  re-initialisation lines, and that a console restarted after a power cycle needs a
+  sync before GoTo. The console's refusal is US3's, so this
   part does not describe it.
 - [ ] T015 [US2] Run the `lint` and `test` gates with every existing test unchanged and
   green. Commit the green story (US2-S1, US2-S2, US2-S3, US2-S4, US2-S5, US2-S6,
-  US2-S7, US2-S8).
+  US2-S7, US2-S8, US2-S9, US2-S10).
 
 ## Phase 3: User Story 3 — The console knows the board and its resets (Priority: P2)
 
@@ -105,7 +115,8 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
   failing tests for US3-S1 and US3-S2.
 - [ ] T017 [US3] Add failing tests to `crates/finder/tests/mount_identity.rs` for the
   refusals with frames stopped and their end once frames start again (US3-S3, US3-S4),
-  the GoTo abort (US3-S5) and tracking (US3-S6).
+  the GoTo abort (US3-S5) and tracking (US3-S6), whose test waits for the session's
+  `mount.resets` to read 1 as well as for tracking to end before it posts Track again.
 
 ### Implementation
 
@@ -114,15 +125,16 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
   `identity()` while connected in `crates/scope-node/src/service.rs`.
 - [ ] T019 [US3] In `crates/finder/src/live.rs` and `crates/finder/src/session.rs`, add
   `MountReading` and the poll's console time to `set_mount`, the identity, the `resets`
-  field, the sync-needed flag that only a sync from a frame whose exposure started after
-  the rise was seen clears, `POWER_CYCLED`, and Track's refusal in
+  field and its `is_zero` helper, `Session::mount_resets`, the sync-needed flag that
+  only a sync from a frame whose exposure started after the rise was seen clears,
+  `POWER_CYCLED`, and Track's refusal in
   `Session::track_target`; in `crates/finder/src/api.rs`, pass `self.clock.clone()` to
   `MountMonitor::start` in `with_simulation` and `with_link`, and add the refusal after a
   reset to the module docs' second-sync and Track paragraphs (plan.md § Interfaces).
 - [ ] T020 [US3] In `crates/finder/src/goto.rs`, add the refusal to
   `GoTo::check_request` and the abort against the count seen when the GoTo was
-  accepted; in `crates/finder/src/tracking.rs`, stop tracking when the count changes
-  (plan.md § Interfaces).
+  accepted; in `crates/finder/src/tracking.rs`, add the azimuth read on every tick of
+  the rate loop and stop tracking when the count changes (plan.md § Interfaces).
 - [ ] T021 [US3] Run the `lint` and `test` gates with every existing test unchanged and
   green. Commit the green story (US3-S1, US3-S2, US3-S3, US3-S4, US3-S5, US3-S6).
 
@@ -132,20 +144,22 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
 
 - [ ] T022 [US4] Create `crates/scope-node/tests/mount_garble.rs` with the shared setup
   and failing tests for a short status (US4-S1), five in a row (US4-S2), a short
-  position (US4-S3) and the GoTo path (US4-S4), and a test for a motion start sent once
-  (US4-S5). US4-S5 already passes before the story and guards that behaviour: it is a
-  preserving test, not a failing one.
+  position (US4-S3), the GoTo path (US4-S4) and health across a reset (US4-S6), and a
+  test for a motion start sent once (US4-S5). US4-S5 guards behaviour the story must
+  keep (a motion start is sent once): it is a preserving test, not a failing one,
+  although the file does not compile before the story adds `health`.
 
 ### Implementation
 
 - [ ] T023 [US4] In `crates/scope-node/src/mount/skywatcher/protocol.rs`, add the retried
   `read`, `MountHealth`, `GotoPath` and `SkyWatcher::health`, and in
   `crates/scope-node/src/mount/skywatcher/mount_link.rs`, `MountLink::health`, its
-  snapshot and the re-export of both types (plan.md § Interfaces).
+  snapshot copied before each read's reset check, the per-axis fold of the GoTo path
+  and the re-export of both types (plan.md § Interfaces).
 - [ ] T024 [US4] Add US4's part to the `## The mount link` section of
   `crates/scope-node/README.md`: FR-017's two lines.
 - [ ] T025 [US4] Run the `lint` and `test` gates with every existing test unchanged and
-  green. Commit the green story (US4-S1, US4-S2, US4-S3, US4-S4, US4-S5).
+  green. Commit the green story (US4-S1, US4-S2, US4-S3, US4-S4, US4-S5, US4-S6).
 
 ## Execution Order
 

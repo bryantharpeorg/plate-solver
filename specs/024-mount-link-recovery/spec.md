@@ -6,9 +6,12 @@ depends_on_landed: ["013-live-finder", "014-goto", "015-tracking", "017-console-
 # Refined 2026-11-14 from four probe builds of its stories and two reviews (anchors, scenarios),
 # then once more the same day from a completeness review of that refinement.
 # The owner settled the owner decisions on 2026-11-14 by accepting every recommended
-# answer. It stays draft until the text added after the probe builds is probe-built;
-# flipping it to `ready` gives the approvals listed under "Owner approvals" and
-# dispatches it.
+# answer.
+# Refined 2026-11-14 (round 2) by probe builds of all four stories from the trio as it
+# stood and two reviews; the scenarios this refinement added were run on the probe branches.
+# It stays draft until the owner answers the round-2 questions (owner decision 4's note,
+# owner approval 6); flipping it to `ready` gives the approvals listed under "Owner
+# approvals" and dispatches it.
 ---
 
 # Feature Specification: The Mount Link Survives a Power Cycle
@@ -94,6 +97,15 @@ made stale.
   most one reset, and a reset whose re-initialisation fails is counted once, when a
   later connect succeeds.
 
+### Session 2026-11-14 (round 2: probe builds and review)
+
+- Q: What if the caller gives up on the read that found a reset? → A: The
+  re-initialisation goes on. The console bounds each mount poll at 200 ms
+  (`crates/finder/src/live.rs:318`), less than a connect at 9600 baud may take, and a
+  dropped `axis_state` handler drops its read. So the re-initialisation runs in its own
+  task, which the read waits for (US2-S10), as the node's Stop already does
+  (`crates/scope-node/src/service.rs:489`).
+
 ## Owner decisions
 
 Each is a design or safety call. *Settled 2026-11-14: the owner accepted the recommended
@@ -127,6 +139,10 @@ answer to all five.* The alternatives stay listed for the record.
    link has no board it answers "the mount did not confirm the stop" at once; the board
    has just powered up at rest. Instead: Stop waits for the connect sequence to finish,
    which takes seconds on a silent board, then stops.
+   *Round 2 note, to re-confirm at the flip:* the same rule holds after a lost link (three
+   failed reads), not only during a re-initialisation. There the board may still be
+   powered and running a `:J` move, such as an MCP `move_axis`, and Stop sends it nothing
+   until a reconnect (plan.md § Risks). The answer above is unchanged.
 5. **Tracking's end reason after a reset** (FR-015). Recommended: `the mount was
    power-cycled`, which the page shows as it is
    (`crates/finder/web/src/components/TrackControl.tsx:78`). Instead: a code such as
@@ -153,6 +169,21 @@ golden or CI file changes.
    running Track stops when a reset is seen (FR-014, FR-015).
 5. **Wrong-length replies to status and position reads are retried**, sharing five
    transmissions in all, and each one's bytes are kept for the log (FR-016, FR-017).
+6. **Three gaps after a reset stay open** (FR-014, FR-015). *Open owner question
+   (round 2); the drafted default is to accept them:*
+   - a reset seen while a GoTo is solving or correcting is caught only at the next
+     slew's first read, after that slew's `goto_axis` pair, planned through the stale
+     model (`crates/finder/src/goto.rs:1010`), has been sent
+     (`crates/finder/src/goto.rs:917`);
+   - tracking's keyhole slews (`crates/finder/src/tracking.rs:581`) and their waits in
+     `at_rest` (`crates/finder/src/tracking.rs:509`) don't read the count, so a keyhole
+     slew can run to its end through stale zero points;
+   - the console's sync-needed flag is not persisted, so a console restarted after a
+     reset never refuses; the node's README says to sync first (FR-007).
+
+   Instead, US3 closes the first two within its writes: GoTo's `prepare` reads and
+   tracking's `at_rest` reads compare `mount_resets` with the baseline before each
+   correction or keyhole waypoint.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -160,11 +191,12 @@ The Rust scenarios of US1, US2 and US4 share one setup unless a scenario says ot
 - A `MountLink` (plan.md § Interfaces) over the emulator: one `Emulator` built with
   `EmulatorConfig::default()` (firmware 3.40 on board 0x90, auxiliary encoders,
   1,620,000 counts per revolution), and an opener that returns
-  `handle.reopen(clock.clone())`, so every reconnect reaches the same board. The stream
-  `Emulator::new` returns is not used.
+  `Ok(handle.reopen(clock.clone()))`, so every reconnect reaches the same board. The
+  stream `Emulator::new` returns is not used.
 - Tokio's clock is paused (`#[tokio::test(start_paused = true)]`) and the node clock is a
-  copy of the `Clock` in `crates/scope-node/tests/skywatcher.rs:18` (test files can't
-  import each other's items); "after N s" means `tokio::time::sleep` of N seconds.
+  copy of the `Clock` in `crates/scope-node/tests/skywatcher.rs:18` (copied rather than
+  included with `#[path]`, which would run `skywatcher.rs`'s tests again); "after N s"
+  means `tokio::time::sleep` of N seconds.
 - "Connected" means the test let 3 s pass after the link started and
   `link.connected()` reads true.
 - "Polled" means `state(Axis::Azimuth)` and `state(Axis::Altitude)` once each, as the
@@ -181,7 +213,14 @@ The console scenarios of US3 (S2 to S6) share one setup:
   `Rig`, copied into the new test file because that `Rig` hard-wires its own private
   mount, with a test `Mount` that wraps the `SimMount`, records the commands it
   receives, and reports firmware `3.40`, board `0x90` and a reset count the test sets.
-  Time is paused.
+  It is built as `Rig::new(START, 50.0, 120.0, true)` with `START` 1,768,528,800
+  (`crates/finder/tests/mcp/support.rs:97`) and target M42
+  (`crates/finder/tests/mcp/support.rs:237`), as the existing GoTo and Track tests build
+  it. Time is paused.
+- The copied `Rig` has no helper for `/api` writes, so each `POST` is built as the
+  `post` helper in `crates/finder/tests/stop/support.rs:232` builds it: a `host` header
+  naming `localhost` on port 8080, and a JSON body, or an empty body where a scenario
+  says so.
 - "After a sync" means the model holds a sync, as `Rig::sync` waits for
   (`crates/finder/tests/mcp/support.rs:278`).
 - "With frames stopped" means the test called `controls.stop_frames()`
@@ -202,26 +241,40 @@ other story needs a link that can connect after start.
 
 1. **Given** the setup with the emulator powered off (`handle.power_off()`) before the
    link starts, **When** 10 s pass, **Then** a committed test asserts that
-   `link.connected()` is false and that no exchange has a reply.
+   `link.connected()` is false, that at least one exchange was recorded, and that no
+   exchange has a reply.
 2. **Given** the same link, **When** the test calls `handle.power_on()` and 5 s pass,
    **Then** it asserts that `link.connected()` is true, that `link.axes()` reports
    1,620,000 counts per revolution on both axes, that the exchanges after power-on
    include `:F3\r`, `:W1050000\r` and `:W2050000\r` in that order, that
    `handle.auxiliary_enabled(1)` and `handle.auxiliary_enabled(2)` are false, and that
    `link.identity()` is `Some(MountIdentity { firmware: "3.40", board: "0x90" })`.
-3. **Given** a `NodeService` built with `with_mount` over a link whose emulator is
-   powered off, after 5 s, **When** the test calls the service's `describe_mount`,
-   `axis_state`, `goto_axis`, `rate_axis` and `stop_all` directly, **Then** it asserts
-   that `describe_mount` returns no axes, that `axis_state`, `goto_axis` and
-   `rate_axis` fail with `FAILED_PRECONDITION` and the message `mount not connected`,
-   that `stop_all` fails with `UNAVAILABLE`, and that no move is on the wire.
-4. **Given** the same service, **When** one frame is captured, **Then** the test asserts
-   that the frame has neither `axis_start` nor `axis_end`.
+3. **Given** a `NodeService` built with `with_mount` from
+   `SyntheticCamera::new(clock.clone())`, the clock, `"test-token"`, `Settings::default()`
+   and a link whose emulator is powered off, after 5 s, **When** the test calls the
+   service's `describe_mount`, `axis_state`, `goto_axis`, `rate_axis` and `stop_all`
+   directly, **Then** it asserts that `describe_mount` returns no axes, that
+   `axis_state`, `goto_axis` and `rate_axis` fail with `FAILED_PRECONDITION` and the
+   message `mount not connected`, that `stop_all` fails with `UNAVAILABLE`, and that no
+   move is on the wire.
+4. **Given** the same service, **When** the test takes the first frame from the service's
+   `frames` stream, **Then** it asserts that the frame has neither `axis_start` nor
+   `axis_end`.
 5. **Given** the built `scope-node` binary on the real clock, with a config whose
    `listen` is a free loopback port (one the test bound and released), whose adapter is
    `simulated` and whose `[mount]` device is a path that does not exist, **When** a
    test starts it and waits 5 s, **Then** it asserts that the process is still running
    and that standard error contains `mount not connected`.
+6. **Given** an `Emulator` on `EmulatorConfig::default()` and a `SkyWatcher` connected
+   directly over `handle.reopen(clock.clone())`, with no link, **When** the test calls
+   `handle.set_position(1, 500_000)` and reads the azimuth state, then calls
+   `handle.inject_reply(b'f', 1, "=101\r", 2)` and reads it once, then calls
+   `handle.power_cycle()` and reads it twice, **Then** it asserts that the first read's
+   position is 500,000; that `handle.auxiliary_enabled(1)` is false before the cycle and
+   true straight after it; that the `:f1\r` replies recorded from the injection on are
+   `=101\r`, `=101\r` and `=000\r` (an injected reply survives the cycle, and the board
+   then reads not initialised); and that the last `:j1\r` reply is `=000080\r`
+   (position 0).
 
 ---
 
@@ -254,9 +307,9 @@ model probably went wrong without anyone seeing it.
    `link.goto(Axis::Azimuth, 16_200)` and polls every 100 ms until the azimuth reads at
    rest, **Then** it asserts that the azimuth reads 16,200, that `:J1\r` was sent, and
    that `link.resets()` is 0: travel within the top rate is not a jump.
-5. **Given** a `NodeService` over the link of US2-S1 after its cycle, **When** the test
-   reads `axis_state` for both axes, **Then** it asserts that each reply's
-   `mount_resets` is 1.
+5. **Given** a `NodeService` built with `with_mount` over the link once US2-S1's cycle
+   and poll are done, **When** the test reads `axis_state` for both axes, **Then** it
+   asserts that each reply's `mount_resets` is 1.
 6. **Given** the link of US2-S2 after its fifth poll, before `power_on`, while
    `link.connected()` is false, **When** the test calls `link.goto(Axis::Azimuth, 1000)`
    and `link.rate(Axis::Altitude, 0.5)`, **Then** it asserts that no move is on the
@@ -271,6 +324,25 @@ model probably went wrong without anyone seeing it.
    five times sleeping 1 s before each, **Then** it asserts that `link.resets()` is 0
    and that `:F3\r` was sent exactly once in all, by the connect: a bit that has not
    read set on this board since the connect is not a reset.
+9. **Given** the setup, connected and polled once, with `handle.drop_replies(b'e', 1, 10)`
+   (enough to fail the re-initialisation and the connect task's next attempt), **When**
+   the test calls `handle.power_cycle()`, polls 1 s later on a spawned task, and 0.5 s
+   after that calls `link.stop_confirmed()`, `link.goto(Axis::Azimuth, 1000)` and
+   `link.rate(Axis::Altitude, 0.5)`, each inside
+   `tokio::time::timeout(Duration::from_millis(10), ...)`, **Then** it asserts that the
+   poll is still running, that `link.connected()` is false, that each timeout returns
+   `Ok`, `stop_confirmed` with false, that `link.resets()` is 0 when the poll returns,
+   that 10 s later `link.connected()` is true and `link.resets()` is 1, and that no move
+   is on the wire after the cycle: a failed re-initialisation wakes the connect task and
+   is counted once.
+10. **Given** the setup, connected and polled once, **When** the test calls
+    `handle.power_cycle()` and `handle.drop_replies(b'e', 1, 2)` (the re-initialisation
+    then takes over 0.6 s), and 1 s later polls inside
+    `tokio::time::timeout(Duration::from_millis(200), ...)`, as the console bounds its
+    mount poll (`crates/finder/src/live.rs:318`), **Then** it asserts that the timeout
+    elapsed, and that 5 s later `link.connected()` is true, `link.resets()` is 1 and
+    `:F3\r` appears exactly once in the exchanges after the cycle: a read dropped by its
+    caller does not cancel the re-initialisation it started.
 
 ---
 
@@ -287,7 +359,7 @@ after an unnoticed reset aims with zero points from before it.
 **Acceptance Scenarios**:
 
 1. **Given** a `NodeService` built with `with_mount` over a `MountLink` whose opener
-   returns `handle.reopen(clock.clone())` of an `Emulator` built with
+   returns `Ok(handle.reopen(clock.clone()))` of an `Emulator` built with
    `EmulatorConfig::default()`, with paused time and the test's own node clock, after
    3 s with `link.connected()` true, **When** the test calls the service's
    `describe_mount`, **Then** it asserts that the reply's `firmware` is `3.40` and its
@@ -314,9 +386,9 @@ after an unnoticed reset aims with zero points from before it.
 6. **Given** the US3 console after a sync, with `POST /api/track` `{"on":true}` accepted
    and `track.state` `tracking`, then frames stopped, **When** the test sets the reset
    count to 1, **Then** it asserts that within 2 s `track.state` is `off` with
-   `track.ended_reason` containing `power-cycled`, and that `POST /api/track`
-   `{"on":true}` then answers `409` with the error exactly `The mount was power-cycled:
-   sync again first`.
+   `track.ended_reason` containing `power-cycled` and the session shows `mount.resets`
+   1, and that `POST /api/track` `{"on":true}` then answers `409` with the error exactly
+   `The mount was power-cycled: sync again first`.
 
 ---
 
@@ -350,11 +422,19 @@ their cause is unknown until their bytes are seen.
 4. **Given** a link over `EmulatorConfig { refuse_absolute: true, ..Default::default() }`,
    connected, **When** the test calls `link.goto(Axis::Azimuth, 16_200)`, **Then** it
    asserts that `link.health().goto_path[0]` is `None` before the GoTo and
-   `Some(GotoPath::Relative)` after; and over a second link on the default board,
-   `Some(GotoPath::Absolute)`.
+   `Some(GotoPath::Relative)` after; and, after the same GoTo over a second link on the
+   default board, `Some(GotoPath::Absolute)`.
 5. **Given** the setup, connected, **When** the test calls
    `handle.drop_replies(b'J', 1, 1)` and `link.goto(Axis::Azimuth, 16_200)`, **Then** it
    asserts that `:J1\r` was sent exactly once: a motion start is never retried.
+6. **Given** the setup, connected, with `"=10\r"` injected once for `f` on axis 1 and
+   polled, then `link.goto(Axis::Azimuth, 16_200)` and a poll 2 s later, **When** the
+   test calls `handle.power_cycle()`, injects `"=1\r"` once for `f` on axis 1 and polls
+   1 s later, **Then** it asserts that `link.resets()` is 1, that
+   `link.health().invalid_replies` is 2, that `last_invalid` is `Some("=1\\r")`, and
+   that `goto_path` is `[Some(GotoPath::Absolute), None]`: the read that found the reset
+   still counts its wrong-length reply, and the old board's path stands until the new
+   board's first GoTo.
 
 ---
 
@@ -387,7 +467,9 @@ their cause is unknown until their bytes are seen.
   US3-S6).
 - **Stop while disconnected.** It clears the node's queued moves and answers "the mount
   did not confirm the stop" (US1-S3); the page already treats that as an unconfirmed
-  stop (017).
+  stop (017). After a lost link the board may still be moving (owner decision 4's note).
+- **The console gives up on a read mid-re-initialisation.** The re-initialisation runs on
+  in its own task and the link connects (US2-S10).
 
 ## Requirements *(mandatory)*
 

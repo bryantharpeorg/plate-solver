@@ -40,7 +40,8 @@ needed" flag lives for the console process.
   exchanges when every reply is valid; existing tests in
   `crates/scope-node/tests/skywatcher.rs` and `crates/scope-node/tests/skywatcher_stop.rs`
   build it directly.
-- `EmulatorConfig` gains no field: tests build it with struct literals.
+- `EmulatorConfig` gains no field: its `Default` and field set are pinned by the tests'
+  configs.
 - The `Error` enum of the Sky-Watcher module gains no variant.
 - Proto changes are additions only.
 
@@ -87,12 +88,13 @@ crates/finder/
 
 ## Interfaces
 
-Every story was probe-built from this section on 2026-11-14; where a probe had to differ,
-the section now says what compiled and passed. The reviews after the probes added parts
-that no probe has compiled yet: in US1, Stop through the queue while disconnected; in
-US2, the bit rule's need for a set bit first, releasing `io` before an in-line connect
-and waking the connect task when that connect fails; in US3, the frame cutoff for
-clearing the refusal and the console clock it needs.
+Every story was probe-built from this section twice on 2026-11-14, the second time from
+the trio as it then stood, and every signature here compiled as given. The second round
+also built the parts the first round's reviews had added (Stop through the queue while
+disconnected; the bit rule's need for a set bit first; `io` released before an in-line
+connect and the connect task woken after a failed one; the frame cutoff and its console
+clock). Where it had to add to the text, this section now says what it built: the
+re-initialisation runs in a spawned task, and the helpers and accessors named below.
 
 ### The `Mount` trait (`crates/scope-node/src/mount/mod.rs`, US1)
 
@@ -136,7 +138,7 @@ pub struct MountLink<S: BaudStream + 'static> {
 impl<S: BaudStream + 'static> MountLink<S> {
     /// Returns at once and connects in a background task.
     pub fn start(open: Opener<S>, clock: Arc<dyn NodeClock>) -> Arc<Self>;
-    /// US4: invalid-reply count, last invalid bytes, GoTo path per axis.
+    /// Added by US4, not US1: invalid-reply count, last invalid bytes, GoTo path per axis.
     pub fn health(&self) -> MountHealth;
 }
 impl<S: BaudStream + 'static> Mount for MountLink<S> { /* delegates to the SkyWatcher */ }
@@ -151,11 +153,15 @@ impl<S: BaudStream + 'static> Mount for MountLink<S> { /* delegates to the SkyWa
   `Arc<SkyWatcher<S>>` and the last state per axis; US2 adds the reset count, the jump
   baselines, the failure count and a pending cause, and US4 the health. The snapshot is
   cloned out and never held across an `await`; the `SkyWatcher`'s own lock still
-  serialises the board.
+  serialises the board. The opener, the clock and the snapshot sit in a private inner
+  struct behind an `Arc`, and the connect task holds only that `Arc`, never the
+  `Arc<MountLink>`: otherwise the link's `Drop`, which aborts the task, never runs. US2's
+  re-initialisation reaches the opener through it too.
 - **Connecting (US1).** The connect task calls `open()`, then `SkyWatcher::connect`. On
   success it logs FR-003's line and then the board's warnings as `mount warning: <text>`,
   and stores the `SkyWatcher`. On failure it logs `mount not connected: <error>` when
-  the error text differs from the last one, and waits 2 s. Against a silent board one
+  the error text differs from the last one since the last successful connect, so the
+  first failure after each loss is logged, and waits 2 s. Against a silent board one
   attempt takes 3 s (two bauds, `crates/scope-node/src/mount/skywatcher/protocol.rs:81`,
   each tried five times, `crates/scope-node/src/mount/skywatcher/transport.rs:43`, with
   a 300 ms timeout, `crates/scope-node/src/mount/skywatcher/transport.rs:6`), so
@@ -180,7 +186,8 @@ impl<S: BaudStream + 'static> Mount for MountLink<S> { /* delegates to the SkyWa
   `report().firmware`: `format!("{}.{:02}", major, minor)` and
   `format!("0x{:02X}", board)`.
 - **Lost (US2).** Three failed `state` reads in a row, counted across both axes and
-  cleared by any good read, drop the stored `SkyWatcher` and wake the connect task. A
+  cleared by any good read, drop the stored `SkyWatcher`, log
+  `mount link lost: 3 failed reads in a row` and wake the connect task. A
   read failed when `SkyWatcher::initialised` (below) is none after it. A read while the
   link has no board, from the capture loop or `axis_state`, is not a failed read: it
   reaches no board and counts toward nothing. From US2 the connect task loops: connect,
@@ -195,21 +202,34 @@ impl<S: BaudStream + 'static> Mount for MountLink<S> { /* delegates to the SkyWa
   - **the jump rule:** a reset when the counts moved from the axis's last good reading
     on this board by more than 1.5 × `top_rate_deg_per_s` × elapsed seconds ×
     `counts_per_revolution` / 360 + 1,000, taking both from the board's `axes()` and
-    wrapping the difference at 24 bits.
+    wrapping the difference at 24 bits with `protocol.rs`'s private `wrapped_delta`
+    (`crates/scope-node/src/mount/skywatcher/protocol.rs:312`), which becomes
+    `pub(super)`.
 
   One read counts at most one reset, and `not initialised` wins over
   `counts jumped on <axis>`. The read that found the reset is returned as read. On a
   reset the link first takes the board out of the snapshot, and the read drops its own
   handle, so `connected()` reads false and `goto` and `rate` drop their moves (FR-008);
-  then it releases `io` and runs `SkyWatcher::connect` on a fresh `open()` stream,
-  awaited by the read that found the reset. The count goes up when the
+  then it releases `io` and runs `SkyWatcher::connect` on a fresh `open()` stream in a
+  task of its own (`tokio::spawn`), whose `JoinHandle` the read that found the reset
+  awaits. A read dropped by its caller leaves that task running, as the node's Stop
+  handler already does (`crates/scope-node/src/service.rs:489`): the console bounds each
+  mount poll at 200 ms (`crates/finder/src/live.rs:318`), a connect at 9600 baud may
+  take longer, and a connect cancelled with the read would leave the link with no
+  board and no connect under way until the node restarts (US2-S10). No `await` comes
+  between taking the board out and the spawn. The count goes up when the
   re-initialisation succeeds, with the log line
-  `mount reset (<cause>): re-initialised <firmware> at <baud> baud`; if it fails, the
-  cause is kept, the link wakes the connect task, and that task's next successful
-  connect counts the cause, so one event counts once. A connect after the first with no
-  cause kept counts as `link lost`. While the in-line connect runs the link has no
-  board, so no read can count toward a loss and the connect task stays waiting: only
-  one connect is ever under way.
+  `mount reset (<cause>): re-initialised <firmware> at <baud> baud`, after FR-003's
+  connect line and with `<firmware>` as that line gives it; if it fails, the task logs
+  `mount reset (<cause>): re-initialisation failed: <error>`, keeps the cause and wakes
+  the connect task, and that task's next successful connect counts the cause, so one
+  event counts once (US2-S9). A connect after the first with no cause kept counts as
+  `link lost`. While the in-line connect runs the link has no board, so no read can
+  count toward a loss and the connect task stays waiting: only one connect is ever under
+  way. A read that comes meanwhile answers at once with the last state, `moving: true`.
+  The read that found the reset waits about 0.3 s for a connect that succeeds and about
+  3 s for one that fails; when that read is the capture loop's, no frame is captured
+  meanwhile.
   Every connect clears the jump baselines, the failure count and the init-bit history.
   Stop does not take `io`: while the link has no board it answers at once (owner
   decision 4). A Stop that took the old board just before still finishes on it.
@@ -233,16 +253,22 @@ impl<S: BaudStream + 'static> Mount for MountLink<S> { /* delegates to the SkyWa
   the `=` and the `\r`) and escaped with `escape_ascii`, and logged as
   `mount reply invalid for :<command><axis>: <bytes>`. Replies the transport can't frame
   are retried but not counted: their bytes never leave `transport.rs`, and `Error` gains
-  no variant. `goto` records `GotoPath::Absolute` or `GotoPath::Relative` per axis once
-  `:S`, or `:H` then `:M`, is accepted, before `:J`, and logs
+  no variant. A refusal (`!n`) or an I/O error returns at once, neither retried nor
+  counted, as the transport returned them before. `goto` records `GotoPath::Absolute`
+  or `GotoPath::Relative` per axis once `:S`, or `:H` then `:M`, is accepted, before
+  `:J`, and logs
   `mount goto path on axis <n>: :S` (or `:H/:M`) when the axis's path changes, so once
   per board. `GotoPath` displays as `:S` and `:H/:M`. `SkyWatcher` gains
   `pub async fn health(&self) -> MountHealth`.
-- **US4, `MountLink::health`:** after each delegated `state`, `goto` and `rate`, the link
-  copies `board.health()` into its snapshot, unless the board was replaced meanwhile. A
-  new connect folds the old board's health into a retired total, so `invalid_replies`
-  sums over every board the link has had, and `last_invalid` and `goto_path` prefer the
-  current board's. `mount_link.rs` re-exports both types
+- **US4, `MountLink::health`:** after each delegated `state` (before its reset check,
+  which takes the board out), `goto` and `rate`, the link copies `board.health()` into
+  its snapshot while the snapshot still holds that board, so the read that finds a reset
+  still counts its own wrong-length replies (US4-S6). A new connect folds the old
+  board's health into a retired total, so `invalid_replies` sums over every board the
+  link has had, and `last_invalid` and `goto_path` prefer the current board's:
+  `goto_path[i]` is the current board's path on axis `i`, or else the last retired one,
+  so after a reset the old board's path stands until the new board's first GoTo.
+  `mount_link.rs` re-exports both types
   (`pub use super::protocol::{GotoPath, MountHealth};`), because `protocol` is a private
   module (`crates/scope-node/src/mount/skywatcher/mod.rs:4`); tests import
   `scope_node::mount::skywatcher::mount_link::{GotoPath, MountHealth}`.
@@ -280,9 +306,13 @@ impl EmulatorHandle {
 }
 ```
 
-A powered-off board neither replies nor carries out commands. `inject_reply` carries out
-the command and replaces only its reply. Faults injected before a power cycle survive
-it. `set_position` overwrites the counts and does not cancel a GoTo in flight.
+A powered-off board neither replies nor carries out commands, and consumes no injected
+fault. `inject_reply` carries out the command and replaces only its reply. Faults
+injected before a power cycle survive it: `power_on` keeps them. `set_position`
+overwrites the counts and does not cancel a GoTo in flight; the board holds no clock, so
+on a moving axis the motion since the last exchange adds to the new counts, and tests
+call it only on an axis at rest. US1-S6 proves these helpers on the board itself, through
+a bare `SkyWatcher`, because US2 and US4 use them and may not write `emulator.rs`.
 `reopen` returns a stream at 9600 baud with empty buffers that is not recorded in
 `baud_attempts()`, like the stream `Emulator::new` returns. The handle gains no position
 getter: tests read positions through the link and set them with `set_position`.
@@ -358,12 +388,17 @@ spec asks for, and it opens the new epoch.
   module docs' second-sync and Track paragraphs (`crates/finder/src/api.rs:3`,
   `crates/finder/src/api.rs:17`) gain the refusal after a reset.
 - **`session.rs`**: `set_mount` stays `pub(crate)` and takes a
-  `pub(crate) struct MountReading { counts, connected, moving, firmware, board, resets }`
-  and `time: f64`, the poll's console time, in place of its three arguments. `MountView`
-  gains `#[serde(skip_serializing_if = "is_zero")] resets: u64`. The session keeps the
-  last count a good poll saw (none before the first, so the first poll only learns it),
-  and a `sync_needed` flag with the `time` of the poll that set it, set when a good
-  poll's count is above the last seen. `record_frame_sync` clears the flag only when it
+  `#[derive(Default)] pub(crate) struct MountReading { counts: Option<[u32; 2]>,
+  connected: bool, moving: bool, firmware: Option<String>, board: Option<String>,
+  resets: Option<u64> }` and `time: f64`, the poll's console time, in place of its three
+  arguments; its default is a failed poll, and its `resets: None` leaves the last-seen
+  count. `MountView` gains `#[serde(skip_serializing_if = "is_zero")] resets: u64`, with
+  a private `fn is_zero(n: &u64) -> bool` in `session.rs` (none exists in the
+  workspace). The session keeps the last count a good poll saw (none before the first,
+  so the first poll only learns it), readable as
+  `pub(crate) fn Session::mount_resets(&self) -> Option<u64>`, and a `sync_needed` flag
+  with the `time` of the poll that set it, set when a good poll's count is above the
+  last seen. `record_frame_sync` clears the flag only when it
   records a sync from a frame that started after that time (the frame's start on the
   console clock is its sync time less half the exposure,
   `frame.end_s - frame.start_s`), as `crates/finder/src/goto.rs:950` waits for an
@@ -379,16 +414,21 @@ spec asks for, and it opens the new epoch.
   (`crates/finder/src/api.rs:725`) and `GoTo::refusal`, so `GET /api/session`'s GoTo
   refusal shows the same words. `GoTo::check_axis_move` is not changed (owner
   decision 2). A running GoTo takes as its baseline the session's last-seen count when
-  it was accepted (its first read's count before the console's first poll); its first
+  it was accepted, `Session::mount_resets()` read in `GoTo::start_request` after
+  `check_request` and passed to the private `run` and `motion` (its first read's count
+  when that is none, before the console's first poll); its first
   read (`crates/finder/src/goto.rs:907`) and each slewing read beside `watchdog_stops`
   (`crates/finder/src/goto.rs:930`) end it `failed` with
   `mount power-cycled during the move` when `mount_resets` differs. The existing failure
   path then sends `StopAll`. A reset during the solving or correcting phases is seen at
   the next slew, if any.
-- **`tracking.rs`**: the rate loop (`crates/finder/src/tracking.rs:735`) reads
-  `axis_state` for the azimuth on each 1 s tick; the first read sets the baseline, and a
-  change ends tracking with `the mount was power-cycled` (owner decision 5). The
-  keyhole and take-up waits don't check it.
+- **`tracking.rs`**: the rate loop (`crates/finder/src/tracking.rs:735`) gains an
+  `axis_state` read of the azimuth on every 1 s tick, right after the tick (today it
+  reads `axis_state` only in two conditional branches,
+  `crates/finder/src/tracking.rs:796` and `crates/finder/src/tracking.rs:820`). The first
+  read sets the baseline, a change ends tracking with `the mount was power-cycled`
+  (owner decision 5), and a failed read ends it `link_lost`, as the loop's other reads
+  do. The keyhole and take-up waits don't check it (owner approval 6).
 - MCP `goto_target` and `set_tracking` go through `GoTo::check_request` and
   `Session::track_target`, so they refuse with the same words without a change of their
   own; no scenario reads them.
@@ -397,16 +437,25 @@ spec asks for, and it opens the new epoch.
 
 A `## The mount link` section, written by the story that builds each part. US1: the node
 starts without the mount and connects when it answers, and FR-003's line. US2: a power
-cycle is recognised and the board is initialised again, the reset line of FR-007, and
-that a console restarted after a power cycle needs a sync before GoTo. US4: FR-017's two
-lines. The console's refusal is US3's and is documented in the console's own API docs
+cycle is recognised and the board is initialised again, the reset line of FR-007, the
+loss line and the failed re-initialisation line, and that a console restarted after a
+power cycle needs a sync before GoTo. US4: FR-017's two lines. The console's refusal
+is US3's and is documented in the console's own API docs
 (`crates/finder/src/api.rs`), not in the node's README.
 
-### Log lines
+### Read from the diff, not from a test
 
-The log lines of FR-001, FR-003, FR-007 and FR-017 are read from the story's diff, not
-from a test: no test reads the node's standard error in process, and US1-S5 reads the
-binary's only for `mount not connected`.
+- **The log lines** of FR-001, FR-003, FR-007 and FR-017, and the loss and failed
+  re-initialisation lines above: no test reads the node's standard error in process,
+  and US1-S5 reads the binary's only for `mount not connected`.
+- **The frame cutoff in `record_frame_sync` (US3).** No scenario tells it apart from
+  "any recorded sync clears the flag": US3-S3 records no sync, and every sync after
+  US3-S4 restarts frames comes from a frame exposed after the rise. A frame in flight
+  across the rise can't be staged with the rig's 500 ms frames and 200 ms exposure.
+- **That every connect clears the jump baselines and the init-bit history (US2).** The
+  probe showed no scenario fails without either: US2-S2's reconnect comes about 10 s
+  after the last good read, when the jump limit is far above the 100,000 counts the
+  power-on zero moves.
 
 ## Shapes that existing tests pin
 
@@ -445,6 +494,8 @@ These are not changed by any story:
 | The monitor gets the console clock from `api.rs` | Time the rise from `LinkStatus.last_frame_at` or `SystemTime` | The last frame's arrival can be older than the poll, and `SystemTime` is not the clock the tests and the simulation run on. |
 | A session flag, not a persisted one | Store the count with each sync | It changes the session file's format; a console restart after a cycle is rare and the README covers it. |
 | Stop still goes through the queue while disconnected | Answer without the queue | Stop must clear queued moves whatever the link's state. |
+| The re-initialisation runs in a spawned task the finding read awaits | Await `SkyWatcher::connect` inside the read | The read is often a console `axis_state` call bounded at 200 ms; a dropped read must not cancel the connect (US2-S10). |
+| US1-S6 proves the emulator helpers through a bare `SkyWatcher` | Through the link | Later stories change what the link does after a jump or a cleared bit, and may not edit US1's test. |
 | Retry reads in `protocol.rs`, one transmission a try | Retry in the transport | The transport can't tell a short status from a valid empty acknowledgement, and nested retries would allow 25 transmissions. |
 | Keep bytes in `health()` | Only log them | A test can read a value; it can't read the node's standard error in process. |
 
@@ -469,13 +520,22 @@ These are not changed by any story:
 
 1. **The earlier specs have landed:** `013-live-finder`, `014-goto`, `015-tracking` and
    `017-console-stop-confirm`. Met: 017's last story landed at c1ed295.
-2. **`main` is still as read.** Every citation here is at c1ed295. `main` at 0a33c19
-   adds only `specs/020-live-chart-calm/`, whose stories write `crates/finder/web`,
-   `crates/finder/src/solve.rs`, a finder test and `DESIGN.md`, none of 024's files. If
-   `main` has moved in these files since, re-read them and re-run the validator.
+2. **`main` is still as read.** Every citation here is at c1ed295. `main` at f8dab49
+   adds `specs/020-live-chart-calm/` and its US1 and US2, which write
+   `crates/finder/web`, `crates/finder/src/solve.rs`,
+   `crates/finder/tests/star_detected.rs` and `DESIGN.md`, none of 024's files or
+   citations. If `main` has moved in these files since, re-read them and re-run the
+   validator.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
-   decisions, § Owner approvals). Flipping to `ready` records them.
+   decisions, § Owner approvals). Flipping to `ready` records them, including the
+   answers to the round-2 questions: owner decision 4's note and owner approval 6.
 4. **No operator-staged files are needed.**
+5. **Draft 025-frame-capture is ordered against this spec.** It writes three of 024's
+   files: its US1 writes `crates/finder/src/api.rs`, and its US2 writes
+   `crates/finder/src/api.rs`, the proto and `crates/scope-node/src/service.rs`. Neither
+   trio orders against the other yet. Whichever of 024 and 025 is flipped to `ready`
+   second first adds the other to `depends_on_landed`, or adds `shared_writes` entries
+   with `merge_order` for those files.
 
 ## Plan traps
 
@@ -487,8 +547,8 @@ that keeps it from recurring. They bind every story.
 2. **A named command is read literally.** *Check:* commands are copied from
    § Verification.
 3. **One evidence budget.** *Check:* each story keeps its diff under 64 KiB, measured
-   with `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c`. The probe
-   builds came to 28, 25, 29 and 16 KB.
+   with `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c`. The round-2
+   probe builds came to 29, 30, 35 and 18 KB (US3's is mostly its copy of the `Rig`).
 4. **The sandbox has only the gates' tools.** *Check:* no task runs a tool outside them.
 5. **A spec fixed mid-epic needs a relaunch.** The judge grades the spec as dispatched.
    *Check:* no builder edits `specs/024-mount-link-recovery/` or `.specify/`.
@@ -502,9 +562,11 @@ that keeps it from recurring. They bind every story.
 8. **A reset that the test caused itself.** A GoTo moves counts quickly; a jump rule
    that is too tight would count it. *Check:* US2-S4 runs a real GoTo and asserts no
    reset, and US2-S2 and US2-S7 move 100,000 counts first.
-9. **Struct literals break on a new field.** *Check:* no field is added to
-   `EmulatorConfig`, `AxisState` (the node's Rust struct), `Error` or any type a test
-   builds by literal; proto messages are built only in `crates/scope-node/src/service.rs`.
+9. **Struct literals break on a new field.** *Check:* no field is added to `AxisState`
+   (the node's Rust struct, built by literal in `crates/simulator/src/mount.rs:189`),
+   `Error` or any type a test builds by literal, and `EmulatorConfig` keeps its fields
+   (§ Technical Context); proto messages are built only in
+   `crates/scope-node/src/service.rs`.
 10. **Each worktree builds on its own.** *Check:* no story sets `CARGO_TARGET_DIR`.
 11. **Every solved frame is a sync.** A refusal that a sync clears is gone by the next
     solved frame. *Check:* US3-S3 and US3-S6 stop the node's frames before they set the
@@ -520,7 +582,10 @@ that keeps it from recurring. They bind every story.
 | The real board's goto speed was never measured; above 5.1°/s every long GoTo would trip the jump rule. | Owner decision 1; the first powered night should include a move over 10°. |
 | A reset during a long slew isn't seen until the next poll. | The motors lose power with the board; the GoTo reads the count every 50 ms while slewing and the console's poll runs every 250 ms. |
 | Reconnecting while a move is queued sends a stale move. | `goto` and `rate` send nothing while not connected (FR-008), and the console aborts on a reset (FR-015); owner decision 3. |
-| Two open descriptors on one serial device split its replies. | A reset takes the old board out under `io` and drops every handle on it before `open()`; only a Stop already under way can still finish on it. Reads while there is no board are not failed reads, so the connect task wakes only for a loss or a failed in-line connect, never beside one. |
+| Two open descriptors on one serial device split its replies. | A reset takes the old board out under `io` and drops every handle on it before `open()`; only a Stop already under way can still finish on it. Reads while there is no board are not failed reads, so the connect task wakes only for a loss or a failed in-line connect, never beside one; the spawned re-initialisation wakes it only after its own connect has failed. |
+| A caller that gives up on the read that found a reset cancels the re-initialisation, leaving the link with no board and nothing to wake the connect task. | The re-initialisation runs in a spawned task that the read awaits through its `JoinHandle`, so a dropped read leaves it running (US2-S10). |
+| After a lost link the board may still be powered and running a `:J` move, and Stop sends it nothing until a reconnect. | Owner decision 4's round-2 note, re-confirmed at the flip. A pulled cable can't be stopped through it anyway; the reconnect counts a reset, and the console then stops a running GoTo or Track (FR-015). |
+| One failed read now takes five wrong-length replies, and three failed reads in a row across both axes are a lost link, so a burst of about 15 wrong-length replies on alternating reads becomes a lost link and one reset. | FR-006 and FR-016 as written; every such reply is logged with its bytes (FR-017), so a night's log shows whether it happens. |
 | The retry hides a real fault. | Every wrong-length reply is counted and logged with its bytes (FR-017). |
 
 ## Refinement Record
@@ -539,11 +604,23 @@ would count a reset on every poll of a board that never sets the bit; and severa
 waits, imports and oracles needed fixing. A completeness review of that revision then
 found that the rule clearing the console's refusal needs the console clock in the mount
 poll, which only `crates/finder/src/api.rs` can pass, so US3 now writes it, and that a
-failed in-line re-initialisation must wake the connect task. § Interfaces names the
-parts no probe has compiled. Writes come from the task text. Shared writes name the
-merge edge that orders them, and the 013, 014, 015 and 017 stories that last wrote the
-same file on `main`. Nothing in this record is an owner approval: those are in
-spec.md, and flipping to `ready` gives them.
+failed in-line re-initialisation must wake the connect task.
+
+Round 2, the same day: each story was probe-built again in a throwaway worktree from the
+trio as it then stood, stacked the same way. Every probe passed its story's tests, its
+crates' tests, clippy and fmt, with no undeclared write and no existing test touched,
+in 18 to 35 KB of diff, and every signature in § Interfaces compiled as given. Those
+probes and two more reviews showed what this revision fixes: a read awaiting the
+in-line re-initialisation could be dropped by a console that gives up on its 200 ms
+poll, leaving the link disconnected until the node restarts, so the re-initialisation
+now runs in a spawned task; US1's scenarios never reached the emulator helpers that US2
+and US4 rely on and may not write; US4's health copy must come before the reset check;
+and several setups, helpers and races needed naming. The scenarios this revision adds
+(US1-S6, US2-S9, US2-S10, US4-S6) were run on the round-2 probe branches and pass, and
+US2-S10 fails when the spawn is replaced by an in-line await. Writes come from the task
+text. Shared writes name the merge edge that orders them, and the 013, 014, 015 and 017
+stories that last wrote the same file on `main`. Nothing in this record is an owner
+approval: those are in spec.md, and flipping to `ready` gives them.
 
 ```yaml
 version: 1
@@ -566,6 +643,11 @@ stories:
         disposition: add
         assertion: "the binary with a missing mount device keeps running and logs mount not connected"
         decision: "spec.md:US1-S5"
+      - path: crates/scope-node/tests/mount_link.rs
+        status: new
+        disposition: add
+        assertion: "on a bare SkyWatcher, set_position reads back, an injected reply is recorded and survives a power cycle, and the cycled board reads not initialised at position 0 with its encoders on again"
+        decision: "spec.md:US1-S6"
       - path: crates/scope-node/tests/skywatcher.rs
         status: existing
         disposition: preserve
@@ -677,6 +759,11 @@ stories:
         disposition: add
         assertion: "a cycle after a move counts one reset and sends F3 once; a status bit that never read set counts none"
         decision: "spec.md:US2-S7"
+      - path: crates/scope-node/tests/mount_reset.rs
+        status: new
+        disposition: add
+        assertion: "a failed re-initialisation leaves moves and Stop answering at once and is counted once by the connect task's next connect; a read dropped at 200 ms does not cancel the re-initialisation"
+        decision: "spec.md:US2-S9"
     preserved_behavior:
       - "the first connect after start is not a reset"
       - "watchdog_stops is unchanged"
@@ -830,6 +917,11 @@ stories:
         disposition: add
         assertion: "the GoTo path is Relative on a board that refuses absolute moves and Absolute otherwise; a motion start is sent once"
         decision: "spec.md:US4-S4"
+      - path: crates/scope-node/tests/mount_garble.rs
+        status: new
+        disposition: add
+        assertion: "the read that finds a reset still counts its wrong-length reply, and the old board's GoTo path stands until the new board's first GoTo"
+        decision: "spec.md:US4-S6"
       - path: crates/scope-node/tests/skywatcher.rs
         status: existing
         disposition: preserve
