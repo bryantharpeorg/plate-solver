@@ -710,8 +710,9 @@ the real binary.
    `CARGO_MANIFEST_DIR` joined with `../..` (`crates/finder/tests/cli/recording.rs:43`),
    is the repository root, not a scratch folder, and stays. The three in-process modules
    alias `crate::support::live` as `support` (`crates/finder/tests/console/recording.rs:3`),
-   so the helper is written `crate::support::Scratch` in full. Written out against
-   9d8cc4e, these edits make a diff of about 11 KB; no probe has built them yet.
+   so the helper is written `crate::support::Scratch` in full. Built against 9d8cc4e by
+   the round-4 probe, these edits make a diff of 12,349 B, and US9's whole diff is
+   53,272 B.
 
    Imports a removed type or call leaves unused are removed.
 3. The scope-node files have no shared helper and get none: in
@@ -960,7 +961,7 @@ already applied. api-H1 was fixed by 027.
    § Measurements holds the probes' machine-independent counts. A story whose files 025
    changed is probe-built again on 9d8cc4e or later: US6, for
    `crates/finder/tests/cli/main.rs`, and US9, with 025's four recording modules, which
-   no probe has built yet.
+   round 4 built on 9d8cc4e.
 5. **`crates/finder/tests` is still as read.** If a file there changes after 9d8cc4e,
    re-read it and re-run the probe.
 
@@ -1002,7 +1003,7 @@ already applied. api-H1 was fixed by 027.
 | A frame interval change takes one frame to apply. | Every count and cadence bound allows one frame. |
 | A change landing on `main` after 9d8cc4e touches a file this spec cites. | Prerequisites 1 and 5: re-read on `main` and re-probe. 025's US3 writes only web files. |
 | An optional story is deleted after round 2 built on it. | Nothing depends on an optional story; its files are its own or come after the stories it waits for. |
-| US9 and US10 are long lists across crates. | Each is a list of small, mechanical edits; the probes measured their diffs at 41 KB (US9, round 3) and 26 KB (US10, round 2, before it kept a test), under the 64 KiB preferred size, and US9's two added files are a few lines each. 025's four recording modules add about 11 KB of such edits to US9, which stays under 64 KiB. |
+| US9 and US10 are long lists across crates. | Each is a list of small, mechanical edits; the probes measured their diffs at 41 KB (US9, round 3) and 26 KB (US10, round 2, before it kept a test), under the 64 KiB preferred size, and US9's two added files are a few lines each. 025's four recording modules add 12,349 B of such edits to US9, whose whole diff is 53,272 B, under 64 KiB. |
 
 ## Refinement Record
 
@@ -1186,6 +1187,17 @@ is a path inside the `Scratch` that does not exist yet. None of them holds an in
 solver, so US8 gains no site; § Interfaces "US8" and spec.md's Assumptions name the
 `Live::start` with `DbSolver` that one of them builds among the out-of-scope deadlines.
 025's US3 writes only web files, none of which this trio cites.
+
+**Round 4 (probe on 025's code), 2026-11-15.** Every story's round-3 probe code, merged
+with `main` at 9d8cc4e (probe/028-r4-025, no conflicts), passed the workspace's 662
+tests twice, with fmt, clippy and the doc tests clean: 645 of this spec's and 025's 17
+new ones. US9's edits to 025's four recording modules were then built as § Interfaces
+"US9" words them (probe/028-r4-us9-025): their 15 tests and the workspace's 662 pass
+twice, nothing is left under the worktree's `target/` or in `CARGO_TARGET_TMPDIR`, a test
+in each file panicked on purpose after making its folder leaves nothing, and the refusal
+test's two absent-root assertions still fail when the root is made first. Those four
+files add 12,349 B, and US9's whole diff is 53,272 B across its 27 writes. No scenario
+or § Interfaces wording changed.
 
 ```yaml
 version: 1
