@@ -15,8 +15,9 @@ shows if the work comes back.
   runs on the synthetic camera without the pattern database.
 - **US2, centred starts:** nine tests whose claim is Track's refusals, its Stop or a later
   GoTo start with M42 in the eyepiece instead of reaching it through a GoTo.
-- **US3, cheaper GoTo setups:** the five-target test loads the far sync of its two-sync
-  model from a state file; the cable-wind test samples its 350° move every 2 s.
+- **US3, cheaper GoTo setups:** the five-target test loads the two syncs of its old setup
+  from a state file and makes only its first 1° move; the cable-wind test samples its
+  350° move every 2 s.
 - **US4, the whole night at 2 frames a second:** a new `Simulator::set_frame_interval`.
 - **US5, Track's restart in paused time:** the tracking happens in process; the built
   binary is started once.
@@ -78,7 +79,7 @@ The new assertions are listed per story in § Interfaces.
 | US6 | `crates/finder/tests/console/session/durable.rs` (new), `crates/finder/tests/console/session/mod.rs`, `crates/finder/tests/cli/session_node.rs` (deleted), `crates/finder/tests/cli/main.rs`, `crates/finder/tests/cli/aim.rs`, `crates/finder/tests/cli/backlash.rs`, `crates/finder/tests/motion/tracking/backlash.rs` |
 | US7 | `crates/finder/tests/support/live.rs`, `crates/finder/tests/console/aim.rs`, `crates/finder/tests/console/live/loop_.rs` |
 | US8 | `crates/finder/tests/motion/tracking/night.rs`, `crates/finder/tests/support/goto.rs`, `crates/finder/tests/support/mcp.rs`, `crates/finder/tests/support/stop.rs`, `crates/finder/tests/motion/night.rs`, `crates/finder/tests/cli/simulate.rs`, `crates/scope-node/tests/cli.rs`, `crates/scope-node/src/rpicam/metadata.rs` |
-| US9 | `crates/finder/tests/support/mod.rs` and the twenty files of § Interfaces "US9" |
+| US9 | `crates/finder/tests/support/mod.rs` and the twenty-two files of § Interfaces "US9" |
 | US10 | the twelve files of § Interfaces "US10" |
 | US11 | `crates/finder/tests/motion/night.rs` |
 | US12 | `crates/finder/tests/mcp/tracking.rs` |
@@ -86,8 +87,10 @@ The new assertions are listed per story in § Interfaces.
 
 ## Interfaces
 
-Line numbers are at 06a7d4e. A story re-reads each line before it edits it; the text is
-given as well as the number.
+Line numbers are at f0ea2d5, where 024 landed, except where a line says it is as an
+earlier story here leaves the file. A story re-reads each line before it edits it; the
+text is given as well as the number. Each story's list includes what round 2's probe of
+it had to do differently from the round-1 text (§ Refinement Record).
 
 ### Shared helpers this plan names
 
@@ -112,21 +115,34 @@ given as well as the number.
 
   and at the end of each test that calls it:
   `assert!(newest_frame(&rig) <= stopped + 1, "frames arrived with the camera off");`.
+  rustfmt splits `newest_frame`'s chain one call per line. In
+  `sunrise_halts_with_the_page_guard_reason_within_one_second` alone the binding is
+  `let last_frame = camera_off(&rig);`, and its bound reads `last_frame + 1`, because
+  `stopped` is already its stop time (`crates/finder/tests/mcp/axis_moves.rs:402`,
+  `let stopped = stop_time(&rig, start);`).
   `rig.controls` is the node's own controls (`crates/finder/tests/support/mcp.rs:218`);
   `rig.sim.stop_frames()` would do nothing here, because the node was built with its own
   `NodeControls` (`crates/finder/tests/support/mcp.rs:214`). With frames stopped the
-  capture loop waits before its next capture (`crates/scope-node/src/service.rs:227`), so
+  capture loop waits before its next capture (`crates/scope-node/src/service.rs:233`), so
   nothing is rendered.
 
 - **A centred start.** As `already_centred_track_is_immediate_and_repeated_on_is_idempotent`
   does (`crates/finder/tests/motion/tracking/routes.rs:383`): point the eyepiece at M42
   by hand before the first sync (`crates/finder/tests/motion/tracking/routes.rs:386`,
-  `rig.sim.point_eyepiece_at(target.ra_deg, target.dec_deg);`), then sync. Track then
-  finds the pointing within 1′ of the target (`crates/finder/src/session.rs:816`) and
-  begins at once (`crates/finder/src/session.rs:842`): its reply reads `tracking` and
-  holds no `goto`, because the session shows `goto` only after a GoTo was requested.
-  Post Track within a few ticks of the sync: M42 drifts out of 1′ in about 4 s at a fixed
-  mount.
+  `rig.sim.point_eyepiece_at(target.ra_deg, target.dec_deg);`), sync, then tick (at most
+  10 ticks) until the session's `pointing` is within 1′ of M42 (`separation`), and post
+  Track. The node starts capturing in `Rig::new`, so its first frame, and the first
+  sync, come from the start direction, 28.7° from M42. Frame 2, solved at about 0.8 s,
+  is the first on M42. Track then finds the pointing within 1′ of the target
+  (`crates/finder/src/session.rs:844`) and begins at once
+  (`crates/finder/src/session.rs:868`): its reply reads `tracking` and holds no `goto`,
+  because the session shows `goto` only after a GoTo was requested. Posted before that
+  frame has solved, Track finds the start direction and arms a GoTo. The wait ends well
+  inside the about 4 s in which M42 drifts out of 1′ at a fixed mount. This is the one
+  recipe for every centred start (US1-S3, the four US2 sites and US5); each site writes
+  the wait in its own file, right after its sync and the connected or at-rest check that
+  follows the sync, because the rigs' shared files are not those stories' writes.
+  `separation` is `finder::model::separation`.
 
 ### US1: the camera off
 
@@ -148,31 +164,37 @@ given as well as the number.
      sync. Its Sun guard is driven by the clock, not by frames.
    - `track_through_the_page_blocks_all_three_mcp_moves_and_keeps_tracking`
      (`crates/finder/tests/mcp/axis_moves.rs:522`): replace `let rig = ready().await;`
-     with the centred start: `Rig::new(START, 50.0, 120.0, true)`, point the eyepiece at
-     M42 (`finder::targets::find("M42")`), `rig.sync()`, and the connected check
-     `ready()` makes. After the page's Track request, assert
-     `session(&rig.app).await["track"]["state"] == "tracking"` and that the session has
-     no `goto`, before the existing wait loop. Everything after is unchanged.
+     with the centred start of "Shared helpers": `Rig::new(START, 50.0, 120.0, true)`,
+     point the eyepiece at M42 (`finder::targets::find("M42")`, written in full),
+     `rig.sync()`, the connected check `ready()` makes, then the wait of the recipe,
+     reading `session(&rig.app).await["pointing"]`. After the page's Track request,
+     assert `session(&rig.app).await["track"]["state"] == "tracking"` and that the
+     session has no `goto`, before the existing wait loop. Everything after is unchanged.
 
    Why it loses nothing: these tests assert axis counts, command times, heartbeats and
    refusals. The cable-limit refusals are re-checked from axis counts every 50 ms during
    a direct move (`crates/finder/src/mcp/guard.rs:155`), and the wind is observed from
-   counts there too (`crates/finder/src/goto.rs:745`). Heartbeats do not wait for frames.
+   counts there too (`crates/finder/src/goto.rs:750`). Heartbeats do not wait for frames.
    With the camera off the model stays the first sync's, which makes the cable margins
    more repeatable, not less.
 
 2. In `crates/simulator/tests/support/mod.rs` the rig (`crates/simulator/tests/support/mod.rs:96`)
    becomes:
    - `Rig::new()`: a `VirtualClock` at the same start, a `SimMount` on it with the same
-     configuration, and `NodeService::with_mount` over
-     `scope_node::synthetic::SyntheticCamera`, as `crates/simulator/tests/stop_finishes.rs:101`
-     builds it, with the same settings. No `Simulator` and no pattern database. Before it
-     returns it asserts
-     `rig.camera.describe(DescribeRequest {}).await.unwrap().into_inner().model == "simulated"`;
+     configuration, and `scope_node::synthetic::SyntheticCamera::new(Arc::new(Clock(clock.clone())))`,
+     the camera `crates/simulator/tests/stop_finishes.rs:101` builds its service over,
+     with the same settings. No `Simulator` and no pattern database. Before it returns it
+     asserts
+     `rig.camera.describe(DescribeRequest {}).await.unwrap().into_inner().model == "simulated"`,
+     on `let mut rig`, since the client call takes `&mut`;
      the synthetic camera's model is `crates/scope-node/src/synthetic.rs:34`, the catalog
      camera's is `crates/simulator/src/camera.rs:79`.
    - `Rig::rendered()`: what `Rig::new()` builds today, on `SimCamera` and the database
      (`crates/simulator/tests/support/mod.rs:24`).
+   - Both call one private `async fn on<C: Camera + 'static>(camera: C, clock: VirtualClock, mount: SimMount) -> Self`,
+     the rest of today's constructor, which still builds the node with
+     `NodeService::with_mount`. The imports gain `synthetic::SyntheticCamera` and
+     `Camera` from `scope_node`.
    - The field `pub sim: Simulator` becomes `pub clock: VirtualClock`. Nothing in
      `stop_and_watchdog.rs` or `watchdog_report.rs` reads `rig.sim`.
 3. In `crates/simulator/tests/frame_positions.rs`, `Rig::new()` becomes `Rig::rendered()`
@@ -193,6 +215,15 @@ given as well as the number.
        rig.sim.point_eyepiece_at(target.ra_deg, target.dec_deg);
        rig.sync().await;
        assert_eq!(rig.view().await["mount"]["connected"], true);
+       // The rig's first frame was exposed before the push: wait for one on M42.
+       for _ in 0..10 {
+           let p = rig.view().await["pointing"].clone();
+           let (ra, dec) = (p["ra_deg"].as_f64().unwrap(), p["dec_deg"].as_f64().unwrap());
+           if separation(ra, dec, target.ra_deg, target.dec_deg) < 1.0 / 60.0 {
+               break;
+           }
+           rig.tick().await;
+       }
        let body = track(&rig, true).await;
        assert_eq!(body["track"]["state"], "tracking", "{body}");
        assert!(body.get("goto").is_none(), "a centred Track ran a GoTo: {body}");
@@ -212,35 +243,43 @@ given as well as the number.
    (`crates/finder/tests/motion/tracking/routes.rs:407`). `accepted()` and `tracking()`
    stay, for the handoff tests and the readout test. `centred()` cannot call `tracking()`:
    it asserts the GoTo finished (`crates/finder/tests/motion/tracking/routes.rs:57`).
+   The wait after the connected check is the centred-start recipe of "Shared helpers".
 2. `crates/finder/tests/motion/tracking/min_alt.rs`: in
    `raised_minimum_altitude_ends_running_tracking_as_too_low`
    (`crates/finder/tests/motion/tracking/min_alt.rs:28`), point the eyepiece at M42
    between `Rig::new` (`crates/finder/tests/motion/tracking/min_alt.rs:29`) and the sync,
-   and assert the Track reply (`crates/finder/tests/motion/tracking/min_alt.rs:31`, whose
-   reply is discarded today) reads `tracking` with no `goto`. The poll for `tracking`
-   then ends at once; the rest is unchanged.
+   wait after the sync as the centred-start recipe says, reading `rig.view()`, and assert
+   the Track reply (`crates/finder/tests/motion/tracking/min_alt.rs:31`, whose reply is
+   discarded today) reads `tracking` with no `goto`. The poll for `tracking` then ends
+   at once; the rest is unchanged.
 3. `crates/finder/tests/motion/stop/motion_ends.rs`: `tracking()`
    (`crates/finder/tests/motion/stop/motion_ends.rs:282`) builds its rig as `ready()`
    (`crates/finder/tests/motion/stop/motion_ends.rs:18`) does, but points the eyepiece
-   at M42 before the sync; `ready()` itself is shared with tests that need a slew and
-   does not change. After the wait for `tracking`, assert that `rig.commands` holds no
-   `MountCommand::GoTo`. The azimuth-moving check
+   at M42 before the sync, and after the sync and `ready()`'s at-rest check waits as the
+   centred-start recipe says, reading `session(&rig.app)`; `ready()` itself is shared with
+   tests that need a slew and does not change. After the wait for `tracking`, assert that
+   `rig.commands` holds no `MountCommand::GoTo`. The azimuth-moving check
    (`crates/finder/tests/motion/stop/motion_ends.rs:294`) still holds: M42's azimuth
    rate is not zero, and the tracker sends its first rate at once.
 4. `crates/finder/tests/motion/stop/retry.rs`: in
    `retained_tracker_cannot_delay_goto_cancellation_or_first_attempt`
    (`crates/finder/tests/motion/stop/retry.rs:198`), point the eyepiece at M42 between
-   `Rig::new` (`crates/finder/tests/motion/stop/retry.rs:199`) and the sync, and after the
-   wait for `tracking` assert that `rig.commands` holds no `MountCommand::GoTo`. Its later
-   GoTo to M45 is unchanged.
+   `Rig::new` (`crates/finder/tests/motion/stop/retry.rs:199`) and the sync, wait after
+   the sync as the centred-start recipe says, and after the wait for `tracking` assert
+   that `rig.commands` holds no `MountCommand::GoTo`. Its later GoTo to M45 is unchanged.
 5. `crates/finder/tests/motion/stop/watchdog.rs`: in
    `past_watchdog_firing_is_the_baseline_for_a_successful_later_goto`
    (`crates/finder/tests/motion/stop/watchdog.rs:157`), replace `ready()`
    (`crates/finder/tests/motion/stop/watchdog.rs:158`) with `Rig::new()`, a push of the
    mount to 5° below M42 (as `crates/finder/tests/motion/tracking/routes.rs:121` does,
-   `rig.mount.push_to(alt - 5.0, az)`), then the sync, before the watchdog. Before the
-   GoTo (`crates/finder/tests/motion/stop/watchdog.rs:192`) assert that the telescope's
-   true direction is within 6° of M42. The final assertions
+   `rig.mount.push_to(alt - 5.0, az)`, with `alt` and `az` from
+   `simulator::sky::horizontal`), then the sync, then tick (at most 10 ticks) until the
+   session's pointing is within 6° of M42, and assert it, with the message "no frame
+   solved after the push", before the watchdog. Without that wait the only sync before
+   the later GoTo is the rig's first frame, exposed before the push, and the GoTo plans
+   from the start direction: its first slew lands 33.5° off and needs two
+   corrections. Before the GoTo (`crates/finder/tests/motion/stop/watchdog.rs:192`)
+   assert that the telescope's true direction is within 6° of M42. The final assertions
    (`crates/finder/tests/motion/stop/watchdog.rs:206` onward) are unchanged; a GoTo of a
    few degrees still sends GoTo commands.
 
@@ -257,49 +296,79 @@ and records GoTo, Rate and StopAll commands (`crates/finder/tests/support/stop.r
    `Session::default()`. Its session edit and aim (the lines after `crates/finder/tests/support/goto.rs:153`)
    still apply, and write to the state file when the session has one.
 2. Add to the same file, beside `Rig::second` (`crates/finder/tests/support/goto.rs:243`):
-   - `pub async fn far_sync(path: &Path, start: f64)`: writes a state file holding the
-     far sync of `second()`, computed, not typed. A second `SimMount` built from the
-     rig's own mount configuration (`crates/finder/tests/support/goto.rs:112`) is driven
-     in paused time by positive moves to axis counts (580000, 4500), the counts of
-     `crates/finder/tests/support/goto.rs:250`, so its gears sit on the same flank. Its
-     `true_direction()` gives the sync's `az_deg`; `finder::ephemeris::apparent_from_true`
-     (`crates/finder/src/ephemeris.rs:129`) of its altitude gives `alt_deg`, because
-     solved frames record apparent altitude. The file holds `site`, `min_alt_deg` and a
-     `model` with that one sync (`time` = `start`, `counts_per_revolution` as the mount's,
-     `epoch` 0, `rms_arcsec` 1), one epoch whose zero points are the rig's on the positive
-     flank, no `base_tilt`, no `fixed` and no `backlash`.
+   - `fn mount_config(alt: f64, az: f64) -> MountConfig`, private: the `MountConfig`
+     literal of `crates/finder/tests/support/goto.rs:112` (base tilt 1° toward 130°,
+     zero points `[az, alt]`, backlash 0.3°) moves here, and `with_session` and
+     `far_sync` both call it. `std::path::Path` joins the file's `use std::{...}` group.
+   - `pub async fn far_sync(path: &Path, start: f64, alt: f64, az: f64)`: writes a state
+     file holding both syncs of `second()`, computed, not typed. A second `SimMount`,
+     `SimMount::with_config(VirtualClock::new(start), mount_config(alt, az))`, is driven
+     in paused time with `Mount::goto` directly, by positive moves, first to axis counts
+     (4500, 4500), the counts of `crates/finder/tests/support/goto.rs:246`, then to
+     (580000, 4500), those of `crates/finder/tests/support/goto.rs:250`, so its gears sit
+     on the flank both syncs use; after each move it waits for both axes to stop and
+     asserts the counts. At each, its `true_direction()` gives the sync's `az_deg`, and
+     `finder::ephemeris::apparent_from_true` (`crates/finder/src/ephemeris.rs:129`) of its
+     altitude gives `alt_deg` (0.82′ of refraction at the far sync), because solved
+     frames record apparent altitude. The syncs are `finder::model::Sync` literals: the
+     near one first, with `time` = `start - 120.0`, then the far one, with `time` =
+     `start`; each with `axis` its counts, `counts_per_revolution` from `mount.axes()`
+     (1620000 on both axes), `roll_deg` null, `rms_arcsec` 1 and `epoch` 0. The near sync
+     is 120 s older so the live sync at the same counts does not thin it
+     (`crates/finder/src/model.rs:512` to `crates/finder/src/model.rs:517`). One
+     `finder::model::Epoch` holds the rig's zero points on the positive flank, in TPoint
+     signs: `ia` = backlash / 2 − the azimuth zero point (−119.85), `ie` = the altitude
+     zero point − backlash / 2 (49.85). The file holds top-level `site` (40, −75) and
+     `min_alt_deg` 15, and a `model` with the two syncs, that epoch and its own
+     `rms_arcsec` 1 (the model has no serde default for it); no `base_tilt`, `fixed`,
+     `expires_at` or `backlash`.
    - `pub async fn second_from_file(&self)`: makes the first 1° move of `second()`
      (`crates/finder/tests/support/goto.rs:246`), 15 ticks, and asserts what `second()`
      asserts (`crates/finder/tests/support/goto.rs:255` and the line after it), plus
-     that the azimuth axis reads 4500 counts and the model holds at least two syncs.
-   Loading a state file does not re-fit anything (`crates/finder/src/session.rs:1457`);
+     that the azimuth axis reads 4500 counts, that the model holds at least two syncs,
+     and that the fitted base tilt is within 1′ of the simulator's 1° toward 130°
+     (`(deg − 1) × 60` and `(toward − 130) × 60` each under 1 in magnitude). Why the tilt:
+     a wrong fixture (true instead of apparent altitude, the negative flank, azimuth or
+     altitude 0.3° off, or an untilted mount) passes the five GoTos silently, because
+     they correct themselves, with the fitted tilt off by up to 663′; round 2 saw the
+     tilt check fail each.
+   Loading a state file does not re-fit anything (`crates/finder/src/session.rs:1511`);
    the base tilt is fitted by the product when the live sync of the 1° move joins the
-   stored sync in the same epoch, 129° apart (`crates/finder/src/model.rs:519`).
+   stored syncs in the same epoch, the far one 129° away (`crates/finder/src/model.rs:519`).
+   Why both syncs are stored: GoTo starts its cable-wind count from the model's first
+   sync (`crates/finder/src/goto.rs:748`; the wind monitor's is
+   `crates/finder/src/goto.rs:564`). With the far sync alone it is `syncs[0]`, and the
+   M81 → M1 GoTo then turns 118° the short way to 1,736,902 counts, 386° from power-on,
+   past the planner's ±360° (`crates/finder/src/goto.rs:479`), and nothing notices. With
+   the near sync first, M1 unwinds to 118,535 counts, as the old setup's model makes it.
 3. `crates/finder/tests/motion/goto/sim.rs`:
    `five_catalog_targets_converge_after_two_syncs_and_report_progress`
-   (`crates/finder/tests/motion/goto/sim.rs:9`) writes the file with `far_sync` into a
-   scratch folder, builds the rig with
+   (`crates/finder/tests/motion/goto/sim.rs:9`) writes the file with
+   `api::far_sync(&path, START, 50.0, 120.0)` into a scratch folder, builds the rig with
    `Rig::with_session(START, 50.0, 120.0, true, Session::with_state_file(path).unwrap())`
    and calls `second_from_file()` instead of `second()`
    (`crates/finder/tests/motion/goto/sim.rs:11`). The target list
    (`crates/finder/tests/motion/goto/sim.rs:12`) and every assertion after it are
-   unchanged. The folder is built as the file's neighbours build theirs today; US9 moves
-   it to the shared helper later.
+   unchanged. The folder is built as the file's neighbours build theirs today, and the
+   test removes it at its end; US9 moves it to the shared helper later. The imports gain
+   `finder::session::Session` and `std::time::Duration`.
 4. Same file: `continuously_observed_cable_wind_survives_real_simulator_power_cycle`
    (`crates/finder/tests/motion/goto/sim.rs:255`): before
    `rig.move_to([350 * 4500, 0])` (`crates/finder/tests/motion/goto/sim.rs:258`) read the
    frame id of the session's pointing and call
    `rig.controls.set_frame_interval(Duration::from_secs(2))`; after it read the frame id
    again, call `rig.controls.set_frame_interval(Duration::from_millis(500))`, and assert
-   the advance is at least 20 and at most 60. The power cycle
+   the advance is at least 20 and at most 60. The frame id is read by a helper in the
+   file, `fn pointing_frame(rig: &Rig) -> u64`, from
+   `rig.state.session().snapshot(rig.now()).pointing`'s `frame_id`. The power cycle
    (`crates/finder/tests/motion/goto/sim.rs:263`) and the rest are unchanged; the cycle
    needs a sync within 1.5 s afterwards, which is why 500 ms comes back first. At 2 s the
    350° move is sampled about every 7°, inside the half-turn the wind monitor needs
-   between observations (`crates/finder/src/goto.rs:60`).
+   between observations (`crates/finder/src/goto.rs:61`).
 
 ### US4: the whole night at 2 frames a second
 
-1. `crates/simulator/src/controls.rs`: beside `stop_frames`
+1. `crates/simulator/src/controls.rs`: after `start_frames`, next to `stop_frames`
    (`crates/simulator/src/controls.rs:105`):
 
    ```rust
@@ -308,18 +377,21 @@ and records GoTo, Rate and StopAll commands (`crates/finder/tests/support/stop.r
    }
    ```
 
-   with `std::time::Duration` imported. The simulator's controls are the node's
-   (`crates/simulator/src/node.rs:45`); `NodeControls::set_frame_interval`
-   (`crates/scope-node/src/service.rs:71`) refuses zero; the capture loop reads the
-   interval before every frame (`crates/scope-node/src/service.rs:229`).
+   with `time::Duration` added to the file's existing `use std::{...}` group. The
+   simulator's controls are the node's (`crates/simulator/src/node.rs:45`);
+   `NodeControls::set_frame_interval` (`crates/scope-node/src/service.rs:71`) refuses
+   zero; the capture loop reads the interval before every frame
+   (`crates/scope-node/src/service.rs:235`).
 2. `crates/finder/tests/motion/night.rs`: after
    `let sim = state.simulator().unwrap().clone();` (`crates/finder/tests/motion/night.rs:136`),
-   `sim.set_frame_interval(Duration::from_millis(500));`. After the first-sync block
-   (`crates/finder/tests/motion/night.rs:153`), read the session about 30 times, one tick
-   apart, collect the distinct `(pointing.frame_id, pointing.time)` pairs, skip the first,
-   and assert at least four remain and that for each consecutive pair the time step
-   divided by the frame-id step is 0.5 s within 0.05 s. At the 200 ms default it is
-   0.2 s. Nothing else in the test changes.
+   `sim.set_frame_interval(Duration::from_millis(500));` (the file already imports
+   `Duration`). After the first-sync block's last line
+   (`crates/finder/tests/motion/night.rs:164`, `assert!(first["model"]["base_tilt"].is_null());`;
+   the block opens at `crates/finder/tests/motion/night.rs:153`), read the session 30
+   times, one tick apart, collect the distinct `(pointing.frame_id, pointing.time)`
+   pairs, skip the first, and assert at least four remain and that for each consecutive
+   pair the time step divided by the frame-id step is 0.5 s within 0.05 s. At the 200 ms
+   default it is 0.2 s. The test's only other change is the call above.
 
 ### US5: Track's restart in paused time
 
@@ -329,10 +401,18 @@ as `crates/finder/tests/cli/backlash.rs:119` is, and:
 
 1. In process, on the test's folder:
    `goto::Rig::with_session(goto::START, 50.0, 120.0, true, Session::with_state_file(folder/state).unwrap())`
-   (US3's constructor), a centred start on M42, `rig.sync()`, then `POST /api/track`
-   `{"on":true}` with no Origin header (allowed for writes), asserting the reply reads
-   `tracking` with no `goto`. Then about 12 ticks, and assert the mount's true direction
-   moved. Then `drop(rig)`.
+   (US3's constructor), the eyepiece pointed at M42, `rig.sync()`, the wait of the
+   centred-start recipe ("Shared helpers"), then `POST /api/track` `{"on":true}` with no
+   Origin header (allowed for writes), asserting the reply reads `tracking` with no
+   `goto`. The test makes that request itself, a JSON `Request::post("/api/track")` with
+   `host` and `content-type` headers sent through `rig.app` with
+   `tower::ServiceExt::oneshot`, because `Rig::call` sends an empty body; `axum`'s
+   `Body`, `Request` and `to_bytes` and `tower::ServiceExt` join the file's imports.
+   Then it ticks until the mount's true direction changes, at most 100 ticks, and
+   asserts that it changed: from a centred start the gears sit mid-backlash (0.3°), so
+   Track's rates take some seconds to take up the play before the tube turns, and a
+   fixed 12 ticks is not enough. Then an explicit `drop(rig)` at the end of the
+   in-process block.
 2. The checks that follow are today's from the state-file read on
    (`crates/finder/tests/cli/track.rs:189`): no `track` in the stored file, one start of
    the built binary (`crates/finder/tests/cli/track.rs:192`), connected, no `track` in its
@@ -346,7 +426,7 @@ as `crates/finder/tests/cli/backlash.rs:119` is, and:
    `tracking.spec.ts`; this test owns "Track is off and nothing moves after a restart".
 
 The stored file never holds `track` whatever tracking did: `StoredSession`
-(`crates/finder/src/session.rs:1396`) has no such field and refuses unknown ones. The
+(`crates/finder/src/session.rs:1450`) has no such field and refuses unknown ones. The
 other tests of the file are unchanged.
 
 ### US6: the binary only for `main.rs`
@@ -358,14 +438,24 @@ other tests of the file are unchanged.
    - a folder holding a state file that it sets to mode 0644, and a stale
      `session.json.tmp` beside it;
    - for exposure 200 ms and then 2000 ms: `Session::with_state_file`
-     (`crates/finder/src/session.rs:1224`), one `Session::edit`
-     (`crates/finder/src/session.rs:1197`) setting site, minimum altitude, target,
+     (`crates/finder/src/session.rs:1278`), one `Session::edit`
+     (`crates/finder/src/session.rs:1251`) setting site, minimum altitude, target,
      imaging camera, node address and token, and camera settings (exposure, gain 4,
-     sigma 5), and `Session::set_aim` (`crates/finder/src/session.rs:1180`) to (700, 420);
+     sigma 5), and `Session::set_aim` (`crates/finder/src/session.rs:1234`) to (700, 420);
      drop it; reopen with `Session::with_state_file`; assert every value equal, the
-     view's `token_set` true and the token absent from the view's JSON;
-   - after the first write: the file's mode is 0600 (`crates/finder/src/session.rs:1479`)
-     and the stale `.tmp` is gone (`crates/finder/src/session.rs:1471`).
+     view's `token_set` true and the token absent from the view's JSON; the token itself
+     is compared in the stored file (`stored["node"]["token"] == "test-token"`), since
+     the view holds only `token_set`; the whole reopened view equals the view the write
+     returned, and the mode is 0600 again after each reopen;
+   - after the first write: the file's mode is 0600 (`crates/finder/src/session.rs:1536`,
+     `options.mode(0o600);`) and the stale `.tmp` is gone
+     (`crates/finder/src/session.rs:1526`, `match fs::remove_file(&temporary)`).
+
+   Its scratch folder is `env!("CARGO_TARGET_TMPDIR")` joined with
+   `session-durable-<pid>`, held by a local `Folder` guard whose `Drop` removes it; US9
+   replaces that guard with `crate::support::Scratch`. The 0644 file is made by
+   `Session::with_state_file` on the empty folder (a fresh default session), dropped, and
+   then set to mode 0644 before the stale `.tmp` is written beside it.
 2. **Delete** `crates/finder/tests/cli/session_node.rs` and `mod session_node;`
    (`crates/finder/tests/cli/main.rs:11`). Its stderr check
    (`crates/finder/tests/cli/session_node.rs:80`) moves to item 3; its restart, mode and
@@ -377,10 +467,14 @@ other tests of the file are unchanged.
    when the server is dropped asserts `!logs.contains("test-token")`. Its test
    (`crates/finder/tests/cli/aim.rs:165`) is otherwise unchanged and stays the restart
    check on the real binary.
-4. `crates/finder/tests/cli/backlash.rs`: its `Server` gains a request with a method and
-   path, as `crates/finder/tests/cli/track.rs:93` has. The restart loop
-   (`crates/finder/tests/cli/backlash.rs:140`) is unrolled so the second server stays up
-   after its read of the measured backlash; the test then posts `{"what":"fixed"}` to
+4. `crates/finder/tests/cli/backlash.rs`: its `Server::request(edit: Option<Value>)` is
+   replaced by `request(method, path, body)`, as `crates/finder/tests/cli/track.rs:93`
+   has, and its two session reads become `request("GET", "/api/session", Value::Null)`;
+   `serde_json::json` joins the import. The restart loop
+   (`crates/finder/tests/cli/backlash.rs:140`) becomes a `restart` closure that starts
+   the server, makes the loop's read and assertions, and returns the server:
+   `drop(restart());` then `let server = restart();`, so the second server stays up
+   after its read of the measured backlash. The test then posts `{"what":"fixed"}` to
    `/api/model/reset`, asserts the reply has no `backlash` and the next session read has
    none, drops the server, and asserts the state file has no `backlash`.
 5. `crates/finder/tests/motion/tracking/backlash.rs`: delete
@@ -403,18 +497,21 @@ the real binary.
    500 ms. Its eight callers are unchanged.
 2. `crates/finder/tests/console/aim.rs`:
    `aim_writes_enforce_origin_json_and_strict_shape_and_preview_retention_is_eight`
-   (`crates/finder/tests/console/aim.rs:63`) calls `state_with_interval(.., 3 s)`. The
+   (`crates/finder/tests/console/aim.rs:63`) calls `state_with_interval(.., 3 s)`,
+   written `std::time::Duration::from_secs(3)` in full. The
    node sends a preview when 5 s have passed since the last
    (`crates/scope-node/src/preview.rs:12`), so at 3 s previews fall on every other frame.
-   After its loop (`crates/finder/tests/console/aim.rs:108`) assert
+   After its loop's closing brace (`crates/finder/tests/console/aim.rs:115`; the loop
+   opens at `crates/finder/tests/console/aim.rs:108`), before
+   `assert!(live.preview(id).is_none())`, assert
    `previews.windows(2).all(|w| w[1] - w[0] == 2)`. Every retention assertion after it is
    unchanged. The wait for each frame allows 10 s of virtual time
    (`crates/finder/tests/support/live.rs:121`), more than 3 s.
 3. `crates/finder/tests/console/live/loop_.rs`:
    `rich_frames_failing_for_thirty_seconds_report_the_whole_unsolved_interval`
    (`crates/finder/tests/console/live/loop_.rs:240`) calls `state_with_interval(.., 5 s)`,
-   counts the frames its loop (`crates/finder/tests/console/live/loop_.rs:248`) receives,
-   and asserts at most 7. The unsolved interval is measured from the first unsolved rich
+   counts the frames its wait loop (`crates/finder/tests/console/live/loop_.rs:248`)
+   receives after the first, and asserts at most 7 (round 2's probe received 6). The unsolved interval is measured from the first unsolved rich
    frame, so the frame count does not change it
    (`crates/finder/tests/console/live/loop_.rs:255` is unchanged).
 
@@ -429,24 +526,39 @@ the real binary.
    (`crates/finder/tests/motion/tracking/night.rs:27`) and ", and 30 s wall time" from the
    module comment (`crates/finder/tests/motion/tracking/night.rs:4`). A runaway is ended
    by nextest (`.config/nextest.toml:23`, slow at 60 s, ended after five periods).
-2. The inline rig solvers: `Stars` in `crates/finder/tests/support/goto.rs:39`, in
-   `crates/finder/tests/support/mcp.rs:113`, in `crates/finder/tests/support/stop.rs:64`
+2. The inline rig solvers: `Stars` in `crates/finder/tests/support/goto.rs:42` (its line
+   as US3 leaves the file; at f0ea2d5 `pub struct Stars;` is one line up), in
+   `crates/finder/tests/support/mcp.rs:113`, in `crates/finder/tests/support/stop.rs:65`
    and in `crates/finder/tests/motion/night.rs:21` each call
    `solve::solve_centroids(.., &options)` with the 5000 ms default
    (`crates/finder/src/solve.rs:69`), which the solver checks against the real clock
    (`crates/plate-solver/src/status.rs:125`). Each passes
    `&SolveOptions { timeout_ms: u64::MAX, ..options }` instead. Nothing adds the timeout
-   to an `Instant`, so `u64::MAX` cannot overflow.
+   to an `Instant`: the deadline check compares the elapsed time with it
+   (`crates/plate-solver/src/status.rs:125`), so `u64::MAX` cannot overflow.
+   Out of scope, and named so: the other 5 s solver deadlines tests still reach, which
+   are the production live solver's through `AppState::with_live`
+   (`crates/finder/src/api.rs:243`), uploaded-frame solves (whose `timeout_ms` the upload
+   route parses, `crates/finder/src/api.rs:1130`), and direct calls of
+   `solve::solve_frame_with_frame` (`crates/finder/src/solve.rs:382`). Round 2's
+   solve-stall mutation, a deadline that starts 5 s early, failed 91 of the 161 tests it
+   ran before this change and 11 after, each of the 11 on one of those paths.
 3. `crates/finder/tests/cli/simulate.rs`: `let first = ...` is read at
    `crates/finder/tests/cli/simulate.rs:130`, before a wait for the first live pointing
    and two edits; the 5 s window starts at `crates/finder/tests/cli/simulate.rs:142`.
    Read the session time again immediately before `let at = Instant::now();` and compare
    against that reading at `crates/finder/tests/cli/simulate.rs:155`. `first` stays for
-   the epoch check that uses it.
+   the epoch check that uses it. Out of scope, and named so: the 15 s wait for the first
+   live pointing in the file's `Server::pointing`
+   (`crates/finder/tests/cli/simulate.rs:97`), another wall-clock bound, which this
+   story leaves alone.
 4. `crates/scope-node/tests/cli.rs`: `run` (`crates/scope-node/tests/cli.rs:7`) calls
    `.output()` (`crates/scope-node/tests/cli.rs:21`), which waits forever. It spawns the
-   child with piped output, polls `try_wait` every 50 ms for up to 10 s, and on timeout
-   kills it and panics naming the arguments. The refusal test
+   child with `.stdin(Stdio::null())`, as `.output()` did, and piped stdout and stderr,
+   polls `try_wait` every 50 ms for up to 10 s, and on timeout kills and reaps it,
+   removes the config file, and panics naming the child's command-line arguments
+   (`command.get_args()`), not the config text, which holds the token. `Stdio`,
+   `Duration` and `Instant` join the file's imports. The refusal test
    (`crates/scope-node/tests/cli.rs:62`) is otherwise unchanged and still starts the node
    without `--check-config`, so it still checks the serving path's refusal.
 5. `crates/scope-node/src/rpicam/metadata.rs`: the three tests at
@@ -454,7 +566,9 @@ the real binary.
    and `crates/scope-node/src/rpicam/metadata.rs:192` become
    `#[tokio::test(start_paused = true)]`. They read in-memory duplex streams only, so a
    paused clock changes nothing but makes their 100 ms timeouts independent of load;
-   `crates/scope-node/src/synthetic.rs:101` is a precedent.
+   `crates/scope-node/src/synthetic.rs:101` is a precedent. Two of them wrap a read in a
+   100 ms timeout; `malformed_or_missing_metadata_is_not_a_frame` never had one. Only the
+   file's `#[cfg(test)]` module changes.
 
 ### US9: scratch folders
 
@@ -507,65 +621,105 @@ the real binary.
    | `crates/finder/tests/motion/tracking/keyhole.rs:149` | `keyhole-<name>` | in the constructor |
    | `crates/finder/tests/motion/tracking/night.rs:139` | `tracking-night-<name>` | never |
    | `crates/finder/tests/motion/goto/sim.rs:9` | US3's folder | as US3 left it |
+   | `crates/finder/tests/console/session/durable.rs` (US6's new file) | `session-durable` | by its own `Folder` guard |
 
-   Where a constructor removed its folder early (`keyhole.rs`), the rig keeps the
-   `Scratch` so the folder lives as long as the rig. In
+   The keyhole and tracking-night rigs build their folders in `Rig::new`
+   (`crates/finder/tests/motion/tracking/keyhole.rs:149`,
+   `crates/finder/tests/motion/tracking/night.rs:139`); each rig gains a field
+   `_folder: crate::support::Scratch`, so the folder lives as long as the rig, and
+   `keyhole.rs` loses its early `remove_dir_all`
+   (`crates/finder/tests/motion/tracking/keyhole.rs:270`). `writes.rs` builds its folder
+   as `repo.join("target")`, where `repo` is `CARGO_MANIFEST_DIR` joined with `../..`
+   (`crates/finder/tests/console/session/writes.rs:182`); `repo` stays for the database
+   path, the `catch_unwind` stays because it reaps the child, and only the
+   `remove_dir_all` (`crates/finder/tests/console/session/writes.rs:248`) goes. In
+   `durable.rs`, `Scratch::new("session-durable")` replaces its `Folder` type, its first
+   `remove_dir_all` and its `create_dir_all`. In
    `crates/finder/tests/console/targets.rs` the `remove_dir` after the child
    (`crates/finder/tests/console/targets.rs:124`) also proved the child left the folder
    empty; it becomes `assert_eq!(std::fs::read_dir(&empty.0).unwrap().count(), 0)`.
    `crates/finder/tests/console/session/edits.rs` already counts the entries before it
-   removes the folder, and keeps that count.
+   removes the folder, and keeps that count. Imports a removed type or call leaves
+   unused are removed.
 3. The scope-node files have no shared helper and get none: in
-   `crates/scope-node/tests/cli.rs:9`, `crates/scope-node/tests/mount_config.rs:9` and
-   `crates/scope-node/tests/rpicam.rs:123` the path is built under
-   `env!("CARGO_TARGET_TMPDIR")` instead of `CARGO_MANIFEST_DIR` and `../../target`, and
-   held by a small guard in the file whose `Drop` removes it.
+   `crates/scope-node/tests/cli.rs:9`, `crates/scope-node/tests/mount_config.rs:9`,
+   `crates/scope-node/tests/rpicam.rs:123` and `crates/scope-node/tests/mount_link.rs:159`
+   the path is built under `env!("CARGO_TARGET_TMPDIR")` instead of `CARGO_MANIFEST_DIR`
+   and `../../target`, and held by a small guard in the file whose `Drop` removes it.
+   `cli.rs` and `mount_config.rs` scratch a file, so their guards call `remove_file`;
+   `rpicam.rs` and `mount_link.rs` scratch a folder. `rpicam.rs`'s guard is
+   `#[cfg(unix)]`, as its one user is. `cli.rs`'s timeout branch (US8) loses its own
+   `remove_file`, because the guard runs while the panic unwinds. `mount_link.rs` is
+   024's: `binary_keeps_running_with_a_missing_mount_device` builds
+   `../../target/mount-link-process-<pid>` and removes it only near its end
+   (`crates/scope-node/tests/mount_link.rs:189`), so a panic before that line leaves it.
 
 The two unit tests in `crates/finder/src` that make folders are left alone: cargo sets
 `CARGO_TARGET_TMPDIR` only for integration tests and benches.
 
 ### US10: duplicates
 
-Every edit below was read at 06a7d4e; none touches an oracle file.
+Every edit below was read at f0ea2d5; none touches an oracle file.
 
 | Finding | File | Edit | The stricter twin |
 |---|---|---|---|
 | core-D3 | `crates/grpc-service/tests/service_acceptance.rs:240` | delete `pixel_center_convention_top_left` | `extract_centroids_reports_wire_x_as_column` (`crates/grpc-service/tests/service_acceptance.rs:404`): asymmetric pixel, axis order, one star |
-| core-D4 | `crates/grpc-service/tests/service_acceptance.rs:187` and `crates/grpc-service/tests/service_acceptance.rs:325` | delete `inline_image_bytes_used_when_shmem_absent` and `coordinate_swap_inbound_and_outbound` | `all_four_rpcs_available` (`crates/grpc-service/tests/service_acceptance.rs:82`) makes the same calls; neither could fail |
-| core-D5 | `crates/plate-solver/tests/solve_acceptance.rs:287` | delete the solve half of `cancellation_honored`; rename the rest `solve_context_reports_a_set_cancel_flag` and say in its comment that `SolveStatus::Cancelled` has no test and no public trigger | `timeout_bounds_the_search` (`crates/plate-solver/tests/solve_acceptance.rs:266`) |
-| core-D6 | `crates/plate-solver/tests/solve_acceptance.rs:88` and `crates/plate-solver/tests/solve_acceptance.rs:159` | delete `explicit_detection_parameters_honored` and `detection_parameters_do_not_perturb_solve_math`; rename `brightest_first_requirement` (`crates/plate-solver/tests/solve_acceptance.rs:43`) `exhausted_search_of_an_empty_pattern_catalog_is_no_match`, assertions unchanged | E2's image parity, and `TOO_FEW` on a blank image over the wire |
+| core-D4 | `crates/grpc-service/tests/service_acceptance.rs:187` and `crates/grpc-service/tests/service_acceptance.rs:325` | delete `inline_image_bytes_used_when_shmem_absent` and `coordinate_swap_inbound_and_outbound` | for the first, `extract_centroids_reports_wire_x_as_column` (`crates/grpc-service/tests/service_acceptance.rs:404`), which also sends inline image bytes with no shared memory and checks the centroid it gets back; only the 8×8 image size is lost. For the second, `all_four_rpcs_available` (`crates/grpc-service/tests/service_acceptance.rs:82`) makes the same calls, checking only `is_ok`. Neither deleted test could fail |
+| core-D5 | `crates/plate-solver/tests/solve_acceptance.rs:287` | delete the solve half of `cancellation_honored`; rename the rest `solve_context_reports_a_set_cancel_flag` and say in its comment that `SolveStatus::Cancelled` has no test and no public trigger, and that `timeout_bounds_the_search` covers the zero-timeout solve | `timeout_bounds_the_search` (`crates/plate-solver/tests/solve_acceptance.rs:266`) |
+| core-D6 | `crates/plate-solver/tests/solve_acceptance.rs:88` | delete `explicit_detection_parameters_honored`; rename `brightest_first_requirement` (`crates/plate-solver/tests/solve_acceptance.rs:43`) `exhausted_search_of_an_empty_pattern_catalog_is_no_match`, assertions unchanged. `detection_parameters_do_not_perturb_solve_math` (`crates/plate-solver/tests/solve_acceptance.rs:159`) stays: its image solve must find at least four of five single-pixel peaks on an all-zero 100×100 image (`NO_MATCH`, not `TOO_FEW`), and no test outside the oracle detects on a zero background | E2's image parity, and `TOO_FEW` on a blank image over the wire |
 | core-D7 | `crates/database-generation/src/patterns.rs:177` | delete `breadth_first_yields_brightest_first`; move `matches_cedar_order_and_visits_each_combination_once` into `tests` and delete `bfc_order_tests` | the seven-element order test pins the five-element sequence |
 | node-D1 | `crates/simulator/tests/mount.rs:84` | delete `backlash_changes_truth_by_point_three_at_the_same_axis_reading` | `defaults_keep_zero_rate_error_and_point_three_backlash_on_both_axes` (`crates/simulator/tests/rate_and_backlash.rs:71`): 1″ against 0.01°, and exact positions |
 | node-D2 | `crates/scope-node/tests/skywatcher.rs:222` | reduce `both_stops_precede_emergency_fallback` to `stop_all_stops_both_axes`: default emulator, both axes running, `stop_all`, assert K1 and K2 sent and both axes at rest | `a_silent_first_axis_confirms_with_emergency_stop_after_the_second_axis` in `crates/scope-node/tests/skywatcher_stop.rs`; the reduced test stays the only caller of `SkyWatcher::stop_all` |
-| node-D3 | `crates/scope-node/src/mount/mod.rs:78` | delete the `tests` module and its `FakeMount` | the port contract on real adapters, `crates/simulator/tests/mount.rs` and `crates/scope-node/tests/skywatcher.rs` |
-| api-D9 | `crates/finder/src/session.rs:1545` and `crates/finder/src/session.rs:1555` | delete the two inline tests | `fresh_session_and_fixed_clock_are_exact_on_repeated_reads` (`crates/finder/tests/console/session/edits.rs:54`) |
+| node-D3 | `crates/scope-node/src/mount/mod.rs:99` | delete the `tests` module and its `FakeMount` | the port contract on real adapters, `crates/simulator/tests/mount.rs` and `crates/scope-node/tests/skywatcher.rs` |
+| api-D9 | `crates/finder/src/session.rs:1599` and `crates/finder/src/session.rs:1609` | delete the two inline tests | `fresh_session_and_fixed_clock_are_exact_on_repeated_reads` (`crates/finder/tests/console/session/edits.rs:54`) |
 | simA-D5 | `crates/finder/tests/motion/model/sim.rs:200` | move the tilt assertions (`crates/finder/tests/motion/model/sim.rs:207` to the line before the test's end) into `durable_night_survives_local_midnight_then_expires_at_solar_noon` in place of its `base_tilt.is_some()` (`crates/finder/tests/motion/model/sim.rs:228`), then delete `second_sync_fits_the_simulator_base_without_opening_an_epoch` | the durable night runs the same setup and second sync |
 | simA-D4 | `crates/finder/tests/motion/goto/routes.rs:49` to `crates/finder/tests/motion/goto/routes.rs:101` | delete `approach_to_fifteen_point_two_degrees_is_refused_without_motion`, `sun_five_degrees_up_is_refused_without_motion`, `m8_below_horizon_is_refused_without_motion` and `absent_mount_and_missing_sync_each_name_the_reason`, and the `ephemeris` and `sky` imports only they used (`crates/finder/tests/motion/goto/routes.rs:6`); in `no_mount_omits_refusal_and_second_sync_omits_it_while_running` assert the no-mount refusal's error names `no mount` (`crates/finder/tests/motion/goto/refusals.rs:119`, which checks only 409 today) | each has a stricter copy in `crates/finder/tests/motion/goto/refusals.rs` that also checks `goto_refusal`; `foreign_goto_is_forbidden_without_motion` and `simulate_startup_connects_the_default_mount_and_serves_motion_and_stop` stay |
-| simA-D9 | `crates/finder/tests/motion/model/routes.rs:107` | the foreign-origin loop keeps `"fixed"` only | the second-sync route test covers the foreign `night` reset; the guard runs before the body is read |
-| mcp-D3 | `crates/finder/tests/mcp/motion.rs:226` | `stopped()` takes `watch: bool`: always StopAll within 0.1 s, the halt reason, motion cleared and at rest within 20 ticks (2 s); only with `watch`, today's 5 s at rest, 5 s unchanged and only-StopAll checks. The `"second client"` case (`crates/finder/tests/mcp/motion.rs:272`) passes `true`, the other eight `false` | the spec asks for the 5 s watch in the second-client case only (016 US4-S6) |
+| simA-D9 | `crates/finder/tests/motion/model/routes.rs:107` | the foreign-origin loop keeps `"fixed"` only, unrolled to one request | `foreign_model_writes_leave_a_working_mount_and_populated_model_unchanged`, in the same file, covers the foreign `night` reset; the guard runs before the body is read |
+| mcp-D3 | `crates/finder/tests/mcp/motion.rs:226` | `stopped()` takes `watch: bool`, with a doc comment saying what each call checks: always StopAll within 0.1 s, the halt reason, motion cleared and at rest within 20 ticks (2 s); only with `watch`, today's 5 s at rest, 5 s unchanged and only-StopAll checks. The `"second client"` case (`crates/finder/tests/mcp/motion.rs:272`) passes `true`, the other eight `false` | the spec asks for the 5 s watch in the second-client case only (016 US4-S6) |
 
 Why node-D1 deletes only: the skeptic's tidy-up, moving two default-value assertions to
 `default_base_tilt_and_zero_points_are_present`, would leave the survivor's name claiming
 "zero rate error" it no longer checks; the assertions already sit in the survivor and
 `crates/simulator/tests/mount.rs:196` already checks the 0.3° default.
 
+The story removes 14 test functions, renames three and moves one, as round 2's probe
+counted them: `brightest_first_requirement` becomes
+`exhausted_search_of_an_empty_pattern_catalog_is_no_match`, `cancellation_honored`
+becomes `solve_context_reports_a_set_cancel_flag`, and
+`both_stops_precede_emergency_fallback` becomes `stop_all_stops_both_axes`;
+`patterns::bfc_order_tests::matches_cedar_order_and_visits_each_combination_once` moves
+to `patterns::tests::matches_cedar_order_and_visits_each_combination_once`.
+`stop_all_stops_both_axes`, like the test it reduces, has no
+positive control that the axes were moving before the stop. In `simA-D4`, the deleted
+no-mount ticks could not fail: a rig built with `connected` false has no mount. The
+probe found each new or moved assertion failing under a mutation of what it checks;
+undoing a saving fails nothing, so the savings are read from the diff.
+
 ### US11 (optional): the whole night shortened
 
 `crates/finder/tests/motion/night.rs`: the five GoTos (`crates/finder/tests/motion/night.rs:174`,
-`["M42", "M31", "M45", "M81", "M1"]`) become one, to M81, with the same assertions; the
-first sync, the one-tap second sync, the hand push and its GoTo to M42, the Stop mid-slew
-to M31 and the dropped link mid-slew to M81 are unchanged. The test is renamed
-`a_whole_night_syncs_gotos_hand_push_stop_and_dropped_link`. Spec 014 US9's "five GoTos"
+`["M42", "M31", "M45", "M81", "M1"]`; the loop is at line 195 once US4 has landed) become
+one, `night.goto("M81")`, with the same assertions; the first sync, the one-tap second
+sync, the hand push and its GoTo to M42, the Stop mid-slew to M31 and the dropped link
+mid-slew to M81 are unchanged. The test is renamed
+`a_whole_night_syncs_gotos_hand_push_stop_and_dropped_link`. No assertion guards the
+saving: the diff is the evidence (US11-S2). Spec 014 US9's "five GoTos"
 (`specs/014-goto/spec.md:677`) keeps its text; approval 15 records the amendment.
 
 ### US12 (optional): the MCP hold shortened
 
-`crates/finder/tests/mcp/tracking.rs`: the hold loop
-(`crates/finder/tests/mcp/tracking.rs:181`, `for second in 0..=600`) spans 75 s; the test
+`crates/finder/tests/mcp/tracking.rs`: the hold loop spans 75 s, through its two literals:
+`for second in 0..=600` (`crates/finder/tests/mcp/tracking.rs:181`) and
+`if second < 600` (`crates/finder/tests/mcp/tracking.rs:188`) both become 75. The test
 (`crates/finder/tests/mcp/tracking.rs:163`) is renamed
 `track_first_goto_keeps_mcp_source_and_holds_m42_for_seventy_five_seconds`; the comment
-above the loop states 75 s. Every assertion in and after the loop is unchanged. Spec 016
-US6-S1 (`specs/016-mcp/spec.md:694`) keeps its text; approval 16 records the amendment.
+above the loop says "through t=75". The closing `eprintln!`
+(`crates/finder/tests/mcp/tracking.rs:206`) may say the new span in place of
+`ten-minute` (`crates/finder/tests/mcp/tracking.rs:207`). Every assertion in and after the
+loop is unchanged. No assertion guards the saving, and none could: the tracker holds 120
+samples at either span (its window is 60 s), so "more than 30 samples" cannot catch a
+revert; the diff is the evidence (US12-S2). Spec 016 US6-S1's "10 min"
+(`specs/016-mcp/spec.md:695`) keeps its text; approval 16 records the amendment.
 
 ### US13 (optional): the window below the route
 
@@ -577,17 +731,20 @@ US6-S1 (`specs/016-mcp/spec.md:694`) keeps its text; approval 16 records the ame
    and keep today's check that it is gone.
 2. `crates/finder/tests/motion/tracking/routes.rs`:
    `readout_uses_live_errors_last_sixty_seconds_and_fr001_fr002`
-   (`crates/finder/tests/motion/tracking/routes.rs:244`) replaces its 750 ticks
-   (`crates/finder/tests/motion/tracking/routes.rs:259`) with ticks until the tracker
-   holds more than 30 samples, and drops the two window assertions
-   (`crates/finder/tests/motion/tracking/routes.rs:265` and the line after). Its RMS,
+   (`crates/finder/tests/motion/tracking/routes.rs:244`) ends its 750 ticks
+   (`crates/finder/tests/motion/tracking/routes.rs:259`) as soon as the tracker holds
+   more than 30 samples, and drops the two window assertions
+   (`crates/finder/tests/motion/tracking/routes.rs:265` and the line after). The loop
+   keeps 750 ticks as its upper bound, so a regression fails at the kept "more than 30"
+   assertion instead of hanging; `let tracker` moves above the loop. Its RMS,
    field-rotation and longest-exposure assertions stay. Then it stops the camera
-   (`rig.controls.stop_frames()`), ticks 61 s so the live samples age out, injects one
-   sample with `rig.state.session().tracker().unwrap().pointing(east, north)`
-   (`crates/finder/src/tracking.rs:240`), and asserts the readout's `rms_arcsec` equals
-   that sample's error after 59.9 s and is 0 after 60.1 s. Missing solves do not end
-   Track, so the readout stays present. The readout's own filter is
-   `crates/finder/src/session.rs:153`.
+   (`rig.controls.stop_frames()`), ticks 610 times (61 s) so the live samples age out,
+   injects one sample, 12″ east and −9″ north (an error of 15″), with
+   `rig.state.session().tracker().unwrap().pointing(east, north)`
+   (`crates/finder/src/tracking.rs:250`), and asserts that the readout's `rms_arcsec`
+   equals that sample's error within 1e-9″ after 599 ticks (59.9 s) and is 0 two ticks
+   later (60.1 s). Missing solves do not end Track, so the readout stays present. The
+   readout's own filter is `crates/finder/src/session.rs:153`.
 
 Spec 015 US7-S7 (`specs/015-tracking/spec.md:416`) keeps its text; approval 17 records
 the amendment.
@@ -595,24 +752,27 @@ the amendment.
 ## Measurements
 
 "Before" is each test's duration in the GitHub `test` job of ergane gates run 43683194483
-on b8dceaa (nextest, optimized test build). "After" is measured by round 2's probe, on the
-post-027 tree, and is not part of any scenario.
+on b8dceaa (nextest, optimized test build). "Work" is what round 2's probe counted on its
+build of each story, in units that do not depend on the machine: frames rendered,
+detected and solved, ticks, GoTos, requests and processes started, and simulated
+seconds. None of it is part of any scenario. Wall seconds are not recorded here: the
+owner reads the first GitHub `test` job after the last story lands (SC-004).
 
-| Story | Tests changed | Before (s) | After (s) |
+| Story | Tests changed | Before (s) | Work, before → after (round 2 probe) |
 |---|---|---|---|
-| US1 | `axis_moves::braking_distance_…` 32.515, `cable_wind_refuses_…` 27.516, `track_through_the_page_…` 8.384, `disconnected_client_…` 7.405, `rate_duration_…` 5.202, `sunrise_halts_…` 4.076, `a_zero_rate_…` 2.039; simulator `silent_link_…` 2.584, `stop_cancels_…` 2.457, `watchdog_count_…` 2.086, `a_full_adapter_queue_…` 0.396 | 94.660 | round 2 |
-| US2 | `tracking::routes::track_names_…` 13.720, `foreign_bodiless_…` 8.706, `below_horizon_…` 6.740, `dropping_console_…` 5.518; `min_alt::…` 6.139; `motion_ends::track_stop_shares_…` 6.521, `track_stop_starts_…` 5.530; `retry::retained_tracker_…` 6.032; `watchdog::past_watchdog_…` 5.651 | 64.557 | round 2 |
-| US3 | `goto::sim::five_catalog_…` 80.944, `continuously_observed_cable_wind_…` 31.589 | 112.533 | round 2 |
-| US4 | `night::a_whole_night_…` | 181.548 | round 2 |
-| US5 | `track::tracking_that_moved_…` | 27.032 | round 2 |
-| US6 | removed: `session_node::…` 1.554, `tracking::backlash::first_transit_…` 3.438; changed: `cli backlash::…` 4.098, `cli aim::…` 1.373 | 10.463 | round 2 |
-| US7 | `aim::aim_writes_…` 9.591, `live::loop_::rich_frames_…` 8.336 | 17.927 | round 2 |
-| US8 | `tracking::night::an_hour_…` 2.915, `cli simulate::simulated_epoch_…` 5.775, scope-node `start_refuses_…` 0.010 | no saving intended | round 2 |
-| US9 | none intended | n/a | n/a |
-| US10 | removed: `model::sim::second_sync_fits_…` 11.974, `goto::routes::absent_mount_…` 2.590, `approach_to_…` 2.130, `m8_below_…` 1.926, `sun_five_…` 1.487, and ten tests of 0.010 s or less each; changed: `mcp motion::security_rejections_…` 15.371, `second_client_…` 12.246 | 47.724 | round 2 |
-| US11 (optional) | `night::a_whole_night_…` (before US4) | 181.548 | round 2, after US4 |
-| US12 (optional) | `mcp tracking::track_first_goto_…_ten_minutes` | 173.646 | round 2 |
-| US13 (optional) | `tracking::routes::readout_uses_…` 27.232, `tracking::tracker::pointing_samples_…` 0.483 | 27.715 | round 2 |
+| US1 | `axis_moves::braking_distance_…` 32.515, `cable_wind_refuses_…` 27.516, `track_through_the_page_…` 8.384, `disconnected_client_…` 7.405, `rate_duration_…` 5.202, `sunrise_halts_…` 4.076, `a_zero_rate_…` 2.039; simulator `silent_link_…` 2.584, `stop_cancels_…` 2.457, `watchdog_count_…` 2.086, `a_full_adapter_queue_…` 0.396 | 94.660 | frames after the first sync in the six direct-move tests 485 → 0 (braking 212, cable wind 174, disconnected 42, rate duration 24, sunrise 23, zero rate 10); Track test frames 52 → 18 and GoTo handoffs 1 → 0; simulator Stop and watchdog catalog renders 52 → 0 and pattern-database loads 4 → 0 |
+| US2 | `tracking::routes::track_names_…` 13.720, `foreign_bodiless_…` 8.706, `below_horizon_…` 6.740, `dropping_console_…` 5.518; `min_alt::…` 6.139; `motion_ends::track_stop_shares_…` 6.521, `track_stop_starts_…` 5.530; `retry::retained_tracker_…` 6.032; `watchdog::past_watchdog_…` 5.651 | 64.557 | frames in the nine tests 425 → 99 (track names 96 → 28, foreign bodiless 56 → 22, below horizon 44 → 10, dropping console 36 → 2, min alt 40 → 6, track stop shares 40 → 6, track stop starts 36 → 2, retry 40 → 6, watchdog 37 → 17); the three Stop tests send no GoTo command |
+| US3 | `goto::sim::five_catalog_…` 80.944, `continuously_observed_cable_wind_…` 31.589 | 112.533 | five-target frames 552 → 446 with both syncs stored (374 with the far sync alone, which loses today's cable-wind state); cable-wind frames 218 → 62 (the 350° move 208 → 52) |
+| US4 | `night::a_whole_night_…` | 181.548 | frames rendered and solved 1511 → 617; `/api/goto` requests 8 → 8; simulated time 306.8 s → 312.8 s |
+| US5 | `track::tracking_that_moved_…` | 27.032 | built-binary starts 2 → 1; `POST /api/track` to the binary 1 → 0; real-time waits before the restart 3 → 0; 14 frames in process, in paused time |
+| US6 | removed: `session_node::…` 1.554, `tracking::backlash::first_transit_…` 3.438; changed: `cli backlash::…` 4.098, `cli aim::…` 1.373 | 10.463 | built `finder` processes 9 → 5; paused-time M42 transit measurements 3 → 2; test functions −2 +1 |
+| US7 | `aim::aim_writes_…` 9.591, `live::loop_::rich_frames_…` 8.336 | 17.927 | aim test frames 81 → 17 (previews 1, 11, …, 81 → 1, 3, …, 17); unsolved-interval frames 61 → 7, its unsolved interval 30.0 s both |
+| US8 | `tracking::night::an_hour_…` 2.915, `cli simulate::simulated_epoch_…` 5.775, scope-node `start_refuses_…` 0.010 | no saving intended | frames and solves unchanged; scope-node still starts 3 children; `cli/simulate.rs` makes one more `GET /api/session` |
+| US9 | none intended | n/a | scratch entries left under `target/` after a full run 2 → 0, and `CARGO_TARGET_TMPDIR` empty after each run |
+| US10 | removed: `model::sim::second_sync_fits_…` 11.974, `goto::routes::absent_mount_…` 2.590, `approach_to_…` 2.130, `m8_below_…` 1.926, `sun_five_…` 1.487, and nine tests of 0.010 s or less each; changed: `mcp motion::security_rejections_…` 15.371, `second_client_…` 12.246 | 47.718 | five goto rigs no longer built (each with a solved first sync, four with an accepted GoTo); one second-sync setup gone; MCP Stop cases' simulated time after the Stop 90 s → 26 s (900 → 260 ticks, about 180 → 52 frames) |
+| US11 (optional) | `night::a_whole_night_…` (before US4) | 181.548 | on top of US4: frames 617 → 192 (1511 → 192 with US4); `/api/goto` requests 8 → 4; GoTos to done 6 → 2, halted 2 → 2; simulated time 312.8 s → 100.3 s |
+| US12 (optional) | `mcp tracking::track_first_goto_…_ten_minutes` | 173.646 | frames 1,236 → 186 (the hold 1,200 → 150); the hold's simulated time 600 s → 75 s |
+| US13 (optional) | `tracking::routes::readout_uses_…` 27.232, `tracking::tracker::pointing_samples_…` 0.483 | 27.715 | readout test frames 186 → 67 (simulated time 92.9 s → 154.4 s, 121 s of it with the camera off) |
 
 For scale, the same log's per-test durations add up to 1,150 s across 621 tests.
 
@@ -635,8 +795,12 @@ For scale, the same log's per-test durations add up to 1,150 s across 621 tests.
 | Bound the newest frame id at one more than at the stop. | Assert no frame at all; count frames in the live loop. | A capture already under way still arrives. The live loop drops frames that arrive while it solves, so it under-counts. |
 | A second constructor, `Rig::rendered`, for `frame_positions.rs`. | Move `frame_positions.rs` to the synthetic camera too. | The skeptic's coverage note: it would stop exercising the rendered camera's exposure times with mount sampling. |
 | A new `centred()` helper in `routes.rs`; `accepted()` stays. | Change `accepted()`. | `accepted()` also serves the readout test, whose span US13 may change; keeping it leaves that test to US13 alone. |
-| The five-target test keeps one live sync and loads only the far one. | Load both syncs; load the fixture from `motion/model/routes.rs`. | The first 1° move puts the gears on the flank both syncs use and gives a solved sync, so the product fits the tilt from its own frame and one stored sync. The model-route fixture carries fixed terms and a sync this mount does not have. |
-| The far sync is computed from a second `SimMount`. | Type its numbers. | Numbers typed by hand would be an oracle nobody can check; the simulator's mount is the truth the test already uses. |
+| The five-target test stores both syncs of the old setup, the near one first and 120 s older, and keeps a live sync from the first 1° move. | Store only the far sync (round 1's decision); load the fixture from `motion/model/routes.rs`. | Round 2 showed that GoTo starts its cable-wind count from the model's first sync: with the far sync alone, the M81 → M1 GoTo reaches 386° from power-on, past the planner's ±360° limit, and nothing notices. With both stored, the wind state is the old setup's. The first 1° move still puts the gears on the flank the syncs use and gives a solved sync, so the product fits the tilt itself, from its own frame and the stored syncs. The model-route fixture carries fixed terms and a sync this mount does not have. |
+| The stored syncs are computed from a second `SimMount`, and `second_from_file` checks the fitted tilt within 1′. | Type their numbers; check only that a tilt exists. | Numbers typed by hand would be an oracle nobody can check; the simulator's mount is the truth the test already uses. Round 2 found that a wrong fixture passes the five GoTos, which correct themselves, so only the tilt check catches it. |
+| One centred-start recipe: after the sync, tick at most 10 times until the session's pointing is within 1′ of M42, then post Track. | Post Track at once after the sync (round 1's text). | The node starts capturing when the rig is built, so the first sync comes from the start direction and Track posted at once arms a GoTo; round 2 saw that at every centred site. |
+| US10 keeps `detection_parameters_do_not_perturb_solve_math`. | Delete it with `explicit_detection_parameters_honored` (round 1's core-D6). | Round 2 found it holds the only assertion outside the oracle that detection finds isolated peaks on a zero background. The owner's approval covers only deletions that lose nothing or lose only what the skeptic's correction names. |
+| US9 also moves the scratch folders of US6's `durable.rs` and 024's `crates/scope-node/tests/mount_link.rs`. | Leave them on their own paths. | With `durable.rs`'s own `Folder`, FR-026's one helper would not be literally true of finder's tests; `mount_link.rs` landed after the audit with the same hazard. |
+| US11 and US12 add no guard assertion. | Assert the shortened span. | Their savings are read from the diff (US11-S2, US12-S2); US12's "more than 30 samples" holds at either span. |
 | Five GoTos stay chained in one test. | One test per target. | Chaining carries backlash, wind and correction state between targets, which only this test and the night check. |
 | 2 s for the cable-wind move. | 5 s. | The skeptic's corrected figure keeps steps near 7°; 5 s would be 17°. |
 | 3 s for the aim test. | 6 s, with preview-less synthetic frames added to `loop_.rs`. | At 3 s the aim test still tells previews from frames by itself, and `loop_.rs` is not touched. |
@@ -674,22 +838,26 @@ already applied. api-H1 was fixed by 027.
 ## Prerequisites before this spec is flipped to `ready`
 
 1. **024 and 025 have landed.** The owner's order is 024, 025, then 028 and 029.
-   `024-mount-link-recovery` is in `depends_on_landed`. 025 is not in this tree, so it is
-   not there yet: when its spec lands on `main`, add it. When each has landed, re-read
-   every citation of this trio on `main` and update the Refinement Record's
-   `shared_writes`. Files this spec writes that they also write:
-   `crates/scope-node/src/mount/mod.rs` (024 US1, which adds trait defaults and leaves the
-   test module US10 deletes alone), `crates/finder/src/session.rs` (024 US3) and
-   `crates/finder/tests/cli/main.rs` (025's draft). Files this spec cites that 024 edits,
-   so their line numbers will move: `crates/scope-node/src/service.rs`,
-   `crates/finder/src/goto.rs`, `crates/finder/src/tracking.rs`,
-   `crates/finder/src/live.rs` and `crates/finder/src/api.rs`. Both add modules to
-   finder's binaries, which this spec does not reorder.
+   024 has landed (`main` at f0ea2d5) and is in `depends_on_landed`; `main` was merged
+   into this branch there, every citation in a file 024 changed was re-read at f0ea2d5,
+   and the Refinement Record's `shared_writes` name 024's stories where they last wrote a
+   file this spec writes: `crates/scope-node/src/mount/mod.rs` (024 US1, which added trait
+   defaults and left the test module US10 deletes alone; that module now opens at line
+   99), `crates/finder/src/session.rs` (024 US3) and `crates/scope-node/tests/mount_link.rs`
+   (024 US1, new; US9 moves its scratch folder). 024 also moved lines this spec cites in
+   `crates/scope-node/src/service.rs`, `crates/finder/src/goto.rs`,
+   `crates/finder/src/tracking.rs` and `crates/finder/src/session.rs`. 025 is not in this
+   tree, so it is not in `depends_on_landed` yet: when its spec lands on `main`, add it,
+   re-read every citation of this trio on `main`, and update the `shared_writes`. It
+   writes `crates/finder/tests/cli/main.rs`, which US6 also writes (025's draft). Both add
+   modules to finder's binaries, which this spec does not reorder.
 2. **The owner keeps or deletes US11, US12 and US13**, and the approvals they carry.
 3. **The owner approvals are given.** Flipping gives them.
-4. **Round 2's probe has built every kept story** in a throwaway worktree, measured each
-   diff with the factory's output check, and filled § Measurements' "After" column.
-5. **`crates/finder/tests` is still as read.** If a file there changed since 06a7d4e,
+4. **Round 2's probe has built every kept story** in a throwaway worktree and measured
+   each diff. Done on 2026-11-15 for all thirteen (§ Refinement Record); § Measurements
+   holds its machine-independent counts. A story whose files 025 changes is probe-built
+   again after 025 lands.
+5. **`crates/finder/tests` is still as read.** If a file there changed since f0ea2d5,
    re-read it and re-run the probe.
 
 ## Plan traps
@@ -704,8 +872,10 @@ already applied. api-H1 was fixed by 027.
 4. **The wrong controls.** In the finder rigs `rig.sim.stop_frames()` does nothing;
    `rig.controls` is the node's. In the simulator rig the call would be
    `rig.service.controls()`. *Check:* the newest-frame bound fails if the stop is removed.
-5. **A centred start that waits.** *Check:* Track is posted within a few ticks of the
-   sync, and its reply is asserted, not just the later state.
+5. **A centred start that waits too long, or not at all.** *Check:* after the sync the
+   test ticks, at most 10 times, until the session's pointing is within 1′ of M42 (6° in
+   the watchdog test), then posts Track, and its reply is asserted, not just the later
+   state.
 6. **Unused imports after a deletion.** *Check:* `cargo clippy` with `-D warnings`;
    `routes.rs` loses `ephemeris` and `sky`, `tracking/night.rs` loses `Instant`.
 7. **A spec fixed mid-epic needs a relaunch.** *Check:* no builder edits
@@ -713,9 +883,10 @@ already applied. api-H1 was fixed by 027.
 8. **Each worktree builds on its own.** *Check:* no story sets `CARGO_TARGET_DIR`.
 9. **A new test file at the top of `crates/finder/tests` fails `layout`.** *Check:* the
    one new module is `console/session/durable.rs`, declared in its folder's `mod.rs`.
-10. **The far sync must be the simulator's truth.** If US3's live sync opens a second
-    epoch, the stored zero points or flank are wrong. *Check:* `second_from_file` asserts
-    one epoch.
+10. **The stored syncs must be the simulator's truth.** If US3's live sync opens a second
+    epoch, the stored zero points or flank are wrong; if the fitted tilt is off, the
+    stored directions are. *Check:* `second_from_file` asserts one epoch and the tilt
+    within 1′ of the simulator's 1° toward 130°.
 11. **Formatting is the repository's.** *Check:* `cargo fmt --all`, then
     `cargo fmt --all --check`.
 
@@ -723,23 +894,115 @@ already applied. api-H1 was fixed by 027.
 
 | Risk | Mitigation |
 |---|---|
-| US3's stored sync does not match what a solved frame would record (apparent altitude, flank). | It is computed from the simulator's mount, not typed; `second_from_file` asserts one epoch and a base tilt; round 2's probe builds it first. If it still fails, US3 escalates rather than loosening a bound. |
+| US3's stored syncs do not match what solved frames would record (apparent altitude, flank). | They are computed from the simulator's mount, not typed; `second_from_file` asserts one epoch and a base tilt within 1′ of the simulator's, which round 2 saw fail for each wrong fixture it tried. If it still fails, US3 escalates rather than loosening a bound. |
 | A frame interval change takes one frame to apply. | Every count and cadence bound allows one frame. |
 | 024 or 025 changes a file this spec cites. | Prerequisite 1: re-read on `main` after they land. |
 | An optional story is deleted after round 2 built on it. | Nothing depends on an optional story; its files are its own or come after the stories it waits for. |
-| US9 and US10 are long lists across crates. | Each is a list of small, mechanical edits; round 2 measures both diffs against the 64 KiB preferred size. |
+| US9 and US10 are long lists across crates. | Each is a list of small, mechanical edits; round 2 measured their diffs at 37 KB and 26 KB, under the 64 KiB preferred size, and US9's two added files are a few lines each. |
 
 ## Refinement Record
 
 Drafted on 2026-11-15 by the plate-solver operator against `main` at 06a7d4e. Round 1
-drafts only: no story has been built. Writes come from the task text. Shared writes name
+drafted only: no story had been built. Writes come from the task text. Shared writes name
 the landed story that last wrote each file, and, for a file two stories here write, the
 later story under the earlier one. Nothing in this record is an owner approval: those are
 in spec.md, and flipping to `ready` gives them.
 
+**Round 2 (probe builds), 2026-11-15.** Each of the thirteen stories was probe-built in a
+throwaway worktree from the trio as it stood at 9563141, stacked as the Work Graph orders
+them, on `main` as 024 landed story by story: 06a7d4e, de9bfe6 (024 US1) or fc7d2bf (024
+US2), with US9 and US10 ending on f0ea2d5. Every probe built, passed its story's tests and
+the workspace's tests, was clean under clippy and fmt, wrote only its declared files and
+failed no existing test. Diffs are each story's own, against the branch it was built on:
+
+| Story | Branch | Built on | Diff |
+|---|---|---|---|
+| US1 | `probe/028-r2-us1` at 654f0de | de9bfe6 | 11,041 B |
+| US2 | `probe/028-r2-us2` at 49b7482 | de9bfe6 | 10,664 B |
+| US3 | `probe/028-r2-us3` at 4828efd | 06a7d4e | 8,104 B |
+| US4 | `probe/028-r2-us4` at 28432e9 | de9bfe6 | 2,526 B |
+| US5 | `probe/028-r2-us5` at 294a9a5 | US3 | 4,629 B |
+| US6 | `probe/028-r2-us6` at dee6f91 | de9bfe6 | 16,600 B |
+| US7 | `probe/028-r2-us7` at 1c48c3c | fc7d2bf | 3,925 B |
+| US8 | `probe/028-r2-us8` at cda4f71 | US3 and US4 on de9bfe6, then fc7d2bf merged | 7,789 B |
+| US9 | `probe/028-r2-us9` at 47d2d04 | US1, US5, US6 and US8 on fc7d2bf, then f0ea2d5 merged | 37,169 B |
+| US10 | `probe/028-r2-us10` at 1259323 | US9 | 25,543 B |
+| US11 (optional) | `probe/028-r2-us11` at 54b6623 | US4 | 1,026 B |
+| US12 (optional) | `probe/028-r2-us12` at 5b72961 | fc7d2bf | 1,480 B |
+| US13 (optional) | `probe/028-r2-us13` at a124e06 | US2 | 2,964 B |
+
+All thirteen were then merged into one tree on f0ea2d5 (`probe/028-r2-all` at c015cb7)
+with no conflicts: fmt, clippy and the doc tests were clean, and nextest passed 644 of 644
+tests twice, against 660 on `main` by the same count, so the round nets −16 tests (−15
+once US10 keeps `detection_parameters_do_not_perturb_solve_math`). In that tree every
+file two stories write has a `depends_on_merged` path between them in the Work Graph,
+and US7 and US12 share no file with any other story.
+
+The probes, and the operator's decisions on what they found, changed this trio as
+follows. None of them changes the owner's settled answers: two specs, the oracle
+untouched, the approved trades and the optional stories as leaves of the graph.
+
+- **One centred-start recipe** (US1-S3, the four US2 sites, US5). Round 1's text failed
+  at every site: the node starts capturing in `Rig::new`, so the first sync comes from
+  the start direction and Track arms a GoTo. After the sync each site now ticks at most
+  10 times until the session's pointing is within 1′ of M42, then posts Track; frame 2,
+  at about 0.8 s, is the first on M42. The recipe is written once (§ Interfaces "A
+  centred start"), and the edge case and Key Entities' "Centred start" say so.
+- **US1:** the sunrise test's binding is `last_frame`, because `stopped` is already its
+  stop time; the simulator rig's two constructors share a private
+  `async fn on<C: Camera + 'static>`.
+- **US2:** the watchdog test ticks until the session's pointing is within 6° of M42 and
+  asserts it ("no frame solved after the push"); without that its later GoTo plans from
+  a frame exposed before the push. US2-S4 and FR-007 say so.
+- **US3:** `second_from_file` checks the fitted base tilt within 1′ of the simulator's
+  1° toward 130°, since a wrong fixture passes the five GoTos (US3-S1 reworded). The
+  state file now holds the near sync too, at (4500, 4500) and 120 s before the start:
+  with one stored sync the M81 → M1 GoTo reaches 386°, past the planner's ±360° limit.
+  That reverses round 1's decision; § Decisions and owner approval 4 now say two of the
+  three syncs come from a file and the live 1° sync still solves. The helpers are
+  `far_sync(path, start, alt, az)`, `mount_config(alt, az)`, and a model with its own
+  `rms_arcsec`.
+- **US4:** US4-S2 and T020 reworded so the cadence assertion is part of the diff; it
+  goes after `crates/finder/tests/motion/night.rs:164`.
+- **US5:** the test makes its own JSON `POST /api/track` and ticks, at most 100 times,
+  until the true direction changes, because the gears start mid-backlash.
+- **US6:** `durable.rs` scratches under `CARGO_TARGET_TMPDIR`; `request(method, path,
+  body)` replaces the backlash test's old helper; the token is compared in the stored
+  file (US6-S1); two session.rs citations were off at drafting and are fixed.
+- **US7:** the preview assertion goes after the loop's closing brace; US7-S2 takes the
+  probe's clearer wording.
+- **US8:** US8-S4 is read from the diff and names the child's arguments, not its config,
+  which holds the token; US8-S5 takes the probe's wording; the other 5 s solver
+  deadlines and `cli/simulate.rs`'s 15 s first-pointing wait are named out of scope.
+- **US9:** T042 and § Interfaces name the keyhole and tracking-night rigs, `writes.rs`'s
+  path and `catch_unwind`, the file guards of scope-node's `cli.rs` and
+  `mount_config.rs`, and `rpicam.rs`'s `#[cfg(unix)]`. US9 also takes US6's
+  `console/session/durable.rs` (as `Scratch::new("session-durable")`) and 024's
+  `crates/scope-node/tests/mount_link.rs` (a fourth scope-node file under US9-S4 and
+  FR-028), both added to its writes.
+- **US10:** `detection_parameters_do_not_perturb_solve_math` stays (US10-S1, FR-030, the
+  tasks and owner approval 12 no longer delete it), so the story removes 14 tests;
+  approval 12 says three renamed and one moved and names them; the twin of
+  `inline_image_bytes_used_when_shmem_absent` and of the foreign `night` reset are
+  named. SC-003 now counts 16 removed.
+- **US11:** US11-S2 reworded so the interrupted slews visibly stay; no guard assertion.
+- **US12:** US12-S2 and T057 allow `ten-minute` in the closing message to change; both
+  loop literals and spec 016's line are named; no guard assertion.
+- **US13:** the 750-tick bound and the injected sample's values are stated.
+
+Round 2's counts of the work each story removes are in § Measurements; its wall-clock
+timings are not part of this trio.
+
+**Re-anchored to `main` at f0ea2d5, 2026-11-15**, once 024 had landed: `main` was merged
+into this branch, every citation in a file 024 changed was re-read at f0ea2d5 and moved
+with its line (in `crates/finder/src/session.rs`, `goto.rs` and `tracking.rs`, and
+`crates/scope-node/src/service.rs` and `mount/mod.rs`), and the shared writes of
+`session.rs` and `mount/mod.rs` now name the 024 stories that last wrote them. 025 is
+still to land and re-anchors the trio again (§ Prerequisites 1).
+
 ```yaml
 version: 1
-reviewed_revision: 06a7d4e0ef488f227f7faf3407f5a6e5e5b405cc
+reviewed_revision: f0ea2d54028ce3c97ab262ce6743ef777a8ed43a
 stories:
   US1:
     tests:
@@ -880,7 +1143,7 @@ stories:
     - path: crates/finder/tests/motion/goto/sim.rs
       status: existing
       disposition: replace
-      assertion: "five-target test starts from the stored far sync with 4500 azimuth counts, a base tilt and one epoch, then its five GoTos unchanged; cable-wind move advances the frame id by 20 to 60"
+      assertion: "five-target test starts from the stored near and far syncs with 4500 azimuth counts, a base tilt within 1 arcminute of the simulator's, at least two syncs and one epoch, then its five GoTos unchanged; cable-wind move advances the frame id by 20 to 60"
       decision: "spec.md:FR-009"
     preserved_behavior:
     - "the five GoTos, their order, their progress states and bounds (spec.md US3-S2)"
@@ -1041,6 +1304,11 @@ stories:
     - crates/finder/tests/motion/tracking/backlash.rs
     no_write_reason: ""
     shared_writes:
+    - path: crates/finder/tests/console/session/durable.rs
+      other_spec: 028-finder-tests-do-less
+      other_story: US9
+      disposition: merge_order
+      reason: "US9 depends_on_merged US6 and moves this new file's scratch folder to the shared helper"
     - path: crates/finder/tests/console/session/mod.rs
       other_spec: 027-finder-tests-by-system
       other_story: US2
@@ -1146,7 +1414,7 @@ stories:
     - path: crates/scope-node/tests/cli.rs
       status: existing
       disposition: replace
-      assertion: "a child still running after 10 s is killed and fails the test; both tests' assertions unchanged"
+      assertion: "a child still running after 10 s is killed and fails the test naming its arguments; both tests' assertions unchanged"
       decision: "spec.md:FR-024"
     - path: crates/scope-node/src/rpicam/metadata.rs
       status: existing
@@ -1266,9 +1534,11 @@ stories:
     - crates/finder/tests/motion/tracking/keyhole.rs
     - crates/finder/tests/motion/tracking/night.rs
     - crates/finder/tests/motion/goto/sim.rs
+    - crates/finder/tests/console/session/durable.rs
     - crates/scope-node/tests/cli.rs
     - crates/scope-node/tests/mount_config.rs
     - crates/scope-node/tests/rpicam.rs
+    - crates/scope-node/tests/mount_link.rs
     no_write_reason: ""
     shared_writes:
     - path: crates/finder/tests/support/mod.rs
@@ -1346,6 +1616,11 @@ stories:
       other_story: US2
       disposition: merge_order
       reason: "028 depends_on_landed 013-live-finder, whose US2 last wrote this file"
+    - path: crates/scope-node/tests/mount_link.rs
+      other_spec: 024-mount-link-recovery
+      other_story: US1
+      disposition: merge_order
+      reason: "028 depends_on_landed 024-mount-link-recovery, whose US1 added this file"
     open_questions: []
   US10:
     tests:
@@ -1357,7 +1632,7 @@ stories:
     - path: crates/plate-solver/tests/solve_acceptance.rs
       status: existing
       disposition: replace
-      assertion: "two tests deleted; the getter check and the empty-catalog NO_MATCH kept under honest names"
+      assertion: "one test deleted; the getter check and the empty-catalog NO_MATCH kept under honest names; detection of isolated peaks on a zero background kept"
       decision: "spec.md:FR-030"
     - path: crates/database-generation/src/patterns.rs
       status: existing
@@ -1412,6 +1687,7 @@ stories:
     preserved_behavior:
     - "no oracle file is edited (spec.md SC-002)"
     - "each removed assertion is held by the stricter twin plan.md Interfaces US10 names"
+    - "detection_parameters_do_not_perturb_solve_math is unchanged (spec.md FR-030)"
     checks:
       development:
       - cargo nextest run --workspace --locked --all-targets --all-features
@@ -1446,25 +1722,15 @@ stories:
       disposition: merge_order
       reason: "028 depends_on_landed 014-goto, whose US3 last wrote this file"
     - path: crates/scope-node/src/mount/mod.rs
-      other_spec: 017-console-stop-confirm
-      other_story: US3
-      disposition: merge_order
-      reason: "028 depends_on_landed 017-console-stop-confirm, whose US3 last wrote this file at the reviewed revision"
-    - path: crates/scope-node/src/mount/mod.rs
       other_spec: 024-mount-link-recovery
       other_story: US1
       disposition: merge_order
-      reason: "028 depends_on_landed 024-mount-link-recovery, whose US1 adds trait defaults to this file before US10 deletes its test module"
-    - path: crates/finder/src/session.rs
-      other_spec: 017-console-stop-confirm
-      other_story: US2
-      disposition: merge_order
-      reason: "028 depends_on_landed 017-console-stop-confirm, whose US2 last wrote this file at the reviewed revision"
+      reason: "028 depends_on_landed 024-mount-link-recovery, whose US1 last wrote this file, adding trait defaults before US10 deletes its test module"
     - path: crates/finder/src/session.rs
       other_spec: 024-mount-link-recovery
       other_story: US3
       disposition: merge_order
-      reason: "028 depends_on_landed 024-mount-link-recovery, whose US3 edits this file before US10 deletes two of its inline tests"
+      reason: "028 depends_on_landed 024-mount-link-recovery, whose US3 last wrote this file before US10 deletes two of its inline tests"
     - path: crates/finder/tests/motion/goto/routes.rs
       other_spec: 027-finder-tests-by-system
       other_story: US2
