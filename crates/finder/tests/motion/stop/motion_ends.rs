@@ -7,7 +7,12 @@ use crate::support::stop as support;
 use std::{sync::atomic::Ordering, sync::Arc, time::Duration};
 
 use axum::body::to_bytes;
-use finder::{model::Model, session::Site, tracking::Tracker};
+use finder::{
+    model::{separation, Model},
+    session::Site,
+    targets,
+    tracking::Tracker,
+};
 use scope_node::mount::{Axis, Mount};
 use serde_json::{json, Value};
 use support::*;
@@ -280,7 +285,24 @@ async fn unanswered_rate_start_retries_its_stop_before_answering_the_tool() {
 }
 
 async fn tracking() -> Rig {
-    let rig = ready().await;
+    let rig = Rig::new().await;
+    let target = targets::find("M42").unwrap();
+    rig.sim.point_eyepiece_at(target.ra_deg, target.dec_deg);
+    rig.sync().await;
+    for axis in [Axis::Azimuth, Axis::Altitude] {
+        assert!(!rig.mount.state(axis).await.moving);
+    }
+    for _ in 0..10 {
+        let p = session(&rig.app).await["pointing"].clone();
+        let (ra, dec) = (
+            p["ra_deg"].as_f64().unwrap(),
+            p["dec_deg"].as_f64().unwrap(),
+        );
+        if separation(ra, dec, target.ra_deg, target.dec_deg) < 1.0 / 60.0 {
+            break;
+        }
+        rig.tick().await;
+    }
     let reply = send(&rig.app, post("/api/track", json!({"on":true}))).await;
     assert_eq!(reply.status(), 200, "{}", body(reply).await);
     for _ in 0..5000 {
@@ -290,6 +312,12 @@ async fn tracking() -> Rig {
         rig.tick().await;
     }
     assert_eq!(session(&rig.app).await["track"]["state"], "tracking");
+    assert!(!rig
+        .commands
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|command| matches!(command.action, MountCommand::GoTo { .. })));
     rig.tick().await;
     assert!(rig.mount.state(Axis::Azimuth).await.moving);
     rig

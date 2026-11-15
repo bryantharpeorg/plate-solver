@@ -91,6 +91,37 @@ async fn accepted() -> Rig {
     moving(&rig).await;
     rig
 }
+/// Track running on M42 with no GoTo: for tests whose claim is not the handoff.
+async fn centred() -> Rig {
+    let rig = Rig::new(START, 50.0, 120.0, true).await;
+    let target = targets::find("M42").unwrap();
+    rig.sim.point_eyepiece_at(target.ra_deg, target.dec_deg);
+    rig.sync().await;
+    assert_eq!(rig.view().await["mount"]["connected"], true);
+    // Track reads the newest solved pointing, and the rig's first frame was
+    // exposed before the push: wait for the first one solved on M42.
+    for _ in 0..10 {
+        let p = rig.view().await["pointing"].clone();
+        let (ra, dec) = (
+            p["ra_deg"].as_f64().unwrap(),
+            p["dec_deg"].as_f64().unwrap(),
+        );
+        if separation(ra, dec, target.ra_deg, target.dec_deg) < 1.0 / 60.0 {
+            break;
+        }
+        rig.tick().await;
+    }
+    let body = track(&rig, true).await;
+    assert_eq!(body["track"]["state"], "tracking", "{body}");
+    assert!(
+        body.get("goto").is_none(),
+        "a centred Track ran a GoTo: {body}"
+    );
+    assert_eq!(body["track"]["target"]["messier"], "M42", "{body}");
+    assert_eq!(body["track"]["wanted"], true, "{body}");
+    moving(&rig).await;
+    rig
+}
 async fn quiet(rig: &Rig, seconds: usize) {
     let before = rig.mount.true_direction();
     for _ in 0..seconds * 10 {
@@ -146,7 +177,7 @@ async fn five_degree_error_starts_goto_and_off_leaves_telescope_where_it_is() {
 }
 #[tokio::test(start_paused = true)]
 async fn below_horizon_and_foreign_origin_refuse_after_positive_track_control() {
-    let rig = accepted().await;
+    let rig = centred().await;
     track(&rig, false).await;
     rig.target("M8");
     assert_eq!(
@@ -176,7 +207,7 @@ async fn below_horizon_and_foreign_origin_refuse_after_positive_track_control() 
 }
 #[tokio::test(start_paused = true)]
 async fn foreign_bodiless_stop_ends_tracking_and_no_rate_restarts_it() {
-    let rig = accepted().await;
+    let rig = centred().await;
     let start = rig.now();
     assert_eq!(rig.call("/api/stop", true).await.0, 200);
     while !rig.stationary().await {
@@ -307,7 +338,7 @@ async fn track_names_missing_mount_sync_site_target_and_sun_refusals() {
     assert_eq!(status, 409);
     assert!(body["error"].as_str().unwrap().contains("no mount"));
     assert!(rig.view().await.get("track").is_none());
-    let rig = accepted().await;
+    let rig = centred().await;
     track(&rig, false).await;
     rig.controls.stop_frames();
     for _ in 0..10 {
@@ -405,7 +436,7 @@ async fn already_centred_track_is_immediate_and_repeated_on_is_idempotent() {
 
 #[tokio::test(start_paused = true)]
 async fn dropping_console_cancels_tracking_without_retaining_the_session() {
-    let rig = accepted().await;
+    let rig = centred().await;
     let session = std::sync::Arc::downgrade(&rig.state.session());
     let mount = rig.mount.clone();
     drop(rig);

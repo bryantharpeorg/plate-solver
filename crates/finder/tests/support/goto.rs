@@ -29,6 +29,7 @@ use simulator::{
     SimCamera, Simulator, VirtualClock,
 };
 use std::{
+    path::Path,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -46,7 +47,10 @@ impl Solver for Stars {
                 &DB,
                 &frame.centroids,
                 (frame.width as usize, frame.height as usize),
-                &options,
+                &SolveOptions {
+                    timeout_ms: u64::MAX,
+                    ..options
+                },
             )
         })
     }
@@ -107,17 +111,18 @@ pub struct Rig {
 }
 impl Rig {
     pub async fn new(start: f64, alt: f64, az: f64, connected: bool) -> Self {
+        Self::with_session(start, alt, az, connected, Session::default()).await
+    }
+    pub async fn with_session(
+        start: f64,
+        alt: f64,
+        az: f64,
+        connected: bool,
+        session: Session,
+    ) -> Self {
         let clock = VirtualClock::new(start);
         let sim = Simulator::new(DB.clone(), simulator::Site::default(), clock.clone());
-        let mount = SimMount::with_config(
-            clock.clone(),
-            MountConfig {
-                base_tilt_deg: 1.0,
-                base_tilt_toward_deg: 130.0,
-                zero_points_deg: [az, alt],
-                backlash_deg: 0.3,
-            },
-        );
+        let mount = SimMount::with_config(clock.clone(), mount_config(alt, az));
         if connected {
             sim.connect_mount(mount.clone());
         }
@@ -150,7 +155,6 @@ impl Rig {
                 Ok::<_, std::io::Error>(client)
             }
         });
-        let session = Session::default();
         session.edit(serde_json::from_value(json!({"node":{"address":"scope.local:1","token":"test-token"},"site":{"lat_deg":40,"lon_deg":-75},"target":"M42","camera_settings":{"exposure_ms":200,"gain":1}})).unwrap(), start).unwrap();
         session
             .set_aim(Some(Aim { x: 700.0, y: 420.0 }), start)
@@ -255,6 +259,22 @@ impl Rig {
         assert!(model.base_tilt.is_some(), "{:?}", model.view());
         assert_eq!(model.epochs.len(), 1);
     }
+    pub async fn second_from_file(&self) {
+        // The stored syncs replace the far slew; the live near sync still fits
+        // the base tilt and puts the gears on the same positive flank.
+        self.move_to([4500, 4500]).await;
+        for _ in 0..15 {
+            self.tick().await;
+        }
+        let model = self.state.session().model(self.now());
+        assert!(model.base_tilt.is_some(), "{:?}", model.view());
+        assert_eq!(model.epochs.len(), 1);
+        assert_eq!(self.mount.state(Axis::Azimuth).await.position, 4500);
+        assert_eq!(model.syncs.len(), 3, "{:?}", model.view());
+        let base = model.base_tilt.unwrap();
+        assert!((base.deg() - 1.0).abs() * 60.0 < 1.0, "{base:?}");
+        assert!((base.toward_deg() - 130.0).abs() * 60.0 < 1.0, "{base:?}");
+    }
     pub fn target(&self, name: &str) {
         self.state
             .session()
@@ -323,4 +343,60 @@ impl Rig {
         let truth = self.sim.telescope().eyepiece;
         finder::model::separation(truth.ra, truth.dec, target.ra_deg, target.dec_deg) * 3600.0
     }
+}
+
+fn mount_config(alt: f64, az: f64) -> MountConfig {
+    MountConfig {
+        base_tilt_deg: 1.0,
+        base_tilt_toward_deg: 130.0,
+        zero_points_deg: [az, alt],
+        backlash_deg: 0.3,
+    }
+}
+
+/// Store the old setup's near and far syncs, on its positive backlash flank.
+/// The simulator's true directions are independent of the model being fitted.
+pub async fn far_sync(path: &Path, start: f64, alt: f64, az: f64) {
+    let config = mount_config(alt, az);
+    let mount = SimMount::with_config(VirtualClock::new(start), config);
+    let mut syncs = Vec::new();
+    for (counts, time) in [([4500, 4500], start - 120.0), ([580_000, 4500], start)] {
+        for (axis, count) in [Axis::Azimuth, Axis::Altitude].into_iter().zip(counts) {
+            mount.goto(axis, count).await;
+        }
+        for _ in 0..1600 {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            if !mount.state(Axis::Azimuth).await.moving && !mount.state(Axis::Altitude).await.moving
+            {
+                break;
+            }
+        }
+        for (axis, count) in [Axis::Azimuth, Axis::Altitude].into_iter().zip(counts) {
+            let state = mount.state(axis).await;
+            assert!(!state.moving, "stored sync's mount did not settle");
+            assert_eq!(state.position, count);
+        }
+        let truth = mount.true_direction();
+        syncs.push(finder::model::Sync {
+            time,
+            axis: counts.map(f64::from),
+            counts_per_revolution: mount.axes().map(|a| a.counts_per_revolution),
+            az_deg: truth.az,
+            alt_deg: ephemeris::apparent_from_true(truth.alt),
+            roll_deg: None,
+            rms_arcsec: 1.0,
+            epoch: 0,
+        });
+    }
+    let epoch = finder::model::Epoch {
+        ia: config.backlash_deg / 2.0 - az,
+        ie: alt - config.backlash_deg / 2.0,
+    };
+    let stored = json!({
+        "site": {"lat_deg": 40, "lon_deg": -75},
+        "min_alt_deg": 15,
+        "target": null,
+        "model": {"syncs": syncs, "epochs": [epoch], "rms_arcsec": 1.0}
+    });
+    std::fs::write(path, serde_json::to_vec(&stored).unwrap()).unwrap();
 }

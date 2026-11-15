@@ -1,14 +1,28 @@
 //! Paused-time motion scenarios share the mounted route harness and its controls.
 use crate::support::goto as api;
 use api::Rig;
-use finder::sky;
+use finder::{session::Session, sky};
 use scope_node::mount::{Axis, Mount};
+use std::time::Duration;
 const START: f64 = 1_768_528_800.0;
 
 #[tokio::test(start_paused = true)]
 async fn five_catalog_targets_converge_after_two_syncs_and_report_progress() {
-    let rig = Rig::new(START, 50.0, 120.0, true).await;
-    rig.second().await;
+    let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target")
+        .join(format!("goto-session-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    let path = folder.join("session.json");
+    api::far_sync(&path, START, 50.0, 120.0).await;
+    let rig = Rig::with_session(
+        START,
+        50.0,
+        120.0,
+        true,
+        Session::with_state_file(path).unwrap(),
+    )
+    .await;
+    rig.second_from_file().await;
     for name in ["M42", "M31", "M45", "M81", "M1"] {
         rig.target(name);
         assert_eq!(rig.call("/api/goto", false).await.0, 200);
@@ -59,6 +73,7 @@ async fn five_catalog_targets_converge_after_two_syncs_and_report_progress() {
         expected.push("done");
         assert_eq!(states, expected, "{name}: {progress:?}");
     }
+    std::fs::remove_dir_all(folder).unwrap();
 }
 #[tokio::test(start_paused = true)]
 async fn sixteen_degree_target_never_drops_below_fifteen() {
@@ -251,11 +266,30 @@ async fn sunrise_tick_commands_stop_within_a_second_and_reports_sun_guard() {
         .contains("Sun guard"));
 }
 
+fn pointing_frame(rig: &Rig) -> u64 {
+    rig.state
+        .session()
+        .snapshot(rig.now())
+        .pointing
+        .unwrap()
+        .frame_id
+        .unwrap()
+}
+
 #[tokio::test(start_paused = true)]
 async fn continuously_observed_cable_wind_survives_real_simulator_power_cycle() {
     let rig = Rig::new(START, 50.0, 120.0, true).await;
     rig.sync().await;
+    let first = pointing_frame(&rig);
+    rig.controls.set_frame_interval(Duration::from_secs(2));
     rig.move_to([350 * 4500, 0]).await;
+    let last = pointing_frame(&rig);
+    rig.controls.set_frame_interval(Duration::from_millis(500));
+    let frames = last - first;
+    assert!(
+        (20..=60).contains(&frames),
+        "long move captured {frames} frames"
+    );
     for _ in 0..15 {
         rig.tick().await;
     }
