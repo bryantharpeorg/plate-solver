@@ -77,7 +77,7 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use crate::catalog::{self, SimilarReport};
 use crate::link::{stop_deadline, LinkManager, Transport};
 use crate::live::{DbSolver, Live, Solver};
-use crate::recording::{Recorder, Sources, FRAME_LIMIT};
+use crate::recording::{RawRefusal, Recorder, Sources, FRAME_LIMIT, MAX_RAW_FRAMES};
 use crate::samples::{self, SampleInfo, Samples};
 use crate::session::{Clock, Session, SessionEdit, SessionError, SessionView, SystemClock};
 use crate::simulate::{Push, Simulation, SimulationTransport, Telescope};
@@ -454,6 +454,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/goto", post(start_goto))
         .route("/api/track", post(set_track))
         .route("/api/record", post(set_record))
+        .route("/api/record/raw", post(record_raw))
         .route("/api/stop", post(stop_mount))
         .route("/api/model/second-sync", post(second_sync))
         .route("/api/model/reset", post(reset_model))
@@ -683,14 +684,7 @@ pub(crate) async fn session_response(state: &AppState) -> SessionResponse {
     };
     let goto = state.goto.as_ref().and_then(|g| g.progress());
     let axis_move = state.axis_move.lock().unwrap().clone();
-    let running = axis_move.as_ref().is_some_and(|m| m.state == "moving")
-        || goto
-            .as_ref()
-            .is_some_and(|g| matches!(g.state, "slewing" | "solving" | "correcting"))
-        || session
-            .track
-            .as_ref()
-            .is_some_and(|t| matches!(t.state, "armed" | "tracking" | "keyhole_wait"));
+    let running = motion_running(axis_move.as_ref(), goto.as_ref(), &session);
     SessionResponse {
         recording: state.recordings.as_ref().and_then(|r| r.view()),
         session,
@@ -700,6 +694,66 @@ pub(crate) async fn session_response(state: &AppState) -> SessionResponse {
         axis_move,
     }
 }
+fn motion_running(
+    axis_move: Option<&crate::mcp::guard::Progress>,
+    goto: Option<&crate::goto::Progress>,
+    session: &SessionView,
+) -> bool {
+    axis_move.is_some_and(|m| m.state == "moving")
+        || goto.is_some_and(|g| matches!(g.state, "slewing" | "solving" | "correcting"))
+        || session
+            .track
+            .as_ref()
+            .is_some_and(|t| matches!(t.state, "armed" | "tracking" | "keyhole_wait"))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawEdit {
+    frames: u8,
+}
+async fn record_raw(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    edit: Result<Json<RawEdit>, JsonRejection>,
+) -> Result<Json<SessionResponse>, ApiError> {
+    let frames = sim_json(edit)?.frames;
+    if !(1..=MAX_RAW_FRAMES).contains(&frames) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "frames must be a whole number from 1 to 10",
+        ));
+    }
+    let recorder = state.recordings.as_ref().ok_or_else(|| {
+        ApiError::new(
+            StatusCode::CONFLICT,
+            "this console has no recordings folder",
+        )
+    })?;
+    let shared = state.clone();
+    let moving = Arc::new(move || {
+        let session = shared.session.snapshot(shared.clock.now());
+        let goto = shared.goto.as_ref().and_then(|g| g.progress());
+        let axis_move = shared.axis_move.lock().unwrap();
+        motion_running(axis_move.as_ref(), goto.as_ref(), &session)
+            || session.mount.as_ref().is_some_and(|m| m.moving)
+    });
+    recorder
+        .request_raw(frames, state.link().and_then(|link| link.raw()), moving)
+        .map_err(|reason| {
+            ApiError::new(
+                StatusCode::CONFLICT,
+                match reason {
+                    RawRefusal::NotRecording => "start a recording first",
+                    RawRefusal::Busy => "raw frames are already being saved",
+                    RawRefusal::Moving => "wait until the mount is still",
+                    RawRefusal::NotConnected => "the scope node is not connected",
+                },
+            )
+        })?;
+    Ok(get_session(State(state)).await)
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RecordEdit {

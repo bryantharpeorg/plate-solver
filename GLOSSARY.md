@@ -136,6 +136,10 @@ _Avoid_: thumbnail, live view
 One folder of what the console saw between the observer's start and stop: each star frame's centroids, settings and axis counts, each live solve and each preview, kept for later tests.
 _Avoid_: capture, log, session
 
+**Raw frame**:
+The 8-bit gray pixels of one star frame, exactly as the scope node's detector read them, saved on request as a PNG next to that frame's line.
+_Avoid_: raw (alone), RAW file, full-resolution preview
+
 **Clock offset**:
 Node time less console time, taken from the least-delay heartbeat exchange of the last 8 s.
 _Avoid_: clock skew, drift

@@ -15,6 +15,7 @@ mod pointing;
 mod pushto;
 mod rates;
 mod recording;
+mod recording_raw;
 mod session;
 mod star_detected;
 mod targets;

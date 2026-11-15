@@ -6,7 +6,7 @@ use hyper_util::rt::TokioIo;
 use scope_link::{
     proto::{
         self, scope_node_client::ScopeNodeClient, scope_node_mount_client::ScopeNodeMountClient,
-        scope_node_stop_client::ScopeNodeStopClient,
+        scope_node_raw_client::ScopeNodeRawClient, scope_node_stop_client::ScopeNodeStopClient,
     },
     BearerToken, ClockMap, Exchange,
 };
@@ -42,6 +42,35 @@ type Connect = Pin<Box<dyn Future<Output = Result<Channel, tonic::transport::Err
 type Client = ScopeNodeClient<InterceptedService<Channel, BearerToken>>;
 type Configure =
     Pin<Box<dyn Future<Output = Result<tonic::Response<proto::Settings>, Status>> + Send>>;
+
+/// The largest raw-frame reply the console accepts; a 2592 × 1944 frame is about 5 MB.
+pub const RAW_MESSAGE_LIMIT: usize = 16 * 1024 * 1024;
+
+/// Raw-frame calls on the console's paired channel (025).
+#[derive(Clone)]
+pub struct RawClient {
+    client: ScopeNodeRawClient<InterceptedService<Channel, BearerToken>>,
+}
+impl RawClient {
+    /// Reuse a scope link channel and the session's bearer token; replies up to
+    /// `RAW_MESSAGE_LIMIT`.
+    pub fn new(channel: Channel, token: &str) -> Result<Self, Status> {
+        let bearer = BearerToken::new(token)
+            .map_err(|_| Status::invalid_argument("invalid scope node token"))?;
+        Ok(Self {
+            client: ScopeNodeRawClient::with_interceptor(channel, bearer)
+                .max_decoding_message_size(RAW_MESSAGE_LIMIT),
+        })
+    }
+    /// The next star frame's pixels. A node without the service answers `Unimplemented`.
+    pub async fn raw_frame(&mut self) -> Result<proto::RawFrameReply, Status> {
+        Ok(self
+            .client
+            .raw_frame(proto::RawFrameRequest {})
+            .await?
+            .into_inner())
+    }
+}
 
 /// Mount calls on the console's paired channel. Stop uses the token-free service.
 #[derive(Clone)]
@@ -188,6 +217,7 @@ pub struct LinkManager {
     status: watch::Receiver<LinkStatus>,
     frames: watch::Receiver<Option<proto::StarFrame>>,
     mount: watch::Receiver<Option<MountClient>>,
+    raw: watch::Receiver<Option<RawClient>>,
 }
 impl Drop for LinkManager {
     fn drop(&mut self) {
@@ -200,14 +230,16 @@ impl LinkManager {
         let (status_tx, status) = watch::channel(LinkStatus::default());
         let (frame_tx, frames) = watch::channel(None);
         let (mount_tx, mount) = watch::channel(None);
+        let (raw_tx, raw) = watch::channel(None);
         let task = tokio::spawn(run(
-            session, clock, transport, status_tx, frame_tx, mount_tx,
+            session, clock, transport, status_tx, frame_tx, mount_tx, raw_tx,
         ));
         Self {
             task,
             status,
             frames,
             mount,
+            raw,
         }
     }
     /// Subscribe to link health changes.
@@ -221,6 +253,11 @@ impl LinkManager {
     /// Mount calls on the current connection; absent while unpaired or disconnected.
     pub fn mount(&self) -> Option<MountClient> {
         self.mount.borrow().clone()
+    }
+
+    /// Raw-frame calls on the current connection; absent while unpaired or disconnected.
+    pub fn raw(&self) -> Option<RawClient> {
+        self.raw.borrow().clone()
     }
 
     /// Send StopAll until the node answers OK or `deadline` passes. The first
@@ -310,18 +347,15 @@ pub(crate) fn camera_settings(
     )
 }
 
-async fn pair(
-    transport: &Transport,
-    config: &LinkConfig,
-) -> Result<
-    (
-        Client,
-        tonic::Streaming<proto::StarFrame>,
-        proto::CameraInfo,
-        MountClient,
-    ),
-    Status,
-> {
+struct Paired {
+    client: Client,
+    frames: tonic::Streaming<proto::StarFrame>,
+    camera: proto::CameraInfo,
+    mount: MountClient,
+    raw: RawClient,
+}
+
+async fn pair(transport: &Transport, config: &LinkConfig) -> Result<Paired, Status> {
     let node = config.node.as_ref().expect("paired node");
     let channel = transport
         .connect(node.address.as_deref().expect("node address"))
@@ -329,6 +363,7 @@ async fn pair(
     let bearer = BearerToken::new(node.token.as_deref().expect("node token"))
         .map_err(|_| Status::invalid_argument("invalid scope node token"))?;
     let mount = MountClient::new(channel.clone(), node.token.as_deref().expect("node token"))?;
+    let raw = RawClient::new(channel.clone(), node.token.as_deref().expect("node token"))?;
     let mut client = ScopeNodeClient::with_interceptor(channel, bearer);
     let camera = client
         .describe(proto::DescribeRequest {})
@@ -337,7 +372,13 @@ async fn pair(
     let (settings, _) = camera_settings(&config.settings, &camera);
     client.configure(settings).await?;
     let frames = client.frames(proto::FramesRequest {}).await?.into_inner();
-    Ok((client, frames, camera, mount))
+    Ok(Paired {
+        client,
+        frames,
+        camera,
+        mount,
+        raw,
+    })
 }
 
 async fn run(
@@ -347,6 +388,7 @@ async fn run(
     status_tx: watch::Sender<LinkStatus>,
     frame_tx: watch::Sender<Option<proto::StarFrame>>,
     mount_tx: watch::Sender<Option<MountClient>>,
+    raw_tx: watch::Sender<Option<RawClient>>,
 ) {
     let mut changes = session.link_changes();
     let mut status = LinkStatus::default();
@@ -372,8 +414,16 @@ async fn run(
             result = changes.changed() => { if result.is_err() { return; } continue; }
             result = time::timeout(SILENCE, pair(&transport, &config)) => result,
         };
-        if let Ok(Ok((client, stream, camera, mount))) = paired {
+        if let Ok(Ok(Paired {
+            client,
+            frames,
+            camera,
+            mount,
+            raw,
+        })) = paired
+        {
             mount_tx.send_replace(Some(mount));
+            raw_tx.send_replace(Some(raw));
             status.out_of_range = camera_settings(&config.settings, &camera).1;
             status.camera = Some(camera);
             publish(&session, &status_tx, &status);
@@ -384,13 +434,14 @@ async fn run(
                 &mut changes,
                 &config,
                 client,
-                stream,
+                frames,
                 &mut status,
                 &status_tx,
                 &frame_tx,
             )
             .await;
             mount_tx.send_replace(None);
+            raw_tx.send_replace(None);
             status.connected = false;
             publish(&session, &status_tx, &status);
             if reconfigured {
