@@ -18,7 +18,8 @@ depends_on_landed: ["013-live-finder", "014-goto", "015-tracking", "017-console-
 # Refreshed 2026-11-15 once 027-finder-tests-by-system had landed (b8dceaa): US3's test is
 # a module of finder's `motion` test binary, and every citation was re-read at b8dceaa
 # (plan.md § Prerequisites 6). The same day the owner closed gap (d) under owner approval
-# 6; that clause and US3-S9 were not probe-built. Flipping it to `ready` gives the
+# 6; US3 with that clause and US3-S9 was probe-built on 027's layout (round 4: nine of
+# nine US3 tests and the workspace's tests pass). Flipping it to `ready` gives the
 # approvals listed under "Owner approvals" and dispatches it.
 ---
 

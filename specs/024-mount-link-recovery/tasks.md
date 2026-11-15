@@ -146,6 +146,9 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
   `#[path]`; a helper it reuses from `crates/finder/tests/support/` it reaches with
   `use crate::support::mcp as support;` (or `stop`), and it adds no file there, since
   027's layout guard pins that folder's files (`crates/finder/tests/layout/main.rs:102`).
+  The `DB` static, `NodeTime`, `Stars` and `Recorded` in `support/mcp.rs` are private, so
+  the module keeps its own copies with the `Rig`; `support/stop.rs`'s `post` always sends
+  a JSON body, so US3-S3 and US3-S4's requests with no body need the module's own `post`.
 - [ ] T017 [US3] Add failing tests to `crates/finder/tests/motion/mount_identity.rs` for
   the refusals with frames stopped and their end once frames start again (US3-S3,
   US3-S4), the GoTo abort (US3-S5) and tracking (US3-S6), whose test waits for the

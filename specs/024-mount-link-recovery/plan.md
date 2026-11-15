@@ -102,7 +102,8 @@ cutoff and its console clock). The third built the parts the owner's answers of
 `at_rest` (US3). Where a probe had to add to the text, this section says what it built:
 the re-initialisation runs in a spawned task, and the helpers and accessors named below.
 Tracking's baseline from the session's count (`Tracker::start_with_resets`, US3), added
-on 2026-11-15 when the owner closed gap (d), was not probe-built.
+on 2026-11-15 when the owner closed gap (d), was probe-built in round 4 on 027's layout:
+every signature here compiled as given.
 
 ### The `Mount` trait (`crates/scope-node/src/mount/mod.rs`, US1)
 
@@ -589,7 +590,9 @@ is US3's and is documented in the console's own API docs
   `POST /api/track`, the reset would have to land between the console's mount poll,
   250 ms apart (`crates/finder/src/live.rs:323`), and tracking's first read, a race with
   that poll's timer in the test's one paused runtime; and a Track off its target starts
-  a GoTo first, whose own baseline would end it the same way.
+  a GoTo first, whose own baseline would end it the same way. The round-4 probe
+  confirmed it: with `begin_tracking` calling `start(target)`, all nine US3 tests stay
+  green; with `start_with_resets` ignoring its count, US3-S9 fails.
 - **That every connect clears the jump baselines and the init-bit history (US2).** The
   probe showed no scenario fails without either: US2-S2's reconnect comes about 10 s
   after the last good read, when the jump limit is far above the 100,000 counts the
@@ -760,7 +763,8 @@ that keeps it from recurring. They bind every story.
 3. **One evidence budget.** *Check:* each story keeps its diff under 64 KiB, measured
    with `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c`. The round-3
    probe builds came to 29.7, 37.6, 43.1 and 19.7 KB (US2's and US3's are mostly their
-   tests, US3's with its copy of the `Rig`).
+   tests, US3's with its copy of the `Rig`); round 4's US3, with the new baseline and
+   US3-S9, came to 46.5 KB.
 4. **The sandbox has only the gates' tools.** *Check:* no task runs a tool outside them.
 5. **A spec fixed mid-epic needs a relaunch.** The judge grades the spec as dispatched.
    *Check:* no builder edits `specs/024-mount-link-recovery/` or `.specify/`.
@@ -880,7 +884,11 @@ closed gap (d) under owner approval 6 ("Close it"): tracking's baseline is the s
 last-seen count when it begins, handed over by `Session::begin_tracking` through one new
 method, `Tracker::start_with_resets`, within US3's writes, with FR-015, the edge case,
 T019 and T020 to match and one scenario, US3-S9. The round-3 probes were built on the old
-layout and were not rebuilt; the new baseline and US3-S9 were not probe-built.
+layout. Round 4 (2026-11-15) probe-built US3 again on 027's layout, on US1 and US2 as
+round 3 built them, with the new baseline: all nine US3 tests, the layout guard and the
+workspace's tests passed, clippy and fmt were clean, and the diff was 46.5 KB. With
+`start_with_resets` ignoring its count, US3-S9 failed; with `begin_tracking` calling
+`start(target)`, all nine passed, which is why that hand-over is read from the diff.
 
 ```yaml
 version: 1
