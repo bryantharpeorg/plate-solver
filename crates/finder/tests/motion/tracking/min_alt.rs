@@ -5,6 +5,7 @@ use axum::{
     body::{to_bytes, Body},
     http::Request,
 };
+use finder::{model::separation, targets};
 use goto_api::Rig;
 use serde_json::{json, Value};
 use tower::ServiceExt;
@@ -27,8 +28,26 @@ async fn write(rig: &Rig, method: &str, path: &str, body: Value) -> Value {
 #[tokio::test(start_paused = true)]
 async fn raised_minimum_altitude_ends_running_tracking_as_too_low() {
     let rig = Rig::new(START, 50.0, 120.0, true).await;
+    let target = targets::find("M42").unwrap();
+    rig.sim.point_eyepiece_at(target.ra_deg, target.dec_deg);
     rig.sync().await;
-    write(&rig, "POST", "/api/track", json!({"on": true})).await;
+    for _ in 0..10 {
+        let p = rig.view().await["pointing"].clone();
+        let (ra, dec) = (
+            p["ra_deg"].as_f64().unwrap(),
+            p["dec_deg"].as_f64().unwrap(),
+        );
+        if separation(ra, dec, target.ra_deg, target.dec_deg) < 1.0 / 60.0 {
+            break;
+        }
+        rig.tick().await;
+    }
+    let body = write(&rig, "POST", "/api/track", json!({"on": true})).await;
+    assert_eq!(body["track"]["state"], "tracking", "{body}");
+    assert!(
+        body.get("goto").is_none(),
+        "a centred Track ran a GoTo: {body}"
+    );
     for _ in 0..5000 {
         if rig.view().await["track"]["state"] == "tracking" {
             break;

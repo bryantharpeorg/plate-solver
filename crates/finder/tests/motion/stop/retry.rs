@@ -5,6 +5,7 @@ use crate::support::stop as support;
 use std::{sync::atomic::Ordering, time::Duration};
 
 use axum::body::to_bytes;
+use finder::{model::separation, targets};
 use scope_node::mount::{Axis, Mount};
 use serde_json::{json, Value};
 use support::*;
@@ -197,7 +198,20 @@ async fn no_scope_link_keeps_the_exact_reply_without_advancing_time() {
 #[tokio::test(start_paused = true)]
 async fn retained_tracker_cannot_delay_goto_cancellation_or_first_attempt() {
     let rig = Rig::new().await;
+    let target = targets::find("M42").unwrap();
+    rig.sim.point_eyepiece_at(target.ra_deg, target.dec_deg);
     rig.sync().await;
+    for _ in 0..10 {
+        let p = session(&rig.app).await["pointing"].clone();
+        let (ra, dec) = (
+            p["ra_deg"].as_f64().unwrap(),
+            p["dec_deg"].as_f64().unwrap(),
+        );
+        if separation(ra, dec, target.ra_deg, target.dec_deg) < 1.0 / 60.0 {
+            break;
+        }
+        rig.tick().await;
+    }
     let reply = send(&rig.app, post("/api/track", json!({"on":true}))).await;
     assert_eq!(reply.status(), 200, "{}", body(reply).await);
     for _ in 0..5000 {
@@ -207,6 +221,12 @@ async fn retained_tracker_cannot_delay_goto_cancellation_or_first_attempt() {
         rig.tick().await;
     }
     assert_eq!(session(&rig.app).await["track"]["state"], "tracking");
+    assert!(!rig
+        .commands
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|command| matches!(command.action, MountCommand::GoTo { .. })));
     let tracker = rig.state.session().tracker().unwrap();
     exact_stop(&rig).await;
     assert_eq!(tracker.state().state, "off");

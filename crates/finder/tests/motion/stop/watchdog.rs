@@ -155,7 +155,30 @@ async fn node_watchdog_halts_goto_without_losing_console_link_or_sending_another
 
 #[tokio::test(start_paused = true)]
 async fn past_watchdog_firing_is_the_baseline_for_a_successful_later_goto() {
-    let rig = ready().await;
+    let rig = Rig::new().await;
+    let target = finder::targets::find("M42").unwrap();
+    let (alt, az) =
+        simulator::sky::horizontal(target.vector(), simulator::Site::default(), rig.now());
+    rig.mount.push_to(alt - 5.0, az);
+    rig.sync().await;
+    let mut error = f64::INFINITY;
+    for _ in 0..10 {
+        let p = session(&rig.app).await["pointing"].clone();
+        error = finder::model::separation(
+            p["ra_deg"].as_f64().unwrap(),
+            p["dec_deg"].as_f64().unwrap(),
+            target.ra_deg,
+            target.dec_deg,
+        );
+        if error < 6.0 {
+            break;
+        }
+        rig.tick().await;
+    }
+    assert!(
+        error < 6.0,
+        "no frame solved after the push: {error} degrees"
+    );
     // Real silence changes neither clock offset nor exposure timestamps.
     rig.controls.set_unresponsive(true);
     timeout(Duration::from_secs(2), async {
@@ -189,6 +212,8 @@ async fn past_watchdog_firing_is_the_baseline_for_a_successful_later_goto() {
             .watchdog_stops,
         1
     );
+    let truth = rig.sim.telescope().eyepiece;
+    assert!(finder::model::separation(truth.ra, truth.dec, target.ra_deg, target.dec_deg) < 6.0);
     let reply = send(&rig.app, post("/api/goto", Value::Null)).await;
     assert_eq!(reply.status(), 200, "{}", body(reply).await);
     let ending = timeout(Duration::from_secs(300), async {

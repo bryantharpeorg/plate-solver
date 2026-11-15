@@ -1,5 +1,11 @@
 //! Oracle: exact input values across built-binary restarts on one state folder;
 //! simulator truth and mount telemetry prove Track moved before restart.
+use crate::support::goto;
+use axum::{
+    body::{to_bytes, Body},
+    http::Request,
+};
+use finder::{model::separation, session::Session};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
@@ -10,6 +16,7 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use serde_json::Value;
+use tower::ServiceExt;
 
 struct Folder(PathBuf);
 impl Folder {
@@ -160,31 +167,58 @@ fn imaging_camera_survives_restart_and_null_clears_it() {
         .get("imaging_camera")
         .is_none());
 }
-#[test]
-fn tracking_that_moved_the_mount_is_off_and_quiet_after_restart() {
+// Track on the built binary is owned by Playwright's tracking.spec.ts; this test
+// owns "Track is off and nothing moves after a restart".
+#[tokio::test(start_paused = true)]
+async fn tracking_that_moved_the_mount_is_off_and_quiet_after_restart() {
     let folder = Folder::new();
     {
-        let server = Server::start(&folder);
-        server.request("PUT", "/api/session", serde_json::json!({"site":{"lat_deg":40,"lon_deg":-75},"target":"M42","camera_settings":{"exposure_ms":200,"gain":1}}));
-        // Push close to M42 before the first sync so the real-time GoTo is short.
+        let rig = goto::Rig::with_session(
+            goto::START,
+            50.0,
+            120.0,
+            true,
+            Session::with_state_file(folder.0.join("session.json")).unwrap(),
+        )
+        .await;
         let target = finder::targets::find("M42").unwrap();
-        let now = server.view()["time"].as_f64().unwrap();
-        let (alt, az) =
-            simulator::sky::horizontal(target.vector(), simulator::Site::default(), now);
-        server.request(
-            "POST",
-            "/api/sim/telescope",
-            serde_json::json!({"alt_deg":alt,"az_deg":az}),
+        rig.sim.point_eyepiece_at(target.ra_deg, target.dec_deg);
+        rig.sync().await;
+        for _ in 0..10 {
+            let p = rig.view().await["pointing"].clone();
+            let (ra, dec) = (
+                p["ra_deg"].as_f64().unwrap(),
+                p["dec_deg"].as_f64().unwrap(),
+            );
+            if separation(ra, dec, target.ra_deg, target.dec_deg) < 1.0 / 60.0 {
+                break;
+            }
+            rig.tick().await;
+        }
+        let request = Request::post("/api/track")
+            .header("host", "localhost")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::json!({"on":true}).to_string()))
+            .unwrap();
+        let response = rig.app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 200);
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["track"]["state"], "tracking", "{body}");
+        assert!(
+            body.get("goto").is_none(),
+            "a centred Track ran a GoTo: {body}"
         );
-        server.wait(|v| {
-            v["pointing"]["source"] == "live" && v["model"]["syncs"].as_u64().unwrap_or(0) > 0
-        });
-        server.request("POST", "/api/track", serde_json::json!({"on":true}));
-        server.wait(|v| v["track"]["state"] == "tracking" && v["mount"]["moving"] == true);
-        let before = server.request("GET", "/api/sim/telescope", Value::Null);
-        thread::sleep(Duration::from_millis(1200));
-        let after = server.request("GET", "/api/sim/telescope", Value::Null);
-        assert_ne!(before["eyepiece"]["az"], after["eyepiece"]["az"]);
+        let before = rig.mount.true_direction();
+        // Take up the initial backlash before the tube itself starts to turn.
+        for _ in 0..100 {
+            rig.tick().await;
+            if rig.mount.true_direction() != before {
+                break;
+            }
+        }
+        assert_ne!(rig.mount.true_direction(), before);
+        drop(rig);
     }
     let stored: Value =
         serde_json::from_slice(&std::fs::read(folder.0.join("session.json")).unwrap()).unwrap();
