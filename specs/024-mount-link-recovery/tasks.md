@@ -7,14 +7,17 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
 **Prerequisites** (plan.md § Prerequisites):
 - `013-live-finder`, `014-goto`, `015-tracking` and `017-console-stop-confirm` have
   landed on `main` (plan.md § Prerequisites 1);
-- `main` is still as read: every citation is at c1ed295, and a later `main` that moved
-  in 024's files or citations needs them re-read (plan.md § Prerequisites 2);
+- `main` is still as read: every citation is at c1ed295, `main` at 1104b7d moved in
+  none of 024's files or citations, and a later `main` that moves in them needs them
+  re-read (plan.md § Prerequisites 2);
 - the owner decisions in spec.md are settled, including the owner's 2026-11-15 answers,
   and the owner approvals given (plan.md § Prerequisites 3);
 - no operator-staged file is needed (plan.md § Prerequisites 4);
-- draft `025-frame-capture` is ordered against this spec, because it also writes
-  `crates/finder/src/api.rs`, `crates/scope-link/proto/scope_node/v1/scope_node.proto`
-  and `crates/scope-node/src/service.rs` (plan.md § Prerequisites 5).
+- the drafts `025-frame-capture` and `026-mount-sky`, which also write 024's files, wait
+  for this spec to land and then name it themselves, so this spec names neither (plan.md
+  § Prerequisites 5);
+- `027-finder-tests-by-system` has landed and US3's test and citations are re-anchored
+  to its layout (plan.md § Prerequisites 6).
 
 **Rules for every story:**
 - Never edit an existing test, golden, fixture, `scripts/ci/`, `.github/`, `deny.toml`,
@@ -66,8 +69,9 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
   `crates/scope-node/src/main.rs`, start a `MountLink` instead of awaiting
   `SkyWatcher::connect`, logging nothing per connect.
 - [ ] T007 [US1] Add the `## The mount link` section to `crates/scope-node/README.md`
-  with US1's part only: starting without the mount, and FR-003's line (plan.md
-  § Interfaces).
+  with US1's part only: starting without the mount, and FR-003's line; say that Stop
+  answers unconfirmed at once before the link's first connect, so the sentence stays
+  true after US2 (plan.md § Interfaces).
 - [ ] T008 [US1] Run the `lint` and `test` gates with every existing test unchanged and
   green. Commit the green story (US1-S1, US1-S2, US1-S3, US1-S4, US1-S5, US1-S6).
 
@@ -79,14 +83,16 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
   and failing tests for a power cycle (US2-S1), a lost and recovered link after a move
   (US2-S2) and a counts jump (US2-S3), and a test for a GoTo that is not a jump
   (US2-S4). US2-S4 guards behaviour the story must keep (travel within the top rate is
-  no reset): it is a preserving test, not a failing one.
+  no reset): it is a preserving test, not a failing one, although the file does not
+  compile before T013 adds `mount_resets`.
 - [ ] T010 [US2] Add failing tests to `crates/scope-node/tests/mount_reset.rs` for
   `mount_resets` on `axis_state` (US2-S5), moves dropped while disconnected (US2-S6),
   one reset for a cycle after a move (US2-S7), a failed re-initialisation with a Stop
   the board acknowledges (US2-S9) and a dropped read during one (US2-S10), Stop over a
   lost link to a powered board running a `:J` move (US2-S11), to a powered-off board
   (US2-S12) and through the service's `stop_all` (US2-S13), and a test for a bit that
-  never read set (US2-S8), which like US2-S4 is a preserving test, not a failing one.
+  never read set (US2-S8), which like US2-S4 is a preserving test, not a failing one,
+  although the file does not compile before T013 adds `mount_resets`.
 
 ### Implementation
 
@@ -105,10 +111,11 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
   count per event, and the loss, reset and failed re-initialisation log lines; and Stop
   over the last connect's stream: the kept `stop_board`, the `device` hold that every
   connect attempt takes from `open()` until its board is stored, the `give_way`
-  notification that makes an attempt drop its connect, and `stop_confirmed` and
-  `stop_all` that notify, take `device`, and then delegate to a connected board, call
-  `stop_board.halt_once()`, or answer false at once before the first connect (plan.md
-  § Interfaces, **Stop**).
+  notification and the `stopping` count that make an attempt drop its connect, and
+  `stop_confirmed` and `stop_all` that answer false at once before the first connect
+  without notifying or taking `device`, and otherwise raise `stopping`, notify, take
+  `device`, and then delegate to a connected board or call `stop_board.halt_once()`
+  (plan.md § Interfaces, **Stop**).
 - [ ] T013 [US2] Add `mount_resets = 5` to `AxisState` in
   `crates/scope-link/proto/scope_node/v1/scope_node.proto`, and fill it in
   `crates/scope-node/src/service.rs`.
@@ -143,13 +150,14 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
   `crates/scope-link/proto/scope_node/v1/scope_node.proto`, and fill them from
   `identity()` while connected in `crates/scope-node/src/service.rs`.
 - [ ] T019 [US3] In `crates/finder/src/live.rs` and `crates/finder/src/session.rs`, add
-  `MountReading` and the poll's console time to `set_mount`, the identity, the `resets`
-  field and its `is_zero` helper, `Session::mount_resets`, the sync-needed flag that
-  only a sync from a frame whose exposure started after the rise was seen clears,
-  `POWER_CYCLED`, and Track's refusal in
+  `MountReading` (with `pub(crate)` fields) and the poll's console time to `set_mount`,
+  the identity, the `resets` field and its `is_zero` helper, `Session::mount_resets`,
+  the sync-needed flag that only a sync from a frame whose exposure started after the
+  rise was seen clears, `POWER_CYCLED`, and Track's refusal in
   `Session::track_target`; in `crates/finder/src/api.rs`, pass `self.clock.clone()` to
   `MountMonitor::start` in `with_simulation` and `with_link`, and add the refusal after a
-  reset to the module docs' second-sync and Track paragraphs (plan.md § Interfaces).
+  reset to the module docs' second-sync and Track paragraphs, with one sentence that
+  `POST /api/goto` refuses the same way (plan.md § Interfaces).
 - [ ] T020 [US3] In `crates/finder/src/goto.rs`, add the refusal to
   `GoTo::check_request` and the abort against the count seen when the GoTo was
   accepted, on its first and slewing reads and on a read after each correction's plan,
@@ -176,8 +184,8 @@ description: "Task list for 024-mount-link-recovery: The Mount Link Survives a P
 - [ ] T023 [US4] In `crates/scope-node/src/mount/skywatcher/protocol.rs`, add the retried
   `read`, `MountHealth`, `GotoPath` and `SkyWatcher::health`, and in
   `crates/scope-node/src/mount/skywatcher/mount_link.rs`, `MountLink::health`, its
-  snapshot copied before each read's reset check, the per-axis fold of the GoTo path
-  and the re-export of both types (plan.md § Interfaces).
+  snapshot copied before each read's loss and reset checks, the per-axis fold of the
+  GoTo path and the re-export of both types (plan.md § Interfaces).
 - [ ] T024 [US4] Add US4's part to the `## The mount link` section of
   `crates/scope-node/README.md`: FR-017's two lines.
 - [ ] T025 [US4] Run the `lint` and `test` gates with every existing test unchanged and

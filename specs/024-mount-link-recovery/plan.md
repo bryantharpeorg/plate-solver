@@ -88,17 +88,17 @@ crates/finder/
 
 ## Interfaces
 
-Every story was probe-built from this section twice on 2026-11-14, the second time from
-the trio as it then stood, and every signature here compiled as given. The second round
-also built the parts the first round's reviews had added (Stop through the queue while
-disconnected; the bit rule's need for a set bit first; `io` released before the
+Every story was probe-built from this section three times on 2026-11-14, each time from
+the trio as it then stood, and every signature here compiled as given, except that
+round 3 had to make `MountReading`'s fields `pub(crate)`, as written below. The second
+round also built the parts the first round's reviews had added (Stop through the queue
+while disconnected; the bit rule's need for a set bit first; `io` released before the
 re-initialisation's connect and the connect task woken after a failed one; the frame
-cutoff and its console clock). Where it had to add to the text, this section now says
-what it built: the re-initialisation runs in a spawned task, and the helpers and
-accessors named below. The owner's answers of 2026-11-15 added three parts, written here
-from the code at c1ed295 and not part of the round-2 probes: Stop over the last
-connect's stream (US2's **Stop** bullet and `halt_once`), GoTo's read after each
-correction's plan, and the count in tracking's `at_rest` (US3).
+cutoff and its console clock). The third built the parts the owner's answers of
+2026-11-15 added: Stop over the last connect's stream (US2's **Stop** bullet and
+`halt_once`), GoTo's read after each correction's plan, and the count in tracking's
+`at_rest` (US3). Where a probe had to add to the text, this section says what it built:
+the re-initialisation runs in a spawned task, and the helpers and accessors named below.
 
 ### The `Mount` trait (`crates/scope-node/src/mount/mod.rs`, US1)
 
@@ -207,9 +207,10 @@ impl<S: BaudStream + 'static> Mount for MountLink<S> { /* delegates to the SkyWa
     since the last connect read it set. A board whose bit never reads set never trips
     this rule;
   - **the jump rule:** a reset when the counts moved from the axis's last good reading
-    on this board by more than 1.5 × `top_rate_deg_per_s` × elapsed seconds ×
-    `counts_per_revolution` / 360 + 1,000, taking both from the board's `axes()` and
-    wrapping the difference at 24 bits with `protocol.rs`'s private `wrapped_delta`
+    on this board by more than 1.5 × `top_rate_deg_per_s` × elapsed seconds (on the
+    link's `NodeClock`, read after each good read) × `counts_per_revolution` / 360 +
+    1,000, taking both from the board's `axes()` and wrapping the difference at 24 bits
+    with `protocol.rs`'s private `wrapped_delta`
     (`crates/scope-node/src/mount/skywatcher/protocol.rs:312`), which US2 makes
     `pub(super)`.
 
@@ -242,25 +243,33 @@ impl<S: BaudStream + 'static> Mount for MountLink<S> { /* delegates to the SkyWa
   `Arc<SkyWatcher<S>>` of the last successful connect. A loss or a reset never takes it
   out; the next successful connect replaces it, which drops the old handle and closes
   its stream. So once the link has connected, it always holds the last open stream to
-  the board. The inner struct gains `device: tokio::sync::Mutex<()>` and
-  `give_way: tokio::sync::Notify`:
+  the board. The inner struct gains `device: tokio::sync::Mutex<()>`,
+  `give_way: tokio::sync::Notify` and `stopping: std::sync::atomic::AtomicUsize`:
   - **a connect attempt gives way.** Every attempt, the connect task's and the spawned
-    re-initialisation's, first creates `give_way.notified()`, then takes `device` and
-    holds it from `open()` until the new board is stored, racing `open()` and
-    `SkyWatcher::connect` against that notification in a `tokio::select!`. When the
-    notification wins, the attempt drops the connect, which closes its stream, and fails
-    with the error `connect gave way to a stop`: the connect task logs it and tries again
-    2 s later, and a re-initialisation keeps its cause and wakes the connect task, as for
-    any failed re-initialisation (US2-S9). A `Notified` created before
-    `notify_waiters()` receives it even before it is first polled, so no attempt can
-    miss it;
-  - **Stop takes the device.** `stop_confirmed` and `stop_all` call
+    re-initialisation's, first creates `give_way.notified()`, then races the rest of the
+    attempt against that notification in a `tokio::select!` that is `biased` toward it:
+    taking `device`, which it holds from `open()` until the new board is stored, `open()`
+    and `SkyWatcher::connect`. When the notification wins, the attempt drops the
+    connect, which closes its stream, and fails with the error
+    `connect gave way to a stop` (an attempt's error is its text, so `Error` gains no
+    variant): the connect task logs it and tries again 2 s later, and a
+    re-initialisation keeps its cause and wakes the connect task, as for any failed
+    re-initialisation (US2-S9). A `Notified` created before `notify_waiters()` receives
+    it even before it is first polled. An attempt that finds `stopping` above 0 once it
+    holds `device` gives way the same way, so one that began just after a Stop's
+    notification, on the node's other worker thread, can't hold that Stop either;
+  - **Stop takes the device.** Before the first connect (no `stop_board`),
+    `stop_confirmed` answers false at once and `stop_all` sends nothing, without
+    notifying `give_way` or taking `device`, so the node's watchdog, which trips 1 s
+    after the service is built when no heartbeat comes
+    (`crates/scope-node/src/mount/watchdog.rs:42`), and the console's repeated Stops never
+    delay the first connect. Otherwise `stop_confirmed` and `stop_all` raise `stopping`
+    through a guard that lowers it when Stop ends or its future is dropped, call
     `give_way.notify_waiters()` and then take `device`, which an attempt gives up within
     a task switch, so Stop never waits seconds on a connect and never runs beside one.
     Holding it, Stop reads the snapshot: with a board connected it delegates to it as
-    before (017's halt, with the transport's five tries); with none but a `stop_board` it
-    calls `stop_board.halt_once()` (below); with neither, before the first connect, it
-    answers false at once and sends nothing. Stop never takes `io`, and an in-flight
+    before (017's halt, with the transport's five tries); with none it calls
+    `stop_board.halt_once()` (below). Stop never takes `io`, and an in-flight
     move is already cancelled by the queue (`crates/scope-node/src/mount/queue.rs:115`)
     before the link's `stop_confirmed` runs. The node's watchdog stops through that same
     queue call (`crates/scope-node/src/mount/watchdog.rs:51`), so it takes this path
@@ -316,14 +325,16 @@ impl<S: BaudStream + 'static> Mount for MountLink<S> { /* delegates to the SkyWa
   `mount goto path on axis <n>: :S` (or `:H/:M`) when the axis's path changes, so once
   per board. `GotoPath` displays as `:S` and `:H/:M`. `SkyWatcher` gains
   `pub async fn health(&self) -> MountHealth`.
-- **US4, `MountLink::health`:** after each delegated `state` (before its reset check,
-  which takes the board out), `goto` and `rate`, the link copies `board.health()` into
-  its snapshot while the snapshot still holds that board, so the read that finds a reset
-  still counts its own wrong-length replies (US4-S6). A new connect folds the old
-  board's health into a retired total, so `invalid_replies` sums over every board the
-  link has had, and `last_invalid` and `goto_path` prefer the current board's:
-  `goto_path[i]` is the current board's path on axis `i`, or else the last retired one,
-  so after a reset the old board's path stands until the new board's first GoTo.
+- **US4, `MountLink::health`:** after each delegated `state` (before its loss and reset
+  checks, both of which take the board out), `goto` and `rate`, the link copies
+  `board.health()` into its snapshot while the snapshot still holds that board (the copy
+  is kept only when the snapshot's board is that `Arc`, by `Arc::ptr_eq`), so the read
+  that finds a reset or a loss still counts its own wrong-length replies (US4-S6). A new
+  connect folds the old board's health into a retired total, so `invalid_replies` sums
+  over every board the link has had, and `last_invalid` and `goto_path` prefer the
+  current board's: `goto_path[i]` is the current board's path on axis `i`, or else the
+  last retired one, so after a reset the old board's path stands until the new board's
+  first GoTo.
   `mount_link.rs` re-exports both types
   (`pub use super::protocol::{GotoPath, MountHealth};`), because `protocol` is a private
   module (`crates/scope-node/src/mount/skywatcher/mod.rs:4`); tests import
@@ -362,8 +373,11 @@ impl EmulatorHandle {
 }
 ```
 
-A powered-off board neither replies nor carries out commands, and consumes no injected
-fault. `inject_reply` carries out the command and replaces only its reply. Faults
+A powered-off board neither replies nor carries out commands, its motors stop, and it
+consumes no injected fault. `power_on` builds each motor again as `Emulator::new` builds
+it (`crates/scope-node/src/mount/skywatcher/emulator.rs:333`: step mode 2, so a fresh
+board's `:f` reads `000`), not as `Motor::default()` would (mode 0, which reads `400`).
+`inject_reply` carries out the command and replaces only its reply. Faults
 injected before a power cycle survive it: `power_on` keeps them. `set_position`
 overwrites the counts and does not cancel a GoTo in flight; the board holds no clock, so
 on a moving axis the motion since the last exchange adds to the new counts, and tests
@@ -445,16 +459,21 @@ spec asks for, and it opens the new epoch.
   none (`crates/finder/src/session.rs:662`), `LinkManager` keeps its own clock private,
   and `LinkStatus.last_frame_at` is the last frame's arrival, not the poll's time. The
   module docs' second-sync and Track paragraphs (`crates/finder/src/api.rs:3`,
-  `crates/finder/src/api.rs:17`) gain the refusal after a reset.
+  `crates/finder/src/api.rs:17`) gain the refusal after a reset, and the second-sync
+  paragraph one sentence that `POST /api/goto` refuses the same way: that route's own
+  docs are in `crates/finder/src/lib.rs:21`, which US3 does not write.
 - **`session.rs`**: `set_mount` stays `pub(crate)` and takes a
-  `#[derive(Default)] pub(crate) struct MountReading { counts: Option<[u32; 2]>,
-  connected: bool, moving: bool, firmware: Option<String>, board: Option<String>,
-  resets: Option<u64> }` and `time: f64`, the poll's console time, in place of its three
-  arguments; its default is a failed poll, and its `resets: None` leaves the last-seen
-  count. `MountView` gains `#[serde(skip_serializing_if = "is_zero")] resets: u64`, with
-  a private `fn is_zero(n: &u64) -> bool` in `session.rs` (none exists in the
-  workspace). The session keeps the last count a good poll saw (none before the first,
-  so the first poll only learns it), readable as
+  `#[derive(Default)] pub(crate) struct MountReading {
+  pub(crate) counts: Option<[u32; 2]>, pub(crate) connected: bool,
+  pub(crate) moving: bool, pub(crate) firmware: Option<String>,
+  pub(crate) board: Option<String>, pub(crate) resets: Option<u64> }` (its fields are
+  `pub(crate)` because `live.rs` builds it by literal) and `time: f64`, the poll's console
+  time, in place of its three arguments; its default is a failed poll, and its
+  `resets: None` leaves the last-seen count. `MountView` gains, after `moving`,
+  `#[serde(skip_serializing_if = "is_zero")] pub resets: u64`, with a private
+  `fn is_zero(n: &u64) -> bool` in `session.rs` (none exists in the workspace). The
+  session keeps the last count a good poll saw (none before the first, so the first poll
+  only learns it), readable as
   `pub(crate) fn Session::mount_resets(&self) -> Option<u64>`, and a `sync_needed` flag
   with the `time` of the poll that set it, set when a good poll's count is above the
   last seen. `record_frame_sync` clears the flag only when it
@@ -468,15 +487,17 @@ spec asks for, and it opens the new epoch.
   right after its "the night has no sync yet" check; the API maps that to `409`.
 - **`goto.rs`**: `GoTo::check_request` (`crates/finder/src/goto.rs:645`) returns
   `POWER_CYCLED` as its `String` error when `sync_needed()`, after its "a GoTo is already
-  running" and "no mount is connected" checks; `crates/finder/src/api.rs:706` already
+  running" check and its `self.link.mount().ok_or("no mount is connected")?` line
+  (`crates/finder/src/goto.rs:649`) and before `prepare` (whose `prepare_with` has a
+  second "no mount is connected" check); `crates/finder/src/api.rs:706` already
   maps it to `409`. `check_request` also serves second sync
   (`crates/finder/src/api.rs:725`) and `GoTo::refusal`, so `GET /api/session`'s GoTo
   refusal shows the same words. `GoTo::check_axis_move` is not changed (owner
   decision 2). A running GoTo takes as its baseline the session's last-seen count when
   it was accepted, `Session::mount_resets()` read in `GoTo::start_request` after
-  `check_request` and passed to the private `run` and `motion` (its first read's count
-  when that is none, before the console's first poll); its first
-  read (`crates/finder/src/goto.rs:907`) and each slewing read beside `watchdog_stops`
+  `check_request` and passed to the private `run` and `motion` as a trailing
+  `resets: Option<u64>` (its first read's count when that is none, before the console's
+  first poll); its first read (`crates/finder/src/goto.rs:907`) and each slewing read beside `watchdog_stops`
   (`crates/finder/src/goto.rs:930`) end it `failed` with
   `mount power-cycled during the move` when `mount_resets` differs. The existing failure
   path then sends `StopAll`. After each correction's plan
@@ -493,9 +514,10 @@ spec asks for, and it opens the new epoch.
   `axis_state` read of the azimuth on every 1 s tick, right after the tick (today it
   reads `axis_state` only in two conditional branches,
   `crates/finder/src/tracking.rs:796` and `crates/finder/src/tracking.rs:820`). The first
-  read sets the baseline, a change ends tracking with `the mount was power-cycled`
-  (owner decision 5), and a failed read ends it `link_lost`, as the loop's other reads
-  do. The keyhole's waits for rest check it too (owner approval 6, US3-S8): the rate
+  read sets the baseline, so a reset after the console's last poll and before that read
+  is not seen by tracking (spec.md owner approval 6, gap (d)); a change ends tracking
+  with `the mount was power-cycled` (owner decision 5), and a failed read ends it
+  `link_lost`, as the loop's other reads do. The keyhole's waits for rest check it too (owner approval 6, US3-S8): the rate
   loop passes its baseline, a `u64` once the first tick has read it, to
   `keyhole(&self, target, client, axes, resets: u64)`
   (`crates/finder/src/tracking.rs:534`, called at `crates/finder/src/tracking.rs:744`),
@@ -517,10 +539,12 @@ spec asks for, and it opens the new epoch.
 ### `crates/scope-node/README.md` (US1, US2, US4)
 
 A `## The mount link` section, written by the story that builds each part. US1: the node
-starts without the mount and connects when it answers, and FR-003's line. US2: a power
-cycle is recognised and the board is initialised again, the reset line of FR-007, the
-loss line and the failed re-initialisation line, and that a console restarted after a
-power cycle needs a sync before GoTo. US4: FR-017's two lines. The console's refusal
+starts without the mount and connects when it answers, and FR-003's line; its sentence
+on Stop says that Stop answers unconfirmed at once, sending nothing, before the link's
+first connect, so it stays true after US2. US2: a power cycle is recognised and the
+board is initialised again, the reset line of FR-007, the loss line and the failed
+re-initialisation line, and that a console restarted after a power cycle needs a sync
+before GoTo. US4: FR-017's two lines. The console's refusal
 is US3's and is documented in the console's own API docs
 (`crates/finder/src/api.rs`), not in the node's README.
 
@@ -532,17 +556,38 @@ is US3's and is documented in the console's own API docs
 - **The frame cutoff in `record_frame_sync` (US3).** No scenario tells it apart from
   "any recorded sync clears the flag": US3-S3 records no sync, and every sync after
   US3-S4 restarts frames comes from a frame exposed after the rise. A frame in flight
-  across the rise can't be staged with the rig's 500 ms frames and 200 ms exposure.
+  across the rise can't be staged with the rig's 500 ms frames and 200 ms exposure. The
+  round-3 probe confirmed it: with "any recorded sync" all eight US3 tests stay green.
+- **US3's other paths no scenario reaches.** GoTo's first-read comparison before the
+  first slew (the first slewing read catches the same reset one pair later); the
+  baseline taken from the first read when the console has not polled yet; `at_rest`
+  right after the keyhole's `stop_all` (US3-S8 reaches the one after a waypoint); the
+  tick read's `link_lost` branch; and `MountReading::default()` leaving the last-seen
+  count.
 - **That every connect clears the jump baselines and the init-bit history (US2).** The
   probe showed no scenario fails without either: US2-S2's reconnect comes about 10 s
   after the last good read, when the jump limit is far above the 100,000 counts the
   power-on zero moves.
-- **Stop's give-way, its hold on `device` and its baud (US2).** The emulator gives each
-  stream its own buffers and baud, so no scenario fails if Stop uses the kept stream
-  while a connect attempt still holds the device, or skips setting the board's baud
-  first. Both matter only on a real serial port, whose descriptors share one input queue
-  and one baud. US2-S9, US2-S11 and US2-S12 do show that Stop answers without waiting on
-  the connect under way.
+- **Stop's hold on `device`, its `stopping` count and its baud (US2).** The emulator
+  gives each stream its own buffers and baud, so no scenario fails if Stop uses the kept
+  stream while a connect attempt still holds the device, or skips setting the board's
+  baud first, and the tests' single-threaded runtime can't stage an attempt that takes
+  the device just after a Stop's notification, which only `stopping` catches. These
+  matter only on a real serial port, whose descriptors share one input queue and one
+  baud, and on the node's two worker threads. The give-way itself is tested: US2-S9,
+  US2-S11 and US2-S12 call Stop while a connect attempt holds the device, and US2-S13's
+  spawned `stop_all` lets one start first, so all four fail without it.
+- **Stop over the kept `stop_board`, not a fresh open (US2).** The emulator's streams
+  all reach one board and its `Exchange` records no stream, so no scenario can tell
+  them apart; § Decisions rejects the fresh open.
+- **Stop with the device gone (US2).** A failed `set_baud` or first write answers false
+  at once; the emulator has no gone mode.
+- **The watchdog's Stop over a lost link (US2).** It takes the same path through the
+  queue's `stop_all` (`crates/scope-node/src/mount/watchdog.rs:51`) as the service's,
+  which US2-S13 shows; no scenario trips the watchdog over a lost link.
+- **Stop before the first connect leaves that connect alone (US2).** US1-S3 shows that
+  it answers at once and sends nothing; no scenario times the first connect around a
+  Stop.
 
 ## Shapes that existing tests pin
 
@@ -554,6 +599,9 @@ These are not changed by any story:
 - **`state` on a failed read** returns the last state with `moving: true`
   (`position_wrap_zero_rate_and_lost_telemetry` in `crates/scope-node/tests/skywatcher.rs`).
   US4's retries happen before that rule, and five bad replies still reach it (US4-S2).
+  The same test (`crates/scope-node/tests/skywatcher.rs:303`) also keeps US4's `read`
+  from nesting the transport's retries: with `safe` true inside `read`, a sixth
+  transmission answers and it fails, and so do US2-S11 and US2-S13.
 - **A motion start is sent once** (`transport_timeouts_and_replay_safety`). US4 retries
   only reads, and US4-S5 guards it again through the link.
 - **017's halt on a connected board** (`crates/scope-node/tests/skywatcher_stop.rs`):
@@ -599,18 +647,20 @@ These are not changed by any story:
 
 ## Verification (every story, before proposing)
 
-- **The factory gates** (`ergane.yaml` at c1ed295):
+- **The factory gates** (`ergane.yaml` at 1104b7d, after pull request 214):
   - `lint` = `cargo fmt --all --check`,
     `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`,
     `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked`
     and `RUSTDOCFLAGS="-D warnings" cargo doc -p finder --no-deps`;
-  - `test` = `cargo test --workspace --all-targets --all-features --locked`,
+  - `test` = `cargo nextest run --workspace --all-targets --all-features --locked`,
     `cargo test --workspace --locked --doc`, and then, in `crates/finder/web`,
     `npm ci --no-audit --no-fund`, `npm run typecheck`, `npm run format:check`,
     `npm test`, `npm run build`, `git status --porcelain -- dist | (! grep .)` and
     `CI=1 npm run e2e`.
 
-  Every story runs both, and the judge sees their results.
+  Every story runs both, and the judge sees their results. nextest runs each test in a
+  process of its own; every story's tests, run on copies of the round-3 probe branches,
+  pass under it as under `cargo test`.
 - **CI in the merge queue** runs every `ci.yml` job, including the build on Rust 1.96.
   Coverage runs only by hand (constitution 1.1.0).
 
@@ -618,23 +668,47 @@ These are not changed by any story:
 
 1. **The earlier specs have landed:** `013-live-finder`, `014-goto`, `015-tracking` and
    `017-console-stop-confirm`. Met: 017's last story landed at c1ed295.
-2. **`main` is still as read.** Every citation here is at c1ed295. `main` at f8dab49
-   adds `specs/020-live-chart-calm/` and its US1 and US2, which write
-   `crates/finder/web`, `crates/finder/src/solve.rs`,
-   `crates/finder/tests/star_detected.rs` and `DESIGN.md`, none of 024's files or
-   citations. If `main` has moved in these files since, re-read them and re-run the
-   validator.
+2. **`main` is still as read.** Every citation here is at c1ed295. `main` at 1104b7d
+   adds `specs/020-live-chart-calm/` and its two stories (`crates/finder/web`,
+   `crates/finder/src/solve.rs`, `crates/finder/tests/star_detected.rs`, `DESIGN.md`);
+   Playwright 1.64.1 (#213: `.github/workflows/ci.yml`,
+   `.github/workflows/ergane-gates.yml` and the page's package files); the nextest
+   `test` gate (#214: `ergane.yaml`, the root `Cargo.toml` and `README.md`,
+   `.config/nextest.toml`, both workflows, `docs/coverage.md`, `scripts/coverage.sh`);
+   and `specs/027-finder-tests-by-system/` (#216). None is one of 024's files or
+   citations. `ergane.yaml`'s `test` gate now runs `cargo nextest run` first, which
+   § Verification copies. If `main` has moved in 024's files since, re-read them and
+   re-run the validator.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
    decisions, § Owner approvals). The owner answered the round-2 questions on
    2026-11-15: owner decision 4 changed to always send Stop, and owner approval 6 closes
    gaps (a) and (b). Flipping to `ready` records every answer.
 4. **No operator-staged files are needed.**
-5. **Draft 025-frame-capture is ordered against this spec.** It writes three of 024's
-   files: its US1 writes `crates/finder/src/api.rs`, and its US2 writes
-   `crates/finder/src/api.rs`, the proto and `crates/scope-node/src/service.rs`. Neither
-   trio orders against the other yet. Whichever of 024 and 025 is flipped to `ready`
-   second first adds the other to `depends_on_landed`, or adds `shared_writes` entries
-   with `merge_order` for those files.
+5. **The drafts that write 024's files wait for it.** Met. `025-frame-capture` writes
+   three of them (its US1 `crates/finder/src/api.rs`; its US2 `crates/finder/src/api.rs`,
+   the proto and `crates/scope-node/src/service.rs`), and the `026-mount-sky` draft two
+   (`crates/finder/src/api.rs` and `crates/finder/src/session.rs`). The owner settled on
+   2026-11-15 that 024 goes before 025, and 026 makes 024's landing its own first
+   prerequisite. Both stay draft until 024 has landed and then add it to their own
+   `depends_on_landed`, so 024 names neither, in `depends_on_landed` or in
+   `shared_writes`.
+6. **`027-finder-tests-by-system` has landed, and US3 is re-anchored to its layout.**
+   Not met. The owner chose the order 027, then 024, then 025 (recorded in 027's
+   frontmatter), and 027 is `ready` on `main` at 1104b7d with neither story landed.
+   After its US2 a test file at the top level of `crates/finder/tests` fails its layout
+   guard, and the finder tests this trio cites move: `mcp/support.rs` and
+   `stop/support.rs` to `support/mcp.rs` and `support/stop.rs`, `goto_sim.rs` to
+   `motion/goto/sim.rs`, `keyhole_sim.rs` to `motion/tracking/keyhole.rs`,
+   `goto_refusal_api.rs` to `motion/goto/refusals.rs`, `watchdog_goto.rs` to
+   `motion/stop/watchdog.rs` and `mount_calls.rs` to `motion/mount_calls.rs`. Once it has
+   landed, merge `main` into this branch and, before the flip: put US3's test in the
+   `motion` binary as a module (`crates/finder/tests/motion/mount_identity.rs` and a
+   `mod mount_identity;` line in `crates/finder/tests/motion/main.rs`, a new US3 write
+   shared with 027's US2), re-read every `crates/finder/tests` citation and the
+   Refinement Record's existing finder test paths at the new `main`, rename US3's
+   development check to the nextest filter for that module, add 027 to
+   `depends_on_landed`, and re-run the validator. No other story writes
+   `crates/finder/tests`.
 
 ## Plan traps
 
@@ -646,8 +720,9 @@ that keeps it from recurring. They bind every story.
 2. **A named command is read literally.** *Check:* commands are copied from
    § Verification.
 3. **One evidence budget.** *Check:* each story keeps its diff under 64 KiB, measured
-   with `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c`. The round-2
-   probe builds came to 29, 30, 35 and 18 KB (US3's is mostly its copy of the `Rig`).
+   with `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c`. The round-3
+   probe builds came to 29.7, 37.6, 43.1 and 19.7 KB (US2's and US3's are mostly their
+   tests, US3's with its copy of the `Rig`).
 4. **The sandbox has only the gates' tools.** *Check:* no task runs a tool outside them.
 5. **A spec fixed mid-epic needs a relaunch.** The judge grades the spec as dispatched.
    *Check:* no builder edits `specs/024-mount-link-recovery/` or `.specify/`.
@@ -732,6 +807,29 @@ closes two gaps: US3 gains GoTo's read after each correction's plan and the coun
 tracking's `at_rest`, and two scenarios (US3-S7, US3-S8). No story's writes changed.
 Those parts are written from the code at c1ed295 and were not in the round-2 probes.
 
+Round 3's probes ran the same night (2026-11-14, local time): each story was probe-built
+again in a throwaway worktree from the trio with those answers, stacked as before. Every
+probe passed its story's tests, its crates' tests, clippy and fmt, with no undeclared
+write and no existing test touched, in 19.7 to 43.1 KB of diff, and every signature in
+§ Interfaces compiled as given but `MountReading`'s field visibility. Mutations showed
+each new part needed: without the kept-stream Stop US2-S9, US2-S11, US2-S12 and US2-S13
+fail, without one transmission a command US2-S12, without GoTo's read after a
+correction's plan US3-S7, and without `at_rest`'s count US3-S8. Those probes and two
+reviews showed what this revision fixes: US2-S11 and US2-S12 called Stop before any
+connect attempt held the device, so they passed without the give-way and now wait 0.1 s;
+US2-S13 now builds its service once the link is lost and checks that it is; a Stop before
+the first connect no longer makes that connect give way; a `stopping` count closes the
+window in which an attempt on the node's other worker thread could take the device just
+after a Stop's notification; US1-S3 now checks that Stop answers at once and sends
+nothing, and US3-S8 that no waypoint follows the reset; the health copy comes before the
+loss check too; § Read from the diff lists the paths no scenario reaches; Prerequisite 5
+is met by the owner's order; and `main` moved to 1104b7d, whose `test` gate runs
+nextest and whose 027 must land first (Prerequisite 6). The changed scenarios and Stop
+were run on copies of the round-3 probe branches: all US1 and US2 tests pass under
+`cargo test` and `cargo nextest`, as do US3's and US4's, and without the give-way
+US2-S9, US2-S11, US2-S12 and US2-S13 fail. One owner question is open, gap (d) under
+spec.md owner approval 6; the recommended default leaves it open.
+
 ```yaml
 version: 1
 reviewed_revision: c1ed295734253c7d6121052b0a14beb2ee64bc17
@@ -746,7 +844,7 @@ stories:
       - path: crates/scope-node/tests/mount_link.rs
         status: new
         disposition: add
-        assertion: "the service over a disconnected link describes no axes, refuses axis_state, goto_axis and rate_axis with mount not connected, answers stop_all UNAVAILABLE, and frames carry no counts"
+        assertion: "the service over a disconnected link describes no axes, refuses axis_state, goto_axis and rate_axis with mount not connected, answers stop_all UNAVAILABLE at once with no stop sent, and frames carry no counts"
         decision: "spec.md:US1-S3"
       - path: crates/scope-node/tests/mount_link.rs
         status: new
@@ -877,7 +975,7 @@ stories:
       - path: crates/scope-node/tests/mount_reset.rs
         status: new
         disposition: add
-        assertion: "over a lost link to a powered board running a J move, Stop sends K1 and K2 over the last connect's stream, is acknowledged, and the axis comes to rest; the node's StopAll over such a link answers OK"
+        assertion: "over a lost link to a powered board running a J move, Stop makes the connect attempt under way give way, sends K1 and K2 over the last connect's stream, is acknowledged, and the axis comes to rest; the node's StopAll over such a link answers OK"
         decision: "spec.md:US2-S11"
       - path: crates/scope-node/tests/mount_reset.rs
         status: new
@@ -966,7 +1064,7 @@ stories:
       - path: crates/finder/tests/mount_identity.rs
         status: new
         disposition: add
-        assertion: "a reset seen while a GoTo corrects ends it failed with power-cycled and sends StopAll with no further GotoAxis; a reset during a keyhole slew ends tracking off with power-cycled"
+        assertion: "a reset seen while a GoTo corrects ends it failed with power-cycled and sends StopAll with no further GotoAxis; a reset during a keyhole slew ends tracking off with power-cycled and sends no further waypoint"
         decision: "spec.md:US3-S7"
       - path: crates/finder/tests/goto_refusal_api.rs
         status: existing
