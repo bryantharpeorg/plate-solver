@@ -1,6 +1,6 @@
 # Implementation Plan: A Drawn Sky on the Real Mount
 
-**Branch**: `020-mount-sky` | **Date**: 2026-11-14 | **Spec**: [spec.md](spec.md)
+**Branch**: `026-mount-sky` | **Date**: 2026-11-14 | **Spec**: [spec.md](spec.md)
 
 This plan records every design decision for the feature. A story that would change one
 escalates rather than re-deciding it.
@@ -13,13 +13,17 @@ counts on the first usable frame, turns the frame's mid-exposure counts into an
 azimuth and altitude, and replaces the frame's centroids with the catalog stars there,
 drawn by the simulator's `field_stars`. Everything downstream (live solving, syncs, the
 model, GoTo, tracking, MCP) runs unchanged on those frames, and every motor command goes
-to the real mount. US2 adds a night clock behind two flags. US3 adds a banner.
+to the real mount. When the node's reset count (spec 024) changes, `MountSky` stops
+drawing for good. US2 adds a night clock behind two flags. US3 adds a banner, which
+also forbids hand pushes.
 
 ## Technical Context
 
 **Language/Version**: Rust (MSRV 1.96) for US1 and US2; TypeScript with React 19 for US3.
 
-**Primary Dependencies**: nothing new. `finder` already depends on `simulator`.
+**Primary Dependencies**: nothing new. `finder` already depends on `simulator`. US1
+reads spec 024's reset count (`AxisState.mount_resets`, `Mount::resets` and the
+session's last-seen count), so 024 lands first (§ Prerequisites).
 
 **Storage**: `mount-sky/session.json` under the default state folder (FR-002). Nothing
 about the drawn sky is persisted: zero counts live for the process.
@@ -79,7 +83,7 @@ DESIGN.md                               # US3: the banner
 ### The filter seam (`crates/finder/src/link.rs`)
 
 ```rust
-/// Replaces each node frame before anything in the console reads it (020).
+/// Replaces each node frame before anything in the console reads it (026).
 pub trait FrameFilter: Send + Sync {
     /// `offset_s` is the link's node-to-console clock offset, when known: console time
     /// is node time minus it.
@@ -119,7 +123,7 @@ Nothing else in `link.rs` changes.
 ### `MountSky` (`crates/finder/src/mount_sky.rs`, new)
 
 ```rust
-//! A drawn sky on the real mount (020): catalog stars at the pointing the encoders give.
+//! A drawn sky on the real mount (026): catalog stars at the pointing the encoders give.
 
 /// The finder's horizontal field, as measured on the sky on 2026-11-09.
 pub const FOV_DEG: f64 = 13.0;
@@ -134,9 +138,16 @@ pub struct MountSkyView {
     /// Counts `[azimuth, altitude]` that read as `ZERO_AZ_DEG` and `tube_alt_deg`;
     /// `null` until the first usable frame.
     pub zero_counts: Option<[i32; 2]>,
+    /// True once the node's reset count changed after the zero was fixed (FR-014).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub power_cycled: bool,
 }
 
-pub struct MountSky { /* db, session, tube_alt_deg, zero: Mutex<Option<[i32; 2]>> */ }
+/// `zero` holds the zero counts and the reset count the session had seen when they
+/// were fixed; `power_cycled` is never cleared.
+pub struct MountSky {
+    /* db, session, tube_alt_deg, zero: Mutex<Option<([i32; 2], u64)>>, power_cycled: AtomicBool */
+}
 
 impl MountSky {
     pub fn new(db: Arc<PatternDatabase>, session: Arc<Session>, tube_alt_deg: f64) -> Self;
@@ -147,26 +158,30 @@ impl FrameFilter for MountSky { /* below */ }
 ```
 
 `filter(frame, offset_s)`:
-1. **Counts.** Both `axis_start` and `axis_end` present: the mid counts are their
+1. **Stopped.** Once `power_cycled` is set (step 5), every frame is unusable.
+2. **Counts.** Both `axis_start` and `axis_end` present: the mid counts are their
    per-axis mean as `f64`. Otherwise the frame is unusable.
-2. **Terms.** `session.mount_sky_terms()` gives the site and counts per revolution.
-   Missing either, or `offset_s`, makes the frame unusable. So does a width, height,
-   exposure or gain that is not finite and above zero: `field_stars` asserts all four
-   (`crates/simulator/src/render.rs:20`).
-3. **Unusable.** Return the frame with `centroids` cleared and `preview_jpeg` `None`.
-4. **Zero.** If no zero is held, store the mid counts rounded to `i32`.
-5. **Pointing.** With `c` the counts per revolution and `z` the zero, build
+3. **Terms.** `session.mount_sky_terms()` gives the site, the counts per revolution and
+   the last-seen reset count. Missing any of them, or `offset_s`, makes the frame
+   unusable. So does a width, height, exposure or gain that is not finite and above
+   zero: `field_stars` asserts all four (`crates/simulator/src/render.rs:20`).
+4. **Unusable.** Return the frame with `centroids` cleared and `preview_jpeg` `None`.
+5. **Zero.** If no zero is held, store the mid counts rounded to `i32` with the reset
+   count beside them. If one is held and the reset count differs from the one stored
+   with it, set `power_cycled`, and the frame is unusable (FR-014). A count that
+   changes back does not clear it.
+6. **Pointing.** With `c` the counts per revolution and `z` the zero, build
    `Model::default()`, call `load_known_terms(0.0, 0.0, [ZERO_AZ_DEG − z[0] × 360 / c[0],
    tube_alt_deg − z[1] × 360 / c[1]])` and take `predict(mid, c)`. With no tilt and no
    fixed terms this is exactly the spec's truth formula, in the model's own sign
    convention (`crates/finder/src/model.rs:327`). Its altitude is apparent.
-6. **Time.** `(frame.start_s + frame.end_s) / 2.0 − offset_s`.
-7. **Stars.** `rotation = simulator::sky::camera_rotation(ephemeris::true_from_apparent(alt),
+7. **Time.** `(frame.start_s + frame.end_s) / 2.0 − offset_s`.
+8. **Stars.** `rotation = simulator::sky::camera_rotation(ephemeris::true_from_apparent(alt),
    az, simulator::Site { lat_deg, lon_deg }, time)`;
    `optics = Optics { width: frame.width, height: frame.height, fov_deg: FOV_DEG,
    eyepiece_px: (frame.width as f64 / 2.0, frame.height as f64 / 2.0) }`;
    `simulator::render::field_stars(&db, optics, rotation, frame.exposure_ms, frame.gain)`.
-8. **Centroids.** Each star becomes `Centroid { x, y, brightness: 1e6 × 10^(−0.4 ×
+9. **Centroids.** Each star becomes `Centroid { x, y, brightness: 1e6 × 10^(−0.4 ×
    magnitude) }`, sorted by brightness, highest first, and cut to `MAX_CENTROIDS`.
    Replace `centroids`, set `preview_jpeg` to `None`, and return the frame.
 
@@ -176,13 +191,18 @@ The filter never panics on a frame: a `predict` of `None` makes the frame unusab
 
 ```rust
 impl Session {
-    /// The site and counts per revolution a drawn sky needs (020).
-    pub fn mount_sky_terms(&self) -> (Option<Site>, Option<[u32; 2]>);
+    /// The site, counts per revolution and last-seen count of the node's mount resets
+    /// that a drawn sky needs (026).
+    pub fn mount_sky_terms(&self) -> (Option<Site>, Option<[u32; 2]>, Option<u64>);
 }
 ```
 
-It reads `values.site` and `values.counts_per_revolution` under the existing lock, as
-`record_frame_sync` does (`crates/finder/src/session.rs:1061`).
+It reads `values.site`, `values.counts_per_revolution` and the last reset count a good
+mount poll saw, which spec 024 keeps in the session (none before the first poll), under
+the existing lock, as `record_frame_sync` does (`crates/finder/src/session.rs:1061`).
+A good poll sets that count and the counts per revolution together, and a failed poll
+clears only the counts per revolution, so the session holds a reset count whenever it
+holds counts per revolution.
 
 ### The console (`crates/finder/src/api.rs`)
 
@@ -208,7 +228,7 @@ filled from `state.mount_sky` in `session_response`.
 US2 adds `night_utc: Option<String>` to `AppState`, and:
 
 ```rust
-/// The night clock of `--mount-sky-night` (020 US2). Call before `with_mount_sky`.
+/// The night clock of `--mount-sky-night` (026 US2). Call before `with_mount_sky`.
 pub fn with_night_clock(self, start_unix_s: f64, utc: impl Into<String>) -> Self;
 ```
 
@@ -279,15 +299,20 @@ finder console: night clock from <utc>: the Sun guard checks a pretend Sun; keep
 US1 adds two rows after `--sim-start`:
 
 ```markdown
-| `--mount-sky` | off | Draw each frame's stars from the real mount's encoders instead of the camera, for testing GoTo without a sky. Needs `--tube-alt`; not with `--simulate`. |
+| `--mount-sky` | off | Draw each frame's stars from the real mount's encoders instead of the camera, for testing GoTo without a sky. Needs `--tube-alt`; not with `--simulate`. Do not push the tube by hand in this mode. |
 | `--tube-alt DEG` | | The tube's altitude when the console starts, from a level, 0 to 90. Requires `--mount-sky`. |
 ```
 
 and a section `## Drawn sky on the real mount` after `## Simulated night and live
 stream`, saying: what the mode does; that the first frame's counts read as azimuth 180°
 and `--tube-alt`; that it keeps its session in `mount-sky/session.json` and the node is
-paired there once; that every guard is unchanged; and that it can't test slip, gear
-backlash after the encoder or the base's tilt. US2 adds two rows:
+paired there once; that every guard is unchanged; that the tube must not be pushed by
+hand in this mode, because with the board's encoders off a push moves the tube and not
+the counts, so the drawn sky stops matching the tube and nothing detects it; that after
+a power cycle (spec 024's reset count) the drawn sky stops for good, and the console must
+be restarted with a fresh `--tube-alt` and the night then reset; and that it can't test slip,
+gear backlash after the encoder, the base's tilt or the 2 to 3% shortfall seen on the
+sky in the real board's 1° moves. US2 adds two rows:
 
 ```markdown
 | `--mount-sky-night UTC` | | Run the console on a night clock from `YYYY-MM-DDTHH:MM:SSZ`, so a daylight test can move the mount. The Sun guard then checks that clock's Sun. Requires `--mount-sky` and `--covers-on`. |
@@ -314,6 +339,7 @@ The **Sun guard** entry becomes:
 export interface MountSky {
   tube_alt_deg: number;
   zero_counts: [number, number] | null;
+  power_cycled?: boolean;
   night_utc?: string;
 }
 ```
@@ -328,6 +354,10 @@ export function MountSkyBanner({ sky }: { sky: MountSky }) {
     <div role="status" className="page-width border-b border-rule px-4 py-2 text-sm text-ink sm:px-5 lg:px-10">
       <strong className="font-semibold">Drawn sky.</strong> These stars come from the
       mount's encoders, not seen by the camera.
+      No hand pushes: a push moves the tube but not the drawn sky.
+      {sky.power_cycled && (
+        <> The mount was power-cycled, so the drawn sky has stopped: restart the console with a fresh --tube-alt.</>
+      )}
       {sky.night_utc && (
         <> Night clock from {sky.night_utc}. Keep the mirror cover and the finder cap on.</>
       )}
@@ -344,12 +374,14 @@ line breaks above: write each phrase the test asserts on one line of JSX.
 
 ### `DESIGN.md` (US3)
 
-Under the components, add:
+At the end of `## Components`, after the `### Aim-point tap — built` entry, add a
+`### Drawn sky banner — built` entry:
 
-> **Drawn sky banner.** Under `finder --mount-sky` a one-line status sits under the top
-> bar on every page: "Drawn sky." in semibold, then that the stars come from the
-> mount's encoders, and on a night clock that the covers must stay on. Ink on paper,
-> with a rule below; no new token.
+> Under `finder --mount-sky` a one-line status sits under the top bar on every page:
+> "Drawn sky." in semibold, then that the stars come from the mount's encoders and that
+> the tube must not be pushed by hand; after a power cycle, that the drawn sky has
+> stopped and the console must be restarted with a fresh `--tube-alt`; and on a night
+> clock, that the covers must stay on. Ink on paper, with a rule below; no new token.
 
 ## Shapes that existing tests pin
 
@@ -378,10 +410,14 @@ These are not changed by any story:
 | Its own state folder | The night's session | A drawn-sky night must never leave syncs or zero points in the real one. |
 | `--covers-on` at start | A confirmation on the page | It is given before anything can move, and the page may not be open when an MCP client drives. |
 | A night clock behind two flags | Turning the Sun guard off | Night-time rules (darkness, targets, the guard's geometry) keep working on the drawn sky. |
+| React to 024's reset count | A counts-jump guard of this spec's own | 024 already counts a jump beyond the top rate as a reset, and its count also catches a lost link and a cleared init bit. |
+| Stop drawing for good on a reset | Re-zero from the counts after it | The counts after a power cycle are an unknown offset from the old ones; only a fresh `--tube-alt` measures the altitude again. |
+| Latch the stop | Compare the count on each frame | A count that changed back would resume drawing from a zero the reset made stale. |
+| Forbid hand pushes in words | Detect a push | With the board's encoders off a push changes nothing the console reads. |
 
 ## Verification (every story, before proposing)
 
-- **The factory gates** (`ergane.yaml` at c1ed295):
+- **The factory gates** (`ergane.yaml` at f8dab49, unchanged since c1ed295):
   - `lint` = `cargo fmt --all --check`,
     `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`,
     `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked`
@@ -399,10 +435,19 @@ These are not changed by any story:
 
 ## Prerequisites before this spec is flipped to `ready`
 
-1. **The earlier specs have landed:** `016-mcp`, `017-console-stop-confirm` and `018-live-chart-steady`. Met:
-   017's last story landed at c1ed295.
-2. **`main` is still as read.** Every citation here is at c1ed295. If `main` has moved in
-   these files, re-read them and re-run the validator.
+1. **The earlier specs have landed:** `016-mcp`, `017-console-stop-confirm`,
+   `018-live-chart-steady` and `020-live-chart-calm`. Met: 020-live-chart-calm's last
+   story landed at f8dab49. **And `024-mount-link-recovery` has landed.** Not met: 024
+   is a draft. US1 needs its `AxisState.mount_resets`, `Mount::resets`, the session's
+   last-seen reset count and `mount.resets` in `GET /api/session` (FR-014, US1-S8). 024
+   is not in `depends_on_landed` only because the validator refuses a dependency on a
+   spec that isn't on `main`; when it lands, add it there, re-read § Interfaces' session
+   and filter steps against its code, and re-run the validator.
+2. **`main` is still as read.** Every citation here was read at c1ed295 and re-read at
+   f8dab49. 024 will change `crates/finder/src/api.rs` and `crates/finder/src/session.rs`,
+   and the draft 025-frame-capture touches `crates/finder/src/link.rs`, all three written
+   by US1: once either lands, re-read the cited lines and the shared writes and re-run
+   the validator.
 3. **The owner approvals are given** (spec § Owner approvals). Flipping to `ready`
    records them.
 4. **Constitution III is amended in the flip PR**, so the dispatch freezes it. The last
@@ -429,7 +474,7 @@ that keeps it from recurring. They bind every story.
    with `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c`.
 4. **The sandbox has only the gates' tools.** *Check:* no task runs a tool outside them.
 5. **A spec fixed mid-epic needs a relaunch.** The judge grades the spec as dispatched.
-   *Check:* no builder edits `specs/020-mount-sky/` or `.specify/`.
+   *Check:* no builder edits `specs/026-mount-sky/` or `.specify/`.
 6. **An oracle copied from the code proves nothing.** *Check:* the tests compute the
    truth formula and the target's horizontal position themselves, and never call
    `MountSky` or `Model` to get an expected value.
@@ -442,6 +487,9 @@ that keeps it from recurring. They bind every story.
 9. **The bundle must be rebuilt.** *Check:* US3 commits `crates/finder/web/dist` after
    `npm run build`, so that the gate's `git status --porcelain -- dist` finds nothing.
 10. **Each worktree builds on its own.** *Check:* no story sets `CARGO_TARGET_DIR`.
+11. **A stop that only compares.** A filter that compared the reset count on each frame
+    would draw again from a stale zero once the count read as before. *Check:* US1-S8
+    sets the count back to 0 and asserts the frames stay empty.
 
 ## Risks
 
@@ -449,7 +497,9 @@ that keeps it from recurring. They bind every story.
 |---|---|
 | A drawn-sky pointing is taken for a real one. | The banner on every page, the start-up line, `mount_sky` in the session, and a separate state folder. |
 | The observer forgets the covers in daylight. | `--covers-on` can't be skipped, and the warning line and banner repeat it. Physical safety still rests on the observer (owner approval 2). |
-| The real tube hits a stop because the drawn altitude is off. | Zero at the measured altitude; README asks for a level check before long moves. |
+| The real tube hits a stop because the drawn altitude is off. | Zero at the measured altitude; README asks for a level check before long moves; a power cycle stops the drawn sky (FR-014). |
+| A hand push makes the drawn sky part from the tube unseen. | The README and the banner forbid hand pushes (owner approval 5). Nothing detects one. |
+| The first long slew on the real board misbehaves. | Only 1° position moves are proven on it (firmware 2.09). Stop, the watchdog and the observer at the power switch are the real ones. |
 | Rendering slows the link loop. | `field_stars` takes milliseconds per frame at a 1 s cadence; frames carry at most 200 stars. |
 
 ## Refinement Record
@@ -458,13 +508,29 @@ Drafted on 2026-11-14 by the plate-solver operator against `main` at c1ed295, fr
 read-only map of the console's frame, mount and simulate paths. No code was probed:
 the interfaces were read from the cited lines, and the risk that `field_stars` and the
 model's `predict` don't line up is carried by US1-S1 and S3. Writes come from the task
-text. Shared writes name the merge edge that orders them, and the 016, 017, 018 and 019
-stories that last wrote the same file on `main`. Nothing in this record is an owner
+text. Shared writes name the merge edge that orders them, and the landed stories that
+last wrote the same file on `main`. Nothing in this record is an owner
 approval: those are in spec.md, and flipping to `ready` gives them.
+
+Renumbered from 020 to 026 on 2026-11-14 by the plate-solver operator on the owner's
+instruction, with the field findings of 13-14 November applied: the drawn sky stops on
+spec 024's reset count (FR-014, US1-S8, US3-S4), hand pushes are forbidden in words, and
+the real board's figures are recorded. `main` was merged at f8dab49 and every cited
+`path:line` re-read there: none of the cited Rust, proto or constitution lines had
+moved, since 020-live-chart-calm changed only `crates/finder/src/solve.rs`, the page and
+`DESIGN.md`; the plan's places in `App.tsx`, `api.ts` and `DESIGN.md` are named, not
+numbered, and still hold. The two new citations (`crates/simulator/src/mount.rs:12`,
+`crates/scope-node/src/mount/skywatcher/protocol.rs:14`) were read there too.
+`reviewed_revision` is therefore f8dab49. The shared writes were
+re-derived from `git log` at f8dab49: 020-live-chart-calm's US2 is now the last writer
+of `DESIGN.md`, `crates/finder/web/dist`, `App.tsx` and `api.ts`, so 020-live-chart-calm
+joins `depends_on_landed`. 024 is not on `main`, so no 024 story can be named here yet;
+when it lands, its US3 becomes the last writer of `api.rs` and `session.rs`
+(§ Prerequisites 1 and 2).
 
 ```yaml
 version: 1
-reviewed_revision: c1ed295734253c7d6121052b0a14beb2ee64bc17
+reviewed_revision: f8dab49c00411f1fa70c2bde374182e4fe9d2ffc
 stories:
   US1:
     tests:
@@ -488,6 +554,11 @@ stories:
         disposition: add
         assertion: "a node without a mount gives frames with no centroids, no live pointing and null zero_counts; the binary refuses bad flag combinations and keeps its session in mount-sky/"
         decision: "spec.md:US1-S5"
+      - path: crates/finder/tests/mount_sky.rs
+        status: new
+        disposition: add
+        assertion: "once the session's reset count changes, every later frame has no centroids and no preview, power_cycled is true, zero_counts is unchanged and a GoTo is refused; a count set back to 0 does not resume drawing"
+        decision: "spec.md:US1-S8"
       - path: crates/finder/tests/simulate_cli.rs
         status: existing
         disposition: preserve
@@ -521,22 +592,22 @@ stories:
     no_write_reason: ""
     shared_writes:
       - path: crates/finder/README.md
-        other_spec: 020-mount-sky
+        other_spec: 026-mount-sky
         other_story: US2
         disposition: merge_order
         reason: "US2 depends_on_merged US1, and adds its flags to US1's section"
       - path: crates/finder/src/api.rs
-        other_spec: 020-mount-sky
+        other_spec: 026-mount-sky
         other_story: US2
         disposition: merge_order
         reason: "US2 depends_on_merged US1, and adds with_night_clock"
       - path: crates/finder/src/main.rs
-        other_spec: 020-mount-sky
+        other_spec: 026-mount-sky
         other_story: US2
         disposition: merge_order
         reason: "US2 depends_on_merged US1, and adds the night flags"
       - path: crates/finder/src/mount_sky.rs
-        other_spec: 020-mount-sky
+        other_spec: 026-mount-sky
         other_story: US2
         disposition: merge_order
         reason: "US2 depends_on_merged US1, and adds night_utc"
@@ -544,32 +615,32 @@ stories:
         other_spec: 017-console-stop-confirm
         other_story: US4
         disposition: merge_order
-        reason: "020 depends_on_landed 017, whose US4 last changed the README"
+        reason: "026 depends_on_landed 017, whose US4 last changed the README"
       - path: crates/finder/src/api.rs
         other_spec: 017-console-stop-confirm
         other_story: US1
         disposition: merge_order
-        reason: "020 depends_on_landed 017, whose US1 last changed api.rs"
+        reason: "026 depends_on_landed 017, whose US1 last changed api.rs"
       - path: crates/finder/src/lib.rs
         other_spec: 017-console-stop-confirm
         other_story: US1
         disposition: merge_order
-        reason: "020 depends_on_landed 017, whose US1 last changed lib.rs"
+        reason: "026 depends_on_landed 017, whose US1 last changed lib.rs"
       - path: crates/finder/src/link.rs
         other_spec: 017-console-stop-confirm
         other_story: US1
         disposition: merge_order
-        reason: "020 depends_on_landed 017, whose US1 last changed link.rs"
+        reason: "026 depends_on_landed 017, whose US1 last changed link.rs"
       - path: crates/finder/src/main.rs
         other_spec: 016-mcp
         other_story: US1
         disposition: merge_order
-        reason: "020 depends_on_landed 016, whose US1 last changed main.rs"
+        reason: "026 depends_on_landed 016, whose US1 last changed main.rs"
       - path: crates/finder/src/session.rs
         other_spec: 017-console-stop-confirm
         other_story: US2
         disposition: merge_order
-        reason: "020 depends_on_landed 017, whose US2 last changed session.rs"
+        reason: "026 depends_on_landed 017, whose US2 last changed session.rs"
     open_questions: []
   US2:
     tests:
@@ -613,7 +684,7 @@ stories:
       - path: crates/finder/web/src/components/MountSkyBanner.test.tsx
         status: new
         disposition: add
-        assertion: "a session with mount_sky shows one status saying Drawn sky and not seen by the camera; with night_utc it adds the night clock and the covers; without mount_sky nothing says Drawn sky"
+        assertion: "a session with mount_sky shows one status saying Drawn sky, not seen by the camera and No hand pushes; with night_utc it adds the night clock and the covers; with power_cycled it says the mount was power-cycled and to restart with a fresh --tube-alt; without mount_sky nothing says Drawn sky"
         decision: "spec.md:US3-S1"
       - path: crates/finder/web/e2e/simulate.spec.ts
         status: existing
@@ -641,24 +712,24 @@ stories:
     no_write_reason: ""
     shared_writes:
       - path: DESIGN.md
-        other_spec: 017-console-stop-confirm
-        other_story: US5
+        other_spec: 020-live-chart-calm
+        other_story: US2
         disposition: merge_order
-        reason: "020 depends_on_landed 017, whose US5 last changed DESIGN.md"
+        reason: "026 depends_on_landed 020-live-chart-calm, whose US2 last changed DESIGN.md"
       - path: crates/finder/web/dist
-        other_spec: 017-console-stop-confirm
-        other_story: US5
+        other_spec: 020-live-chart-calm
+        other_story: US2
         disposition: merge_order
-        reason: "020 depends_on_landed 017, whose US5 last rebuilt the bundle"
+        reason: "026 depends_on_landed 020-live-chart-calm, whose US2 last rebuilt the bundle"
       - path: crates/finder/web/src/App.tsx
-        other_spec: 018-live-chart-steady
-        other_story: US1
+        other_spec: 020-live-chart-calm
+        other_story: US2
         disposition: merge_order
-        reason: "020 depends_on_landed 018, whose US1 last changed App.tsx"
+        reason: "026 depends_on_landed 020-live-chart-calm, whose US2 last changed App.tsx"
       - path: crates/finder/web/src/api.ts
-        other_spec: 017-console-stop-confirm
-        other_story: US5
+        other_spec: 020-live-chart-calm
+        other_story: US2
         disposition: merge_order
-        reason: "020 depends_on_landed 017, whose US5 last changed api.ts"
+        reason: "026 depends_on_landed 020-live-chart-calm, whose US2 last changed api.ts"
     open_questions: []
 ```

@@ -1,11 +1,12 @@
 ---
-description: "Task list for 020-mount-sky: A Drawn Sky on the Real Mount"
+description: "Task list for 026-mount-sky: A Drawn Sky on the Real Mount"
 ---
 
 # Tasks: A Drawn Sky on the Real Mount
 
 **Prerequisites** (plan.md § Prerequisites):
-- `016-mcp`, `017-console-stop-confirm` and `018-live-chart-steady` have landed on `main`;
+- `016-mcp`, `017-console-stop-confirm`, `018-live-chart-steady`, `020-live-chart-calm`
+  and `024-mount-link-recovery` have landed on `main`;
 - the owner approvals in spec.md are given;
 - Constitution III is amended (1.2.0) before dispatch;
 - no operator-staged file is needed.
@@ -29,11 +30,12 @@ description: "Task list for 020-mount-sky: A Drawn Sky on the Real Mount"
 - [ ] T001 [US1] Create `crates/finder/tests/mount_sky.rs` with the shared setup of
   spec.md § User Scenarios, modelled on `Rig::new` in
   `crates/finder/tests/mcp/support.rs` but calling `with_mount_sky(transport, 30.0)`,
-  with the `SimMount`'s zero points at `[300, 70]`, and helpers for the truth of counts
-  and for horizontal from a pointing. Write failing tests for US1-S1 and US1-S2.
+  with the `SimMount`'s zero points at `[300, 70]` behind a test `Mount` whose reset
+  count the test sets, and helpers for the truth of counts and for horizontal from a
+  pointing. Write failing tests for US1-S1 and US1-S2.
 - [ ] T002 [US1] Add failing tests to `crates/finder/tests/mount_sky.rs` for the GoTo at
-  night and its refusal in the day (US1-S3, US1-S4), and for a node without a mount
-  (US1-S5).
+  night and its refusal in the day (US1-S3, US1-S4), for a node without a mount
+  (US1-S5), and for the drawn sky stopping for good after a reset (US1-S8).
 - [ ] T003 [US1] Add failing tests to `crates/finder/tests/mount_sky.rs` that run the
   built binary for the refused flag combinations and the `mount-sky/` state folder
   (US1-S6, US1-S7).
@@ -44,16 +46,17 @@ description: "Task list for 020-mount-sky: A Drawn Sky on the Real Mount"
   `LinkManager::start_with_filter` exactly as plan.md § Interfaces gives them, with
   `start` calling it with `None`.
 - [ ] T005 [US1] Create `crates/finder/src/mount_sky.rs` with `MountSky`,
-  `MountSkyView` and the filter of plan.md § Interfaces, and export it from
-  `crates/finder/src/lib.rs`. Add `Session::mount_sky_terms` in
-  `crates/finder/src/session.rs`.
+  `MountSkyView` (with `power_cycled`) and the filter of plan.md § Interfaces, and
+  export it from `crates/finder/src/lib.rs`. Add `Session::mount_sky_terms`, with the
+  last-seen reset count, in `crates/finder/src/session.rs`.
 - [ ] T006 [US1] In `crates/finder/src/api.rs`, add `AppState::with_mount_sky` and the
   `mount_sky` field of `SessionResponse`. In `crates/finder/src/main.rs`, add
   `--mount-sky` and `--tube-alt`, the `mount-sky` state folder and the start-up line.
-- [ ] T007 [US1] Add US1's two rows and the `## Drawn sky on the real mount` section to
+- [ ] T007 [US1] Add US1's two rows and the `## Drawn sky on the real mount` section,
+  with its ban on hand pushes and the restart after a power cycle, to
   `crates/finder/README.md` (plan.md § Interfaces).
 - [ ] T008 [US1] Run the `lint` and `test` gates with every existing test unchanged and
-  green. Commit the green story (US1-S1 to US1-S7).
+  green. Commit the green story (US1-S1 to US1-S8).
 
 ## Phase 2: User Story 2 — The same test in daylight, on a night clock (Priority: P2)
 
@@ -79,16 +82,16 @@ description: "Task list for 020-mount-sky: A Drawn Sky on the Real Mount"
 ### Tests first
 
 - [ ] T013 [US3] Create `crates/finder/web/src/components/MountSkyBanner.test.tsx` with
-  failing tests for US3-S1, US3-S2 and US3-S3.
+  failing tests for US3-S1, US3-S2, US3-S3 and US3-S4.
 
 ### Implementation
 
-- [ ] T014 [US3] Add the `MountSky` type to `crates/finder/web/src/api.ts`, create
+- [ ] T014 [US3] Add the `MountSky` type, with `power_cycled`, to `crates/finder/web/src/api.ts`, create
   `crates/finder/web/src/components/MountSkyBanner.tsx`, and place it in
   `crates/finder/web/src/App.tsx` (plan.md § Interfaces).
 - [ ] T015 [US3] Add the banner paragraph to `DESIGN.md`. Run the `lint` and `test`
   gates with every existing Vitest and Playwright test unchanged and green, commit the
-  rebuilt `crates/finder/web/dist`, and commit the green story (US3-S1, US3-S2 and US3-S3).
+  rebuilt `crates/finder/web/dist`, and commit the green story (US3-S1, US3-S2, US3-S3 and US3-S4).
 
 ## Execution Order
 
@@ -98,6 +101,7 @@ US1 ──► US2
 ```
 
 - **US1** comes first: US2 and US3 build on its flags, `MountSky` and `mount_sky` field.
+  It needs 024's reset count, so 024 has landed before dispatch.
 - **US2** and **US3** share no file, so they may run beside each other once US1 has
   merged.
 - **`[P]`** marks nothing here: every task shares a file with another in its story.
