@@ -5,7 +5,7 @@ use crate::{
     link::{LinkManager, MountClient},
     live::Live,
     model::{separation, Model},
-    session::{Clock, Session, Site},
+    session::{Clock, Session, Site, POWER_CYCLED},
     sky::{self, Observer},
     targets::Target,
 };
@@ -25,6 +25,7 @@ const ACCELERATION: f64 = 3.0;
 pub(crate) const TICK: Duration = Duration::from_millis(50);
 const AXES: [Axis; 2] = [Axis::Azimuth, Axis::Altitude];
 const WATCHDOG_HALT: &str = "halted by the scope node's watchdog";
+const RESET_FAILURE: &str = "mount power-cycled during the move";
 fn wrap(angle: f64) -> f64 {
     (angle + 180.0).rem_euclid(360.0) - 180.0
 }
@@ -620,6 +621,7 @@ impl GoTo {
         let _gate = self.start_gate.lock().await;
         let generation = *self.cancel.borrow();
         let (client, plan) = self.check_request(target.as_ref()).await?;
+        let resets = self.session.mount_resets();
         if *self.cancel.borrow() != generation {
             return Err("the observer stopped it".into());
         }
@@ -636,7 +638,7 @@ impl GoTo {
         }
         let owner = self.clone();
         tokio::spawn(async move {
-            owner.run(target, client, plan, generation).await;
+            owner.run(target, client, plan, generation, resets).await;
         });
         Ok(())
     }
@@ -647,6 +649,9 @@ impl GoTo {
             return Err("a GoTo is already running".into());
         }
         let mut client = self.link.mount().ok_or("no mount is connected")?;
+        if self.session.sync_needed() {
+            return Err(POWER_CYCLED.into());
+        }
         let plan = tokio::time::timeout(
             Duration::from_secs(1),
             self.prepare(target, &mut client, false),
@@ -868,12 +873,13 @@ impl GoTo {
         client: MountClient,
         plan: Plan,
         generation: u64,
+        resets: Option<u64>,
     ) {
         let mut movement = client.clone();
         let result = tokio::select! {
             biased;
             reason = self.guard(generation) => Err((true, reason)),
-            result = self.motion(target.as_ref(), &mut movement, plan, generation) => result.map_err(|reason| (reason == WATCHDOG_HALT, reason)),
+            result = self.motion(target.as_ref(), &mut movement, plan, generation, resets) => result.map_err(|reason| (reason == WATCHDOG_HALT, reason)),
         };
         if let Err((halted, reason)) = result {
             let progress = self.progress().unwrap();
@@ -900,15 +906,20 @@ impl GoTo {
         client: &mut MountClient,
         mut plan: Plan,
         generation: u64,
+        resets: Option<u64>,
     ) -> Result<(), String> {
         let mut reports = self.live.subscribe();
         let mut correction = 0;
         let mut error = None;
-        let watchdog_stops = client
+        let initial = client
             .axis_state(AXES[0])
             .await
-            .map_err(|_| "mount did not answer")?
-            .watchdog_stops;
+            .map_err(|_| "mount did not answer")?;
+        let resets = resets.unwrap_or(initial.mount_resets);
+        if initial.mount_resets != resets {
+            return Err(RESET_FAILURE.into());
+        }
+        let watchdog_stops = initial.watchdog_stops;
         loop {
             self.update(generation, "slewing", correction, error, None);
             for waypoint in &plan.waypoints {
@@ -927,6 +938,9 @@ impl GoTo {
                         .axis_state(Axis::Altitude)
                         .await
                         .map_err(|_| "mount did not answer")?;
+                    if az.mount_resets != resets || alt.mount_resets != resets {
+                        return Err(RESET_FAILURE.into());
+                    }
                     if az.watchdog_stops != watchdog_stops || alt.watchdog_stops != watchdog_stops {
                         return Err(WATCHDOG_HALT.into());
                     }
@@ -1008,6 +1022,14 @@ impl GoTo {
             // Retain the numbered correction long enough for session readers.
             tokio::time::sleep(Duration::from_millis(100)).await;
             plan = self.prepare(target, client, true).await?.0;
+            // A correction planned through old zero points must never be sent.
+            let state = client
+                .axis_state(Axis::Azimuth)
+                .await
+                .map_err(|_| "mount did not answer")?;
+            if state.mount_resets != resets {
+                return Err(RESET_FAILURE.into());
+            }
         }
     }
 }
