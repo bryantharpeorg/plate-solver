@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["013-live-finder", "014-goto", "015-tracking", "017-console-stop-confirm", "027-finder-tests-by-system"]
 # Drafted 2026-11-14 by the plate-solver operator against `main` at c1ed295, from the
 # dark-site field findings of 13-14 November (gap 1: the mount link after a power cycle).
@@ -21,6 +21,10 @@ depends_on_landed: ["013-live-finder", "014-goto", "015-tracking", "017-console-
 # 6; US3 with that clause and US3-S9 was probe-built on 027's layout (round 4: nine of
 # nine US3 tests and the workspace's tests pass). Flipping it to `ready` gives the
 # approvals listed under "Owner approvals" and dispatches it.
+# Flipped to ready 2026-11-15 on the owner's go (the owner settled every decision and
+# chose to have the operator flip it once 027 had landed and US3 was re-built on its
+# layout), giving the seven owner approvals. Validated against `main` at 1c977a3: no
+# findings, preflight 0, US1 then US2, then US3 and US4.
 ---
 
 # Feature Specification: The Mount Link Survives a Power Cycle
