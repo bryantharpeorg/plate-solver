@@ -4,7 +4,7 @@ depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "0
 # Drafted 2026-11-14 against `main` at 870b332 with the gate change of pull request 214
 # applied, from the test-layer audit the owner asked for that day. Both stories were built
 # in a throwaway worktree before this was written (plan.md § Refinement Record). It stays
-# draft until the owner flips it to `ready` on Tharpebox, which gives the approvals listed
+# draft until the owner flips it to `ready`, which gives the approvals listed
 # under "Owner approvals" and dispatches it. The owner asked for it to run before 024, 025
 # and 026, so that those are written against the layout it leaves.
 # Flipped to ready 2026-11-15 on the owner's go (the owner chose to have the operator flip it
