@@ -153,3 +153,24 @@ The cause is `not initialised`, `counts jumped on Azimuth` (or `Altitude`), or
 `mount reset (<cause>): re-initialisation failed: <error>` and retries in the
 background, keeping the cause to count once on success. A console restarted after
 a power cycle needs a sync before GoTo.
+
+Status (`:f`) and position (`:j`) reads share a budget of five transmissions for
+timeouts, malformed frames and framed replies of the wrong length. Each
+wrong-length framed reply is counted in `MountLink::health().invalid_replies`,
+kept escaped as `last_invalid`, and logged with its command and bytes:
+
+```text
+mount reply invalid for :f1: =10\r
+```
+
+GoTo records the accepted path per axis in `health().goto_path`: `:S` for an
+absolute position, or `:H/:M` for the relative fallback. A changed path logs once
+per axis on each board, including its first GoTo:
+
+```text
+mount goto path on axis 1: :S
+```
+
+Health counts persist across reconnects and resets; the latest invalid bytes and
+each axis's previous path remain until a new board reports replacements. A motion
+start (`:J`) is always sent once, even when its acknowledgement is lost.

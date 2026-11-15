@@ -1,4 +1,5 @@
 //! Connect a mount in the background while the scope node keeps serving its camera.
+pub use super::protocol::{GotoPath, MountHealth};
 use super::{protocol::wrapped_delta, transport::BaudStream, Parameters, SkyWatcher};
 use crate::{
     clock::NodeClock,
@@ -27,6 +28,8 @@ struct Snapshot<S> {
     seen_initialised: [bool; 2],
     failures: u8,
     pending_cause: Option<String>,
+    health: MountHealth,
+    retired_health: MountHealth,
 }
 struct Inner<S> {
     open: Opener<S>,
@@ -82,6 +85,8 @@ impl<S: BaudStream + 'static> MountLink<S> {
                 seen_initialised: [false; 2],
                 failures: 0,
                 pending_cause: None,
+                health: MountHealth::default(),
+                retired_health: MountHealth::default(),
             }),
             io: tokio::sync::Mutex::new(()),
             device: tokio::sync::Mutex::new(()),
@@ -92,6 +97,22 @@ impl<S: BaudStream + 'static> MountLink<S> {
         // The task owns only Inner, so dropping the last link can abort it.
         let connect = tokio::spawn(connect(inner.clone()));
         Arc::new(Self { inner, connect })
+    }
+    /// Invalid replies over the link's lifetime and the last GoTo path per axis.
+    pub fn health(&self) -> MountHealth {
+        let snapshot = self.inner.snapshot.lock().unwrap();
+        combined_health(&snapshot.retired_health, &snapshot.health)
+    }
+    async fn copy_health(&self, board: &Arc<SkyWatcher<S>>) {
+        let health = board.health().await;
+        let mut snapshot = self.inner.snapshot.lock().unwrap();
+        if snapshot
+            .board
+            .as_ref()
+            .is_some_and(|current| Arc::ptr_eq(current, board))
+        {
+            snapshot.health = health;
+        }
     }
     fn board(&self) -> Option<Arc<SkyWatcher<S>>> {
         self.inner.snapshot.lock().unwrap().board.clone()
@@ -113,6 +134,17 @@ impl<S: BaudStream + 'static> MountLink<S> {
             (None, Some(board)) => board.halt_once().await,
             (None, None) => false,
         }
+    }
+}
+
+fn combined_health(retired: &MountHealth, current: &MountHealth) -> MountHealth {
+    MountHealth {
+        invalid_replies: retired.invalid_replies + current.invalid_replies,
+        last_invalid: current
+            .last_invalid
+            .clone()
+            .or_else(|| retired.last_invalid.clone()),
+        goto_path: std::array::from_fn(|i| current.goto_path[i].or(retired.goto_path[i])),
     }
 }
 
@@ -172,6 +204,8 @@ async fn attempt<S: BaudStream + 'static>(inner: &Inner<S>) -> Result<(), String
             snapshot.baselines = [None; 2];
             snapshot.seen_initialised = [false; 2];
             snapshot.failures = 0;
+            snapshot.retired_health = combined_health(&snapshot.retired_health, &snapshot.health);
+            snapshot.health = MountHealth::default();
             snapshot.stop_board = Some(board.clone());
             snapshot.board = Some(board);
             Ok(())
@@ -228,6 +262,9 @@ impl<S: BaudStream + 'static> Mount for MountLink<S> {
                 };
             };
             let state = board.state(axis).await;
+            // Copy before either loss or reset removes this board, including the
+            // wrong-length replies encountered by the read that found it.
+            self.copy_health(&board).await;
             let initialised = board.initialised(axis).await;
             let now = self.inner.clock.now();
             let i = axis.index();
@@ -295,6 +332,7 @@ impl<S: BaudStream + 'static> Mount for MountLink<S> {
             let _io = self.inner.io.lock().await;
             if let Some(board) = self.board() {
                 board.goto(axis, position).await;
+                self.copy_health(&board).await;
             } else {
                 eprintln!("mount not connected: move dropped");
             }
@@ -305,6 +343,7 @@ impl<S: BaudStream + 'static> Mount for MountLink<S> {
             let _io = self.inner.io.lock().await;
             if let Some(board) = self.board() {
                 board.rate(axis, deg_per_s).await;
+                self.copy_health(&board).await;
             } else {
                 eprintln!("mount not connected: move dropped");
             }
