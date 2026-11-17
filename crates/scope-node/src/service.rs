@@ -5,6 +5,7 @@ use crate::{
     clock::NodeClock,
     detect::DetectSettings,
     exposure::Controller,
+    imaging::{service::ImagingHost, ImagingCamera},
     mount::{
         queue::{MountQueue, QueueError},
         watchdog::Watchdog,
@@ -16,6 +17,7 @@ use crate::{
 use scope_link::{
     proto::{
         self,
+        scope_node_imaging_server::ScopeNodeImagingServer,
         scope_node_mount_server::{ScopeNodeMount, ScopeNodeMountServer},
         scope_node_raw_server::{ScopeNodeRaw, ScopeNodeRawServer},
         scope_node_server::{ScopeNode, ScopeNodeServer},
@@ -25,7 +27,7 @@ use scope_link::{
 };
 use std::{
     pin::Pin,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, OnceLock},
     time::Duration,
 };
 use tokio::{
@@ -73,7 +75,7 @@ impl NodeControls {
         assert!(!interval.is_zero(), "frame interval must be positive");
         self.state.send_modify(|s| s.interval = interval);
     }
-    async fn ready(&self, frames: bool) {
+    pub(crate) async fn ready(&self, frames: bool) {
         let mut changes = self.state.subscribe();
         let _ = changes
             .wait_for(|s| !s.unresponsive && (!frames || s.running))
@@ -99,6 +101,7 @@ struct Runtime {
     capture: JoinHandle<()>,
     token: TokenInterceptor,
     watchdog: Option<Watchdog>,
+    imaging: OnceLock<Arc<ImagingHost>>,
 }
 impl Drop for Runtime {
     fn drop(&mut self) {
@@ -182,11 +185,24 @@ impl NodeService {
                 capture: task,
                 token: TokenInterceptor::new(token),
                 watchdog,
+                imaging: OnceLock::new(),
             }),
         })
     }
     pub fn controls(&self) -> NodeControls {
         self.runtime.shared.controls.clone()
+    }
+    /// Attach the node's imaging camera. Panics with `an imaging camera is
+    /// already attached` when called twice. No constructor's signature changes.
+    pub fn with_imaging(self, camera: impl ImagingCamera + 'static) -> Self {
+        self.runtime
+            .imaging
+            .set(Arc::new(ImagingHost::new(Arc::new(camera))))
+            .unwrap_or_else(|_| panic!("an imaging camera is already attached"));
+        self
+    }
+    pub(crate) fn imaging_host(&self) -> Option<&Arc<ImagingHost>> {
+        self.runtime.imaging.get()
     }
     /// The command queue, when the node has a connected mount.
     pub fn mount_queue(&self) -> Option<&Arc<MountQueue>> {
@@ -201,6 +217,10 @@ impl NodeService {
             ))
             .add_service(ScopeNodeStopServer::new(self.clone()))
             .add_service(ScopeNodeRawServer::with_interceptor(
+                self.clone(),
+                self.runtime.token.clone(),
+            ))
+            .add_service(ScopeNodeImagingServer::with_interceptor(
                 self.clone(),
                 self.runtime.token.clone(),
             ))

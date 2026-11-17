@@ -161,3 +161,103 @@ message RawFrameReply {
   // 8-bit gray, row-major, width × height bytes, no padding.
   bytes pixels = 4;
 }
+
+// The imaging camera (030). Every call requires the session's bearer token.
+// A node built before 030 lacks this service and answers UNIMPLEMENTED; a node with
+// no imaging camera answers FAILED_PRECONDITION to every call.
+service ScopeNodeImaging {
+  rpc DescribeImaging(DescribeImagingRequest) returns (ImagingInfo);
+  rpc ImagingStatus(ImagingStatusRequest) returns (ImagingStatusReply);
+  // An absent field leaves that setting alone. Returns the settings in force.
+  rpc ConfigureImaging(ImagingSettings) returns (ImagingSettings);
+  // One exposure: one header, then its samples in chunks of at most 262144 bytes.
+  rpc Expose(ExposeRequest) returns (stream ExposeEvent);
+  rpc AbortExposure(AbortExposureRequest) returns (AbortExposureReply);
+}
+message DescribeImagingRequest {}
+message ImagingStatusRequest {}
+message AbortExposureRequest {}
+message AbortExposureReply {}
+message ImagingRange {
+  double min = 1;
+  double max = 2;
+}
+message ImagingInfo {
+  string model = 1;
+  optional string serial = 2;
+  // Unbinned sensor pixels.
+  uint32 width = 3;
+  uint32 height = 4;
+  double pixel_um = 5;
+  // Bits a sample as delivered: 8 or 16.
+  uint32 bits = 6;
+  // "RGGB", "BGGR", "GRBG" or "GBRG"; empty for a mono sensor.
+  string bayer = 7;
+  ImagingRange exposure_ms = 8;
+  // Absent when the camera has no such control.
+  ImagingRange gain = 9;
+  ImagingRange offset = 10;
+  repeated uint32 binnings = 11;
+  bool cooler = 12;
+}
+message ImagingRoi {
+  uint32 x = 1;
+  uint32 y = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+}
+message ImagingSettings {
+  optional double gain = 1;
+  optional double offset = 2;
+  optional uint32 binning = 3;
+  ImagingRoi roi = 4;
+  optional bool cooler_on = 5;
+  optional double set_temp_c = 6;
+}
+message ImagingStatusReply {
+  optional double temp_c = 1;
+  // Percent.
+  optional double cooler_power = 2;
+  optional double set_temp_c = 3;
+  bool exposing = 4;
+}
+message ExposeRequest {
+  double exposure_ms = 1;
+  // 1 to 16 lower-case letters; "dark" and "flat" choose the camera's frame type.
+  string purpose = 2;
+  // Forward at most this many bytes of samples a second; 0 means no limit.
+  uint32 max_bytes_per_s = 3;
+  // Also keep the frame on the node's disk.
+  bool save = 4;
+}
+message ExposeEvent {
+  oneof event {
+    ImagingFrameHeader header = 1;
+    bytes chunk = 2;
+  }
+}
+message ImagingFrameHeader {
+  // The node's count of imaging frames, from 1 for each run of the node.
+  uint64 id = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  uint32 bits = 4;
+  string bayer = 5;
+  // Exposure start and end in seconds on the node's monotonic clock.
+  double start_s = 6;
+  double end_s = 7;
+  double exposure_ms = 8;
+  optional double gain = 9;
+  optional double offset = 10;
+  uint32 binning = 11;
+  optional double temp_c = 12;
+  // Little-endian samples, row by row: width × height × bits / 8 bytes in all.
+  uint64 byte_count = 13;
+  string purpose = 14;
+  // The node's own copy: its file name, or why there is none; both empty when not asked.
+  string node_file = 15;
+  string node_save_error = 16;
+  // The region of interest in force for the exposure, in unbinned sensor pixels: the
+  // frame's own `roi` (the plan document's Amendment 6).
+  ImagingRoi roi = 17;
+}

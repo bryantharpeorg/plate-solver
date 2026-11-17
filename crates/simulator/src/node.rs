@@ -1,5 +1,5 @@
 //! The production scope-node service over the catalog-rendered camera.
-use crate::{SimCamera, Simulator, VirtualClock};
+use crate::{SimCamera, SimImagingCamera, Simulator, VirtualClock};
 use scope_link::memory;
 use scope_node::{clock::NodeClock, service::NodeService, RangeError, Settings};
 use std::{
@@ -37,6 +37,22 @@ impl SimNode {
         token: impl AsRef<[u8]>,
         initial: Settings,
     ) -> Result<Self, RangeError> {
+        Self::from_cameras(
+            simulator.clone(),
+            camera,
+            SimImagingCamera::new(simulator),
+            token,
+            initial,
+        )
+    }
+    /// Like `from_camera`, with the imaging camera of the caller's choice.
+    pub fn from_cameras(
+        simulator: Simulator,
+        camera: SimCamera,
+        imaging: SimImagingCamera,
+        token: impl AsRef<[u8]>,
+        initial: Settings,
+    ) -> Result<Self, RangeError> {
         let service = NodeService::with_controls_and_mount(
             camera,
             Arc::new(Clock(simulator.clock().clone())),
@@ -46,7 +62,8 @@ impl SimNode {
             simulator
                 .mount()
                 .map(|mount| Arc::new(mount) as Arc<dyn scope_node::mount::Mount>),
-        )?;
+        )?
+        .with_imaging(imaging);
         Ok(Self {
             service,
             servers: Mutex::new(Vec::new()),

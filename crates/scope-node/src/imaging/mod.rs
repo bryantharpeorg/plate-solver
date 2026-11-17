@@ -1,6 +1,7 @@
 //! The imaging side of the camera port (030): one exposure on request.
 use std::{fmt, future::Future, pin::Pin};
 
+pub mod service;
 pub mod synthetic;
 
 /// A colour sensor's mosaic, named by its top-left 2 × 2 cell row by row.
