@@ -188,7 +188,10 @@ ladder:
 
 # How wide the floor may run. Every spec carries `depends_on_landed` in its
 # frontmatter, so a second concurrent epic never starts N+1 before N has landed.
+# Raised from 2 and 2 on 2026-11-17 at the owner's ask, with the builder moved off the
+# one-at-a-time subscription route; the operator watches concurrent epics for overlapping
+# writes.
 roadmap:
   cadence_s: 300
-  max_concurrent_epics: 2
-  max_concurrent_nodes: 2
+  max_concurrent_epics: 4
+  max_concurrent_nodes: 4
