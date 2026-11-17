@@ -1,7 +1,8 @@
 use clap::Parser;
 use scope_node::{
     clock::SystemClock,
-    config::{Adapter, Config},
+    config::{Adapter, Config, ImagingAdapter},
+    imaging::{indi::IndiCamera, synthetic::SyntheticImagingCamera},
     mount::{
         skywatcher::{probe, serial::Serial, MountLink},
         Mount,
@@ -49,6 +50,10 @@ async fn start(args: Args) -> Result<(), Box<dyn std::error::Error>> {
             Some(mount) => print!("\n[mount]\n{}", toml::to_string(mount)?),
             None => println!("\n# no mount configured"),
         }
+        match &config.imaging {
+            Some(imaging) => print!("\n[imaging]\n{}", imaging.printed()),
+            None => println!("\n# no imaging camera configured"),
+        }
         return Ok(());
     }
     let settings = config.settings();
@@ -89,12 +94,29 @@ async fn serve(
     };
     let service = NodeService::with_controls_and_mount(
         camera,
-        clock,
+        clock.clone(),
         &config.token,
         settings,
         Default::default(),
         mount,
     )?;
+    // The imaging camera the `[imaging]` table names, attached beside the
+    // finder camera. The adapter connects at its first use, so the node
+    // starts whether or not the INDI server is up.
+    let service = match &config.imaging {
+        Some(imaging) => match imaging.adapter {
+            ImagingAdapter::Indi => service.with_imaging(IndiCamera::tcp(
+                imaging.address(),
+                imaging.device.clone(),
+                imaging.neutral_controls(),
+                clock.clone(),
+            )),
+            ImagingAdapter::Simulated => {
+                service.with_imaging(SyntheticImagingCamera::new(clock.clone()))
+            }
+        },
+        None => service,
+    };
     tonic::transport::Server::builder()
         .add_routes(service.routes())
         .serve(config.listen)

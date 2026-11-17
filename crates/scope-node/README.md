@@ -174,3 +174,41 @@ mount goto path on axis 1: :S
 Health counts persist across reconnects and resets; the latest invalid bytes and
 each axis's previous path remain until a new board reports replacements. A motion
 start (`:J`) is always sent once, even when its acknowledgement is lost.
+
+## The imaging camera
+
+An `[imaging]` table adds a deep-sky camera beside the finder camera, for the imaging
+console's exposures. The camera is reached through an INDI server, which the owner
+installs and starts on the scope node: INDI's own `indiserver` and the camera's device
+program (for a ZWO camera, `indi_asi_ccd`; INDI's camera simulator for testing,
+`indi_simulator_ccd`). INDI core and the device programs are under LGPL-2.1-or-later;
+this program is their client over a TCP socket and links none of them.
+
+```toml
+[imaging]
+adapter = "indi"            # or "simulated": a small stand-in camera, no INDI needed
+address = "127.0.0.1:7624"  # the INDI server; the default
+device = "ZWO CCD ASI071MC Pro"  # optional
+neutral = { "CCD_CONTROLS.WB_R" = 50, "CCD_CONTROLS.WB_B" = 50 }
+```
+
+The adapter connects when the node is first asked about the camera, so the node starts
+whether or not the INDI server is up. It asks the server for its properties and chooses
+the device the table names or, with none named, the first whose `DRIVER_INTERFACE` has
+the camera bit; connects it; and switches compression off, the transfer format to FITS
+and upload to the client, for each the device defines. The camera's own ranges — gain,
+offset, binning, exposure, temperature — are read from the camera at run time; nothing
+is keyed to a camera model. The adapter sets the camera's settings on each connection,
+so a power-cycled camera is set again when it is next reached. After the table changes,
+the node must be rebuilt and restarted, because its binary builds the adapter the table
+names.
+
+`neutral` is how a camera's white balance is made neutral. On a camera whose
+white-balance controls scale the raw samples, the table names them with their neutral
+values — this example's camera's `CCD_CONTROLS.WB_R` and `WB_B` at 50 and 50 — and the
+adapter sets them on every connection, one vector a property, every element of the
+property at the value the device last reported. Every control neither the table nor a
+settings change names stays as the device reports it, and no control is recorded with a
+frame. A name the camera does not define fails the connection with
+`the camera has no control <property>.<element>`, and a camera that refuses a vector
+fails it with its own message; the console shows the camera's error either way.

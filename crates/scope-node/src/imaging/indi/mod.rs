@@ -6,8 +6,8 @@
 pub mod protocol;
 
 use super::{
-    BayerPattern, Exposure, ImagingCamera, ImagingError, ImagingFrame, ImagingFuture, ImagingInfo,
-    ImagingSettings, ImagingStatus, Range,
+    check_settings, BayerPattern, Exposure, ImagingCamera, ImagingError, ImagingFrame,
+    ImagingFuture, ImagingInfo, ImagingSettings, ImagingStatus, Range, Roi,
 };
 use crate::clock::NodeClock;
 use std::{
@@ -45,7 +45,6 @@ pub const RETRY_PAUSE: Duration = Duration::from_secs(1);
 
 /// One control set on each connection: (property, element, value), as
 /// `ImagingConfig::neutral_controls` gives them. Empty for no such controls.
-/// US5 sets them; US4 carries them without using them.
 pub type NeutralControls = Vec<(String, String, f64)>;
 
 /// A property's state.
@@ -373,6 +372,10 @@ impl Devices {
 enum Command {
     Describe(oneshot::Sender<Result<ImagingInfo, ImagingError>>),
     Status(oneshot::Sender<Result<ImagingStatus, ImagingError>>),
+    Apply(
+        Box<ImagingSettings>,
+        oneshot::Sender<Result<ImagingSettings, ImagingError>>,
+    ),
 }
 
 /// Where a connection stands in the connecting sequence of plan.md § The INDI
@@ -386,6 +389,8 @@ enum Phase {
     Choosing,
     /// Steps 4 and 5: `CONNECT` sent or not needed, the device settling.
     Settling,
+    /// Step 7: the neutral controls' vectors are being answered.
+    Neutral,
     /// Connected: answers come from what the adapter holds.
     Ready,
 }
@@ -396,17 +401,23 @@ impl Phase {
     }
 }
 
+/// The apply in flight: the reply, the property whose answer is awaited and
+/// the vectors still to send after it.
+struct ApplyFlight {
+    reply: oneshot::Sender<Result<ImagingSettings, ImagingError>>,
+    wait: String,
+    rest: VecDeque<(String, String)>,
+}
+
 /// The adapter's one task.
 struct Adapter {
     connect: IndiConnect,
     /// Only the text the errors name.
     address: String,
     device: Option<String>,
-    /// US5 sets these on each connection; US4 carries them without using
-    /// them.
-    #[allow(dead_code)]
+    /// The controls set on each connection (US5).
     neutral: NeutralControls,
-    /// US6's exposures read it; US4 carries it.
+    /// US6's exposures read it; US5 carries it.
     #[allow(dead_code)]
     clock: Arc<dyn NodeClock>,
     cmd_rx: mpsc::UnboundedReceiver<Command>,
@@ -428,8 +439,14 @@ struct Adapter {
     quiet: Option<Instant>,
     /// The commands answered when the connection settles, or fails.
     waiting: VecDeque<Command>,
-    /// The set temperature the adapter was last asked for. US5 sends it;
-    /// nothing sets it yet.
+    /// Step 7: the property whose answer is awaited, and the neutral vectors
+    /// still to send after it.
+    neutral_wait: Option<String>,
+    neutral_rest: VecDeque<(String, String)>,
+    /// The apply in flight, when one is.
+    applying: Option<ApplyFlight>,
+    /// The set temperature the adapter was last asked for, sent when the
+    /// cooler is on and remembered when it is not.
     set_temp_c: Option<f64>,
 }
 
@@ -496,8 +513,14 @@ impl Adapter {
         }
     }
 
-    /// Lose the connection, whatever it was.
+    /// Lose the connection, whatever it was. An apply in flight is answered
+    /// with the loss; a connecting failure answers its own error first.
     fn drop_connection(&mut self) {
+        if let Some(flight) = self.applying.take() {
+            let _ = flight
+                .reply
+                .send(Err(ImagingError::Failed(CLOSED.to_string())));
+        }
         self.writer = None;
         self.elements = None;
         self.dial = None;
@@ -506,12 +529,17 @@ impl Adapter {
         self.deadline = None;
         self.since = None;
         self.quiet = None;
+        self.neutral_wait = None;
+        self.neutral_rest.clear();
         self.phase = Phase::Idle;
     }
 
     /// Fail the connection: drop it, and answer every waiting command with
     /// the failure, so the next command connects again.
     fn fail(&mut self, text: String) {
+        if let Some(flight) = self.applying.take() {
+            let _ = flight.reply.send(Err(ImagingError::Failed(text.clone())));
+        }
         self.drop_connection();
         let error = ImagingError::Failed(text);
         while let Some(cmd) = self.waiting.pop_front() {
@@ -520,6 +548,9 @@ impl Adapter {
                     let _ = reply.send(Err(error.clone()));
                 }
                 Command::Status(reply) => {
+                    let _ = reply.send(Err(error.clone()));
+                }
+                Command::Apply(_, reply) => {
                     let _ = reply.send(Err(error.clone()));
                 }
             }
@@ -590,8 +621,51 @@ impl Adapter {
                 }
                 self.schedule();
             }
-            Phase::Ready => self.devices.record(&element),
+            Phase::Neutral => {
+                self.devices.record(&element);
+                let wait = self.neutral_wait.clone();
+                if let Some(wait) = wait {
+                    if self.is_answer(&element, &wait) {
+                        self.neutral_answer(&element).await;
+                    }
+                }
+            }
+            Phase::Ready => {
+                self.devices.record(&element);
+                let wait = self.applying.as_ref().map(|flight| flight.wait.clone());
+                if let Some(wait) = wait {
+                    if self.is_answer(&element, &wait) {
+                        self.apply_answer(&element).await;
+                    }
+                }
+            }
         }
+    }
+
+    /// Whether this element is the answer a sent vector awaits: a
+    /// `set…Vector` of the chosen device, of the property awaited.
+    fn is_answer(&self, element: &protocol::Element, property: &str) -> bool {
+        if !(element.tag.starts_with("set") && element.tag.ends_with("Vector")) {
+            return false;
+        }
+        self.chosen.as_deref().is_some_and(|chosen| {
+            element.attr("device") == Some(chosen) && element.attr("name") == Some(property)
+        })
+    }
+
+    /// An Alert answer's message: its own `message` attribute, the device's
+    /// latest `message` element, or `no reason given`.
+    fn message_of(&self, element: &protocol::Element) -> String {
+        element
+            .attr("message")
+            .map(str::to_string)
+            .or_else(|| {
+                self.chosen
+                    .as_ref()
+                    .and_then(|chosen| self.devices.map.get(chosen))
+                    .and_then(|device| device.message.clone())
+            })
+            .unwrap_or_else(|| "no reason given".to_string())
     }
 
     /// Step 3: choose the device — the named one at its first element, or the
@@ -671,7 +745,16 @@ impl Adapter {
 
     async fn deadline_fired(&mut self) {
         let now = Instant::now();
-        if matches!(self.phase, Phase::Choosing) {
+        if matches!(self.phase, Phase::Neutral) {
+            let property = self.neutral_wait.take().unwrap_or_default();
+            self.fail(format!("the camera did not answer {property} within 5 s"));
+        } else if let Some(flight) = self.applying.take() {
+            self.deadline = None;
+            let _ = flight.reply.send(Err(ImagingError::Failed(format!(
+                "the camera did not answer {} within 5 s",
+                flight.wait
+            ))));
+        } else if matches!(self.phase, Phase::Choosing) {
             let text = match &self.device {
                 Some(name) => {
                     format!("the INDI server at {} has no device {name}", self.address)
@@ -716,16 +799,144 @@ impl Adapter {
             self.fail(CLOSED.to_string());
             return;
         }
-        self.phase = Phase::Ready;
-        self.deadline = None;
-        self.answer_waiting();
+        self.step_7().await;
+    }
+
+    /// Step 7: the neutral controls. Every one is checked against what the
+    /// device has defined before any is sent; then one vector a property, in
+    /// the order the list first names it, holding every element of that
+    /// property in its defined order, the named ones at their values and
+    /// every other at its latest value, each answer awaited (plan.md §
+    /// Connecting). A failure fails the connection, so the next call
+    /// connects again and runs the step again.
+    async fn step_7(&mut self) {
+        let Some(device) = self.chosen.clone() else {
+            return;
+        };
+        if self.neutral.is_empty() {
+            self.phase = Phase::Ready;
+            self.deadline = None;
+            self.answer_waiting().await;
+            return;
+        }
+        for (property, element, _) in &self.neutral {
+            if !self.has_number(&device, property, element) {
+                self.fail(format!("the camera has no control {property}.{element}"));
+                return;
+            }
+        }
+        let mut order: Vec<String> = Vec::new();
+        let mut named: HashMap<String, Vec<(String, f64)>> = HashMap::new();
+        for (property, element, value) in &self.neutral {
+            if !order.iter().any(|seen| seen == property) {
+                order.push(property.clone());
+            }
+            named
+                .entry(property.clone())
+                .or_default()
+                .push((element.clone(), *value));
+        }
+        let mut rest: VecDeque<(String, String)> = VecDeque::new();
+        for property in &order {
+            let values = self.neutral_edit(&device, property, &named[property]);
+            rest.push_back((
+                property.clone(),
+                protocol::new_number(&device, property, &values),
+            ));
+        }
+        let Some((property, xml)) = rest.pop_front() else {
+            self.phase = Phase::Ready;
+            self.deadline = None;
+            self.answer_waiting().await;
+            return;
+        };
+        if self.write(&xml).await.is_err() {
+            self.fail(CLOSED.to_string());
+            return;
+        }
+        self.phase = Phase::Neutral;
+        self.neutral_wait = Some(property);
+        self.neutral_rest = rest;
+        self.deadline = Some(Instant::now() + ANSWER_WAIT);
+    }
+
+    /// Step 7: the device answered one property's neutral vector.
+    async fn neutral_answer(&mut self, element: &protocol::Element) {
+        let property = element.attr("name").unwrap_or_default().to_string();
+        if State::parse(element.attr("state")) == State::Alert {
+            self.fail(format!(
+                "the camera refused {property}: {}",
+                self.message_of(element)
+            ));
+            return;
+        }
+        match self.neutral_rest.pop_front() {
+            Some((next, xml)) => {
+                if self.write(&xml).await.is_err() {
+                    self.fail(CLOSED.to_string());
+                    return;
+                }
+                self.neutral_wait = Some(next);
+                self.deadline = Some(Instant::now() + ANSWER_WAIT);
+            }
+            None => {
+                self.neutral_wait = None;
+                self.phase = Phase::Ready;
+                self.deadline = None;
+                self.answer_waiting().await;
+            }
+        }
+    }
+
+    /// Whether the device has defined this number element.
+    fn has_number(&self, device: &str, property: &str, element: &str) -> bool {
+        self.devices
+            .map
+            .get(device)
+            .and_then(|device| device.props.get(property))
+            .is_some_and(|prop| {
+                matches!(&prop.kind, Kind::Number(elements)
+                    if elements.iter().any(|e| e.name == element))
+            })
+    }
+
+    /// The values of one property's neutral vector: every element in its
+    /// defined order, the named ones at their values and every other at its
+    /// latest value.
+    fn neutral_edit<'a>(
+        &'a self,
+        device: &str,
+        property: &str,
+        wanted: &'a [(String, f64)],
+    ) -> Vec<(&'a str, f64)> {
+        let elements = match self
+            .devices
+            .map
+            .get(device)
+            .and_then(|device| device.props.get(property))
+            .map(|prop| &prop.kind)
+        {
+            Some(Kind::Number(elements)) => elements,
+            _ => return Vec::new(),
+        };
+        elements
+            .iter()
+            .map(|element| {
+                let value = wanted
+                    .iter()
+                    .find(|(name, _)| name == &element.name)
+                    .map(|(_, value)| *value)
+                    .unwrap_or(element.value);
+                (element.name.as_str(), value)
+            })
+            .collect()
     }
 
     /// A call of the port. A connected camera is answered from what the
     /// adapter holds; any other one waits for the connection being made.
     async fn command(&mut self, cmd: Command) {
         if self.phase.is_ready() {
-            self.answer(cmd);
+            self.answer(cmd).await;
             return;
         }
         if matches!(self.phase, Phase::Idle) {
@@ -741,13 +952,13 @@ impl Adapter {
     }
 
     /// Answer every waiting command from what the adapter holds.
-    fn answer_waiting(&mut self) {
+    async fn answer_waiting(&mut self) {
         while let Some(cmd) = self.waiting.pop_front() {
-            self.answer(cmd);
+            self.answer(cmd).await;
         }
     }
 
-    fn answer(&self, cmd: Command) {
+    async fn answer(&mut self, cmd: Command) {
         match cmd {
             Command::Describe(reply) => {
                 let _ = reply.send(self.describe());
@@ -755,6 +966,7 @@ impl Adapter {
             Command::Status(reply) => {
                 let _ = reply.send(Ok(self.status()));
             }
+            Command::Apply(edit, reply) => self.apply(*edit, reply).await,
         }
     }
 
@@ -834,6 +1046,254 @@ impl Adapter {
             exposing: false,
         }
     }
+
+    /// The settings in force, read back from the properties (plan.md § The
+    /// INDI adapter's `apply`): the port's definition of an answer.
+    fn in_force(&self) -> ImagingSettings {
+        let world = self
+            .chosen
+            .as_ref()
+            .and_then(|chosen| self.devices.map.get(chosen));
+        let number = |property: &str, element: &str| {
+            world.and_then(|world| world.number_value(property, element))
+        };
+        let roi = world.and_then(|world| {
+            let frame = world.props.get("CCD_FRAME")?;
+            let Kind::Number(elements) = &frame.kind else {
+                return None;
+            };
+            let value = |name: &str| {
+                elements
+                    .iter()
+                    .find(|element| element.name == name)
+                    .map(|element| element.value)
+            };
+            Some(Roi {
+                x: value("X")? as u32,
+                y: value("Y")? as u32,
+                width: value("WIDTH")? as u32,
+                height: value("HEIGHT")? as u32,
+            })
+        });
+        ImagingSettings {
+            gain: number("CCD_CONTROLS", "Gain").or_else(|| number("CCD_GAIN", "GAIN")),
+            offset: number("CCD_CONTROLS", "Offset").or_else(|| number("CCD_OFFSET", "OFFSET")),
+            binning: number("CCD_BINNING", "HOR_BIN").map(|value| value as u32),
+            roi,
+            cooler_on: world.and_then(|world| world.switch_on("CCD_COOLER", "COOLER_ON")),
+            set_temp_c: self.set_temp_c,
+        }
+    }
+
+    /// US5's `apply`: check the edit against the description and the
+    /// settings in force, then send one vector for each setting present, in
+    /// plan.md's order, awaiting each answer within `ANSWER_WAIT` (plan.md §
+    /// The INDI adapter's `apply`). A set temperature asked for while the
+    /// cooler is off is remembered and sent when the cooler is next
+    /// switched on.
+    async fn apply(
+        &mut self,
+        edit: ImagingSettings,
+        reply: oneshot::Sender<Result<ImagingSettings, ImagingError>>,
+    ) {
+        if self.applying.is_some() {
+            let _ = reply.send(Err(ImagingError::Busy));
+            return;
+        }
+        let info = match self.describe() {
+            Ok(info) => info,
+            Err(error) => {
+                let _ = reply.send(Err(error));
+                return;
+            }
+        };
+        let in_force = self.in_force();
+        let merged = match check_settings(&info, &in_force, &edit) {
+            Ok(merged) => merged,
+            Err(error) => {
+                let _ = reply.send(Err(error));
+                return;
+            }
+        };
+        if let Some(temp) = edit.set_temp_c {
+            self.set_temp_c = Some(temp);
+        }
+        let Some(device) = self.chosen.clone() else {
+            let _ = reply.send(Err(ImagingError::Failed(CLOSED.to_string())));
+            return;
+        };
+        let mut steps: VecDeque<(String, String)> = VecDeque::new();
+        if let Some(binning) = edit.binning {
+            steps.push_back((
+                "CCD_BINNING".to_string(),
+                protocol::new_number(
+                    &device,
+                    "CCD_BINNING",
+                    &[("HOR_BIN", binning as f64), ("VER_BIN", binning as f64)],
+                ),
+            ));
+        }
+        if let Some(roi) = edit.roi {
+            steps.push_back((
+                "CCD_FRAME".to_string(),
+                protocol::new_number(
+                    &device,
+                    "CCD_FRAME",
+                    &[
+                        ("X", roi.x as f64),
+                        ("Y", roi.y as f64),
+                        ("WIDTH", roi.width as f64),
+                        ("HEIGHT", roi.height as f64),
+                    ],
+                ),
+            ));
+        }
+        if edit.gain.is_some() || edit.offset.is_some() {
+            match self.controls_edit(&device, edit.gain, edit.offset) {
+                Some(values) => steps.push_back((
+                    "CCD_CONTROLS".to_string(),
+                    protocol::new_number(&device, "CCD_CONTROLS", &values),
+                )),
+                None => {
+                    // Without `CCD_CONTROLS`, the separate gain and offset
+                    // vectors, one each.
+                    if let Some(gain) = edit.gain {
+                        if self.has_number(&device, "CCD_GAIN", "GAIN") {
+                            steps.push_back((
+                                "CCD_GAIN".to_string(),
+                                protocol::new_number(&device, "CCD_GAIN", &[("GAIN", gain)]),
+                            ));
+                        }
+                    }
+                    if let Some(offset) = edit.offset {
+                        if self.has_number(&device, "CCD_OFFSET", "OFFSET") {
+                            steps.push_back((
+                                "CCD_OFFSET".to_string(),
+                                protocol::new_number(&device, "CCD_OFFSET", &[("OFFSET", offset)]),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(on) = edit.cooler_on {
+            let element = if on { "COOLER_ON" } else { "COOLER_OFF" };
+            steps.push_back((
+                "CCD_COOLER".to_string(),
+                protocol::new_switch(&device, "CCD_COOLER", element),
+            ));
+        }
+        // The set temperature, sent only while the cooler is on: the edit's,
+        // or the remembered one when the cooler is switched on.
+        if let Some(temp) = self.set_temp_c {
+            let cooler_on = merged.cooler_on == Some(true);
+            let asked = edit.set_temp_c.is_some();
+            let switched_on = edit.cooler_on == Some(true);
+            if cooler_on
+                && (asked || switched_on)
+                && self.has_number(&device, "CCD_TEMPERATURE", "CCD_TEMPERATURE_VALUE")
+            {
+                steps.push_back((
+                    "CCD_TEMPERATURE".to_string(),
+                    protocol::new_number(
+                        &device,
+                        "CCD_TEMPERATURE",
+                        &[("CCD_TEMPERATURE_VALUE", temp)],
+                    ),
+                ));
+            }
+        }
+        match steps.pop_front() {
+            None => {
+                let _ = reply.send(Ok(self.in_force()));
+            }
+            Some((property, xml)) => {
+                if self.write(&xml).await.is_err() {
+                    let _ = reply.send(Err(ImagingError::Failed(CLOSED.to_string())));
+                    return;
+                }
+                self.applying = Some(ApplyFlight {
+                    reply,
+                    wait: property,
+                    rest: steps,
+                });
+                self.deadline = Some(Instant::now() + ANSWER_WAIT);
+            }
+        }
+    }
+
+    /// The device answered the vector an apply awaits: an `Alert` fails the
+    /// apply with the camera's message, any other answer sends the next
+    /// vector or answers the settings in force.
+    async fn apply_answer(&mut self, element: &protocol::Element) {
+        let Some(mut flight) = self.applying.take() else {
+            return;
+        };
+        let property = element.attr("name").unwrap_or_default().to_string();
+        if State::parse(element.attr("state")) == State::Alert {
+            self.deadline = None;
+            let _ = flight.reply.send(Err(ImagingError::Failed(format!(
+                "the camera refused {property}: {}",
+                self.message_of(element)
+            ))));
+            return;
+        }
+        match flight.rest.pop_front() {
+            Some((next, xml)) => {
+                if self.write(&xml).await.is_err() {
+                    self.deadline = None;
+                    let _ = flight
+                        .reply
+                        .send(Err(ImagingError::Failed(CLOSED.to_string())));
+                    return;
+                }
+                self.applying = Some(ApplyFlight {
+                    reply: flight.reply,
+                    wait: next,
+                    rest: flight.rest,
+                });
+                self.deadline = Some(Instant::now() + ANSWER_WAIT);
+            }
+            None => {
+                self.deadline = None;
+                let _ = flight.reply.send(Ok(self.in_force()));
+            }
+        }
+    }
+
+    /// One `CCD_CONTROLS` vector's values: every element in its defined
+    /// order at its latest value, the changed ones changed (owner decision
+    /// 13). `None` when the device defines no `CCD_CONTROLS`.
+    fn controls_edit<'a>(
+        &'a self,
+        device: &str,
+        gain: Option<f64>,
+        offset: Option<f64>,
+    ) -> Option<Vec<(&'a str, f64)>> {
+        let elements = match self
+            .devices
+            .map
+            .get(device)
+            .and_then(|device| device.props.get("CCD_CONTROLS"))
+            .map(|prop| &prop.kind)
+        {
+            Some(Kind::Number(elements)) => elements,
+            _ => return None,
+        };
+        Some(
+            elements
+                .iter()
+                .map(|element| {
+                    let value = match element.name.as_str() {
+                        "Gain" => gain.unwrap_or(element.value),
+                        "Offset" => offset.unwrap_or(element.value),
+                        _ => element.value,
+                    };
+                    (element.name.as_str(), value)
+                })
+                .collect(),
+        )
+    }
 }
 
 /// The INDI adapter as the camera port sees it.
@@ -872,6 +1332,9 @@ impl IndiCamera {
                 since: None,
                 quiet: None,
                 waiting: VecDeque::new(),
+                neutral_wait: None,
+                neutral_rest: VecDeque::new(),
+                applying: None,
                 set_temp_c: None,
             }
             .run(),
@@ -910,9 +1373,13 @@ impl ImagingCamera for IndiCamera {
         Box::pin(answer(rx))
     }
 
-    /// Settings arrive with US5.
-    fn apply<'a>(&'a self, _settings: &'a ImagingSettings) -> ImagingFuture<'a, ImagingSettings> {
-        Box::pin(async { Err(ImagingError::Failed("settings arrive with US5".to_string())) })
+    /// Change the settings present; answer all the settings in force.
+    fn apply<'a>(&'a self, settings: &'a ImagingSettings) -> ImagingFuture<'a, ImagingSettings> {
+        let (tx, rx) = oneshot::channel();
+        let _ = self
+            .cmd
+            .send(Command::Apply(Box::new(settings.clone()), tx));
+        Box::pin(answer(rx))
     }
 
     /// Exposures arrive with US6.
