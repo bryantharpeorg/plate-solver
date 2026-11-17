@@ -24,9 +24,10 @@ it through 034's library and adds it, and hands each stacked sub's solve to 032'
 and weights to at most 1920 wide, with no mean of the full size in between, takes a
 fitted plane from each channel, applies the observer's gains and an `asinh` curve, and
 hands 031's JPEG encoder the result. Three routes start, stop and
-show a stack; its view rides in the imaging view; at its end `stack.fits`, `stack.png`
-and `stack.json` are written under `runs/<id>/`, the folder named through the one
-`label` rule that 037 shares. The Imaging page gains a Stack block whose picture obeys
+show a stack; its view rides in the imaging view; its subs are saved in `subs/` inside
+its own folder, `runs/<id>/`, named through the one `label` rule that 037 shares, and
+at its end `stack.fits`, `stack.png` and `stack.json` are written there (spec owner
+decision 13). The Imaging page gains a Stack block whose picture obeys
 031's night exception through 031's own `useColourHold`, and MCP clients two tools.
 Nothing changes on the scope node or the scope link, and nothing here touches the
 mount.
@@ -49,9 +50,11 @@ package.
 
 **Storage**: under the console's imaging folder (031: `imaging/` in the state folder, or
 `--imaging-dir`): `runs/<id>/stack.json`, and at a stack's end `runs/<id>/stack.fits`
-and `runs/<id>/stack.png`. Each sub is an ordinary imaging frame under
-`frames/<UTC date>/`, saved by 031's path, with 032's solve sidecar beside it. Nothing
-about a stack is kept in `session.json`; a running stack lives in memory.
+and `runs/<id>/stack.png`. Each sub is saved in `runs/<id>/subs/` as
+`<frame id, six digits>.fits`, by 031's path through the stack's lease, with 032's
+solve sidecar beside it; every other imaging frame stays under `frames/<UTC date>/`
+(spec owner decision 13, settled by the owner on 2026-11-17). Nothing about a stack is
+kept in `session.json`; a running stack lives in memory.
 
 **Testing**:
 - US1: `crates/simulator/tests/imaging_scene.rs` (new).
@@ -132,11 +135,12 @@ crates/finder/
 ├── README.md                           # US8: ## Live stack, three rows; US10: two tool lines
 ├── src/lib.rs                          # US8: three route lines
 ├── src/api.rs                          # US5: the Stacker in AppState; US8: attach, target_label
-├── src/imaging/mod.rs                  # US2: pub mod stack; US8: ImagingView.stack, attach_stack
+├── src/imaging/mod.rs                  # US2: pub mod stack; US5: Lease::save_in; US8: ImagingView.stack, attach_stack
+├── src/imaging/frames.rs               # US5: a frame taken under a lease that names a folder is saved there
 ├── src/imaging/fits.rs                 # US8: RealCube, encode_cube
 ├── src/imaging/routes.rs               # US8: three routes
 ├── src/imaging/stack.rs                # US2: new, Colour, colour, Placement with its corner check; US3: Stack; US4: rejection, levels; US5: pub mod service; US6: judge, SubSettings, same_settings; US7: pub mod display
-├── src/imaging/stack/service.rs        # US5: new, the loop, note_solve at step 8; US6: the gate and the queue; US7: the picture; US8: label, the folder and the files
+├── src/imaging/stack/service.rs        # US5: new, the loop, the folder and its subs/, note_solve at step 8; US6: the gate and the queue; US7: the picture; US8: label, stack.json and the files
 ├── src/imaging/stack/display.rs        # US7: new
 ├── src/mcp/tools.rs                    # US10: two tools
 ├── tests/console/main.rs               # US2 to US8: one mod line a module
@@ -532,7 +536,7 @@ the console, **The settings test**).
 `crates/finder/src/imaging/mod.rs` gains `pub mod stack;` (US2), in alphabetical order
 among its `pub mod` lines.
 
-### The camera's lease (`crates/finder/src/imaging/mod.rs`, 031 US6; written by no story of this spec)
+### The camera's lease (`crates/finder/src/imaging/mod.rs`, 031 US6; US5 adds `save_in` alone)
 
 The plan document's amendment 1: "The console's imaging state (031) holds one lease
 naming the holder; a second taker is refused with the holder's name. Each later spec
@@ -540,7 +544,8 @@ takes and releases that lease and adds no lock of its own." 031's US6, which the
 series audit's finding on 031 adds to that trio, builds it "name for name as those
 trios assume it", in the shape `specs/033-focus-reading-and-aid/plan.md` § The camera
 lease writes down, and 033's, 034's and 037's trios use the same names. This section
-cites it and adds nothing to it: no story of this spec writes any of it. 031's plan.md
+cites it. No story of this spec writes any of it but US5, which adds one method,
+`Lease::save_in`, and nothing else (§ A lease's folder). 031's plan.md
 § The camera lease gives it with these names, and also has `Lease::set` and
 `Lease::take` answer 409 `this console takes no imaging frames` once the `Imaging` is
 gone; the re-anchoring reads each name and each point below in 031's code
@@ -569,8 +574,9 @@ impl Lease {
 }
 ```
 
-This spec calls `Imaging::holder` (in `start`, step 5), `Imaging::lease` (step 6) and
-`Lease::take` (the taker). It does not call `Lease::set`; `Lease::set` is what 036
+This spec calls `Imaging::holder` (in `start`, step 5), `Imaging::lease` (step 6),
+its own `Lease::save_in` (step 7) and `Lease::take` (the taker). It does not call
+`Lease::set`; `Lease::set` is what 036
 calls, from the taker, to set a stack's exposure (§ Shapes that existing tests pin, the
 last entry). What this spec relies on, and nothing more:
 
@@ -611,7 +617,55 @@ through the stack's own lease, which is what 036's plan does (§ Shapes that exi
 tests pin, the last entry; § Prerequisites 10). 034's `Calibration::restore_exposure`,
 which went through `Imaging::set`, is gone (034 A1).
 
-### The stack on the console (`crates/finder/src/imaging/stack/service.rs`, new, US5; the gate and the queue, US6; the picture, US7; the folder and the files, US8)
+### A lease's folder (`crates/finder/src/imaging/mod.rs` and `crates/finder/src/imaging/frames.rs`, 031's files, US5)
+
+Spec owner decision 13, settled by the owner on 2026-11-17: a folder per run. A
+stack's subs are saved in `subs/` inside the stack's own folder, not under
+`frames/<UTC date>/` with every other imaging frame. 031 saves every frame it takes
+under `frames/`, so US5 adds to 031's lease the one thing that needs, and nothing
+else:
+
+```rust
+// 031's `Lease` (031 US6), as US5 of this spec extends it:
+impl Lease {
+    /// From now on save every imaging frame this lease takes in `folder`, relative to
+    /// the imaging folder, as `<folder>/<id as six digits>.fits`, instead of under
+    /// `frames/<UTC date>/` (035: a stack's `runs/<id>/subs`). The holder makes the
+    /// folder; the save does not. With the `Imaging` gone it does nothing.
+    pub fn save_in(&self, folder: &str);
+}
+```
+
+1. **Where it is kept.** 031's state, which holds the grant and the holder out, also
+   holds that grant's folder, `None` until `save_in` and cleared with the grant when
+   the `Lease` is dropped. So the folder goes with the lease: a frame taken under no
+   lease, under a lease that named none, or under the next lease, is saved under
+   `frames/<UTC date>/` as 031 has it.
+2. **Read when the frame is asked for.** `take_as` reads the folder of the caller's
+   grant in the same lock acquisition as its checks, and the frame keeps it, as it
+   keeps `roi`, `set_temp_c` and the camera's serial. Its checks, refusals and words
+   are 031's, unchanged.
+3. **The file.** 031's step 5 writes such a frame as `<folder>/<id>.fits` by 031's own
+   rule: whole, as `<name>.part` with `create_new`, then, if the final name exists, the
+   `.part` file removed and the frame ended `failed` with
+   `could not save the imaging frame: <folder>/<id>.fits already exists`, otherwise
+   renamed. It does not make the folder: a folder that is gone fails the frame with
+   `could not save the imaging frame: {error}`. `FrameView::file` is that path, so
+   032's solve sidecar, named from it, lies beside the sub, and the worker's step 1
+   finds the file as before. The cards and the preview are 031's, unchanged.
+4. **The id is 031's.** The count is the same one for every imaging frame, subs
+   included, and a take whose UTC date differs from the last one's still lists
+   `frames/<that date>/` as 031 has it. After a restart the count looks only there, so
+   an id may repeat one a sub holds in an earlier stack's `subs`; no file is replaced,
+   because each stack's `subs` folder is new (spec § Edge Cases, **Frame ids after a
+   restart**).
+
+`start` calls `save_in` in step 7, after it has made the folder and before the taker is
+spawned, so every sub the taker asks for is saved there. 031's tests take no frame
+under a lease that names a folder, so they read every file where they read it before
+(§ Shapes that existing tests pin).
+
+### The stack on the console (`crates/finder/src/imaging/stack/service.rs`, new, US5, with the folder; the gate and the queue, US6; the picture, US7; `stack.json` and the files, US8)
 
 ```rust
 //! The live stack as the console runs it (035): subs taken back to back, solved, gated,
@@ -776,9 +830,10 @@ receiver (§ Shapes that existing tests pin, the last entry).
 6. `imaging.lease(HOLDER)` (§ The camera's lease) refused: that `Refusal`, unchanged,
    status and words. No other part is asked whether it is taking frames: not
    `Calibration::busy`, not 033's `Imaging::focus_running`.
-7. US8: the folder (§ The folder and the files); a failure is 500
-   `cannot make the stack folder: {error}`, and the lease of step 6 is dropped before
-   it is answered.
+7. The folder and its `subs/` (§ The folder and the files), then
+   `lease.save_in("runs/<id>/subs")` (§ A lease's folder); US8 adds `stack.json`. A
+   failure is 500 `cannot make the stack folder: {error}`, and the lease of step 6 is
+   dropped before it is answered.
 
 The steps are not one atomic step. The console runs on tokio's multi-threaded runtime
 (`crates/finder/Cargo.toml:33`), so two starts can pass steps 1 to 5 at the same moment
@@ -1005,12 +1060,15 @@ the pixels' lock and, with the lock let go, answers
 `preview::jpeg(&display::shrink(&picture, max))`. A stack that ends keeps its picture,
 and the next start drops it.
 
-**The folder and the files** (US8). In `start`, step 7: `create_dir_all` of
-`imaging.root()/runs`; `create_dir` of the folder named by the `id`, and on
-`AlreadyExists` of that name with `-2`, `-3` and so on, the `id` becoming the name that
-worked; any other failure is the 500. Then `stack.json` is written (below) with what is
-known at the start; a failure there is the same 500. At the end, on the blocking pool,
-in this order, each file whole under its name plus `.part` and then renamed:
+**The folder and the files** (US5 the folder, US8 the files). In `start`, step 7, US5:
+`create_dir_all` of `imaging.root()/runs`; `create_dir` of the folder named by the
+`id`, and on `AlreadyExists` of that name with `-2`, `-3` and so on, the `id` becoming
+the name that worked; then `create_dir` of `subs` inside it; any other failure is the
+500. Then `lease.save_in(&format!("runs/{id}/subs"))`, so every sub is saved in that
+`subs/` as `<frame id, six digits>.fits` with its solve sidecar beside it (spec owner
+decision 13). US8: then `stack.json` is written (below) with what is known at the
+start; a failure there is the same 500. At the end, on the blocking pool, in this
+order, each file whole under its name plus `.part` and then renamed:
 
 1. with at least one sub stacked, `stack.fits`: `fits::encode_cube` of `stack.mean()`
    with the cards of § FITS. This is the one place outside the tests where a mean of
@@ -1032,8 +1090,13 @@ second text of `fits::utc`), `target` (the label or null), `options`, `camera`
 `exposure_s`, `reference` (the view's object with `cd_deg`, the reference solve's, and
 `file`, the reference sub's; null when no sub was stacked) and `subs`, an array in the
 order taken of `{"frame_id", "file", "outcome"}` with, for a stacked sub, `turn_deg`,
-`shift_px` and `rejected_px`, and from US6 `focus_arcsec` when measured. `file` is
-031's `FrameView::file` and null for a sub that never arrived.
+`shift_px` and `rejected_px`, and from US6 `focus_arcsec` when measured. `file` is the
+sub's name in the stack's folder, `subs/<frame id, six digits>.fits`: 031's
+`FrameView::file`, which is `runs/<id>/subs/<frame id>.fits`, less its leading
+`runs/<id>/`, so the folder stands on its own when another program opens it; null for
+a sub that never arrived. `reference.file` is written the same way. A dropped sub stays
+in `subs/` and is listed with its outcome like a stacked one; nothing here removes,
+moves or rewrites a sub (spec owner decision 13).
 
 ### The display (`crates/finder/src/imaging/stack/display.rs`, new, US7)
 
@@ -1291,8 +1354,10 @@ region when the console keeps one and judged against the other subs of the stack
 the camera is never kept waiting and what `behind` means; the
 `stack` object's keys; the display's steps and that they change nothing saved; the
 gains and the stretch; the folder `runs/<id>/`, the three files, the cards of
-`stack.fits` and the keys of `stack.json`, and that every sub stays under `frames/`
-with its solve sidecar; that nothing is saved if the console exits mid-stack; the
+`stack.fits` and the keys of `stack.json`, and that every sub, a dropped one too, is
+saved in the folder's `subs/` with its solve sidecar and listed in `stack.json` by its
+name there, while every other imaging frame stays under `frames/`; that nothing but
+the start's `stack.json` is saved if the console exits mid-stack; the
 memory a stack holds, as planes of the camera's size, with the picture made from a
 reduction and a mean of the full size made only when the stack is saved; that a
 trailed sub which solves is stacked unless the focus gate finds it soft; and `took_ms`
@@ -1609,9 +1674,12 @@ These are not changed by any story:
   simulator keeps compiling.
 - **`Imaging::take`, `ended`, `abort`, `set` and `view`, and where a frame is saved.**
   The stack edits none of them. It takes its subs through the lease, which is 031's own
-  code (§ The camera's lease), and calls `ended`, `abort` and `view` as they are. 031's
-  tests pin `frames/<UTC date>/<id>.fits`, the id rule and the refusals' words; a sub
-  is one more saved frame with the purpose label `sub`.
+  code (§ The camera's lease), and calls `ended`, `abort` and `view` as they are. The
+  one edit to 031's code is US5's `Lease::save_in` and the save of a frame taken under
+  a lease that names a folder (§ A lease's folder). 031's tests take no frame under
+  such a lease, so what they pin holds: `frames/<UTC date>/<id>.fits`, the id rule, the
+  `.part` rule, the cards and the refusals' words. A sub is one more saved frame with
+  the purpose label `sub`, in its stack's `subs/`.
 - **033's `focus::read`, its focus view and what it keeps.** `read` "keeps no state and
   writes nothing" and is called as it is; the stack reads `focus.region` from the
   imaging view and writes nothing of 033's: no region, no record, no `focus.json`.
@@ -1690,7 +1758,8 @@ These are not changed by any story:
      sub's `SolveFrame` and `ImagingSolve`, after this spec's `note_solve` and with no
      lock held.
   5. *037 wraps `Stacker::start` and `Stacker::stop` and reads `view()`.* It takes the
-     folder this spec names and the list of subs in `stack.json` as they are; it lets
+     folder this spec names and the list of subs in `stack.json` as they are, each sub
+     named by its path inside that folder; it lets
      go of its own lease before it calls `start`, which takes the lease as
      `the stack`; and its `run::label` is `label` of this file, so a run's id and its
      stack's folder end alike (037 A2).
@@ -1723,8 +1792,8 @@ These are not changed by any story:
 | The page's picture is reduced straight from the sums and weights, under the pixels' lock for that pass alone | `Stack::mean()` and then a reduction; the lock held for the whole picture | A mean of the full size is 195 MB at the worked example's size (`docs/research/2026-11-15-imaging-camera.md` § 8. Live stacking) and would be made after almost every sub, since the queue is usually empty. The reduction reads the same planes once and keeps about 22 MB. Holding the lock through `background`, `tone` and the JPEG would keep `GET /api/imaging/stack/preview.jpg` waiting for all of it. |
 | The gate takes each sub's focus reading through 033's `focus::read`, in the kept focus region | The solver port's `measure` over the whole sub; our own star measure on the colour picture; 033's verdict against the focus record | The glossary's focus reading is taken in the focus region, and 033's plan writes `read` for this spec to call. A measure of our own needs a detector for 16-bit data. The record's verdict is the focus check of a run, which 037 owns; a stack compares its own subs (spec owner decision 8). |
 | The stack holds 031's lease from an accepted start until it has ended | Asking `Calibration::busy` and 033's `focus_running`, and waiting out a frame another party slips in; a lock of the stack's own | The plan document's amendment 1: one holder, named, on the imaging state, and no lock in a later spec. It also removes the retry loop the first draft needed (spec owner decision 21). |
-| A dropped sub stays on disk and is listed | Deleting it | Every sub is kept (the plan document's What is kept row); another stacker may want it. |
-| `runs/<id>/` holds the stack and a list; subs stay under `frames/` | Saving subs into `runs/<id>/subs/` | 031's `take` always saves under `frames/<UTC date>/` and its tests pin that and the id rule; `stack.json` ties the two together with no change to 031 (spec owner decision 13). |
+| A dropped sub stays in the stack's `subs/` and is listed with its reason | Deleting it | Every sub is kept (the plan document's What is kept row); another stacker may want it. |
+| `runs/<id>/` holds the stack, its list and `subs/`, where the stack's lease saves every sub; `stack.json` names each by its path inside the folder | Every sub left under `frames/<UTC date>/` with the other imaging frames, listed by its path from the imaging folder (the answer recommended before) | The owner's answer, a folder per run (spec owner decision 13, settled on 2026-11-17): a night's work opens in another program from one folder, which stands on its own. It costs one edit to 031's code, `Lease::save_in`, which 031's tests never reach, and no change to 031's id rule. |
 | `stack.json`, not `run.json` | Writing `run.json` | The plan document gives `run.json` to the imaging run of 037. |
 | Saved once, at the end | A copy every so many subs | The subs are the record; a copy of 195 MB at the worked example's size every few minutes stalls the worker (spec owner decision 14). |
 | A FITS cube of three planes, written by hand | Three files; a FITS crate | One image, twenty cards and big-endian reals need no library; 031 and 034 write theirs the same way. |
@@ -1775,8 +1844,10 @@ These are not changed by any story:
    existing tests pin is checked against their test files, the ones that read the
    Imaging page among them; and the validator is re-run on `main`.
 3. **The owner decisions are settled and the approvals given** (spec § Owner decisions,
-   § Owner approvals). Not met: all twenty-six decisions are open. Any answer other
-   than the recommended one is written into the trio and re-validated before the flip.
+   § Owner approvals). Not met. Decision 13 was settled by the owner on 2026-11-17 with
+   its other answer, a folder per run, which is written into the trio; the other
+   twenty-five are written with their recommended answers. Any answer other than the
+   recommended one is written into the trio and re-validated before the flip.
 4. **The constitution covers an imaging solve that is not our own Rust.** Not met, and
    032's to meet: principle V says "The solver is our own Rust", the stack registers
    every sub by ASTAP's solve, and the plan document's § Before any flip asks for the
@@ -1834,18 +1905,19 @@ These are not changed by any story:
    The first things to prove are in § Risks.
 10. **The plan document agrees with the settled decisions, and 036 and 037 with this
     trio.** Three parts.
-    - *The plan document.* Met in the drafts for the recommended answers; not met on
+    - *The plan document.* Met in the drafts for the answers written here; not met on
       `main`, where the plan document is not yet (prerequisite 7). This trio departed
       from its § Interfaces shared across the specs in three places (spec owner
-      decisions 13, 18 and 19), and that section now gives their recommended answers:
-      `stack.rs` with `stack/service.rs` and `stack/display.rs`;
-      `runs/<UTC start>-<target>/` holding `stack.json`, `stack.fits` and `stack.png`,
-      every sub left under `frames/` and no `subs/` folder; and three routes for 035,
-      the start route taking the options. If the owner settles any of them otherwise, that
-      section is corrected in the same change. The order of a hint's sources is not
-      among them: this trio keeps the plan document's order. If the owner picks spec
-      owner decision 26's other answer, that is a departure, and § Mount-neutral by
-      design, 4 is corrected with it.
+      decisions 13, 18 and 19), and that section now gives the answer written here for
+      each: `stack.rs` with `stack/service.rs` and `stack/display.rs`;
+      `runs/<UTC start>-<target>/` holding `stack.json`, `stack.fits`, `stack.png` and
+      `subs/`, where every sub of the stack is saved, as the owner settled decision 13
+      on 2026-11-17, that section being corrected in the same change; and three routes
+      for 035, the start route taking the options. If the owner settles 18 or 19
+      otherwise, that section is corrected in the same change. The order of a hint's
+      sources is not among them: this trio keeps the plan document's order. If the
+      owner picks spec owner decision 26's other answer, that is a departure, and
+      § Mount-neutral by design, 4 is corrected with it.
     - *036.* Met as drafted. 036's plan lists what it assumes of this trio under its
       § Prerequisites 3, **035 is read as landed**, and its § What 035 must provide,
       and is re-anchored to this trio, not the reverse. It sets a stack's exposure
@@ -1859,9 +1931,11 @@ These are not changed by any story:
       this trio's `note_solve` (the seam, 4). A sub taken at an exposure that changes
       within a stack is not offered.
     - *037.* Met as drafted. 037's plan already takes this trio as it is: `Stacker::start`
-      names its own folder, every sub is kept and listed in `stack.json`, and after
-      the stop 037 removes from disk the subs that list names when they are not to be
-      kept (037 plan.md § Decisions and § Prerequisites 2); and its `run::label` is the
+      names its own folder, every sub is kept in its `subs/` and listed in
+      `stack.json` by its path inside the folder, and after the stop 037 removes from
+      disk the subs that list names when they are not to be kept (037 plan.md
+      § Decisions and § Prerequisites 2; its text was brought to decision 13's answer
+      on 2026-11-17); and its `run::label` is the
       one line `crate::imaging::stack::service::label(name)` (037 A2). Nothing of this
       trio is open for 037 but the re-anchoring of prerequisite 2.
 11. **No operator-staged file is needed.** Met.
@@ -1956,7 +2030,7 @@ with the check that keeps it from recurring. They bind every story.
     reads the stand-in's own values out of `stack.fits` after a stack that was shown.
 20. **A card too long for its columns.** *Check:* the celestial numbers are rounded
     (§ FITS), and spec US8-S1 reads them back within 10⁻¹².
-21. **A stack's folder name that clashes.** *Check:* `-2` is added, and spec US8-S3
+21. **A stack's folder name that clashes.** *Check:* `-2` is added, and spec US5-S2
     starts two stacks in one second.
 22. **`deny_unknown_fields` and the MCP tool's `on`.** `StartRequest` refuses `on`.
     *Check:* `set_stacking` removes `on` before it parses the rest, and spec US10-S2
@@ -1972,8 +2046,9 @@ with the check that keeps it from recurring. They bind every story.
     cannot be made, and keeps the camera would lock every other taker out until the
     console restarts. *Check:* the taker owns the `Lease`, so it is dropped on every
     return of the taker, and `start` drops it where it fails after taking it; spec
-    US5-S4 takes a frame after a stack that ended as `camera`, and US5-S8 after one
-    that was stopped.
+    US5-S4 takes a frame after a stack that ended as `camera`, US5-S8 after one that
+    was stopped, and US5-S2 reads `holder()` `None` after a folder that could not be
+    made.
 27. **A second lock, or a look that hides the holder.** Asking `Calibration::busy` or
     `focus_running` before the lease would be a lock of this spec's own, and would
     refuse with words that do not name the holder; so would a look at the view's frame
@@ -2021,6 +2096,12 @@ with the check that keeps it from recurring. They bind every story.
     worker calls `note_solve` and nothing else of 032's state, once, in step 8, with no
     lock held, for stacked subs alone; spec US5-S9 reads the aim point measured from
     five readings with no `solve` in the view and a hint radius still 3°.
+35. **A sub saved with the other frames, or a frame saved in a stack's folder after the
+    stack.** A folder set on the `Imaging` rather than on the lease, or set after the
+    taker has started, would do one or the other. *Check:* the folder is kept with the
+    lease's grant and cleared with it, and `start` sets it before it spawns the taker
+    (§ A lease's folder); spec US5-S1 finds every sub in `runs/<id>/subs/` and no file
+    under `frames/`, and US5-S8's frame after the stop is saved under `frames/`.
 
 ## Risks
 
@@ -2041,7 +2122,7 @@ with the check that keeps it from recurring. They bind every story.
 | The picture looks green before the observer sets gains. | Expected without a colour matrix (the plan document's Colour row); the gains are on the page; measured gains are spec owner decision 17's alternative. |
 | 031 lands the lease under other names or with other rules: the frame in flight checked before the lease, a single imaging frame that holds the lease, a foreign `abort` refused, a refusal that does not name the holder. | § The camera's lease cites 031 US6 and lists the six points and where each is used, and 033's, 034's and 037's trios use the same shape; § Prerequisites 8 reads each in 031's plan.md and code before the flip. Only `Stacker::start`, the taker and three scenarios (spec US5-S2, US5-S4, US5-S8) touch it, and US5-S2 asserts `holder()` `None` during a single frame, so point 6 shows up there if it changes. |
 | 031 lands with no lease at all. | Spec owner decision 21's other answer, which is the first draft's design: ask the two busy checks and wait out a foreign frame, three times at most. |
-| US5's diff nears 64 KiB: the loop, the rigs and nine scenarios. | It is built second in the probe round (§ Prerequisites 9). If it passes the budget, US5-S7 and US5-S9, the two on the sim stacking rig, move to US6, whose diff is the smallest of the console stories; the call of `note_solve` stays in US5's step 8, which is one line. |
+| US5's diff nears 64 KiB: the loop, the rigs, nine scenarios, and since decision 13 was settled the stack's folder and 031's `Lease::save_in`. | It is built second in the probe round (§ Prerequisites 9). If it passes the budget, US5-S7 and US5-S9, the two on the sim stacking rig, move to US6, whose diff is the smallest of the console stories; the call of `note_solve` stays in US5's step 8, which is one line. The folder and `save_in` stay in US5, because every sub from the first is saved in the folder. |
 | US8's diff nears 64 KiB: three routes, the view, the cube, three files, the README and eight tests. | Measured in the probe round; the README's section can move to US10, which already writes that file. |
 | A scenario's numbers rest on the simulator's noise, its seeded field or its star shapes and have not been run (US3-S4, US3-S5, US4-S4). | Each was worked from 030's constants and is given with its margin in spec.md; the probe build of US3 and US4 runs them, and a tolerance that proves wrong is corrected there, never by a story. |
 | 033 changes `focus::read`, its focus view or its aid before it lands. | § Prerequisites 5. The gate touches 033 in two places, `read` and `focus.region`, and one scenario (spec US6-S6) drives its routes. |
@@ -2162,6 +2243,20 @@ projection. Every `path:line` in spec.md and plan.md was read again at 49bb210 i
 pass, the worktree's HEAD, and none had moved; the one added,
 `crates/simulator/src/optics.rs:26`, was read there too.
 
+What the owner's answer changed. On 2026-11-17 the owner settled spec owner decision 13
+with its other answer, a folder per run, and it was written into the three files: a
+stack's subs are saved in `subs/` inside its own folder, through `Lease::save_in`, the
+one edit to 031's code (§ A lease's folder), and `stack.json` names each by its path
+inside the folder. Because every sub from the first is saved there, the folder, its
+`subs/` and the `-2` rule moved from US8 to US5, which now writes 031's
+`crates/finder/src/imaging/mod.rs` and `crates/finder/src/imaging/frames.rs`; the Work
+Graph gained the edge US5 on US2, and US8 no longer names US2, since US5 is now the
+story between them that writes `mod.rs`. FR-013, FR-014, FR-031 and FR-035 changed in
+their words and not in their stories. No scenario was added or removed; the changed
+ones are US5-S1, US5-S2 (it gained the folder that cannot be made and the `-2`, which
+US8-S3 lost), US5-S3, US5-S8, US8-S1, US8-S3 and US8-S7. 031's id rule, and where
+every frame outside a stack is saved, did not change. No `path:line` was added.
+
 Every `path:line` names a file that exists at 49bb210 and was read there, but for the
 lines of `GLOSSARY.md`, which are lines of the plan document's uncommitted rewrite of
 that file (§ Prerequisites 7). Every number in a scenario was worked by hand or with a
@@ -2197,7 +2292,7 @@ validator resolves every such path in the drafting worktree; each is named under
 `preserved_behavior` with what it must still assert, and moves to `tests` at the
 re-anchoring. The record's `open_questions` are empty because the validator refuses a
 record that holds any; what is not established is in § Risks and § Prerequisites, and
-in spec.md's owner decisions 8, 13, 20, 21 and 26. Nothing in this record is an owner
+in spec.md's owner decisions 8, 20, 21 and 26. Nothing in this record is an owner
 approval: those are in spec.md, and flipping to `ready` gives them.
 
 ```yaml
@@ -2339,9 +2434,9 @@ stories:
         reason: "035 depends_on_landed 034, whose US4 last changed the imaging module"
       - path: crates/finder/src/imaging/mod.rs
         other_spec: 035-live-stack
-        other_story: US8
+        other_story: US5
         disposition: merge_order
-        reason: "US8 follows US2 on the merge chain, and adds the stack to the imaging view"
+        reason: "US5 follows US2 by a direct merge edge, and adds Lease::save_in"
       - path: crates/finder/src/imaging/stack.rs
         other_spec: 035-live-stack
         other_story: US3
@@ -2481,17 +2576,17 @@ stories:
       - path: crates/finder/tests/console/stack_loop.rs
         status: new
         disposition: add
-        assertion: "a started stack takes subs with the purpose sub, solves, calibrates and adds each, with the first as the reference sub, 032's hint for the first and, on a rig with no live pointing, its own hint from the second on, and a mean equal to the stand-in's ramp"
+        assertion: "a started stack takes subs with the purpose sub, saved in its own folder's subs and none under frames, solves, calibrates and adds each, with the first as the reference sub, 032's hint for the first and, on a rig with no live pointing, its own hint from the second on, and a mean equal to the stand-in's ramp"
         decision: "spec.md:US5-S1"
       - path: crates/finder/tests/console/stack_loop.rs
         status: new
         disposition: add
-        assertion: "start refuses bad gains and stretch, those before it looks at the camera, a console without a solver or a camera, a single frame in flight while nobody holds the lease, and a camera whose lease another holder has, naming that holder even while the holder's own frame is exposing; on a running stack it changes gains and stretch only; a console without imaging has no stacker"
+        assertion: "start refuses bad gains and stretch, those before it looks at the camera, a console without a solver or a camera, a single frame in flight while nobody holds the lease, a camera whose lease another holder has, naming that holder even while the holder's own frame is exposing, and a folder that cannot be made, letting the lease go; on a running stack it changes gains and stretch only; a second stack in the same second takes the id with -2; a console without imaging has no stacker"
         decision: "spec.md:US5-S2"
       - path: crates/finder/tests/console/stack_loop.rs
         status: new
         disposition: add
-        assertion: "subs that do not solve are dropped and counted as not_solved, too_few_stars or solver_failed, and the first sub that solves is the reference sub"
+        assertion: "subs that do not solve are dropped and counted as not_solved, too_few_stars or solver_failed and stay in the stack's subs folder, and the first sub that solves is the reference sub"
         decision: "spec.md:US5-S3"
       - path: crates/finder/tests/console/stack_loop.rs
         status: new
@@ -2516,7 +2611,7 @@ stories:
       - path: crates/finder/tests/console/stack_loop.rs
         status: new
         disposition: add
-        assertion: "while a stack runs a single imaging frame is refused with the holder's name, the stack, and the stack goes on; after the stop a frame is taken"
+        assertion: "while a stack runs a single imaging frame is refused with the holder's name, the stack, and the stack goes on; after the stop a frame is taken and saved under frames"
         decision: "spec.md:US5-S8"
       - path: crates/finder/tests/console/stack_loop.rs
         status: new
@@ -2529,7 +2624,8 @@ stories:
         assertion: "no file at the top level of crates/finder/tests or new file in its support folder, and each binary's main.rs holds only its support include and mod lines"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
-      - "031's take, ended, abort and view, its frame ids and files, and the lease's refusals are 031's and unchanged; a sub is one more saved frame (plan.md Shapes that existing tests pin)"
+      - "031's take, ended, abort and view, its id rule, its .part rule, the files of every frame not taken under a lease that names a folder, and the lease's refusals are 031's and unchanged; Lease::save_in is the one addition, and a sub is one more saved frame, in its stack's subs (plan.md Shapes that existing tests pin, A lease's folder)"
+      - "crates/finder/tests/console/imaging_lease.rs, a test file 031 creates, passes unchanged: the lease's names, refusals and release, with no folder named (plan.md A lease's folder)"
       - "032's solve_frame is called as it is and touches neither the page's solve nor the relation; a stacked sub's solve reaches the relation only through 032's note_solve, and neither the page's solve nor the kept scale changes (spec.md FR-015)"
       - "032's Imaging::hint is asked for every sub and is not edited: a live pointing's hint is used as it is (plan.md Plan traps 30)"
       - "034's Library::calibrate is called as it is; Calibration::busy is not asked"
@@ -2552,6 +2648,8 @@ stories:
     writes:
       - GLOSSARY.md
       - crates/finder/src/api.rs
+      - crates/finder/src/imaging/frames.rs
+      - crates/finder/src/imaging/mod.rs
       - crates/finder/src/imaging/stack.rs
       - crates/finder/src/imaging/stack/service.rs
       - crates/finder/tests/console/main.rs
@@ -2573,6 +2671,16 @@ stories:
         other_story: US8
         disposition: merge_order
         reason: "US8 follows US5 on the merge chain, and attaches the stacker and adds target_label"
+      - path: crates/finder/src/imaging/frames.rs
+        other_spec: 031-imaging-frames-on-console
+        other_story: US3
+        disposition: merge_order
+        reason: "035 depends_on_landed 031, whose US3 last changed frames.rs"
+      - path: crates/finder/src/imaging/mod.rs
+        other_spec: 035-live-stack
+        other_story: US8
+        disposition: merge_order
+        reason: "US8 follows US5 by a direct merge edge, and adds the stack to the imaging view"
       - path: crates/finder/src/imaging/stack.rs
         other_spec: 035-live-stack
         other_story: US6
@@ -2722,7 +2830,7 @@ stories:
         other_spec: 035-live-stack
         other_story: US8
         disposition: merge_order
-        reason: "US8 follows US7 on the merge chain, and adds the folder and the files"
+        reason: "US8 follows US7 on the merge chain, and adds stack.json and the files"
       - path: crates/finder/tests/console/main.rs
         other_spec: 035-live-stack
         other_story: US8
@@ -2734,7 +2842,7 @@ stories:
       - path: crates/finder/tests/console/stack_console.rs
         status: new
         disposition: add
-        assertion: "POST and DELETE /api/imaging/stack start and stop a stack and answer the imaging view; stack.fits holds the worked cards and the stand-in's values in three planes of 32-bit reals, stack.png the picture, and stack.json every sub with its outcome"
+        assertion: "POST and DELETE /api/imaging/stack start and stop a stack and answer the imaging view; stack.fits holds the worked cards and the stand-in's values in three planes of 32-bit reals, stack.png the picture, and stack.json every sub with its outcome and its name in the folder's subs"
         decision: "spec.md:US8-S1"
       - path: crates/finder/tests/console/stack_console.rs
         status: new
@@ -2744,7 +2852,7 @@ stories:
       - path: crates/finder/tests/console/stack_console.rs
         status: new
         disposition: add
-        assertion: "a stack's id carries the target's label, a stack with no sub writes stack.json alone, a second stack in the same second takes the id with -2, and label makes every character that is not an ASCII letter or digit one dash"
+        assertion: "a stack's id carries the target's label, a stack with no sub writes stack.json alone beside an empty subs folder, and label makes every character that is not an ASCII letter or digit one dash"
         decision: "spec.md:US8-S3"
       - path: crates/finder/tests/console/stack_console.rs
         status: new
@@ -2764,7 +2872,7 @@ stories:
       - path: crates/finder/tests/cli/stack.rs
         status: new
         disposition: add
-        assertion: "the built finder under --simulate stacks and leaves one run folder with stack.fits, stack.png and stack.json, and nothing of the stack in session.json"
+        assertion: "the built finder under --simulate stacks and leaves one run folder with stack.fits, stack.png, stack.json and its subs, no file under frames, and nothing of the stack in session.json"
         decision: "spec.md:US8-S7"
       - path: crates/finder/tests/layout/main.rs
         status: existing

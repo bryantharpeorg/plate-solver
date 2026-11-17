@@ -16,6 +16,9 @@ depends_on_landed: ["025-frame-capture", "028-finder-tests-do-less", "030-imagin
 # (plan.md § Prerequisites).
 # Citations of files that exist today were checked against `main` at 49bb210
 # (49bb210fe4860dd98ba24727074e7bd3cc0d7124), the worktree's HEAD, which completes 028.
+# Revised 2026-11-17 with a note on the owner's answer to 035's owner decision 13: a
+# stack's subs are saved in its own folder, through a folder 035 lets a lease name
+# (§ Clarifications, the last session); nothing this spec builds changes.
 # It stays draft until the owner settles the owner decisions and flips it to `ready`,
 # which gives the approvals listed under "Owner approvals" and dispatches it.
 ---
@@ -223,6 +226,16 @@ and `finder --simulate`. Nothing here solves, focuses, calibrates or stacks.
     `SimImagingCamera`.
 
   plan.md § What this trio takes from 030 gives each as this trio uses it.
+
+### Session 2026-11-17 (the owner's answers)
+
+- Q: Is every imaging frame saved under `frames/<UTC date>/`? → A: Every frame this
+  spec takes is, but a stack's subs are not. The owner settled 035's owner decision 13
+  as a folder per run: a stack's subs are saved in `runs/<stack id>/subs/`, beside the
+  stack's own files. 035's US5 adds `Lease::save_in` to this spec's lease and the save
+  of a frame taken under a lease that names a folder; no story here writes or calls
+  it, and FR-011, the id rule and every scenario here stand as written (plan.md
+  § Receiving and saving, **A stack's subs are saved elsewhere**).
 
 ## Owner decisions
 

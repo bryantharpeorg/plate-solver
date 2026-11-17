@@ -26,7 +26,8 @@ description: "Task list for 035-live-stack: Live Stack"
 - 034 takes the camera's lease for a set of darks or flats and has no
   `restore_exposure` (034 A1; plan.md § Prerequisites 13): met in the drafts, not met
   on `main`;
-- the owner decisions in spec.md are settled and its owner approvals given: not met;
+- the owner decisions in spec.md are settled and its owner approvals given: not met
+  (decision 13 was settled on 2026-11-17, a folder per run, and is written in);
 - every story has been probe-built: not met;
 - the plan document, ADR-0002, the research note and the plan document's rewrite of
   `GLOSSARY.md` are on `main`: not met;
@@ -216,8 +217,11 @@ description: "Task list for 035-live-stack: Live Stack"
   the first hint 032's and the later ones the stack's own (US5-S1), and for the
   refusals of `start` in their order (US5-S2): among them the lease held by the test as
   `probe`, that lease held while a frame the test took with it is exposing, which must
-  still name `probe`, a single imaging frame in flight with `holder()` `None`, and a
-  console without imaging.
+  still name `probe`, a single imaging frame in flight with `holder()` `None`, a
+  console without imaging, a regular file named `runs` that keeps the folder from
+  being made, with `holder()` `None` afterwards, and a second stack in the same second,
+  whose `id` ends `-2`. US5-S1 reads every sub in `runs/<id>/subs/` and no file under
+  `frames/`.
 - [ ] T019 [US5] Add failing tests to `crates/finder/tests/console/stack_loop.rs` for
   subs that do not solve (US5-S3), a failed exposure and three in a row, with the frame
   taken afterwards (US5-S4), a stop against a slow solver (US5-S5) and an aborted
@@ -238,11 +242,18 @@ description: "Task list for 035-live-stack: Live Stack"
   `LastView`, the `#[non_exhaustive]` `StackView` and `Stacker` with `new`, `start`,
   `stop`, `view` and `mean`, as plan.md § The stack on the console gives them, leaving
   out the fields and constants marked for US6, US7 and US8. Add `pub mod service;` to
-  `crates/finder/src/imaging/stack.rs`.
+  `crates/finder/src/imaging/stack.rs`. In 031's `crates/finder/src/imaging/mod.rs` and
+  `crates/finder/src/imaging/frames.rs`, add `Lease::save_in` and the save of a frame
+  taken under a lease that names a folder in that folder, exactly as plan.md § A
+  lease's folder gives them, the folder kept with the lease's grant and cleared with
+  it, changing nothing else of 031's take, save, cards or id rule.
 - [ ] T022 [US5] In `crates/finder/src/imaging/stack/service.rs`, write `start` in its
   order, looking for an imaging frame in flight in step 5 only while
   `imaging.holder()` is `None`, taking 031's lease as `HOLDER` in step 6 and asking no
-  other part whether it is taking imaging frames; the
+  other part whether it is taking imaging frames, and in step 7 making `runs/<id>/`,
+  `-2` and on for a name that is taken, and `subs` in it, then calling
+  `lease.save_in`, with the lease dropped and a 500 when the folder cannot be made
+  (plan.md § The stack on the console, **The folder and the files**); the
   stopping mark, a `tokio::sync::watch` channel of `bool`; the taker, which owns the
   lease, takes every sub through it, looks at the stopping mark again right after each
   `take` and never waits for the worker; the worker's steps 1, 3, 4, 6 (`between`
@@ -252,13 +263,14 @@ description: "Task list for 035-live-stack: Live Stack"
   the counts, with the counts' lock let go; and the ending, done once, in which the
   lease is dropped when the taker returns, before `state` becomes `ended` (plan.md
   § The stack on the console, § The camera's lease, § Plan traps 13, 14, 16, 17, 26,
-  27, 30 and 34).
+  27, 30, 34 and 35).
 - [ ] T023 [US5] In `crates/finder/src/api.rs`, add the `stack` field and
   `AppState::stack()`, and build the `Stacker` in `with_imaging` right after 034's
   `Calibration`. Add the **Reference sub** entry to `GLOSSARY.md` after the **Stack**
   entry, with the three lines of spec owner approval 6.
 - [ ] T024 [US5] Run the `lint` and `test` gates with every existing test unchanged and
-  green, 032's `imaging_relation` included. Commit the green story (US5-S1, US5-S2,
+  green, 031's `imaging_frames` and `imaging_lease` and 032's `imaging_relation`
+  included. Commit the green story (US5-S1, US5-S2,
   US5-S3, US5-S4, US5-S5, US5-S6, US5-S7, US5-S8 and US5-S9).
 
 ## Phase 6: User Story 6 — The gate, and a queue the camera never waits on (Priority: P1)
@@ -345,7 +357,7 @@ description: "Task list for 035-live-stack: Live Stack"
   routes with its three files (US8-S1) and for the routes' refusals and the preview
   route (US8-S2).
 - [ ] T036 [US8] Add failing tests to `crates/finder/tests/console/stack_console.rs` for
-  the target's label, an empty stack, a second stack in one second and `label`'s three
+  the target's label, an empty stack with its empty `subs`, and `label`'s three
   worked names, `NGC 1976`, `M42` and `Barnard’s Loop` (US8-S3), the
   stack in the imaging view and the session, and none of it on a console without
   imaging (US8-S4), a folder that cannot be made and
@@ -361,11 +373,11 @@ description: "Task list for 035-live-stack: Live Stack"
   editing none of them (plan.md § FITS).
 - [ ] T039 [US8] In `crates/finder/src/imaging/stack/service.rs`, add `FORMAT`, the
   public `label`, which maps each `char` of a name that is not an ASCII letter or digit
-  to one `-`, `FilesView`, the folder and `stack.json` at the start, with the lease
-  dropped when
-  either fails, and at the end `stack.fits` with the cards of plan.md § FITS,
-  `stack.png` from `display::render` of the stack at its own width, and `stack.json`,
-  each under its name plus `.part` and renamed, with
+  to one `-`, `FilesView`, `stack.json` at the start in the folder US5 makes, with the
+  lease dropped when it cannot be written, and at the end `stack.fits` with the cards
+  of plan.md § FITS, `stack.png` from `display::render` of the stack at its own width,
+  and `stack.json`, which names each sub and the reference sub by its path inside the
+  folder, `subs/<frame id>.fits`, each under its name plus `.part` and renamed, with
   `files` or `save_error` in the view (plan.md § The stack on the console, **The folder
   and the files**).
 - [ ] T040 [US8] In `crates/finder/src/imaging/mod.rs`, add `ImagingView.stack` and
@@ -451,8 +463,10 @@ US1 ──► US2 ──► US3 ──► US4 ──► US5 ──► US6 ──
   and follows it only so that one chain orders every story.
 - **US3** adds `Stack` to US2's file, and **US4** rejection and the background match to
   US3's `Stack`.
-- **US5** runs all of it from the console's loop under 031's lease, and writes the rigs
-  every later `console` module imports.
+- **US5** runs all of it from the console's loop under 031's lease, saves every sub in
+  the stack's own `subs/` through the lease, and writes the rigs every later `console`
+  module imports. It follows US2 by a direct edge too, as the next story to write
+  `crates/finder/src/imaging/mod.rs`.
 - **US6** adds the gate to US5's worker and bounds its queue; **US7** gives the loop a
   picture to keep.
 - **US8** puts the routes, the view and the files over the loop and reads US7's picture.

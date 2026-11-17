@@ -610,6 +610,17 @@ a word, which is why the check is there. One console writes an imaging folder, s
 check is enough; a hard link is not used because the folder may be on a file system
 that has none. An existing name is never opened for writing.
 
+**A stack's subs are saved elsewhere** (035, not this spec). The owner settled 035's
+owner decision 13 on 2026-11-17 as a folder per run: a stack's subs go in
+`runs/<stack id>/subs/`, not here. 035's US5 adds `Lease::save_in(folder)` to this
+spec's lease and has this step write a frame taken under a lease that names a folder
+as `<folder>/<id>.fits`, by the same `.part` and existing-name rule
+(`specs/035-live-stack/plan.md` § A lease's folder). No story of this spec writes or
+calls it: every frame this spec takes, through `Imaging::take` or `Lease::take`, is
+saved under `frames/<UTC date>/` as above, the id rule above is the one count for
+every frame, a stack's subs included, and this spec's tests read every file where this
+section puts it.
+
 ### FITS at the console (`crates/finder/src/imaging/fits.rs`, new, US2)
 
 ```rust
@@ -1096,7 +1107,9 @@ These are not changed by any story:
   `ImagingFrame`, so a field added to it later breaks every such literal that does not
   end with `..Default::default()`, which the shared setup requires. `Imaging::take`
   always saves a file: 033's focus aid and 037's keep-subs switch save each frame and
-  remove the file once the frame has ended, so no path without a file is needed. From
+  remove the file once the frame has ended, so no path without a file is needed; 035
+  adds only a folder that a lease may name for its frames (§ Receiving and saving, **A
+  stack's subs are saved elsewhere**). From
   US6 the lease's names and its refusal are pinned by US6's tests, which is what 033 to
   037 call. Files once written are pinned too: a card added later appears only in later
   files.

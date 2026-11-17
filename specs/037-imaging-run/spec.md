@@ -218,8 +218,9 @@ the settings, starts, watches and stops; it never puts the steps in order itself
   `Imaging::focus_ended`, with five verdicts (`good`, `slightly_soft`, `clearly_out`,
   `unmeasurable`, `no_record`) and sizes in arcseconds once a scale is known and in
   sensor pixels until then. 035 a `Stacker` whose `start` names its own folder,
-  `runs/<UTC start>-<target>`, keeps every sub where 031 saved it and lists it in
-  `stack.json`, and whose view counts drops by reason; and one function,
+  `runs/<UTC start>-<target>`, keeps every sub in that folder's `subs/` and lists it
+  in `stack.json` by its path inside the folder, and whose view counts drops by
+  reason; and one function,
   `crate::imaging::stack::service::label`, for the rule that turns a target's name into
   the last part of that folder's name, which the run's `run::label` calls rather than
   writing the rule again. 036 a `Steering` that says
@@ -234,10 +235,11 @@ the settings, starts, watches and stops; it never puts the steps in order itself
   the focus check's (owner decision 20).
 - Q: Where is the run's folder? → A: 035 names a stack's folder itself, so once the run
   stacks, its folder is the stack's and `run.json` lies beside `stack.json`. A run that
-  ends before it stacks makes `runs/<run id>/` for its `run.json` at the ending. Subs
-  stay where 031 saves every imaging frame (035's owner decision 13), so there is no
-  `subs/` folder; the plan document, which first had one, now says the same in its
-  shared storage (owner decision 23).
+  ends before it stacks makes `runs/<run id>/` for its `run.json` at the ending (owner
+  decision 23). The stack's subs are saved in `subs/` inside that folder, a folder per
+  run, as the owner settled 035's owner decision 13 on 2026-11-17, and the plan
+  document's shared storage says the same; the run's own imaging frames and the focus
+  check's stay where 031 saves every imaging frame, under `frames/<UTC date>/`.
 - Q: The imaging view of 031 holds nothing but its `state` while the camera is not
   `ready`. Where is a run that ended because the link was lost? → A: In the same view.
   `run` is filled in every state, as 035's `stack` is (FR-016, US3-S5).
@@ -798,9 +800,9 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_st
      with `Ended: the stack stopped: the stack is busy.`, and `calls()` ends
      `stack.start M42`, `camera.release`;
    - with
-     `fail_stack_stop(Failure::Other("could not remove frames/2026-01-16/000004.fits"))`
+     `fail_stack_stop(Failure::Other("could not remove subs/000004.fits"))`
      a run stopped while stacking still ends `stopped`, with `warnings`
-     `["The stack did not end cleanly: could not remove frames/2026-01-16/000004.fits."]`.
+     `["The stack did not end cleanly: could not remove subs/000004.fits."]`.
 
 ---
 
@@ -1239,13 +1241,14 @@ runs both; during development,
      `-M42`, and R joined with it holds `run.json`, whose `ended.reason` is
      `count_limit`, and 035's `stack.json`, `stack.fits` and `stack.png`;
    - that `stack.json` lists at least three subs with the `outcome` `stacked`, and the
-     `file` of each exists under R;
+     `file` of each, a path inside the run's folder, exists there;
    - 2 s after the ending the session's `track.state` is `tracking` with
      `track.target.messier` `M42`: the run stopped nothing (oracle: the session).
 2. **Given** the same rig, **When** a test sends `{"subs":2,"keep_subs":false}` and
    waits until the run has ended, **Then** a committed test asserts `count_limit`, a
    `stack.fits` in the run's folder, and that no `file` that its `stack.json` lists
-   exists under R any more, nor that file's name with `.fits` made `.solve.json`.
+   exists in the run's folder any more, nor that file's name with `.fits` made
+   `.solve.json`.
    **Given** the same rig with a run that is stacking, **When** a test sends
    `DELETE /api/imaging/run`, **Then** the committed test asserts `stopped`, the
    imaging view's `stack.state` `ended`, a `run.json` in the run's folder,

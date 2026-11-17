@@ -43,7 +43,8 @@ adds no npm package.
 **Storage**: `run.json` under the console's imaging folder (031: `imaging/` in the state
 folder, or `--imaging-dir`): in the stack's folder, `runs/<stack id>/`, beside 035's
 `stack.json`, `stack.fits` and `stack.png`, or in `runs/<run id>/` for a run that ends
-before it stacks. Subs stay under `frames/`, where 031 saves every imaging frame.
+before it stacks. The stack's subs are in its folder's `subs/` (035's owner decision
+13); the run's own imaging frames stay under `frames/`, where 031 saves them.
 Nothing about a run is kept in `session.json`: it is run-only, like Track.
 
 **Testing**:
@@ -1287,8 +1288,10 @@ rule is in the machine.
 - `stop(keep_subs)`: `stacker.stop().await`. A view with a `save_error` is
   `Err(Save(save_error))`, and no sub is removed. Otherwise, with `keep_subs` false: it
   reads `stack.json` in the stack's folder under `imaging.root()`, and for every entry
-  of its `subs` array that has a `file`, removes that file and the file whose name ends
-  `.solve.json` in place of `.fits`, a missing file being no failure; the first other
+  of its `subs` array that has a `file`, a path inside the stack's folder
+  (`subs/<frame id>.fits`, 035's owner decision 13), removes that file in the stack's
+  folder and the file whose name ends `.solve.json` in place of `.fits`, a missing file
+  being no failure; the first other
   failure, after every entry was tried, is
   `Err(Other(format!("could not remove {file}: {error}")))`; a `stack.json` that cannot
   be read or parsed is `Err(Other(format!("could not read stack.json: {error}")))`.
@@ -2515,7 +2518,7 @@ stories:
       - path: crates/finder/tests/motion/imaging_run_stack.rs
         status: new
         disposition: add
-        assertion: "on the simulator a run of the console's own five parts asked for 3 subs ends count_limit with run.json beside stack.json, stack.fits and stack.png in the stack's folder, whose name ends with the target's label, at least three kept subs on disk, and Track still tracking"
+        assertion: "on the simulator a run of the console's own five parts asked for 3 subs ends count_limit with run.json beside stack.json, stack.fits and stack.png in the stack's folder, whose name ends with the target's label, at least three kept subs in that folder, and Track still tracking"
         decision: "spec.md:US8-S1"
       - path: crates/finder/tests/motion/imaging_run_stack.rs
         status: new
