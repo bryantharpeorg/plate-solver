@@ -92,6 +92,10 @@ _Avoid_: current position, last solve
 The mount following the target across the sky so that it stays at the aim point.
 _Avoid_: tracking mode (that is the solver's hinted solving)
 
+**Followed push**:
+A push by hand of more than the push threshold while Track is on, after which Track holds the place the telescope was left at until the observer turns Track on for the target again.
+_Avoid_: drift, pushed target
+
 **Aim point**:
 The spot in the finder camera's frame where the main telescope is looking: the centre of the imaging camera's sensor, or of the eyepiece's view when no imaging camera is attached. The console measures it from an imaging solve and a live pointing of the same moment; without an imaging camera the observer sets it by tapping a centred star. Moves bring the aim point, not the boresight, onto the target.
 _Avoid_: telescope boresight, frame centre
