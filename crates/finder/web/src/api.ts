@@ -50,6 +50,7 @@ export interface Guidance {
   never?: boolean;
   turn_deg?: number;
   tilt_deg?: number;
+  separation_deg?: number;
   placement?: TargetPlacement;
 }
 

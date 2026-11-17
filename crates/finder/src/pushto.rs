@@ -82,10 +82,13 @@ pub struct Guidance {
     /// Altitude motion in degrees, up positive.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tilt_deg: Option<f64>,
+    /// Angle on the sky from the pointing to the target, in degrees.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub separation_deg: Option<f64>,
     /// Target geometry on or off the latest pointing's frame, when one exists.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub placement: Option<Placement>,
-    /// Live pointing is more than five console seconds old; no turn or tilt is given.
+    /// Live pointing is more than five console seconds old; no turn, tilt or separation is given.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stale: Option<bool>,
 }
@@ -108,6 +111,7 @@ pub fn guidance(
         never: None,
         turn_deg: None,
         tilt_deg: None,
+        separation_deg: None,
         placement: pointing.map(|p| placement(target, &p.frame)),
         stale: None,
     };
@@ -128,11 +132,22 @@ pub fn guidance(
             result.never = (times.state == AltitudeState::NeverRises).then_some(true);
         }
         if class == Class::Pointable {
-            if let Some((alt, az)) = pointing.and_then(|p| p.alt_deg.zip(p.az_deg)) {
+            if let Some((p, (alt, az))) = pointing.and_then(|p| Some((p, p.alt_deg.zip(p.az_deg)?)))
+            {
                 let target_alt_az = sky::alt_az(target.ra_deg, target.dec_deg, &observer);
                 let (turn, tilt) = turn_tilt((alt, az), target_alt_az);
                 result.turn_deg = Some(turn);
                 result.tilt_deg = Some(tilt);
+                result.separation_deg = Some(
+                    angular_distance(
+                        UnitVector::from_radec(p.ra_deg.to_radians(), p.dec_deg.to_radians()),
+                        UnitVector::from_radec(
+                            target.ra_deg.to_radians(),
+                            target.dec_deg.to_radians(),
+                        ),
+                    )
+                    .to_degrees(),
+                );
             }
         }
     }
@@ -153,6 +168,7 @@ pub fn guidance_with_source(
         result.stale = Some(true);
         result.turn_deg = None;
         result.tilt_deg = None;
+        result.separation_deg = None;
     }
     result
 }
