@@ -10,8 +10,10 @@ description: "Task list for 038-track-follows-a-push: Track Follows a Push"
   are given at the flip;
 - every story has been probe-built: met on 2026-11-17, in two rounds;
 - no operator-staged file is needed;
-- 021 and 022 have landed and this trio is re-read against them: not met (plan.md
-  § Prerequisites 6).
+- 021 and 022 have landed and this trio is re-read against them: met on 2026-11-17,
+  with 021 at 2f6a777 and 022 at 20ce2fe (plan.md § Prerequisites 6);
+- 026-mount-sky lands first, and whether `depends_on_landed` gains it is the owner's
+  call at the flip (plan.md § Prerequisites 7).
 
 **Rules for every story:**
 - Never edit an existing test, golden, fixture, `scripts/ci/`, `.github/`, `deny.toml`,
@@ -106,8 +108,8 @@ description: "Task list for 038-track-follows-a-push: Track Follows a Push"
   `crates/finder/web/src/api.ts`, and the `Recenter {target}` button to
   `crates/finder/web/src/components/TrackControl.tsx` (plan.md § The page).
 - [ ] T015 [US3] Record the button in `DESIGN.md`'s "Track and tracking
-  readout" section and in the "Track and Tracking Readout" component of
-  `.impeccable/design.json`.
+  readout" section, naming its push a push by hand (plan.md § The page), and in the
+  "Track and Tracking Readout" component of `.impeccable/design.json`.
 - [ ] T016 [US3] Describe the push check, the `push` key, the readout at the place
   followed, going back, and Track on for another target while Track is on, in the Track
   paragraphs under `## API` (after "Track on requires…") and the `POST /api/track` row of

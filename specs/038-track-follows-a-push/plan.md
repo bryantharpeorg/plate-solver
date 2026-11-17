@@ -191,16 +191,16 @@ pub struct TrackView {
 ```
 
 - `TrackRun` gains `push: Push`, `check_armed: bool` and `model_due: bool`, all clear
-  in a new `TrackRun`. `stop_tracking` (`crates/finder/src/session.rs:950`), which edits
-  the run in place, clears all three too. `set_aim` (`crates/finder/src/session.rs:1234`)
+  in a new `TrackRun`. `stop_tracking` (`crates/finder/src/session.rs:976`), which edits
+  the run in place, clears all three too. `set_aim` (`crates/finder/src/session.rs:1260`)
   clears `check_armed`.
 - **The effective push** is `run.push` while the run's tracker is not `off`, and
   `Push::None` otherwise. The view, the sync rule and `start_tracking` read only the
   effective push, so a tracker that ended by itself (too low, a lost link, the Sun, a
   power cycle) leaves no push behind (spec FR-009).
-- `track_live_pointing` (`crates/finder/src/session.rs:972`) keeps its signature; `now`
+- `track_live_pointing` (`crates/finder/src/session.rs:998`) keeps its signature; `now`
   is the latest pointing's `time`, its mid-exposure on the console clock
-  (`crates/finder/src/live.rs:199`), and `track_generation` is read in the same lock as
+  (`crates/finder/src/live.rs:202`), and `track_generation` is read in the same lock as
   the tracker:
   1. As today, return unless a tracker is running with a target.
   2. If its state is not `tracking`, clear `check_armed`; if `checks_push` is false or
@@ -208,7 +208,7 @@ pub struct TrackView {
      `None`, setting `check_armed` when the pointing is within `PUSH_THRESHOLD_DEG` of
      the tracker's target and the state is `tracking`; return.
   3. Compute `separation` (`crate::model::separation`, as
-     `crates/finder/src/session.rs:845` uses it) of the live pointing from the tracker's
+     `crates/finder/src/session.rs:871` uses it) of the live pointing from the tracker's
      target.
   4. `Following` within `PUSH_REOPEN_S` of its `at`, and the pointing more than
      `PUSH_STILL_DEG` from the place followed: set `Moving { since: now }` at this
@@ -226,7 +226,7 @@ pub struct TrackView {
   Every write of `run.push` re-reads `track_generation` under the values lock and writes
   nothing if it has changed, so a Track run replaced meanwhile is never given another
   run's push. The values lock is never held while calling into the tracker.
-- `record_frame_sync` (`crates/finder/src/session.rs:1098`) answers `Ok(false)` before
+- `record_frame_sync` (`crates/finder/src/session.rs:1124`) answers `Ok(false)` before
   anything else while the effective push is `Moving`. After a sync is recorded with
   `model_due` set, it clears `model_due` and, if the tracker is still running, calls
   `tracker.set_model` with the session's model.
@@ -234,7 +234,7 @@ pub struct TrackView {
   readout's field rotation and longest exposure at the place when `Following`.
 - `Session::edit` (`PUT /api/session`) leaves the Track run and its push as they are, as
   015 has it (spec owner decision 10).
-- `start_tracking`'s early answer (`crates/finder/src/session.rs:825`) also requires the
+- `start_tracking`'s early answer (`crates/finder/src/session.rs:851`) also requires the
   effective push to be `Push::None`, read with `effective_push()` before the block that
   locks the values, since `effective_push()` takes that lock. With a push it goes on as
   for any other start. The old tracker is stopped. Only after stopping an old tracker,
@@ -243,7 +243,7 @@ pub struct TrackView {
   (`crates/finder/src/goto.rs:739`). A missing link or a failed read ends the wait; the
   GoTo then reports it. It answers `Err("stopped")` if `track_generation` has changed
   meanwhile. Then a GoTo starts and Track is armed when the pointing is
-  more than 1′ from the target (`crates/finder/src/session.rs:844`). The same wait
+  more than 1′ from the target (`crates/finder/src/session.rs:870`). The same wait
   mends 015's Track on for another target while Track is on, which today answers 409
   (spec owner approval 9).
 
@@ -269,6 +269,9 @@ status paragraph, with the target in italic as the status sets it, calling
 button shares the switch's `pending` state, so each disables the other. The status
 paragraph and the readout are not changed. The button uses the existing `button` class
 without `button-primary` (GoTo's button has both); no new class or token.
+
+In `DESIGN.md`, "push" alone is 022's push-to line in the guidance block (its **Push**
+style). The entry for this button calls this spec's push a push by hand.
 
 ## Shapes that existing tests pin
 
@@ -320,7 +323,7 @@ on requires…") and the `POST /api/track` row.
 
 ## Verification (every story, before proposing)
 
-- **The factory gates** (`ergane.yaml` at 49bb210):
+- **The factory gates** (`ergane.yaml` at 2f6a777, its gates as at 49bb210):
   - `lint` = `cargo fmt --all --check`,
     `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` and
     the two `cargo doc` runs with `RUSTDOCFLAGS="-D warnings"`;
@@ -336,8 +339,9 @@ on requires…") and the `POST /api/track` row.
 ## Prerequisites before this spec is flipped to `ready`
 
 1. **The earlier specs have landed:** every spec in `depends_on_landed`. Met at 49bb210.
-2. **`main` is still as read.** Every citation here is at 49bb210. If `main` has moved
-   in these files, re-read them and re-run the validator.
+2. **`main` is still as read.** Every citation here is at 2f6a777, re-read by content on
+   2026-11-17 (§ Refinement Record, Re-anchor). If `main` has moved in these files,
+   re-read them and re-run the validator.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
    decisions, § Owner approvals). Met on 2026-11-17: the owner settled every owner
    decision (spec § Owner decisions); the approvals are given at the flip.
@@ -348,13 +352,24 @@ on requires…") and the `POST /api/track` row.
    `crates/finder/src/session.rs`, `crates/finder/web/src/api.ts`,
    `crates/finder/README.md`, `GLOSSARY.md`, `DESIGN.md` and `crates/finder/web/dist`,
    and 021 also writes `crates/finder/src/mcp/tools.rs` and
-   `crates/finder/tests/mcp/main.rs`. Not met: they are flipped or about to be. At this
-   spec's flip, every anchor in those files is re-read on `main`, and
-   `depends_on_landed` gains the two if the owner wants the roadmap to keep the order.
+   `crates/finder/tests/mcp/main.rs`. Met on 2026-11-17: 021 landed at 2f6a777 and 022
+   at 20ce2fe, and every anchor was re-read on `main` at 2f6a777 (§ Refinement Record,
+   Re-anchor). `depends_on_landed` is left as it is: both are on `main`, so the order
+   holds without them, and adding them stays the owner's choice at the flip.
+7. **026-mount-sky lands first.** 026, a draft in PR 207 about to be flipped, writes
+   `crates/finder/src/session.rs`, `crates/finder/web/src/api.ts`,
+   `crates/finder/README.md`, `GLOSSARY.md`, `DESIGN.md` and `crates/finder/web/dist`,
+   as US1, US2 and US3 do, and also `crates/finder/web/src/useSession.ts` and
+   `crates/finder/web/src/App.tsx`, which bring `track` to `TrackControl`. 038 should
+   land after 026. Whether `depends_on_landed` gains `026-mount-sky` is the owner's call
+   at the flip. If 026 lands before 038 is dispatched, this trio is re-read on `main`
+   again (its `session.rs` anchors move, and US3 relies on `useSession.ts` passing
+   `track` whole) and re-validated.
 
 Outside the factory, before it is relied on at the telescope: GoTo and Track proven on
 the real mount, then one push of about 2° and one of about 5′ while tracking, to see that
-the first is followed and the second corrected.
+the first is followed and the second corrected. It needs real stars: a sky drawn from the
+axis counts, as 026 draws one, cannot show a push, which moves no count.
 
 ## Plan traps
 
@@ -381,7 +396,7 @@ They bind every story.
    push in tilt, and down.
 9. **The live loop hands the pointing over before the sync.** `track_live_pointing`
    runs before `record_frame_sync` for the same frame
-   (`crates/finder/src/live.rs:216`, `crates/finder/src/live.rs:223`). *Check:* the push
+   (`crates/finder/src/live.rs:219`, `crates/finder/src/live.rs:226`). *Check:* the push
    state the sync rule reads is the one set for that frame.
 10. **Locks.** `track_live_pointing` reads the tracker's state and the session's values
     under two locks. *Check:* in `track_live_pointing`, `record_frame_sync` and
@@ -399,7 +414,7 @@ They bind every story.
     tracker that ends by itself does not touch the run at all
     (`crates/finder/src/tracking.rs:892`). *Check:* every reader goes through the
     effective push, and US1-S4 ends Track while moving.
-14. **A sync's time is mid-exposure** (`crates/finder/src/live.rs:199`), earlier than the
+14. **A sync's time is mid-exposure** (`crates/finder/src/live.rs:202`), earlier than the
     console time at which its frame was handed over. *Check:* US1-S5 compares sync
     times with the push's time, never with the follow's `at`, and US1-S5 and US1-S3
     push just after a new `pointing.seq`, so no frame open at the push is timed after
@@ -421,7 +436,7 @@ They bind every story.
 | A real push smears frames for several seconds, so the moving state lasts longer. | It costs nothing: nothing pulls while moving. The field check measures it. |
 | A knock of more than 5′ that stays put for 5 s is followed instead of corrected. | One press goes back. The threshold and the settle are constants (owner decisions 1 and 2). |
 | 036 lets imaging subs steer the tracker. Its sub errors would pull toward the old place at up to 30″ a pulse after a follow. | 036 is re-anchored to `main` after this lands and must end the subs' claim on a follow. 037's run ends `pushed_away` first in any case. |
-| Draft `026-mount-sky` writes `README.md`, `GLOSSARY.md`, `DESIGN.md`, `api.ts` and `dist`, as US1 and US3 do. | Whichever is flipped second is re-read, declares the other in `depends_on_landed` and its shared writes, and is re-validated. |
+| Draft `026-mount-sky` writes `session.rs`, `README.md`, `GLOSSARY.md`, `DESIGN.md`, `api.ts` and `dist`, as US1, US2 and US3 do. | 038 lands after it (§ Prerequisites 7): re-read on `main` once 026 has landed, and re-validated; whether `depends_on_landed` gains it is the owner's call at the flip. |
 
 ## Refinement Record
 
@@ -478,9 +493,20 @@ component it renders; the `pi_loop.rs` anchor and the `enum Push` block are corr
 Still caught by no test: the rates and forecasts at the place followed, FR-007's
 hand-over, step 4's reopen and owner decision 7's kept offset.
 
+**Re-anchor, 2026-11-17.** 021 landed at 2f6a777 and 022 at 20ce2fe. The trio was
+re-read on `main` at 2f6a777, by content. Seven cited lines of `session.rs` (ten
+citations) moved 26 lines, and three of `live.rs` (six citations) moved 3; every other
+citation reads as before. Neither spec changed a function this one changes, the rig, the
+tracking tests, `TrackControl`, its fixture, `SessionTrack`, `set_tracking`'s
+description or the gates. Round 2's branches merge onto 2f6a777 with git's own merge but
+for `mod push_tool;` beside 021's `mod session_rotation;` and the rebuilt `dist`. The
+shared writes below now name 021 and 022 where they wrote a file later; they stay
+outside `depends_on_landed` (§ Prerequisites 6). The page's one note on the word "push"
+is in § The page; 026's overlap is § Prerequisites 7.
+
 ```yaml
 version: 1
-reviewed_revision: 49bb210fe4860dd98ba24727074e7bd3cc0d7124
+reviewed_revision: 2f6a777592b7ff2767e71317da90eb3376d179e0
 stories:
   US1:
     tests:
@@ -537,7 +563,7 @@ stories:
         other_spec: 028-finder-tests-do-less
         other_story: US4
         disposition: merge_order
-        reason: "038 depends_on_landed 028, whose US4 last changed session.rs"
+        reason: "038 depends_on_landed 028, whose US4 changed session.rs; 022's US3 and 021's US1 wrote it later, and are on main"
       - path: crates/finder/src/tracking.rs
         other_spec: 024-mount-link-recovery
         other_story: US3
@@ -552,7 +578,7 @@ stories:
         other_spec: 025-frame-capture
         other_story: US2
         disposition: merge_order
-        reason: "038 depends_on_landed 025, whose US2 last changed GLOSSARY.md"
+        reason: "038 depends_on_landed 025, whose US2 changed GLOSSARY.md; 022's US1 and 021's US1 wrote it later, and are on main"
       - path: crates/finder/tests/motion/tracking/mod.rs
         other_spec: 027-finder-tests-by-system
         other_story: US2
@@ -577,7 +603,7 @@ stories:
         assertion: "set_tracking's description contains real telescope, and two track objects with no push compare equal"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
-      - "Track on for the target already tracked with no push answers at once and changes nothing, with the same tracker (crates/finder/src/session.rs:825)"
+      - "Track on for the target already tracked with no push answers at once and changes nothing, with the same tracker (crates/finder/src/session.rs:851)"
     checks:
       development:
         - "cargo nextest run -p finder --locked --test motion tracking::push_back::"
@@ -599,12 +625,12 @@ stories:
         other_spec: 017-console-stop-confirm
         other_story: US1
         disposition: merge_order
-        reason: "038 depends_on_landed 017, whose US1 last changed tools.rs"
+        reason: "038 depends_on_landed 017, whose US1 changed tools.rs; 021's US1 wrote it later, and is on main"
       - path: crates/finder/tests/mcp/main.rs
         other_spec: 027-finder-tests-by-system
         other_story: US2
         disposition: merge_order
-        reason: "038 depends_on_landed 027, whose US2 last changed the module list"
+        reason: "038 depends_on_landed 027, whose US2 changed the module list; 021's US1 added a line later, and is on main"
     open_questions: []
   US3:
     tests:
@@ -641,12 +667,12 @@ stories:
         other_spec: 025-frame-capture
         other_story: US2
         disposition: merge_order
-        reason: "038 depends_on_landed 025, whose US2 last changed the README"
+        reason: "038 depends_on_landed 025, whose US2 changed the README; 022's US3 and 021's US1 wrote it later, and are on main"
       - path: DESIGN.md
         other_spec: 025-frame-capture
         other_story: US3
         disposition: merge_order
-        reason: "038 depends_on_landed 025, whose US3 last changed DESIGN.md"
+        reason: "038 depends_on_landed 025, whose US3 changed DESIGN.md; 022 and 021 wrote it later, and are on main"
       - path: .impeccable/design.json
         other_spec: 025-frame-capture
         other_story: US3
@@ -656,12 +682,12 @@ stories:
         other_spec: 025-frame-capture
         other_story: US3
         disposition: merge_order
-        reason: "038 depends_on_landed 025, whose US3 last rebuilt dist"
+        reason: "038 depends_on_landed 025, whose US3 rebuilt dist; 022 and 021 rebuilt it later, and are on main"
       - path: crates/finder/web/src/api.ts
         other_spec: 025-frame-capture
         other_story: US3
         disposition: merge_order
-        reason: "038 depends_on_landed 025, whose US3 last changed api.ts"
+        reason: "038 depends_on_landed 025, whose US3 changed api.ts; 022's US1 and US3 and 021's US1 wrote it later, and are on main"
       - path: crates/finder/web/src/components/TrackControl.tsx
         other_spec: 015-tracking
         other_story: US8
