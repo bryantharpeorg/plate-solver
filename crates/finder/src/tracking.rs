@@ -66,6 +66,10 @@ pub struct State {
     pub samples: Vec<PointingError>,
     /// Additional azimuth and altitude rates, arcseconds per second.
     pub tracking_offset: [f64; 2],
+    /// Whether the session may check live pointings for a push: true while
+    /// tracking with no axis's backlash being measured; false otherwise,
+    /// `off` and the keyhole included.
+    pub checks_push: bool,
 }
 impl Default for State {
     fn default() -> Self {
@@ -75,6 +79,7 @@ impl Default for State {
             target: None,
             samples: Vec::new(),
             tracking_offset: [0.0; 2],
+            checks_push: false,
         }
     }
 }
@@ -89,12 +94,15 @@ struct Control {
     encoder_residual_deg: [f64; 2],
     solve_after: Option<f64>,
     resume_pointing: Option<PointingError>,
+    /// The target has been replaced by a followed push; the rate loop's next
+    /// turn clears it and refreshes every forecast made for the old place.
+    followed: bool,
 }
 
 struct Shared {
     clock: Arc<dyn Clock>,
     link: Arc<LinkManager>,
-    model: Model,
+    model: Mutex<Arc<Model>>,
     site: Site,
     min_alt_deg: Mutex<f64>,
     wind: Mutex<Wind>,
@@ -134,7 +142,7 @@ impl Tracker {
             shared: Arc::new(Shared {
                 clock,
                 link,
-                model,
+                model: Mutex::new(Arc::new(model)),
                 site,
                 min_alt_deg: Mutex::new(min_alt_deg),
                 wind: Mutex::new(wind),
@@ -205,7 +213,7 @@ impl Tracker {
         }
         let shared = self.shared.clone();
         *task = Some(tokio::spawn(async move {
-            shared.run(target, client, axes, generation, resets).await;
+            shared.run(client, axes, generation, resets).await;
         }));
         Ok(())
     }
@@ -237,10 +245,16 @@ impl Tracker {
     /// Latest state, with error samples aged using the console's clock.
     pub fn state(&self) -> State {
         let mut control = self.shared.control.lock().unwrap();
-        let state = &mut control.state;
         let now = self.shared.clock.now();
-        state.samples.retain(|s| now - s.time <= 60.0);
-        state.clone()
+        let mut state = {
+            let state = &mut control.state;
+            state.samples.retain(|s| now - s.time <= 60.0);
+            state.clone()
+        };
+        state.checks_push = state.state == "tracking"
+            && control.measurement[0].is_none()
+            && control.measurement[1].is_none();
+        state
     }
 
     /// Feed a live solve's aim-point error (or simulator truth plus noise).
@@ -249,6 +263,34 @@ impl Tracker {
     /// every five seconds. Both solved frames and simulator pointings use this path.
     pub fn pointing(&self, east_arcsec: f64, north_arcsec: f64) {
         self.shared.pointing(east_arcsec, north_arcsec);
+    }
+
+    /// Hold this J2000 place in place of the target from the rate loop's next
+    /// turn. The target keeps its name and takes the place's RA and Dec. Clears
+    /// the proportional term, the previous pointing's time and the error
+    /// samples; keeps the tracking offset. Refused, changing nothing, unless the
+    /// state is `tracking` and no backlash is being measured, both read under
+    /// the control lock it then writes.
+    pub fn follow(&self, ra_deg: f64, dec_deg: f64) -> Result<(), String> {
+        let mut control = self.shared.control.lock().unwrap();
+        if control.state.state != "tracking" || control.measurement.iter().any(Option::is_some) {
+            return Err("Track is not tracking; the push cannot be followed".into());
+        }
+        let Some(target) = control.state.target.as_mut() else {
+            return Err("the tracker holds no target".into());
+        };
+        target.ra_deg = ra_deg;
+        target.dec_deg = dec_deg;
+        control.followed = true;
+        control.proportional = [0.0; 2];
+        control.previous_pointing = None;
+        control.state.samples.clear();
+        Ok(())
+    }
+
+    /// Use this pointing model for every later rate, forecast and keyhole plan.
+    pub fn set_model(&self, model: Model) {
+        *self.shared.model.lock().unwrap() = Arc::new(model);
     }
 }
 
@@ -323,7 +365,14 @@ impl Shared {
 }
 
 impl Shared {
+    /// The model the loop currently plans through; a handed-over replacement
+    /// shares the same backlash and crossing state through `Model::motion`.
+    fn model(&self) -> Arc<Model> {
+        self.model.lock().unwrap().clone()
+    }
+
     fn end(&self, reason: String) {
+        let model = self.model();
         let mut control = self.control.lock().unwrap();
         let state = &mut control.state;
         if state.state != "off" {
@@ -335,7 +384,7 @@ impl Shared {
         control.previous_pointing = None;
         for (i, measurement) in control.measurement.iter_mut().enumerate() {
             if measurement.take().is_some() {
-                self.model.motion.crossing(i, false);
+                model.motion.crossing(i, false);
             }
         }
         self.cancel
@@ -404,15 +453,15 @@ impl Shared {
 
     fn positions(&self, target: &Target, counts: [u32; 2], time: f64) -> Option<[f64; 2]> {
         let (alt, az) = self.place(target, time);
-        self.model
+        self.model()
             .inverse(az, ephemeris::apparent_from_true(alt), counts)
     }
 
     fn rates_at(&self, target: &Target, counts: [u32; 2], now: f64) -> Result<[f64; 2], String> {
+        let model = self.model();
         let positions = [now, now + 1.0].map(|time| {
             let (alt, az) = self.place(target, time);
-            self.model
-                .inverse(az, ephemeris::apparent_from_true(alt), counts)
+            model.inverse(az, ephemeris::apparent_from_true(alt), counts)
         });
         let [Some(here), Some(next)] = positions else {
             return Err("cannot invert the pointing model".into());
@@ -522,6 +571,7 @@ impl Shared {
         counts: [u32; 2],
         resets: u64,
     ) -> Result<[i32; 2], String> {
+        let model = self.model();
         loop {
             let az = client
                 .axis_state(Axis::Azimuth)
@@ -538,7 +588,7 @@ impl Shared {
                 return Err("the mount was power-cycled".into());
             }
             let positions = [az.position, alt.position];
-            if let Some(p) = self.model.predict(positions.map(f64::from), counts) {
+            if let Some(p) = model.predict(positions.map(f64::from), counts) {
                 self.wind.lock().unwrap().observe(p.az_deg);
             }
             if !az.moving && !alt.moving {
@@ -566,17 +616,21 @@ impl Shared {
             control.previous_pointing = None;
             control.solve_after = None;
             control.resume_pointing = None;
+            let model = self.model();
             for (i, measurement) in control.measurement.iter_mut().enumerate() {
                 *measurement = None;
-                self.model.motion.crossing(i, true);
+                model.motion.crossing(i, true);
             }
         }
         client.stop_all().await.map_err(|_| "link_lost")?;
         let counts = axes.map(|a| a.counts_per_revolution);
         let mut current = self.at_rest(client, counts, resets).await?;
         let exit = self.keyhole_exit(target)?;
+        // The planner borrows the model this keyhole began with, even if the
+        // session hands a newer one over while the slew runs.
+        let model = self.model();
         let mut planner = Planner {
-            model: &self.model,
+            model: &model,
             axes,
             current,
             wind: *self.wind.lock().unwrap(),
@@ -591,10 +645,10 @@ impl Shared {
         let plan = planner.plan(target)?;
         for waypoint in plan.waypoints {
             for (i, axis) in AXES.into_iter().enumerate() {
-                self.model
+                model
                     .motion
                     .moving(i, f64::from(waypoint[i]) - f64::from(current[i]));
-                self.model.motion.crossing(i, true);
+                model.motion.crossing(i, true);
                 client
                     .goto_axis(axis, waypoint[i])
                     .await
@@ -603,7 +657,7 @@ impl Shared {
             current = self.at_rest(client, counts, resets).await?;
         }
         for i in 0..2 {
-            self.model.motion.crossing(i, false);
+            model.motion.crossing(i, false);
         }
         // Neither PI nor reversal take-up runs during this wait. Solves made
         // here still observe cable wind but cannot provide the resume pointing.
@@ -624,7 +678,7 @@ impl Shared {
         let mut direction = [1.0; 2];
         for i in 0..2 {
             if rates[i] < 0.0 {
-                if let Some(b) = self.model.motion.backlash().axis(i) {
+                if let Some(b) = self.model().motion.backlash().axis(i) {
                     self.take_up(client, i, -1.0, b).await?;
                     direction[i] = -1.0;
                 }
@@ -674,11 +728,12 @@ impl Shared {
         }
         for (i, degrees) in measured.into_iter().enumerate() {
             if let Some(degrees) = degrees {
-                if let Err(reason) = self.model.motion.measured(i, degrees) {
+                let model = self.model();
+                if let Err(reason) = model.motion.measured(i, degrees) {
                     self.end(reason);
                     return;
                 }
-                self.model.motion.crossing(i, false);
+                model.motion.crossing(i, false);
             }
         }
     }
@@ -701,8 +756,9 @@ impl Shared {
         direction: f64,
         degrees: f64,
     ) -> Result<(), String> {
-        self.model.motion.moving(i, direction);
-        self.model.motion.crossing(i, true);
+        let model = self.model();
+        model.motion.moving(i, direction);
+        model.motion.crossing(i, true);
         Self::stop_axis(client, AXES[i]).await?;
         client
             .rate_axis(AXES[i], direction * TAKEUP_RATE)
@@ -713,12 +769,12 @@ impl Shared {
         // the one-second rate refresh with the take-up pulse.
         sleep(Duration::from_secs_f64(degrees / TAKEUP_RATE)).await;
         Self::stop_axis(client, AXES[i]).await?;
-        self.model.motion.moving(i, direction);
-        self.model.motion.crossing(i, false);
+        model.motion.moving(i, direction);
+        model.motion.crossing(i, false);
         Ok(())
     }
 
-    async fn guard(&self, target: &Target, generation: u64) -> String {
+    async fn guard(&self, generation: u64) -> String {
         let mut cancel = self.cancel.subscribe();
         let mut tick = interval(TICK);
         tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
@@ -726,7 +782,8 @@ impl Shared {
             if *cancel.borrow_and_update() != generation {
                 return "stopped".into();
             }
-            if let Some(reason) = self.ending(target) {
+            let target = self.control.lock().unwrap().state.target.clone();
+            if let Some(reason) = target.and_then(|target| self.ending(&target)) {
                 return reason;
             }
             tokio::select! { biased; _ = cancel.changed() => {}, _ = tick.tick() => {} }
@@ -735,7 +792,6 @@ impl Shared {
 
     async fn run(
         self: Arc<Self>,
-        target: Target,
         client: MountClient,
         axes: [AxisInfo; 2],
         generation: u64,
@@ -762,6 +818,22 @@ impl Shared {
                     return "the mount was power-cycled".into();
                 }
                 let now = self.clock.now();
+                // The rate loop plans for the place the tracker holds, which a
+                // followed push can change between turns.
+                let (followed, target) = {
+                    let mut control = self.control.lock().unwrap();
+                    (
+                        std::mem::take(&mut control.followed),
+                        control.state.target.clone(),
+                    )
+                };
+                let Some(target) = target else {
+                    return "stopped".into();
+                };
+                let model = self.model();
+                if followed {
+                    refresh_at = 0.0;
+                }
                 if now >= refresh_at {
                     keyhole_entry = self.keyhole_entry(&target);
                     forecast = [0, 1].map(|i| self.reversal(&target, counts, i));
@@ -791,7 +863,7 @@ impl Shared {
                     if next == 0.0 {
                         continue;
                     }
-                    let backlash = self.model.motion.backlash().axis(i);
+                    let backlash = model.motion.backlash().axis(i);
                     let approaching = backlash.is_some_and(|b| {
                         forecast[i].is_some_and(|t| t >= now && t - now <= b / TAKEUP_RATE + 1.0)
                     });
@@ -832,7 +904,7 @@ impl Shared {
                                 saw_error: false,
                                 settled_since: None,
                             });
-                            self.model.motion.crossing(i, true);
+                            model.motion.crossing(i, true);
                             direction[i] = next;
                         }
                     }
@@ -875,7 +947,7 @@ impl Shared {
                         } else {
                             requested
                         };
-                    self.model.motion.moving(i, rate);
+                    model.motion.moving(i, rate);
                     if movement.rate_axis(axis, rate).await.is_err() {
                         return "link_lost".into();
                     }
@@ -884,7 +956,7 @@ impl Shared {
         };
         let reason = tokio::select! {
             biased;
-            reason = self.guard(&target, generation) => reason,
+            reason = self.guard(generation) => reason,
             reason = rates => reason,
         };
         // Publish the ending before StopAll; dropping the selected-out rate

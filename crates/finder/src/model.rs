@@ -205,6 +205,10 @@ pub struct Model {
     pub expires_at: Option<f64>,
     /// Unweighted sky residual RMS in arcseconds.
     pub rms_arcsec: f64,
+    /// The next sync opens a new zero-point epoch: the axes moved without
+    /// their readings following, as after a followed push.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub slip_pending: bool,
     #[serde(default)]
     fixed_since: Option<f64>,
     #[serde(skip)]
@@ -432,11 +436,18 @@ impl Model {
         self.base_tilt = None;
         self.expires_at = None;
         self.rms_arcsec = 0.0;
+        self.slip_pending = false;
     }
     /// Clear hardware calibration. Only subsequently acquired syncs can refit it.
     pub fn reset_fixed(&mut self) {
         self.fixed = None;
         self.fixed_since = self.syncs.iter().map(|s| s.time).max_by(f64::total_cmp);
+        self.slip_pending = false;
+    }
+    /// Mark the next accepted sync as a slip whatever its distance from the
+    /// prediction, because the axes moved without their readings following.
+    pub fn mark_slip(&mut self) {
+        self.slip_pending = true;
     }
     fn eligible(&self) -> Vec<&Sync> {
         self.syncs
@@ -494,12 +505,13 @@ impl Model {
         {
             return false;
         }
-        let slip = self
-            .predict(sync.axis, sync.counts_per_revolution)
-            .is_some_and(|p| {
-                separation(p.az_deg, p.alt_deg, sync.az_deg, sync.alt_deg)
-                    > if self.base_tilt.is_some() { 0.5 } else { 2.5 }
-            });
+        let slip = self.slip_pending
+            || self
+                .predict(sync.axis, sync.counts_per_revolution)
+                .is_some_and(|p| {
+                    separation(p.az_deg, p.alt_deg, sync.az_deg, sync.alt_deg)
+                        > if self.base_tilt.is_some() { 0.5 } else { 2.5 }
+                });
         if self.epochs.is_empty() || slip {
             let axis =
                 [0, 1].map(|i| sync.axis[i] * 360.0 / f64::from(sync.counts_per_revolution[i]));
@@ -525,6 +537,8 @@ impl Model {
         let (n, az, alt) = self.spread();
         let fit_fixed = !slip && n >= 20 && az >= 180.0 && alt >= 30.0;
         self.fit(fit_base, fit_fixed, slip);
+        // A refused sync leaves the mark set; this one was accepted.
+        self.slip_pending = false;
         true
     }
     /// API summary, omitted for an entirely empty model.

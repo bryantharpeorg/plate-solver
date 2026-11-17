@@ -104,6 +104,39 @@ pub struct TrackingReadout {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub longest_exposure_s: Option<ExposureView>,
 }
+/// Push check bounds (spec owner decisions 1 and 2), in degrees.
+const PUSH_THRESHOLD_DEG: f64 = 5.0 / 60.0;
+const PUSH_STILL_DEG: f64 = 1.0 / 60.0;
+/// Seconds of stillness that settle a push, and the window after a follow.
+const PUSH_SETTLE_S: f64 = 5.0;
+const PUSH_REOPEN_S: f64 = 10.0;
+
+/// Track's push state, on the live-pointing intake.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+enum Push {
+    #[default]
+    None,
+    /// The first pointing of the current still stretch, and its console time.
+    Moving {
+        ra_deg: f64,
+        dec_deg: f64,
+        since: f64,
+    },
+    Following {
+        ra_deg: f64,
+        dec_deg: f64,
+        at: f64,
+    },
+}
+
+/// The `track` view's push shape: moving by hand, or following a place.
+#[derive(Debug, Serialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum PushView {
+    Moving,
+    Following { ra_deg: f64, dec_deg: f64, at: f64 },
+}
+
 /// Run-only Track state; never written to the state file.
 #[derive(Debug, Serialize)]
 pub struct TrackView {
@@ -119,6 +152,9 @@ pub struct TrackView {
     /// Present while the tracker is active.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub readout: Option<TrackingReadout>,
+    /// The push by hand Track is holding, absent unless it is moving or followed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub push: Option<PushView>,
 }
 #[derive(Clone)]
 struct TrackRun {
@@ -127,6 +163,12 @@ struct TrackRun {
     target: Target,
     tracker: Option<Arc<Tracker>>,
     ended_reason: Option<String>,
+    /// The push the live pointings have shown, if any.
+    push: Push,
+    /// Whether the push check is armed by a pointing within the threshold.
+    check_armed: bool,
+    /// The follow's own sync is recorded; hand the tracker the model then.
+    model_due: bool,
 }
 impl TrackRun {
     fn view(&self, values: &Values, time: f64) -> TrackView {
@@ -137,11 +179,36 @@ impl TrackRun {
         } else {
             tracker.as_ref().map_or("off", |t| t.state)
         };
+        // A push never outlives the tracker: an ended tracker holds none.
+        let push = match (&self.push, tracker.as_ref().filter(|t| t.state != "off")) {
+            (Push::None, _) | (Push::Moving { .. }, None) => None,
+            (Push::Moving { .. }, Some(_)) => Some(PushView::Moving),
+            (Push::Following { .. }, None) => None,
+            (
+                Push::Following {
+                    ra_deg,
+                    dec_deg,
+                    at,
+                },
+                Some(_),
+            ) => Some(PushView::Following {
+                ra_deg: *ra_deg,
+                dec_deg: *dec_deg,
+                at: *at,
+            }),
+        };
         let readout = tracker.as_ref().filter(|t| t.state != "off").and_then(|t| {
             let site = values.site?;
+            // FR-010: while Track follows a push, the readout is the place followed.
+            let (ra_deg, dec_deg) = match &self.push {
+                Push::Following {
+                    ra_deg, dec_deg, ..
+                } => (*ra_deg, *dec_deg),
+                _ => (self.target.ra_deg, self.target.dec_deg),
+            };
             let (alt, az) = sky::alt_az(
-                self.target.ra_deg,
-                self.target.dec_deg,
+                ra_deg,
+                dec_deg,
                 &Observer {
                     lat: site.lat_deg,
                     lon: site.lon_deg,
@@ -186,6 +253,7 @@ impl TrackRun {
                 .and_then(|t| t.ended_reason)
                 .or_else(|| self.ended_reason.clone()),
             readout,
+            push,
         }
     }
 }
@@ -888,6 +956,9 @@ impl Session {
                 target,
                 tracker: None,
                 ended_reason: None,
+                push: Push::None,
+                check_armed: false,
+                model_due: false,
             });
             values.track_generation
         };
@@ -982,6 +1053,9 @@ impl Session {
                 track.wanted = false;
                 track.armed = false;
                 track.ended_reason = Some("stopped".into());
+                track.push = Push::None;
+                track.check_armed = false;
+                track.model_due = false;
             }
         }
         if let Some(tracker) = self.tracker() {
@@ -995,8 +1069,20 @@ impl Session {
 
     /// Feed only successful live solves, at the calibrated aim point. Uploads
     /// never call this entry point. The tracker accepts every active state name.
+    /// A live pointing more than the push threshold from the place the tracker
+    /// holds is a push by hand: it is handed over to nobody, and once the
+    /// pointings have stayed still for long enough, the tracker follows it.
     pub(crate) fn track_live_pointing(&self) {
-        let Some(tracker) = self.tracker() else {
+        // Step 1: a running tracker with a target, its generation read in the
+        // same lock as the tracker itself.
+        let (tracker, generation) = {
+            let values = self.values.lock().expect("observing session");
+            (
+                values.track.as_ref().and_then(|run| run.tracker.clone()),
+                values.track_generation,
+            )
+        };
+        let Some(tracker) = tracker else {
             return;
         };
         let state = tracker.state();
@@ -1006,15 +1092,181 @@ impl Session {
         let Some(target) = state.target else {
             return;
         };
-        let values = self.values.lock().expect("observing session");
-        if let Some(pointing) = &values.pointing {
-            let east = ((pointing.ra_deg - target.ra_deg + 180.0).rem_euclid(360.0) - 180.0)
-                * target.dec_deg.to_radians().cos()
-                * 3600.0;
-            let north = (pointing.dec_deg - target.dec_deg) * 3600.0;
-            drop(values);
-            tracker.pointing(east, north);
+        let (pointing, push, armed) = {
+            let mut values = self.values.lock().expect("observing session");
+            let (push, armed) = match &mut values.track {
+                Some(run) => {
+                    if state.state != "tracking" {
+                        run.check_armed = false;
+                    }
+                    (run.push, run.check_armed)
+                }
+                None => return,
+            };
+            (values.pointing.clone(), push, armed)
+        };
+        let Some(pointing) = pointing else {
+            return;
+        };
+        let now = pointing.time;
+        let hand_over = |east: f64, north: f64| tracker.pointing(east, north);
+        let error = |pointing: &Pointing| {
+            (
+                ((pointing.ra_deg - target.ra_deg + 180.0).rem_euclid(360.0) - 180.0)
+                    * target.dec_deg.to_radians().cos()
+                    * 3600.0,
+                (pointing.dec_deg - target.dec_deg) * 3600.0,
+            )
+        };
+        let separation = |ra_deg: f64, dec_deg: f64| {
+            crate::model::separation(ra_deg, dec_deg, target.ra_deg, target.dec_deg)
+        };
+        // Step 2: the check does not run while the tracker waits in the keyhole
+        // or measures a backlash, and until a pointing within the threshold has
+        // armed it. The error is handed over as today.
+        if state.state != "tracking" || !state.checks_push || !armed {
+            let (east, north) = error(&pointing);
+            let within = separation(pointing.ra_deg, pointing.dec_deg) <= PUSH_THRESHOLD_DEG;
+            hand_over(east, north);
+            {
+                let mut values = self.values.lock().expect("observing session");
+                if values.track_generation != generation {
+                    return;
+                }
+                if let Some(run) = &mut values.track {
+                    // Only a moving state is ended here; a followed push stays
+                    // while the tracker runs, even through a backlash pass.
+                    if matches!(run.push, Push::Moving { .. }) {
+                        run.push = Push::None;
+                    }
+                    if within && state.state == "tracking" {
+                        run.check_armed = true;
+                    }
+                }
+            }
+            return;
         }
+        // Step 4: a move within the window after a follow makes the telescope
+        // moving by hand again before it can be read as a plain error.
+        if let Push::Following {
+            ra_deg,
+            dec_deg,
+            at,
+        } = push
+        {
+            if now - at < PUSH_REOPEN_S
+                && crate::model::separation(pointing.ra_deg, pointing.dec_deg, ra_deg, dec_deg)
+                    > PUSH_STILL_DEG
+            {
+                self.mark_slip();
+                self.edit_push(generation, |run| {
+                    run.push = Push::Moving {
+                        ra_deg: pointing.ra_deg,
+                        dec_deg: pointing.dec_deg,
+                        since: now,
+                    }
+                });
+                return;
+            }
+        }
+        // Step 5: at or under the threshold the error is handed over as today;
+        // a pointing back at the place held ends the moving state.
+        if separation(pointing.ra_deg, pointing.dec_deg) <= PUSH_THRESHOLD_DEG {
+            if matches!(push, Push::Moving { .. }) {
+                self.edit_push(generation, |run| run.push = Push::None);
+            }
+            let (east, north) = error(&pointing);
+            hand_over(east, north);
+            return;
+        }
+        // Over the threshold: the telescope is moving by hand.
+        match push {
+            // Step 6: a first push marks the model's slip and hands nothing over.
+            Push::None | Push::Following { .. } => {
+                self.edit_push(generation, |run| {
+                    run.push = Push::Moving {
+                        ra_deg: pointing.ra_deg,
+                        dec_deg: pointing.dec_deg,
+                        since: now,
+                    }
+                });
+                self.mark_slip();
+            }
+            // Step 7: still within a minute of arc of the stretch's first
+            // pointing, the push settles once the pointings have held for
+            // five seconds, and the tracker follows the place it was left at.
+            Push::Moving {
+                ra_deg,
+                dec_deg,
+                since,
+            } => {
+                if crate::model::separation(pointing.ra_deg, pointing.dec_deg, ra_deg, dec_deg)
+                    > PUSH_STILL_DEG
+                {
+                    self.edit_push(generation, |run| {
+                        run.push = Push::Moving {
+                            ra_deg: pointing.ra_deg,
+                            dec_deg: pointing.dec_deg,
+                            since: now,
+                        }
+                    });
+                } else if now - since >= PUSH_SETTLE_S
+                    && tracker.follow(pointing.ra_deg, pointing.dec_deg).is_ok()
+                {
+                    self.edit_push(generation, |run| {
+                        run.push = Push::Following {
+                            ra_deg: pointing.ra_deg,
+                            dec_deg: pointing.dec_deg,
+                            at: now,
+                        };
+                        run.model_due = true;
+                    });
+                }
+            }
+        }
+    }
+
+    /// Write the run's push under the values lock, only if the Track run read
+    /// before is still the run in force.
+    fn edit_push(&self, generation: u64, edit: impl FnOnce(&mut TrackRun)) {
+        let mut values = self.values.lock().expect("observing session");
+        if values.track_generation != generation {
+            return;
+        }
+        if let Some(run) = &mut values.track {
+            edit(run);
+        }
+    }
+
+    /// The push the live pointings have shown, read as none whenever the run's
+    /// tracker is off, so a push never outlives the Track that held it.
+    fn effective_push(&self) -> Push {
+        let values = self.values.lock().expect("observing session");
+        match &values.track {
+            Some(run)
+                if run
+                    .tracker
+                    .as_ref()
+                    .is_some_and(|t| t.state().state != "off") =>
+            {
+                run.push
+            }
+            _ => Push::None,
+        }
+    }
+
+    /// Mark the model's next sync as a slip, persisting as `reset_model` does.
+    /// The mark is kept in memory even when the state file cannot be written.
+    fn mark_slip(&self) {
+        let mut values = self.values.lock().expect("observing session");
+        let mut next = values.clone();
+        next.model.mark_slip();
+        if let Some(path) = &self.state_file {
+            if let Err(error) = write_state(path, &next) {
+                eprintln!("could not persist the pending slip: {error}");
+            }
+        }
+        *values = next;
     }
 
     pub(crate) fn link_changes(&self) -> watch::Receiver<LinkConfig> {
@@ -1139,6 +1391,11 @@ impl Session {
         time: f64,
         rms: f64,
     ) -> Result<bool, SessionError> {
+        // A frame taken while the telescope moves by hand is no sync: its axes
+        // did not follow the pointing. FR-006, answered before anything else.
+        if matches!(self.effective_push(), Push::Moving { .. }) {
+            return Ok(false);
+        }
         let (aim, site, counts) = {
             let values = self.values.lock().expect("observing session");
             (values.aim, values.site, values.counts_per_revolution)
@@ -1175,9 +1432,27 @@ impl Session {
         };
         if recorded {
             let exposure_start = time - (frame.end_s - frame.start_s) / 2.0;
-            let mut values = self.values.lock().expect("observing session");
-            if values.sync_needed.is_some_and(|rise| exposure_start > rise) {
-                values.sync_needed = None;
+            let mut hand_over = None;
+            {
+                let mut values = self.values.lock().expect("observing session");
+                if values.sync_needed.is_some_and(|rise| exposure_start > rise) {
+                    values.sync_needed = None;
+                }
+                // FR-007: the follow's own sync is recorded, so the tracker
+                // takes the session's model for its later plans.
+                if let Some(run) = values.track.as_mut() {
+                    if run.model_due {
+                        run.model_due = false;
+                        if let Some(tracker) = run.tracker.clone() {
+                            hand_over = Some((tracker, values.model.clone()));
+                        }
+                    }
+                }
+            }
+            if let Some((tracker, model)) = hand_over {
+                if tracker.state().state != "off" {
+                    tracker.set_model(model);
+                }
             }
         }
         Ok(recorded)
@@ -1267,7 +1542,9 @@ impl Session {
         }
     }
 
-    /// Persist the aim for subsequent solves, or reset it.
+    /// Persist the aim for subsequent solves, or reset it. A changed aim point
+    /// disarms the push check until a pointing within the threshold is handed
+    /// over again.
     pub fn set_aim(&self, aim: Option<Aim>, time: f64) -> Result<SessionView, SessionError> {
         if let Some(aim) = aim {
             aim.validate()?;
@@ -1279,6 +1556,9 @@ impl Session {
             write_state(path, &next).map_err(SessionError::Storage)?;
         }
         *values = next;
+        if let Some(run) = &mut values.track {
+            run.check_armed = false;
+        }
         Ok(values.view(time))
     }
 
