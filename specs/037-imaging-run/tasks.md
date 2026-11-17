@@ -17,13 +17,12 @@ description: "Task list for 037-imaging-run: The Imaging Run"
   its US6, and 033 to 035 take it: met in the drafts, and re-read when 031 lands
   (plan.md § Prerequisites 3);
 - the first twenty-five owner decisions in spec.md are settled and its owner approvals
-  given, and 032's owner decision 25, the seam between 032 and 015 that decision 26
-  cites, is settled in 032's trio: not met (plan.md § Prerequisites 4);
-- 032's draft now holds a measured aim point back while Track is on (032's FR-036),
-  the answer that by spec.md owner decision 26 changes FR-022's test and moves
-  FR-025's wait after the re-centre's Track off, and this trio is rewritten for it, or
-  the owner answers 032's decision 25 otherwise: not met, in this worktree's drafts
-  (plan.md § Prerequisites 4);
+  given: not met (plan.md § Prerequisites 4);
+- 032's owner decision 25, the seam between 032 and 015 that decision 26 cites, is
+  settled in 032's trio, and this trio is written for its answer: met on 2026-11-17.
+  The owner chose the hold (032's FR-036), so FR-022's test counts a held aim point as
+  moved and FR-025's wait comes after the re-centre's Track off (plan.md
+  § Prerequisites 4);
 - every story has been probe-built: not met (plan.md § Prerequisites 5);
 - no operator-staged file is needed.
 
@@ -216,17 +215,18 @@ description: "Task list for 037-imaging-run: The Imaging Run"
 - [ ] T018 [US4] Create `crates/finder/src/imaging/run/console.rs` with `CENTRE_SHARE`,
   `CENTRE_FLOOR_ARCSEC`, `mount`, `camera` and `solver`, and add `pub mod console;` to
   `crates/finder/src/imaging/run.rs`. Write the mount part's `target`, `point`, the
-  table of `state` with its `repointing` flag, and `repoint`'s steps 1 and 3 to 6:
+  table of `state` with its `repointing` flag, and `repoint`'s steps 1, 2 and 4 to 6:
   refuse when the stop generation has changed, Track off, Track on under
   `start_motion`, the generation compared before Track's answer is read, Stop asked
   again when it changed, and only then Track's error as a failure of the mount (plan.md
-  § The console's mount part). Step 2, the wait, is US5's. Write the camera part over
+  § The console's mount part). Step 3, the wait, is US5's. Write the camera part over
   031 US6's lease, with `HOLDER`, an `Arc` of the lease kept under a std `Mutex`, the
   lease taken in `hold` before the look for an imaging frame in flight and before the
   region-of-interest check, and the holder's take with the purpose `run` at the
   camera's settings as they stand, setting nothing and asking nothing of 036's
   steering; and the solver part, with the session's aim point read before and after
-  the solve for `aim_moved` (plan.md § The console's camera and solver parts).
+  the solve, and 032's `Session::held_aim` after it, for `aim_moved` (plan.md § The
+  console's camera and solver parts).
 - [ ] T019 [US4] Run the `lint` and `test` gates with every existing test unchanged and
   green, US1's to US3's included. Commit the green story (US4-S1, US4-S2, US4-S3,
   US4-S4 and US4-S5).
@@ -255,10 +255,10 @@ description: "Task list for 037-imaging-run: The Imaging Run"
   4 of the task the centring loop of plan.md § Centring in the machine, with `repoint`
   awaited unguarded and only after a solve whose `aim_moved` is true.
 - [ ] T023 [US5] In `crates/finder/src/imaging/run/console.rs`, add `FRESH_POLLS` and
-  step 2 of `repoint`: the wait, with Track on, for a live pointing newer than the one
-  found, at most `FRESH_POLLS` polls, going on when none has come and refusing as
-  stopped when the stop generation changes meanwhile (plan.md § The console's mount
-  part).
+  step 3 of `repoint`: after the part's own Track off and with Track off, the wait for
+  a live pointing newer than the one found then, at most `FRESH_POLLS` polls, going on
+  to ask Track when none has come and refusing as stopped, with `repointing` cleared,
+  when the stop generation changes meanwhile (plan.md § The console's mount part).
 - [ ] T024 [US5] Run the `lint` and `test` gates with every existing test unchanged and
   green, US1's to US4's included. Commit the green story (US5-S1, US5-S2, US5-S3,
   US5-S4 and US5-S5).

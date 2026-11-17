@@ -190,7 +190,7 @@ is re-read on `main` before the flip (§ Prerequisites 2 and 3).
 | the imaging folder | 034 | `Imaging::root()` | 034 plan.md § 031's imaging state |
 | whether there is an imaging solver | 032 | `Imaging::solver()` | 032 plan.md § Solving on the console |
 | solve the latest imaging frame, awaited | 032 | `Imaging::solve()`, `Imaging::solved(frame_id)` → `SolveView { state, ra_deg, dec_deg, arcsec_per_px, reason, error, .. }` | 032 plan.md § Solving on the console |
-| whether a solve moved the aim point | 032 | `SessionView::aim` → `Option<AimView { x, y, source }>`, read before the solve and after it; 032's task sets it with `Session::set_measured_aim` before the solve reads `solved` | 032 plan.md § The session, § The relation, § Solving on the console |
+| whether a solve moved the aim point | 032 | `SessionView::aim` → `Option<AimView { x, y, source }>`, read before the solve and after it; `Session::held_aim()` → `Option<Aim>`, the measured aim point held back while Track is on, read after it; 032's task hands a measured aim point to `Session::set_measured_aim`, which holds it back while Track is on, before the solve reads `solved` | 032 plan.md § The session (the held aim point), § The relation, § Solving on the console |
 | the focus check, awaited | 033 | `Imaging::focus_start(FocusAsk { check: true, .. })`, `Imaging::focus_ended()` → `FocusView { unit, aid, .. }`, `AidView { check, state, verdict, median, last, reference, ended_reason, error, .. }` | 033 plan.md § The aid on the console, § The focus view |
 | the focus aid, opened and closed | 033 | `Imaging::focus_start(FocusAsk::default())`, `Imaging::focus_stop()` | 033 plan.md § The aid on the console |
 | the live stack | 035 | `AppState::stack()` → `Stacker`; `Stacker::start(StartRequest, Option<&str>)`, `Stacker::stop()`, `Stacker::view()` → `StackView { state, id, stacked, dropped, ended_reason, error, save_error, .. }` | 035 plan.md § The stack on the console, § The console |
@@ -337,7 +337,8 @@ pub trait FocusSteps: Send + Sync {
 pub struct Centre {
     pub offset_arcsec: f64,
     pub tolerance_arcsec: f64,
-    /// Whether the solve moved the aim point: a re-centre is asked for only then.
+    /// Whether the solve moved the aim point, or left a measured one held back until
+    /// Track is off: a re-centre is asked for only then.
     pub aim_moved: bool,
 }
 pub trait SolveSteps: Send + Sync {
@@ -920,8 +921,8 @@ three lines, written as they stand here, with no backticks:
 pub const CENTRE_SHARE: f64 = 0.05;
 pub const CENTRE_FLOOR_ARCSEC: f64 = 90.0;
 // US5:
-/// Polls a re-centre waits, at most, for the finder camera's next live pointing: 5 s
-/// at `POLL`.
+/// Polls a re-centre waits, at most, after its own Track off, for the finder camera's
+/// next live pointing: 5 s at `POLL`.
 pub const FRESH_POLLS: u32 = 20;
 
 pub fn mount(state: &AppState) -> Arc<dyn MountSteps>;
@@ -978,16 +979,18 @@ from `point` on, the stop generation, the target's id and `by`; and a flag,
   generation unmoved (a start of Track that lost a race inside the session, or the
   console letting go of Track) would read `Slewing` for ever, and the run has no
   timeout for that.
-- **`repoint`**, in this order. US4 writes steps 1 and 3 to 6; US5 adds step 2 and
+- **`repoint`**, in this order. US4 writes steps 1, 2 and 4 to 6; US5 adds step 3 and
   `FRESH_POLLS`.
   1. The generation differs from the one kept: `Err(Stopped)`.
-  2. (US5) It reads the `seq` of the session's pointing
+  2. `repointing` is set; `state.session().stop_tracking().await`
+     (`crates/finder/src/session.rs:950`).
+  3. (US5) It reads the `seq` of the session's pointing
      (`crates/finder/src/session.rs:463`), then, at most `FRESH_POLLS` times, sleeps
      `POLL` and reads it again. It goes on as soon as the `seq` has changed, and goes
      on all the same when it has not after the last sleep. A generation that has
-     changed meanwhile is `Err(Stopped)`. Track stays on through this wait.
-  3. `repointing` is set; `state.session().stop_tracking().await`
-     (`crates/finder/src/session.rs:950`).
+     changed meanwhile clears `repointing` and is `Err(Stopped)`: that Stop has
+     stopped the mount, and nothing has been started since step 2. Track stays off
+     through this wait.
   4. `let asked = api::start_motion(&state, by, tool, || api::start_tracking(&state)).await`,
      with `tool` `imaging_run` for `page` and `start_imaging_run` for `mcp`;
      `repointing` is cleared, whatever `asked` is.
@@ -1006,33 +1009,33 @@ from `point` on, the stop generation, the target's id and `by`; and a flag,
   it tells a Stop from a mount that would not start, and whatever step 4 did start is
   stopped again before the part answers. A Stop asked twice is always safe.
 
-  **Step 2 is there** because a latest pointing is taken at the aim point in force when
-  its star frame was solved (`crates/finder/src/session.rs:1192`): right after 032 has
-  set a newly measured aim point, the pointing the session holds is still the old
-  one's, and Track's 1′ test (`crates/finder/src/session.rs:845`) would start no GoTo.
-  The wait is a bound in seconds, 5 s at `POLL`, and not a count of the finder camera's
-  frames. 015's tracker already expects a live pointing at least every five seconds
-  (`crates/finder/src/tracking.rs:248`), so a finder camera slower than that is outside
-  what Track is built for; after the bound the part asks Track anyway, Track decides
-  with the pointing it has, and at worst a try is spent.
+  **Step 3 is there** because a latest pointing is taken at the aim point in force when
+  its star frame was solved (`crates/finder/src/session.rs:1192`), and while Track is
+  on 032 holds a newly measured aim point back (032's FR-036; 032's owner decision 25,
+  which spec owner decision 26 cites, settled by the owner on 2026-11-17). Right after
+  step 2 the pointing the session holds was still taken at the old aim point, and
+  Track's 1′ test (`crates/finder/src/session.rs:845`) would start no GoTo. The first
+  live solve the session records with Track off applies the held aim point before its
+  pointing is taken (032 plan.md § The session, the held aim point), so that pointing
+  is the first at the new aim point, and Track asked after it brings the target there.
+  The `seq` is read after step 2 for that reason: a pointing recorded while Track was
+  still on was taken at the old aim point. The wait is a bound in seconds, 5 s at
+  `POLL`, and not a count of the finder camera's frames. 015's tracker already expects
+  a live pointing at least every five seconds (`crates/finder/src/tracking.rs:248`), so
+  a finder camera slower than that is outside what Track is built for; after the bound
+  the part asks Track anyway, Track decides with the pointing it has, the held aim
+  point stays held under the new Track, and at worst a try is spent.
 
-  **What the tracker does during step 2.** Track is on while the part waits, and the
-  live pointing it waits for is the first one the tracker is handed at the new aim
-  point (`crates/finder/src/session.rs:972`). The tracker takes the whole step from
-  the old aim point as its error and starts to close it, at a rate nothing bounds
-  (`crates/finder/src/tracking.rs:304`), under Track's own guards and outside GoTo's.
-  The part cannot prevent that: it is a seam between 032 and 015, reachable from 032 on
-  with or without a run, and the owner settles it as 032's owner decision 25, which
-  spec owner decision 26 cites (spec § Clarifications). Step 3 ends it, and the GoTo
-  that step 4 lets Track start is what brings the target to the aim point under GoTo's
-  checks. That is 032 as first drafted. 032's draft now holds a measured aim point back
-  while Track is on and applies it at the first live solve the session records with
-  Track off (032's FR-036, US4-S8), its recommended answer, so the tracker is handed no
-  step. Whatever 032's decision 25 settles is re-read here at the re-anchoring; only
-  an answer that holds a measured aim point back while Track is on moves step 2 after
-  step 3 (spec owner decision 26), and that is the answer 032 now recommends: this part
-  is not yet rewritten for it (§ Prerequisites 4). Until then the probe of US5-S4 says
-  what the simulator's mount does in those seconds (§ Prerequisites 5).
+  **The tracker is handed no step.** While Track is on, live pointings stay taken at
+  the aim point Track started from, so 015's tracker, which is handed every one as the
+  target's offset (`crates/finder/src/session.rs:972`), sees no step toward a newly
+  measured aim point; during step 3 Track is off. As 032 was first drafted, the aim
+  point was set at once and this wait came before Track off: the tracker took the whole
+  step from the old aim point as its error and closed it at a rate nothing bounds
+  (`crates/finder/src/tracking.rs:304`), under Track's own guards and outside GoTo's,
+  for up to 5 s (spec § Clarifications). The owner's answer to 032's decision 25 closed
+  that in 032. The probe of US5-S4 confirms that the simulator's mount does not move
+  toward the new aim point between the imaging solve and step 2 (§ Prerequisites 5).
 
   `stop_tracking` waits for the mount's acknowledgement of its stop, not for rest. If
   an axis still reports motion when step 4's Track asks GoTo, GoTo refuses with
@@ -1129,26 +1132,31 @@ is awaited, so the camera is given back at the moment `release` drops the kept c
    `(CENTRE_SHARE * shorter * solve.arcsec_per_px).max(CENTRE_FLOOR_ARCSEC)`, `shorter`
    being the smaller of the `width` and `height` of the imaging view's `frame` when its
    `id` is still `frame.id`, and `CENTRE_FLOOR_ARCSEC` alone otherwise. `aim_moved` is
-   true when the session's `aim`, read again now, is there where `before` was not, or
-   has another `x` or another `y` than `before`.
+   true when `state.session().held_aim()` is `Some`: a measured aim point 032 holds
+   back while Track is on, which the re-centre's Track off puts in force (§ The
+   console's mount part, step 3). Otherwise it is true when the session's `aim`, read
+   again now, is there where `before` was not, or has another `x` or another `y` than
+   `before`.
 
 `aim_moved` is read from the session and not from 032's `relation.last`, because an aim
 reading 032 takes does not always move the aim point: 032 sets the session's aim point
 only when none is in force, when the one in force was tapped, or when its window's
 median lies more than `AIM_STEP_ARCSEC`, 10″ on the sky, from the one in force (032
-plan.md § The relation, `should_apply`); and, as 032 is now drafted, while Track is on
-it sets none at all but holds it back (032's FR-036; § Prerequisites 4). When the aim
-point did not move, Track off and on would bring the mount back to where it is, and a
-try would be spent on nothing.
+plan.md § The relation, `should_apply`); and while Track is on it sets none at all but
+holds it back (032's FR-036), which `held_aim` answers. 032 smooths later aim readings
+against the held one as the aim point in force, so an aim point is held back only when
+one of those three tests passed. When the aim point neither moved nor is held back,
+Track off and on would bring the mount back to where it is, and a try would be spent on
+nothing.
 
 The centre of a whole-sensor imaging frame is the set point, at any binning, which is
 why `hold` refuses a region of interest and the offset needs no pixel arithmetic. 032's
 task hands the measured aim point to the session before it shows the solve as `solved`
 (032 plan.md § Solving on the console, the task's steps 1 to 3). With Track off the
 session sets it, so the second read sees it, and from then on every live pointing is
-taken at it. With Track on, as throughout a run, 032's draft now holds it back (032
-plan.md § The session, the held aim point), so the second read does not see it:
-§ Prerequisites 4.
+taken at it. With Track on, as throughout a run, 032 holds it back (032 plan.md § The
+session, the held aim point): the second read of `aim` does not see it and `held_aim`
+does, and the first live pointing after the re-centre's Track off is taken at it.
 
 ### Centring in the machine (`crates/finder/src/imaging/run.rs`, US5)
 
@@ -1475,13 +1483,13 @@ between backticks and one line each; a table of the seventeen endings with their
 between backticks, what each means and what the mount is doing afterwards; the limits
 (`subs`, `duration_s` and its 7200 s default, counted on the clock from the start of
 stacking) and the counts (three imaging frames, three solves, three centring tries, ten
-subs, 15 minutes at a focus pause, 5 s for the finder camera before a re-centre); the
-centring tolerance; that the run's own imaging frames are taken at the camera's
-exposure setting and only the stack's subs are capped by the tracker's limit, so that a
-long setting on an alt-az mount trails the corner stars of the imaging frames the run
-solves; the three routes and the four tools between backticks; where `run.json` lies
-and its keys; what `keep_subs` false removes; and what `POST /api/stop` and the MCP
-`stop` do to a run.
+subs, 15 minutes at a focus pause, 5 s for the finder camera after a re-centre's Track
+off); the centring tolerance; that the run's own imaging frames are taken at the
+camera's exposure setting and only the stack's subs are capped by the tracker's limit,
+so that a long setting on an alt-az mount trails the corner stars of the imaging frames
+the run solves; the three routes and the four tools between backticks; where
+`run.json` lies and its keys; what `keep_subs` false removes; and what `POST /api/stop`
+and the MCP `stop` do to a run.
 
 Then `### Field checklist: the first imaging run`, exactly fourteen numbered steps, each
 one or two sentences with what to write down (US11-S2 reads the word `corner` in the
@@ -1499,7 +1507,8 @@ text from the line that begins `8.` to the line that begins `9.`):
 7. At the focus check, write down the verdict, the focus reading and the focus record;
    if the run pauses, turn the focuser and press `Check focus again`.
 8. At centring, write down each try's offset and the tolerance, how many tries it took,
-   and how the telescope moved between the first imaging solve and the first re-centre.
+   and whether the telescope stayed still between the first imaging solve and the first
+   re-centre's Track off: a newly measured aim point waits until Track is off.
    Open the last imaging frame the run solved and write down whether its corner stars
    are trailed, since the run's own imaging frames are not capped as subs are.
 9. While stacking, write down the subs stacked and dropped by reason after 5 minutes,
@@ -1575,7 +1584,7 @@ These are not changed by any story:
 | Decision | Rejected | Why |
 |---|---|---|
 | The run points by asking Track, and re-centres by Track off and Track on | Calling `GoTo::start` from the run; feeding the tracker an offset; a small axis move | GoTo refuses while the mount tracks (`crates/finder/src/goto.rs:739`); Track already decides whether a GoTo is needed and carries every guard. An axis move is a second way to move the mount, which the plan document forbids (rules 1 and 5). |
-| A re-centre first waits for the finder camera's next live pointing, for at most 5 s | Asking Track at once; a count of the finder camera's frames | The pointing the session holds was taken at the aim point of its own moment (`crates/finder/src/session.rs:1192`); right after a new aim point is measured, Track's 1′ test would read the old one, start no GoTo, and a try would be spent. The bound is in seconds because a count of star frames has no end on a finder camera that has stopped solving, and 5 s is the interval within which 015's tracker already expects a live pointing (`crates/finder/src/tracking.rs:248`). |
+| A re-centre turns Track off, then waits for the finder camera's next live pointing, for at most 5 s, before it asks Track again | Asking Track at once after Track off; waiting with Track still on; a count of the finder camera's frames | While Track is on 032 holds a newly measured aim point back and applies it at the first live solve the session records with Track off, before that solve's pointing is taken (032's FR-036; spec owner decision 26). The pointing the session holds was taken at the aim point of its own moment (`crates/finder/src/session.rs:1192`): asked at once, Track's 1′ test would read one taken at the old aim point, start no GoTo, and a try would be spent. A wait made with Track still on would see no pointing at the new aim point at all. The bound is in seconds because a count of star frames has no end on a finder camera that has stopped solving, and 5 s is the interval within which 015's tracker already expects a live pointing (`crates/finder/src/tracking.rs:248`). |
 | Stop is told from the run's own Track off by GoTo's stop generation | Reading `track.ended_reason` | The run's own `stop_tracking` leaves `stopped` there too. Every real Stop goes through `GoTo::stop`, which advances the generation first. |
 | The mount part asks for Stop again when the generation changed across its restart, and compares the generation before it reads Track's answer | Trusting Track's own check; reading Track's error first | A Stop that lands between Track off and Track's start is seen by neither. One that lands during Track's start makes Track answer `stopped` (`crates/finder/src/session.rs:854`) or GoTo answer `the observer stopped it` (`crates/finder/src/goto.rs:626`): read first, that is a `mount_failed` after the observer pressed Stop. |
 | The mount part names only `armed` and `off` of Track's states, and takes `steady` from the tracker | Listing `tracking` and `keyhole_wait` | The keyhole is one mount's way of being unsteady; a later tracker has others (rule 1). |
@@ -1596,7 +1605,7 @@ These are not changed by any story:
 | The offset is the separation of the solve's centre from the target | The target's pixel in the imaging frame | It needs no pixel, so it works when the target is outside the imaging frame, and it uses the same great-circle function as Track's 1′ test. |
 | A region of interest refuses a start | Measuring at the sensor's centre through the solve's map | Spec owner decision 24: 032 takes aim readings from whole-sensor imaging frames only, so such a run could not re-centre. |
 | The tolerance has a floor of 90″ | A share of the imaging frame alone | GoTo arrives at 60″ (`crates/finder/src/goto.rs:1013`); on a small or long-focus imaging frame a share alone would ask for less than GoTo can give and never be met. |
-| A solve that did not move the aim point is retried without a re-centre, and whether it moved is read from the session | Re-centre anyway; deciding by 032's outcome word | The aim point in force did not change, so Track off and on would bring the mount where it already is, and the restart would spoil the next aim reading. 032's outcome `measured` does not say the aim point moved: 032 leaves an aim point alone when its median is within 10″ of it (032 plan.md § The relation). |
+| A solve that did not move the aim point is retried without a re-centre, and whether it moved is read from the session, an aim point it holds back counting as moved | Re-centre anyway; deciding by 032's outcome word | The aim point in force did not change and none is held back, so Track off and on would bring the mount where it already is, and the restart would spoil the next aim reading. 032's outcome `measured` does not say the aim point moved: 032 leaves an aim point alone when its median is within 10″ of it (032 plan.md § The relation). |
 | `repoint`, `stack.start`, `stack.stop` and the aid's open and close are awaited unguarded | Guarded like the other steps; the runner's stop signal handed to `repoint` | Dropping one half-way would leave Track off, or a stack or a focus aid running, with the run already ended. A stop of the run therefore waits for them: for a re-centre at most 5 s, one Track off and one Track on, after which Track is on, as after any stop of the run (spec FR-005, owner decision 14). Handing the signal in would add a parameter to a trait for a wait that short. |
 | Durations are measured on tokio's clock, stamps on the console's | Both on the console's clock | The tracker does the same (`crates/finder/src/tracking.rs:4`); `FixedClock` in a scripted test never moves. |
 | The run waits for a steady tracker without a time limit | A timeout | Rule 6 and rule 1: how long a tracker is unsteady is the mount's affair, a meridian flip among them; the observer can always stop. |
@@ -1671,10 +1680,11 @@ These are not changed by any story:
    - 036's `Tracker::steady` is false while a tracker settles after a start; the run's
      first exposure waits on it;
    - 032's task sets a measured aim point in the session before it shows a solve as
-     `solved`, and sets it only when `should_apply` says so; `aim_moved` rests on both
-     (§ The console's camera and solver parts). As 032 is now drafted, it sets none
-     while Track is on but holds it back (032's FR-036), which § Prerequisites 4 takes
-     up.
+     `solved`, and sets it only when `should_apply` says so; while Track is on it
+     holds it back instead, `Session::held_aim` answers it, and the first live solve
+     the session records with Track off applies it before that pointing is taken
+     (032's FR-036). `aim_moved` and the wait of `repoint`'s step 3 rest on all of it
+     (§ The console's camera and solver parts, § The console's mount part).
 3. **The lease of the imaging camera exists.** Met in the drafts, by the audit round in
    which this trio was revised. The plan document's amendment 1 gives 031's imaging
    state one lease that names its holder, and says each later spec takes and gives it
@@ -1701,27 +1711,24 @@ These are not changed by any story:
    § Owner approvals). Not met: none of the first twenty-five is settled. Decision 26,
    the tracker and a newly measured aim point, is not this trio's: it cites 032's owner
    decision 25, which the owner settles in 032's trio, because the behaviour is
-   reachable from 032 on, with or without a run (§ The console's mount part, "What the
-   tracker does during step 2"). Whatever 032 records there, this trio is re-validated
-   with 032's before the flip; only an answer that holds a measured aim point back while
-   Track is on changes a line here (spec owner decision 26). Also not met: that is the
-   answer 032's draft now recommends and writes as its FR-036 and US4-S8, and this trio
-   is not yet rewritten for it. As the two drafts stand in this worktree (neither is on
-   `main`), every aim reading of a run is taken while Track is on and held back, so the
-   session's aim point never moves under a run, `aim_moved` stays false, no re-centre
-   is asked, and a run that starts with no aim point cannot centre: US5-S4, SC-004
-   and the whole runs of US8-S1 and US8-S2 rest on FR-022's test and FR-025's wait
-   being rewritten for it, or on the owner answering 032's decision 25 otherwise.
+   reachable from 032 on, with or without a run (§ The console's mount part, "The
+   tracker is handed no step"). Met for decision 26: the owner settled 032's decision
+   25 on 2026-11-17 with the hold, which 032 writes as its FR-036 and US4-S8, and this
+   trio is written for it. Every aim reading of a run is taken while Track is on and
+   held back, so FR-022's test counts a held aim point as moved and FR-025's wait comes
+   after the re-centre's Track off, whose first live pointing puts it in force; US5-S4,
+   SC-004 and the whole runs of US8-S1 and US8-S2 rest on both. This trio is
+   re-validated with 032's before the flip.
 5. **A probe build of every story.** Not met. No story has been compiled or run
    (§ Refinement Record). The probe settles, at the least:
    - each story's diff against 64 KiB, US1, US4 and US8 first (spec SC-007);
    - whether US4-S1 leaves the target inside 90″ with the true aim point set, and
      whether its solved offset agrees with the truth within 30″;
    - whether US5-S4 centres within its bound on the simulator and how many tries it
-     takes; and what the simulator's mount does between the first imaging solve and
-     the re-centre's Track off, that is, how far and how fast 015's tracker moves it
-     toward the newly measured aim point (032's owner decision 25, which spec owner
-     decision 26 cites);
+     takes; that the simulator's mount does not move toward the newly measured aim
+     point between the first imaging solve and the re-centre's Track off (032's owner
+     decision 25, which spec owner decision 26 cites); and that the first live
+     pointing after that Track off comes within the 5 s of `repoint`'s step 3;
    - whether the simulator's mount is at rest by the time a re-centre's Track asks
      GoTo, or GoTo refuses with `the mount is already moving` (§ Risks);
    - the timing of US6-S4 and US7-S2 against the machine's poll, and of US3-S6's two
@@ -1868,9 +1875,9 @@ story.
 | The simulator leaves the target just outside 90″, with the true aim point set or after a re-centre, or needs more than three tries. | Unprobed (§ Prerequisites 5). US4-S1 and US5-S4 assert the bounds against the truth, so a miss is seen in the probe of the story that owns the test, and owner decisions 2 and 3 are where the numbers change. |
 | A story still passes 64 KiB. | Unmeasured (§ Prerequisites 5, spec SC-007). Three stories were each cut in two on the review's estimate, and the script is in the library so that nine test modules do not each carry one. US1 is the largest: the machine, the whole script and six scenarios. If the probe shows it over, its scenario of the mount's endings (US1-S5) moves to US2 at the re-anchoring, a move of tests only. US4 is next: if it is over, its scenario of the guards (US4-S4) becomes a story of its own. |
 | A re-centre interrupts tracking for a second or two, so the next aim reading reads `moving`. | 032 takes no aim reading then and keeps the one in force; the run still solves and compares, and asks for no further re-centre from a solve that did not move the aim point. Seen in the probe of US5-S4. |
-| 015's tracker closes the whole step to a newly measured aim point at a rate nothing bounds, for up to the 5 s a re-centre waits, outside GoTo's checks. | Not this trio's to fix: it is a seam between 032 and 015, reachable from 032 on, and the owner settles it as 032's owner decision 25, which spec owner decision 26 cites. 032's draft now closes it by holding a measured aim point back while Track is on (032's FR-036), the answer that changes FR-022 and FR-025 here (§ Prerequisites 4). Until it is settled the probe of US5-S4 records how far and how fast the simulator's mount moves in those seconds (§ Prerequisites 5), and the field checklist has the observer watch the first centring (step 8). |
+| 015's tracker chases a newly measured aim point at a rate nothing bounds, outside GoTo's checks. | Closed in 032, where the seam between 032 and 015 lies: the owner settled 032's owner decision 25 on 2026-11-17 with the hold (032's FR-036, US4-S8), which spec owner decision 26 cites, and FR-022 and FR-025 here are written for it (§ Prerequisites 4). The probe of US5-S4 confirms that the simulator's mount does not move toward the new aim point before the re-centre's Track off (§ Prerequisites 5), and the field checklist has the observer watch the first centring (step 8). |
 | The observer's exposure setting is longer than the tracker's limit, and the run's own imaging frames, which 036 does not cap, trail their corner stars. | A known limit (spec § Clarifications; § The console's camera and solver parts). The solve's centre, all the run reads, is not moved; a solve that fails for want of stars is counted (US2-S2). The README says so and step 8 of the field checklist has the observer look. The other answer is a getter in 036 for the capped exposure, an edit to 036. |
-| A re-centre asks Track again while the mount still reports motion after Track off; GoTo refuses with `the mount is already moving` and the run ends `mount_failed`. | Unprobed (§ Prerequisites 5). `stop_tracking` waits for the mount's acknowledgement of the stop, not for rest (`crates/finder/src/tracking.rs:219`). If the probe or the telescope shows it, `repoint` waits, for a counted number of polls, until the session's mount view no longer says the mount is moving (`crates/finder/src/session.rs:508`) before it asks Track; that reads no axis, and is written in at the re-anchoring. |
+| A re-centre asks Track again while the mount still reports motion after Track off; GoTo refuses with `the mount is already moving` and the run ends `mount_failed`. | Unprobed (§ Prerequisites 5). `stop_tracking` waits for the mount's acknowledgement of the stop, not for rest (`crates/finder/src/tracking.rs:219`). `repoint`'s step 3 now lies between Track off and Track's start, which gives the mount until the next live pointing, but it is not a wait for rest. If the probe or the telescope shows it, `repoint` waits, for a counted number of polls, until the session's mount view no longer says the mount is moving (`crates/finder/src/session.rs:508`) before it asks Track; that reads no axis, and is written in at the re-anchoring. |
 | A console dropped in the middle of a run keeps Track on through something the imaging state of 030 to 036 holds. | US1-S6 proves that the runner lets its parts go; the probe drops a rig in the middle of a run (§ Prerequisites 5). In the binary the state lives until exit, so only tests are touched. |
 | A stop of the run waits up to about 5 s when it arrives during a re-centre. | Said in spec FR-005 and owner decision 14, and asserted on the script (US5-S3). The console's Stop does not wait: it stops the mount at once, and the run then ends `stopped`. |
 | The first imaging frame costs an exposure and a transfer the run does not use again. | Spec owner decision 20 names the two other answers. The first imaging frame is what tells a camera fault from poor focus. |
@@ -1910,6 +1917,12 @@ run's own imaging frames, which 036 does not cap, are a known limit that the REA
 the field checklist's step 8 state, with US11-S2 reading it (A4). No story id, scenario
 id or FR number moved. Every `path:line` was read again at 49bb210, where `main` still
 was: none had moved, and one was made exact (§ Prerequisites 7).
+
+On 2026-11-17 the owner settled 032's owner decision 25, which owner decision 26 cites,
+with the hold: FR-022, FR-024 and FR-025, `repoint`'s steps (its wait is now step 3,
+after Track off) and `aim_moved` were rewritten for it (spec.md § Clarifications, the
+last session). No story id, scenario id or FR number moved, and no scenario's text
+changed.
 
 **No probe build has been run.** No story of this trio has been compiled, linted or
 tested, no interface above has been built, and no diff has been measured: both sessions
@@ -2263,7 +2276,7 @@ stories:
         other_spec: 037-imaging-run
         other_story: US5
         disposition: merge_order
-        reason: "US5 depends_on_merged US4, and adds FRESH_POLLS and the wait for a live pointing to repoint"
+        reason: "US5 depends_on_merged US4, and adds FRESH_POLLS and the wait for a live pointing after Track off to repoint"
       - path: crates/finder/tests/motion/main.rs
         other_spec: 036-tracking-from-subs
         other_story: US7
@@ -2332,7 +2345,7 @@ stories:
       handoff: declared_gates
       independent: declared_pipeline
       release:
-        - "release owner: the repository owner, through the merge queue's ci.yml jobs, and the first centring at the telescope, watched for what the tracker does with a newly measured aim point (032's owner decision 25, which spec.md owner decision 26 cites)"
+        - "release owner: the repository owner, through the merge queue's ci.yml jobs, and the first centring at the telescope, watched for the tube staying still after a newly measured aim point until the re-centre's Track off (032's owner decision 25, which spec.md owner decision 26 cites)"
     writes:
       - crates/finder/src/imaging/run.rs
       - crates/finder/src/imaging/run/console.rs

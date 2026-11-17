@@ -16,9 +16,9 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
 - the drafts outside this series that write the same files (`026-mount-sky`,
   `021-chart-orientation`, `022-altaz-guidance`) are ordered against this spec: not
   met (plan.md § Prerequisites 9);
-- owner decision 25's answer is written into the trio it names: not met (plan.md
-  § Prerequisites 11); 037's owner decision 26 already cites it, in the drafting
-  worktree.
+- owner decision 25's answer is written into the trio it names: met on 2026-11-17,
+  when the owner chose the held aim point (FR-036); 037's owner decision 26 cites it,
+  and 037's re-centre is written for it (plan.md § Prerequisites 11).
 
 **Rules for every story:**
 - Never edit an existing test, golden, fixture, `scripts/ci/`, `.github/`, `deny.toml`,

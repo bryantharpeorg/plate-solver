@@ -1748,18 +1748,15 @@ These are not changed by any story:
     settles owner decision 4, 5, 6 or 20, or approval 7 or 8, otherwise, those three
     sections of the plan document are corrected in the same change, so that 033 to 037
     read what 032 builds.
-11. **Owner decision 25's answer is written into the trio it names.** Not met. The
-    recommended answer, the held aim point, is this trio's own and is already written
-    (spec FR-036, US4-S8, § The session). Another answer is written before this spec
-    is flipped: into 036 for a bound on the tracker's rate, or into this trio's US4 for
-    a restart of Track through GoTo or for a probe's bound, with FR-036 and US4-S8
-    changed or removed in the same edit and the trio re-validated. 037's owner
-    decision 26 already cites spec owner decision 25 here, in the drafting worktree;
-    what is left is that 037's re-centre is read against the settled answer: with the
-    recommended one, the aim point a run's first imaging solve measures is applied at
-    the run's own Track off, so the run
-    tests whether it moved from `relation.aim` and `relation.held`, not from the
-    session's `aim` while Track is still on.
+11. **Owner decision 25's answer is written into the trio it names.** Met on
+    2026-11-17. The owner chose the held aim point, this trio's own recommended answer,
+    already written here (spec FR-036, US4-S8, § The session). 037's owner decision 26
+    cites spec owner decision 25, and 037's re-centre is written for the answer: the
+    aim point a run's first imaging solve measures is held while Track is on and
+    applied at the first live solve after the run's own Track off, so the run tests
+    whether it moved with `Session::held_aim` as well as the session's `aim`, and waits
+    for that live solve after its Track off before it asks Track again (037's FR-022,
+    FR-025). No line of 036 changes.
 
 ## Plan traps
 
@@ -1908,8 +1905,8 @@ with the check that keeps it from recurring. They bind every story.
 | The new button and region on the Imaging page break a query in 031's page tests. | Prerequisite 2 re-reads them; the block shows no `status` or `alert` until a solve is asked for. |
 | `021-chart-orientation`, a draft, also writes `Chart.tsx`. | Prerequisite 9. |
 | A work folder is left behind by a console that exits mid-solve. | It holds one prepared copy; folders are named by process and count, so a later run never reuses one. The README says they may be deleted. |
-| A measured aim point held for the whole of a long stack (Track on for hours) leaves GoTo and Track on the old aim point, which may be a degree from the sensor's centre before the first measurement. | The target still lands inside the 3° the first hint searches; the page says the aim point waits; the first Track off applies it, and 037's re-centre turns Track off and on for that reason. Owner decision 25 is where a different answer is chosen. |
-| 037's re-centre was drafted against an aim point set at once while Track is on. | Prerequisite 11: 037 is read against the settled answer, and tests whether the aim point moved from `relation.aim` and `relation.held`. |
+| A measured aim point held for the whole of a long stack (Track on for hours) leaves GoTo and Track on the old aim point, which may be a degree from the sensor's centre before the first measurement. | The target still lands inside the 3° the first hint searches; the page says the aim point waits; the first Track off applies it, and 037's re-centre turns Track off and on for that reason. Owner decision 25, settled on 2026-11-17, chose this. |
+| 037's centring rests on the hold: it reads `Session::held_aim`, and waits after its own Track off for the first live solve, which applies the held aim point. | Prerequisite 11: 037 is written for the settled answer (037's FR-022, FR-025). A change to FR-036 or to `held_aim` is re-read in 037 before either trio is flipped. |
 | US4-S8 needs a GoTo of some 30° and Track to settle on the simulator in virtual time, and its 60″ is set against the tracker's deadband, not measured. | The rig is the one 015's own Track tests run (`crates/finder/tests/motion/tracking/routes.rs:85`); the first probe build of US4 times it and reads the travel without the hold, to show the scenario fails on the first draft. |
 | A hint turned to `none` after misses runs ASTAP's slowest search on every later failed sub until one solves. | Misses are only `not_solved` and `timed_out`, not `too_few_stars`, which a cloudy sub gives; the whole-sky limit is 600 s; a solved solve starts again from the first source. |
 
@@ -1948,6 +1945,10 @@ measured aim point is held while Track is on, owner decision 25 moving here from
 and the adapter's work-folder error and § Prerequisites 9 are corrected. The numbers
 of US3-S8 and US4-S2's history were worked by hand; US4-S8's 60″ is the bound existing
 tracking tests hold, not a measurement.
+
+On 2026-11-17 the owner settled owner decision 25 with the hold this trio recommended,
+so no requirement, scenario or interface changed; the decision, § Prerequisites 11 and
+§ Risks now say it is settled (spec.md § Clarifications, the last session).
 
 What a first refinement round must do is § Prerequisites 2, 5 and 6, and its findings
 replace this paragraph. Until then the record below is the draft's own account: its

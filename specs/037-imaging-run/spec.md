@@ -76,9 +76,11 @@ the settings, starts, watches and stops; it never puts the steps in order itself
   "focus is good" is claimed (`docs/research/2026-11-15-imaging-camera.md` § 6. Focus).
 - Q: How is the target centred? → A: The first imaging solve of a night searches wide,
   and 032 measures the aim point and the imaging angle from it. The run compares the
-  solve's centre with the target. Outside the tolerance, it turns Track off and on
-  again, which brings the target to the measured aim point through GoTo, takes another
-  imaging frame and solves it, at most three times. It never nudges an axis (rule 5).
+  solve's centre with the target. Outside the tolerance, it turns Track off, which puts
+  the newly measured aim point in force (032 holds it back while Track is on; owner
+  decision 26), and Track on again, which brings the target to it through GoTo; then it
+  takes another imaging frame and solves it, at most three times. It never nudges an
+  axis (rule 5).
 - Q: What happens during stacking? → A: 035's stack takes and places the subs and 036's
   steering corrects the tracker from them; the run starts the stack, watches its counts
   and stops it. The run adds no rule of its own about exposure length: the exposure is
@@ -172,13 +174,15 @@ the settings, starts, watches and stops; it never puts the steps in order itself
   aim point again is Track off and Track on; the run does exactly that (FR-020), and
   Track decides whether a GoTo is needed.
 - Q: A latest pointing is taken at the aim point in force when its star frame was solved
-  (`crates/finder/src/session.rs:1192`). What does that mean for a re-centre? → A: The
-  pointing the session holds just after 032 has set a newly measured aim point was still
-  taken at the old one, and Track's 1′ test would read it. So before it turns Track off
-  the run's mount part waits for the finder camera's next live pointing, for at most
-  5 s (FR-025). After 5 s it asks Track anyway; at worst a try is spent.
+  (`crates/finder/src/session.rs:1192`). What does that mean for a re-centre? → A: While
+  Track is on, 032 holds a newly measured aim point back, and the pointing the session
+  holds was taken at the old one; Track's 1′ test would read it. 032 applies the held
+  aim point at the first live solve the session records with Track off, before that
+  solve's pointing is taken (032's FR-036). So after it turns Track off the run's mount
+  part waits for the finder camera's next live pointing, for at most 5 s, and only then
+  asks Track again (FR-025). After 5 s it asks Track anyway; at worst a try is spent.
 - Q: What does 015's tracker do with a newly measured aim point meanwhile? → A: As 032
-  was first drafted, it chases it, and nothing in this trio can stop it. While Track is
+  was first drafted, it chased it, and nothing in this trio could stop it. While Track is
   on, every live pointing reaches the tracker as the target's offset from the aim point in force
   (`crates/finder/src/session.rs:972`). The tracker turns an offset beyond its 10″
   deadband into a rate that removes 60% of it within the interval to the next solve,
@@ -191,18 +195,17 @@ the settings, starts, watches and stops; it never puts the steps in order itself
   solves: about 1.3° a second at two solves a second, along the direction of tracking
   (a correction against it is held at zero). That motion is Track's, not GoTo's. It passes Track's own guards
   (the minimum altitude, the Sun, the link) and none of the checks GoTo makes along a
-  path. It lasts from 032 setting the aim point, inside the run's imaging solve, until
-  the run's own Track off: at most the 5 s of the wait above. It is a seam between 032
-  and 015, not of this spec: it arises without a run too, whenever an imaging solve
-  measures a new aim point while Track is on, as under a stack started by hand (035),
-  so it is reachable from 032 on. It is 032's owner decision 25, which this spec's owner
-  decision 26 only cites. 032's draft now answers it there: its recommended answer,
-  written as its FR-036 and US4-S8, holds a measured aim point back while Track is on
-  and applies it at the first live solve the session records with Track off, so the
-  tracker is handed no such step. That is the one answer that, by owner decision 26,
-  changes FR-022 and FR-025 here, and this trio is not yet rewritten for it (plan.md
-  § Prerequisites 4). The probe of US5-S4 must observe what the mount does whatever the
-  answer (plan.md § Prerequisites 5).
+  path. It would have lasted from 032 setting the aim point, inside the run's imaging
+  solve, until the run's own Track off: at most the 5 s the first draft waited with
+  Track on. It is a seam between 032 and 015, not of this spec: it arises without a run
+  too, whenever an imaging solve measures a new aim point while Track is on, as under a
+  stack started by hand (035), so it is reachable from 032 on. It is 032's owner
+  decision 25, which this spec's owner decision 26 only cites. The owner settled it
+  there on 2026-11-17 with 032's recommended answer, written as its FR-036 and US4-S8:
+  032 holds a measured aim point back while Track is on and applies it at the first
+  live solve the session records with Track off, so the tracker is handed no such step.
+  FR-022 and FR-025 here are written for that answer. The probe of US5-S4 observes that
+  the mount does not move toward the new aim point (plan.md § Prerequisites 5).
 - Q: Could the run leave the mount moving after the observer's Stop? → A: Only in one
   window, which FR-020 closes. The run's re-centring turns Track off and on again. A
   Stop that lands between the two would be followed by the run's own start, and one
@@ -340,13 +343,28 @@ the settings, starts, watches and stops; it never puts the steps in order itself
   exact: the session target's type is cited at its `struct` line,
   `crates/finder/src/targets.rs:39`, in plan.md § The console's mount part.
 
+### Session 2026-11-17 (the owner's answers)
+
+- Q: What did the owner answer for owner decision 26, and what changed here? → A: Hold
+  it: 032 holds a newly measured aim point back while Track is on and uses it once
+  Track is off (032's owner decision 25, FR-036). The centring step turns Track off,
+  takes the new aim point, re-centres and turns Track on again. FR-022's test of
+  whether a solve moved the aim point now also counts an aim point 032 holds back;
+  FR-024 asks for a re-centre on that test; FR-025's wait comes after the re-centre's
+  Track off instead of before it. plan.md § The console's mount part (`repoint`'s
+  steps, its wait now step 3), § The console's camera and solver parts (`aim_moved`),
+  § What 030 to 036 offer, § Decisions, § Prerequisites 2, 4 and 5, § Risks, the
+  README's field checklist step 8, the Refinement Record, tasks.md T018 and T023, and
+  this spec's Clarifications, Edge Cases and Assumptions say the same. No story id,
+  scenario id or FR number moved, and no scenario's text changed.
+
 ## Owner decisions
 
 Each is a design or taste call the plan document leaves open, but for 11, 13, 15, 22
 and 25, whose recommended answer the plan document now writes into its shared
 interfaces; they stay here, under their numbers, for the owner to settle at the flip.
 None of the first twenty-five is settled; the twenty-sixth is a decision of 032's, cited here because a
-run crosses it; the twenty-seventh, added on 2026-11-16, is unsettled too. A different answer is written into the trio and re-validated before the
+run crosses it, and settled by the owner on 2026-11-17; the twenty-seventh, added on 2026-11-16, is unsettled too. A different answer is written into the trio and re-validated before the
 flip, never left to a story.
 
 1. **What an ending does to the mount.** Recommended: nothing. An ending that a guard or
@@ -457,20 +475,22 @@ flip, never left to a story.
     that the machine imports nothing of the mount, the camera or the session and no
     story's diff passes 64 KiB. Instead: one file.
 26. **The tracker and a newly measured aim point** is 032's owner decision 25, cited
-    here and not decided here. As 032 was first drafted, it set a measured aim point in
-    the session at once, and 015's tracker then closed the whole step from the old aim
-    point at a rate nothing bounds, under Track's guards and outside GoTo's
-    (Clarifications). That hazard is reachable from 032 on, whenever an imaging solve measures a new aim point while
-    Track is on, with or without a run, so 032's trio holds the recommended answer and
-    the others, and this spec may change neither 032 nor 015. Whichever answer the owner
-    gives there, this trio is re-validated with 032's before the flip. Only an answer
-    that has 032 hold a measured aim point back while Track is on changes a line here:
-    FR-022's test of whether the aim point moved, and the place of FR-025's wait, which
-    would then come after the re-centre's Track off. That is the answer 032's draft
-    now recommends and writes as its FR-036 and US4-S8, and those two lines are not
-    yet rewritten for it (plan.md § Prerequisites 4). The probe of US5-S4 observes what
-    the simulator's mount does in those seconds whatever the answer (plan.md
-    § Prerequisites 5).
+    here and not decided here. **Settled by the owner on 2026-11-17: hold it.** 032
+    holds a newly measured aim point back while Track is on and uses it once Track is
+    off (032's FR-036, US4-S8). A run's centring step turns Track off, takes the new
+    aim point at the first live pointing after it, re-centres and turns Track on again:
+    FR-022's test of whether a solve moved the aim point counts an aim point 032 holds
+    back, and FR-025's wait comes after the re-centre's Track off. The hazard is
+    reachable from 032 on, whenever an imaging solve measures a new aim point while
+    Track is on, with or without a run, which is why 032's trio holds the answer; this
+    spec changes neither 032 nor 015. Instead: the aim point used at once, as 032 was
+    first drafted, under which 015's tracker closed the whole step from the old aim
+    point at a rate nothing bounds, under Track's guards and outside GoTo's, for up to
+    the 5 s a re-centre then waited with Track on (Clarifications); or one of 032's
+    other answers (a bound on the tracker's rate in 036, Track restarting through GoTo,
+    or the chase accepted and bounded by a probe), none of which changed a line here.
+    The probe of US5-S4 observes that the simulator's mount does not move toward the
+    new aim point in those seconds (plan.md § Prerequisites 5).
 27. **A push by hand during a run.** Recommended: when the session's Track view
     carries 038's `push`, the telescope moving by hand or Track following a push, the
     run ends `pushed_away`, saves the stack and asks nothing of the mount, so Track goes
@@ -1464,20 +1484,23 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_do
   a wide first search is 032's.
 - **An imaging solve that does not move the aim point**: 032 took no aim reading from it
   (`moving`, `no_live_pointing`, `off_frame`, `set_aside`), or took one whose median
-  lies within 10″ of the aim point in force and left that alone; or, as 032 is now
-  drafted, took one while Track is on and held it back (032's FR-036), which is every
-  aim reading of a run (plan.md § Prerequisites 4). A re-centre would
-  bring the same aim point back, so the run takes another imaging frame instead; it
-  still counts as a try (US5-S3).
-- **No finder live pointing arrives before a re-centre.** After 5 s the run asks Track
-  anyway, and Track decides with the pointing it has; at worst a try is spent. A finder
-  camera that gives a live pointing less often than every 5 s is already outside what
-  015's tracker is built for (`crates/finder/src/tracking.rs:248`).
-- **The tracker chases a newly measured aim point before the run re-centres.** It did,
-  as 032 was first drafted, for up to the 5 s of that wait. 032's draft now holds a
-  measured aim point back while Track is on (032's FR-036), so it does not
-  (Clarifications; 032's owner decision 25, which owner decision 26 cites; plan.md
-  § Prerequisites 4).
+  lies within 10″ of the aim point in force and left that alone, and 032 holds no
+  measured aim point back. A re-centre would bring the same aim point back, so the run
+  takes another imaging frame instead; it still counts as a try (US5-S3). An aim point
+  032 holds back while Track is on, which is where every aim reading of a run goes, does
+  move it: the re-centre's Track off puts it in force (FR-022; 032's FR-036).
+- **No finder live pointing arrives after the re-centre's Track off.** After 5 s the
+  run asks Track anyway, and Track decides with the pointing it has, taken at the old
+  aim point; an aim point 032 held back stays held under the new Track, so the next
+  solve asks for another re-centre, and at worst a try is spent. A finder camera that
+  gives a live pointing less often than every 5 s is already outside what 015's tracker
+  is built for (`crates/finder/src/tracking.rs:248`).
+- **A newly measured aim point while Track is on.** 032 holds it back until Track is
+  off, so the tracker never chases it (032's FR-036; 032's owner decision 25, which
+  owner decision 26 cites, settled on 2026-11-17). The re-centre's Track off puts it in
+  force, and the live pointing the re-centre then waits for is the first taken at it
+  (FR-025). As 032 was first drafted, the tracker chased it for up to the 5 s of a
+  wait made with Track on (Clarifications).
 - **Track is still stopping when the re-centre asks it again.** GoTo refuses with
   `the mount is already moving` while an axis still reports motion
   (`crates/finder/src/goto.rs:739`), and the run ends `mount_failed` with those words.
@@ -1664,8 +1687,10 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_do
   the imaging frame and wait for it. Solved, it SHALL answer the separation of the
   solve's centre from the target in arcseconds; the tolerance, the larger of 1/20 of the
   imaging frame's shorter side times the solve's scale and 90″ (owner decision 2); and
-  whether the solve moved the aim point: whether the session's aim point is another
-  after the solve than it was before it. Failed with 032's reason `no_database`, or
+  whether the solve moved the aim point: whether, after the solve, the session's aim
+  point is another than it was before it, or the session holds a measured aim point
+  back while Track is on (032's FR-036), which the re-centre's Track off puts in force
+  (owner decision 26). Failed with 032's reason `no_database`, or
   `failed`, it is a solver that cannot run, unless the error begins
   `could not save the imaging solve`, which is a save failure; with any other reason,
   no solution.
@@ -1675,13 +1700,17 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_do
   decision 27).
 - **FR-024**: After a solve the run SHALL keep its offset and tolerance in `centring`.
   Outside the tolerance it SHALL count a try, show `centring`, ask the mount part to
-  point again when the solve moved the aim point, wait until the mount tracks and is
-  steady, take another imaging frame and solve it. After three tries without success it
-  SHALL end `not_centred` without starting the stack (owner decisions 3 and 4).
-- **FR-025**: Before it turns Track off, the mount part's pointing again SHALL wait, with
-  Track left on, for a live pointing newer than the one it finds: at most twenty polls
-  of 250 ms, 5 s. It SHALL be refused as stopped when the stop generation changes
-  during the wait, and SHALL go on to ask Track when no live pointing has come.
+  point again when the solve moved the aim point as FR-022 tests it, wait until the
+  mount tracks and is steady, take another imaging frame and solve it. After three tries
+  without success it SHALL end `not_centred` without starting the stack (owner
+  decisions 3 and 4).
+- **FR-025**: After it turns Track off and before it asks Track again, the mount part's
+  pointing again SHALL wait, with Track off, for a live pointing newer than the one it
+  finds once Track is off: at most twenty polls of 250 ms, 5 s. That live pointing is
+  the first the session records with Track off, which puts a measured aim point 032
+  held back in force and is taken at it (032's FR-036, owner decision 26). It SHALL be
+  refused as stopped when the stop generation changes during the wait, and SHALL go on
+  to ask Track when no live pointing has come.
 - **FR-026**: A focus verdict of clearly out, unmeasurable or no record, and a focus
   check that could not finish, SHALL put the run in `focus_pause`, open the focus aid
   through the focus part, and say so in the words of plan.md § The run's words (owner
@@ -1814,8 +1843,9 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_do
     settings (031), capped by 036 for a stack's subs only; capping the run's own
     imaging frames too, which needs a getter 036 does not offer (Clarifications);
   - any change to GoTo, Track, Stop or their guards, and any new mount command; what
-    the tracker does with a newly measured aim point is 032's and 015's, and the
-    owner's to settle as 032's owner decision 25 (owner decision 26);
+    the tracker does with a newly measured aim point is 032's and 015's, and the owner
+    settled it as 032's owner decision 25: 032 holds it back while Track is on (owner
+    decision 26);
   - the lease itself, and how 033 to 035 take it: they are 031's and theirs;
   - a free-space check (owner decision 7);
   - a `target` argument (owner decision 10);
@@ -1826,9 +1856,9 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_do
   which follow the checklist of FR-041: the whole run on a bright target, started once
   from the page and once by an MCP client; how many centring tries a real night needs
   and how far off the first solve finds the target; whether 90″ suits the real mount;
-  the real focus pause, with the focuser turned by hand; a run through a Stop; how the
-  real mount moves between a first imaging solve and the re-centre after it (032's
-  owner decision 25); whether the corner stars of the run's own imaging frames trail at
+  the real focus pause, with the focuser turned by hand; a run through a Stop; that the
+  real mount does not move toward a newly measured aim point between a first imaging
+  solve and the re-centre's Track off (032's owner decision 25); whether the corner stars of the run's own imaging frames trail at
   the exposure setting used for subs (Clarifications); and a design review of the run
   block on a phone in the dark. GoTo and
   Track must be proven on the real mount before any of it (the plan document, § Before

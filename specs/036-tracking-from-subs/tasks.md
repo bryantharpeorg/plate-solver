@@ -20,7 +20,8 @@ description: "Task list for 036-tracking-from-subs: Tracking Steered by the Subs
 - the documents this trio cites are on `main`: not met;
 - 032's owner decision on a newly measured aim point while Track is on is settled,
   and, if its answer is that the tracker bounds the rate one tracking error may ask
-  for, US3 carries that bound with one scenario (plan.md § Prerequisites 11): not met;
+  for, US3 carries that bound with one scenario (plan.md § Prerequisites 11): met on
+  2026-11-17; the owner chose to hold the aim point, so no bound is added;
 - no operator-staged file is needed.
 
 **Rules for every story:**

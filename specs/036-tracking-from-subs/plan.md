@@ -1465,14 +1465,14 @@ These are not changed by any story:
     has not landed; 035 tracks it (035 plan.md § Prerequisites 8), and § Prerequisites 2
     and 3 read it as landed. This trio reaches the lease only through § What 035 must
     provide, points 3 to 5.
-11. **A bound on the rate one tracking error may ask for.** Open, and not this trio's
-    to settle. 032's owner decision on a newly measured aim point while Track is on
-    (raised by the audit's finding A4 on 032; 037's owner decision 26 cites it) may
-    take the answer that the tracker bounds the rate one tracking error may ask for.
-    If the owner takes it there, US3 carries that bound in
-    `crates/finder/src/tracking.rs` with one scenario, owner approval 2 names it, and
-    the trio is re-validated before it is flipped; otherwise nothing here changes. Not
-    met: the decision is open.
+11. **A bound on the rate one tracking error may ask for.** Met on 2026-11-17, with
+    nothing to add here. 032's owner decision on a newly measured aim point while Track
+    is on (032's owner decision 25, raised by the audit's finding A4 on 032; 037's
+    owner decision 26 cites it) could have taken the answer that the tracker bounds the
+    rate one tracking error may ask for, which US3 would then have carried. The owner
+    chose the other answer: 032 holds a newly measured aim point back while Track is on
+    and uses it once Track is off (032's FR-036). So no bound is written, and nothing in
+    this trio changes.
 12. **038's followed push.** Added 2026-11-16. Draft `038-track-follows-a-push` makes
     Track follow a push by hand of more than 5′ through `Tracker::follow`, which changes
     the place the tracker holds. If 038 lands first, this trio is re-anchored to it:
@@ -1653,7 +1653,8 @@ steady they run as 015 has them (US3-S6, US3-S11, US6-S5, § The tracker, § Pla
 the taker returns (§ The stack, § What 035 must provide); rule 1 is no longer to be
 edited (§ Prerequisites 9); US7-S6 guards 035's `stack/service.rs`, and owner
 decision 1's widening is worked; and a bound on the rate one tracking error may ask
-for waits on 032's owner decision (§ Prerequisites 11). Every `path:line` in spec.md
+for waited on 032's owner decision, which the owner settled on 2026-11-17 with no bound
+(§ Prerequisites 11). Every `path:line` in spec.md
 and plan.md was then read again at 49bb210, the worktree's HEAD; none had moved. **No
 probe build has been run:** no story has been compiled, and no scenario has been seen
 to pass or fail, before the review, after it, or after the audit.
@@ -1695,7 +1696,7 @@ stories should agree, but only a build of both shows it); whether the wait for t
 first rates ever takes more than a few milliseconds of virtual time; US3's test file
 under US6's held-mode test, `lapsed && control.steady`; whether US6-S5's follow keeps
 015's 60″ bound with the finder camera's corrections held for gaps 6 s apart; US7-S5's
-rig; and all of § Prerequisites 3 and § Prerequisites 11.
+rig; and all of § Prerequisites 3.
 
 Writes come from § Project Structure. Shared writes name the merge edge that orders two
 stories of this spec on one file, under the earlier story, or the story that, by the

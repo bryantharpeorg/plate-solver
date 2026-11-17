@@ -304,6 +304,15 @@ work.
   that changed between dbc2b5b and 49bb210 were already read at 49bb210 when the trio
   was finished.
 
+### Session 2026-11-17 (the owner's answers)
+
+- Q: What did the owner answer on a newly measured aim point while Track is on, and
+  what changed here? → A: Hold it: 032 holds the aim point back while Track is on and
+  uses it once Track is off (032's owner decision 25, which 037's owner decision 26
+  cites). That is not the answer that would have had US3 bound the rate one tracking
+  error may ask for (A5 above), so no story, scenario or requirement changes here;
+  plan.md § Prerequisites 11 is met, and its Refinement Record and tasks.md say so.
+
 ## Owner decisions
 
 Each is a design or taste call the plan document leaves open. None is settled. A

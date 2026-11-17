@@ -298,7 +298,8 @@ was set, and MCP clients get one tool.
   point, about 2300″ within half a second, under Track's guards and outside GoTo's.
   This arises from this spec's landing, whenever an imaging solve measures an aim point
   while Track is on, and not only in 037's run. Owner decision 25 settles it here; the
-  recommended answer holds the aim point back until Track is off (FR-036, US4-S8).
+  owner's answer, on 2026-11-17, holds the aim point back until Track is off (FR-036,
+  US4-S8).
 - Q: Is the history of live solves a fixed queue? → A: It was: 2000 finder fixes, which
   at two a second hold about 1000 s, less than the three exposures the fit of an aim
   reading reaches across (one before, the exposure, one after) once subs pass about
@@ -317,11 +318,23 @@ was set, and MCP clients get one tool.
   "DSLR/OSC raw images require 2x2 binning"; and in its § 13, the two lines on the
   `.ini`'s form and the `CD` matrix's row order.
 
+### Session 2026-11-17 (the owner's answers)
+
+- Q: What did the owner answer for owner decision 25, and what changed here? → A: Hold
+  it: a newly measured aim point is held while Track is on and used once Track is off.
+  That is the answer this trio already recommended and writes as FR-036 and US4-S8, so
+  no requirement, scenario or interface here changes. Owner decision 25 is marked
+  settled; plan.md § Prerequisites 11 is met, and its § Risks and tasks.md say so. The
+  answer's other half is 037's: its centring step turns Track off, takes the new aim
+  point at the first live pointing after it, and turns Track on again, reading the
+  held aim point through `Session::held_aim` (037's FR-022, FR-025). The edge case of
+  a measured aim point while Track is on now says how that re-centre takes it up.
+
 ## Owner decisions
 
-Each is a design or taste call the plan document leaves open. None is settled. A
-different answer is written into the trio and re-validated before the flip, never left
-to a story.
+Each is a design or taste call the plan document leaves open. None is settled but 25,
+which the owner settled on 2026-11-17. A different answer is written into the trio and
+re-validated before the flip, never left to a story.
 
 1. **How the session says the aim point was set.** Recommended: `aim` keeps `x` and `y`
    and gains `source` with the value `measured` only when the console measured it; a
@@ -443,19 +456,19 @@ to a story.
     cites this one). As first drafted, an aim reading set the session's aim point at once,
     and 015's tracker then closed the whole step from the old aim point at a rate
     nothing bounds, from this spec's landing (Clarifications, the fourth session).
-    Recommended: this spec holds a measured aim point back while Track is on, shows it
-    as held, and applies it at the first live solve the session records after Track is
-    off (FR-036, US4-S8). The hazard is closed where it arises, from this spec's
-    landing, with no change to 015's tracker or to a later trio, and a re-centre that
-    turns Track off and on again (037) picks the new aim point up. Instead: 036's
-    tracker bounds the rate one tracking error may ask for (037's first
+    **Settled by the owner on 2026-11-17: hold it.** This spec holds a measured aim
+    point back while Track is on, shows it as held, and applies it at the first live
+    solve the session records after Track is off (FR-036, US4-S8). The hazard is closed
+    where it arises, from this spec's landing, with no change to 015's tracker. 037's
+    centring step turns Track off, takes the new aim point at the first live pointing
+    after it, re-centres and turns Track on again (037's FR-022, FR-025). Instead:
+    036's tracker bounds the rate one tracking error may ask for (037's first
     recommendation), which leaves the hazard live from this spec's landing until 036's
     and replaces FR-036 and US4-S8 with nothing here; or Track restarts through GoTo
     when the aim point changes, which this trio would write into
     `crates/finder/src/session.rs` and which needs the console's GoTo there; or the
     behaviour is accepted as drafted and bounded by a probe on the simulator and at the
-    telescope. The chosen answer is written into the trio it names before this spec is
-    flipped (plan.md § Prerequisites 11).
+    telescope. The answer is written here and in 037 (plan.md § Prerequisites 11).
 
 ## Owner approvals
 
@@ -1604,7 +1617,8 @@ development, `cargo nextest run -p finder --locked --test mcp imaging_solve::`.
   waits: it is held while Track is on (`relation.held`, and a line on the Imaging
   page), aim readings taken meanwhile are smoothed against it, and the first live
   solve the session records after Track is off applies it (FR-036, owner decision
-  25). A run's re-centre turns Track off and on and so takes it up. A restart while
+  25). A run's re-centre turns Track off, waits for that live solve and turns Track on
+  again, and so takes it up (037). A restart while
   one is held forgets it; the next aim reading measures it again.
 - **Subs of many minutes.** The history of live solves spans four exposures, thinned to
   at most 2000 fixes over that span, so the fit of an aim reading still finds live
