@@ -23,6 +23,11 @@ ignore = [
     # parity test in crates/star-detection; it is not part of the production
     # dependency graph.
     "RUSTSEC-2024-0436",
+    # chrono is unmaintained (RUSTSEC-2026-0543, published 2026-11-17) and no safe
+    # upgrade is available. Nothing in this workspace uses it: it comes in only through
+    # finder's MCP server, rmcp 3.9.0, and rmcp's schemars 1.2.3. Remove this once rmcp
+    # moves to jiff or time.
+    "RUSTSEC-2026-0543",
     # zip 0.6.6 — three advisories, all in archive EXTRACTION to the filesystem:
     # ZipArchive::extract / ZipStreamReader::extract keeping SUID/SGID bits
     # (RUSTSEC-2026-0367), creating symlinks whose targets escape the destination
@@ -43,6 +48,15 @@ ignore = [
     # one. Also extraction only, so the reasoning above holds: npyz opens archives
     # with ZipArchive::new and reads members by name, and nothing calls extract.
     "RUSTSEC-2026-0429",
+    # zip 0.6.6 twice more (both published 2026-11-17), neither on a path used here.
+    # RUSTSEC-2026-0545: reading a WinZip AES entry with a password can return it
+    # without checking its authentication code. Nothing here reads with a password:
+    # npyz opens archives with ZipArchive::new and reads members with by_name, and
+    # database-generation only writes. RUSTSEC-2026-0548: ZipStreamReader can extract
+    # under local-header names that differ from the central directory. Nothing here
+    # uses ZipStreamReader. They go with the others above.
+    "RUSTSEC-2026-0545",
+    "RUSTSEC-2026-0548",
     # zstd-safe 5.0.2 (RUSTSEC-2026-0403): streaming decompression of a legacy zstd
     # frame that fails can expose uninitialized output memory. The fix is in
     # zstd-safe >= 8.2, which only zstd >= 0.14 uses, and zip 0.6 pins zstd 0.11.
