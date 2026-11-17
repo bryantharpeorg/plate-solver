@@ -1,6 +1,12 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "016-mcp", "017-console-stop-confirm", "018-live-chart-steady", "019-night-legibility", "020-live-chart-calm", "022-altaz-guidance"]
+# Flipped to ready 2026-11-17 by the operator seat on the owner's pre-approval of 2026-11-14
+# ("once they're refined and merge for you to take over and do ergane spec validate on and
+# then move it to a ready state"), after 022-altaz-guidance landed (20ce2fe) and this trio
+# was re-anchored to it, giving the owner approvals listed under "Owner approvals". US2-S4
+# states its formula as the owner asked on 2026-11-17 (pull request 243). Validated against
+# `main` at 20ce2fe: no validator findings, preflight 0, US1 then US2.
 # Drafted 2026-11-13 against `main` at ce80f67, from the owner's report at the lake site
 # that the chart moved sideways to his pushes, and his request for a setting "to turn via
 # some offset degree". Refined 2026-11-14 against `main` at 0a33c19: every story was built
