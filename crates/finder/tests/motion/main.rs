@@ -10,6 +10,7 @@ mod model;
 mod mount_calls;
 mod mount_identity;
 mod mount_sky;
+mod mount_sky_night;
 mod night;
 mod recording_raw;
 mod simulate;

@@ -29,6 +29,9 @@ pub struct MountSkyView {
     /// True once the node's reset count changed after the zero was fixed (FR-014).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub power_cycled: bool,
+    /// The UTC label of the night clock the console runs on (FR-010).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub night_utc: Option<String>,
 }
 
 /// Draws each node frame's stars from the mount's encoders. `zero` holds the zero
@@ -42,6 +45,8 @@ pub struct MountSky {
     zero: Mutex<Option<([i32; 2], u64)>>,
     /// Latched when the node's reset count changes after the zero was fixed.
     power_cycled: AtomicBool,
+    /// The UTC label of `--mount-sky-night`, when the console runs on a night clock.
+    night_utc: Option<String>,
 }
 
 impl MountSky {
@@ -52,7 +57,14 @@ impl MountSky {
             tube_alt_deg,
             zero: Mutex::new(None),
             power_cycled: AtomicBool::new(false),
+            night_utc: None,
         }
+    }
+
+    /// The UTC label of the night clock the console runs on (026 US2).
+    pub fn with_night_utc(mut self, utc: String) -> Self {
+        self.night_utc = Some(utc);
+        self
     }
 
     pub fn view(&self) -> MountSkyView {
@@ -64,6 +76,7 @@ impl MountSky {
                 .expect("mount-sky zero")
                 .map(|(fixed, _)| fixed),
             power_cycled: self.power_cycled.load(Ordering::SeqCst),
+            night_utc: self.night_utc.clone(),
         }
     }
 }

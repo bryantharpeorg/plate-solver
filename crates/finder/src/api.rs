@@ -116,6 +116,8 @@ pub struct AppState {
     recordings: Option<Arc<Recorder>>,
     mount_monitor: Option<Arc<crate::live::MountMonitor>>,
     mount_sky: Option<Arc<crate::mount_sky::MountSky>>,
+    /// The UTC label of `--mount-sky-night`, when the console runs on a night clock.
+    night_utc: Option<String>,
     simulation: Option<Arc<Simulation>>,
     goto: Option<Arc<crate::goto::GoTo>>,
     tracking_owner: Option<Arc<crate::session::TrackingOwner>>,
@@ -148,6 +150,7 @@ impl AppState {
             recordings: None,
             mount_monitor: None,
             mount_sky: None,
+            night_utc: None,
             simulation: None,
             goto: None,
             tracking_owner: None,
@@ -235,14 +238,24 @@ impl AppState {
         self
     }
 
+    /// The night clock of `--mount-sky-night` (026 US2). Call before `with_mount_sky`.
+    pub fn with_night_clock(mut self, start_unix_s: f64, utc: impl Into<String>) -> Self {
+        self.clock = Arc::new(crate::simulate::ConsoleClock(simulator::VirtualClock::new(
+            start_unix_s,
+        )));
+        self.night_utc = Some(utc.into());
+        self
+    }
+
     /// The paired real node, with every frame's stars drawn from its encoders. Call
     /// before `with_live`, in place of `with_link`.
     pub fn with_mount_sky(mut self, transport: Transport, tube_alt_deg: f64) -> Self {
-        let sky = Arc::new(crate::mount_sky::MountSky::new(
-            self.db.clone(),
-            self.session.clone(),
-            tube_alt_deg,
-        ));
+        let mut sky =
+            crate::mount_sky::MountSky::new(self.db.clone(), self.session.clone(), tube_alt_deg);
+        if let Some(utc) = self.night_utc.take() {
+            sky = sky.with_night_utc(utc);
+        }
+        let sky = Arc::new(sky);
         self.link = Some(Arc::new(LinkManager::start_with_filter(
             self.session.clone(),
             self.clock.clone(),

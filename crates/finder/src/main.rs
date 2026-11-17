@@ -46,6 +46,12 @@ struct Args {
     /// The tube's altitude now, in degrees from a level (0 to 90). With --mount-sky.
     #[arg(long, requires = "mount_sky", value_parser = parse_tube_alt)]
     tube_alt: Option<f64>,
+    /// Run the console on a night clock from this UTC, for daylight tests. Needs --covers-on.
+    #[arg(long, requires_all = ["mount_sky", "covers_on"], value_parser = parse_night)]
+    mount_sky_night: Option<Night>,
+    /// Confirm that the mirror's cover and the finder's cap are on. With --mount-sky-night.
+    #[arg(long, requires = "mount_sky_night")]
+    covers_on: bool,
     /// Turn off the MCP endpoint.
     #[arg(long)]
     no_mcp: bool,
@@ -70,6 +76,27 @@ fn parse_tube_alt(value: &str) -> Result<f64, String> {
     } else {
         Err("--tube-alt requires degrees from 0 to 90".into())
     }
+}
+
+/// A night clock start: the Unix seconds the console's clock runs from, and the
+/// UTC text that named them.
+#[derive(Clone)]
+struct Night {
+    unix_s: f64,
+    utc: String,
+}
+
+/// The `--mount-sky-night` value: the CLI's UTC form, kept as its label too.
+fn parse_night(value: &str) -> Result<Night, String> {
+    parse_start(value)
+        .map(|unix_s| Night {
+            unix_s,
+            utc: value.to_string(),
+        })
+        .map_err(|_| {
+            "--mount-sky-night requires YYYY-MM-DDTHH:MM:SSZ (optional fractional seconds)"
+                .to_string()
+        })
 }
 
 #[tokio::main]
@@ -130,6 +157,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
             .await?
     } else if args.mount_sky {
+        let state = match &args.mount_sky_night {
+            Some(night) => state.with_night_clock(night.unix_s, night.utc.clone()),
+            None => state,
+        };
         state.with_mount_sky(finder::link::Transport::Tcp, args.tube_alt.unwrap())
     } else {
         state.with_link(finder::link::Transport::Tcp)
@@ -146,6 +177,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.mount_sky {
         eprintln!(
             "finder console: drawn sky: stars come from the mount's encoders, not the camera"
+        );
+    }
+    if let Some(night) = &args.mount_sky_night {
+        eprintln!(
+            "finder console: night clock from {}: the Sun guard checks a pretend Sun; keep the mirror cover and the finder cap on",
+            night.utc
         );
     }
     eprintln!("finder console: http://{bound_addr}");
