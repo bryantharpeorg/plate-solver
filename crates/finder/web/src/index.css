@@ -459,6 +459,23 @@
   [data-theme="night"] .aim-mark text {
     font-weight: 680;
   }
+  .up-mark {
+    stroke: var(--color-on-photo);
+  }
+  .up-label {
+    fill: var(--color-on-photo);
+    paint-order: stroke;
+    stroke: var(--color-photo);
+    stroke-linejoin: round;
+    font-weight: 600;
+  }
+  [data-theme="night"] .up-mark path {
+    stroke-width: 1.8px;
+    vector-effect: non-scaling-stroke;
+  }
+  [data-theme="night"] .up-label {
+    font-weight: 680;
+  }
   .furniture text {
     stroke: none;
     font-weight: 600;

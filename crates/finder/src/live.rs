@@ -66,6 +66,9 @@ pub struct LiveReport {
     /// Guidance at completion.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub guidance: Option<Guidance>,
+    /// Zenith bearing in the solved frame when the session has a site.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub up_deg: Option<f64>,
 }
 /// A preview and its exposure's centroids.
 #[derive(Clone)]
@@ -240,7 +243,7 @@ impl Live {
                     .expect("preview history")
                     .back()
                     .map(|p| p.frame_id);
-                let guidance = session.snapshot(clock.now()).guidance;
+                let snapshot = session.snapshot(clock.now());
                 let _ = outgoing.send(LiveReport {
                     frame_id: frame.id,
                     time,
@@ -248,7 +251,8 @@ impl Live {
                     preview_seq,
                     stars: frame.centroids.len(),
                     report,
-                    guidance,
+                    guidance: snapshot.guidance,
+                    up_deg: pointing_seq.and(snapshot.pointing.and_then(|p| p.up_deg)),
                 });
                 drop(permit);
             }

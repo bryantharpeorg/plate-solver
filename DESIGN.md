@@ -314,6 +314,14 @@ frame's middle, cased like a star name. It is session furniture, outside the leg
 and it leaves the centre reticle where it is. At night the ring is 2.2px and
 non-scaling.
 
+### Up mark — built
+When the session has a site, the chart draws which way is up and which way is right
+at the aim point (the frame's centre without one): two Frame Ink arms from 13 chart
+units out, the longer toward the zenith with an arrowhead, the shorter toward growing
+azimuth, with the upright words "up" and "right" beyond them. It is session
+furniture, outside the legend, drawn only on the latest pointing's chart. The
+compass's north and east stay as they are.
+
 ### GoTo — built
 `GoToControl` sits inside the guidance block, under its directions, while mount telemetry is present. Its square 44px primary button uses the existing dim primary treatment at night. Only a connected mount with no running GoTo or second sync and no `goto_refusal` enables it. The refusal is the server planner's exact text, linked to the button and printed in Second Ink. The page does no motion planning. An ink status line shows Slewing, Solving, each numbered Correction, and On target with the final error rounded to 0.1″; failures and halts retain their reason. Requests refresh the session immediately, and mount sessions poll every 500ms, waiting for an outstanding read to finish.
 

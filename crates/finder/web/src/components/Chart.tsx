@@ -234,6 +234,17 @@ export function Chart({ report: newest, imageUrl, label, busy, layers, onLayers,
             {furniture && <Furniture geometry={furniture} u={u} intro={intro} />}
             {live && session?.aim && <AimMark x={session.aim.x} y={session.aim.y} W={W} u={u} />}
             {solved &&
+              session?.pointing &&
+              session.pointing.up_deg !== undefined &&
+              report.pointing_seq !== undefined &&
+              report.pointing_seq === session.pointing.seq && (
+                <UpMark
+                  at={live && session.aim ? session.aim : { x: W / 2, y: H / 2 }}
+                  up={session.pointing.up_deg}
+                  u={u}
+                />
+              )}
+            {solved &&
               session?.target &&
               session.guidance?.placement &&
               session.pointing &&
@@ -273,6 +284,41 @@ function AimMark({ x, y, W, u }: { x: number; y: number; W: number; u: number })
         aim
       </text>
     </g>
+  );
+}
+
+function UpMark({ at, up, u }: { at: { x: number; y: number }; up: number; u: number }) {
+  const out = (bearing: number, r: number) => {
+    const a = (bearing * Math.PI) / 180;
+    return { x: at.x + Math.sin(a) * r, y: at.y - Math.cos(a) * r };
+  };
+  const label = {
+    textAnchor: "middle",
+    dominantBaseline: "middle",
+    fontSize: 11 * u,
+    strokeWidth: 3 * u,
+  } as const;
+  return (
+    <>
+      <g
+        data-up
+        transform={`translate(${at.x} ${at.y}) rotate(${up})`}
+        className="up-mark pointer-events-none"
+        strokeWidth={1.3 * u}
+      >
+        <title>Up and right at the aim point</title>
+        <path
+          fill="none"
+          d={`M0 ${-13 * u}V${-34 * u}M${-4 * u} ${-28 * u}L0 ${-34 * u}L${4 * u} ${-28 * u}M${13 * u} 0H${22 * u}`}
+        />
+      </g>
+      <text data-up-label="up" className="up-label pointer-events-none" {...out(up, 43 * u)} {...label}>
+        up
+      </text>
+      <text data-up-label="right" className="up-label pointer-events-none" {...out(up + 90, 31 * u)} {...label}>
+        right
+      </text>
+    </>
   );
 }
 
