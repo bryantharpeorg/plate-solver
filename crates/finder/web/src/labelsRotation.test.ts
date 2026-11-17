@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SolveReport } from "./api";
+import type { ObjectMark, SolveReport } from "./api";
 import {
   boxesOverlap,
   layoutLabels,
@@ -18,17 +18,29 @@ import { ORION2 } from "./test/fixtures";
 // arithmetic. WIDE is the plan's non-square frame check: a square fixture like ORION2
 // would hide a swapped box.
 
-/** ORION2's marks in the plan's wide 1296 × 972 frame. */
-const WIDE: SolveReport = { ...ORION2, width: 1296, height: 972 };
+/** ORION2's marks, spread across the plan's wide 1296 × 972 frame. */
+const WIDE: SolveReport = {
+  ...ORION2,
+  width: 1296,
+  height: 972,
+  stars: ORION2.stars.map((s) => ({ ...s, x: (s.x * 1296) / 507, y: (s.y * 972) / 507 })),
+  objects: ORION2.objects.map((o): ObjectMark => ({
+    ...o,
+    x: (o.x * 1296) / 507,
+    y: (o.y * 972) / 507,
+    radius_px: (o.radius_px * 972) / 507,
+    minor_px: (o.minor_px * 972) / 507,
+  })),
+  detected: ORION2.detected.map(([x, y]): [number, number] => [(x * 1296) / 507, (y * 972) / 507]),
+};
 
-/** The chart's scale where jsdom measures no width: one CSS pixel is 320 of the frame. */
 const measure = (text: string, size: number) => text.length * size * 0.62;
 
 function input(rotation?: number): LabelInput {
   return {
     W: WIDE.width,
     H: WIDE.height,
-    u: WIDE.width / 320,
+    u: WIDE.width / (480 - 60),
     stars: WIDE.stars,
     objects: WIDE.objects,
     detected: WIDE.detected,
@@ -54,7 +66,7 @@ const toSeen = (deg: number, x: number, y: number) => toView(WIDE.width, WIDE.he
 
 for (const deg of [90, 79]) {
   describe(`labels laid out in the view turned by ${deg}°`, () => {
-    const u = WIDE.width / 320;
+    const u = WIDE.width / (480 - 60);
     const spots = layoutLabels(input(deg));
     const placed = [...spots.entries()];
     const starLabels = placed.filter(([key]) => key.startsWith("s:"));

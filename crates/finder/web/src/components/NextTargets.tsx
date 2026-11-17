@@ -14,9 +14,11 @@ interface Props {
   site: Site | null;
   onSetSite: () => void;
   minAlt?: number;
+  /** The live views' rotation, so the off-frame arrows turn with the chart. */
+  rotation?: number;
 }
 
-export function NextTargets({ reference, nearby, site, onSetSite, minAlt = 15 }: Props) {
+export function NextTargets({ reference, nearby, site, onSetSite, minAlt = 15, rotation = 0 }: Props) {
   if (!reference && nearby.length === 0) return null;
   return (
     <section aria-labelledby="next-title" className="space-y-6">
@@ -37,7 +39,7 @@ export function NextTargets({ reference, nearby, site, onSetSite, minAlt = 15 }:
                 detail={o.kind}
                 where={
                   <span className="inline-flex items-center gap-1.5">
-                    <DirectionArrow degrees={o.direction_deg} />
+                    <DirectionArrow degrees={o.direction_deg} rotation={rotation} />
                     {deg(o.separation_deg)}
                   </span>
                 }
@@ -160,7 +162,7 @@ function Similar({
   );
 }
 
-export function DirectionArrow({ degrees }: { degrees: number }) {
+export function DirectionArrow({ degrees, rotation = 0 }: { degrees: number; rotation?: number }) {
   return (
     <svg
       viewBox="-8 -8 16 16"
@@ -169,7 +171,8 @@ export function DirectionArrow({ degrees }: { degrees: number }) {
       role="img"
       aria-label={`${Math.round(degrees)}° from up on the frame`}
     >
-      <g transform={`rotate(${degrees})`}>
+      {/* The arrow turns with the chart; its label keeps the frame's own bearing. */}
+      <g transform={`rotate(${degrees - rotation})`}>
         <path
           d="M0 6V-5M-3.5 -1.5L0 -5L3.5 -1.5"
           fill="none"

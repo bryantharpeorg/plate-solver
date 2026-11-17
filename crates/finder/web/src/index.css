@@ -330,6 +330,12 @@
     opacity: 0;
     animation: ink-in 500ms var(--ease-out-expo) forwards;
   }
+  /* A rotated chart keeps its labels upright: each turns back about its own middle. */
+  .chart-rotated text:not([transform]) {
+    transform-box: fill-box;
+    transform-origin: center;
+    rotate: var(--label-rotation);
+  }
   .edge-label {
     fill: var(--color-ink-2);
     font-stretch: 82%;

@@ -6,6 +6,7 @@
 
 import type { ObjectMark, StarMark } from "./api";
 import { seenNow } from "./calm";
+import { fromView, sinCos, toView } from "./rotation";
 
 /** A rectangle in image pixels. */
 export interface Box {
@@ -42,6 +43,8 @@ export interface LabelInput {
   detected: [number, number][];
   /** The chart's furniture: compass, scale bar, centre reticle. */
   furniture: Box[];
+  /** The live chart's rotation, degrees counter-clockwise; absent or 0 lays out in the frame's axes. */
+  rotation?: number;
   measure: Measure;
 }
 
@@ -143,6 +146,34 @@ function candidate(x: number, y: number, dx: number, dy: number, d: number, w: n
  */
 export function layoutLabels(input: LabelInput): Map<string, LabelSpot> {
   const { W, H, u, measure } = input;
+  const deg = input.rotation ?? 0;
+  const [sin, cos] = sinCos(deg);
+  // At 0° every mapping below is the identity, unchanged to the bit.
+  const to =
+    deg === 0
+      ? (x: number, y: number): [number, number] => [x, y]
+      : (x: number, y: number): [number, number] => toView(W, H, deg, x, y);
+  const from =
+    deg === 0
+      ? (x: number, y: number): [number, number] => [x, y]
+      : (x: number, y: number): [number, number] => fromView(W, H, deg, x, y);
+  /** A frame-axis box as seen: the bounding box of its four corners in the view. */
+  const boxInView = (b: Box): Box => {
+    const seen = (
+      [
+        [b.x0, b.y0],
+        [b.x1, b.y0],
+        [b.x0, b.y1],
+        [b.x1, b.y1],
+      ] as [number, number][]
+    ).map(([x, y]) => to(x, y));
+    return {
+      x0: Math.min(...seen.map((p) => p[0])),
+      y0: Math.min(...seen.map((p) => p[1])),
+      x1: Math.max(...seen.map((p) => p[0])),
+      y1: Math.max(...seen.map((p) => p[1])),
+    };
+  };
   const pad = 2 * u;
   const grow = (b: Box): Box => ({ x0: b.x0 - pad, y0: b.y0 - pad, x1: b.x1 + pad, y1: b.y1 + pad });
   const around = (x: number, y: number, r: number): Box => ({ x0: x - r, y0: y - r, x1: x + r, y1: y + r });
@@ -150,23 +181,44 @@ export function layoutLabels(input: LabelInput): Map<string, LabelSpot> {
   // Everything drawn, each with the key of the mark it belongs to ("" for none) and how
   // much covering it costs. Nothing may cover the furniture while any other spot is left.
   const obstacles: (Box & { owner: string; weight?: number })[] = input.furniture.map((b) => ({
-    ...b,
+    ...boxInView(b),
     owner: "",
     weight: 1000,
   }));
-  for (const s of input.stars) obstacles.push({ ...around(s.x, s.y, (ringRadius(s) + 1) * u), owner: `s:${s.id}` });
-  for (const [x, y] of input.detected) obstacles.push({ ...around(x, y, 4 * u), owner: "" });
+  for (const s of input.stars) {
+    const [sx, sy] = to(s.x, s.y);
+    obstacles.push({ ...around(sx, sy, (ringRadius(s) + 1) * u), owner: `s:${s.id}` });
+  }
+  for (const [x, y] of input.detected) {
+    const [dx, dy] = to(x, y);
+    obstacles.push({ ...around(dx, dy, 4 * u), owner: "" });
+  }
   for (const o of input.objects) {
-    for (const [x, y] of outline(o, u)) obstacles.push({ ...around(x, y, 1.5 * u), owner: `o:${o.id}` });
+    for (const [x, y] of outline(o, u)) {
+      const [ox, oy] = to(x, y);
+      obstacles.push({ ...around(ox, oy, 1.5 * u), owner: `o:${o.id}` });
+    }
   }
   const labels: Box[] = [];
 
   const margin = 3 * u;
-  /** The box moved, if need be, to lie inside the frame. */
-  const intoFrame = (b: Box): [number, number] => [
-    Math.max(margin - b.x0, 0) - Math.max(b.x1 - (W - margin), 0),
-    Math.max(margin - b.y0, 0) - Math.max(b.y1 - (H - margin), 0),
-  ];
+  /** The box moved, if need be, to lie inside the frame as seen. */
+  const intoFrame = (b: Box): [number, number] => {
+    const seen = (
+      [
+        [b.x0, b.y0],
+        [b.x1, b.y0],
+        [b.x0, b.y1],
+        [b.x1, b.y1],
+      ] as [number, number][]
+    ).map(([x, y]) => from(x, y));
+    const xs = seen.map((p) => p[0]);
+    const ys = seen.map((p) => p[1]);
+    const fx = Math.max(margin - Math.min(...xs), 0) - Math.max(Math.max(...xs) - (W - margin), 0);
+    const fy = Math.max(margin - Math.min(...ys), 0) - Math.max(Math.max(...ys) - (H - margin), 0);
+    // Moving the box by this in the view moves its corners by exactly [fx, fy] in the frame.
+    return deg === 0 ? [fx, fy] : [fx * cos + fy * sin, -fx * sin + fy * cos];
+  };
   /** How much a label box would cover: other labels count four times over. */
   const cost = (b: Box, key: string, skipOwn: boolean) => {
     const g = grow(b);
@@ -222,17 +274,33 @@ export function layoutLabels(input: LabelInput): Map<string, LabelSpot> {
         spot.leader = { x1: x + ux * start, y1: y + uy * start, x2: ex - ux * 2 * u, y2: ey - uy * 2 * u };
       }
     }
+    // The spot is drawn inside the rotated group, in frame pixels, and the text is turned
+    // back upright about its own middle: its anchor point moves by fromView of the box's
+    // centre less the centre, so the upright text lands exactly on the laid-out box.
+    const c: [number, number] = [(box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2];
+    const f = from(c[0], c[1]);
+    spot.x += f[0] - c[0];
+    spot.y += f[1] - c[1];
+    if (spot.leader) {
+      const [x1, y1] = from(spot.leader.x1, spot.leader.y1);
+      const [x2, y2] = from(spot.leader.x2, spot.leader.y2);
+      spot.leader = { x1, y1, x2, y2 };
+    }
     labels.push(grow(box));
     spots.set(key, { ...spot, box });
   };
 
   for (const o of input.objects) {
-    place(`o:${o.id}`, o.id, o.x, o.y, (dx, dy) => reach(o, u, dx, dy), OBJECT_TEXT * u, true, true);
+    const [ox, oy] = to(o.x, o.y);
+    // A view direction's reach is the frame's reach in the frame direction it comes from.
+    const reachTo = (dx: number, dy: number) => reach(o, u, dx * cos - dy * sin, dx * sin + dy * cos);
+    place(`o:${o.id}`, o.id, ox, oy, reachTo, OBJECT_TEXT * u, true, true);
   }
   const named = input.stars.filter((s) => s.name).sort((a, b) => a.mag - b.mag);
   for (const s of named) {
     const r = ringRadius(s) * u;
-    place(`s:${s.id}`, s.name ?? "", s.x, s.y, () => r, STAR_TEXT * u, false, false);
+    const [sx, sy] = to(s.x, s.y);
+    place(`s:${s.id}`, s.name ?? "", sx, sy, () => r, STAR_TEXT * u, false, false);
   }
   return spots;
 }

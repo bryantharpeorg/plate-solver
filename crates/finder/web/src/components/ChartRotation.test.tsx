@@ -78,22 +78,18 @@ describe("the turned live chart", () => {
     const bh = 1296 * sin + 972 * cos;
     const m = (30 * bw) / 320;
     const { container } = render(<Harness session={{ ...SESSION, chart_rotation_deg: 30 }} />);
-    const [x, y, w, h] = container
-      .querySelector('svg[role="img"]')!
-      .getAttribute("viewBox")!
-      .split(" ")
-      .map(Number);
+    const [x, y, w, h] = container.querySelector('svg[role="img"]')!.getAttribute("viewBox")!.split(" ").map(Number);
     expect(x).toBeCloseTo(-m, 2);
     expect(y).toBeCloseTo(-m, 2);
     expect(w).toBeCloseTo(bw + 2 * m, 2);
     expect(h).toBeCloseTo(bh + 2 * m, 2);
-    const figure = container.querySelector("figure")!;
+    const figure = container.querySelector<HTMLElement>("figure")!;
     expect(Number(figure.style.getPropertyValue("--chart-aspect"))).toBeCloseTo(bw / bh, 9);
   });
 
   it("keeps every star, object and compass label upright and every edge label along its edge (S3)", () => {
     const { container, rerender } = render(<Harness report={ORION2} />);
-    const svg = container.querySelector('svg[role="img"]')!;
+    const svg = container.querySelector<SVGElement>('svg[role="img"]')!;
     expect(svg.classList.contains("chart-rotated")).toBe(true);
     expect(svg.style.getPropertyValue("--label-rotation")).toBe("90deg");
     // The upright labels are caught by the one CSS rule: no transform of their own.
@@ -147,14 +143,15 @@ describe("the aim-point tap on the turned photo", () => {
   /** The photo's bounding box in CSS pixels: 364 wide, with the turned frame's aspect. */
   const photoBox = (deg: number) => {
     const b = rotatedBox(1296, 972, deg);
-    return { width: 364, height: (364 * b.height) / b.width };
+    return { width: 364, height: Math.round(((364 * b.height) / b.width) * 100) / 100 };
   };
 
   function open(deg: number) {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ site: null }))));
-    render(
-      <AimTap session={{ site: null, aim: { x: 700, y: 420 }, chart_rotation_deg: deg }} live={LIVE} />,
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ site: null }))),
     );
+    render(<AimTap session={{ site: null, aim: { x: 700, y: 420 }, chart_rotation_deg: deg }} live={LIVE} />);
     const image = screen.getByRole("img", { name: /preview.*42/i });
     const { width, height } = photoBox(deg);
     vi.spyOn(image, "getBoundingClientRect").mockReturnValue({
@@ -203,7 +200,7 @@ describe("the aim-point tap on the turned photo", () => {
 describe("the turned live photo", () => {
   it("boxes the photo at the turned frame's aspect and turns it about its centre (S6)", () => {
     const { container } = render(<LivePreview seq={42} width={1296} height={972} rotation={90} />);
-    expect(container.querySelector("div")!.style.getPropertyValue("aspect-ratio")).toBe("0.75 / 1");
+    expect(container.querySelector<HTMLElement>("div")!.style.getPropertyValue("aspect-ratio")).toBe("0.75 / 1");
     const photo = screen.getByRole("img", { name: /preview.*42/i });
     expect(photo.style.transform).toBe("translate(-50%, -50%) rotate(-90deg)");
   });

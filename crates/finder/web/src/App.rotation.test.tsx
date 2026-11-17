@@ -99,8 +99,8 @@ describe("the turned live page", () => {
         (g) => g.getAttribute("transform") === "translate(486 648) rotate(-90) translate(-648 -486)",
       ),
     ).toBe(true);
-    expect(container.firstElementChild!.style.getPropertyValue("--chart-aspect")).toBe("0.75");
+    expect(container.querySelector<HTMLElement>("div")!.style.getPropertyValue("--chart-aspect")).toBe("0.75");
     const preview = screen.getByRole("img", { name: /preview/i });
-    expect(preview.parentElement!.style.getPropertyValue("aspect-ratio")).toBe("0.75 / 1");
+    expect((preview.parentElement as HTMLElement)!.style.getPropertyValue("aspect-ratio")).toBe("0.75 / 1");
   });
 });

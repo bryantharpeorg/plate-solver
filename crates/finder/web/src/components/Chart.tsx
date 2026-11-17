@@ -19,6 +19,7 @@ import {
   type LabelSpot,
   type Measure,
 } from "../labels";
+import { rotatedBox, rotationOf, rotationTransform } from "../rotation";
 import { FamilyShape } from "./Symbol";
 import { TargetMark } from "./TargetMark";
 import type { ObservingSession } from "../useSession";
@@ -150,8 +151,11 @@ export function Chart({ report: newest, imageUrl, label, busy, layers, onLayers,
 
   const W = report.width;
   const H = report.height;
+  // Only a live chart turns, by the session's rotation; the box is what it turns into.
+  const rotation = live ? rotationOf(session) : 0;
+  const b = rotatedBox(W, H, rotation);
   // Image pixels per CSS pixel, so strokes and labels keep their on-screen size.
-  const u = width > 2 * MARGIN + 40 ? W / (width - 2 * MARGIN) : W / 320;
+  const u = width > 2 * MARGIN + 40 ? b.width / (width - 2 * MARGIN) : b.width / 320;
   const m = MARGIN * u;
   const solved = report.pointing !== null;
   // With nothing solved, the detected stars are the whole story: show them.
@@ -170,89 +174,124 @@ export function Chart({ report: newest, imageUrl, label, busy, layers, onLayers,
     detected,
     furniture: furniture?.boxes ?? [],
     measure,
+    rotation,
   });
+
+  // The SVG's pieces, built once and ordered by the rotation.
+  const defs = (
+    <defs>
+      <clipPath id={clip}>
+        <rect width={W} height={H} />
+      </clipPath>
+    </defs>
+  );
+  const paperEdge = (
+    <rect
+      x={-m + 1.5 * u}
+      y={-m + 1.5 * u}
+      width={b.width + 2 * m - 3 * u}
+      height={b.height + 2 * m - 3 * u}
+      fill="none"
+      stroke="var(--color-ink)"
+      strokeWidth={u}
+    />
+  );
+  const frame = (
+    <>
+      <image href={imageUrl} width={W} height={H} preserveAspectRatio="none" className="photo" />
+      <rect width={W} height={H} fill="none" stroke="var(--color-ink)" strokeWidth={1.4 * u} />
+
+      {layers.grid && solved && (
+        <Grid lines={report.grid} W={W} H={H} u={u} clip={clip} intro={intro} rotation={rotation} />
+      )}
+
+      <g clipPath={`url(#${clip})`} fontSize={STAR_TEXT * u}>
+        {detected.map(([x, y], i) => (
+          <circle key={i} cx={x} cy={y} r={3 * u} strokeWidth={u} className="mark-detected" />
+        ))}
+        {objects.map((o, i) => (
+          <ObjectSymbol
+            key={o.id}
+            object={o}
+            u={u}
+            spot={spots.get(`o:${o.id}`)}
+            delay={450 + i * 60}
+            picked={picked?.kind === "object" && picked.object.id === o.id}
+            onPick={() => setPicked({ kind: "object", object: o })}
+          />
+        ))}
+        {stars.map((s) => (
+          <StarSymbol
+            key={s.id}
+            star={s}
+            u={u}
+            spot={spots.get(`s:${s.id}`)}
+            picked={picked?.kind === "star" && picked.star.id === s.id}
+            onPick={() => setPicked({ kind: "star", star: s })}
+          />
+        ))}
+        {furniture && <Furniture geometry={furniture} u={u} intro={intro} />}
+        {live && session?.aim && <AimMark x={session.aim.x} y={session.aim.y} W={W} u={u} />}
+        {solved &&
+          session?.pointing &&
+          session.pointing.up_deg !== undefined &&
+          report.pointing_seq !== undefined &&
+          report.pointing_seq === session.pointing.seq && (
+            <UpMark
+              at={live && session.aim ? session.aim : { x: W / 2, y: H / 2 }}
+              up={session.pointing.up_deg}
+              u={u}
+            />
+          )}
+        {solved &&
+          session?.target &&
+          session.guidance?.placement &&
+          session.pointing &&
+          report.pointing_seq !== undefined &&
+          report.pointing_seq === session.pointing.seq && (
+            <TargetMark target={session.target} placement={session.guidance.placement} W={W} H={H} u={u} />
+          )}
+      </g>
+    </>
+  );
 
   return (
     <figure
       className="chart lg:mx-auto lg:max-w-[calc((100dvh-11rem)*var(--chart-aspect))]"
-      style={{ "--chart-aspect": W / H } as CSSProperties}
+      style={{ "--chart-aspect": b.width / b.height } as CSSProperties}
     >
       {/* Leave room for guidance on a phone while keeping the legend at full width. */}
       <div ref={box} className={session?.target ? "max-sm:mx-5" : undefined}>
         <svg
           key={key}
-          viewBox={`${-m} ${-m} ${W + 2 * m} ${H + 2 * m}`}
-          className="block h-auto w-full select-none"
+          viewBox={`${-m} ${-m} ${b.width + 2 * m} ${b.height + 2 * m}`}
+          className={`block h-auto w-full select-none${rotation ? " chart-rotated" : ""}`}
+          style={rotation ? ({ "--label-rotation": `${rotation}deg` } as CSSProperties) : undefined}
           role="img"
           aria-label={solved ? `Chart of ${label} with the solution drawn on it` : `Frame ${label}`}
           onClick={() => setPicked(null)}
         >
-          <defs>
-            <clipPath id={clip}>
-              <rect width={W} height={H} />
-            </clipPath>
-          </defs>
-          <rect
-            x={-m + 1.5 * u}
-            y={-m + 1.5 * u}
-            width={W + 2 * m - 3 * u}
-            height={H + 2 * m - 3 * u}
-            fill="none"
-            stroke="var(--color-ink)"
-            strokeWidth={u}
-          />
-          <image href={imageUrl} width={W} height={H} preserveAspectRatio="none" className="photo" />
-          <rect width={W} height={H} fill="none" stroke="var(--color-ink)" strokeWidth={1.4 * u} />
-
-          {layers.grid && solved && <Grid lines={report.grid} W={W} H={H} u={u} clip={clip} intro={intro} />}
-
-          <g clipPath={`url(#${clip})`} fontSize={STAR_TEXT * u}>
-            {detected.map(([x, y], i) => (
-              <circle key={i} cx={x} cy={y} r={3 * u} strokeWidth={u} className="mark-detected" />
-            ))}
-            {objects.map((o, i) => (
-              <ObjectSymbol
-                key={o.id}
-                object={o}
-                u={u}
-                spot={spots.get(`o:${o.id}`)}
-                delay={450 + i * 60}
-                picked={picked?.kind === "object" && picked.object.id === o.id}
-                onPick={() => setPicked({ kind: "object", object: o })}
-              />
-            ))}
-            {stars.map((s) => (
-              <StarSymbol
-                key={s.id}
-                star={s}
-                u={u}
-                spot={spots.get(`s:${s.id}`)}
-                picked={picked?.kind === "star" && picked.star.id === s.id}
-                onPick={() => setPicked({ kind: "star", star: s })}
-              />
-            ))}
-            {furniture && <Furniture geometry={furniture} u={u} intro={intro} />}
-            {live && session?.aim && <AimMark x={session.aim.x} y={session.aim.y} W={W} u={u} />}
-            {solved &&
-              session?.pointing &&
-              session.pointing.up_deg !== undefined &&
-              report.pointing_seq !== undefined &&
-              report.pointing_seq === session.pointing.seq && (
-                <UpMark
-                  at={live && session.aim ? session.aim : { x: W / 2, y: H / 2 }}
-                  up={session.pointing.up_deg}
-                  u={u}
-                />
-              )}
-            {solved &&
-              session?.target &&
-              session.guidance?.placement &&
-              session.pointing &&
-              report.pointing_seq !== undefined &&
-              report.pointing_seq === session.pointing.seq && (
-                <TargetMark target={session.target} placement={session.guidance.placement} W={W} H={H} u={u} />
-              )}
-          </g>
+          {/*
+            Unrotated, the children are today's in today's order. Rotated, the paper's edge
+            stays level and outside one group that turns the frame and everything drawn on it
+            (inside the group a turned edge would leave the viewBox at any angle but a
+            quarter turn).
+          */}
+          {rotation ? (
+            <>
+              {paperEdge}
+              <g transform={rotationTransform(W, H, rotation)}>
+                {defs}
+                {frame}
+              </g>
+            </>
+          ) : (
+            <>
+              {defs}
+              {paperEdge}
+              {frame}
+            </>
+          )}
         </svg>
       </div>
       <figcaption className="mt-2.5 min-h-11 sm:mx-[30px] sm:mt-3">
@@ -334,6 +373,7 @@ function Grid({
   u,
   clip,
   intro: introNow,
+  rotation = 0,
 }: {
   lines: GridLine[];
   W: number;
@@ -341,6 +381,8 @@ function Grid({
   u: number;
   clip: string;
   intro: boolean;
+  /** The live chart's rotation, so edge labels read along their turned edges. */
+  rotation?: number;
 }) {
   const [intro] = useState(introNow);
   const gap = 6 * u;
@@ -383,6 +425,16 @@ function Grid({
                 : edge === "left"
                   ? [-gap, y, -90, "auto"]
                   : [W + gap, y, 90, "auto"];
+          const size = 11 * u;
+          // The angle it is read at on screen, in [-180, 180): upside down past a quarter turn.
+          const seen = ((((rotate - rotation) % 360) + 540) % 360) - 180;
+          const middle = ty + (baseline === "hanging" ? 0.35 : -0.35) * size;
+          const transform =
+            rotation === 0
+              ? rotate
+                ? `rotate(${rotate} ${tx} ${ty})`
+                : undefined
+              : `rotate(${rotate} ${tx} ${ty})${Math.abs(seen) > 90 ? ` rotate(180 ${tx} ${middle})` : ""}`;
           return (
             <g key={i}>
               <path d={tick} stroke="var(--color-ink)" strokeWidth={u} />
@@ -391,7 +443,7 @@ function Grid({
                 y={ty}
                 textAnchor="middle"
                 dominantBaseline={baseline}
-                transform={rotate ? `rotate(${rotate} ${tx} ${ty})` : undefined}
+                transform={transform}
                 className="edge-label"
               >
                 {text}
