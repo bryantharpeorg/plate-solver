@@ -91,8 +91,16 @@ The mount following the target across the sky so that it stays at the aim point.
 _Avoid_: tracking mode (that is the solver's hinted solving)
 
 **Aim point**:
-The spot in the finder camera's frame on which the main telescope's eyepiece is centred. Moves bring the aim point, not the boresight, onto the target.
+The spot in the finder camera's frame where the main telescope is looking: the centre of the imaging camera's sensor, or of the eyepiece's view when no imaging camera is attached. The console measures it from an imaging solve and a live pointing of the same moment; without an imaging camera the observer sets it by tapping a centred star. Moves bring the aim point, not the boresight, onto the target.
 _Avoid_: telescope boresight, frame centre
+
+**Imaging angle**:
+How far the imaging camera's frame is turned from the finder camera's frame, about the line of sight. Measured together with the aim point.
+_Avoid_: camera rotation (the finder camera's rotation on the tube is a fixed term), roll (that is a solve's angle from celestial north)
+
+**Imaging run**:
+The console's whole procedure from a chosen target to a saved stack: GoTo, tracking, the focus check, centring the target on the imaging camera's sensor, and stacking subs until it is stopped.
+_Avoid_: session (that is the observing session), sequence, capture, job
 
 ### Equipment
 
@@ -109,7 +117,7 @@ The small optical scope on the telescope tube. Named only when the optics matter
 _Avoid_: finder (alone)
 
 **Imaging camera**:
-A camera at the main telescope's focuser, used for photographs. The console only needs its sensor's size and pixel pitch, to report field rotation and exposure limits.
+A camera at the main telescope's focuser, used for photographs. The scope node takes its exposures and relays them; the console saves, solves, calibrates and stacks them.
 _Avoid_: main camera
 
 **Scope node**:
@@ -129,7 +137,7 @@ One exposure as the scope node sends it: its id, exposure start and end on the n
 _Avoid_: frame (alone), image
 
 **Preview**:
-An occasional small JPEG of a star frame's image, for the page to show under the chart.
+An occasional small JPEG of a star frame's image, for the page to show under the chart, or a colour JPEG of an imaging frame, for the Imaging page and MCP clients.
 _Avoid_: thumbnail, live view
 
 **Recording**:
@@ -139,6 +147,58 @@ _Avoid_: capture, log, session
 **Raw frame**:
 The 8-bit gray pixels of one star frame, exactly as the scope node's detector read them, saved on request as a PNG next to that frame's line.
 _Avoid_: raw (alone), RAW file, full-resolution preview
+
+**Imaging frame**:
+One exposure from the imaging camera as the scope node relays it: its samples exactly as the camera delivered them, before any colour processing, with its exposure start and end on the node's clock and the settings it was made with.
+_Avoid_: frame (alone), image, star frame (the finder camera's), raw frame (the finder camera's 8-bit pixels)
+
+**Sub**:
+An imaging frame taken for a stack.
+_Avoid_: light, light frame, subframe
+
+**Dark**:
+An imaging frame taken with the telescope covered, to record the sensor's own signal. A **master dark** is the average of a set taken with the same settings.
+_Avoid_: dark frame (in code and specs; fine in prose to the observer)
+
+**Flat**:
+An imaging frame of an evenly lit field, to record vignetting and dust shadows. A **master flat** is the average of a set, less its own dark.
+_Avoid_: flat field
+
+**Calibration library**:
+The console's master darks and master flats, each kept with a record of how it was made: the camera, gain, offset, binning and set temperature, and for a master dark its exposure.
+_Avoid_: calibration set, dark library
+
+**Stack**:
+The picture built from a run's subs: each calibrated, turned into colour, rotated and shifted into place by its imaging solve, and averaged with outliers rejected.
+_Avoid_: live view, integration, master light
+
+**Imaging solver**:
+The part that works out where an imaging frame points. Today it is the ASTAP program.
+_Avoid_: plate solver (alone: the finder camera's solver is this project's own)
+
+**Solver port**:
+The hardware-neutral way the console asks an imaging solver for an imaging solve or a star measure. A **solver adapter** speaks one solver's own interface behind it, such as ASTAP's or the simulator's.
+_Avoid_: driver, backend
+
+**Imaging solve**:
+Where an imaging frame points: the J2000 RA and Dec of its centre, the angle of its up direction east of celestial north, and its scale in arcseconds per pixel.
+_Avoid_: plate solve (alone), WCS
+
+**Focus reading**:
+The median size of the stars in an imaging frame's focus region, as a half-flux diameter in arcseconds. Smaller is sharper.
+_Avoid_: focus score, HFD (alone), FWHM
+
+**Focus region**:
+The part of the imaging camera's frame where focus readings are taken: the tile of a full frame with the smallest reading.
+_Avoid_: focus box, ROI (alone)
+
+**Focus record**:
+The smallest focus reading this imaging camera has given on this telescope, tonight and on earlier nights. A reading is judged against it, never against an absolute number.
+_Avoid_: best focus, focus target
+
+**Focus aid**:
+A loop of short exposures of the focus region, each with its focus reading, the best so far and the trend, shown while the observer turns the focuser.
+_Avoid_: autofocus (there is no motor), focus mode
 
 **Clock offset**:
 Node time less console time, taken from the least-delay heartbeat exchange of the last 8 s.
@@ -157,12 +217,12 @@ The part that speaks one mount's own protocol behind the mount port, such as Sky
 _Avoid_: driver
 
 **Camera port**:
-The hardware-neutral way the scope node takes frames from a camera.
+The hardware-neutral way the scope node takes frames from a camera: a stream of star frames from the finder camera, and exposures on request from the imaging camera.
 _Avoid_: driver
 
 **Camera adapter**:
-The part that speaks one camera's own interface behind the camera port, such as the Arducam's or the simulator's.
-_Avoid_: driver
+The part that speaks one camera's own interface behind the camera port, such as the Arducam's, the simulator's, or INDI's for an imaging camera.
+_Avoid_: driver, plugin, provider
 
 **Axis position**:
 An axis's own reading of where it is, in the mount's frame rather than the sky's. The pointing model turns axis positions into a direction on the sky.
@@ -179,6 +239,46 @@ _Avoid_: command, endpoint
 **Direct axis move**:
 Moving an axis to an axis position, or at a rate for a set time, asked for by axis rather than by target. Only MCP clients ask for one; it needs a sync and passes the same guards as a GoTo.
 _Avoid_: raw move, manual slew
+
+**Purpose label**:
+The short word an exposure is asked for with, saying what it is for: `frame` and `probe`, and later `focus`, `dark`, `flat`, `sub` and `run`.
+_Avoid_: frame type (that is INDI's), kind
+
+**Lease** (on the imaging camera):
+The console's record of which one of its procedures is taking exposures with the imaging camera: the focus aid, a set of darks or flats, the stack or the imaging run. A second taker is refused with the holder's name. A single imaging frame holds none.
+_Avoid_: lock, reservation, mutex
+
+**Finder fix**:
+One live solve of the finder camera as the console's history keeps it: when its star frame was taken, and how it maps the sky onto the finder camera's frame.
+_Avoid_: sample, sync (that ties the mount to the sky)
+
+**Star measure**:
+The median half-flux diameter, in pixels, and the star count that a solver adapter reports for an imaging frame or a region of one.
+_Avoid_: focus reading (that is in arcseconds, for the focus region), HFD (alone)
+
+**Aim reading**:
+One reading of the aim point and the imaging angle, taken from an imaging solve and the finder camera's live solves of the same moment. The console smooths the last few into the aim point it uses.
+_Avoid_: measure (that is the star measure), sample, calibration
+
+**Relation** (between the cameras):
+What the console keeps between the finder camera and the imaging camera: the scale an imaging solve measured, the aim readings held, and from them the aim point and the imaging angle.
+_Avoid_: alignment, calibration, offset
+
+**Solve hint**:
+What the console tells the imaging solver before an imaging solve: where to look, how far around it, and how tall the field is, each when known.
+_Avoid_: seed, guess, prior
+
+**Solve sidecar**:
+The file beside a saved imaging frame that records its imaging solve, or why it failed. The imaging frame's own file is never rewritten.
+_Avoid_: header update, WCS file
+
+**Focus check**:
+Up to nine imaging frames of the focus region taken without the observer, ended by the first settled reading and a verdict against the focus record.
+_Avoid_: autofocus (there is no motor), focus test
+
+**Settled reading**:
+The median of three focus readings taken one after another at one focuser position. The focus aid shows it, and only it can set the focus record.
+_Avoid_: average, smoothed HFD
 
 ### Solving
 
