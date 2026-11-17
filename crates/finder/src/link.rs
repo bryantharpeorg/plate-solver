@@ -211,6 +211,13 @@ pub struct LinkStatus {
     pub last_heartbeat_at: Option<Instant>,
 }
 
+/// Replaces each node frame before anything in the console reads it (026).
+pub trait FrameFilter: Send + Sync {
+    /// `offset_s` is the link's node-to-console clock offset, when known: console time
+    /// is node time minus it.
+    fn filter(&self, frame: proto::StarFrame, offset_s: Option<f64>) -> proto::StarFrame;
+}
+
 /// Owns the scope link task. Dropping the manager cancels all in-flight calls.
 pub struct LinkManager {
     task: JoinHandle<()>,
@@ -227,12 +234,22 @@ impl Drop for LinkManager {
 impl LinkManager {
     /// Watch the session's pairing and settings; every connection uses this client.
     pub fn start(session: Arc<Session>, clock: Arc<dyn Clock>, transport: Transport) -> Self {
+        Self::start_with_filter(session, clock, transport, None)
+    }
+
+    /// `start` with every frame passed through `filter` first.
+    pub fn start_with_filter(
+        session: Arc<Session>,
+        clock: Arc<dyn Clock>,
+        transport: Transport,
+        filter: Option<Arc<dyn FrameFilter>>,
+    ) -> Self {
         let (status_tx, status) = watch::channel(LinkStatus::default());
         let (frame_tx, frames) = watch::channel(None);
         let (mount_tx, mount) = watch::channel(None);
         let (raw_tx, raw) = watch::channel(None);
         let task = tokio::spawn(run(
-            session, clock, transport, status_tx, frame_tx, mount_tx, raw_tx,
+            session, clock, transport, status_tx, frame_tx, mount_tx, raw_tx, filter,
         ));
         Self {
             task,
@@ -381,6 +398,7 @@ async fn pair(transport: &Transport, config: &LinkConfig) -> Result<Paired, Stat
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run(
     session: Arc<Session>,
     clock: Arc<dyn Clock>,
@@ -389,6 +407,7 @@ async fn run(
     frame_tx: watch::Sender<Option<proto::StarFrame>>,
     mount_tx: watch::Sender<Option<MountClient>>,
     raw_tx: watch::Sender<Option<RawClient>>,
+    filter: Option<Arc<dyn FrameFilter>>,
 ) {
     let mut changes = session.link_changes();
     let mut status = LinkStatus::default();
@@ -438,6 +457,7 @@ async fn run(
                 &mut status,
                 &status_tx,
                 &frame_tx,
+                &filter,
             )
             .await;
             mount_tx.send_replace(None);
@@ -493,6 +513,7 @@ async fn active(
     status: &mut LinkStatus,
     status_tx: &watch::Sender<LinkStatus>,
     frame_tx: &watch::Sender<Option<proto::StarFrame>>,
+    filter: &Option<Arc<dyn FrameFilter>>,
 ) -> bool {
     let mut map = ClockMap::new();
     let mut deadline = Instant::now() + SILENCE;
@@ -532,6 +553,10 @@ async fn active(
             }
             frame = stream.message() => {
                 let Ok(Some(frame)) = frame else { return false; };
+                let frame = match &filter {
+                    Some(filter) => filter.filter(frame, status.offset_s),
+                    None => frame,
+                };
                 status.last_frame_at = Some(clock.now());
                 status.stars = Some(frame.centroids.len());
                 frame_tx.send_replace(Some(frame));

@@ -115,6 +115,7 @@ pub struct AppState {
     live: Option<Arc<Live>>,
     recordings: Option<Arc<Recorder>>,
     mount_monitor: Option<Arc<crate::live::MountMonitor>>,
+    mount_sky: Option<Arc<crate::mount_sky::MountSky>>,
     simulation: Option<Arc<Simulation>>,
     goto: Option<Arc<crate::goto::GoTo>>,
     tracking_owner: Option<Arc<crate::session::TrackingOwner>>,
@@ -146,6 +147,7 @@ impl AppState {
             live: None,
             recordings: None,
             mount_monitor: None,
+            mount_sky: None,
             simulation: None,
             goto: None,
             tracking_owner: None,
@@ -230,6 +232,29 @@ impl AppState {
             self.session.clone(),
             self.clock.clone(),
         )));
+        self
+    }
+
+    /// The paired real node, with every frame's stars drawn from its encoders. Call
+    /// before `with_live`, in place of `with_link`.
+    pub fn with_mount_sky(mut self, transport: Transport, tube_alt_deg: f64) -> Self {
+        let sky = Arc::new(crate::mount_sky::MountSky::new(
+            self.db.clone(),
+            self.session.clone(),
+            tube_alt_deg,
+        ));
+        self.link = Some(Arc::new(LinkManager::start_with_filter(
+            self.session.clone(),
+            self.clock.clone(),
+            transport,
+            Some(sky.clone()),
+        )));
+        self.mount_monitor = Some(Arc::new(crate::live::MountMonitor::start(
+            self.link.as_ref().unwrap().clone(),
+            self.session.clone(),
+            self.clock.clone(),
+        )));
+        self.mount_sky = Some(sky);
         self
     }
 
@@ -662,6 +687,8 @@ pub(crate) struct SessionResponse {
     motion: Option<Motion>,
     #[serde(skip_serializing_if = "Option::is_none")]
     axis_move: Option<crate::mcp::guard::Progress>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mount_sky: Option<crate::mount_sky::MountSkyView>,
 }
 async fn get_mcp(State(state): State<AppState>) -> Json<crate::mcp::McpStatus> {
     Json(state.mcp.status(&state.allowed_hosts))
@@ -692,6 +719,7 @@ pub(crate) async fn session_response(state: &AppState) -> SessionResponse {
         goto_refusal,
         motion: record.clone().filter(|_| running),
         axis_move,
+        mount_sky: state.mount_sky.as_ref().map(|sky| sky.view()),
     }
 }
 fn motion_running(

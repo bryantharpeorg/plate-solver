@@ -9,6 +9,7 @@ mod goto;
 mod model;
 mod mount_calls;
 mod mount_identity;
+mod mount_sky;
 mod night;
 mod recording_raw;
 mod simulate;

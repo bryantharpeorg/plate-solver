@@ -32,6 +32,8 @@ cargo run --release -p finder -- --db my_camera.npz --samples ~/frames
 | `--state DIR` | `$XDG_STATE_HOME/finder`, otherwise `~/.local/state/finder` | Folder holding the observing session in `session.json`. |
 | `--simulate` | off | In-process simulator on a virtual clock, with an isolated session and pairing. |
 | `--sim-start UTC` | now | Start the simulated night at `YYYY-MM-DDTHH:MM:SSZ`, optionally with fractional seconds. Requires `--simulate`. |
+| `--mount-sky` | off | Draw each frame's stars from the real mount's encoders instead of the camera, for testing GoTo without a sky. Needs `--tube-alt`; not with `--simulate`. Do not push the tube by hand in this mode. |
+| `--tube-alt DEG` | | The tube's altitude when the console starts, from a level, 0 to 90. Requires `--mount-sky`. |
 | `--allow-host NAME` | none | DNS name permitted for same-origin writes, in addition to IP literals and `localhost`. Repeat for multiple names. |
 | `--licenses` | | Print the third-party notices for the embedded page and data, and exit. |
 
@@ -436,6 +438,32 @@ night's model. Resets are persisted across restarts and command no motion.
 Invalid reset bodies answer 400 with a JSON `error`; a missing JSON content type
 answers 415. A foreign Origin on either model route answers 403 with a JSON
 `error`, leaving both the model and axes unchanged.
+
+
+## Drawn sky on the real mount
+
+Run the console against the paired scope node with `--mount-sky --tube-alt 30` and
+the tube's altitude from a level. The console then draws each frame's stars from the
+mount's encoders instead of the camera: the first frame's mid-exposure counts read as
+azimuth 180° and the altitude you passed, and every later frame carries the catalog
+stars at the pointing its counts give, at its mid-exposure console time. Syncs, the
+model, GoTo, tracking and the MCP tools run unchanged on those frames, and every motor
+command goes to the real mount. Each frame's preview is dropped.
+
+Without `--state`, the mode keeps its session in `mount-sky/session.json` under the
+default state folder, and the node is paired there once; the night's real `session.json`
+is never read or written. Every guard is unchanged: the Sun guard, the minimum
+altitude, Stop and the watchdog behave as without the mode, and a GoTo still needs a
+sync. `GET /api/session` reports `mount_sky` with `tube_alt_deg` and `zero_counts`.
+
+Do not push the tube by hand in this mode. With the board's encoders off, a push moves
+the tube and not the counts, so the drawn sky stops matching the tube and nothing
+detects it. After a power cycle (the node's reset count changes) the drawn sky stops
+for good, and `mount_sky` carries `power_cycled: true`: restart the console with a
+fresh `--tube-alt` and reset the night then. Check the tube is level before long moves.
+
+What the drawn sky cannot test: slip, gear backlash after the encoder, the base's tilt,
+and the 2 to 3% shortfall seen on the sky in the real board's 1° moves.
 
 
 ## Recording a night

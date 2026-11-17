@@ -7,6 +7,7 @@ mod support;
 mod aim;
 mod backlash;
 mod flags;
+mod mount_sky;
 mod recording;
 mod session;
 mod session_rotation;
