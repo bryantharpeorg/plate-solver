@@ -688,8 +688,9 @@ a throwaway worktree on the 2026-11-16 probe's build of 022 (`6c68476`, branch
 - **One reading of US2-S4**, for the owner: "`toView` of the spot's anchor, moved by the
   box's centre less the box's own anchor point" was built as `toView(anchor + (centre −
   anchor point))`, which § Interfaces describes. The other reading,
-  `toView(anchor) + (centre − anchor point)`, cannot hold at any angle but 0. The
-  scenario's words are unchanged.
+  `toView(anchor) + (centre − anchor point)`, cannot hold at any angle but 0. On
+  2026-11-17 the owner had the scenario state the built reading outright (spec.md
+  § Clarifications, Session 2026-11-17).
 - **Not run:** `ci.yml`'s other jobs, a gate on a cold target folder, and an e2e test that
   sets a rotation (the spec adds none).
 
