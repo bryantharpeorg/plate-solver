@@ -17,6 +17,10 @@ depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "016-mcp", "01
 # changes only the constitution, so all of it holds there.
 # On 2026-11-17 the owner had US2-S4 state its formula outright, the reading it was
 # built to (Clarifications, last session); nothing else changed.
+# Re-anchored 2026-11-17 to `main` at 20ce2fe after 022 landed: every citation into a
+# file 022 changed moved with its line, and what the trio says of 022 was checked against
+# its landed code (Clarifications, last session). No scenario's Given, When or Then, no
+# owner approval and no `depends_on_landed` entry changed.
 ---
 
 # Feature Specification: A Chart Turned to the Sky
@@ -48,7 +52,7 @@ the chart, the live photo and the aim-point tap all turned alike.
      paper margin (`crates/finder/web/src/components/Chart.tsx:184`), and its aspect is
      `W / H` (`crates/finder/web/src/components/Chart.tsx:178`).
   2. The compass draws north at the solve's `north_deg`, degrees clockwise from up
-     (`crates/finder/web/src/components/Chart.tsx:523`, from
+     (`crates/finder/web/src/components/Chart.tsx:591`, from
      `crates/finder/src/sky.rs:168`). Drawn inside a turned chart it stays correct.
   3. The live photo is a plain `<img>` under the chart
      (`crates/finder/web/src/components/LivePreview.tsx:6`).
@@ -57,9 +61,9 @@ the chart, the live photo and the aim-point tap all turned alike.
      `crates/finder/web/src/components/AimTap.tsx:61`). A turned photo needs the inverse
      turn as well.
   5. The session persists the aim point in `session.json`
-     (`crates/finder/src/session.rs:593` and `crates/finder/src/session.rs:1467`), and
-     omits it from reads until set (`crates/finder/src/session.rs:569`). The stored struct
-     denies unknown fields (`crates/finder/src/session.rs:1451`).
+     (`crates/finder/src/session.rs:597` and `crates/finder/src/session.rs:1483`), and
+     omits it from reads until set (`crates/finder/src/session.rs:573`). The stored struct
+     denies unknown fields (`crates/finder/src/session.rs:1467`).
 - Q: What already exists? → A: Only a local hotfix used that night, uncommitted and not on
   `main`: a "⟲ Turn 90°" chip under the chart cycling 0, 90, 180 and 270°
   counter-clockwise, kept in the browser's `localStorage` as `finder.turn`. It turned
@@ -159,6 +163,44 @@ the chart, the live photo and the aim-point tap all turned alike.
   box anchor point)`, cannot hold at any angle but 0. The owner had the scenario state
   the formula outright ("Yes, reword it"); no other scenario, approval or
   `depends_on_landed` entry changed.
+
+### Session 2026-11-17 (re-anchored to `main` at 20ce2fe, after 022 landed)
+
+- Q: What changed on `main` since cc593c7? → A: 022 landed, as `9e23cb1` (US1),
+  `547256d` (US2) and `20ce2fe` (US3). Among the files this spec cites or writes it
+  changed `session.rs`, `api.ts`, `Chart.tsx`, `index.css`, `DESIGN.md`, `GLOSSARY.md`,
+  `crates/finder/README.md` and `crates/finder/tests/console/main.rs`. Of the 38
+  citations into them, 24 moved with their lines and none changed what it says;
+  `session.rs` moved exactly as the probe's build of 022 had it (plan.md
+  § Prerequisites). It also changed `live.rs`, `pushto.rs`, `useLive.ts` and
+  `GuidanceBlock.tsx`, which this spec neither cites nor writes.
+- Q: Where does 022 draw its marks, and do they turn? → A: In the chart's clip group
+  (`crates/finder/web/src/components/Chart.tsx:209`), after the furniture: the aim mark
+  (`crates/finder/web/src/components/Chart.tsx:235`), a group holding its ring, dot and
+  the word "aim"; then the up mark (`crates/finder/web/src/components/Chart.tsx:241`), a
+  group holding the two arms, with the words "up" and "right" beside that group rather
+  than in it; then the target mark. US2's turned group holds the clip group, so both
+  marks turn with the frame (FR-006). None of the three words has a `transform` of its
+  own, and 022's rules for them in `index.css` set no `transform` or `rotate`, so the
+  upright rule turns each back about its middle.
+- Q: Do the scenarios still hold with 022's marks drawn? → A: Yes, as written. US2-S1
+  and US2-S9 look for the turned group's own transform; the up mark's is
+  `rotate(up_deg)` with `up_deg` in [0, 360), never `rotate(-90)`. US2-S3's selector
+  matches the three words as well as the star, object and compass labels it names, and
+  its `rotate(180` check reads only the grid's edge labels. US2-S8 holds because an
+  unset or zero rotation adds no group, so 022's marks draw as on `main`; the up mark
+  that 022 draws on an upload chart stays as captured (FR-009).
+- Q: How does 022 as landed differ from the probe's build of it? → A: The landed chart
+  draws the up mark before the target mark, where the build drew it after, and 022's
+  own chart tests were rewritten before landing. Neither changes this spec: US2 keeps
+  the order inside its group, and the landed `ChartAim.test.tsx` and `ChartUp.test.tsx`
+  render without a rotation and pin each mark's parent as the clip group, which an
+  unrotated chart keeps (plan.md § Shapes that existing tests pin). `session.rs`,
+  `index.css` and `GLOSSARY.md` are as the build had them.
+- Q: Does the push line turn? → A: No. The push line ("right 2.7° · down 1.4°") and the
+  distance left ("2.8° away") are in the guidance block, outside the chart, in the
+  observer's own directions (Assumptions, out of scope). `GLOSSARY.md`'s **Turn** now
+  says the page prints a clockwise turn as "right"; "rotation" still keeps clear of it.
 
 ## Owner approvals
 
@@ -387,10 +429,9 @@ on his Dob.
 ## Assumptions
 
 - **Earlier features are in place.** 012, 013, 016, 017, 018, 019, 020 and 022 have
-  landed. Every citation here was re-read at da1120d, where 020, 024, 025, 027 and 028
-  have landed and 022 has not. 022 changes `Chart.tsx`, `api.ts`, `index.css`,
-  `DESIGN.md`, `GLOSSARY.md`, `README.md` and `session.rs` first, so the line numbers in
-  those files are re-read when it has landed (plan.md § Prerequisites).
+  landed. Every citation here was re-read at 20ce2fe, after 022 landed; those into
+  `Chart.tsx`, `api.ts`, `DESIGN.md` and `session.rs`, which 022 changed, moved with
+  their lines (plan.md § Prerequisites).
 - **Out of scope:**
   - the automatic horizon level (dropped by the owner on 2026-11-14);
   - mirrored images;
