@@ -105,8 +105,7 @@ GLOSSARY.md                                     # US1: Chart rotation
 
 ## Interfaces
 
-Line numbers are at da1120d, before 022 lands, unless marked. § Prerequisites says which
-to re-read.
+Line numbers are at 20ce2fe, after 022 landed. § Prerequisites lists the ones 022 moved.
 
 ### US1: the session (`crates/finder/src/session.rs`)
 
@@ -123,18 +122,18 @@ to re-read.
   `null` → `Some(None)` and a number → `Some(Some(v))`. A string, boolean or array fails
   to deserialize, and `api::session_edit_error` (`crates/finder/src/api.rs:934` to
   `crates/finder/src/api.rs:941`) answers it 400 with a JSON `error`, with no new code.
-- `SessionView` (`crates/finder/src/session.rs:532`) gains
+- `SessionView` (`crates/finder/src/session.rs:536`) gains
   `#[serde(skip_serializing_if = "Option::is_none")] pub chart_rotation_deg: Option<f64>`
-  after `aim` (`crates/finder/src/session.rs:569`), and the view sets it from `Values`
-  beside `aim: self.aim` (`crates/finder/src/session.rs:642`).
-- `Values` (`crates/finder/src/session.rs:576`) gains a plain
-  `chart_rotation_deg: Option<f64>` after `aim` (`crates/finder/src/session.rs:593`).
+  after `aim` (`crates/finder/src/session.rs:573`), and the view sets it from `Values`
+  beside `aim: self.aim` (`crates/finder/src/session.rs:658`).
+- `Values` (`crates/finder/src/session.rs:580`) gains a plain
+  `chart_rotation_deg: Option<f64>` after `aim` (`crates/finder/src/session.rs:597`).
   `Values` derives only `Clone`, so it takes no serde attribute. `Values::default()`
-  (`crates/finder/src/session.rs:599`) sets it to `None`.
+  (`crates/finder/src/session.rs:603`) sets it to `None`.
 - `Values::edited` checks it after `min_alt_deg`
-  (`crates/finder/src/session.rs:1318`), refusing a non-finite number with
+  (`crates/finder/src/session.rs:1334`), refusing a non-finite number with
   `SessionError::Invalid("chart_rotation_deg must be a finite number of degrees".into())`, and
-  stores it after the target (`crates/finder/src/session.rs:1340`):
+  stores it after the target (`crates/finder/src/session.rs:1356`):
 
   ```rust
   if let Some(rotation) = edit.chart_rotation_deg {
@@ -152,16 +151,16 @@ to re-read.
 
   JSON cannot carry a non-finite number: serde_json refuses `1e400` while parsing, which
   answers 400. The check is for callers that build a `SessionEdit` in Rust.
-- `StoredSession` (`crates/finder/src/session.rs:1452`) gains, after `aim`
-  (`crates/finder/src/session.rs:1467`),
+- `StoredSession` (`crates/finder/src/session.rs:1468`) gains, after `aim`
+  (`crates/finder/src/session.rs:1483`),
   `#[serde(default, skip_serializing_if = "Option::is_none")] chart_rotation_deg: Option<f64>`,
   so a file without it reads as unset and an unset value writes nothing.
-- `read_state`'s `SessionEdit` (`crates/finder/src/session.rs:1491`) passes
+- `read_state`'s `SessionEdit` (`crates/finder/src/session.rs:1507`) passes
   `chart_rotation_deg: Some(stored.chart_rotation_deg)`, so a stored value is checked and
   normalised exactly as a `PUT` is. `write_state`'s `StoredSession`
-  (`crates/finder/src/session.rs:1541`) writes `values.chart_rotation_deg`.
+  (`crates/finder/src/session.rs:1557`) writes `values.chart_rotation_deg`.
 - Every other `SessionEdit` literal ends in `..Default::default()` or
-  `..SessionEdit::default()` and needs nothing (`crates/finder/src/session.rs:1583`,
+  `..SessionEdit::default()` and needs nothing (`crates/finder/src/session.rs:1599`,
   `crates/finder/src/simulate.rs:94`, `crates/finder/src/simulate.rs:118`).
 
 ### US1: the MCP tools (`crates/finder/src/mcp/tools.rs`)
@@ -175,8 +174,8 @@ Both exhaustive patterns name the field, and both tools refuse it:
 
 ### US1: the page's session
 
-- `ObservingSession` (`crates/finder/web/src/api.ts:245`) gains, after `aim`
-  (`crates/finder/web/src/api.ts:264`):
+- `ObservingSession` (`crates/finder/web/src/api.ts:248`) gains, after `aim`
+  (`crates/finder/web/src/api.ts:267`):
 
   ```ts
   /** How far the live views are turned, degrees counter-clockwise; omitted until set. */
@@ -221,7 +220,7 @@ Both exhaustive patterns name the field, and both tools refuse it:
   > live chart and photos by it. The MCP tools do not change it.
 
 - `DESIGN.md`, a new section after § Live chart and preview
-  (`DESIGN.md:336` to `DESIGN.md:337`):
+  (`DESIGN.md:356` to `DESIGN.md:357`):
 
   > ### Chart rotation — built
   > Setup's Chart rotation section, after Minimum altitude, holds one ruled degrees field
@@ -356,9 +355,12 @@ from `toView` of unit vectors; either keeps the quarter turns exact.
   `b.width + 2 * m - 3 * u` by `b.height + 2 * m - 3 * u` and level, then one
   `<g transform={rotationTransform(W, H, rotation)}>` holding the `<defs>` and everything
   else, in today's order. Inside the group a turned edge would poke out of the `viewBox`
-  (8.9 px a side at 30°).
-- **Grid edge labels** (`crates/finder/web/src/components/Chart.tsx:310` to
-  `crates/finder/web/src/components/Chart.tsx:327`): `Grid` gets `rotation`. Rotated,
+  (8.9 px a side at 30°). Today's order ends in the clip group
+  (`crates/finder/web/src/components/Chart.tsx:209` to
+  `crates/finder/web/src/components/Chart.tsx:255`), which holds 022's aim mark, its up
+  mark and the target mark, in that order, so all three turn with the frame (FR-006).
+- **Grid edge labels** (`crates/finder/web/src/components/Chart.tsx:378` to
+  `crates/finder/web/src/components/Chart.tsx:395`): `Grid` gets `rotation`. Rotated,
   every edge label gets a `transform`, so the upright rule leaves it alone and it reads
   along its edge:
 
@@ -390,8 +392,13 @@ Beside `.ink-in` (`crates/finder/web/src/index.css:329`), inside `@layer compone
 }
 ```
 
-It catches the star, object, compass, scale-bar, target, aim and up labels, none of which
-has a `transform` of its own.
+It catches the star, object, compass, scale-bar and target labels and 022's "aim", "up"
+and "right", none of which has a `transform` of its own. "aim" is inside the aim mark's
+group (`crates/finder/web/src/components/Chart.tsx:277`); "up" and "right" sit beside the
+up mark's group, not in it (`crates/finder/web/src/components/Chart.tsx:315` and
+`crates/finder/web/src/components/Chart.tsx:318`); and 022's `.aim-mark text` and
+`.up-label` rules (`crates/finder/web/src/index.css:448` and
+`crates/finder/web/src/index.css:465`) set no `transform` or `rotate`.
 
 ### US2: the photos and the arrows
 
@@ -458,7 +465,11 @@ These are not changed by any story:
   compared the ORION2, VIRGO, ROOF, busy and live-with-target charts, `LivePreview` and
   the aim-point region against c1ed295 and found them identical; the 2026-11-16 probe
   compared nine renderings, 022's aim and up marks among them, against its build of 022
-  and found them identical too.
+  and found them identical too. 022 as landed draws the up mark before the target mark,
+  where that build drew it after; an unrotated chart keeps the landed order. 022's own
+  `crates/finder/web/src/components/ChartAim.test.tsx` and
+  `crates/finder/web/src/components/ChartUp.test.tsx` render without a rotation too, and
+  pin each mark's markup and its parent, the clip group, which an unrotated chart keeps.
 - **The label layout.** `crates/finder/web/src/labels.test.ts` calls `layoutLabels`
   without `rotation`; every mapping is then the identity.
 - **The aim tap.** `crates/finder/web/src/components/AimTap.test.tsx:52` mocks only the
@@ -520,34 +531,42 @@ These are not changed by any story:
 
 ## Prerequisites before this spec is flipped to `ready`
 
-1. **The earlier specs have landed:** 012, 013, 016, 017, 018, 019, 020 and 022. All but
-   022 are met at da1120d, where 024, 025, 027 and 028 have landed too;
-   `depends_on_landed` holds this spec until 022 lands.
-2. **`main` is still as read, once 022 has landed.** Every citation here is at da1120d,
-   and holds at cc593c7, which changed only `.specify/memory/constitution.md`.
-   022 edits `crates/finder/web/src/components/Chart.tsx`,
-   `crates/finder/web/src/api.ts`, `crates/finder/web/src/index.css`, `DESIGN.md`,
-   `GLOSSARY.md`, `crates/finder/README.md` and `crates/finder/src/session.rs`; re-read
-   the lines cited in those files after it lands and correct them here. For
-   `session.rs`, the 2026-11-16 probe's build of 022 on da1120d (§ Refinement Record)
-   moved them as follows; re-check them against the real merge:
+1. **The earlier specs have landed:** 012, 013, 016, 017, 018, 019, 020 and 022. All are
+   met at 20ce2fe: 022 landed as `9e23cb1` (US1), `547256d` (US2) and `20ce2fe` (US3),
+   after 024, 025, 027 and 028.
+2. **`main` is still as read.** Every citation here is at 20ce2fe. Between da1120d and
+   022, `main` changed only `.specify/memory/constitution.md` outside `specs/`. 022
+   changed, among the files cited here, `crates/finder/src/session.rs`,
+   `crates/finder/web/src/api.ts`, `crates/finder/web/src/components/Chart.tsx`,
+   `crates/finder/web/src/index.css`, `DESIGN.md`, `crates/finder/README.md` and
+   `crates/finder/tests/console/main.rs`. Each cited line was re-read there, and none
+   changed what it holds. The table gives every `session.rs` site and the others that
+   moved. `session.rs` is as the 2026-11-16 probe's build of 022 had it, so its lines
+   are the ones that build gave:
 
-   | Site | At da1120d | After 022 (probe) |
+   | Site | At da1120d | At 20ce2fe |
    |---|---|---|
-   | `SessionEdit` | 351 | 351 |
-   | `present_nullable` | 372 | 372 |
-   | `SessionView` | 532 | 536 |
-   | `SessionView.aim` | 569 | 573 |
-   | `Values` | 576 | 580 |
-   | `Values.aim` | 593 | 597 |
-   | `Values::default` | 599 | 603 |
-   | the view's `aim: self.aim` | 642 | 658 |
-   | `edited`'s `min_alt_deg` check | 1318 | 1334 |
-   | `edited`'s target | 1340 | 1356 |
-   | `#[serde(deny_unknown_fields)]` on `StoredSession` | 1451 | 1467 |
-   | `StoredSession.aim` | 1467 | 1483 |
-   | `read_state`'s `SessionEdit` | 1491 | 1507 |
-   | `write_state`'s `StoredSession` | 1541 | 1557 |
+   | `session.rs`: `SessionEdit` | 351 | 351 |
+   | `session.rs`: `present_nullable` | 372 | 372 |
+   | `session.rs`: `SessionView` | 532 | 536 |
+   | `session.rs`: `SessionView.aim` | 569 | 573 |
+   | `session.rs`: `Values` | 576 | 580 |
+   | `session.rs`: `Values.aim` | 593 | 597 |
+   | `session.rs`: `Values::default` | 599 | 603 |
+   | `session.rs`: the view's `aim: self.aim` | 642 | 658 |
+   | `session.rs`: `edited`'s `min_alt_deg` check | 1318 | 1334 |
+   | `session.rs`: `edited`'s target | 1340 | 1356 |
+   | `session.rs`: `#[serde(deny_unknown_fields)]` on `StoredSession` | 1451 | 1467 |
+   | `session.rs`: `StoredSession` | 1452 | 1468 |
+   | `session.rs`: `StoredSession.aim` | 1467 | 1483 |
+   | `session.rs`: `read_state`'s `SessionEdit` | 1491 | 1507 |
+   | `session.rs`: `write_state`'s `StoredSession` | 1541 | 1557 |
+   | `session.rs`: the storage test's `SessionEdit` | 1583 | 1599 |
+   | `api.ts`: `ObservingSession` | 245 | 248 |
+   | `api.ts`: `ObservingSession.aim` | 264 | 267 |
+   | `Chart.tsx`: the compass's `north` | 523 | 591 |
+   | `Chart.tsx`: the grid's edge labels | 310 to 327 | 378 to 395 |
+   | `DESIGN.md`: § Live chart and preview | 336 to 337 | 356 to 357 |
 
    A spec that lands before 021 and edits a file cited here (draft 026, the imaging
    drafts 030 to 038) means re-reading those citations too.
@@ -695,16 +714,33 @@ a throwaway worktree on the 2026-11-16 probe's build of 022 (`6c68476`, branch
   sets a rotation (the spec adds none).
 
 `main` then moved to cc593c7 (constitution 1.3.0), which changes only
-`.specify/memory/constitution.md`, so every citation and probe above holds there, and this
-record is reviewed at cc593c7.
+`.specify/memory/constitution.md`, so every citation and probe above holds there.
+
+**Re-anchored on 2026-11-17 to `main` at 20ce2fe**, after 022 landed as `9e23cb1` (US1),
+`547256d` (US2) and `20ce2fe` (US3). Every citation into a file 022 changed was re-read
+there: of 38, 24 moved with their lines (§ Prerequisites) and 14 were unchanged, and none
+changed what it cites. The other 72, into files 022 left alone, were read there too and
+all hold. `session.rs`, `index.css` and `GLOSSARY.md` are as the probe's build of 022 had
+them, so the `session.rs` lines are the ones that build predicted. Where this spec
+looks, 022 as landed differs from the build in two ways: `Chart.tsx` draws the up mark
+before the target mark, and 022's `ChartAim.test.tsx` and `ChartUp.test.tsx` were
+rewritten; both still render unrotated and pin each mark's parent as the clip group.
+Neither changes a scenario, an FR or an approval: the turned group holds the clip group,
+so both marks turn with the frame, and their three words carry no `transform`, so the
+upright rule turns them back (spec.md § Clarifications, the last session). Nothing was
+built again. `git apply --check` of the probe's two stories (`e04816c` and `6a3cbab`,
+on `6c68476`) against 20ce2fe applies every file but `Chart.tsx`, where the hunk round
+the SVG's children carries the build's order of the two marks as context. The shared
+writes with 022 still name the story that wrote each file last. This record is reviewed
+at 20ce2fe.
 
 Writes come from the task text. Shared writes name the story in this spec that writes the
 same file next, and a landed story in `depends_on_landed` that wrote it before (022's US3
-for the files 022 touches, 020's US2 for `labels.ts` and `App.tsx`). Where a later landed
-spec that is not in `depends_on_landed` wrote the file last (025's US3 for
-`useSession.ts` and `SetupPage.tsx`), the reason says so; it is on `main`, so no order
-against it is left to keep. The three test files that declare US1's modules were last
-written by 028's US3 (`crates/finder/tests/cli/main.rs` and
+for the files it wrote last and its US1 for `GLOSSARY.md`, 020's US2 for `labels.ts` and
+`App.tsx`). Where a later landed spec that is not in `depends_on_landed` wrote the file
+last (025's US3 for `useSession.ts` and `SetupPage.tsx`), the reason says so; it is on
+`main`, so no order against it is left to keep. The three test files that declare US1's
+modules were last written by 028's US3 (`crates/finder/tests/cli/main.rs` and
 `crates/finder/tests/console/session/mod.rs`) and 027's US2
 (`crates/finder/tests/mcp/main.rs`), neither of which this spec names in
 `depends_on_landed`. Nothing in this record is an owner approval: those are in spec.md,
@@ -712,7 +748,7 @@ and flipping to `ready` gives them.
 
 ```yaml
 version: 1
-reviewed_revision: cc593c7d8cb9327f3ce10fb05fd9191549a1fc20
+reviewed_revision: 20ce2fe15a3a9609e49219eb9ed7b2875c6d673a
 stories:
   US1:
     tests:
@@ -878,6 +914,16 @@ stories:
         status: existing
         disposition: preserve
         assertion: "an unrotated tap posts frame 42 at (700, 420)"
+        decision: "plan.md:Shapes that existing tests pin"
+      - path: crates/finder/web/src/components/ChartAim.test.tsx
+        status: existing
+        disposition: preserve
+        assertion: "022's aim mark on an unrotated live chart: its markup, its upright label with no transform, and the clip group as its parent"
+        decision: "plan.md:Shapes that existing tests pin"
+      - path: crates/finder/web/src/components/ChartUp.test.tsx
+        status: existing
+        disposition: preserve
+        assertion: "022's up mark on an unrotated chart: its transform and arms, its up and right labels with no transform, and the clip group as its parent"
         decision: "plan.md:Shapes that existing tests pin"
       - path: crates/finder/web/src/components/NextTargets.test.tsx
         status: existing
