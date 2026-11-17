@@ -244,20 +244,22 @@ is being measured.
 
 Track on while Track follows a push by hand or the telescope is still moving by
 hand sends the telescope back: the tracker ends, the push clears, both axes are
-waited to rest, and the request starts a GoTo to the target and tracks it, where
-it is the no-op above only with no push. Track on for another target while Track
-is on goes the same way: the old tracker ends and the request starts a GoTo to
-the new target. The page offers a Recenter button while a push is shown and the
-session's target is the tracked one.
+waited to rest, and the request starts a GoTo to the target and tracks it. With
+no push, Track on for the target already being tracked stays the no-op it always
+was. Track on for another target while Track is on goes the same way: the old
+tracker ends and the request starts a GoTo to the new target. The page offers a
+Recenter button while a push is shown and the session's target is the tracked
+one.
 
 After the first accepted Track-on request, session reads include
 `track: {wanted, state, target, ended_reason?, readout?, push?}`. `state` is `armed`,
 `tracking`, `keyhole_wait` or `off`; `target` is the canonical object being tracked.
 `ended_reason` holds the last tracker or GoTo ending reason. While tracking, the
 readout reports `rms_arcsec` over the last 60 s of live pointing errors and
-`field_rotation_deg_per_min` at the target — at the place followed while Track
-follows a push by hand. While the telescope is pushed by hand, session reads carry
-`track.push`: `{"state":"moving"}` while it moves, or
+`field_rotation_deg_per_min` at the target; while Track follows a push by hand,
+the readout's field rotation and longest exposure are computed at the place
+followed. While the telescope is pushed by hand, session reads carry `track.push`:
+`{"state":"moving"}` while it moves, or
 `{"state":"following","ra_deg":…,"dec_deg":…,"at":…}` once Track holds the place
 followed; the key is omitted once the push ends with Track. Uploaded frames never
 drive tracking.
