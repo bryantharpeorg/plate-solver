@@ -50,6 +50,7 @@ export interface Guidance {
   never?: boolean;
   turn_deg?: number;
   tilt_deg?: number;
+  separation_deg?: number;
   placement?: TargetPlacement;
 }
 
@@ -207,6 +208,17 @@ export interface SessionTrack {
   };
 }
 
+export interface SessionRecording {
+  on: boolean;
+  folder: string;
+  since: number;
+  frames: number;
+  solves: number;
+  previews: number;
+  ended_reason?: "stopped" | "limit" | "write_failed" | "node_restarted";
+  raw?: { wanted: number; saved: number; error?: string };
+}
+
 export interface PointingModel {
   syncs: number;
   epoch: number;
@@ -234,6 +246,7 @@ export interface McpStatus {
 export interface ObservingSession {
   motion?: SessionMotion;
   track?: SessionTrack;
+  recording?: SessionRecording;
   imaging_camera?: ImagingCamera;
   backlash?: { alt_deg?: number; az_deg?: number };
   goto?: GoToProgress;
@@ -303,6 +316,26 @@ export async function postTrack(on: boolean): Promise<ObservingSession> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ on }),
+    }),
+  );
+}
+
+export async function postRecord(on: boolean): Promise<ObservingSession> {
+  return json(
+    await fetch("/api/record", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ on }),
+    }),
+  );
+}
+
+export async function postRecordRaw(frames: number): Promise<ObservingSession> {
+  return json(
+    await fetch("/api/record/raw", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frames }),
     }),
   );
 }

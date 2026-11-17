@@ -213,6 +213,8 @@ At night, body text is weight 540 and small text is a step larger: `text-xs` is 
 - **Display** (680, 2.75rem on wide screens and 2.35rem on phones, line-height 1, -0.02em): RA and Dec. Unit marks (h m s, ° ′ ″) are set at 0.5em in Second Ink and raised as superscripts.
 - **Chart Title** (640, wdth 118%, 0.3em tracking, uppercase, 1.05 to 1.3rem): the constellation name, and the title of the no-frame, no-match and first-run blocks. It is the atlas's chart title, not a kicker.
 - **Headline** (650, 1.125rem, -0.01em): section titles ("In the field", "What to look at next") and sheet titles.
+- **Push** (600, 1.5rem, line-height 1.25): the push line in the guidance block, the
+  largest text there.
 - **Title** (600, 0.875rem, Second Ink): group titles inside a section.
 - **Body** (400, 1rem, 1.45, tabular figures): list entries and prose. Prose is capped at 60ch.
 - **Body Quiet** (400, 0.9375rem): the fact lines (Clauses) and quiet notes.
@@ -291,7 +293,10 @@ was seen in two of the three frames before, for at most 10 s after it was last s
 Tapping a solid ring the solver did not use says why it is solid.
 
 ### Guidance block — built
-An ink-only ruled block leads the page when a target is set, before the doubled-rule title block. It names the target and kind, and prints the session's pointability class in Second Ink. Pointable guidance gives the whole-degree turn and tilt and the latest pointing's age, or asks for a solved frame. Down targets show the session's rising, transit and setting in device-local time to the minute; a target that never reaches the minimum altitude says so. The Sun guard refuses directions within 15° of the Sun. Without a site the block links to `/setup`. It uses no object colours, fill or shadow; night uses the existing red ink tokens.
+An ink-only ruled block leads the page when a target is set, before the doubled-rule title block. It names the target and kind, and prints the session's pointability class in Second Ink. Pointable guidance leads with the push in the observer's own directions, "right 2.7°
+· down 1.4°", in the Push style, to a tenth of a degree. Under it, in Body Quiet, are
+the distance left on the sky ("2.8° away"), the whole-degree turn and tilt, and the
+latest pointing's age. Without a pointing it asks for a solved frame. Down targets show the session's rising, transit and setting in device-local time to the minute; a target that never reaches the minimum altitude says so. The Sun guard refuses directions within 15° of the Sun. Without a site the block links to `/setup`. It uses no object colours, fill or shadow; night uses the existing red ink tokens.
 
 ### MCP motion note — built
 `McpNote` prints “Moved by an MCP client · <tool>” only while the session's `motion.by` is `mcp`. It is plain Second Ink text in the guidance block and beside the top bar's single Stop, with no status or alert role and no guidance Stop. While this note is present, the top bar adds a full-width ruled row for the wrapping note and the 44px Stop, keeping both readable on phones. Any `motion` keeps Stop enabled even before mount telemetry arrives, and disables Setup's model actions. The note uses the same red-only night tokens as other text.
@@ -301,6 +306,13 @@ An ink-only ruled block leads the page when a target is set, before the doubled-
 
 ### Target reticle — built
 On the latest pointing's chart, the target's atlas family symbol sits at the supplied pixel coordinates inside four open square corner ticks in Frame Ink. Galaxy symbols retain the supplied axes and position angle. The italic object-colour label sits toward the interior of the frame. This is session furniture, outside the legend: the five chips and their counts stay the same, and hiding Deep sky leaves the target drawn. A missing or different `pointing_seq` suppresses the mark. Existing object and Frame Ink tokens collapse to red at night.
+
+### Aim mark — built
+On a live chart with an aim point set, a Frame Ink ring of 9 chart units with a centre
+dot marks the pixel the eyepiece is centred on, with the upright word "aim" toward the
+frame's middle, cased like a star name. It is session furniture, outside the legend,
+and it leaves the centre reticle where it is. At night the ring is 2.2px and
+non-scaling.
 
 ### GoTo — built
 `GoToControl` sits inside the guidance block, under its directions, while mount telemetry is present. Its square 44px primary button uses the existing dim primary treatment at night. Only a connected mount with no running GoTo or second sync and no `goto_refusal` enables it. The refusal is the server planner's exact text, linked to the button and printed in Second Ink. The page does no motion planning. An ink status line shows Slewing, Solving, each numbered Correction, and On target with the final error rounded to 0.1″; failures and halts retain their reason. Requests refresh the session immediately, and mount sessions poll every 500ms, waiting for an outstanding read to finish.
@@ -346,6 +358,9 @@ The camera's last solved field is printed beside the loaded database's range. Wi
 
 ### Aim-point tap — built
 Setup's Aim point section asks the observer to centre a star in the eyepiece and tap it on the live preview. The full-width ruled photograph uses `.photo` in the night edition. Each tap scales from the displayed image rectangle to that preview's full-frame pixels and sends its frame id; later frames without a preview do not change that coordinate system. The console snaps to a star. A refusal such as “no star is close enough to the tap,” or an expired frame, stays visible in ink and leaves the aim point unchanged. Unloaded or failed photographs accept no tap. The saved pixel coordinates are printed above the preview; Reset aim point immediately returns them to “frame centre,” even before a preview arrives. Moving the finder camera is the cue to reset.
+
+### Recording — built
+On the Setup page, after the aim point, while a scope node is paired: a section titled Recording with one primary button, Start recording. While recording, one status line names the folder and counts, with Stop recording and Save 3 raw frames as secondary buttons; raw progress is a second line of the status and a failure is an alert, such as Raw frames stopped: the mount started moving. After a recording the status says what was saved, and why when it hit its frame limit or the scope node restarted, which asks for a new recording. Ink on paper with existing tokens only; at night it is red like every other section.
 
 ## Do's and Don'ts
 

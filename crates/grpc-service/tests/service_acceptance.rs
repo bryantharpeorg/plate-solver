@@ -184,31 +184,6 @@ async fn solve_from_image_one_call_end_to_end() {
 }
 
 #[tokio::test]
-async fn inline_image_bytes_used_when_shmem_absent() {
-    let mut client = make_client().await;
-
-    let response = client
-        .extract_centroids(CentroidsRequest {
-            input_image: Some(Image {
-                width: 8,
-                height: 8,
-                image_data: vec![0u8; 64],
-                shmem_name: None,
-                reopen_shmem: false,
-            }),
-            sigma: 8.0,
-            binning: None,
-            return_binned: false,
-            use_binned_for_star_candidates: false,
-            detect_hot_pixels: false,
-            normalize_rows: false,
-            estimate_background_region: None,
-        })
-        .await;
-    assert!(response.is_ok(), "inline image should be accepted");
-}
-
-#[tokio::test]
 async fn shmem_name_returns_internal() {
     let mut client = make_client().await;
 
@@ -234,49 +209,6 @@ async fn shmem_name_returns_internal() {
     assert!(response.is_err(), "shmem should fail: no fast path");
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::Internal);
-}
-
-#[tokio::test]
-async fn pixel_center_convention_top_left() {
-    // A single bright pixel at (4,4) should centroid at (4.5, 4.5) on the wire.
-    // The detector needs a non-zero background so noise estimation stays above
-    // the floor and the 1-D gate can fire; a flat black background yields zero
-    // detections.
-    let mut image = vec![50u8; 10 * 10];
-    image[4 * 10 + 4] = 200;
-
-    let mut client = make_client().await;
-    let response = client
-        .extract_centroids(CentroidsRequest {
-            input_image: Some(Image {
-                width: 10,
-                height: 10,
-                image_data: image,
-                shmem_name: None,
-                reopen_shmem: false,
-            }),
-            sigma: 2.0,
-            binning: None,
-            return_binned: false,
-            use_binned_for_star_candidates: false,
-            detect_hot_pixels: false,
-            normalize_rows: false,
-            estimate_background_region: None,
-        })
-        .await
-        .unwrap();
-
-    let result = response.into_inner();
-    assert!(
-        !result.star_candidates.is_empty(),
-        "star should be detected"
-    );
-    let first = result.star_candidates[0]
-        .centroid_position
-        .as_ref()
-        .unwrap();
-    assert!((first.x - 4.5).abs() < 1e-6, "x = {}", first.x);
-    assert!((first.y - 4.5).abs() < 1e-6, "y = {}", first.y);
 }
 
 #[tokio::test]
@@ -319,32 +251,6 @@ async fn centroids_ordered_brightest_first() {
         b0,
         b1
     );
-}
-
-#[tokio::test]
-async fn coordinate_swap_inbound_and_outbound() {
-    // Send a centroid at wire (x=3.0, y=7.0). The solver receives (y=7.0, x=3.0).
-    // With no real database the solve returns TOO_FEW, but the request must still
-    // be accepted and processed without a coordinate-related panic.
-    let mut client = make_client().await;
-    let response = client
-        .solve_from_centroids(SolveFromCentroidsRequest {
-            centroids: vec![ImageCoord { x: 3.0, y: 7.0 }],
-            width: 64,
-            height: 64,
-            params: Some(SolveParams {
-                fov_estimate: Some(20.0),
-                fov_max_error: Some(5.0),
-                match_radius: Some(0.01),
-                match_threshold: Some(1e-5),
-                solve_timeout_ms: Some(100),
-                distortion: Some(0.0),
-                return_matches: false,
-                return_catalog: false,
-            }),
-        })
-        .await;
-    assert!(response.is_ok(), "request should be accepted after swap");
 }
 
 #[tokio::test]

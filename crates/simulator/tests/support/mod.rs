@@ -5,7 +5,8 @@ use scope_node::{
     clock::NodeClock,
     mount::{Axis, AxisInfo, AxisState, Mount, MountFuture},
     service::NodeService,
-    Settings,
+    synthetic::SyntheticCamera,
+    Camera, Settings,
 };
 use simulator::{mount::SimMount, SimCamera, Simulator, Site, VirtualClock};
 use std::{
@@ -79,7 +80,7 @@ impl Mount for Adapter {
 }
 
 pub struct Rig {
-    pub sim: Simulator,
+    pub clock: VirtualClock,
     pub adapter: Arc<Adapter>,
     pub service: NodeService,
     pub camera: CameraClient,
@@ -95,9 +96,28 @@ impl Drop for Rig {
 impl Rig {
     pub async fn new() -> Self {
         let clock = VirtualClock::new(1_768_528_800.0);
+        let mount = SimMount::new(clock.clone());
+        let camera = SyntheticCamera::new(Arc::new(Clock(clock.clone())));
+        let mut rig = Self::on(camera, clock, mount).await;
+        assert_eq!(
+            rig.camera
+                .describe(proto::DescribeRequest {})
+                .await
+                .unwrap()
+                .into_inner()
+                .model,
+            "simulated"
+        );
+        rig
+    }
+    pub async fn rendered() -> Self {
+        let clock = VirtualClock::new(1_768_528_800.0);
         let sim = Simulator::new(DB.clone(), Site::default(), clock.clone());
         let mount = SimMount::new(clock.clone());
         sim.connect_mount(mount.clone());
+        Self::on(SimCamera::new(sim), clock, mount).await
+    }
+    async fn on<C: Camera + 'static>(camera: C, clock: VirtualClock, mount: SimMount) -> Self {
         let adapter = Arc::new(Adapter {
             mount,
             clock: clock.clone(),
@@ -107,8 +127,8 @@ impl Rig {
             stops: Mutex::new(Vec::new()),
         });
         let service = NodeService::with_mount(
-            SimCamera::new(sim.clone()),
-            Arc::new(Clock(clock)),
+            camera,
+            Arc::new(Clock(clock.clone())),
             "test-token",
             Settings {
                 exposure_ms: Some(200.0),
@@ -125,7 +145,7 @@ impl Rig {
         });
         let channel = connect.await.unwrap();
         Self {
-            sim,
+            clock,
             adapter,
             service,
             camera: proto::scope_node_client::ScopeNodeClient::with_interceptor(

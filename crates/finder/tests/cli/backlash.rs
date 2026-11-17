@@ -1,0 +1,137 @@
+//! Oracle: a backlash actually measured in paused time, retained bit for bit on
+//! two next-day restarts of the built binary on the same state folder.
+use crate::support::tracker as backlash_sim;
+
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{SocketAddr, TcpStream};
+use std::path::Path;
+use std::process::{Child, Command, Stdio};
+use std::sync::{mpsc, Arc, Mutex};
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
+
+use serde_json::{json, Value};
+
+struct Server {
+    child: Child,
+    address: SocketAddr,
+    reader: Option<JoinHandle<()>>,
+}
+impl Server {
+    fn start(folder: &crate::support::Scratch) -> Self {
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut command = Command::new(env!("CARGO_BIN_EXE_finder"));
+        command
+            .arg("--db")
+            .arg(repo.join("reference-solutions/cedar-solve/tetra3/data/default_database.npz"))
+            .arg("--samples")
+            .arg(repo.join("reference-solutions/cedar-solve/examples/data/medium_fov"))
+            .args([
+                "--listen",
+                "127.0.0.1:0",
+                "--simulate",
+                "--sim-start",
+                "2026-01-17T02:00:00Z",
+            ])
+            .arg("--state")
+            .arg(&folder.0)
+            .env("TOKIO_WORKER_THREADS", "2")
+            .env_remove("XDG_STATE_HOME")
+            .env("HOME", &folder.0)
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped());
+        let mut child = command.spawn().unwrap();
+        let pipe = child.stderr.take().unwrap();
+        let stderr = Arc::new(Mutex::new(String::new()));
+        let collected = stderr.clone();
+        let (sender, receiver) = mpsc::channel();
+        let reader = thread::spawn(move || {
+            for line in BufReader::new(pipe).lines() {
+                let line = line.unwrap();
+                collected.lock().unwrap().push_str(&format!("{line}\n"));
+                if let Some(address) = line.strip_prefix("finder console: http://") {
+                    sender.send(address.parse::<SocketAddr>().unwrap()).unwrap();
+                }
+            }
+        });
+        let address = match receiver.recv_timeout(Duration::from_secs(30)) {
+            Ok(address) => address,
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                reader.join().unwrap();
+                panic!("server did not start: {error}: {}", stderr.lock().unwrap());
+            }
+        };
+        Self {
+            child,
+            address,
+            reader: Some(reader),
+        }
+    }
+
+    fn request(&self, method: &str, path: &str, body: Value) -> Value {
+        let mut stream = TcpStream::connect(self.address).unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .unwrap();
+        stream
+            .set_write_timeout(Some(Duration::from_secs(10)))
+            .unwrap();
+        let body = body.to_string();
+        write!(stream, "{method} {path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}", self.address, body.len()).unwrap();
+        let mut response = String::new();
+        stream.read_to_string(&mut response).unwrap();
+        assert!(response.starts_with("HTTP/1.1 200"), "{response}");
+        serde_json::from_str(response.split_once("\r\n\r\n").unwrap().1).unwrap()
+    }
+}
+impl Drop for Server {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        self.child.wait().unwrap();
+        self.reader.take().unwrap().join().unwrap();
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn measured_altitude_backlash_survives_two_next_day_binary_restarts_exactly() {
+    let folder = crate::support::Scratch::new("backlash-cli");
+    let session = finder::session::Session::with_state_file(folder.0.join("session.json")).unwrap();
+    let rig = backlash_sim::measured(session).await;
+    let measured = rig.body().await["backlash"]["alt_deg"].as_f64().unwrap();
+    assert!((measured - 0.3).abs() * 3600.0 <= 30.0);
+    let stored: Value =
+        serde_json::from_slice(&std::fs::read(folder.0.join("session.json")).unwrap()).unwrap();
+    assert_eq!(stored["backlash"]["alt_deg"].as_f64(), Some(measured));
+    assert!(
+        stored.get("model").is_none(),
+        "backlash is durable even without a persisted model view"
+    );
+    assert!(stored["backlash"].get("az_deg").is_none());
+    rig.session.reset_model(false, rig.now()).unwrap();
+    assert_eq!(
+        rig.body().await["backlash"]["alt_deg"].as_f64(),
+        Some(measured)
+    );
+    drop(rig);
+    let restart = || {
+        let server = Server::start(&folder);
+        let body = server.request("GET", "/api/session", Value::Null);
+        assert!(body["time"].as_f64().unwrap() >= 1_768_615_200.0);
+        assert_eq!(body["backlash"]["alt_deg"].as_f64(), Some(measured));
+        server
+    };
+    drop(restart());
+    let server = restart();
+    let reset = server.request("POST", "/api/model/reset", json!({"what": "fixed"}));
+    assert!(reset.get("backlash").is_none());
+    assert!(server
+        .request("GET", "/api/session", Value::Null)
+        .get("backlash")
+        .is_none());
+    drop(server);
+    let stored: Value =
+        serde_json::from_slice(&std::fs::read(folder.0.join("session.json")).unwrap()).unwrap();
+    assert!(stored.get("backlash").is_none());
+}

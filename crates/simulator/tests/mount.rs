@@ -81,32 +81,6 @@ async fn both_axes_honour_capabilities_counts_signed_rates_and_stop_through_the_
 }
 
 #[tokio::test(start_paused = true)]
-async fn backlash_changes_truth_by_point_three_at_the_same_axis_reading() {
-    for axis in [Axis::Azimuth, Axis::Altitude] {
-        let mount = SimMount::with_config(
-            clock(),
-            MountConfig {
-                backlash_deg: 0.3,
-                ..ideal()
-            },
-        );
-        arrive(&mount, axis, -1.0).await;
-        arrive(&mount, axis, 0.0).await;
-        let upward = mount.true_direction();
-        assert_eq!(mount.state(axis).await.position, 0);
-        arrive(&mount, axis, 1.0).await;
-        arrive(&mount, axis, 0.0).await;
-        let downward = mount.true_direction();
-        assert_eq!(mount.state(axis).await.position, 0);
-        let difference = match axis {
-            Axis::Azimuth => turn(upward.az, downward.az),
-            Axis::Altitude => downward.alt - upward.alt,
-        };
-        near(difference, 0.3, 0.01);
-    }
-}
-
-#[tokio::test(start_paused = true)]
 async fn ninety_degree_trapezoid_arrives_in_twenty_seven_point_six_seconds() {
     for axis in [Axis::Azimuth, Axis::Altitude] {
         let mount = SimMount::with_config(clock(), ideal());

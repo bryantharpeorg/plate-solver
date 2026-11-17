@@ -117,6 +117,8 @@ message AxisState {
   bool moving = 3;
   // Times the node's watchdog has stopped the mount since the node started.
   uint64 watchdog_stops = 4;
+  // Resets of the motor board the node has seen since it started.
+  uint64 mount_resets = 5;
 }
 message AxisPositions {
   int32 azimuth = 1;
@@ -126,6 +128,9 @@ message DescribeMountRequest {}
 message DescribeMountReply {
   // Azimuth first, altitude second; empty when no mount is connected.
   repeated AxisInfo axes = 1;
+  // Firmware as major.minor and board code, empty when unknown.
+  string firmware = 2;
+  string board = 3;
 }
 message AxisStateRequest { Axis axis = 1; }
 message GotoAxisRequest {
@@ -140,3 +145,19 @@ message RateAxisRequest {
 message RateAxisReply {}
 message StopAllRequest {}
 message StopAllReply {}
+
+// Raw frames on request (025). Every call requires the session's bearer token.
+// A node built before 025 lacks this service and answers UNIMPLEMENTED.
+service ScopeNodeRaw {
+  // Waits for the next star frame the node sends and answers with its pixels.
+  rpc RawFrame(RawFrameRequest) returns (RawFrameReply);
+}
+message RawFrameRequest {}
+message RawFrameReply {
+  // The star frame these pixels were detected on.
+  uint64 id = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  // 8-bit gray, row-major, width × height bytes, no padding.
+  bytes pixels = 4;
+}

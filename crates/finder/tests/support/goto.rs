@@ -1,0 +1,402 @@
+#![allow(dead_code)]
+//! Oracles: rendered catalog stars, simulator mechanics and true eyepiece,
+//! sampled every 0.1 s in paused time; angular acceptance is strictly 60 arcseconds.
+pub use super::live as support;
+use axum::{
+    body::{to_bytes, Body},
+    http::{Request, StatusCode},
+    Router,
+};
+use finder::{
+    api::AppState,
+    ephemeris,
+    link::Transport,
+    live::{SolveFuture, Solver},
+    samples::Samples,
+    session::{Aim, Session},
+    sky,
+    solve::{self, SolveOptions},
+};
+use scope_link::{memory, proto};
+use scope_node::{
+    clock::NodeClock,
+    mount::{Axis, AxisInfo, AxisState, Mount, MountFuture},
+    service::{NodeControls, NodeService},
+};
+use serde_json::{json, Value};
+use simulator::{
+    mount::{MountConfig, SimMount},
+    SimCamera, Simulator, VirtualClock,
+};
+use std::{
+    path::Path,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+#[allow(unused_imports)]
+pub use support::{ConsoleClock, DB, START};
+use tower::ServiceExt;
+
+// Real rendered stars and the real solver, kept on the paused runtime so a
+// blocking worker cannot let virtual time race ahead of the exposure.
+pub struct Stars;
+impl Solver for Stars {
+    fn solve(&self, frame: proto::StarFrame, options: SolveOptions) -> SolveFuture<'_> {
+        Box::pin(async move {
+            solve::solve_centroids(
+                &DB,
+                &frame.centroids,
+                (frame.width as usize, frame.height as usize),
+                &SolveOptions {
+                    timeout_ms: u64::MAX,
+                    ..options
+                },
+            )
+        })
+    }
+}
+pub struct NodeTime(VirtualClock);
+impl NodeClock for NodeTime {
+    fn now(&self) -> f64 {
+        self.0.node_now()
+    }
+}
+#[derive(Clone)]
+pub struct Recorded {
+    pub mount: SimMount,
+    pub clock: VirtualClock,
+    pub stops: Arc<Mutex<Vec<f64>>>,
+}
+impl Mount for Recorded {
+    fn axes(&self) -> [AxisInfo; 2] {
+        self.mount.axes()
+    }
+    fn state(&self, axis: Axis) -> MountFuture<'_, AxisState> {
+        self.mount.state(axis)
+    }
+    fn goto(&self, axis: Axis, position: i32) -> MountFuture<'_, ()> {
+        self.mount.goto(axis, position)
+    }
+    fn rate(&self, axis: Axis, rate: f64) -> MountFuture<'_, ()> {
+        self.mount.rate(axis, rate)
+    }
+    fn stop_all(&self) -> MountFuture<'_, ()> {
+        Box::pin(async move {
+            self.stops.lock().unwrap().push(self.clock.now());
+            self.mount.stop_all().await;
+        })
+    }
+}
+// Independent horizon transform from the simulator, not the GoTo guard.
+pub fn sun_truth(lat: f64, lon: f64, time: f64) -> (f64, f64) {
+    let jd = sky::julian_date(time);
+    let (ra, dec) = ephemeris::sun(jd);
+    let date = math_core::UnitVector::from_radec(ra.to_radians(), dec.to_radians());
+    simulator::sky::horizontal(
+        simulator::sky::to_j2000(date, jd),
+        simulator::Site {
+            lat_deg: lat,
+            lon_deg: lon,
+        },
+        time,
+    )
+}
+pub struct Rig {
+    pub sim: Simulator,
+    pub mount: SimMount,
+    pub state: AppState,
+    pub app: Router,
+    pub stops: Arc<Mutex<Vec<f64>>>,
+    pub controls: NodeControls,
+}
+impl Rig {
+    pub async fn new(start: f64, alt: f64, az: f64, connected: bool) -> Self {
+        Self::with_session(start, alt, az, connected, Session::default()).await
+    }
+    pub async fn with_session(
+        start: f64,
+        alt: f64,
+        az: f64,
+        connected: bool,
+        session: Session,
+    ) -> Self {
+        let clock = VirtualClock::new(start);
+        let sim = Simulator::new(DB.clone(), simulator::Site::default(), clock.clone());
+        let mount = SimMount::with_config(clock.clone(), mount_config(alt, az));
+        if connected {
+            sim.connect_mount(mount.clone());
+        }
+        let stops = Arc::new(Mutex::new(Vec::new()));
+        let recorded = Recorded {
+            mount: mount.clone(),
+            clock: clock.clone(),
+            stops: stops.clone(),
+        };
+        let node = NodeService::with_controls_and_mount(
+            SimCamera::new(sim.clone()),
+            Arc::new(NodeTime(clock.clone())),
+            "test-token",
+            Default::default(),
+            NodeControls::default(),
+            connected.then(|| Arc::new(recorded) as Arc<dyn Mount>),
+        )
+        .unwrap();
+        let controls = node.controls();
+        controls.set_frame_interval(Duration::from_millis(500));
+        let transport = Transport::connector(move || {
+            let node = node.clone();
+            async move {
+                let (client, server) = tokio::io::duplex(64 * 1024);
+                tokio::spawn(async move {
+                    memory::serve_routes_on(server, node.routes())
+                        .await
+                        .unwrap();
+                });
+                Ok::<_, std::io::Error>(client)
+            }
+        });
+        session.edit(serde_json::from_value(json!({"node":{"address":"scope.local:1","token":"test-token"},"site":{"lat_deg":40,"lon_deg":-75},"target":"M42","camera_settings":{"exposure_ms":200,"gain":1}})).unwrap(), start).unwrap();
+        session
+            .set_aim(Some(Aim { x: 700.0, y: 420.0 }), start)
+            .unwrap();
+        let state = AppState::shared(DB.clone(), Samples::default())
+            .with_session(session)
+            .with_clock(Arc::new(ConsoleClock(clock)))
+            .with_link(transport)
+            .with_live_solver(Arc::new(Stars));
+        let app = finder::router(state.clone());
+        let rig = Self {
+            sim,
+            mount,
+            state,
+            app,
+            stops,
+            controls,
+        };
+        for _ in 0..100 {
+            if rig.state.link().unwrap().status().borrow().connected {
+                break;
+            }
+            rig.tick().await;
+        }
+        assert!(rig.state.link().unwrap().status().borrow().connected);
+        rig
+    }
+    pub fn now(&self) -> f64 {
+        self.sim.clock().now()
+    }
+    pub async fn tick(&self) {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    pub async fn call(&self, path: &str, foreign: bool) -> (StatusCode, Value) {
+        let mut request = Request::post(path).header("host", "localhost");
+        if foreign {
+            request = request.header("origin", "http://foreign.invalid");
+        }
+        let response = self
+            .app
+            .clone()
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let status = response.status();
+        (
+            status,
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap(),
+        )
+    }
+    pub async fn view(&self) -> Value {
+        let response = self
+            .app
+            .clone()
+            .oneshot(Request::get("/api/session").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap()
+    }
+    pub async fn sync(&self) {
+        for _ in 0..100 {
+            if !self.state.session().model(self.now()).syncs.is_empty() {
+                return;
+            }
+            self.tick().await;
+        }
+        panic!("no solved sync: {}", self.view().await);
+    }
+    pub async fn stationary(&self) -> bool {
+        !self.mount.state(Axis::Azimuth).await.moving
+            && !self.mount.state(Axis::Altitude).await.moving
+    }
+    pub async fn move_to(&self, axis: [i32; 2]) {
+        let mut client = self.state.link().unwrap().mount().unwrap();
+        for (i, a) in [proto::Axis::Azimuth, proto::Axis::Altitude]
+            .into_iter()
+            .enumerate()
+        {
+            client.goto_axis(a, axis[i]).await.unwrap();
+        }
+        for _ in 0..1600 {
+            self.tick().await;
+            if self.stationary().await {
+                return;
+            }
+        }
+        panic!("mount did not settle");
+    }
+    pub async fn second(&self) {
+        // Both syncs use the same backlash flank. The two physical directions
+        // are >90° apart; the simulator, rather than the fitted model, is truth.
+        self.move_to([4500, 4500]).await;
+        for _ in 0..15 {
+            self.tick().await;
+        }
+        self.move_to([580_000, 4500]).await;
+        for _ in 0..15 {
+            self.tick().await;
+        }
+        let model = self.state.session().model(self.now());
+        assert!(model.base_tilt.is_some(), "{:?}", model.view());
+        assert_eq!(model.epochs.len(), 1);
+    }
+    pub async fn second_from_file(&self) {
+        // The stored syncs replace the far slew; the live near sync still fits
+        // the base tilt and puts the gears on the same positive flank.
+        self.move_to([4500, 4500]).await;
+        for _ in 0..15 {
+            self.tick().await;
+        }
+        let model = self.state.session().model(self.now());
+        assert!(model.base_tilt.is_some(), "{:?}", model.view());
+        assert_eq!(model.epochs.len(), 1);
+        assert_eq!(self.mount.state(Axis::Azimuth).await.position, 4500);
+        assert_eq!(model.syncs.len(), 3, "{:?}", model.view());
+        let base = model.base_tilt.unwrap();
+        assert!((base.deg() - 1.0).abs() * 60.0 < 1.0, "{base:?}");
+        assert!((base.toward_deg() - 130.0).abs() * 60.0 < 1.0, "{base:?}");
+    }
+    pub fn target(&self, name: &str) {
+        self.state
+            .session()
+            .edit(
+                serde_json::from_value(json!({"target": name})).unwrap(),
+                self.now(),
+            )
+            .unwrap();
+    }
+    pub fn site_for_altitude(&self, name: &str, alt: f64) {
+        let target = finder::targets::find(name).unwrap();
+        let (ra, dec) =
+            sky::precess_from_j2000(target.ra_deg, target.dec_deg, sky::julian_date(self.now()));
+        // On the meridian, h = 90 - |latitude - declination| (Meeus 13).
+        let lat = dec + 90.0 - alt;
+        let lon =
+            (ra - sky::gmst_deg(sky::julian_date(self.now())) + 180.0).rem_euclid(360.0) - 180.0;
+        self.state
+            .session()
+            .edit(
+                serde_json::from_value(json!({"site":{"lat_deg":lat,"lon_deg":lon},"target":name}))
+                    .unwrap(),
+                self.now(),
+            )
+            .unwrap();
+    }
+    pub async fn finish(&self, min_alt: Option<f64>, sun_distance: bool) -> Vec<Value> {
+        self.finish_with(min_alt, sun_distance, |_| {}).await
+    }
+    pub async fn finish_with(
+        &self,
+        min_alt: Option<f64>,
+        sun_distance: bool,
+        mut sample: impl FnMut(&Value),
+    ) -> Vec<Value> {
+        let mut progress = Vec::new();
+        for _ in 0..5000 {
+            let view = self.view().await;
+            let value = view["goto"].clone();
+            if progress.last() != Some(&value) {
+                progress.push(value.clone());
+            }
+            sample(&value);
+            let truth = self.mount.true_direction();
+            if let Some(min) = min_alt {
+                assert!(truth.alt >= min, "altitude {} < {}", truth.alt, min);
+            }
+            if sun_distance {
+                let sun = sun_truth(
+                    view["site"]["lat_deg"].as_f64().unwrap(),
+                    view["site"]["lon_deg"].as_f64().unwrap(),
+                    self.now(),
+                );
+                assert!(finder::model::separation(truth.az, truth.alt, sun.1, sun.0) >= 15.0);
+            }
+            if matches!(value["state"].as_str(), Some("done" | "failed" | "halted")) {
+                assert!(self.stationary().await);
+                return progress;
+            }
+            self.tick().await;
+        }
+        panic!("GoTo did not end: {}", self.view().await);
+    }
+    pub fn error_arcsec(&self, name: &str) -> f64 {
+        let target = finder::targets::find(name).unwrap();
+        let truth = self.sim.telescope().eyepiece;
+        finder::model::separation(truth.ra, truth.dec, target.ra_deg, target.dec_deg) * 3600.0
+    }
+}
+
+fn mount_config(alt: f64, az: f64) -> MountConfig {
+    MountConfig {
+        base_tilt_deg: 1.0,
+        base_tilt_toward_deg: 130.0,
+        zero_points_deg: [az, alt],
+        backlash_deg: 0.3,
+    }
+}
+
+/// Store the old setup's near and far syncs, on its positive backlash flank.
+/// The simulator's true directions are independent of the model being fitted.
+pub async fn far_sync(path: &Path, start: f64, alt: f64, az: f64) {
+    let config = mount_config(alt, az);
+    let mount = SimMount::with_config(VirtualClock::new(start), config);
+    let mut syncs = Vec::new();
+    for (counts, time) in [([4500, 4500], start - 120.0), ([580_000, 4500], start)] {
+        for (axis, count) in [Axis::Azimuth, Axis::Altitude].into_iter().zip(counts) {
+            mount.goto(axis, count).await;
+        }
+        for _ in 0..1600 {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            if !mount.state(Axis::Azimuth).await.moving && !mount.state(Axis::Altitude).await.moving
+            {
+                break;
+            }
+        }
+        for (axis, count) in [Axis::Azimuth, Axis::Altitude].into_iter().zip(counts) {
+            let state = mount.state(axis).await;
+            assert!(!state.moving, "stored sync's mount did not settle");
+            assert_eq!(state.position, count);
+        }
+        let truth = mount.true_direction();
+        syncs.push(finder::model::Sync {
+            time,
+            axis: counts.map(f64::from),
+            counts_per_revolution: mount.axes().map(|a| a.counts_per_revolution),
+            az_deg: truth.az,
+            alt_deg: ephemeris::apparent_from_true(truth.alt),
+            roll_deg: None,
+            rms_arcsec: 1.0,
+            epoch: 0,
+        });
+    }
+    let epoch = finder::model::Epoch {
+        ia: config.backlash_deg / 2.0 - az,
+        ie: alt - config.backlash_deg / 2.0,
+    };
+    let stored = json!({
+        "site": {"lat_deg": 40, "lon_deg": -75},
+        "min_alt_deg": 15,
+        "target": null,
+        "model": {"syncs": syncs, "epochs": [epoch], "rms_arcsec": 1.0}
+    });
+    std::fs::write(path, serde_json::to_vec(&stored).unwrap()).unwrap();
+}

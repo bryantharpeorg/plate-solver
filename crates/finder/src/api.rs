@@ -4,6 +4,9 @@
 //! nearest pointable spot at least 90° in azimuth from every nightly sync. It
 //! settles, solves and takes a sync without corrections or changing the target.
 //! Answers 200 with `{"started":true}`, or 409 with a JSON `error` on refusal.
+//! After a mount reset it refuses with `The mount was power-cycled: sync again first`
+//! until a sync from a star frame exposed after the console saw the reset.
+//! `POST /api/goto` refuses the same way.
 //!
 //! `GET /api/session` includes `backlash: {alt_deg?, az_deg?}` once measured.
 //! It survives nights and restarts; resetting fixed terms clears it.
@@ -17,7 +20,10 @@
 //! `POST /api/track` accepts exactly `{"on":true}` or `{"on":false}` and
 //! returns the session. It enforces the same-origin rule. Track on answers 409
 //! with a JSON `error` without moving unless a mount, a nightly sync, a site,
-//! a set Sun and a pointable target are available. It arms behind a running GoTo,
+//! a set Sun and a pointable target are available.
+//! It refuses after a mount reset with `The mount was power-cycled: sync again first`
+//! until a sync from a star frame exposed after the console saw the reset.
+//! It arms behind a running GoTo,
 //! or starts a GoTo first when the target is more than one arcminute off the aim
 //! point. Track off stops both axes; the bodiless, any-origin `POST /api/stop`
 //! also clears arming and ends tracking with `ended_reason: "stopped"`.
@@ -48,6 +54,7 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::future::Future;
 use std::io::Write;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -70,6 +77,7 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use crate::catalog::{self, SimilarReport};
 use crate::link::{stop_deadline, LinkManager, Transport};
 use crate::live::{DbSolver, Live, Solver};
+use crate::recording::{RawRefusal, Recorder, Sources, FRAME_LIMIT, MAX_RAW_FRAMES};
 use crate::samples::{self, SampleInfo, Samples};
 use crate::session::{Clock, Session, SessionEdit, SessionError, SessionView, SystemClock};
 use crate::simulate::{Push, Simulation, SimulationTransport, Telescope};
@@ -105,6 +113,7 @@ pub struct AppState {
     mcp: crate::mcp::McpConfig,
     link: Option<Arc<LinkManager>>,
     live: Option<Arc<Live>>,
+    recordings: Option<Arc<Recorder>>,
     mount_monitor: Option<Arc<crate::live::MountMonitor>>,
     simulation: Option<Arc<Simulation>>,
     goto: Option<Arc<crate::goto::GoTo>>,
@@ -135,6 +144,7 @@ impl AppState {
             mcp: crate::mcp::McpConfig::default(),
             link: None,
             live: None,
+            recordings: None,
             mount_monitor: None,
             simulation: None,
             goto: None,
@@ -196,6 +206,7 @@ impl AppState {
         self.mount_monitor = Some(Arc::new(crate::live::MountMonitor::start(
             simulation.link.clone(),
             self.session.clone(),
+            self.clock.clone(),
         )));
         self.simulation = Some(simulation);
         Ok(self)
@@ -217,6 +228,7 @@ impl AppState {
         self.mount_monitor = Some(Arc::new(crate::live::MountMonitor::start(
             self.link.as_ref().unwrap().clone(),
             self.session.clone(),
+            self.clock.clone(),
         )));
         self
     }
@@ -262,6 +274,21 @@ impl AppState {
             link.clone(),
             self.live.as_ref().unwrap().clone(),
         )));
+        self
+    }
+
+    /// Record on request under `root` (025). The binary passes `recordings/` in its state folder.
+    pub fn with_recordings(mut self, root: impl Into<PathBuf>) -> Self {
+        self.recordings = Some(Arc::new(Recorder::new(root.into(), FRAME_LIMIT)));
+        self
+    }
+
+    /// End each recording after `frames` star frames instead of `FRAME_LIMIT`.
+    /// Call after `with_recordings`; without it this changes nothing.
+    pub fn with_recording_limit(mut self, frames: u64) -> Self {
+        if let Some(old) = &self.recordings {
+            self.recordings = Some(Arc::new(Recorder::new(old.root().to_path_buf(), frames)));
+        }
         self
     }
 
@@ -426,6 +453,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/mcp", get(get_mcp))
         .route("/api/goto", post(start_goto))
         .route("/api/track", post(set_track))
+        .route("/api/record", post(set_record))
+        .route("/api/record/raw", post(record_raw))
         .route("/api/stop", post(stop_mount))
         .route("/api/model/second-sync", post(second_sync))
         .route("/api/model/reset", post(reset_model))
@@ -624,6 +653,8 @@ pub(crate) struct SessionResponse {
     #[serde(flatten)]
     pub(crate) session: SessionView,
     #[serde(skip_serializing_if = "Option::is_none")]
+    recording: Option<crate::recording::RecordingView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     goto: Option<crate::goto::Progress>,
     #[serde(skip_serializing_if = "Option::is_none")]
     goto_refusal: Option<String>,
@@ -653,15 +684,9 @@ pub(crate) async fn session_response(state: &AppState) -> SessionResponse {
     };
     let goto = state.goto.as_ref().and_then(|g| g.progress());
     let axis_move = state.axis_move.lock().unwrap().clone();
-    let running = axis_move.as_ref().is_some_and(|m| m.state == "moving")
-        || goto
-            .as_ref()
-            .is_some_and(|g| matches!(g.state, "slewing" | "solving" | "correcting"))
-        || session
-            .track
-            .as_ref()
-            .is_some_and(|t| matches!(t.state, "armed" | "tracking" | "keyhole_wait"));
+    let running = motion_running(axis_move.as_ref(), goto.as_ref(), &session);
     SessionResponse {
+        recording: state.recordings.as_ref().and_then(|r| r.view()),
         session,
         goto,
         goto_refusal,
@@ -669,6 +694,103 @@ pub(crate) async fn session_response(state: &AppState) -> SessionResponse {
         axis_move,
     }
 }
+fn motion_running(
+    axis_move: Option<&crate::mcp::guard::Progress>,
+    goto: Option<&crate::goto::Progress>,
+    session: &SessionView,
+) -> bool {
+    axis_move.is_some_and(|m| m.state == "moving")
+        || goto.is_some_and(|g| matches!(g.state, "slewing" | "solving" | "correcting"))
+        || session
+            .track
+            .as_ref()
+            .is_some_and(|t| matches!(t.state, "armed" | "tracking" | "keyhole_wait"))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawEdit {
+    frames: u8,
+}
+async fn record_raw(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    edit: Result<Json<RawEdit>, JsonRejection>,
+) -> Result<Json<SessionResponse>, ApiError> {
+    let frames = sim_json(edit)?.frames;
+    if !(1..=MAX_RAW_FRAMES).contains(&frames) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "frames must be a whole number from 1 to 10",
+        ));
+    }
+    let recorder = state.recordings.as_ref().ok_or_else(|| {
+        ApiError::new(
+            StatusCode::CONFLICT,
+            "this console has no recordings folder",
+        )
+    })?;
+    let shared = state.clone();
+    let moving = Arc::new(move || {
+        let session = shared.session.snapshot(shared.clock.now());
+        let goto = shared.goto.as_ref().and_then(|g| g.progress());
+        let axis_move = shared.axis_move.lock().unwrap();
+        motion_running(axis_move.as_ref(), goto.as_ref(), &session)
+            || session.mount.as_ref().is_some_and(|m| m.moving)
+    });
+    recorder
+        .request_raw(frames, state.link().and_then(|link| link.raw()), moving)
+        .map_err(|reason| {
+            ApiError::new(
+                StatusCode::CONFLICT,
+                match reason {
+                    RawRefusal::NotRecording => "start a recording first",
+                    RawRefusal::Busy => "raw frames are already being saved",
+                    RawRefusal::Moving => "wait until the mount is still",
+                    RawRefusal::NotConnected => "the scope node is not connected",
+                },
+            )
+        })?;
+    Ok(get_session(State(state)).await)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RecordEdit {
+    on: bool,
+}
+async fn set_record(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    edit: Result<Json<RecordEdit>, JsonRejection>,
+) -> Result<Json<SessionResponse>, ApiError> {
+    if sim_json(edit)?.on {
+        let recorder = state.recordings.as_ref().ok_or_else(|| {
+            ApiError::new(
+                StatusCode::CONFLICT,
+                "this console has no recordings folder",
+            )
+        })?;
+        let (link, live) = state
+            .link
+            .as_ref()
+            .zip(state.live.as_ref())
+            .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "this console has no live link"))?;
+        recorder
+            .start(Sources {
+                frames: link.frames(),
+                status: link.status(),
+                reports: live.subscribe(),
+                clock: state.clock.clone(),
+                session: state.session.clone(),
+            })
+            .map_err(|error| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?;
+    } else if let Some(recorder) = &state.recordings {
+        recorder.stop();
+    }
+    Ok(get_session(State(state)).await)
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct TrackEdit {

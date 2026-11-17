@@ -6,7 +6,7 @@ use support::*;
 
 #[tokio::test(start_paused = true)]
 async fn exposure_positions_follow_the_node_clock_and_steady_simulated_rate() {
-    let mut rig = Rig::new().await;
+    let mut rig = Rig::rendered().await;
     rig.rate(proto::Axis::Azimuth, 1.5).await;
     rig.step(0.6, true).await;
     assert_eq!(
@@ -19,7 +19,7 @@ async fn exposure_positions_follow_the_node_clock_and_steady_simulated_rate() {
         .await
         .unwrap()
         .into_inner();
-    let after = rig.sim.clock().node_now();
+    let after = rig.clock.node_now();
     let frame = loop {
         let frame = frames.message().await.unwrap().unwrap();
         if frame.start_s >= after {
@@ -27,8 +27,8 @@ async fn exposure_positions_follow_the_node_clock_and_steady_simulated_rate() {
         }
     };
     assert!((frame.end_s - frame.start_s - 0.2).abs() < 1e-9);
-    assert!(frame.start_s >= 1000.0 && frame.end_s - rig.sim.clock().node_now() <= 1e-9);
-    assert!(frame.start_s < rig.sim.clock().now() - 1_000_000.0);
+    assert!(frame.start_s >= 1000.0 && frame.end_s - rig.clock.node_now() <= 1e-9);
+    assert!(frame.start_s < rig.clock.now() - 1_000_000.0);
     let start = frame.axis_start.unwrap();
     let end = frame.axis_end.unwrap();
     let expected = 1.5 * 0.2 * f64::from(rig.adapter.axes()[0].counts_per_revolution) / 360.0;

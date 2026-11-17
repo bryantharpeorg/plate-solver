@@ -17,6 +17,7 @@ use scope_link::{
     proto::{
         self,
         scope_node_mount_server::{ScopeNodeMount, ScopeNodeMountServer},
+        scope_node_raw_server::{ScopeNodeRaw, ScopeNodeRawServer},
         scope_node_server::{ScopeNode, ScopeNodeServer},
         scope_node_stop_server::{ScopeNodeStop, ScopeNodeStopServer},
     },
@@ -28,7 +29,7 @@ use std::{
     time::Duration,
 };
 use tokio::{
-    sync::{broadcast, watch},
+    sync::{broadcast, oneshot, watch},
     task::JoinHandle,
 };
 use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};
@@ -83,6 +84,7 @@ impl NodeControls {
 struct Commands {
     pending: Option<Settings>,
     preview: bool,
+    raw: Vec<oneshot::Sender<proto::RawFrameReply>>,
 }
 struct Shared {
     info: CameraInfo,
@@ -167,6 +169,7 @@ impl NodeService {
             commands: Mutex::new(Commands {
                 pending: None,
                 preview: false,
+                raw: Vec::new(),
             }),
             frames: broadcast::channel(16).0,
             controls,
@@ -197,18 +200,28 @@ impl NodeService {
                 self.runtime.token.clone(),
             ))
             .add_service(ScopeNodeStopServer::new(self.clone()))
+            .add_service(ScopeNodeRawServer::with_interceptor(
+                self.clone(),
+                self.runtime.token.clone(),
+            ))
     }
     fn connected_mount(&self) -> Result<&Arc<MountQueue>, Status> {
-        self.mount_queue()
-            .ok_or_else(|| Status::failed_precondition("no mount connected"))
+        let mount = self
+            .mount_queue()
+            .ok_or_else(|| Status::failed_precondition("no mount connected"))?;
+        if !mount.mount().connected() {
+            return Err(Status::failed_precondition("mount not connected"));
+        }
+        Ok(mount)
     }
     fn moving_mount(&self) -> Result<&Arc<MountQueue>, Status> {
+        let mount = self.connected_mount()?;
         if self.runtime.watchdog.as_ref().is_some_and(Watchdog::lost) {
             return Err(Status::failed_precondition(
                 "heartbeat required after link loss",
             ));
         }
-        self.connected_mount()
+        Ok(mount)
     }
     /// Every method, including Describe and Heartbeat, uses the pairing interceptor.
     pub fn into_server(
@@ -290,10 +303,66 @@ async fn run<C: Camera>(mut capture: CaptureLoop<C>, mut settings: Settings, sha
                 axis_start: captured.axis_start,
                 axis_end: captured.axis_end,
             });
+            let waiters = std::mem::take(&mut shared.commands.lock().unwrap().raw);
+            answer_raw(
+                waiters,
+                captured.id,
+                frame.width,
+                frame.height,
+                frame.pixels,
+            );
         }
         tokio::time::sleep_until(start + interval).await;
     }
 }
+// Clone only for extra waiters; the last waiter owns the detector's buffer.
+fn answer_raw(
+    mut waiters: Vec<oneshot::Sender<proto::RawFrameReply>>,
+    id: u64,
+    width: u32,
+    height: u32,
+    pixels: Vec<u8>,
+) {
+    if let Some(last) = waiters.pop() {
+        for waiter in waiters {
+            let _ = waiter.send(proto::RawFrameReply {
+                id,
+                width,
+                height,
+                pixels: pixels.clone(),
+            });
+        }
+        let _ = last.send(proto::RawFrameReply {
+            id,
+            width,
+            height,
+            pixels,
+        });
+    }
+}
+
+#[tonic::async_trait]
+impl ScopeNodeRaw for NodeService {
+    async fn raw_frame(
+        &self,
+        _: Request<proto::RawFrameRequest>,
+    ) -> Result<Response<proto::RawFrameReply>, Status> {
+        self.runtime.shared.controls.ready(false).await;
+        let (sender, receiver) = oneshot::channel();
+        self.runtime
+            .shared
+            .commands
+            .lock()
+            .unwrap()
+            .raw
+            .push(sender);
+        receiver
+            .await
+            .map(Response::new)
+            .map_err(|_| Status::unavailable("the scope node stopped capturing"))
+    }
+}
+
 fn to_wire(settings: &Settings) -> proto::Settings {
     proto::Settings {
         exposure_ms: settings.exposure_ms,
@@ -413,8 +482,12 @@ impl ScopeNodeMount for NodeService {
         &self,
         _: Request<proto::DescribeMountRequest>,
     ) -> Result<Response<proto::DescribeMountReply>, Status> {
-        let axes = self
-            .mount_queue()
+        let mount = self.mount_queue().filter(|q| q.mount().connected());
+        let (firmware, board) = mount
+            .and_then(|q| q.mount().identity())
+            .map(|identity| (identity.firmware, identity.board))
+            .unwrap_or_default();
+        let axes = mount
             .map(|q| {
                 q.mount()
                     .axes()
@@ -427,20 +500,26 @@ impl ScopeNodeMount for NodeService {
                     .collect()
             })
             .unwrap_or_default();
-        Ok(Response::new(proto::DescribeMountReply { axes }))
+        Ok(Response::new(proto::DescribeMountReply {
+            axes,
+            firmware,
+            board,
+        }))
     }
     async fn axis_state(
         &self,
         request: Request<proto::AxisStateRequest>,
     ) -> Result<Response<proto::AxisState>, Status> {
         let axis = axis(request.into_inner().axis)?;
-        let state = self.connected_mount()?.mount().state(axis).await;
+        let mount = self.connected_mount()?.mount();
+        let state = mount.state(axis).await;
         Ok(Response::new(proto::AxisState {
             position: state.position,
             rate_deg_per_s: state.rate_deg_per_s,
             moving: state.moving,
             // Sample after the axes so watchdog-induced rest carries its count.
             watchdog_stops: self.runtime.watchdog.as_ref().map_or(0, Watchdog::stops),
+            mount_resets: mount.resets(),
         }))
     }
     async fn goto_axis(

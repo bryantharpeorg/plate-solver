@@ -14,6 +14,30 @@ use tokio::sync::Mutex;
 const TOP_RATE: f64 = 3.4;
 const FAST_THRESHOLD: f64 = 128.0 * 360.0 / 86164.0905;
 
+/// The positioning commands accepted by the board for a GoTo.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GotoPath {
+    Absolute,
+    Relative,
+}
+impl fmt::Display for GotoPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Absolute => ":S",
+            Self::Relative => ":H/:M",
+        })
+    }
+}
+
+/// Invalid read replies and the last accepted GoTo path on each axis.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct MountHealth {
+    pub invalid_replies: u64,
+    pub last_invalid: Option<String>,
+    /// Azimuth first.
+    pub goto_path: [Option<GotoPath>; 2],
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Firmware {
     pub major: u8,
@@ -139,25 +163,56 @@ struct Protocol<S> {
     rates: [f64; 2],
     sampled_at: [f64; 2],
     states: [AxisState; 2],
+    initialised: [Option<bool>; 2],
+    health: MountHealth,
 }
 struct Status {
     moving: bool,
     tracking: bool,
     fast: bool,
     reverse: bool,
+    initialised: bool,
 }
 impl<S: BaudStream> Protocol<S> {
-    async fn status(&mut self, axis: u8) -> Result<Status, Error> {
-        let data = self.transport.command(b'f', axis, b"", true).await?;
-        if data.len() != 3 {
-            return Err(Error::InvalidReply);
+    async fn read(&mut self, command: u8, axis: u8, len: usize) -> Result<Vec<u8>, Error> {
+        for attempt in 0..5 {
+            // One transmission per try: framing, timeouts and lengths share the
+            // same budget rather than nesting the transport's safe retries.
+            let result = match self.transport.command(command, axis, b"", false).await {
+                Ok(data) if data.len() == len => return Ok(data),
+                Ok(data) => {
+                    let mut frame = vec![b'='];
+                    frame.extend_from_slice(&data);
+                    frame.push(b'\r');
+                    let escaped = frame.escape_ascii().to_string();
+                    self.health.invalid_replies += 1;
+                    eprintln!(
+                        "mount reply invalid for :{}{}: {}",
+                        char::from(command),
+                        axis,
+                        escaped
+                    );
+                    self.health.last_invalid = Some(escaped);
+                    Err(Error::InvalidReply)
+                }
+                result => result,
+            };
+            match result {
+                Err(Error::Timeout | Error::InvalidReply) if attempt < 4 => continue,
+                result => return result,
+            }
         }
+        unreachable!("at least one transmission")
+    }
+    async fn status(&mut self, axis: u8) -> Result<Status, Error> {
+        let data = self.read(b'f', axis, 3).await?;
         let flags = codec::hex(data[0])?;
         Ok(Status {
             moving: codec::hex(data[1])? & 1 != 0,
             tracking: flags & 1 != 0,
             fast: flags & 4 != 0,
             reverse: flags & 2 != 0,
+            initialised: codec::hex(data[2])? & 1 != 0,
         })
     }
     async fn ack(&mut self, command: u8, axis: u8, data: &[u8]) -> Result<(), Error> {
@@ -185,7 +240,7 @@ impl<S: BaudStream> Protocol<S> {
     }
     async fn motion(&mut self, command: u8, axis: u8, data: &[u8]) -> Result<(), Error> {
         match self.ack(command, axis, data).await {
-            Err(Error::Refused(2)) => {
+            Err(Error::Refused(2)) if command != b'J' => {
                 self.stop_wait(axis).await?;
                 self.ack(command, axis, data).await // One retry, even if refused again.
             }
@@ -193,7 +248,7 @@ impl<S: BaudStream> Protocol<S> {
         }
     }
     async fn position(&mut self, axis: u8) -> Result<i32, Error> {
-        codec::decode_position(&self.transport.command(b'j', axis, b"", true).await?)
+        codec::decode_position(&self.read(b'j', axis, 6).await?)
     }
     async fn state(&mut self, axis: u8) -> Result<AxisState, Error> {
         let status = self.status(axis).await?;
@@ -219,6 +274,7 @@ impl<S: BaudStream> Protocol<S> {
         };
         self.states[i] = state;
         self.sampled_at[i] = now;
+        self.initialised[i] = Some(status.initialised);
         Ok(state)
     }
     async fn rate(&mut self, axis: u8, requested: f64) -> Result<(), Error> {
@@ -277,7 +333,7 @@ impl<S: BaudStream> Protocol<S> {
             ],
         )
         .await?;
-        match self
+        let path = match self
             .motion(b'S', axis, &codec::encode_position(target))
             .await
         {
@@ -289,8 +345,17 @@ impl<S: BaudStream> Protocol<S> {
                     .min(TOP_RATE * TOP_RATE / 6.0 * cpr / 360.0)
                     .round() as u32;
                 self.motion(b'M', axis, &codec::encode_u24(brake)).await?;
+                GotoPath::Relative
             }
-            result => result?,
+            result => {
+                result?;
+                GotoPath::Absolute
+            }
+        };
+        let previous = &mut self.health.goto_path[usize::from(axis - 1)];
+        if *previous != Some(path) {
+            eprintln!("mount goto path on axis {axis}: {path}");
+            *previous = Some(path);
         }
         self.motion(b'J', axis, b"").await
     }
@@ -308,8 +373,25 @@ impl<S: BaudStream> Protocol<S> {
         }
         result
     }
+    async fn halt_once(&mut self) -> Result<(), Error> {
+        // The lost link's stream gets one transmission per command. Reach both
+        // axes with K before escalating either axis to L, as in halt.
+        let first = self.transport.command(b'K', 1, b"", false).await;
+        let second = self.transport.command(b'K', 2, b"", false).await;
+        let mut result = Ok(());
+        for (axis, stopped) in [(1, first), (2, second)] {
+            if !matches!(stopped, Ok(ref reply) if reply.is_empty()) {
+                match self.transport.command(b'L', axis, b"", false).await {
+                    Ok(reply) if reply.is_empty() => {}
+                    Ok(_) => result = Err(Error::InvalidReply),
+                    Err(error) => result = Err(error),
+                }
+            }
+        }
+        result
+    }
 }
-fn wrapped_delta(target: i32, current: i32) -> i32 {
+pub(super) fn wrapped_delta(target: i32, current: i32) -> i32 {
     ((i64::from(target) - i64::from(current) + 0x80_0000).rem_euclid(0x100_0000) - 0x80_0000) as i32
 }
 
@@ -352,6 +434,8 @@ impl<S: BaudStream> SkyWatcher<S> {
                 clock,
                 rates: [0.0; 2],
                 sampled_at: [now; 2],
+                initialised: [None; 2],
+                health: MountHealth::default(),
                 states: [AxisState {
                     position: 0,
                     rate_deg_per_s: 0.0,
@@ -368,6 +452,29 @@ impl<S: BaudStream> SkyWatcher<S> {
     }
     pub fn report(&self) -> &BoardReport {
         &self.report
+    }
+    /// Health accumulated on this board since its connect sequence.
+    pub async fn health(&self) -> MountHealth {
+        self.protocol.lock().await.health.clone()
+    }
+    /// The init bit from the last full state read; none before a read or on failure.
+    pub async fn initialised(&self, axis: Axis) -> Option<bool> {
+        self.protocol.lock().await.initialised[axis.index()]
+    }
+    /// Stop through the last successful connect's stream with no command retries.
+    pub async fn halt_once(&self) -> bool {
+        let mut protocol = self.protocol.lock().await;
+        // A cancelled discovery may have changed the tty's shared baud. Restore
+        // the last known board baud and flush stale serial input before stopping.
+        let result = match protocol.transport.set_baud(self.report.baud) {
+            Ok(()) => protocol.halt_once().await,
+            Err(error) => Err(error),
+        };
+        if let Err(error) = result {
+            eprintln!("mount stop failed: {error}");
+            return false;
+        }
+        true
     }
     async fn log_motion(&self, result: Result<(), Error>) {
         if let Err(error) = result {
@@ -392,6 +499,7 @@ impl<S: BaudStream> Mount for SkyWatcher<S> {
             match protocol.state(axis.index() as u8 + 1).await {
                 Ok(state) => state,
                 Err(error) => {
+                    protocol.initialised[axis.index()] = None;
                     eprintln!("mount state failed: {error}");
                     // Loss of telemetry must never look like confirmed rest.
                     AxisState {

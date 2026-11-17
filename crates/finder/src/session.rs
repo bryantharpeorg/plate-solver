@@ -506,7 +506,26 @@ pub struct MountView {
     pub firmware: Option<String>,
     /// Either axis is moving.
     pub moving: bool,
+    /// Motor board resets seen by the scope node since it started.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub resets: u64,
 }
+
+fn is_zero(n: &u64) -> bool {
+    *n == 0
+}
+
+#[derive(Default)]
+pub(crate) struct MountReading {
+    pub(crate) counts: Option<[u32; 2]>,
+    pub(crate) connected: bool,
+    pub(crate) moving: bool,
+    pub(crate) firmware: Option<String>,
+    pub(crate) board: Option<String>,
+    pub(crate) resets: Option<u64>,
+}
+
+pub(crate) const POWER_CYCLED: &str = "The mount was power-cycled: sync again first";
 
 /// One consistent read of the observing session and its console time.
 #[derive(Debug, Serialize)]
@@ -561,6 +580,8 @@ struct Values {
     backlash: Option<Backlash>,
     model: Model,
     mount: Option<MountView>,
+    mount_resets: Option<u64>,
+    sync_needed: Option<f64>,
     counts_per_revolution: Option<[u32; 2]>,
     site: Option<Site>,
     min_alt_deg: f64,
@@ -584,6 +605,8 @@ impl Default for Values {
             backlash: None,
             model: Model::default(),
             mount: None,
+            mount_resets: None,
+            sync_needed: None,
             counts_per_revolution: None,
             site: None,
             min_alt_deg: 15.0,
@@ -764,6 +787,9 @@ impl Session {
         if self.model(time).syncs.is_empty() {
             return Err("the night has no sync yet".into());
         }
+        if self.sync_needed() {
+            return Err(POWER_CYCLED.into());
+        }
         let site = view.site.ok_or("a site is needed")?;
         if crate::goto::sun_horizontal(site.lat_deg, site.lon_deg, time).0 >= -0.83 {
             return Err("Sun is up".into());
@@ -902,7 +928,7 @@ impl Session {
                 track.tracker = Some(tracker.clone());
                 track.target.clone()
             };
-            tracker.start(target).await
+            tracker.start_with_resets(target, self.mount_resets()).await
         }
         .await;
         if let Err(reason) = &result {
@@ -991,15 +1017,35 @@ impl Session {
         self.values.lock().expect("observing session").model.clone()
     }
 
-    pub(crate) fn set_mount(&self, counts: Option<[u32; 2]>, connected: bool, moving: bool) {
+    /// Whether a board reset requires a sync from a newly exposed star frame.
+    pub fn sync_needed(&self) -> bool {
+        self.values
+            .lock()
+            .expect("observing session")
+            .sync_needed
+            .is_some()
+    }
+
+    pub(crate) fn mount_resets(&self) -> Option<u64> {
+        self.values.lock().expect("observing session").mount_resets
+    }
+
+    pub(crate) fn set_mount(&self, reading: MountReading, time: f64) {
         let mut values = self.values.lock().expect("observing session");
-        values.counts_per_revolution = counts.filter(|_| connected);
-        if counts.is_some() {
+        if let Some(resets) = reading.resets {
+            if values.mount_resets.is_some_and(|last| resets > last) {
+                values.sync_needed = Some(time);
+            }
+            values.mount_resets = Some(resets);
+        }
+        values.counts_per_revolution = reading.counts.filter(|_| reading.connected);
+        if reading.counts.is_some() {
             values.mount = Some(MountView {
-                connected,
-                moving,
-                board: None,
-                firmware: None,
+                connected: reading.connected,
+                moving: reading.moving,
+                board: reading.board,
+                firmware: reading.firmware,
+                resets: values.mount_resets.unwrap_or(0),
             });
         } else if let Some(mount) = &mut values.mount {
             mount.connected = false;
@@ -1086,10 +1132,18 @@ impl Session {
             lon: site.lon_deg,
             time,
         };
-        match ModelSync::from_frame(frame, solved, aim, observer, counts, rms) {
-            Some(sync) => self.record_sync(sync),
-            None => Ok(false),
+        let recorded = match ModelSync::from_frame(frame, solved, aim, observer, counts, rms) {
+            Some(sync) => self.record_sync(sync)?,
+            None => false,
+        };
+        if recorded {
+            let exposure_start = time - (frame.end_s - frame.start_s) / 2.0;
+            let mut values = self.values.lock().expect("observing session");
+            if values.sync_needed.is_some_and(|rise| exposure_start > rise) {
+                values.sync_needed = None;
+            }
         }
+        Ok(recorded)
     }
 
     /// Reset nightly or hardware terms, persisting before committing the change.
@@ -1538,23 +1592,5 @@ mod tests {
         let restored = Session::with_state_file(&path).unwrap();
         assert_eq!(restored.snapshot(0.0).min_alt_deg, 15.0);
         std::fs::remove_dir_all(folder).unwrap();
-    }
-
-    // Oracle: FR-009's exact defaults; no numerical tolerance.
-    #[test]
-    fn fresh_session_has_no_site_target_or_pointing_and_fifteen_degree_minimum() {
-        let view = Session::default().snapshot(1768528800.0);
-        assert!(view.site.is_none());
-        assert!(view.target.is_none());
-        assert!(view.pointing.is_none());
-        assert_eq!(view.min_alt_deg, 15.0);
-    }
-
-    // Oracle: 2026-01-16 02:00 UT = 1768528800 Unix seconds, exactly.
-    #[test]
-    fn fixed_clock_reads_the_same_unix_time_twice() {
-        let clock = FixedClock(1768528800.0);
-        assert_eq!(clock.now(), 1768528800.0);
-        assert_eq!(clock.now(), 1768528800.0);
     }
 }

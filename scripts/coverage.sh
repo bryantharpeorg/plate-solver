@@ -15,8 +15,9 @@
 # --rust / --web   run one half only (default: both)
 # --branch         add Rust branch coverage; needs a nightly toolchain with
 #                  llvm-tools-preview (rustup toolchain install nightly -c llvm-tools-preview)
-# --report-only    re-render the Rust reports from the last `cargo llvm-cov` run without
-#                  running tests again (CI uses this after the gate has measured)
+# --report-only    re-render the reports from the last measured run without running tests
+#                  again: the last `cargo llvm-cov` run for Rust, and the page reports
+#                  already in $COVERAGE_DIR/web (CI uses this after the gate has measured)
 #
 # This is evidence, not a gate: it sets no threshold. The 80% floor lives in ci.yml.
 # How to read the output: docs/coverage.md.
@@ -43,6 +44,10 @@ done
 
 cd "$root"
 mkdir -p "$out"
+
+# The root Cargo.toml optimizes test builds for speed. Coverage is measured without that,
+# as CI's `test-coverage` job measures it: an optimizer merges and drops lines.
+export CARGO_PROFILE_TEST_OPT_LEVEL=0
 
 if [ "$rust" = 1 ]; then
   if ! cargo "${toolchain[@]}" llvm-cov --version >/dev/null 2>&1; then
@@ -75,7 +80,12 @@ if [ "$rust" = 1 ]; then
   fi
 fi
 
-if [ "$web" = 1 ]; then
+if [ "$web" = 1 ] && [ "$report_only" = 1 ]; then
+  [ -f "$out/web/coverage-summary.json" ] || {
+    echo "coverage.sh: --report-only found no page coverage in $out/web; run it without --report-only first" >&2
+    exit 1
+  }
+elif [ "$web" = 1 ]; then
   (
     cd crates/finder/web
     [ -d node_modules ] || npm ci --no-audit --no-fund

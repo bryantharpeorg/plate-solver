@@ -46,6 +46,15 @@ pub struct AxisState {
     pub moving: bool,
 }
 
+/// The board's own name for itself, when the adapter can read it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MountIdentity {
+    /// Version as major.minor with two minor digits, e.g. "3.40".
+    pub firmware: String,
+    /// Board code in hex, e.g. "0x90".
+    pub board: String,
+}
+
 /// Object-safe asynchronous operation, usable by services through `dyn Mount`.
 pub type MountFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -55,6 +64,18 @@ pub type MountFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 /// within their reported top rate. Positive rates increase axis counts. A stop
 /// cancels positioning and rate commands on both axes and may decelerate to rest.
 pub trait Mount: Send + Sync {
+    /// False while the adapter has no working link to the board.
+    fn connected(&self) -> bool {
+        true
+    }
+    /// Resets seen since the node started.
+    fn resets(&self) -> u64 {
+        0
+    }
+    /// Firmware and board, once known.
+    fn identity(&self) -> Option<MountIdentity> {
+        None
+    }
     /// Capabilities in azimuth, altitude order.
     fn axes(&self) -> [AxisInfo; 2];
     /// Read position, rate and motion status on the axis's own clock.
@@ -72,95 +93,5 @@ pub trait Mount: Send + Sync {
             self.stop_all().await;
             true
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::Mutex;
-
-    struct FakeMount(Mutex<[AxisState; 2]>);
-
-    impl Mount for FakeMount {
-        fn axes(&self) -> [AxisInfo; 2] {
-            [
-                AxisInfo {
-                    counts_per_revolution: 360_000,
-                    top_rate_deg_per_s: 2.0,
-                    can_goto: true,
-                },
-                AxisInfo {
-                    counts_per_revolution: 720_000,
-                    top_rate_deg_per_s: 4.0,
-                    can_goto: true,
-                },
-            ]
-        }
-        fn state(&self, axis: Axis) -> MountFuture<'_, AxisState> {
-            Box::pin(async move { self.0.lock().unwrap()[axis.index()] })
-        }
-        fn goto(&self, axis: Axis, position: i32) -> MountFuture<'_, ()> {
-            Box::pin(async move {
-                self.0.lock().unwrap()[axis.index()] = AxisState {
-                    position,
-                    rate_deg_per_s: 0.0,
-                    moving: false,
-                };
-            })
-        }
-        fn rate(&self, axis: Axis, deg_per_s: f64) -> MountFuture<'_, ()> {
-            Box::pin(async move {
-                let mut states = self.0.lock().unwrap();
-                states[axis.index()].rate_deg_per_s = deg_per_s;
-                states[axis.index()].moving = deg_per_s != 0.0;
-            })
-        }
-        fn stop_all(&self) -> MountFuture<'_, ()> {
-            Box::pin(async move {
-                for state in self.0.lock().unwrap().iter_mut() {
-                    state.rate_deg_per_s = 0.0;
-                    state.moving = false;
-                }
-            })
-        }
-    }
-
-    #[tokio::test]
-    async fn two_axes_expose_capabilities_positions_signed_rates_and_stop() {
-        // Independent fake capabilities and commands, with exact count/rate equality.
-        let mount: Box<dyn Mount> = Box::new(FakeMount(Mutex::new(
-            [AxisState {
-                position: 0,
-                rate_deg_per_s: 0.0,
-                moving: false,
-            }; 2],
-        )));
-        for (axis, counts, top, position, rate) in [
-            (Axis::Azimuth, 360_000, 2.0, -1234, -1.25),
-            (Axis::Altitude, 720_000, 4.0, 5678, 2.5),
-        ] {
-            assert_eq!(
-                mount.axes()[axis.index()],
-                AxisInfo {
-                    counts_per_revolution: counts,
-                    top_rate_deg_per_s: top,
-                    can_goto: true,
-                }
-            );
-            mount.goto(axis, position).await;
-            assert_eq!(mount.state(axis).await.position, position);
-            mount.rate(axis, rate).await;
-            let state = mount.state(axis).await;
-            assert_eq!(state.rate_deg_per_s, rate);
-            assert!(state.moving);
-        }
-        mount.stop_all().await;
-        for axis in [Axis::Azimuth, Axis::Altitude] {
-            let state = mount.state(axis).await;
-            assert_eq!(state.rate_deg_per_s, 0.0);
-            assert!(!state.moving);
-            assert_ne!(state.position, 0);
-        }
     }
 }

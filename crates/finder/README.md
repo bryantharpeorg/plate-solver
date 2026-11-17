@@ -176,6 +176,8 @@ The page uses the API types in `web/src/api.ts`, which mirror the Rust structs i
 | `GET /api/session` | One shared observing session: `{site, min_alt_deg, target, pointing, time}`. |
 | `PUT /api/session` | JSON partial edit: `{site?, min_alt_deg?, target?}`. Answers the updated observing session. |
 | `POST /api/track` | JSON `{"on":true}` or `{"on":false}`. Answers 200 with the session; on refusal, 409 with a JSON `error`. Same-origin writes only. |
+| `POST /api/record` | JSON `{"on":true}` or `{"on":false}`. Start or stop a recording; answers 200 with the session, 409 or 500 with a JSON `error`. Same-origin writes only. |
+| `POST /api/record/raw` | JSON `{"frames":N}`, N from 1 to 10. While recording, save the next N star frames' 8-bit pixels as `raw-<id>.png`; progress is `recording.raw` in the session. Needs a scope node built with 025. Refused while the mount moves. Same-origin writes only. |
 | `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
 | `POST /api/stop` | No body. Always 200, ending tracking, clearing arming and commanding both axes to stop, from any origin, without taking the motion lock. Sends `StopAll` immediately, retrying in its own task with 200 ms per attempt and 50 ms between attempts for a bounded 2 s window, even if the request goes away. Waits for the round and answers exactly `{"stopped":true}` when the scope node answers OK or there is no scope link; otherwise answers `{"stopped":true,"acknowledged":false}`. This means the node did not answer and the mount may still be moving; press Stop again. The MCP tools `stop` and `stop_all` return the same reply. |
 | `POST /api/model/second-sync` | No body. Start the second sync; 200 with `{"started":true}`, or 409 with a JSON `error` naming the refusal. Same-origin writes only. |
@@ -428,3 +430,63 @@ night's model. Resets are persisted across restarts and command no motion.
 Invalid reset bodies answer 400 with a JSON `error`; a missing JSON content type
 answers 415. A foreign Origin on either model route answers 403 with a JSON
 `error`, leaving both the model and axes unchanged.
+
+
+## Recording a night
+
+Send `POST /api/record` with `{"on":true}` to save the star frames the console
+receives, every live solve of those frames, and their previews. Send `{"on":false}`
+to stop. A repeated start keeps the recording already on; the next start after a
+stop makes a new folder. The route follows the same-origin rule; invalid JSON
+bodies answer 400 and a body without a JSON content type answers 415, each with a
+JSON `error` and no change.
+
+Each recording lives in `recordings/<UTC start>/` in the state folder (by default
+`simulate/recordings/` under `--simulate`). Names are `YYYY-MM-DDTHH-MM-SSZ`, with
+`-2`, `-3` and so on for starts in an already used second. The files are:
+
+- `recording.json`: format `finder-recording/1`, the finder version, console start
+  time as Unix seconds and UTC, and the session's site, aim point, camera settings,
+  pointing model and camera. At the end it gains the stop time, reason and counts.
+- `frames.jsonl`: one JSON line for each star frame read after the start, holding
+  `id`, `start_s`, `end_s`, `width`, `height`, `exposure_ms`, `gain`, `settings`,
+  `centroids` as ordered `[x, y, brightness]` triples, `axis_start`, `axis_end`,
+  console `received_at` and the link's `offset_s` (node time less console time).
+  Settings hold nullable `exposure_ms`, `gain` and `detection`; detection holds
+  `sigma`, `binning`, `normalize_rows` and `detect_hot_pixels`. Each axis position
+  holds `azimuth` and `altitude`. Absent settings, axes or offset are null.
+  A preview-bearing line also has `preview`, naming its JPEG file. Frames replaced
+  on the newest-frame channel before the recorder reads them appear as gaps in ids.
+- `solves.jsonl`: the same JSON as the live events, only for recorded star frames.
+- `preview-<id>.jpg`: the scope node's preview bytes unchanged, written before the
+  corresponding frame line.
+
+A recording ends at 3,600 star frames. Its `ended_reason` is `stopped`, `limit`,
+`write_failed` or `node_restarted`. An id that does not rise, as after a scope node
+restart or pairing with another node, ends it with `node_restarted` before writing
+that star frame or its preview. Start a new recording afterwards. A failed write
+ends it without making a deleted folder again. No lines follow a stop's answer.
+The session's `recording` holds the folder, start time, counts and end reason from
+the first start until the console exits; it is run-only and never saved in
+`session.json`. Every console start begins without a recording.
+
+While recording, `POST /api/record/raw` with `{"frames":N}`, a whole number from
+1 to 10, saves the next N star frames' raw frames as lossless 8-bit gray PNGs,
+`raw-<id>.png`, beside their frame lines. Each PNG is written under a `.part` name
+and renamed when complete. Rebuild the scope node with 025 before using this route.
+The session's `recording.raw` holds `wanted`, `saved` and an optional `error`:
+`this scope node cannot send raw frames`, `no raw frame arrived within 15 s`,
+`the raw frame request failed` or `the mount started moving`. A request ends at its
+first failure, or with its recording, retaining its progress without adding an
+error when the recording ends. Only one raw-frame request runs at a time.
+Raw frames are refused with `wait until the mount is still` while an axis move,
+GoTo or Track runs, or the mount reports movement. Once a move starts, a running
+request stops before its next raw frame with `the mount started moving`; one
+already on its way can finish. A raw reply shares the scope link's connection
+with the heartbeat: on slow Wi-Fi a transfer can delay the heartbeat past one
+second, and the scope node then stops the mount.
+
+A recording holds the site, times and solves, never the node's address or token.
+Review one before committing it to this public repository (owner decision 9).
+Tests can replay frame lines through `Live::start` with their saved clock offset
+and receipt time, as `crates/finder/tests/console/live/loop_.rs` feeds frames.

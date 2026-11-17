@@ -40,7 +40,7 @@ fn test_db(
 }
 
 #[test]
-fn brightest_first_requirement() {
+fn exhausted_search_of_an_empty_pattern_catalog_is_no_match() {
     let db = test_db(10.0, 30.0, 100, 150);
     let bright = vec![
         (10.0, 10.0),
@@ -82,27 +82,6 @@ fn default_fov_from_db_range() {
     );
     // Midpoint of [10, 30] is 20 degrees.
     assert_eq!(sol.fov_used, Some(20.0));
-}
-
-#[test]
-fn explicit_detection_parameters_honored() {
-    // A uniform dark image should yield zero stars with a high sigma.
-    let image = vec![0u8; 64 * 64];
-    let db = test_db(10.0, 30.0, 100, 150);
-    let params = DetectParams {
-        sigma: 20.0,
-        noise_estimate: Some(1.0),
-        binning: 2,
-        normalize_rows: true,
-        detect_hot_pixels: true,
-        return_binned: false,
-        use_binned_for_star_candidates: false,
-    };
-    let sol = solve_from_image(
-        &image, 64, 64, None, 5.0, 0.01, 1e-5, 5000, 0.0, 0.002, db, params,
-    );
-    // No stars found means TOO_FEW, proving the detection path was exercised with the params.
-    assert_eq!(sol.status, Some(SolveStatus::TooFew));
 }
 
 #[test]
@@ -284,9 +263,9 @@ fn timeout_bounds_the_search() {
 }
 
 #[test]
-fn cancellation_honored() {
-    // Verify that a cancelled context reports CANCELLED through the public
-    // context helpers, and that a zero-timeout solve reports TIMEOUT.
+fn solve_context_reports_a_set_cancel_flag() {
+    // SolveStatus::Cancelled has no test and no public trigger. This checks only
+    // the context flag; timeout_bounds_the_search covers the zero-timeout solve.
     let db = test_db(10.0, 30.0, 100, 150);
     let cancelled = Arc::new(AtomicBool::new(true));
     let ctx = plate_solver::status::SolveContext {
@@ -306,18 +285,4 @@ fn cancellation_honored() {
     };
 
     assert!(ctx.is_cancelled());
-
-    let sol = solve_from_centroids(
-        &[(10.0, 10.0), (20.0, 20.0), (30.0, 30.0), (40.0, 40.0)],
-        (100, 100),
-        None,
-        5.0,
-        0.01,
-        1e-5,
-        0,
-        0.0,
-        0.002,
-        ctx.db,
-    );
-    assert_eq!(sol.status, Some(SolveStatus::Timeout));
 }

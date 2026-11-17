@@ -3,7 +3,7 @@ use scope_node::{
     clock::SystemClock,
     config::{Adapter, Config},
     mount::{
-        skywatcher::{probe, serial::Serial, SkyWatcher},
+        skywatcher::{probe, serial::Serial, MountLink},
         Mount,
     },
     rpicam::RpicamCamera,
@@ -79,16 +79,11 @@ async fn serve(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let clock = Arc::new(SystemClock);
     let mount: Option<Arc<dyn Mount>> = if let Some(mount) = &config.mount {
-        let mount = SkyWatcher::connect(Serial::open(&mount.device)?, clock.clone()).await?;
-        eprintln!(
-            "mount connected: {} at {} baud",
-            mount.report().firmware,
-            mount.report().baud
-        );
-        for warning in &mount.report().warnings {
-            eprintln!("mount warning: {warning}");
-        }
-        Some(Arc::new(mount))
+        let device = mount.device.clone();
+        Some(MountLink::start(
+            Box::new(move || Serial::open(&device)),
+            clock.clone(),
+        ))
     } else {
         None
     };

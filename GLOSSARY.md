@@ -35,8 +35,10 @@ Moving the telescope by hand, following the console's directions from where it p
 _Avoid_: manual slew
 
 **Turn**:
-A direction of motion in azimuth: clockwise or anticlockwise, as seen from above.
-_Avoid_: left, right, pan
+A direction of motion in azimuth: clockwise or anticlockwise, as seen from above. The
+page prints a clockwise turn as "right" and an anticlockwise one as "left", as the
+observer faces where the telescope points.
+_Avoid_: pan
 
 **Tilt**:
 A direction of motion in altitude: up or down.
@@ -131,6 +133,14 @@ _Avoid_: frame (alone), image
 **Preview**:
 An occasional small JPEG of a star frame's image, for the page to show under the chart.
 _Avoid_: thumbnail, live view
+
+**Recording**:
+One folder of what the console saw between the observer's start and stop: each star frame's centroids, settings and axis counts, each live solve and each preview, kept for later tests.
+_Avoid_: capture, log, session
+
+**Raw frame**:
+The 8-bit gray pixels of one star frame, exactly as the scope node's detector read them, saved on request as a PNG next to that frame's line.
+_Avoid_: raw (alone), RAW file, full-resolution preview
 
 **Clock offset**:
 Node time less console time, taken from the least-delay heartbeat exchange of the last 8 s.
