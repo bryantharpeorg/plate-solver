@@ -137,7 +137,7 @@ shadow, hot pixels and a column pattern, and its known patterns are the oracles.
   `ImagingView`, `FrameView`, `SettingsEdit` and `Refusal`
   (`crates/finder/src/imaging/mod.rs`, and `crates/finder/src/imaging/frames.rs` for
   `FrameView`, 031 US1 and US2); two things the series audit gave 031's trio, which
-  031's plan.md now carries as well as its spec.md: the imaging camera's lease (031 US6,
+  031's plan.md now carries as well as its spec.md: the imaging camera's lease (031 US9,
   its plan.md § The camera lease), `Imaging::lease`, `Imaging::holder`, `Lease::set`
   and `Lease::take`, whose refusal is 409 `the imaging camera is held by {holder}`, in
   the shape `specs/033-focus-reading-and-aid/plan.md` § The camera lease quotes, and
@@ -145,9 +145,9 @@ shadow, hot pixels and a column pattern, and its known patterns are the oracles.
   for its file's `SET-TEMP` card (plan.md § The camera's lease, § Prerequisites 11);
   the saved file
   `frames/<UTC date>/<id>.fits` and its cards, read with `fits::decode`
-  (`crates/finder/src/imaging/fits.rs`, 031 US2); the route table
+  (`crates/finder/src/imaging/fits.rs`, 031 US2 and US3); the route table
   (`crates/finder/src/imaging/routes.rs`, 031 US1); the Imaging page
-  (`crates/finder/web/src/components/ImagingPage.tsx`, 031 US4); the MCP tools' place
+  (`crates/finder/web/src/components/ImagingPage.tsx`, 031 US7); the MCP tools' place
   (`crates/finder/src/mcp/tools.rs:165`); and `SimImagingCamera` with its numbered steps
   for making a frame (`crates/simulator/src/imaging.rs`, 030 US2). If 030 or 031 lands with any
   of them changed, this trio is corrected before the flip (plan.md § Prerequisites 2).
@@ -669,7 +669,7 @@ Every scenario shares these definitions unless it says otherwise.
   `crate::support::Scratch::new(name)`, the helper 028's US5 put in
   `crates/finder/tests/support/mod.rs:12`, which makes the folder, names it by its
   public field `.0`, and removes it when dropped.
-- **The lease** is 031's (031 US6; plan.md § The camera's lease):
+- **The lease** is 031's (031 US9; plan.md § The camera's lease):
   `state.imaging().unwrap().holder()` is the name of whoever holds the imaging camera,
   or `None`; `state.imaging().unwrap().lease(name)` takes it for the test, or answers a
   `Refusal` of status 409 whose `message` contains the holder's name; dropping the
@@ -1975,7 +1975,7 @@ often the only thing to hand.
   pattern and binning are equal, their gain, offset and set temperature are each both
   absent or equal within 0.001, and the first key's exposure is within 1 ms of the
   exposure given; sensor temperature SHALL not be compared (US3-S3). US3 implements it.
-- **FR-042**: A set of darks SHALL hold the imaging camera's lease (031 US6) under
+- **FR-042**: A set of darks SHALL hold the imaging camera's lease (031 US9) under
   `HOLDER`, `a set of darks or flats`, a public constant of
   `crates/finder/src/imaging/calibration/service.rs`, from the moment its request is
   accepted until just before its state becomes `done`, `failed` or `stopped`. Its
@@ -2069,7 +2069,7 @@ often the only thing to hand.
   - recording or matching on the camera's other controls, white balance among them,
     which no spec of this series records: 030's INDI adapter sets white balance neutral
     each time it connects (owner decision 17, settled by amendment 2);
-  - the imaging camera's lease itself, which is 031's (031 US6): this spec takes it and
+  - the imaging camera's lease itself, which is 031's (031 US9): this spec takes it and
     adds nothing to it (owner decision 23, settled by amendment 1);
   - waiting for the sensor to reach its set temperature, and holding subs back until it
     has (owner decision 24);

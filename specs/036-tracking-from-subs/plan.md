@@ -1065,7 +1065,7 @@ that the guard rests on US7's diff.
 
 ### What 035 must provide (035's files; read as landed before the flip)
 
-035's trio is a draft, and so is 031's, which carries the camera's lease as its US6
+035's trio is a draft, and so is 031's, which carries the camera's lease as its US9
 (031 plan.md § The camera lease; 035 plan.md § Prerequisites 8). This section lists
 everything this spec assumes of 035, and through it of 031's lease, so that the
 re-anchoring has one list to check (§ Prerequisites 3). 035's Prerequisites 10 and
@@ -1275,7 +1275,7 @@ These are not changed by any story:
   `MountConfig`'s four fields are untouched
   (`crates/simulator/tests/rate_and_backlash.rs`).
 - **031's pinned settings.** `PUT /api/imaging/settings`, the page's settings body and
-  `set_imaging_camera`'s nine keys are 031's (031 spec.md US1-S2, US4, US5-S1). The
+  `set_imaging_camera`'s nine keys are 031's (031 spec.md US1-S2, US7, US8-S1). The
   two settings here have their own route.
 - **The imaging view without steering.** `steering` is skipped until the steering is
   first used. No test of 030, 031, 032 or 034 starts a stack or calls this spec's route, so
@@ -1386,7 +1386,7 @@ These are not changed by any story:
    `CameraView`, `SettingsView`, `RoiView`, `FrameView`, `SessionWrite`, `sim_json`,
    `put_settings`, `SettingsEdit`, `Refusal`, `putImagingSettings`, the simulator's
    `set_unresponsive` as 031 US1-S6 uses it, and the camera's lease, `Imaging::lease`,
-   `Lease::take` and `Lease::set`, as 031's US6 gives them (031 plan.md § The camera
+   `Lease::take` and `Lease::set`, as 031's US9 gives them (031 plan.md § The camera
    lease); 032: `ImagingSolve`,
    `from_cd`, `pixel_of`, `cd_deg`, `SolveFrame`, `Region`, `set_solver`,
    `solve_frame`, `SimulatedSolver`, the solving rig; 034: that a master dark matches
@@ -1396,7 +1396,7 @@ These are not changed by any story:
 3. **035 is read as landed, against § What 035 must provide.** Not met. 035's trio was
    read whole when the review of this one was applied: its plan.md with the camera's
    lease, its tasks.md and its Refinement Record. It is still a draft and it is not
-   probe-built, and the lease it uses is 031's US6, which 031's draft carries and
+   probe-built, and the lease it uses is 031's US9, which 031's draft carries and
    `main` does not yet (035 plan.md § Prerequisites 8). Before the flip each of the
    nine points of § What 035 must provide is read in the landed code, and these are
    settled:
@@ -1460,7 +1460,7 @@ These are not changed by any story:
    is not edited: it gives its two times a tracker is not steady as today's examples,
    and spec owner decision 17 declares the three further times on its own. 035's Prerequisites 10 does the same for its own departures.
 10. **031 carries the camera's lease.** Met in the drafts: 031's trio in this worktree
-    carries it as its US6 (031 plan.md § The camera lease), with `Imaging::lease`,
+    carries it as its US9 (031 plan.md § The camera lease), with `Imaging::lease`,
     `Lease::take` and `Lease::set` as this trio names them. Not met on `main`, where 031
     has not landed; 035 tracks it (035 plan.md § Prerequisites 8), and § Prerequisites 2
     and 3 read it as landed. This trio reaches the lease only through § What 035 must

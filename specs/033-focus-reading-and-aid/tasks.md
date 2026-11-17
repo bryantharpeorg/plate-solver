@@ -9,7 +9,7 @@ description: "Task list for 033-focus-reading-and-aid: Focus Reading and Focus A
   `032-imaging-solve-and-aim-point` have landed on `main`, and this trio has been re-anchored to them: not met (plan.md § Prerequisites
   1 and 2);
 - 031's trio carries the imaging camera's lease of the plan document's amendment 1 as
-  its User Story 6, with `RoiEdit` defined, and this trio cites both as 031 names
+  its User Story 9, with `RoiEdit` defined, and this trio cites both as 031 names
   them: met in the trios as drafted, and checked in 031's code at the re-anchoring
   (plan.md § The camera lease, § Prerequisites 2 and 11);
 - the owner decisions in spec.md are settled and its owner approvals given: not met;
@@ -57,7 +57,7 @@ description: "Task list for 033-focus-reading-and-aid: Focus Reading and Focus A
 - Do not change 031's `take`, `set`, `abort` or lease, their refusals, or the imaging
   settings' keys. Do not add a method to the trait `ImagingSolver` or a field to
   `ImagingOptics`, `SolveFrame`, `Region` or `StarMeasure`.
-- The focus aid takes 031's lease (031 US6) and releases it. Add no lock, flag or
+- The focus aid takes 031's lease (031 US9) and releases it. Add no lock, flag or
   queue of this spec's own that keeps anyone else from the imaging camera (spec.md
   SC-007, plan.md § Plan traps 26). A test of the lease asserts a 409 and that the
   words contain the holder's name, never the rest of 031's sentence, `the imaging
@@ -254,7 +254,7 @@ assert `check` here.
   the kept region.
 - [ ] T023 [US5] In `crates/finder/src/imaging/focus/run.rs`, add `focus_start` with
   its eight refusals in order, the fourth only while nobody holds the lease and the
-  last of them 031's lease (031 US6) asked for as `HOLDER`; the task's five steps
+  last of them 031's lease (031 US9) asked for as `HOLDER`; the task's five steps
   (remember, choose the region, set, one frame after another, end) with the search,
   the provisional tile and step 4j; `focus_stop` and `focus_running` (plan.md § The
   camera lease, § The aid on the console). The task owns the lease, sets and takes through

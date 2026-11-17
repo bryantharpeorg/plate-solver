@@ -8,7 +8,7 @@ description: "Task list for 034-dark-and-flat-frames: Dark and Flat Frames"
 - `030-imaging-camera-link`, `031-imaging-frames-on-console`,
   `032-imaging-solve-and-aim-point` and `033-focus-reading-and-aid` have landed on
   `main`: not met, all four are drafts;
-- 031's trio carries the imaging camera's lease (031 US6: `Imaging::lease`,
+- 031's trio carries the imaging camera's lease (031 US9: `Imaging::lease`,
   `Imaging::holder`, `Lease::set`, `Lease::take`) and `FrameView::set_temp_c` in its
   plan.md as well as its spec.md (plan.md § Prerequisites 11): not met on `main`, where
   no trio of this series is committed yet; met in this worktree, whose 031 plan.md now

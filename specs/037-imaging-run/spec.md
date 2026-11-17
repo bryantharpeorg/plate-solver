@@ -11,7 +11,7 @@ depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-con
 # § Refinement Record). It builds on code that 030 to 036 create and that does not exist
 # yet. Their interfaces are taken from their plan.md in the same worktree, name for
 # name: the lease of the imaging camera, which the plan document's amendment 1 gives
-# 031, from 031's US6, and the rule for a stack's folder name from 035. The trio is
+# 031, from 031's US9, and the rule for a stack's folder name from 035. The trio is
 # re-anchored to `main` after its seven predecessors land and before the flip.
 # A second agent reviewed the trio the same day; its twenty-two findings are answered
 # in this text, which has eleven stories where the reviewed draft had eight. An audit
@@ -96,7 +96,7 @@ the settings, starts, watches and stops; it never puts the steps in order itself
   mount as the guard that fired left it.
 - Q: Who holds the imaging camera during a run? → A: One holder at every moment. The
   plan document's amendment 1 gives the console's imaging state one lease that names its
-  holder, which 031 writes as its US6, and a second taker is refused with the holder's
+  holder, which 031 writes as its US9, and a second taker is refused with the holder's
   name. The run takes the lease,
   as `the imaging run`, before it asks for Track, and holds it while it slews, takes its
   own imaging frames, solves and centres. 033's focus check and focus aid and 035's
@@ -257,7 +257,7 @@ the settings, starts, watches and stops; it never puts the steps in order itself
   `pushed_away`, was added on 2026-11-16 with spec 038, which makes Track follow a push
   by hand instead of pulling the telescope back (owner decision 27).
 - Q: Which interfaces are not final? → A: Those of 030 to 036, which are drafts until
-  they land, the lease of 031's US6 among them. The run reaches all of them only
+  they land, the lease of 031's US9 among them. The run reaches all of them only
   through the console's own five
   parts (FR-021, FR-029, FR-033 and the `steady` answer of FR-019), so the states, the
   routes, the page and the tools do not depend on their names. plan.md § Prerequisites
@@ -312,7 +312,7 @@ the settings, starts, watches and stops; it never puts the steps in order itself
   2. **A2. One rule for a folder's name.** `run::label` calls 035's
      `crate::imaging::stack::service::label` instead of writing 035's rule a second
      time; `run_id` is unchanged, and US1-S1 still pins `NGC 1976` to `NGC-1976`.
-  3. **A3. The lease is 031's US6.** The names `Imaging::lease`, `Lease` and
+  3. **A3. The lease is 031's US9.** The names `Imaging::lease`, `Lease` and
      `Lease::take` are 031's own and no longer marked as assumed, 034 takes the same
      lease, and two scenarios now state the lease's refusal word for word:
      `the imaging camera is held by the imaging run` (US4-S4) and
@@ -517,7 +517,7 @@ and the following. Each is named in the FR or success criterion that makes it.
    seventeen ending reasons as stable strings (FR-004, FR-016); and two words this spec
    gives 031's imaging camera, stable from the first run: the purpose `run`, which 031
    writes into the `PURPOSE` card of every imaging frame the run takes itself, and the
-   holder's name `the imaging run`, which 031's lease (031 US6) names in every refusal
+   holder's name `the imaging run`, which 031's lease (031 US9) names in every refusal
    while the run holds the camera (FR-021).
 3. **Four MCP tools**: `start_imaging_run`, `stop_imaging_run`, `continue_imaging_run`
    and `get_imaging_run`. The first is a moving tool, and `start_motion` learns its name
@@ -970,7 +970,7 @@ in US5.
    - on a centred rig, right after a start is answered and while `run.state` is
      `slewing`, `POST /api/imaging/frame` answers 409 with the `error`
      `the imaging camera is held by the imaging run`; and after `POST /api/stop` has
-     ended that run it answers 200 (oracle: 031's own route under 031 US6's lease,
+     ended that run it answers 200 (oracle: 031's own route under 031 US9's lease,
      whose refusal names the holder).
 5. **Given** the centred rig and its mount part alone, made by the test with
    `finder::imaging::run::console::mount`, no run being started, **Then** a committed
@@ -1148,7 +1148,7 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_fo
    - a start while a focus aid the test started is running is refused with 409 and the
      `error` `the imaging camera is held by the focus aid`, the script's `calls()` hold
      no `mount.point`, and the imaging view's `focus.aid.state` is still `running`
-     (oracle: 031 US6's lease, whose refusal names its holder, and 033's name for the
+     (oracle: 031 US9's lease, whose refusal names its holder, and 033's name for the
      aid; the camera part asks for the lease before it looks for an imaging frame in
      flight, FR-021);
    - on a focus rig whose R is fresh, so that the camera has no focus record, a run
@@ -1456,7 +1456,7 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_do
   `Track is on`, as it is today (`crates/finder/src/api.rs:613`).
 - **Someone asks for an imaging frame, the focus aid, a set of darks or flats, or a
   stack during a run.** Each is refused. The lease refuses with the name of whoever
-  holds the camera then, in 031 US6's words `the imaging camera is held by` and the
+  holds the camera then, in 031 US9's words `the imaging camera is held by` and the
   name: the imaging run, the focus aid or the stack (US4-S4, US6-S7). The starts of
   033, 034 and 035, as drafted, look for an imaging frame in flight only while nobody
   holds the lease, so they too answer with the holder's name while the holder is
@@ -1680,7 +1680,7 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_do
   Track off and Track's answer.
 - **FR-021**: The console's own camera part SHALL refuse a start with 031's words while
   the imaging camera is not ready. It SHALL take 031's lease of the imaging camera
-  (031 US6) as `the imaging run`, passing a refusal's words on unchanged, before it
+  (031 US9) as `the imaging run`, passing a refusal's words on unchanged, before it
   looks at anything else of the camera (owner approval 2). Holding the lease, it SHALL refuse with
   `an exposure is in progress` while an imaging frame is in flight, and with
   `the imaging camera has a region of interest set: clear it before an imaging run`
@@ -1804,7 +1804,7 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_do
   observer.
 - **The run's record**: `run.json`, in the stack's folder or in `runs/<run id>/` under
   the imaging folder.
-- **Lease**: 031's one hold on the imaging camera (031 US6), which a run takes for its
+- **Lease**: 031's one hold on the imaging camera (031 US9), which a run takes for its
   own imaging frames and hands over to the focus check and the stack (the plan
   document, amendment 1).
 - **Set point**: where on the sensor the run wants the target, today its centre (036's

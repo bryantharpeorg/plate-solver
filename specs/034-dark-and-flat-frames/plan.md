@@ -486,7 +486,7 @@ exactly this text: the first card is not `SIMPLE` with the value `T`, or there i
 every card after `NAXIS2` up to `END`, typed as 031's `decode` types them.
 
 031's `encode` and `decode` are not edited: `decode` of a real image still answers
-`unsupported FITS BITPIX -32`, which 031's US2-S10 asserts.
+`unsupported FITS BITPIX -32`, which 031's US3-S1 asserts.
 
 ### The library (`crates/finder/src/imaging/calibration/library.rs`, new, US3; the map's file, US5)
 
@@ -733,19 +733,19 @@ the entry is answered as it is. Otherwise `darks/<id>.badpixels.json` is written
 the entry's `bad_pixels` becomes the number of pixels, and the index is written. An id
 that is not a listed dark is an `std::io::Error` of kind `NotFound`.
 
-### The camera's lease (`crates/finder/src/imaging/mod.rs`, 031 US6; written by no story of this spec)
+### The camera's lease (`crates/finder/src/imaging/mod.rs`, 031 US9; written by no story of this spec)
 
 The plan document's amendment 1: "The console's imaging state (031) holds one lease
 naming the holder; a second taker is refused with the holder's name. Each later spec
 takes and releases that lease and adds no lock of its own." The series audit gave it to
-031's trio as its User Story 6 (031 spec.md, owner approval 12), and 031's plan.md now
+031's trio as its User Story 9 (031 spec.md, owner approval 12), and 031's plan.md now
 gives its interface in § The camera lease, in the shape
 `specs/033-focus-reading-and-aid/plan.md` § The camera lease quotes and 035's and 037's
 plans take too. This spec uses that shape name for name, and the re-anchoring reads
 every name again in 031's code (§ Prerequisites 2 and 11):
 
 ```rust
-// 031's (031 US6; its plan.md § The camera lease), as 033's, 035's and 037's plans quote it:
+// 031's (031 US9; its plan.md § The camera lease), as 033's, 035's and 037's plans quote it:
 /// The imaging camera, held for one taker. Dropping it releases the camera at once.
 /// It holds no strong reference to the `Imaging`.
 pub struct Lease { /* 031's */ }
@@ -1460,7 +1460,7 @@ Write each phrase a test asserts on one line of JSX, so `textContent` keeps it w
 Only existing classes and tokens are used; `index.css` does not change. The field drafts
 are component state and survive the page's one-second reads.
 
-`components/ImagingPage.tsx` (031 US4): as the page's last block, after the Imaging
+`components/ImagingPage.tsx` (031 US7): as the page's last block, after the Imaging
 frame section, its picture, 032's Imaging solve block and 033's `<FocusBlock … />`,
 which 033 renders right after 032's (`specs/033-focus-reading-and-aid/plan.md` § The
 page),
@@ -1472,7 +1472,7 @@ view without `calibration` renders no block, which is what keeps the component t
 ### `DESIGN.md` and `.impeccable/design.json` (US9)
 
 After the last entry that 031, 032 and 033 add for the Imaging page, 033's Focus block
-entry by their drafts (031's US4 puts the first of them after the Recording entry,
+entry by their drafts (031's US7 puts the first of them after the Recording entry,
 `DESIGN.md:350`), a plain `###` heading
 and one paragraph (the `>` marks only set the text apart here):
 
@@ -1513,7 +1513,7 @@ its code when this trio is re-anchored (§ Prerequisites 2 and 5).
   a view outside `ready` holds `state`, and `error` for `error`, and nothing else (031's
   US1-S4). `calibration` is set only on a `ready` view.
 - **The session's `imaging` equals the body of `GET /api/imaging`** (031's US1-S1), and
-  `get_imaging_camera` answers that body (031's US5-S2). Both are the one view, so
+  `get_imaging_camera` answers that body (031's US8-S2). Both are the one view, so
   both carry `calibration` alike.
 - **`camera` and `status` are compared whole and `settings` and `frame` key by key**
   (031's shared setup). No key is added to any of the four.
@@ -1522,7 +1522,7 @@ its code when this trio is re-anchored (§ Prerequisites 2 and 5).
   nothing to either. No test of 032 asserts that the imaging view has no `calibration`
   key.
 - **031's `decode` refuses `BITPIX` −32** with `unsupported FITS BITPIX -32` (its
-  US2-S10). `encode` and `decode` are not edited; real images have functions of their
+  US3-S1). `encode` and `decode` are not edited; real images have functions of their
   own.
 - **Frame ids and files.** Each frame of a set takes the console's next id and is saved
   as 031 saves every frame, so its numbering, its `.part` rule and its
@@ -1547,7 +1547,7 @@ its code when this trio is re-anchored (§ Prerequisites 2 and 5).
 - **The Imaging page without `calibration`.** 031's
   `crates/finder/web/src/components/ImagingPage.test.tsx` renders views that have no
   `calibration`, and reads the page's statuses and alerts; the block renders nothing
-  then. Its reads of `/api/imaging` (031's US4-S6) are the hook's, which the block
+  then. Its reads of `/api/imaging` (031's US7-S6) are the hook's, which the block
   only asks to read again after a request of its own.
 - **The Imaging page at night.** 031's `crates/finder/web/e2e/imaging.spec.ts` counts
   off-red pixels in a full-page screenshot of the simulate project's page, which now
@@ -1701,7 +1701,7 @@ its code when this trio is re-anchored (§ Prerequisites 2 and 5).
      `crates/finder/web/src/api.ts` and `ImagingPage.tsx`, 033 US6. 033 does not write
      `crates/simulator/src/imaging.rs`, `crates/simulator/src/lib.rs` or
      `crates/finder/src/imaging/fits.rs`, whose last writers stay 030's (the two
-     simulator files, 030 US2) and 031's (`fits.rs`, 031 US2);
+     simulator files, 030 US2) and 031's (`fits.rs`, 031 US3);
    - (b) where 033 places its block: its Focus block follows 032's Imaging solve block
      (033 plan.md § The page), so the Calibration block, placed after it, is the page's
      last block until 035 places its own after it;
@@ -1736,7 +1736,7 @@ its code when this trio is re-anchored (§ Prerequisites 2 and 5).
     three parts of the dark test at the owner's exposures.
 11. **031's trio carries the imaging camera's lease and `FrameView::set_temp_c`.** Not
     met on `main`, where no trio of this series is committed yet; met in this worktree:
-    the series audit gave 031's spec.md the lease as US6 and the frame's set temperature
+    the series audit gave 031's spec.md the lease as US9 and the frame's set temperature
     in its FR-009, and 031's plan.md, from which this trio takes 031's interfaces, now
     has both, the lease in § The camera lease and `set_temp_c` in `FrameView`
     (§ Receiving and saving). Its names are the ones § The camera's lease uses, name for
@@ -1877,7 +1877,7 @@ mechanism and the check that keeps it from recurring. They bind every story.
 | Risk | Mitigation |
 |---|---|
 | 030, 031, 032 or 033 lands with interfaces other than its draft's. | § Prerequisites 2 and 11: the trio is re-anchored to their code and re-validated before the flip. The seams are few: four methods of `Imaging` and its lease, the view with `frame.set_temp_c` and `relation.angle_deg`, the saved file's cards, `fits.rs`'s card writer, the simulator's frame steps and 033's `PURPOSE`. |
-| 031's lease is in 031's plan.md only since the series audit, and not yet on `main`. | § Prerequisites 11. The shape here is 031's plan.md § The camera lease, the one 033's plan quotes from 031's US6, name for name, and the scenarios assert of its refusal only a 409 with the holder's name. |
+| 031's lease is in 031's plan.md only since the series audit, and not yet on `main`. | § Prerequisites 11. The shape here is 031's plan.md § The camera lease, the one 033's plan quotes from 031's US9, name for name, and the scenarios assert of its refusal only a 409 with the holder's name. |
 | A story's diff passes 64 KiB. | Not measured: no probe build. The library story was split in two before the flip (US3 the library on disk, US4 the library in the console), and the rigs are written once and imported. The largest that remain are US3, US6 and US7; US6 grew in review by the third dark test, `anyway` and the temperature rule, and lost the waiting restore to the lease. If the probe finds US6 over the limit it splits where its scenarios do: the set and its tests (US6-S1 to US6-S5), then stopping, failures and the lease (US6-S6 to US6-S9). |
 | Worked numbers that rest on simulated noise are wrong by a count. | Each has a tolerance and a worked example; the probe build of § Prerequisites 4 runs them. US2-S8 draws no stars, so no seeded star can sit in a block; US7-S7's blocks are 10,000 samples and use medians. |
 | The dark test refuses the owner's real darks. | `anyway` takes the set and the master says `checked` false; spec owner decision 4 and the first field check. Each part of the test is one constant: `DARK_RISE_SIGMAS`, `COVER_SHARE`, `LIT_SHARE` with `LIT_MIN`. |
@@ -1908,7 +1908,7 @@ compiled, linted or tested, no interface above has been built, and no diff has b
 measured: the sessions wrote documents only. This spec also builds on code that does
 not exist: every type and function of 030, 031, 032 and 033 named here is its draft's, not
 something that was read in a file, and 031's lease and `FrameView::set_temp_c` are as
-031's plan.md now gives them for its US6 and FR-009, in the shape 033's plan quotes
+031's plan.md now gives them for its US9 and FR-009, in the shape 033's plan quotes
 (§ The camera's lease, § Prerequisites 11).
 
 Every `path:line` names a file that exists at 49bb210, the worktree's HEAD, and was
@@ -2224,9 +2224,9 @@ stories:
         reason: "US5 depends_on_merged US3, and adds the map's file"
       - path: crates/finder/src/imaging/fits.rs
         other_spec: 031-imaging-frames-on-console
-        other_story: US2
+        other_story: US3
         disposition: merge_order
-        reason: "034 depends_on_landed 031, whose US2 created fits.rs"
+        reason: "034 depends_on_landed 031, whose US3 last changed fits.rs"
       - path: crates/finder/tests/console/main.rs
         other_spec: 034-dark-and-flat-frames
         other_story: US4

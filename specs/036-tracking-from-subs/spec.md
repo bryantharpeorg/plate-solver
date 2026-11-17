@@ -214,7 +214,7 @@ work.
   sub is accepted". Up to four subs wait between the two.
 - Q: What is the camera's lease, and what does it mean here? → A: The plan document's
   amendment 1: one holder of the camera at a time, named, on 031's imaging state. 031's
-  draft carries it as its US6 (031 plan.md § The camera lease), and 033 and 035 cite it
+  draft carries it as its US9 (031 plan.md § The camera lease), and 033 and 035 cite it
   name for name (035 plan.md § The camera's lease): `Imaging::lease`, and `Lease::take` and
   `Lease::set` for the holder. While a lease is out, `Imaging::take` and `Imaging::set`
   by anyone else are refused with the holder's name, `PUT /api/imaging/settings`
@@ -1775,7 +1775,7 @@ tracking error is (e, n) within 10⁻⁴″.
 
 - **Earlier features are in place.** 015 has landed. 030, 031, 032, 033, 034 and 035 are
   drafts (plan.md § Prerequisites). 031's draft carries the camera's lease of the plan
-  document's amendment 1 as its US6, in the names 033 and 035 use; this trio reaches it
+  document's amendment 1 as its US9, in the names 033 and 035 use; this trio reaches it
   through 035 (plan.md § What 035 must provide). Every `path:line` here was read
   at 49bb210, and read again there after the audit.
 - **Out of scope:**

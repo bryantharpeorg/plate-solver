@@ -20,8 +20,8 @@ used of it.
 
 ## Technical Context
 
-**Language/Version**: Rust (MSRV 1.96) for US1 to US3, US5 and US6; TypeScript with
-React 19 for US4.
+**Language/Version**: Rust (MSRV 1.96) for US1 to US6, US8 and US9; TypeScript with
+React 19 for US7.
 
 **Primary Dependencies**: none new, and no story changes a `Cargo.toml` or `Cargo.lock`.
 `finder` has what it needs: `image` with `jpeg` (`crates/finder/Cargo.toml:27`),
@@ -37,11 +37,15 @@ console's three (`exposure_ms`, `forward_kib_per_s`, `save_at_node`) last for a 
 - US1: the module `imaging` of finder's `console` and `cli` test binaries (new files
   `crates/finder/tests/console/imaging.rs`, `crates/finder/tests/cli/imaging.rs`).
 - US2: the module `imaging_frames` of `console` and `cli`.
-- US3: the module `imaging_preview` of `console`.
-- US4: `crates/finder/web/src/components/ImagingPage.test.tsx` (new, Vitest) and
+- US3: the module `imaging_fits` of `console`.
+- US4: the module `imaging_checks` of `console`, whose node's `ScopeNodeImaging` is the
+  test's own.
+- US5: the module `imaging_control` of `console`.
+- US6: the module `imaging_preview` of `console`.
+- US7: `crates/finder/web/src/components/ImagingPage.test.tsx` (new, Vitest) and
   `crates/finder/web/e2e/imaging.spec.ts` (new, Playwright, simulate project).
-- US5: the module `imaging` of finder's `mcp` test binary.
-- US6: the module `imaging_lease` of finder's `console` test binary (new file
+- US8: the module `imaging` of finder's `mcp` test binary.
+- US9: the module `imaging_lease` of finder's `console` test binary (new file
   `crates/finder/tests/console/imaging_lease.rs`), which reaches the MCP door through
   `crate::support::mcp` as `crates/finder/tests/motion/mount_identity.rs:4` does.
 - Where a finder test goes is 027's rule: `console` calls the router in process, `cli`
@@ -70,7 +74,7 @@ browser.
 - Nothing is keyed to one camera model.
 - Rendering stays cheap: the simulated imaging camera is 1236 × 822 by default and no
   test renders the 4944 × 3284 size.
-- `web/dist` is committed and must be the build of its source (US4).
+- `web/dist` is committed and must be the build of its source (US7).
 - Budgets are things a test or 030's probe measures; this plan states none for the real
   camera.
 
@@ -93,40 +97,43 @@ console flag, one lease.
 
 ```text
 crates/finder/
-├── README.md                           # US1, US2, US3, US4, US5, US6
-├── src/lib.rs                          # US1: pub mod imaging, route lines; US2, US3: route lines
+├── README.md                           # US1, US2, US5, US6, US7, US8, US9
+├── src/lib.rs                          # US1: pub mod imaging, route lines; US2, US5, US6: route lines
 ├── src/link.rs                         # US1: ImagingClient, connect_imaging
 ├── src/api.rs                          # US1: with_imaging, imaging field, merged routes, two visibilities
 ├── src/main.rs                         # US1: --imaging-dir
-├── src/imaging/mod.rs                  # US1: new, state, RoiEdit; US2: frames; US3: previews; US6: the lease
-├── src/imaging/routes.rs               # US1: new; US2, US3: their routes
-├── src/imaging/frames.rs               # US2: new, receive and save
-├── src/imaging/fits.rs                 # US2: new
-├── src/imaging/preview.rs              # US3: new
-├── src/mcp/tools.rs                    # US5: three tools
-├── tests/console/main.rs               # US1, US2, US3, US6: one mod line each
+├── src/imaging/mod.rs                  # US1: new, state, RoiEdit; US2: frames; US5: abort, refusals; US6: previews; US9: the lease
+├── src/imaging/routes.rs               # US1: new; US2, US5, US6: their routes
+├── src/imaging/frames.rs               # US2: new, receive and save; US4: its checks; US5: abort, refusals, the node's copy; US6: the preview; US9: the lease's check in take
+├── src/imaging/fits.rs                 # US2: new, encode; US3: decode
+├── src/imaging/preview.rs              # US6: new
+├── src/mcp/tools.rs                    # US8: three tools
+├── tests/console/main.rs               # US1 to US6, US9: one mod line each
 ├── tests/console/imaging.rs            # US1: new
-├── tests/console/imaging_frames.rs     # US2: new, the node's copy read back included
-├── tests/console/imaging_preview.rs    # US3: new
-├── tests/console/imaging_lease.rs      # US6: new
+├── tests/console/imaging_frames.rs     # US2: new
+├── tests/console/imaging_fits.rs       # US3: new
+├── tests/console/imaging_checks.rs     # US4: new
+├── tests/console/imaging_control.rs    # US5: new, the node's copy read back included
+├── tests/console/imaging_preview.rs    # US6: new
+├── tests/console/imaging_lease.rs      # US9: new
 ├── tests/cli/main.rs                   # US1, US2: one mod line each
 ├── tests/cli/imaging.rs                # US1: new
 ├── tests/cli/imaging_frames.rs         # US2: new
-├── tests/mcp/main.rs                   # US5: mod imaging
-├── tests/mcp/imaging.rs                # US5: new
+├── tests/mcp/main.rs                   # US8: mod imaging
+├── tests/mcp/imaging.rs                # US8: new
 └── web/
-    ├── src/api.ts                      # US4: imaging types and calls
-    ├── src/useImaging.ts               # US4: new
-    ├── src/useColourHold.ts            # US4: new, the hold-to-see-colour control (035 reuses it)
-    ├── src/App.tsx                     # US4: the /imaging route
-    ├── src/components/TopBar.tsx       # US4: the Imaging link
-    ├── src/components/ImagingPage.tsx          # US4: new
-    ├── src/components/ImagingPage.test.tsx     # US4: new
-    ├── e2e/imaging.spec.ts             # US4: new
-    ├── playwright.config.ts            # US4: two list entries, one list re-wrapped (spec owner approval 8)
-    └── dist/                           # US4: rebuilt
-DESIGN.md                               # US4
-.impeccable/design.json                 # US4
+    ├── src/api.ts                      # US7: imaging types and calls
+    ├── src/useImaging.ts               # US7: new
+    ├── src/useColourHold.ts            # US7: new, the hold-to-see-colour control (035 reuses it)
+    ├── src/App.tsx                     # US7: the /imaging route
+    ├── src/components/TopBar.tsx       # US7: the Imaging link
+    ├── src/components/ImagingPage.tsx          # US7: new
+    ├── src/components/ImagingPage.test.tsx     # US7: new
+    ├── e2e/imaging.spec.ts             # US7: new
+    ├── playwright.config.ts            # US7: two list entries, one list re-wrapped (spec owner approval 8)
+    └── dist/                           # US7: rebuilt
+DESIGN.md                               # US7
+.impeccable/design.json                 # US7
 ```
 
 Nothing under `crates/scope-node`, `crates/scope-link` or `crates/simulator` is written
@@ -281,9 +288,10 @@ impl LinkManager {
 ```
 
 `LinkManager` (`crates/finder/src/link.rs:215`) gains two fields, `session: Arc<Session>`
-and `transport: Transport`, clones that `start` (`crates/finder/src/link.rs:229`) keeps
-before it spawns `run`; `start`'s signature and `run`'s seven parameters
-(`crates/finder/src/link.rs:384`) do not change. `Transport::connect`
+and `transport: Transport`, clones that `start_with_filter` (which `start`,
+`crates/finder/src/link.rs:229`, calls) keeps before it spawns `run`. Neither `start`'s
+nor `start_with_filter`'s signature changes, nor `run`'s eight parameters
+(`crates/finder/src/link.rs:384`). `Transport::connect`
 (`crates/finder/src/link.rs:165`) becomes `pub(crate)`. `connect_imaging` reads the
 pairing from `self.session.link_changes().borrow()`
 (`crates/finder/src/session.rs:994`), the session the manager was started with, which
@@ -292,12 +300,12 @@ under `--simulate` is the private one (`crates/finder/src/simulate.rs:104`); cal
 stream; and builds the client with the pairing's token. The link's own task, its status
 and its other clients never see this connection.
 
-### The console's imaging state (`crates/finder/src/imaging/mod.rs`, new, US1; US2 and US3 extend it)
+### The console's imaging state (`crates/finder/src/imaging/mod.rs`, new, US1; US2, US5 and US6 extend it)
 
 ```rust
 //! The imaging camera as the console holds it (031).
 pub mod routes;
-// US2: pub mod fits; pub mod frames;   US3: pub mod preview;
+// US2: pub mod fits; pub mod frames;   US6: pub mod preview;
 
 pub const STATUS_PERIOD: Duration = Duration::from_secs(2);
 pub const RETRY_PERIOD: Duration = Duration::from_secs(5);
@@ -383,19 +391,24 @@ impl Imaging {
     pub async fn set(&self, edit: SettingsEdit) -> Result<ImagingView, Refusal>;
     // US2:
     pub async fn take(&self, purpose: &str) -> Result<ImagingView, Refusal>;
-    pub async fn abort(&self) -> ImagingView;
-    /// The frame with this id once it is saved, failed or aborted.
+    /// The frame with this id as it ended. The console keeps the last ended frame beside
+    /// the latest; `ended(id)` answers it when its id is `id`, and otherwise the latest
+    /// frame if its id is `id` and it has ended. For an older id, the last ended frame.
     pub async fn ended(&self, id: u64) -> FrameView;
-    // US3:
+    // US5:
+    pub async fn abort(&self) -> ImagingView;
+    // US6:
     pub fn preview(&self, id: u64) -> Option<Vec<u8>>;
-    // US6 (§ The camera lease): lease, holder.
+    // US9 (§ The camera lease): lease, holder.
 }
 ```
 
-Each plain `Option` of `SettingsEdit` uses a `deserialize_with` that reads the value
-itself, so a JSON null is an error and not "absent"; the two double options use the
-pattern `SessionEdit` already uses for a field that may be cleared
-(`crates/finder/src/session.rs:354`).
+Each plain `Option` of `SettingsEdit` uses a `deserialize_with` of `imaging/mod.rs`'s own
+that reads the value itself, as `present_value` does
+(`crates/finder/src/session.rs:380`), so a JSON null is an error and not "absent". The
+two double options use one written as `present_nullable` is
+(`crates/finder/src/session.rs:372`), the pattern `SessionEdit` uses for a field that
+may be cleared (`crates/finder/src/session.rs:354`); both helpers are private there.
 
 **The task** follows the `connected` flag of `link.status()` and holds at most one
 `ImagingClient`. `LinkStatus` changes with every answered heartbeat, four times a second
@@ -417,7 +430,9 @@ acted on.
 
 The view outside `ready` holds none of `camera`, `status`, `settings` and `frame`. In
 the state `error` it holds `error`; a part a later spec adds to the view says itself
-whether it shows outside `ready`.
+whether it shows outside `ready`. From US5, the view's `status.exposing` is the
+console's: true while its latest frame is `exposing`, false otherwise, whatever the
+camera's own status, read every 2 s, last said (spec FR-009).
 Every call the task makes is limited to `CALL_WAIT`, 5 s, and raced against `connected`
 turning false, so a silent node cannot hold the task past a lost link. A call that runs
 out of time is a failed call whose message is `the scope node did not answer within 5 s`.
@@ -425,16 +440,17 @@ out of time is a failed call whose message is `the scope node did not answer wit
 **`set`**, in this order: not `ready` answers 409 with the state's words (`no_link`:
 `the scope node is not connected`; `no_service`: `this scope node has no imaging
 service`; `no_camera`: `this scope node has no imaging camera`; `error`:
-`the imaging camera is not answering: {error}`); from US6, a lease out to someone else
-answers 409 `the imaging camera is held by {holder}` (§ The camera lease); a frame
-`exposing` or `receiving` answers 409 `an exposure is in progress`; `exposure_ms` not
+`the imaging camera is not answering: {error}`); from US9, a lease out to someone else
+answers 409 `the imaging camera is held by {holder}` (§ The camera lease); from US5, a
+frame `exposing` or `receiving` answers 409 `an exposure is in progress`; `exposure_ms` not
 finite or outside the
 camera's range answers 400
 `exposure_ms {value} is outside the camera's range {min}–{max} ms`;
 `forward_kib_per_s` not a whole number from 64 to 1048576 answers 400
 `forward_kib_per_s must be a whole number from 64 to 1048576, or null`. Then, if any
-camera field is present, `configure` with exactly those fields (`roi: null` as the whole
-sensor): `InvalidArgument` answers 400 with the node's message, any other error 502
+camera field is present, `configure` with exactly those fields, `roi: null` sent as the
+whole sensor, `ImagingRoi { x: 0, y: 0, width, height }` from the camera's description:
+`InvalidArgument` answers 400 with the node's message, any other error 502
 `the scope node did not apply the settings: {message}`, and nothing is kept; the call
 is limited to `SET_WAIT`, 30 s, after which the message is `no answer within 30 s`. On success
 the node's answer becomes the camera settings and the console's three are stored. An
@@ -457,15 +473,15 @@ in `session_response` (`crates/finder/src/api.rs:674`) from
 `pub(crate)`. `router` (`crates/finder/src/api.rs:440`) gains
 `.merge(crate::imaging::routes::routes())` before `with_state`.
 
-### The routes (`crates/finder/src/imaging/routes.rs`, new, US1; US2 and US3 add theirs)
+### The routes (`crates/finder/src/imaging/routes.rs`, new, US1; US2, US5 and US6 add theirs)
 
 ```rust
 pub(crate) fn routes() -> Router<AppState>;
 // US1:  GET  /api/imaging                         get_imaging
 //       PUT  /api/imaging/settings                put_settings
 // US2:  POST /api/imaging/frame                   take_frame
-//       POST /api/imaging/abort                   abort_frame
-// US3:  GET  /api/imaging/frames/{id}/preview.jpg frame_preview
+// US5:  POST /api/imaging/abort                   abort_frame
+// US6:  GET  /api/imaging/frames/{id}/preview.jpg frame_preview
 ```
 
 - `get_imaging` answers `Json(view)`, or `ImagingView::off()` without imaging.
@@ -488,10 +504,10 @@ pub(crate) fn routes() -> Router<AppState>;
 `* GET /api/imaging: the imaging camera's state, description, status, settings and latest imaging frame.`
 and `* PUT /api/imaging/settings: a partial edit of exposure_ms, gain, offset, binning, roi, cooler_on, set_temp_c, forward_kib_per_s and save_at_node.`
 (US1);
-`* POST /api/imaging/frame: no body; take one imaging frame and save it as FITS.` and
-`* POST /api/imaging/abort: no body; abort the exposure or the imaging frame in flight.` (US2);
+`* POST /api/imaging/frame: no body; take one imaging frame and save it as FITS.` (US2);
+`* POST /api/imaging/abort: no body; abort the exposure or the imaging frame in flight.` (US5);
 `* GET /api/imaging/frames/{id}/preview.jpg: a colour JPEG of one of the last eight imaging frames.`
-(US3).
+(US6).
 
 `crates/finder/src/main.rs`: `Args` (`crates/finder/src/main.rs:18`) gains
 
@@ -505,9 +521,14 @@ and the state gains, after `.with_live()` (`crates/finder/src/main.rs:114`),
 `.with_imaging(args.imaging_dir.unwrap_or_else(|| state_dir.join("imaging")))`. No new
 start-up line.
 
-### Receiving and saving (`crates/finder/src/imaging/frames.rs`, new, US2)
+### Receiving and saving (`crates/finder/src/imaging/frames.rs`, new, US2; US4 and US5 extend it)
+
+US2 builds this section but for the parts marked US4 and US5, which the stories that
+test them add: US4 the checks on what the scope node sends (spec US4-S1), and US5 the
+frame-in-flight refusals, abort and the scope node's copy (spec US5-S1 to US5-S4).
 
 ```rust
+// US4:
 /// The most bytes of samples the console accepts for one frame.
 pub const FRAME_LIMIT: u64 = 256 * 1024 * 1024;
 /// How long after the last chunk the next may take.
@@ -540,66 +561,71 @@ pub struct FrameView {
     /// The exposure's start in console Unix seconds, and as `YYYY-MM-DDTHH:MM:SS.mmm`.
     pub start: Option<f64>, pub date_obs: Option<String>,
     pub bytes: Option<u64>, pub received: Option<u64>,
-    pub node_file: Option<String>, pub node_save_error: Option<String>,
+    pub node_file: Option<String>, pub node_save_error: Option<String>,   // US5
     /// Console Unix seconds: when the last byte was in hand, and when the file was in place.
     pub received_at: Option<f64>, pub saved_at: Option<f64>,
     /// `frames/<UTC date>/<id>.fits`, relative to the imaging folder.
     pub file: Option<String>,
-    pub preview: Option<String>,           // US3
+    pub preview: Option<String>,           // US6
     pub error: Option<String>,
 }
 ```
 
-**`take`**: refused as `set` is while not `ready`; from US6, refused as `set` is while
-a lease is out to someone else; with a frame `exposing` or `receiving`, 409
-`an exposure is already in progress`. Otherwise the frame gets the next id (below), the
-state `exposing`, as `roi` the region the settings hold at that moment, and as
-`set_temp_c` the set temperature the settings hold then, only when `cooler_on` is true.
-The camera's serial is kept beside it for the file's `SERIALNO` (spec owner decision
-16). A task is spawned and the view is answered. Every frame `take` starts is saved to a
-file; a later spec that wants no file kept for a frame removes it once the frame has
-ended (§ Shapes that existing tests pin, last bullet).
+**`take`** is `frames::take`, which `Imaging::take` calls, and makes its checks under
+one acquisition of the state's lock: refused as `set` is while not `ready`; from US9,
+refused as `set` is while a lease is out to someone else (§ The camera lease); from US5,
+with a frame `exposing` or `receiving`, 409 `an exposure is already in progress`.
+Otherwise the frame gets the next id (below), the state `exposing`, as `roi` the region
+the settings hold at that moment, and as `set_temp_c` the set temperature the settings
+hold then, only when `cooler_on` is true. The camera's serial is kept beside it for the
+file's `SERIALNO` (spec owner decision 16). A task is spawned and the view is answered.
+Every frame `take` starts is saved to a file; a later spec that wants no file kept for a
+frame removes it once the frame has ended (§ Shapes that existing tests pin, last
+bullet).
 
 **The task**, on a clone of the client:
 
 1. `expose` with the settings' `exposure_ms`, the purpose, `max_bytes_per_s` =
-   `forward_kib_per_s × 1024` or 0, and `save` = `save_at_node`; then the first message,
-   all within W = `2 × exposure + HEADER_SLACK`, else
-   `no imaging frame header arrived within {n} s`, n being W in seconds rounded up to a
-   whole number (152 for 1000 ms, 151 for 500 ms).
+   `forward_kib_per_s × 1024` or 0, and `save` = `save_at_node` (US5; `false` before
+   it); then the first message. From US4, both are within W = `2 × exposure +
+   HEADER_SLACK`, else `no imaging frame header arrived within {n} s`, n being W in
+   seconds rounded up to a whole number (152 for 1000 ms, 151 for 500 ms).
 2. A status ends the frame, whether it comes as the call's own answer or as the stream's
-   first item: `Aborted` ends it `aborted`; any other ends it `failed` with
+   first item: from US5, `Aborted` ends it `aborted`; any other ends it `failed` with
    `the exposure failed: {message}`. A first message that is not a header is
    `the scope node sent no imaging frame header`.
-3. The header must have `bits` 8 or 16 and `byte_count` equal to
+3. From US4, the header must have `bits` 8 or 16 and `byte_count` equal to
    `width × height × bits/8`, above 0 and at most `FRAME_LIMIT`, else
    `the imaging frame's header does not add up`. The state becomes `receiving`; `start`
    is `start_s − offset_s`, with `offset_s` the link's clock offset now
    (`crates/finder/src/link.rs:201`), or the one read when the frame was asked for; and
    when the header carries `roi`, it replaces the frame's `roi`. A header without one
    (a test's own node) leaves the region the settings held.
-4. Chunks are appended to a buffer of `byte_count` bytes, `received` rising. A chunk
-   that would take `received` past `byte_count` is
-   `the scope node sent more bytes than the header said`; the end of the stream before
-   `byte_count` is reached,
-   `the imaging frame was incomplete: {received} of {bytes} bytes`; `CHUNK_WAIT` without
-   a chunk, `the imaging frame stalled`. When `received` equals `byte_count` the frame is
+4. Chunks are appended to a buffer of `byte_count` bytes, `received` rising. The end of
+   the stream, an error on it, or an event that is not a chunk, before `byte_count` is
+   reached: `the imaging frame was incomplete: {received} of {bytes} bytes`. From US4, a
+   chunk that would take `received` past `byte_count` is
+   `the scope node sent more bytes than the header said`, and `CHUNK_WAIT` without a
+   chunk `the imaging frame stalled`. When `received` equals `byte_count` the frame is
    whole: `received_at` is the console clock's reading, and the stream is dropped
    without reading on.
 5. The whole frame is saved on the blocking pool (below); a failure is
-   `could not save the imaging frame: {error}`. US3 makes the preview in the same step.
+   `could not save the imaging frame: {error}`. US6 makes the preview in the same step.
 6. The state becomes `saved`, and `saved_at` is the console clock's reading.
 
-**`abort`**: with a frame `exposing`, call `AbortExposure` on a clone of the client and
-let the task end the frame when the node's `Aborted` arrives, or end it `aborted`
-directly if that call fails; with a frame `receiving`, abort the task, which drops the
-stream, and end the frame `aborted`. Otherwise nothing.
+**`abort`** (US5): with a frame `exposing`, call `AbortExposure` on a clone of the
+client and let the task end the frame when the node's `Aborted` arrives, or end it
+`aborted` directly if that call fails; with a frame `receiving`, abort the task, which
+drops the stream, and end the frame `aborted`. Otherwise nothing.
 
 **The id** is the console's own. At the first `take` of a run, and at any `take` whose
-UTC date differs from the last one's, the folder `frames/<that date>/` is listed and the
-count is raised to the largest `NNNNNN.fits` number in it; it never falls. The id is the
-count plus one, and the count rises with every `take` that starts a frame, saved or not,
-so no id is used twice in a run.
+UTC date differs from the last one's, the folder of the take's UTC date,
+`frames/<that date>/`, is listed and the count is raised to the largest `NNNNNN.fits`
+number in it; it never falls. The id is the count plus one, and the count rises with
+every `take` that starts a frame, saved or not, so no id is used twice in a run. The
+file goes under the date of the exposure's start (below), which for a frame asked for
+just before midnight UTC is the next date; that folder is not listed for it, and the
+existing-name check keeps any file already there.
 
 **The file** is `frames/<UTC date of start>/<id as six digits>.fits`. It is written
 whole as `<name>.part` with `create_new`. Then, if the final name exists
@@ -621,7 +647,7 @@ saved under `frames/<UTC date>/` as above, the id rule above is the one count fo
 every frame, a stack's subs included, and this spec's tests read every file where this
 section puts it.
 
-### FITS at the console (`crates/finder/src/imaging/fits.rs`, new, US2)
+### FITS at the console (`crates/finder/src/imaging/fits.rs`, new, US2; US3 adds `FitsError` and `decode`)
 
 ```rust
 #[derive(Debug, Clone, PartialEq)]
@@ -637,15 +663,16 @@ pub struct FitsImage {
     /// The cards after the structural ones, in order.
     pub cards: Vec<(String, CardValue)>,
 }
+pub fn encode(image: &FitsImage) -> Vec<u8>;
+/// `YYYY-MM-DD` and `YYYY-MM-DDTHH:MM:SS.mmm` of console Unix seconds, in UTC.
+pub fn utc(unix_s: f64) -> (String, String);
+
+// US3:
 /// Why bytes are not an image `encode` writes. Displays as its text.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FitsError(pub String);
 // impl fmt::Display (the text), impl std::error::Error
-
-pub fn encode(image: &FitsImage) -> Vec<u8>;
 pub fn decode(bytes: &[u8]) -> Result<FitsImage, FitsError>;
-/// `YYYY-MM-DD` and `YYYY-MM-DDTHH:MM:SS.mmm` of console Unix seconds, in UTC.
-pub fn utc(unix_s: f64) -> (String, String);
 ```
 
 `encode` writes `SIMPLE = T`, `BITPIX`, `NAXIS = 2`, `NAXIS1`, `NAXIS2`, then for 16 bits
@@ -657,7 +684,7 @@ doubled, cut at 68. A real is written with Rust's `{:?}` with `e` made `E` (`0.5
 `100.0`, `-9.5`, `1E-7`). A 16-bit sample v is stored as the big-endian `i16`
 `v − 32768`; an 8-bit sample as it is.
 
-`decode` reads what `encode` writes and refuses the rest. Its checks, in this order,
+`decode` (US3) reads what `encode` writes and refuses the rest. Its checks, in this order,
 each with exactly this text: the first card is not `SIMPLE` with the value `T`, or no
 `END` card is found, `not a FITS image`; `NAXIS` is not 2,
 `a {n}-axis FITS file is not one image`; `BITPIX` is neither 8 nor 16,
@@ -670,11 +697,11 @@ a stored 16-bit value s as `s + 32768`, and as `cards` every card after `SIMPLE`
 `END`: a value in single quotes is `Text`, its doubled quotes made single and its
 trailing spaces dropped; `T` or `F` is `Logical`; a number with no `.`, `E` or `e` is
 `Int`; any other number is `Real`. So `decode(&encode(&image))` equals `image` for
-every image whose texts end in no space and whose reals are finite (US2-S10). It is
+every image whose texts end in no space and whose reals are finite (US3-S1). It is
 here because the plan document puts reading in this file; 032 is its first caller, and
 a test of a saved file never reads it through `decode` (§ Plan traps 6).
 
-**The worked FITS frame** of US2-S10 is the one 030's camera adapter reads from a
+**The worked FITS frame** of US3-S1 is the one 030's camera adapter reads from a
 camera (030's plan.md § Reading a FITS BLOB), written out here because `decode` reads
 it too. It is 5760 bytes: one header block with the cards
 `SIMPLE  =                    T`, `BITPIX  =                   16`,
@@ -686,7 +713,8 @@ it too. It is 5760 bytes: one header block with the cards
 2880; then the 16 bytes `80 00 80 01 80 02 80 03 00 00 1C 40 7F FE 7F FF` and zeros to
 2880. The test builds it with a helper of its own.
 
-A saved frame's cards, in order: `DATE-OBS` (text), `EXPTIME` (real, seconds), `GAIN`
+A saved frame's cards, in order: `DATE-OBS` (text), `EXPTIME` (real, seconds: the
+header's `exposure_ms` over 1000), `GAIN`
 (real), `OFFSET` (real), `XBINNING` and `YBINNING` (int), `XORGSUBF` and `YORGSUBF`
 (int: the frame's `roi` `x` and `y` as it stands when the frame is saved, the header's,
 each divided by the header's `binning` and rounded down, which is the origin in binned
@@ -697,8 +725,10 @@ console's id), `PURPOSE` (text). `GAIN`, `OFFSET`, `CCD-TEMP` and `BAYERPAT` are
 out when the frame has none, `SET-TEMP` when the frame has no `set_temp_c`, and
 `SERIALNO` when the camera has no serial. `XORGSUBF` and `YORGSUBF` are always written;
 the region's size is `NAXIS1` and `NAXIS2` with `XBINNING` (spec owner decision 16).
+The view's `frame.exposure_ms` stays the exposure the console asked for; only the file's
+`EXPTIME` is the header's (spec US4-S2).
 
-### The preview (`crates/finder/src/imaging/preview.rs`, new, US3)
+### The preview (`crates/finder/src/imaging/preview.rs`, new, US6)
 
 ```rust
 pub const PREVIEW_SIDE: u32 = 1280;
@@ -708,9 +738,11 @@ pub const STRETCH: f64 = 10.0;
 pub const NOISE_FLOOR: f64 = 30.0;
 
 pub struct Rgb { pub width: u32, pub height: u32, /** RGB, 3 bytes a pixel. */ pub pixels: Vec<u8> }
-/// `bayer` is `"RGGB"`, `"BGGR"`, `"GRBG"`, `"GBRG"` or `None` for mono.
+/// `bayer` is `"RGGB"`, `"BGGR"`, `"GRBG"` or `"GBRG"`; any other value, and `None`, is
+/// read as mono.
 pub fn rgb(samples: &[u8], width: u32, height: u32, bits: u32, bayer: Option<&str>) -> Rgb;
-pub fn jpeg(picture: &Rgb) -> Vec<u8>;
+/// `None` when the picture has no pixels, which `image`'s encoder refuses.
+pub fn jpeg(picture: &Rgb) -> Option<Vec<u8>>;
 ```
 
 1. **Colour.** For a mosaic, each whole 2 × 2 cell becomes one pixel: red and blue are
@@ -725,16 +757,18 @@ pub fn jpeg(picture: &Rgb) -> Vec<u8>;
    `round(255·asinh(10·t)/asinh(10))` with t = clamp((v − black_c)/span, 0, 1).
 4. **JPEG** at quality 85 with `image`'s encoder.
 
-Worked example (US3-S1): nine red values 100 × 6, 400, 700, 900 give black 100, noise 0
+Worked example (US6-S1): nine red values 100 × 6, 400, 700, 900 give black 100, noise 0
 and a 99.9th percentile of 700; nine blue values 50 × 7, 200, 350 give black 50 and 200;
-green is flat. The span is 600, so red 400 is t = 0.5, 197; red 700 and 900 are 255;
-blue 200 is t = 0.25, 140; blue 350 is 197.
+nine green values 100 × 8 and 250, the mean of 400 and 100, give black 100 and a 99.9th
+percentile of 100. The span is 600, so red 400 is t = 0.5, 197; red 700 and 900 are
+255; blue 200 is t = 0.25, 140; blue 350 is 197; green 250 is t = 0.25, 140.
 
 The console keeps the JPEGs of the last `PREVIEWS_KEPT` saved frames, by id, in memory.
 `frame.preview` is `/api/imaging/frames/{id}/preview.jpg`, set when the frame is saved.
-A preview that cannot be made does not fail the frame; `preview` is then absent.
+A preview that cannot be made, `jpeg` answering `None`, does not fail the frame;
+`preview` is then absent (spec US6-S3, a 64 × 1 mosaic with no whole 2 × 2 cell).
 
-### The page (`crates/finder/web/src/`, US4)
+### The page (`crates/finder/web/src/`, US7)
 
 `api.ts`, after `SessionRecording`:
 
@@ -780,7 +814,8 @@ when unmounted.
 `App.tsx`: beside the `/setup` branch (`crates/finder/web/src/App.tsx:176`), the path
 `/imaging` renders `<ImagingPage night={night} onBack={() => navigate("/")} />`, and
 `TopBar` is given `imaging={session.node ? { current: path === "/imaging", onOpen: () =>
-navigate("/imaging") } : undefined}`. `useSession` does not change: the link depends on
+navigate("/imaging") } : undefined}`, and the frame picker's `onPick` goes home from
+`/imaging` as it does from `/setup`. `useSession` does not change: the link depends on
 `session.node` alone. `TopBar.tsx`: with that prop, after the Setup link
 (`crates/finder/web/src/components/TopBar.tsx:111`), an `<a href="/imaging"
 className="chip">Imaging</a>` with `aria-current="page"` when current and the Setup
@@ -812,13 +847,17 @@ link's click handling; without the prop, nothing.
   `Also keep each imaging frame at the scope node`, and the button
   `Save imaging settings`
   (`button button-primary`). `Gain` and `Offset` are shown only when the camera has the
-  range; `Cooler` and `Set temperature` only when it has a cooler. Drafts survive the
-  one-second reads. Save sends one `putImagingSettings` whose keys are, in this order,
-  `exposure_ms`, `gain`, `offset`, `binning`, `cooler_on`, `set_temp_c`,
-  `forward_kib_per_s`, `save_at_node`, each only when its field is shown and, for
-  `set_temp_c`, not empty; `forward_kib_per_s` is always sent, as the field's number or
-  as `null` when the field is empty, so that a limit can be removed; then `refresh`. A
-  refusal shows its words in an `alert`.
+  range; `Cooler` and `Set temperature` only when it has a cooler. The checkbox is drawn
+  in ink, not by the browser (`appearance-none`, a 1px `border-ink` box and
+  `checked:bg-ink`), because a native box is gray at night. These are Tailwind
+  utilities on existing tokens; `index.css` does not change. Drafts start from the
+  view's settings on the first render and follow them only when those settings change,
+  so they survive the one-second reads. Save sends one `putImagingSettings` whose keys
+  are, in this order, `exposure_ms`, `gain`, `offset`, `binning`, `cooler_on`,
+  `set_temp_c`, `forward_kib_per_s`, `save_at_node`, each only when its field is shown
+  and, for `set_temp_c`, not empty; `forward_kib_per_s` is always sent, as the field's
+  number or as `null` when the field is empty, so that a limit can be removed; then
+  `refresh`. A refusal shows its words in an `alert`.
 - **Imaging frame** (`h2` `Imaging frame`): the button `Take imaging frame`
   (`button button-primary`), disabled
   while the frame is `exposing` or `receiving`; then by state: `exposing`, a `status`
@@ -846,13 +885,13 @@ link's click handling; without the prop, nothing.
 uses it too):
 
 ```ts
-import type { KeyboardEvent, PointerEvent } from "react";
+import type { KeyboardEvent } from "react";
 
 /** The longest one hold shows colour. */
 export const COLOUR_HOLD_MS = 10_000;
 
 export interface ColourHoldBind {
-  onPointerDown: (event: PointerEvent<HTMLButtonElement>) => void;
+  onPointerDown: () => void;
   onPointerUp: () => void;
   onPointerLeave: () => void;
   onPointerCancel: () => void;
@@ -875,7 +914,8 @@ while a hold is under way and `night` is true, so with `night` false the handler
 nothing that shows.
 
 Write each phrase a test asserts on one line of JSX, so `textContent` keeps it whole.
-Only existing classes and tokens are used; `index.css` does not change.
+Only existing classes, and Tailwind utilities on existing tokens, are used; `index.css`
+does not change.
 
 `e2e/imaging.spec.ts` runs in the simulate project. It defines its own off-red counter,
 written as `crates/finder/web/e2e/session.spec.ts:45` writes it, and
@@ -890,7 +930,7 @@ in the `test` gate requires it. The re-wrap is part of the approved edit (spec o
 approval 8). The screenshot taken during a
 hold masks the picture with `mask` and `maskColor: "#000000"`.
 
-### `DESIGN.md` and `.impeccable/design.json` (US4)
+### `DESIGN.md` and `.impeccable/design.json` (US7)
 
 Four edits, with the words of spec owner approval 6: the Red Torch Rule's paragraph
 (`DESIGN.md:198`), whose exception names both pictures from the imaging camera, an
@@ -917,11 +957,12 @@ text apart here):
 
 `.impeccable/design.json` gains one entry in `components`, after `Recording`, formatted
 as its neighbours: `name` `Imaging page`, `kind` `custom`, `refersTo` `button`, a
-`description` that says the same in one sentence each, and `html` and `css` snippets
-under the class `ds-imaging-page`, using only `var(--color-ink)`. The class `ds-imaging`
+`description` that says what the `DESIGN.md` entry says, as its neighbours do, and
+`html` and `css` snippets under the class `ds-imaging-page`, using only
+`var(--color-ink)`. The class `ds-imaging`
 is taken: it is the Imaging Camera entry's (`.impeccable/design.json:719`).
 
-### The MCP tools (`crates/finder/src/mcp/tools.rs`, US5)
+### The MCP tools (`crates/finder/src/mcp/tools.rs`, US8)
 
 Two structs that only describe a tool's input, beside `TargetArguments`
 (`crates/finder/src/mcp/tools.rs:31`) and written as it is; `SettingsEdit` parses the
@@ -931,20 +972,41 @@ arguments, so the route and the tool refuse with the same words:
 #[derive(rmcp::schemars::JsonSchema)]
 #[expect(dead_code, reason = "schema only; SettingsEdit parses the actual arguments")]
 struct ImagingSettingsArguments {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "f64")]
     exposure_ms: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "f64")]
     gain: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "f64")]
     offset: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "u32")]
     binning: Option<u32>,
     roi: Option<ImagingRoiArguments>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "bool")]
     cooler_on: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "f64")]
     set_temp_c: Option<f64>,
     forward_kib_per_s: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "bool")]
     save_at_node: Option<bool>,
 }
 #[derive(rmcp::schemars::JsonSchema)]
 #[expect(dead_code, reason = "schema only; SettingsEdit parses the actual arguments")]
 struct ImagingRoiArguments { x: u32, y: u32, width: u32, height: u32 }
 ```
+
+The seven keys that refuse null carry `#[schemars(with = …)]` with
+`#[serde(default, skip_serializing_if = "Option::is_none")]`, so the schema lists them as
+optional and not nullable, with no `required` list and no `default`; `roi` and
+`forward_kib_per_s`, which null clears, stay plain `Option`s and nullable. Neither near
+form does: `#[schemars(with = …)]` alone makes the seven `required`, and plain types with
+`#[serde(default)]` publish `"default":0.0` and `"default":false`.
 
 Three tools in the `#[tool_router]` block, each `output_schema = object_schema()`:
 
@@ -956,14 +1018,16 @@ Three tools in the `#[tool_router]` block, each `output_schema = object_schema()
   with `input_schema = rmcp::handler::server::common::schema_for_input::<ImagingSettingsArguments>().expect("imaging settings schema")`,
   as `set_target` declares its own (`crates/finder/src/mcp/tools.rs:355`), so a client
   reads the nine key names from `tools/list`:
-  takes `arguments: JsonObject`, parses them as `SettingsEdit` the way `set_target`
-  parses its edit, calls `Imaging::set`, and answers the view; a parse error or a
-  `Refusal` is `CallToolResult::error` with the words.
+  takes `arguments: JsonObject`, parses them with
+  `api::sim_json(Json::<SettingsEdit>::from_bytes(…))`, the route's own parse, so a
+  parse error has the route's words, calls `Imaging::set`, and answers the view; a parse
+  error or a `Refusal` is `CallToolResult::error` with the words.
 - `take_imaging_frame`, description
   `Take one imaging frame, as POST /api/imaging/frame does. It waits until the imaging frame is saved and returns it with a colour JPEG preview.`:
   takes `arguments: JsonObject`; any key is the error
   `take_imaging_frame takes no arguments`. It calls `Imaging::take("frame")`, then
-  `Imaging::ended(id)`. `saved`: `CallToolResult::structured` of the view, with
+  `Imaging::ended(id)`, and answers from the frame `ended` returns. `saved`:
+  `CallToolResult::structured` of the view with that frame as `frame`, with
   `ContentBlock::image(base64 of the preview, "image/jpeg")` pushed after the text
   block when the preview is held. `failed`: the error is the frame's own `error`,
   unchanged (for example `the exposure failed: the camera fell over`).
@@ -974,13 +1038,13 @@ None is a moving tool: no rate limit and no call-log line. The MCP session tools
 `imaging` because they serialize `session_response`
 (`crates/finder/src/mcp/tools.rs:347`); no other MCP code changes.
 
-### The camera lease (`crates/finder/src/imaging/mod.rs`, US6)
+### The camera lease (`crates/finder/src/imaging/mod.rs` and `crates/finder/src/imaging/frames.rs`, US9)
 
 The plan document's Amendment 1, name for name as 033's plan.md § The camera lease, 034's
 and 035's § The camera's lease, 036's and 037's plans call it:
 
 ```rust
-/// The imaging camera, held for one taker (031 US6). Dropping it releases the camera at
+/// The imaging camera, held for one taker (031 US9). Dropping it releases the camera at
 /// once, also when the task that owns it is aborted. It holds no strong reference to the
 /// `Imaging`.
 #[derive(Debug)]
@@ -1016,7 +1080,7 @@ and that grant answered. `holder` reads `lease`'s name. `Drop` upgrades the `Wea
 that succeeds and `lease` holds its grant, `lease` becomes `None`. Nothing is awaited in
 any of the three, so a cancelled task's drop of its `Lease` releases the camera in the
 instant the task ends. A `Lease` adds nothing to `Arc::strong_count` of the `Imaging`
-(US6-S5). That scenario's second case also rests on § The console's imaging state's
+(US9-S5). That scenario's second case also rests on § The console's imaging state's
 "Dropping the `Imaging` ends it": the task that follows the link holds no `Arc<Imaging>`
 of its own, so with no frame in flight the test's one `Arc` is the last.
 
@@ -1024,10 +1088,15 @@ of its own, so with no frame in flight the test's one `Arc` is the last.
 functions that take the caller's grant, `None` for anyone and `Some(grant)` from a
 `Lease`: `set_as(&self, grant: Option<u64>, edit)` and `take_as(&self, grant:
 Option<u64>, purpose)`. Each makes its checks under the one lock acquisition that today
-holds the state check and the frame-in-flight check, in this order: (1) not `ready`,
-the state's words; (2) `lease` is `Some((g, h))` and the caller's grant is not
-`Some(g)`, 409 `the imaging camera is held by {h}`; (3) a frame `exposing` or
-`receiving`, the frame-in-flight words of `set` or `take`; then the rest as today.
+holds the state check and the frame-in-flight check, in this order: (1) not `ready`, the
+state's words; (2) `lease` is `Some((g, h))` and the caller's grant is not `Some(g)`,
+409 `the imaging camera is held by {h}`; (3) a frame `exposing` or `receiving`, the
+frame-in-flight words of `set` or `take`; then the rest as today. `take`'s checks are
+made in `frames.rs` (§ Receiving and saving, **`take`**), so US9 writes that file too:
+`frames::take` takes the lease's check as its last parameter,
+`held: impl FnOnce(&State) -> Result<(), Refusal>`, `State` being what the state's
+`Mutex` guards, and calls it between the state's check and the frame-in-flight check; `take_as` passes check (2), for
+its own grant, as that parameter. `set_as` makes its three checks in `mod.rs`.
 `Lease::set` and `Lease::take` upgrade the `Weak` (failing as above) and call
 `set_as(Some(self.grant), …)` and `take_as(Some(self.grant), …)`. So the routes and the
 MCP tools, which call `Imaging::set` and `Imaging::take`, refuse with the holder's words
@@ -1047,12 +1116,17 @@ own.
 
 `crates/finder/README.md`: US1 adds `## Imaging frames` at the end, the two rows after
 the `POST /api/record/raw` row (`crates/finder/README.md:180`) and `--imaging-dir`; US2
-its two rows, the `frame` object, the path and the cards, and how to read the time a
-frame took to reach the console (`received_at − start − exposure_ms/1000`, and that
-less the scope node's probe figure for the link alone); US3 the preview row and how it
-is made; US4 one sentence in `## Night mode` (`crates/finder/README.md:122`) on the
-held colour, which spec owner approval 9 names; US5 the three tools
-in `## MCP clients`; US6 one paragraph at the end of `## Imaging frames`, with these
+the `POST /api/imaging/frame` row, the `frame` object, the path and the cards, and how
+to read the time a frame took to reach the console (`received_at − start −
+exposure_ms/1000`, and that less the scope node's probe figure for the link alone); US5
+the `POST /api/imaging/abort` row and the `frame` object's `node_file` and
+`node_save_error`; US6 the preview row and how it is made; US7 one sentence in
+`## Night mode` (`crates/finder/README.md:122`) on the held colour, which spec owner
+approval 9 names; US8 one sentence and a three-item list in `## MCP clients`, after its
+paragraph on Stop and before `### MCP under WSL2`, one item a tool: what it takes and
+answers, and that `set_imaging_camera` and `take_imaging_frame` answer
+`this console takes no imaging frames` at once on a console that takes none; US9 one
+paragraph at the end of `## Imaging frames`, with these
 words: "**One holder.** A part of the console that takes imaging frames one after
 another holds the imaging camera while it runs. Meanwhile `PUT /api/imaging/settings`
 and `POST /api/imaging/frame` answer 409, and `set_imaging_camera` and
@@ -1072,10 +1146,10 @@ These are not changed by any story:
   imaging camera and `SimNode` are read and never written: no story here writes a file
   under `crates/scope-node`, `crates/scope-link` or `crates/simulator`. 030's own tests
   pin them.
-- **`LinkManager::start`'s signature, `MountClient`, `RawClient` and the link's one
-  connection for everything that exists today.** A console built without `with_imaging`
-  never opens a second connection, so every existing in-process test sees the link it
-  saw.
+- **`LinkManager::start`'s and `start_with_filter`'s signatures, `MountClient`,
+  `RawClient` and the link's one connection for everything that exists today.** A
+  console built without `with_imaging` never opens a second connection, so every
+  existing in-process test sees the link it saw.
 - **`GET /api/session`, and the MCP session bodies, on a console built without
   `with_imaging`**: `imaging` is skipped when absent, so those bodies are byte for byte
   what they were. The binary's session gains `imaging`; its tests read the session key
@@ -1084,7 +1158,7 @@ These are not changed by any story:
 - **The MCP tool list as tests read it.** They look tools up by name; one calls every
   listed tool with `{}` and checks for the token (`crates/finder/tests/mcp/motion.rs:528`),
   so each new tool must answer `{}` at once and without the token on a console with no
-  imaging (US5-S5, US5-S6).
+  imaging (US8-S5, US8-S6).
 - **The binary's start-up lines.** `crates/finder/tests/cli/simulate.rs` reads the
   address line `finder console: http://`; nothing new is printed.
 - **Finder's test layout** (`crates/finder/tests/layout/main.rs:102`): no file at the top
@@ -1100,8 +1174,8 @@ These are not changed by any story:
 - **Shapes this spec pins for its own later stories and for 032 to 037.** `ImagingView`,
   `SettingsView` and `FrameView` are `#[non_exhaustive]` and tests compare `settings` and
   `frame` key by key; tests build scope-link messages with `..Default::default()`. Two
-  more, which 032 to 037 will meet. From US2 on a console test implements
-  `ScopeNodeImaging` by hand (US2-S5, US2-S11), so a new call on that service stops an
+  more, which 032 to 037 will meet. From US4 on a console test implements
+  `ScopeNodeImaging` by hand (US4-S1, US4-S2), so a new call on that service stops an
   existing test compiling, which is 030's plan trap 7 again for the new service: a later
   spec's calls go in a new service of its own. A test's own camera builds an
   `ImagingFrame`, so a field added to it later breaks every such literal that does not
@@ -1110,7 +1184,7 @@ These are not changed by any story:
   remove the file once the frame has ended, so no path without a file is needed; 035
   adds only a folder that a lease may name for its frames (§ Receiving and saving, **A
   stack's subs are saved elsewhere**). From
-  US6 the lease's names and its refusal are pinned by US6's tests, which is what 033 to
+  US9 the lease's names and its refusal are pinned by US9's tests, which is what 033 to
   037 call. Files once written are pinned too: a card added later appears only in later
   files.
 
@@ -1125,10 +1199,10 @@ These are not changed by any story:
 | A hand-written FITS writer and reader | A FITS crate | One image, a dozen cards and big-endian samples need no library; `fitsio` wraps C and the pure-Rust writers are young. |
 | `IMAGETYP` `LIGHT`, `DARK`, `FLAT` | The two-word values some programs write | Both forms are read by the programs that will open these files. `LIGHT` is a named exception to the glossary's "avoid light": it is the FITS convention's value in that card, not this project's word for a sub. |
 | The console's file takes a frame's region from the frame's header, and the console stamps the set temperature and serial | The console stamping the region from its settings, with nothing on the scope link (the review's draft); leaving the region to 033 | The plan document's Amendment 6 puts the region in the header and the file. The node knows the region the camera really used, so a camera changed by another INDI client is stamped right. The set temperature and serial stay the console's (spec owner decision 16, whose open part this is). |
-| One lease on the console's imaging state, granted by name, never waiting, released on drop, checked by `set` and `take` after the state and before a frame in flight | A lock in each later spec; a lease that waits; a single frame that takes the lease | The plan document's Amendment 1. Checked inside `set` and `take`, it guards the routes and the MCP tools without touching them; a holder that heard the frame-in-flight words could not tell who to wait for; a single frame holding no lease keeps the page's one-frame flow as it was, and each holder looks for a frame in flight itself (spec US6). |
+| One lease on the console's imaging state, granted by name, never waiting, released on drop, checked by `set` and `take` after the state and before a frame in flight | A lock in each later spec; a lease that waits; a single frame that takes the lease | The plan document's Amendment 1. Checked inside `set` and `take`, it guards the routes and the MCP tools without touching them; a holder that heard the frame-in-flight words could not tell who to wait for; a single frame holding no lease keeps the page's one-frame flow as it was, and each holder looks for a frame in flight itself (spec US9). |
 | The hold-to-see-colour control as one hook, `useColourHold` | The control written into each page block | 035's stack picture needs the same control and the same exception; one hook keeps one behaviour and one set of release events (spec owner decision 11). |
 | An existing file name fails the frame | Trusting the count alone; a hard link | A rename replaces without a word; a check costs one call; hard links are missing on some file systems. |
-| `decode` in this spec, tested by round trip and worked bytes | Leaving it to 032 | The plan document puts reading in `fits.rs`, and code with no test is not allowed, so it has a scenario (US2-S10). |
+| `decode` in this spec, tested by round trip and worked bytes | Leaving it to 032 | The plan document puts reading in `fits.rs`, and code with no test is not allowed, so it has a scenario (US3-S1). |
 | `received_at` and `saved_at` on the frame, and the time in hand on the page | Timing the hop with the probe | The probe runs on the scope node alone and cannot see the link; the console can, and the plan document lists the forward time as a field check. |
 | Previews in memory, the last eight | Previews on disk | The FITS file is the record; a preview is remade by any viewer. |
 | The page reads `GET /api/imaging` once a second | Server-sent events | One more poll is simpler than a second stream and fast enough for an exposure's progress. |
@@ -1162,7 +1236,7 @@ These are not changed by any story:
    `028-finder-tests-do-less`: met on `main` at 49bb210, where all six of its stories
    have landed (US2 at 1928771, US1 at 54e69f4, US3 at 64c3862, US4 at 6bd5a28, US6 at
    dbc2b5b, US5 at 49bb210). `030-imaging-camera-link`: not met. It is a draft, to be
-   flipped and built first; this trio's first story starts after all seven of its
+   flipped and built first; this trio's first story starts after all eight of its
    stories have landed. The worktree is at 49bb210.
 2. **The trio is re-anchored to `main`.** Not met. For the files that exist today it is
    met at 49bb210: every `path:line` in spec.md and plan.md was compared, line for line,
@@ -1175,7 +1249,12 @@ These are not changed by any story:
    that section and spec.md's shared setup are corrected to what was built, the
    citations into `crates/scope-node` and `crates/simulator` that 030's stories moved
    are read again, and the validator is re-run. The same is done if `main` moves again
-   before the flip.
+   before the flip. Round 1's probes read every citation on a newer `main`, with 021,
+   022 and 026 landed, and found each by its content; many lines had moved, and two now
+   say more than this trio did, which § The link now states: `start` calls
+   `start_with_filter`, and `run` takes eight parameters. Those, and the two
+   `crates/finder/src/session.rs` lines § The console's imaging state now cites, are
+   re-anchored with the rest.
 3. **The owner decisions are settled and the approvals given** (spec § Owner decisions,
    § Owner approvals). Not met. Of the sixteen decisions, 3 and 4 are settled by the
    plan document's Amendment 3 and 8 by Amendment 5, and the region of 16 by
@@ -1184,12 +1263,12 @@ These are not changed by any story:
    (its owner decisions 7, 8, 9 and 12), and each pair is settled together. Any answer
    other than the recommended one is written into the trio and re-validated before the
    flip.
-4. **The trio is probe-built.** Not met. No story has been compiled. Before the flip
-   each of the six stories is built from this trio in a throwaway worktree, on top of
-   030's probe builds, tests first, with both gates; each diff is measured as plan trap
-   3 says; and what the probes find is folded back in. The stories form one chain, so
-   they are built in order; US2 looks the largest. The first things to prove are in
-   § Risks.
+4. **The trio is probe-built.** Met on 2026-11-17, round 1, every story: each was built
+   from this trio in a throwaway worktree, on top of 030's round-1 probe builds, tests
+   first, with both gates, `cargo deny check` and `cargo machete`; each diff was
+   measured as plan trap 3 says; and what the probes found is folded back in
+   (§ Refinement Record, round 1). The draft's second story measured over the budget,
+   and it is split in four as measured, US2 to US5.
 5. **The documents this trio cites are on `main`.** Not met: the plan document,
    ADR-0002, the changed `GLOSSARY.md` and the research note are in the drafting
    worktree, uncommitted. They land with 030 or before it, none of them by a story. The
@@ -1202,7 +1281,7 @@ These are not changed by any story:
    our own Rust" is not touched here; the imaging solver is 032's.
 7. **Outside the factory, before the first use at the telescope:** the scope node
    rebuilt and probed as 030's plan.md § Prerequisites 8 says, and the console rebuilt
-   from `main` after US6. Not needed to flip.
+   from `main` after US9. Not needed to flip.
 8. **Other drafts that write the same files are ordered.** Not met. `026-mount-sky`,
    `021-chart-orientation` and `022-altaz-guidance` are drafts on branches of this
    repository whose Refinement Records write files this spec writes (spec.md's
@@ -1215,7 +1294,7 @@ These are not changed by any story:
    exists outside the branches read here.
 9. **The plan document agrees with the settled decisions.** Met on this side of the
    link. The plan document's Amendment 3 settles the one departure the review found
-   here (owner decisions 3 and 4), and Amendments 1 and 6 are carried here (US6, owner
+   here (owner decisions 3 and 4), and Amendments 1 and 6 are carried here (US9, owner
    decision 16). § Interfaces shared across the specs now names the file
    `crates/finder/src/imaging/routes.rs` in its module list and holds the cards this
    trio adds in its list of an imaging frame's FITS cards; the `frame` keys this trio
@@ -1225,14 +1304,17 @@ These are not changed by any story:
    lists; whether the scope node keeps a copy at all is still 030's open owner decision
    9, and when the owner settles it, this trio's `save_at_node` follows (owner decision
    9).
-10. **The trios that call the lease use its names.** Met for the names: US6 has
+10. **The trios that call the lease use its names.** Met for the names: US9 has
     `Lease`, `Imaging::lease`, `Imaging::holder`, `Lease::set`, `Lease::take` and the
     refusal `the imaging camera is held by {holder}` as 033's plan.md § The camera lease
     writes them down, and its six scenarios are the six rules there. Each of 033 to 037
-    is re-anchored to US6 after this spec lands, and 032's Refinement Record names US6
-    as the last writer of `crates/finder/src/imaging/mod.rs`,
-    `crates/finder/tests/console/main.rs` and `crates/finder/README.md`; those are their
-    trios' edits, not this one's.
+    is re-anchored to US9 after this spec lands. 032's Refinement Record names US9 as
+    the last writer of `crates/finder/src/imaging/mod.rs`,
+    `crates/finder/tests/console/main.rs` and `crates/finder/README.md`, and 035's names
+    it for `crates/finder/src/imaging/frames.rs`. Round 1's renumbering changed those
+    records, and every other citation of this spec's stories and scenarios in 032 to
+    037, to the nine-story numbers; the re-anchoring itself is their trios' work, not
+    this one's.
 
 ## Plan traps
 
@@ -1252,14 +1334,14 @@ with the check that keeps it from recurring. They bind every story.
    `specs/031-imaging-frames-on-console/` or `.specify/`.
 6. **An oracle copied from the code proves nothing.** *Check:* tests compute the sample
    rule themselves, and read saved FITS files with their own code and never through
-   `finder::imaging::fits`. US2-S10 tests `encode` and `decode` themselves, against
+   `finder::imaging::fits`. US3-S1 tests `encode` and `decode` themselves, against
    bytes the scenario works out, not against each other alone.
 7. **Real sockets and paused time do not mix.** With time paused, tokio jumps to the
    next timer whenever every task is idle, so a timeout fires while a real socket is
    still delivering. *Check:* every in-process test runs over in-memory streams; only
    the two `cli` modules use real sockets, in real time, with generous limits.
 8. **Sidereal drift is large at this scale.** At 2.18″ a pixel an untracked star moves
-   7 px a second. *Check:* US3-S4, the one scenario here that places a star, uses a
+   7 px a second. *Check:* US6-S4, the one scenario here that places a star, uses a
    20 ms exposure and puts the star at the truth for mid-exposure.
 9. **Whole-object comparisons break at the next story.** *Check:* tests compare
    `settings` and `frame` key by key, and build link messages with
@@ -1272,12 +1354,13 @@ with the check that keeps it from recurring. They bind every story.
     read just before the request, to a millisecond.
 12. **A pacing rule that counts the chunk it is about to send.** The scope node paces
     (030): the wait before chunk k is the bytes already sent over the rate, so the last
-    of eight chunks leaves when seven have gone. *Check:* US2-S7 gives the worked time
+    of eight chunks leaves when seven have gone. *Check:* US2-S4 gives the worked time
     at the console, 28 s.
 13. **A FITS card one column out.** Readers are strict about `= ` in columns 9 and 10
     and numbers ending in column 30. *Check:* US2-S1 reads the file with the test's own
-    fixed-column reader, and § FITS at the console gives the worked bytes.
-14. **The bundle must be rebuilt.** *Check:* US4 commits `crates/finder/web/dist` after
+    fixed-column reader, US3-S1 compares a whole real's card as text, and § FITS at the
+    console gives the worked bytes.
+14. **The bundle must be rebuilt.** *Check:* US7 commits `crates/finder/web/dist` after
     `npm run build`, so that the gate's `git status --porcelain -- dist` finds nothing.
 15. **027's layout.** *Check:* each new finder test is a module file in its binary's
     folder with one alphabetical `mod` line, binding helpers with
@@ -1287,61 +1370,62 @@ with the check that keeps it from recurring. They bind every story.
     `crate::support::Scratch`; and no test builds a path from `CARGO_MANIFEST_DIR` and
     `../../target`, which 028 removed.
 17. **A masked screenshot is pink.** Playwright paints masks magenta by default, which
-    the off-red counter would count. *Check:* US4-S8's mask colour is black.
+    the off-red counter would count. *Check:* US7-S8's mask colour is black.
 18. **A tool that hangs on `{}`.** An existing test calls every listed tool with empty
-    arguments. *Check:* without imaging the new tools answer at once (US5-S5).
+    arguments. *Check:* without imaging the new tools answer at once (US8-S5).
 19. **The link's status changes four times a second.** `LinkStatus` holds the heartbeat
     count, so "wait until the status changes" returns at the next heartbeat, and a retry
     or a call raced against it would be cut short every 250 ms. *Check:* the imaging
     task waits on `connected` alone, with `wait_for`; US1-S10 asserts a retry period of
     exactly 5 s while heartbeats are answered.
 20. **A rename replaces.** *Check:* the final name is tested before the rename, and an
-    existing file fails the frame and is left as it is (US2-S6).
-21. **A long list that Prettier re-wraps.** *Check:* US4 writes the simulate project's
+    existing file fails the frame and is left as it is (US2-S3).
+21. **A long list that Prettier re-wraps.** *Check:* US7 writes the simulate project's
     `testMatch` list one entry a line, which spec owner approval 8 names.
 22. **A lease checked in the wrong place.** Checked after the frame-in-flight test, a
     second taker hears `an exposure is already in progress` and cannot tell who to wait
     for; checked in the routes, the MCP tools and later specs' own callers slip past it.
     *Check:* the check is inside `set_as` and `take_as`, between the state's and the
-    frame's, under the same lock; US6-S2 asserts the holder's words both before and
-    during the holder's frame, through `Imaging`, the routes and the MCP door, and the
-    state's words first on a console with no link.
+    frame's, under the same lock, which for `take` is taken in `frames.rs`; US9-S2
+    asserts the holder's words both before and during the holder's frame, through
+    `Imaging`, the routes and the MCP door, and the state's words first on a console
+    with no link.
 23. **A lease that outlives its holder or keeps the `Imaging` alive.** An `Arc` in the
     `Lease`, or a release that awaits, leaves the camera held after a task is cancelled.
-    *Check:* `Lease` holds a `Weak` and a grant, its `Drop` awaits nothing, and US6-S5
+    *Check:* `Lease` holds a `Weak` and a grant, its `Drop` awaits nothing, and US9-S5
     aborts a holder's task and reads `holder()` in the same virtual instant.
 24. **A region from the settings, not the camera.** Stamping a file from what the
     console asked for writes the wrong origin when another INDI client moved the region.
     *Check:* `XORGSUBF` and `YORGSUBF` come from the frame's `roi` as it stands when it
-    is saved, the header's; US2-S11's node sends a region the settings never held, and
+    is saved, the header's; US4-S2's node sends a region the settings never held, and
     the file carries it.
 
 ## Risks
 
 | Risk | Mitigation |
 |---|---|
-| Nothing here has been compiled, and neither has 030, which all of it stands on. An interface may not build as written: prost's names for 030's messages, as § What this trio takes from 030 writes them; a second connection made from the link manager's kept transport; a `Weak<Imaging>` in a `Lease` whose `Drop` takes the state's lock. | Prerequisite 4: probe builds of all six stories before the flip, on top of 030's. Prerequisite 2: every name taken from 030 is read again on `main` after it lands. |
-| A story passes 64 KiB. The likeliest, by what each writes, is US2 (twelve scenarios since the review and the split), then US1 and US4. This is an estimate from the interfaces; nothing has been measured. | Measured on the probes. The splits are written in advance: US2 can shed its `decode` (US2-S10, FR-016) and its failure cases (US2-S5) into stories of their own, and US4 its Playwright file. Each split is a spec change made before the flip. |
-| The second connection doubles what a poor link must carry at the worst moment. | The rate limit (US2-S7); the heartbeat is on its own connection and proven unaffected on the simulator; the real link is a field check. |
-| The new top-bar chip crowds the bar on a phone in the simulate project's existing checks. | Probe-run `CI=1 npm run e2e`; the chip shows only with a paired node; if a check fails, the chip's label hides below `sm` as the other chips' do, a change to § The page before the flip. |
-| The simulate console now takes a second connection and describes an imaging camera at start; an existing simulate check may notice. | Probe-run the whole `test` gate on US1. The session's `imaging` key is not read by the page before US4. |
-| The preview's stretch looks poor on real frames. | It is a preview; owner decision 7 puts its look outside the gates, and 035 owns the stack's stretch. |
-| The hold control fails to release on some phone browser. | Five release events and the 10 s limit (US4-S5); a check on a real phone is outside the factory. |
+| An interface may not build as written: prost's names for 030's messages, as § What this trio takes from 030 writes them; a second connection made from the link manager's kept transport; a `Weak<Imaging>` in a `Lease` whose `Drop` takes the state's lock. | Proved in round 1 (Prerequisite 4), on 030's round-1 probe code: every interface built as plan.md writes it, with private additions only; US1-S5 counts exactly two connections; and in US9-S5 the `Lease` adds nothing to the strong count and is released in the instant its task is aborted, with no deadlock, since no task holds an `Arc<Imaging>`. Prerequisite 2: every name taken from 030 is read again on `main` after it lands. |
+| A story passes 64 KiB. | Measured in round 1 (§ Refinement Record): US1 64,223 bytes, US6 26,407, US7 52,002, US8 19,580 and US9 23,788 with its write of `frames.rs`. The draft's second story measured 85,621 bytes, and the split prepared here before the probes (`decode` and the failure cases out) still left 71,496, so it is split in four where its measured code divides: US2 takes and saves a frame, about 57 KB estimated from the measured blocks; US3 is `decode`, 10,800 bytes measured; US4 the checks and US4-S2, about 16.5 KB; and US5 the refusals, abort and the node's copy, about 9 KB. The three estimates are measured when those stories are next built. US1 is at 98 % of the budget: if a later build passes it, US1-S9 and US1-S10, with the test's own camera, about 5.5 KB, become a story of their own, a spec change made before US1 is dispatched again. US7's Playwright split is not needed. |
+| The second connection doubles what a poor link must carry at the worst moment. | The rate limit (US2-S4); the heartbeat is on its own connection and proven unaffected on the simulator (in round 1, 113 heartbeats answered while a frame crossed for 28 s of virtual time, the link connected at every read); the real link is a field check. |
+| The new top-bar chip crowds the bar on a phone in the simulate project's existing checks. | Not seen in round 1: every simulate check passed with the Imaging chip, at the phone viewport too. The chip shows only with a paired node; if a later check fails, the chip's label hides below `sm` as the other chips' do, a change to § The page before the flip. |
+| The simulate console now takes a second connection and describes an imaging camera at start; an existing simulate check may notice. | Not seen in round 1: every Rust test passed from US1 on, and the whole `CI=1 npm run e2e` passed with the second connection and the page unchanged, and again after US7 and US9. The session's `imaging` key is not read by the page before US7. |
+| The preview's stretch looks poor on real frames. | It is a preview; owner decision 7 puts its look outside the gates, and 035 owns the stack's stretch. On the simulated field in round 1 the sky went to black with a little colour noise. Which percentile the noise is read from, and the JPEG's quality, are caught by no test for the same reason. |
+| The hold control fails to release on some phone browser. | Five release events and the 10 s limit (US7-S5); a check on a real phone is outside the factory. |
 | Specs 032 to 037 need a field this spec's types lack. | Views are non-exhaustive and tests compare key by key. A field they need on the scope link or on `ImagingFrame` is 030's to add, and changes the scope link, which the later spec must name for approval. |
 | `main` moves again before the flip and shifts a cited line, or 030 lands differently from its plan.md. | Prerequisite 2: the line-for-line comparison is run again against the new `main`, as it was for 49bb210, and the names taken from 030 are read again there. |
 | The view's `settings.roi` lags a region changed by another INDI client until the console's next settings read. | Files and `frame.roi` take the region from the frame's header, so a frame is placed right whatever the view shows (spec owner decision 16). |
-| A later spec's holder forgets to drop its `Lease`, and the camera stays held. | The lease is a value: it is dropped when its owner returns or is cancelled (US6-S5). `holder()` names it, and the refusal says who holds the camera. |
+| A later spec's holder forgets to drop its `Lease`, and the camera stays held. | The lease is a value: it is dropped when its owner returns or is cancelled (US9-S5). `holder()` names it, and the refusal says who holds the camera. |
 | `026-mount-sky`, `021-chart-orientation` and `022-altaz-guidance` are drafts that write files this spec writes. | Prerequisite 8: two such specs are never flipped together; the second names the first in `depends_on_landed` and is re-anchored. |
-| 030's owner decision 9 is still open: its other answer drops the scope node's copy, `save` on `ExposeRequest`, which the plan document now carries. | Prerequisite 9; this trio's `save_at_node`, US2-S9 and US2-S12 follow that decision (owner decision 9). |
+| 030's owner decision 9 is still open: its other answer drops the scope node's copy, `save` on `ExposeRequest`, which the plan document now carries. | Prerequisite 9; this trio's `save_at_node`, US5-S3 and US5-S4 follow that decision (owner decision 9). |
 
 ## Refinement Record
 
 Drafted on 2026-11-15 by the grilling session against `main` at dbc2b5b, from
 `docs/plans/2026-11-15-specs-030-037-imaging.md` and the surveys of the camera path and
 the console made that morning, as the console's half of the trio
-`030-imaging-camera-link`. **No probe build has been run.** No story of this trio has
-been compiled, linted or tested, no interface above has been built, and no diff has
-been measured: the session wrote documents only. Every `path:line` was read at dbc2b5b,
+`030-imaging-camera-link`. **No probe build had been run then.** No story of this trio
+had been compiled, linted or tested, no interface above built and no diff measured: the
+session wrote documents only. Every `path:line` was read at dbc2b5b,
 re-read at 49bb210 and checked by the validator there; every number in a scenario was
 worked by hand and is shown as a worked example where it is not obvious.
 
@@ -1356,7 +1440,7 @@ its file; the hop to the console made measurable; and the departure from the pla
 document written as owner decisions.
 
 An auditor then compared the trio with 032 to 037, and its findings were applied the
-same day, still with no probe build. Those on this side: US6 gives the console's imaging
+same day, still with no probe build. Those on this side: US9 gives the console's imaging
 state the one holder of the plan document's Amendment 1, under the names the later
 trios call; US1 defines `RoiEdit`, which `SettingsEdit` named; the region of interest
 comes with the frame's header and is written into the file (Amendment 6); the view's
@@ -1367,26 +1451,68 @@ are corrected (§ Prerequisites 2), so the record below is reviewed at 49bb210.
 
 The trio was then split in two at the owner's ask, the same day and still with no probe
 build. The scope node's stories stayed in 030, and the console's came here and were
-renumbered from 1: US1 to US6 were the sixth, seventh, eighth, tenth, eleventh and
-thirteenth stories of the one trio, and their requirements are FR-001 to FR-034 in
-story order. No interface, scenario value or decision changed. One scenario came from a
-story that stayed: US2-S12, the console's reading of the scope node's own copy, was the
-fifth scenario of that story (030's US7 now), and its test moved from a module of its
-own into `imaging_frames`. Every edge to a story of 030 became this trio's
-`depends_on_landed`.
+renumbered from 1: the six stories they then made were the sixth, seventh, eighth,
+tenth, eleventh and thirteenth stories of the one trio, and their requirements are
+FR-001 to FR-034 in story order. No interface, scenario value or decision changed. One
+scenario came from a story that stayed: the console's reading of the scope node's own
+copy, now US5-S4, was the fifth scenario of that story (030's US7 now), and its test
+moved from a module of its own into `imaging_frames`, and in round 1 into
+`imaging_control`. Every edge to a story of 030 became this trio's `depends_on_landed`.
 
-What a first refinement round must do is § Prerequisites 4, and its findings replace
-this paragraph. Until then the record below is the draft's own account: its tests are
-the scenarios, its writes are the files § Project Structure names, and its shared writes
-name the merge edge that orders two stories of this spec on one file, or the story of
-025 or 028 that last wrote the file on `main`. No file here is written by 030, so no
+**Round 1 (probe builds), 2026-11-17.** Every story was built from this trio, tests
+first, by three probe agents in throwaway worktrees, each story on the commit of the one
+before it and nothing pushed. Their base was 030's round-1 probe code
+(`probe/030-r1-c` at d727848) on `main` at 6cc8724, where 021, 022 and 026 had landed,
+with this trio (`probe/031-r1-base` at 76da6ef); clippy and the workspace's 734 tests
+passed there. Each story passed the `lint` gate, the `test` gate's cargo commands,
+`cargo deny check` (with the base's findings) and `cargo machete`, and the `test` gate's
+page commands ran on the page's story and on the last story's head; each new test
+failed before the story's change and passed after; and each diff, measured as plan
+trap 3 says, changed the story's declared writes and no other file, but for the
+lease's. By the draft's numbers:
+
+- US1: `probe/031-r1-a` at 9786619; 10 tests; 64,223 bytes; 11 files.
+- US2: `probe/031-r1-a` at 9c622b9; 12 tests; 85,621 bytes; 10 files.
+- US3, now US6: `probe/031-r1-b` at ac835bf; 4 tests; 26,407 bytes; 8 files.
+- US4, now US7: `probe/031-r1-b` at 3b861a6; 11 Vitest and 2 Playwright tests; 52,002
+  bytes; 12 files and `dist`.
+- US5, now US8: `probe/031-r1-c` at b7f6359; 6 tests; 19,580 bytes; 4 files.
+- US6, now US9: `probe/031-r1-c` at b09f0e0; 6 tests; 23,788 bytes; 5 files, of which
+  `crates/finder/src/imaging/frames.rs` was not declared and was written on a commit of
+  its own, c57c027.
+
+The draft's US2 passed its 12 tests once its header wait, now US4-S1's, was given more
+than the shared setup's 60 s, but its 10 declared writes measured 85,621 bytes. The
+split prepared in § Risks was then built from US1's commit, on `probe/031-r1-a-split`,
+tree for tree the same as the whole story: without `decode` and the failure cases it
+measured 71,496 bytes (9bcf631), `decode` 10,800 (5eea930) and the failure cases
+10,568 (443cd67). So it is split in four where those blocks divide: US2 takes and saves
+a frame; US3 is `decode`, as measured; US4 the failure cases, as measured, with US4-S2,
+whose node is the same test's own `ScopeNodeImaging`; and US5 the refusals, abort and
+the node's copy. § Risks gives the estimated size of US2, US4 and US5, which are
+measured when they are next built. The lease's check could be made under `take`'s lock
+only in `frames.rs`, which US9 now writes. The workspace ran 772 tests after the lease's
+story, Vitest 343 and Playwright 31. The probes reported forty-one defects, three
+blocking: the split, the 60 s cap on a wait, and the lease's undeclared write. Their
+fixes are in this trio: they settle choices the plan left open, correct wording a
+builder could misread, and add the assertions that the probes' bite checks showed
+missing (spec.md § Clarifications, the round-1 session). Every 030 interface this trio
+uses was as 030's trio gives it.
+
+The record below is round 1's account: its tests are the scenarios the probes built and
+ran, with the draft's US2 regrouped as the split groups it, each new story's tests in a
+module of its own; its writes are the files their diffs changed, US9's `frames.rs`
+among them, divided for US2 to US5 by the parts of § Receiving and saving and § FITS at
+the console each builds; and its shared writes name the merge edge that orders two
+stories of this spec on one file, or the story of 025 or 028 that last wrote the file
+on `main`. No file here is written by 030, so no
 shared write names it. A file last written by an older landed spec (013, 014, 016, 017,
 020, 024 or 027, each of which 028 already depends on) has no entry, because the
 validator refuses a shared write that names a spec outside this spec's
 `depends_on_landed`. The record's `open_questions` are empty for the same kind of
 reason: the validator refuses a record that holds any. What is not established is
-written where it can stay until a probe settles it: § Risks, and § Prerequisites 2 and
-4. Nothing in this record is an owner approval: those are in spec.md, and flipping to
+written where it can stay until it is settled: § Risks, and § Prerequisites 2. Nothing
+in this record is an owner approval: those are in spec.md, and flipping to
 `ready` gives them.
 
 ```yaml
@@ -1418,7 +1544,7 @@ stories:
       - path: crates/finder/tests/console/imaging.rs
         status: new
         disposition: add
-        assertion: "the console opens exactly two connections and the scope link stays connected with star frames arriving"
+        assertion: "once star frames arrive, the console has opened exactly two connections and the scope link stays connected, and after 10 s more still two"
         decision: "spec.md:US1-S5"
       - path: crates/finder/tests/console/imaging.rs
         status: new
@@ -1473,7 +1599,7 @@ stories:
     preserved_behavior:
       - "a console built without with_imaging opens one connection and serves the same session (plan.md Shapes that existing tests pin)"
       - "nothing about imaging is persisted in session.json"
-      - "LinkManager::start's signature and run's seven parameters are unchanged"
+      - "LinkManager::start's and start_with_filter's signatures and run's eight parameters are unchanged"
     checks:
       development:
         - "cargo nextest run -p finder --locked --test console imaging::"
@@ -1506,7 +1632,7 @@ stories:
         other_spec: 031-imaging-frames-on-console
         other_story: US2
         disposition: merge_order
-        reason: "US2 depends_on_merged US1, and adds its rows and paragraph"
+        reason: "US2 depends_on_merged US1, and adds its row and paragraphs"
       - path: crates/finder/src/api.rs
         other_spec: 025-frame-capture
         other_story: US2
@@ -1521,7 +1647,7 @@ stories:
         other_spec: 031-imaging-frames-on-console
         other_story: US2
         disposition: merge_order
-        reason: "US2 depends_on_merged US1, and adds its route lines after US1's"
+        reason: "US2 depends_on_merged US1, and adds its route line after US1's"
       - path: crates/finder/src/link.rs
         other_spec: 025-frame-capture
         other_story: US2
@@ -1541,7 +1667,7 @@ stories:
         other_spec: 031-imaging-frames-on-console
         other_story: US2
         disposition: merge_order
-        reason: "US2 depends_on_merged US1, and adds its two routes"
+        reason: "US2 depends_on_merged US1, and adds its route"
       - path: crates/finder/tests/console/main.rs
         other_spec: 025-frame-capture
         other_story: US2
@@ -1573,58 +1699,28 @@ stories:
       - path: crates/finder/tests/console/imaging_frames.rs
         status: new
         disposition: add
-        assertion: "a simulated frame is 2036160 bytes at 1236 x 822, 512640 at binning 2 and 83520 for a 400 x 400 region at binning 2, whose file carries the region's origin, the set temperature and the serial, and whose view carries set_temp_c"
+        assertion: "a simulated frame is 2036160 bytes at 1236 x 822, 512640 at binning 2 and 83520 for a 400 x 400 region at binning 2, whose file carries the region's origin, the set temperature and the serial, and whose view carries set_temp_c; a fourth with the cooler off has no SET-TEMP"
         decision: "spec.md:US2-S2"
       - path: crates/finder/tests/console/imaging_frames.rs
         status: new
         disposition: add
-        assertion: "a foreign origin, a second request, a settings change during an exposure and every not-ready state are refused with their text"
+        assertion: "ids continue after the largest file in the date's folder, and a file already under the next name fails the frame and is left as it is"
         decision: "spec.md:US2-S3"
       - path: crates/finder/tests/console/imaging_frames.rs
         status: new
         disposition: add
-        assertion: "abort ends a 30 s exposure as aborted within 1 s with no file, and the next frame is 000002.fits"
+        assertion: "a frame in flight for 28 s at 64 KiB/s leaves the link connected while more than 100 heartbeats are answered, and its received_at reads 28 s ± 0.1 s after the end of the exposure"
         decision: "spec.md:US2-S4"
-      - path: crates/finder/tests/console/imaging_frames.rs
-        status: new
-        disposition: add
-        assertion: "an incomplete frame, a header that does not add up or is above 256 MiB, a chunk first, too many bytes, a node error, a stall and no header within 152 s each end failed with their text and leave no file"
-        decision: "spec.md:US2-S5"
-      - path: crates/finder/tests/console/imaging_frames.rs
-        status: new
-        disposition: add
-        assertion: "ids continue after the largest file in the date's folder, and a file already under the next name fails the frame and is left as it is"
-        decision: "spec.md:US2-S6"
-      - path: crates/finder/tests/console/imaging_frames.rs
-        status: new
-        disposition: add
-        assertion: "a frame in flight for 28 s at 64 KiB/s leaves the link connected while more than 100 heartbeats are answered, and its received_at reads 28 s after the end of the exposure"
-        decision: "spec.md:US2-S7"
       - path: crates/finder/tests/cli/imaging_frames.rs
         status: new
         disposition: add
         assertion: "the built finder under --simulate --imaging-dir saves one 2036160-byte frame under that folder"
-        decision: "spec.md:US2-S8"
+        decision: "spec.md:US2-S5"
       - path: crates/finder/tests/console/imaging_frames.rs
         status: new
         disposition: add
-        assertion: "with save_at_node and a node that has no save folder the frame is still saved and its view carries the node's reason, and neither key without save_at_node"
-        decision: "spec.md:US2-S9"
-      - path: crates/finder/tests/console/imaging_frames.rs
-        status: new
-        disposition: add
-        assertion: "encode writes the worked bytes and cards for a 16-bit and an 8-bit image, decode gives each back and reads the worked FITS frame, and each refusal displays its text"
-        decision: "spec.md:US2-S10"
-      - path: crates/finder/tests/console/imaging_frames.rs
-        status: new
-        disposition: add
-        assertion: "an 8-bit mono frame with no gain, offset or temperature is saved with BITPIX 8, no BZERO or BSCALE, none of the absent cards and its bytes unchanged, and the header's region replaces the settings' in its view and its origin cards"
-        decision: "spec.md:US2-S11"
-      - path: crates/finder/tests/console/imaging_frames.rs
-        status: new
-        disposition: add
-        assertion: "with save_at_node and a node that has a save folder the frame view names the node's file, whose samples equal the console's"
-        decision: "spec.md:US2-S12"
+        assertion: "frames taken for the purposes dark and flat are saved with IMAGETYP DARK and FLAT and their PURPOSE"
+        decision: "spec.md:US2-S6"
       - path: crates/finder/tests/console/recording.rs
         status: existing
         disposition: preserve
@@ -1662,57 +1758,219 @@ stories:
     shared_writes:
       - path: crates/finder/README.md
         other_spec: 031-imaging-frames-on-console
-        other_story: US3
+        other_story: US5
         disposition: merge_order
-        reason: "US3 depends_on_merged US2, and adds the preview's row and paragraph"
+        reason: "US5 depends_on_merged US2, and adds the abort row and the node's copy"
       - path: crates/finder/src/lib.rs
         other_spec: 031-imaging-frames-on-console
-        other_story: US3
+        other_story: US5
         disposition: merge_order
-        reason: "US3 depends_on_merged US2, and adds the preview route's line"
+        reason: "US5 depends_on_merged US2, and adds the abort route's line"
       - path: crates/finder/src/imaging/mod.rs
         other_spec: 031-imaging-frames-on-console
-        other_story: US3
+        other_story: US5
         disposition: merge_order
-        reason: "US3 depends_on_merged US2, and adds the kept previews"
+        reason: "US5 depends_on_merged US2, and adds abort and the frame-in-flight refusal of set"
       - path: crates/finder/src/imaging/routes.rs
         other_spec: 031-imaging-frames-on-console
-        other_story: US3
+        other_story: US5
         disposition: merge_order
-        reason: "US3 depends_on_merged US2, and adds the preview route"
-      - path: crates/finder/src/imaging/frames.rs
+        reason: "US5 depends_on_merged US2, and adds the abort route"
+      - path: crates/finder/src/imaging/fits.rs
         other_spec: 031-imaging-frames-on-console
         other_story: US3
         disposition: merge_order
-        reason: "US3 depends_on_merged US2, and makes the preview when a frame is saved"
+        reason: "US3 depends_on_merged US2, and adds decode beside encode"
+      - path: crates/finder/src/imaging/frames.rs
+        other_spec: 031-imaging-frames-on-console
+        other_story: US4
+        disposition: merge_order
+        reason: "US4 depends_on_merged US2, and adds the checks on what the node sends"
       - path: crates/finder/tests/console/main.rs
         other_spec: 031-imaging-frames-on-console
         other_story: US3
         disposition: merge_order
-        reason: "US3 depends_on_merged US2, and adds mod imaging_preview"
+        reason: "US3 depends_on_merged US2, and adds mod imaging_fits before mod imaging_frames"
     open_questions: []
   US3:
+    tests:
+      - path: crates/finder/tests/console/imaging_fits.rs
+        status: new
+        disposition: add
+        assertion: "encode writes the worked bytes and cards for a 16-bit and an 8-bit image, a whole real as 100.0, decode gives each back and reads the worked FITS frame, and each refusal displays its text"
+        decision: "spec.md:US3-S1"
+      - path: crates/finder/tests/layout/main.rs
+        status: existing
+        disposition: preserve
+        assertion: "no file at the top level of crates/finder/tests or new file in its support folder, and each binary's main.rs holds only its support include and mod lines"
+        decision: "plan.md:Shapes that existing tests pin"
+    preserved_behavior:
+      - "encode, and every file US2 saves, are unchanged: decode only reads (spec.md FR-016)"
+    checks:
+      development:
+        - "cargo nextest run -p finder --locked --test console imaging_fits::"
+        - "cargo nextest run -p finder --locked --test layout"
+      handoff: declared_gates
+      independent: declared_pipeline
+      release:
+        - "release owner: the repository owner, through the merge queue's ci.yml jobs"
+    writes:
+      - crates/finder/src/imaging/fits.rs
+      - crates/finder/tests/console/imaging_fits.rs
+      - crates/finder/tests/console/main.rs
+    no_write_reason: ""
+    shared_writes:
+      - path: crates/finder/tests/console/main.rs
+        other_spec: 031-imaging-frames-on-console
+        other_story: US4
+        disposition: merge_order
+        reason: "US4 depends_on_merged US3, and adds mod imaging_checks before mod imaging_fits"
+    open_questions: []
+  US4:
+    tests:
+      - path: crates/finder/tests/console/imaging_checks.rs
+        status: new
+        disposition: add
+        assertion: "an incomplete frame, a header that does not add up or is above 256 MiB, a chunk first, too many bytes, a node error, a stall after 30 s and no header within 152 s each end failed with their text and leave no file"
+        decision: "spec.md:US4-S1"
+      - path: crates/finder/tests/console/imaging_checks.rs
+        status: new
+        disposition: add
+        assertion: "an 8-bit mono frame with no gain, offset or temperature is saved with BITPIX 8, no BZERO or BSCALE, none of the absent cards and its bytes unchanged, and the header's region replaces the settings' in its view and its origin cards"
+        decision: "spec.md:US4-S2"
+      - path: crates/finder/tests/layout/main.rs
+        status: existing
+        disposition: preserve
+        assertion: "no file at the top level of crates/finder/tests or new file in its support folder, and each binary's main.rs holds only its support include and mod lines"
+        decision: "plan.md:Shapes that existing tests pin"
+    preserved_behavior:
+      - "a whole frame is saved as US2 saves it; the checks refuse only what breaks the rules of spec.md FR-010"
+    checks:
+      development:
+        - "cargo nextest run -p finder --locked --test console imaging_checks::"
+        - "cargo nextest run -p finder --locked --test layout"
+      handoff: declared_gates
+      independent: declared_pipeline
+      release:
+        - "release owner: the repository owner, through the merge queue's ci.yml jobs"
+    writes:
+      - crates/finder/src/imaging/frames.rs
+      - crates/finder/tests/console/imaging_checks.rs
+      - crates/finder/tests/console/main.rs
+    no_write_reason: ""
+    shared_writes:
+      - path: crates/finder/src/imaging/frames.rs
+        other_spec: 031-imaging-frames-on-console
+        other_story: US5
+        disposition: merge_order
+        reason: "US5 depends_on_merged US4, and adds abort, the frame-in-flight refusal of take and the node's copy"
+      - path: crates/finder/tests/console/main.rs
+        other_spec: 031-imaging-frames-on-console
+        other_story: US5
+        disposition: merge_order
+        reason: "US5 depends_on_merged US4, and adds mod imaging_control after mod imaging_checks"
+    open_questions: []
+  US5:
+    tests:
+      - path: crates/finder/tests/console/imaging_control.rs
+        status: new
+        disposition: add
+        assertion: "a foreign origin, a second request, a settings change during an exposure and every not-ready state are refused with their text"
+        decision: "spec.md:US5-S1"
+      - path: crates/finder/tests/console/imaging_control.rs
+        status: new
+        disposition: add
+        assertion: "status.exposing is true 1 s into a 30 s exposure, abort ends it as aborted within 1 s with no file, and the next frame is 000002.fits"
+        decision: "spec.md:US5-S2"
+      - path: crates/finder/tests/console/imaging_control.rs
+        status: new
+        disposition: add
+        assertion: "with save_at_node and a node that has no save folder the frame is still saved and its view carries the node's reason, and neither key without save_at_node"
+        decision: "spec.md:US5-S3"
+      - path: crates/finder/tests/console/imaging_control.rs
+        status: new
+        disposition: add
+        assertion: "with save_at_node and a node that has a save folder the frame view names the node's file, whose samples equal the console's"
+        decision: "spec.md:US5-S4"
+      - path: crates/finder/tests/layout/main.rs
+        status: existing
+        disposition: preserve
+        assertion: "no file at the top level of crates/finder/tests or new file in its support folder, and each binary's main.rs holds only its support include and mod lines"
+        decision: "plan.md:Shapes that existing tests pin"
+    preserved_behavior:
+      - "POST /api/imaging/abort with nothing in progress changes nothing (spec.md FR-013)"
+      - "the tests of US2 to US4 pass unchanged: a frame with save_at_node off is saved as before"
+    checks:
+      development:
+        - "cargo nextest run -p finder --locked --test console imaging_control::"
+        - "cargo nextest run -p finder --locked --test layout"
+      handoff: declared_gates
+      independent: declared_pipeline
+      release:
+        - "release owner: the repository owner, through the merge queue's ci.yml jobs"
+    writes:
+      - crates/finder/README.md
+      - crates/finder/src/imaging/frames.rs
+      - crates/finder/src/imaging/mod.rs
+      - crates/finder/src/imaging/routes.rs
+      - crates/finder/src/lib.rs
+      - crates/finder/tests/console/imaging_control.rs
+      - crates/finder/tests/console/main.rs
+    no_write_reason: ""
+    shared_writes:
+      - path: crates/finder/README.md
+        other_spec: 031-imaging-frames-on-console
+        other_story: US6
+        disposition: merge_order
+        reason: "US6 depends_on_merged US5, and adds the preview's row and paragraph"
+      - path: crates/finder/src/lib.rs
+        other_spec: 031-imaging-frames-on-console
+        other_story: US6
+        disposition: merge_order
+        reason: "US6 depends_on_merged US5, and adds the preview route's line"
+      - path: crates/finder/src/imaging/mod.rs
+        other_spec: 031-imaging-frames-on-console
+        other_story: US6
+        disposition: merge_order
+        reason: "US6 depends_on_merged US5, and adds the kept previews"
+      - path: crates/finder/src/imaging/routes.rs
+        other_spec: 031-imaging-frames-on-console
+        other_story: US6
+        disposition: merge_order
+        reason: "US6 depends_on_merged US5, and adds the preview route"
+      - path: crates/finder/src/imaging/frames.rs
+        other_spec: 031-imaging-frames-on-console
+        other_story: US6
+        disposition: merge_order
+        reason: "US6 depends_on_merged US5, and makes the preview when a frame is saved"
+      - path: crates/finder/tests/console/main.rs
+        other_spec: 031-imaging-frames-on-console
+        other_story: US6
+        disposition: merge_order
+        reason: "US6 depends_on_merged US5, and adds mod imaging_preview after mod imaging_frames"
+    open_questions: []
+  US6:
     tests:
       - path: crates/finder/tests/console/imaging_preview.rs
         status: new
         disposition: add
-        assertion: "the worked 6 x 6 RGGB frame becomes the worked 3 x 3 picture, 197 for a half and 140 for a quarter of the span"
-        decision: "spec.md:US3-S1"
+        assertion: "the worked 6 x 6 RGGB frame becomes the worked 3 x 3 picture, 197 for a half and 140 for a quarter of the span, green the mean of its two samples, and read as BGGR its red and blue swap"
+        decision: "spec.md:US6-S1"
       - path: crates/finder/tests/console/imaging_preview.rs
         status: new
         disposition: add
-        assertion: "a wide mono frame is box-averaged by 5, a 2600 x 1400 mosaic becomes 650 x 350, a flat frame is black and mono is gray"
-        decision: "spec.md:US3-S2"
+        assertion: "a wide mono frame is box-averaged by 5, a 2600 x 1400 mosaic becomes 650 x 350, a flat frame is black, mono is gray, a block is its mean, and the span is at least 1"
+        decision: "spec.md:US6-S2"
       - path: crates/finder/tests/console/imaging_preview.rs
         status: new
         disposition: add
-        assertion: "a saved frame's preview route answers a 32 x 24 JPEG, an unknown id 404, a bad id 400, and only the last eight are kept"
-        decision: "spec.md:US3-S3"
+        assertion: "a saved frame's preview route answers a 32 x 24 JPEG, an unknown id 404, a bad id 400, only the last eight are kept, and a frame with no whole 2 x 2 cell is saved with no preview"
+        decision: "spec.md:US6-S3"
       - path: crates/finder/tests/console/imaging_preview.rs
         status: new
         disposition: add
-        assertion: "a pure red simulated star is red in the preview and a pure blue one blue"
-        decision: "spec.md:US3-S4"
+        assertion: "every saturated pixel of a pure red simulated star is red and near the star, and a pure blue one's blue"
+        decision: "spec.md:US6-S4"
       - path: crates/finder/tests/layout/main.rs
         status: existing
         disposition: preserve
@@ -1742,62 +2000,67 @@ stories:
     shared_writes:
       - path: crates/finder/README.md
         other_spec: 031-imaging-frames-on-console
-        other_story: US4
+        other_story: US7
         disposition: merge_order
-        reason: "US4 depends_on_merged US3, and adds a sentence to Night mode"
+        reason: "US7 depends_on_merged US6, and adds a sentence to Night mode"
       - path: crates/finder/tests/console/main.rs
         other_spec: 031-imaging-frames-on-console
-        other_story: US6
+        other_story: US9
         disposition: merge_order
-        reason: "US6 depends_on_merged US3, and adds mod imaging_lease after mod imaging_frames"
+        reason: "US9 depends_on_merged US6, and adds mod imaging_lease after mod imaging_frames"
       - path: crates/finder/src/imaging/mod.rs
         other_spec: 031-imaging-frames-on-console
-        other_story: US6
+        other_story: US9
         disposition: merge_order
-        reason: "US6 depends_on_merged US3, and adds the lease to the state"
+        reason: "US9 depends_on_merged US6, and adds the lease to the state"
+      - path: crates/finder/src/imaging/frames.rs
+        other_spec: 031-imaging-frames-on-console
+        other_story: US9
+        disposition: merge_order
+        reason: "US9 depends_on_merged US6, and adds the lease's check to take"
     open_questions: []
-  US4:
+  US7:
     tests:
       - path: crates/finder/web/src/components/ImagingPage.test.tsx
         status: new
         disposition: add
         assertion: "the /imaging route shows the Imaging heading and Back to console, and the top bar shows the Imaging link only with a scope node, current on that route"
-        decision: "spec.md:US4-S1"
+        decision: "spec.md:US7-S1"
       - path: crates/finder/web/src/components/ImagingPage.test.tsx
         status: new
         disposition: add
         assertion: "each state that is not ready shows exactly its words and no Settings or Frame region"
-        decision: "spec.md:US4-S2"
+        decision: "spec.md:US7-S2"
       - path: crates/finder/web/src/components/ImagingPage.test.tsx
         status: new
         disposition: add
         assertion: "the ready page shows the camera line, the sensor line for each cooler state, the settings the camera has and the forwarding limit, and saves them with one PUT in the stated key order"
-        decision: "spec.md:US4-S3"
+        decision: "spec.md:US7-S3"
       - path: crates/finder/web/src/components/ImagingPage.test.tsx
         status: new
         disposition: add
-        assertion: "the Imaging frame region's button, statuses and alerts follow the frame's state with the stated words, the time in hand included, and post frame and abort"
-        decision: "spec.md:US4-S4"
+        assertion: "the Imaging frame region's button, statuses and alerts follow the frame's state with the stated words, the time in hand included, Take disabled and Abort shown while exposing or receiving, and post frame and abort"
+        decision: "spec.md:US7-S4"
       - path: crates/finder/web/src/components/ImagingPage.test.tsx
         status: new
         disposition: add
         assertion: "the picture has the photo class, and at night Hold to see colour removes it only while held, on every release event and after 10 s from the first press, a repeated keydown not starting the limit again; and the useColourHold hook holds only at night"
-        decision: "spec.md:US4-S5"
+        decision: "spec.md:US7-S5"
       - path: crates/finder/web/src/components/ImagingPage.test.tsx
         status: new
         disposition: add
-        assertion: "the hook reads /api/imaging on opening, every second and after each request, and stops when unmounted"
-        decision: "spec.md:US4-S6"
+        assertion: "the hook reads /api/imaging on opening, every second and after each request, stops when unmounted, and a failed read changes nothing shown"
+        decision: "spec.md:US7-S6"
       - path: crates/finder/web/e2e/imaging.spec.ts
         status: new
         disposition: add
         assertion: "on the simulate console a frame taken from the page appears as a 618 x 411 picture"
-        decision: "spec.md:US4-S7"
+        decision: "spec.md:US7-S7"
       - path: crates/finder/web/e2e/imaging.spec.ts
         status: new
         disposition: add
         assertion: "at night the page has no off-red pixel, the picture alone shows colour while the control is held, and it is red again on release"
-        decision: "spec.md:US4-S8"
+        decision: "spec.md:US7-S8"
       - path: crates/finder/web/src/components/StopButton.test.tsx
         status: existing
         disposition: preserve
@@ -1865,9 +2128,9 @@ stories:
         reason: "031 depends_on_landed 025, whose US3 last changed DESIGN.md"
       - path: crates/finder/README.md
         other_spec: 031-imaging-frames-on-console
-        other_story: US5
+        other_story: US8
         disposition: merge_order
-        reason: "US5 depends_on_merged US4, and adds the three tools to MCP clients"
+        reason: "US8 depends_on_merged US7, and adds the three tools to MCP clients"
       - path: crates/finder/web/dist
         other_spec: 025-frame-capture
         other_story: US3
@@ -1879,38 +2142,38 @@ stories:
         disposition: merge_order
         reason: "031 depends_on_landed 025, whose US3 last changed api.ts"
     open_questions: []
-  US5:
+  US8:
     tests:
       - path: crates/finder/tests/mcp/imaging.rs
         status: new
         disposition: add
-        assertion: "the three tools are listed with object output schemas, only get_imaging_camera read-only, the stated descriptions, and set_imaging_camera's input schema holding exactly the nine settings keys"
-        decision: "spec.md:US5-S1"
+        assertion: "the three tools are listed with object output schemas, only get_imaging_camera read-only, the stated descriptions, and set_imaging_camera's input schema holding exactly the nine settings keys, the seven that refuse null not nullable"
+        decision: "spec.md:US8-S1"
       - path: crates/finder/tests/mcp/imaging.rs
         status: new
         disposition: add
-        assertion: "get_imaging_camera equals GET /api/imaging, set_imaging_camera changes settings, and a refused gain is a tool error with the route's text"
-        decision: "spec.md:US5-S2"
+        assertion: "get_imaging_camera and get_session's imaging equal GET /api/imaging, set_imaging_camera changes settings, and a refused gain and a parse error are tool errors with the route's text"
+        decision: "spec.md:US8-S2"
       - path: crates/finder/tests/mcp/imaging.rs
         status: new
         disposition: add
         assertion: "take_imaging_frame answers only after the frame is saved, with the frame and a JPEG image block equal to the preview route's body"
-        decision: "spec.md:US5-S3"
+        decision: "spec.md:US8-S3"
       - path: crates/finder/tests/mcp/imaging.rs
         status: new
         disposition: add
         assertion: "take_imaging_frame refuses arguments and a second exposure, and reports an aborted frame and a failed one, each as a tool error with its text"
-        decision: "spec.md:US5-S4"
+        decision: "spec.md:US8-S4"
       - path: crates/finder/tests/mcp/imaging.rs
         status: new
         disposition: add
         assertion: "on a console with no imaging the tools answer at once: off, and this console takes no imaging frames"
-        decision: "spec.md:US5-S5"
+        decision: "spec.md:US8-S5"
       - path: crates/finder/tests/mcp/imaging.rs
         status: new
         disposition: add
         assertion: "no result of the three tools holds the node's token"
-        decision: "spec.md:US5-S6"
+        decision: "spec.md:US8-S6"
       - path: crates/finder/tests/mcp/motion.rs
         status: existing
         disposition: preserve
@@ -1946,42 +2209,42 @@ stories:
     shared_writes:
       - path: crates/finder/README.md
         other_spec: 031-imaging-frames-on-console
-        other_story: US6
+        other_story: US9
         disposition: merge_order
-        reason: "US6 depends_on_merged US5, and adds the one-holder paragraph to Imaging frames"
+        reason: "US9 depends_on_merged US8, and adds the one-holder paragraph to Imaging frames"
     open_questions: []
-  US6:
+  US9:
     tests:
       - path: crates/finder/tests/console/imaging_lease.rs
         status: new
         disposition: add
         assertion: "lease hands the camera to one holder at once, a second is refused at once with 409 the imaging camera is held by the test, holder names it, and a lease is granted after the first is dropped and on a console with no link"
-        decision: "spec.md:US6-S1"
+        decision: "spec.md:US9-S1"
       - path: crates/finder/tests/console/imaging_lease.rs
         status: new
         disposition: add
         assertion: "while a lease is out Imaging::set and take, both routes and both MCP tools answer the holder's 409 before and during the holder's frame, nothing changes, and the state's words come first with no link"
-        decision: "spec.md:US6-S2"
+        decision: "spec.md:US9-S2"
       - path: crates/finder/tests/console/imaging_lease.rs
         status: new
         disposition: add
         assertion: "the holder's Lease::set and Lease::take change the settings, take and save a frame, and refuse a bad value and a frame in flight with Imaging's own words"
-        decision: "spec.md:US6-S3"
+        decision: "spec.md:US9-S3"
       - path: crates/finder/tests/console/imaging_lease.rs
         status: new
         disposition: add
         assertion: "with a lease out anyone reads the view and get_imaging_camera, aborts the holder's frame and fetches its preview"
-        decision: "spec.md:US6-S4"
+        decision: "spec.md:US9-S4"
       - path: crates/finder/tests/console/imaging_lease.rs
         status: new
         disposition: add
         assertion: "aborting the holder's task releases the camera in the same instant, the lease adds nothing to the Imaging's strong count, its frame runs on unheld, and a lease of a dropped Imaging answers this console takes no imaging frames"
-        decision: "spec.md:US6-S5"
+        decision: "spec.md:US9-S5"
       - path: crates/finder/tests/console/imaging_lease.rs
         status: new
         disposition: add
         assertion: "a frame from the page or take_imaging_frame holds no lease, a lease is granted during it, and the holder meets the frame-in-flight words itself"
-        decision: "spec.md:US6-S6"
+        decision: "spec.md:US9-S6"
       - path: crates/finder/tests/mcp/motion.rs
         status: existing
         disposition: preserve
@@ -1993,7 +2256,7 @@ stories:
         assertion: "no file at the top level of crates/finder/tests or new file in its support folder, and each binary's main.rs holds only its support include and mod lines"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
-      - "with no lease out, Imaging::set and Imaging::take refuse and answer exactly as US1 and US2 have them, so the tests of US1, US2 and US5 pass unchanged (spec.md FR-030)"
+      - "with no lease out, Imaging::set and Imaging::take refuse and answer exactly as US1, US2 and US5 have them, so the tests of US1 to US5 and US8 pass unchanged (spec.md FR-030)"
       - "routes.rs and mcp/tools.rs are unchanged: the check is inside Imaging (plan.md The camera lease)"
       - "abort, ended, view and preview are open to anyone (spec.md FR-031)"
     checks:
@@ -2006,6 +2269,7 @@ stories:
         - "release owner: the repository owner, through the merge queue's ci.yml jobs; 033 to 037 re-anchored to the lease"
     writes:
       - crates/finder/README.md
+      - crates/finder/src/imaging/frames.rs
       - crates/finder/src/imaging/mod.rs
       - crates/finder/tests/console/imaging_lease.rs
       - crates/finder/tests/console/main.rs

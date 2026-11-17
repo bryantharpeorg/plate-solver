@@ -173,7 +173,8 @@ was set, and MCP clients get one tool.
   - `crates/finder/src/imaging/frames.rs` (031 US2): `FrameView`, with a saved frame's
     `id`, `file`, `width`, `height`, `bits`, `bayer`, `binning`, `roi`, `start` and
     `exposure_ms`;
-  - `crates/finder/src/imaging/fits.rs` (031 US2): `FitsImage`, `encode` and `decode`;
+  - `crates/finder/src/imaging/fits.rs` (031 US2 and US3): `FitsImage`, `encode` and
+    `decode`;
   - `crates/simulator/src/imaging.rs` (030 US2): `SimImagingCamera`, `ImagingOptics`,
     `ImagingTruth`, `Simulator::imaging_truth_at`, `Simulator::imaging_optics`,
     `Simulator::set_imaging_optics`, `deep_field`, `FIELD_SEED`, `STARS_PER_SQ_DEG`
@@ -181,9 +182,9 @@ was set, and MCP clients get one tool.
     the simulated solver adapter answers from, so this spec changes nothing under
     `crates/simulator` (SC-003);
   - `crates/finder/web/src/components/ImagingPage.tsx` and
-    `crates/finder/web/src/useImaging.ts` (031 US4), whose Imaging frame block 031's
+    `crates/finder/web/src/useImaging.ts` (031 US7), whose Imaging frame block 031's
     own scenarios find as a region named `Imaging frame`;
-  - the MCP tools `get_imaging_camera` and `take_imaging_frame` (031 US5).
+  - the MCP tools `get_imaging_camera` and `take_imaging_frame` (031 US8).
 - Q: Which ASTAP facts were checked, and against what? → A: Against ASTAP's own page on
   2026-11-15 (`docs/research/2026-11-15-imaging-camera.md` § 3. ASTAP): `-f` names the
   picture; `-ra` is in hours; `-spd` is declination + 90°; `-fov` is the picture's

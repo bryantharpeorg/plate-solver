@@ -16,7 +16,7 @@ solves at five points and checked against them at the grid's four corners; `Stac
 resamples a sub through that map and keeps a sum, a
 weight and, for rejection, a sum of squared deviations for every pixel, in one pass. A
 `Stacker` runs the loop on the console while it holds 031's lease on the camera (031
-US6): one task asks for subs back to back, another takes them from a queue of four,
+US9): one task asks for subs back to back, another takes them from a queue of four,
 solves each through 032's `solve_frame` with a hint whose sources are tried in the plan
 document's order, gates it (its focus reading through 033's `focus::read`), calibrates
 it through 034's library and adds it, and hands each stacked sub's solve to 032's
@@ -185,8 +185,8 @@ review, 033's as it was revised the evening this trio was finished. Four things 
 here come from the series audit's findings on 031, 032 and 034, which were being
 written into those trios while this one was revised; each is written below as this
 trio uses it, to be read in those trios and then their code at the re-anchoring
-(§ Prerequisites 8, 13 and 14): the camera's lease (031 US6; § The camera's lease);
-`useColourHold` (031 US4, from the finding A6; § The page); `Imaging::note_solve`
+(§ Prerequisites 8, 13 and 14): the camera's lease (031 US9; § The camera's lease);
+`useColourHold` (031 US7, from the finding A6; § The page); `Imaging::note_solve`
 (032 US4, from the finding A3; § The stack on the console, the worker's step 8); and a
 set of darks or flats that holds the lease (034 A1; § Prerequisites 13). Positions and
 planes are as spec.md § User Scenarios defines them: a pixel's centre is at (x + 0.5,
@@ -536,11 +536,11 @@ the console, **The settings test**).
 `crates/finder/src/imaging/mod.rs` gains `pub mod stack;` (US2), in alphabetical order
 among its `pub mod` lines.
 
-### The camera's lease (`crates/finder/src/imaging/mod.rs`, 031 US6; US5 adds `save_in` alone)
+### The camera's lease (`crates/finder/src/imaging/mod.rs`, 031 US9; US5 adds `save_in` alone)
 
 The plan document's amendment 1: "The console's imaging state (031) holds one lease
 naming the holder; a second taker is refused with the holder's name. Each later spec
-takes and releases that lease and adds no lock of its own." 031's US6, which the
+takes and releases that lease and adds no lock of its own." 031's US9, which the
 series audit's finding on 031 adds to that trio, builds it "name for name as those
 trios assume it", in the shape `specs/033-focus-reading-and-aid/plan.md` § The camera
 lease writes down, and 033's, 034's and 037's trios use the same names. This section
@@ -554,7 +554,7 @@ Only US5 uses it, in `Stacker::start` and in the taker, which owns the `Lease` a
 it by returning, and one test of US5 takes a lease of its own and a frame with it.
 
 ```rust
-// 031's (031 US6), as this trio uses it:
+// 031's (031 US9), as this trio uses it:
 /// The imaging camera, held for one taker. Dropping it releases the camera at once.
 /// It holds no strong reference to the `Imaging`.
 pub struct Lease { /* 031's */ }
@@ -582,25 +582,25 @@ last entry). What this spec relies on, and nothing more:
 
 1. `lease(holder)` hands the camera to the caller or answers a 409 `Refusal` whose
    message contains the name of whoever holds it, in 031's words
-   `the imaging camera is held by {holder}` (031 US6-S1). It does not wait, and it
+   `the imaging camera is held by {holder}` (031 US9-S1). It does not wait, and it
    looks at nothing but the lease (spec US5-S2).
 2. While a lease is out, `Imaging::take` and `Imaging::set` by anyone else, and so
    `POST /api/imaging/frame`, `PUT /api/imaging/settings`, 031's MCP tools, the focus
    aid and a set of darks or flats, are refused as in 1, with the holder's name, and
    that check comes before their check for an imaging frame in flight. So a second
    taker hears the holder's name even while a sub is exposing. Those refusals are
-   031's code and 031's tests (031 US6-S2); spec US5-S8 reads one of them during a
+   031's code and 031's tests (031 US9-S2); spec US5-S8 reads one of them during a
    stack.
 3. The holder's `take` behaves as 031's `take` does without a lease: it is refused only
    as `take` is, when the camera is not `ready` or an imaging frame is in flight (031
-   US6-S3); the taker asks for a sub only once the last has ended.
+   US9-S3); the taker asks for a sub only once the last has ended.
 4. `Imaging::abort`, `Imaging::ended`, `Imaging::view`, 032's `solve_frame` and 032's
    `Imaging::note_solve` are open to anyone, lease or no lease. Stopping an exposure is
    never refused, so the page's Abort ends a sub (spec US5-S6).
 5. Dropping the `Lease` releases the camera, on every way out, also when the task that
    owns it is aborted, and a `lease` or a `take` asked for after that succeeds (spec
    US5-S4, US5-S8).
-6. A single imaging frame asked for with `Imaging::take` holds no lease (031 US6).
+6. A single imaging frame asked for with `Imaging::take` holds no lease (031 US9).
    While it is in flight and nobody holds the lease, `holder()` is `None`, and that
    frame is the one thing `start`'s step 5 looks for. Spec US5-S2's case of a start
    right after `POST /api/imaging/frame` asserts `holder()` `None` there, so that a 031
@@ -626,7 +626,7 @@ under `frames/`, so US5 adds to 031's lease the one thing that needs, and nothin
 else:
 
 ```rust
-// 031's `Lease` (031 US6), as US5 of this spec extends it:
+// 031's `Lease` (031 US9), as US5 of this spec extends it:
 impl Lease {
     /// From now on save every imaging frame this lease takes in `folder`, relative to
     /// the imaging folder, as `<folder>/<id as six digits>.fits`, instead of under
@@ -1454,13 +1454,13 @@ Write each phrase a test asserts on one line of JSX, so `textContent` keeps it w
 Only existing classes and tokens are used; `index.css` does not change.
 
 `useColourHold` is 031's: the series audit's finding on 031 (A6) makes the hold one
-hook, which 031's US4 creates as `crates/finder/web/src/useColourHold.ts` beside its
+hook, which 031's US7 creates as `crates/finder/web/src/useColourHold.ts` beside its
 `useImaging.ts` and uses for its own picture
-(`specs/031-imaging-frames-on-console/plan.md` § The page, and 031 spec.md US4-S5, which
+(`specs/031-imaging-frames-on-console/plan.md` § The page, and 031 spec.md US7-S5, which
 renders it with `renderHook`). As 031's plan.md gives it, and as this trio uses it:
 
 ```ts
-// 031's (031 US4, from the audit's finding A6), crates/finder/web/src/useColourHold.ts:
+// 031's (031 US7, from the audit's finding A6), crates/finder/web/src/useColourHold.ts:
 import type { KeyboardEvent, PointerEvent } from "react";
 
 /** The longest one hold shows colour. */
@@ -1773,7 +1773,7 @@ These are not changed by any story:
 | The whole transform between two solves, as a linear map and a shift | Shift and angle; a similarity; the exact projective mapping for each pixel | Shift and angle leave 0.5 to 0.7 px over an hour that starts 90 minutes past transit; a similarity leaves about 0.2 px at the corner over one hour and 0.3 to 0.5 px over two, and a linear map 0.01 px or less (`docs/research/2026-11-15-imaging-camera.md` § 8. Live stacking). The solves' `cd_deg` already hold the linear part, so carrying it costs nothing. The exact mapping differs by about 0.1 px at most inside what `judge` allows at the worked example's size (inferred, § The arithmetic, **`between`**) and costs a division a pixel. |
 | The linear map is checked at the reference grid's four corners, and a sub it misses by more than 0.5 px there is `off_field` | No check; the exact mapping for every pixel; a check at every pixel | The map's error grows as the shift times the square of the field's half-size: 0.10 px at most at the worked example's size, 1.17 px at the corners of a 3° × 2° field of 3600 × 2400 pixels inside `judge`'s limit (spec US2-S7). Four more projections a sub keep the cheap map honest on any field; the error is largest at the corners, so they bound it. The exact mapping is spec owner decision 3's other answer. |
 | A stacked sub's solve gives 032 an aim reading through `note_solve` | A sub's solve feeds only the stack; every solved sub, stacked or not, also keeping the scale and showing as the page's solve | The plan document's Two cameras row measures the aim point whenever an imaging solve and a live pointing share a moment; a stack is most of a night's solves, and a stale aim point puts the target off the sensor's centre once the subs stop and the tracker's own corrections steer. A sub that was dropped may be off the field or soft, so it gives none. Keeping the scale from a sub would narrow every later hint on one sub's word, and showing it as the page's solve would replace the observer's own; neither is asked (spec owner decision 20). |
-| `start` looks for a frame in flight only while nobody holds the lease | Looking always, before the lease (the trio's earlier text); leaving it all to the lease | 033's `focus_start` check 4 and its reason: a holder has a frame exposing almost all the time it holds the camera, so looking always answered `an exposure is in progress` and never the holder's name, against the amendment. Leaving it all to the lease would rest on a single imaging frame holding the lease, which 031 US6 says it does not. |
+| `start` looks for a frame in flight only while nobody holds the lease | Looking always, before the lease (the trio's earlier text); leaving it all to the lease | 033's `focus_start` check 4 and its reason: a holder has a frame exposing almost all the time it holds the camera, so looking always answered `an exposure is in progress` and never the holder's name, against the amendment. Leaving it all to the lease would rest on a single imaging frame holding the lease, which 031 US9 says it does not. |
 | The rule for a target's name in a folder is one function, `stack::service::label`, called by `target_label` and by 037 | The same rule written in `target_label` and again in 037's `run.rs` | One function cannot drift from itself, and a run's id and its stack's folder must end alike (037 A2). |
 | The stack's picture holds colour through 031's `useColourHold` | A second hold, with its own timer and listeners, in `StackBlock` | 031 A6 takes the hold out of 031's page so every imaging picture shares it; the Red Torch Rule's one exception is then one piece of code. |
 | The map is read through the sky at five points | The product of one solve's matrix and the other's inverse | Each solve's angle is from its own north; between two centres north turns by the difference in right ascension times the sine of the declination, 0.3 px at 500 px for centres 0.02° apart at declination 60° (spec US2-S5). |
@@ -1876,12 +1876,12 @@ These are not changed by any story:
 8. **031 carries the camera's lease and the colour hold, and the series is re-anchored
    to them.** Met in the drafts by the series audit's findings on 031; not met on
    `main`. The plan document's amendment 1 gives 031 one lease naming its holder; the
-   audit's finding on 031 gives it to 031's trio as US6, in the shape
+   audit's finding on 031 gives it to 031's trio as US9, in the shape
    `specs/033-focus-reading-and-aid/plan.md` § The camera lease writes down, which
    § The camera's lease cites name for name; and its finding A6 takes the hold under an
    imaging picture out of 031's page as `useColourHold`, which § The page writes down as
    this trio uses it. When this trio was revised after the audit, 031's trio in the
-   drafting worktree carried both: US6 and its plan.md § The camera lease, whose
+   drafting worktree carried both: US9 and its plan.md § The camera lease, whose
    refusal reads `the imaging camera is held by {holder}`, and the hook in US4,
    `crates/finder/web/src/useColourHold.ts`, in its plan.md § The page. 031's revision
    is done, and both were read again in its trio and agree with § The camera's lease
@@ -2119,7 +2119,7 @@ with the check that keeps it from recurring. They bind every story.
 | Stars' cores vary with seeing and are rejected too often, dimming stars. | The deviation is learned at each pixel, so a core's own spread widens its own limit; the field check compares a stack with `reject` false. |
 | The background's plane is pulled by a nebula that fills most tiles. | Only the darker half of the tiles is fitted; what is saved is untouched; the look is for the design review (spec owner decision 16). |
 | The picture looks green before the observer sets gains. | Expected without a colour matrix (the plan document's Colour row); the gains are on the page; measured gains are spec owner decision 17's alternative. |
-| 031 lands the lease under other names or with other rules: the frame in flight checked before the lease, a single imaging frame that holds the lease, a foreign `abort` refused, a refusal that does not name the holder. | § The camera's lease cites 031 US6 and lists the six points and where each is used, and 033's, 034's and 037's trios use the same shape; § Prerequisites 8 reads each in 031's plan.md and code before the flip. Only `Stacker::start`, the taker and three scenarios (spec US5-S2, US5-S4, US5-S8) touch it, and US5-S2 asserts `holder()` `None` during a single frame, so point 6 shows up there if it changes. |
+| 031 lands the lease under other names or with other rules: the frame in flight checked before the lease, a single imaging frame that holds the lease, a foreign `abort` refused, a refusal that does not name the holder. | § The camera's lease cites 031 US9 and lists the six points and where each is used, and 033's, 034's and 037's trios use the same shape; § Prerequisites 8 reads each in 031's plan.md and code before the flip. Only `Stacker::start`, the taker and three scenarios (spec US5-S2, US5-S4, US5-S8) touch it, and US5-S2 asserts `holder()` `None` during a single frame, so point 6 shows up there if it changes. |
 | 031 lands with no lease at all. | Spec owner decision 21's other answer, which is the first draft's design: ask the two busy checks and wait out a foreign frame, three times at most. |
 | US5's diff nears 64 KiB: the loop, the rigs, nine scenarios, and since decision 13 was settled the stack's folder and 031's `Lease::save_in`. | It is built second in the probe round (§ Prerequisites 9). If it passes the budget, US5-S7 and US5-S9, the two on the sim stacking rig, move to US6, whose diff is the smallest of the console stories; the call of `note_solve` stays in US5's step 8, which is one line. The folder and `save_in` stay in US5, because every sub from the first is saved in the folder. |
 | US8's diff nears 64 KiB: three routes, the view, the cube, three files, the README and eight tests. | Measured in the probe round; the README's section can move to US10, which already writes that file. |
@@ -2223,7 +2223,7 @@ FR-042 in US9). In substance:
   three on the sim stacking rig. Owner decision 20 now recommends that answer;
 - the shared write of `crates/finder/tests/cli/main.rs` names 033's US8, its last
   writer after 033's split;
-- § The camera's lease cites 031 US6 instead of standing in for it, adds the sixth
+- § The camera's lease cites 031 US9 instead of standing in for it, adds the sixth
   point (a single imaging frame holds no lease), and § Shapes that existing tests pin,
   § Prerequisites 10 and 13 and § Risks no longer describe 036's earlier cap through
   `restore_exposure`, which 034 A1 removes and 036 replaces with `Lease::set`;
@@ -2270,9 +2270,9 @@ documentation: while a blocking task runs, a paused clock does not advance.
 
 Some things here rest on less than a reviewed plan.md, and each is named where it is
 used. Four come from the series audit's findings on other trios, which were being
-written into those trios while this one was revised: the camera's lease (031 US6),
+written into those trios while this one was revised: the camera's lease (031 US9),
 cited in § The camera's lease with the six points relied on, and `useColourHold` (031
-US4, from the finding A6), quoted in § The page, both as 031's plan.md gives them when
+US7, from the finding A6), quoted in § The page, both as 031's plan.md gives them when
 this trio was checked; `Imaging::note_solve` (032 US4, from the
 finding A3), whose signature 032's plan.md gives as § The stack on the console writes
 it; and a set of darks or flats under the lease (034 A1), which 034's plan.md carries.
@@ -2672,9 +2672,9 @@ stories:
         reason: "US8 follows US5 on the merge chain, and attaches the stacker and adds target_label"
       - path: crates/finder/src/imaging/frames.rs
         other_spec: 031-imaging-frames-on-console
-        other_story: US3
+        other_story: US9
         disposition: merge_order
-        reason: "035 depends_on_landed 031, whose US3 last changed frames.rs"
+        reason: "035 depends_on_landed 031, whose US9 last changed frames.rs"
       - path: crates/finder/src/imaging/mod.rs
         other_spec: 035-live-stack
         other_story: US8
@@ -3043,9 +3043,9 @@ stories:
         reason: "035 depends_on_landed 034, whose US9 last rebuilt the bundle"
       - path: crates/finder/web/playwright.config.ts
         other_spec: 031-imaging-frames-on-console
-        other_story: US4
+        other_story: US7
         disposition: merge_order
-        reason: "035 depends_on_landed 031, whose US4 last changed playwright.config.ts"
+        reason: "035 depends_on_landed 031, whose US7 last changed playwright.config.ts"
       - path: crates/finder/web/src/api.ts
         other_spec: 034-dark-and-flat-frames
         other_story: US9

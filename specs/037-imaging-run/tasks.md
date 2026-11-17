@@ -14,7 +14,7 @@ description: "Task list for 037-imaging-run: The Imaging Run"
   every name of plan.md § What 030 to 036 offer re-read on `main`: not met (plan.md
   § Prerequisites 1 and 2);
 - 031 holds the lease of the imaging camera the plan document's amendment 1 names, as
-  its US6, and 033 to 035 take it: met in the drafts, and re-read when 031 lands
+  its US9, and 033 to 035 take it: met in the drafts, and re-read when 031 lands
   (plan.md § Prerequisites 3);
 - the first twenty-five owner decisions in spec.md are settled and its owner approvals
   given: not met (plan.md § Prerequisites 4);
@@ -220,7 +220,7 @@ description: "Task list for 037-imaging-run: The Imaging Run"
   `start_motion`, the generation compared before Track's answer is read, Stop asked
   again when it changed, and only then Track's error as a failure of the mount (plan.md
   § The console's mount part). Step 3, the wait, is US5's. Write the camera part over
-  031 US6's lease, with `HOLDER`, an `Arc` of the lease kept under a std `Mutex`, the
+  031 US9's lease, with `HOLDER`, an `Arc` of the lease kept under a std `Mutex`, the
   lease taken in `hold` before the look for an imaging frame in flight and before the
   region-of-interest check, and the holder's take with the purpose `run` at the
   camera's settings as they stand, setting nothing and asking nothing of 036's

@@ -10,8 +10,8 @@ description: "Task list for 035-live-stack: Live Stack"
   met, all five are drafts;
 - this trio has been re-anchored against `main` after they landed, every plain path of a
   file they create given its line: not met;
-- 031 carries the camera's lease of the plan document's amendment 1 (031 US6) and the
-  colour hold `useColourHold` (031 US4, from the audit's finding A6), and plan.md § The
+- 031 carries the camera's lease of the plan document's amendment 1 (031 US9) and the
+  colour hold `useColourHold` (031 US7, from the audit's finding A6), and plan.md § The
   camera's lease and § The page have been read against 031's plan.md and code (plan.md
   § Prerequisites 8): met in the drafts by the series audit's findings on 031, not met
   on `main`;
@@ -417,7 +417,7 @@ description: "Task list for 035-live-stack: Live Stack"
   `deleteImagingStack` to `crates/finder/web/src/api.ts`, and `stack` to
   `ImagingView`. Create `crates/finder/web/src/components/StackBlock.tsx` with the
   words of plan.md § The page, holding colour under its picture through 031's
-  `useColourHold(night)` of `crates/finder/web/src/useColourHold.ts` (031 US4, from the
+  `useColourHold(night)` of `crates/finder/web/src/useColourHold.ts` (031 US7, from the
   audit's finding A6): the picture's class `photo` unless `held`, and `{...bind}` with
   `aria-pressed={held}` on `Hold to see colour`, writing no timer, listener or key test
   of its own, and place it in

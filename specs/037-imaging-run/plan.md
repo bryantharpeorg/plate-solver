@@ -109,7 +109,7 @@ scope node.
   great-circle `separation`, or `scope_link::proto`. None holds an identifier, an import
   or arithmetic for an axis, an altitude, an azimuth, a rate or axis counts, or a focal
   length, a field size or a scale as a number (§ Plan traps 18).
-- No lock of the run's own on the imaging camera: 031's one lease (031 US6), taken and
+- No lock of the run's own on the imaging camera: 031's one lease (031 US9), taken and
   given back (the plan document, amendment 1).
 - `web/dist` is committed and must be the build of its source (US9).
 - Budgets are things a test measures; this plan states none for the real telescope.
@@ -175,7 +175,7 @@ DESIGN.md                                 # US9: the block
 Everything 030 to 036 create is named as their plan.md gives it in the drafting
 worktree: each of the seven reviewed by a second agent, and all the trios of the series
 audited side by side. The lease of the imaging camera, which the plan document's
-amendment 1 gives 031, is 031's US6; 033, 034 and 035 take the same lease. All of it
+amendment 1 gives 031, is 031's US9; 033, 034 and 035 take the same lease. All of it
 is re-read on `main` before the flip (§ Prerequisites 2 and 3).
 
 ### What 030 to 036 offer (read, never written, by this spec)
@@ -185,7 +185,7 @@ is re-read on `main` before the flip (§ Prerequisites 2 and 3).
 | the camera's state, description, settings and latest imaging frame | 031 | `Imaging::view()` → `ImagingView { state, camera, settings, frame, .. }`; `SettingsView::roi`; `CameraView::{width, height}` | 031 plan.md § The console's imaging state |
 | one imaging frame, awaited, and its abort | 031 | `Imaging::take(purpose)`, `Imaging::ended(id)` → `FrameView`, `Imaging::abort()` | 031 plan.md § Receiving and saving |
 | why a request was not carried out | 031 | `crate::imaging::Refusal { status, message }` | 031 plan.md § The console's imaging state |
-| the one lease of the imaging camera, and an imaging frame taken by its holder | 031 | `Imaging::lease(holder)` → `Lease`, released when dropped; `Lease::take(purpose)`; a refusal `the imaging camera is held by {holder}` | 031 US6 (031 plan.md, its section on the lease); the plan document, amendment 1 |
+| the one lease of the imaging camera, and an imaging frame taken by its holder | 031 | `Imaging::lease(holder)` → `Lease`, released when dropped; `Lease::take(purpose)`; a refusal `the imaging camera is held by {holder}` | 031 US9 (031 plan.md, its section on the lease); the plan document, amendment 1 |
 | the UTC text of a time | 031 | `crate::imaging::fits::utc(unix_s) -> (String, String)` | 031 plan.md § FITS at the console |
 | a target's name as a folder's name takes it | 035 | `crate::imaging::stack::service::label(name: &str) -> String` | 035 spec.md FR-035, US8-S3; 035 plan.md § The stack on the console |
 | the imaging folder | 034 | `Imaging::root()` | 034 plan.md § 031's imaging state |
@@ -1052,7 +1052,7 @@ from `point` on, the stop generation, the target's id and `by`; and a flag,
 pub const HOLDER: &str = "the imaging run";
 ```
 
-It keeps one `Mutex<Option<Arc<Lease>>>`. The lease is 031's US6, which 033, 034 and
+It keeps one `Mutex<Option<Arc<Lease>>>`. The lease is 031's US9, which 033, 034 and
 035 take as well: `Imaging::lease(holder)` answers a `Lease` or a 409 `Refusal` whose
 message is `the imaging camera is held by {holder}`, naming whoever holds the camera,
 and does not wait; while a lease is out, `Imaging::take` and `Imaging::set` by anyone
@@ -1374,7 +1374,7 @@ with these words exactly, each phrase a test asserts on one line of JSX:
 
 Only existing classes and tokens are used; `index.css` does not change. The block holds
 no picture, so the night rule and the hold-to-see-colour control need nothing of it.
-`ImagingPage.tsx` (031 US4) renders `<ImagingRunBlock view={view} refresh={refresh} />`
+`ImagingPage.tsx` (031 US7) renders `<ImagingRunBlock view={view} refresh={refresh} />`
 right after its title block, before the not-ready line and the Camera section, whenever
 it has a view.
 
@@ -1548,7 +1548,7 @@ These are not changed by any story:
 - **031's imaging view and its tests.** `ImagingView` is `#[non_exhaustive]` and its
   tests compare it key by key (031's spec.md § User Scenarios), so a `run` key that
   appears only after a start changes none of them. `Imaging::take`, `ended`, `abort`
-  and `set`, and their refusals, are 031's and unchanged; so is the lease (031 US6).
+  and `set`, and their refusals, are 031's and unchanged; so is the lease (031 US9).
 - **032's solve and relation, 033's check and aid, 035's stack, 036's steering.** The
   parts call them as their plans give them, and change none.
 - **The scripted tests of earlier stories, for the later ones.** A test file an earlier
@@ -1691,11 +1691,11 @@ These are not changed by any story:
 3. **The lease of the imaging camera exists.** Met in the drafts, by the audit round in
    which this trio was revised. The plan document's amendment 1 gives 031's imaging
    state one lease that names its holder, and says each later spec takes and gives it
-   back and adds no lock of its own. 031's trio gains it as its US6 (the audit's
+   back and adds no lock of its own. 031's trio gains it as its US9 (the audit's
    finding A1 on 031), and 034 takes it for a set of darks or flats in place of a check
    of its own (the audit's finding A1 on 034), as 033 and 035 do for the focus aid and
    the stack; 033's plan already words the refusal as this trio does. 031's plan.md
-   § The camera lease now writes US6 out, and the five things below hold there; this
+   § The camera lease now writes US9 out, and the five things below hold there; this
    trio is read again against it when 031 lands, for the same five
    things: the names `Imaging::lease`, `Lease` and `Lease::take`; that a refusal is a
    409 whose words are `the imaging camera is held by {holder}`; that `Lease::take`
@@ -1873,7 +1873,7 @@ story.
 | Risk | Mitigation |
 |---|---|
 | 033, 035 or 036 lands offering something other than its draft. | The run touches them in three small parts and nowhere else; the states, routes, page and tools do not move. § Prerequisites 2 re-anchors, and a gap goes to the owner. |
-| 031 lands the lease under other names, words or rules than its US6 gives. | § Prerequisites 3 lists the five points. Only the camera part's `hold`, `release` and `take` touch it, and five scenarios, two of which state its refusal word for word. |
+| 031 lands the lease under other names, words or rules than its US9 gives. | § Prerequisites 3 lists the five points. Only the camera part's `hold`, `release` and `take` touch it, and five scenarios, two of which state its refusal word for word. |
 | Another taker gets the lease in the instant of a hand-over. | The run's next step is refused with that holder's name and the run says so: a pause, `stack_failed` or `camera_failed` (spec § Edge Cases, US1-S2, US2-S4). Spec owner decision 15 names the other answer, a change to 033 and 035. |
 | The simulator leaves the target just outside 90″, with the true aim point set or after a re-centre, or needs more than three tries. | Unprobed (§ Prerequisites 5). US4-S1 and US5-S4 assert the bounds against the truth, so a miss is seen in the probe of the story that owns the test, and owner decisions 2 and 3 are where the numbers change. |
 | A story still passes 64 KiB. | Unmeasured (§ Prerequisites 5, spec SC-007). Three stories were each cut in two on the review's estimate, and the script is in the library so that nine test modules do not each carry one. US1 is the largest: the machine, the whole script and six scenarios. If the probe shows it over, its scenario of the mount's endings (US1-S5) moves to US2 at the re-anchoring, a move of tests only. US4 is next: if it is over, its scenario of the guards (US4-S4) becomes a story of its own. |
@@ -1913,7 +1913,7 @@ An audit then compared the seven trios the series then had, side by side, and ga
 one four
 minor findings, all applied (spec.md § Clarifications, the last session): owner
 decision 26 now cites 032's owner decision 25 (A1); `run::label` calls 035's
-`crate::imaging::stack::service::label` (A2); the lease is 031's US6, its names no
+`crate::imaging::stack::service::label` (A2); the lease is 031's US9, its names no
 longer marked as assumed, US4-S4 and US6-S7 state its refusal word for word, and owner
 approval 2 names the purpose `run` and the holder's name `the imaging run` (A3); and the
 run's own imaging frames, which 036 does not cap, are a known limit that the README and
@@ -2251,7 +2251,7 @@ stories:
       - "Session::start_tracking, Session::stop_tracking, GoTo, Tracker and api::stop keep their signatures, words and behaviour (plan.md Shapes that existing tests pin)"
       - "the run sends no axis command and reads no axis position (spec.md FR-001)"
       - "no trait of a part gains a method and Steps gains no field"
-      - "the lease is 031's US6: the camera part takes it, gives it back and adds no lock (plan.md Plan traps 20)"
+      - "the lease is 031's US9: the camera part takes it, gives it back and adds no lock (plan.md Plan traps 20)"
       - "the run's own imaging frames are taken at the camera's settings as they stand: the camera part sets nothing and asks nothing of 036's steering (plan.md The console's camera and solver parts)"
       - "every scenario of US1 to US3 still holds: the machine changes by one mod line"
     checks:

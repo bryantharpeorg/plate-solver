@@ -405,7 +405,7 @@ camera gives 2472 × 1642 at full resolution and 1236 × 821 from a frame binned
 1. Make the folder `<work_dir>/solve-<process id>-<n>`, n counting this adapter's calls
    from 1. A failure is `Failed("the imaging solver's work folder could not be
    written: {error}")`.
-2. Read the frame's file and `fits::decode` it (031 US2). A failure is `Failed("the
+2. Read the frame's file and `fits::decode` it (031 US3). A failure is `Failed("the
    imaging frame could not be read: {error}")`. `prepare` it; its error is `Failed`
    with that text. Write the copy with `fits::encode` as `frame.fits` in the folder.
 3. Start the program with the arguments, the base being `<folder>/frame`, its standard
@@ -1371,7 +1371,7 @@ JSX:
 - with `relation.held` true, a `quiet` paragraph `The measured aim point waits until
   Track is off.`
 
-Only existing classes are used. `ImagingPage.tsx` (031 US4) renders
+Only existing classes are used. `ImagingPage.tsx` (031 US7) renders
 `<ImagingSolveBlock view={view} refresh={refresh} />` right after its Imaging frame
 section, only when the view is `ready`.
 
@@ -1461,7 +1461,7 @@ read-only annotation:
   with the solve's own `error`.
 
 It is not a moving tool: no rate limit and no call-log line. It is written as 031's
-`take_imaging_frame` is (031 US5).
+`take_imaging_frame` is (031 US8).
 
 ### `crates/finder/src/lib.rs` and `crates/finder/README.md`
 
@@ -2034,9 +2034,9 @@ stories:
     shared_writes:
       - path: crates/finder/src/imaging/mod.rs
         other_spec: 031-imaging-frames-on-console
-        other_story: US6
+        other_story: US9
         disposition: merge_order
-        reason: "032 depends_on_landed 031, whose US6 last changed imaging/mod.rs"
+        reason: "032 depends_on_landed 031, whose US9 last changed imaging/mod.rs"
       - path: crates/finder/src/imaging/mod.rs
         other_spec: 032-imaging-solve-and-aim-point
         other_story: US2
@@ -2044,9 +2044,9 @@ stories:
         reason: "US2 depends_on_merged US1, and adds its mod lines and the view's solve"
       - path: crates/finder/tests/console/main.rs
         other_spec: 031-imaging-frames-on-console
-        other_story: US6
+        other_story: US9
         disposition: merge_order
-        reason: "032 depends_on_landed 031, whose US6 last changed console/main.rs"
+        reason: "032 depends_on_landed 031, whose US9 last changed console/main.rs"
       - path: crates/finder/tests/console/main.rs
         other_spec: 032-imaging-solve-and-aim-point
         other_story: US2
@@ -2135,9 +2135,9 @@ stories:
     shared_writes:
       - path: crates/finder/README.md
         other_spec: 031-imaging-frames-on-console
-        other_story: US6
+        other_story: US9
         disposition: merge_order
-        reason: "032 depends_on_landed 031, whose US6 last changed the README"
+        reason: "032 depends_on_landed 031, whose US9 last changed the README"
       - path: crates/finder/README.md
         other_spec: 032-imaging-solve-and-aim-point
         other_story: US3
@@ -2160,9 +2160,9 @@ stories:
         reason: "US3 depends_on_merged US2, and adds mod relation and the view's relation"
       - path: crates/finder/src/imaging/routes.rs
         other_spec: 031-imaging-frames-on-console
-        other_story: US3
+        other_story: US6
         disposition: merge_order
-        reason: "032 depends_on_landed 031, whose US3 last changed imaging/routes.rs"
+        reason: "032 depends_on_landed 031, whose US6 last changed imaging/routes.rs"
       - path: crates/finder/src/imaging/solving.rs
         other_spec: 032-imaging-solve-and-aim-point
         other_story: US3
@@ -2170,9 +2170,9 @@ stories:
         reason: "US3 depends_on_merged US2, and adds the hint"
       - path: crates/finder/src/lib.rs
         other_spec: 031-imaging-frames-on-console
-        other_story: US3
+        other_story: US6
         disposition: merge_order
-        reason: "032 depends_on_landed 031, whose US3 last changed lib.rs"
+        reason: "032 depends_on_landed 031, whose US6 last changed lib.rs"
       - path: crates/finder/src/main.rs
         other_spec: 031-imaging-frames-on-console
         other_story: US1
@@ -2576,29 +2576,29 @@ stories:
     shared_writes:
       - path: .impeccable/design.json
         other_spec: 031-imaging-frames-on-console
-        other_story: US4
+        other_story: US7
         disposition: merge_order
-        reason: "032 depends_on_landed 031, whose US4 last changed design.json"
+        reason: "032 depends_on_landed 031, whose US7 last changed design.json"
       - path: DESIGN.md
         other_spec: 031-imaging-frames-on-console
-        other_story: US4
+        other_story: US7
         disposition: merge_order
-        reason: "032 depends_on_landed 031, whose US4 last changed DESIGN.md"
+        reason: "032 depends_on_landed 031, whose US7 last changed DESIGN.md"
       - path: crates/finder/web/dist
         other_spec: 031-imaging-frames-on-console
-        other_story: US4
+        other_story: US7
         disposition: merge_order
-        reason: "032 depends_on_landed 031, whose US4 last rebuilt the bundle"
+        reason: "032 depends_on_landed 031, whose US7 last rebuilt the bundle"
       - path: crates/finder/web/src/api.ts
         other_spec: 031-imaging-frames-on-console
-        other_story: US4
+        other_story: US7
         disposition: merge_order
-        reason: "032 depends_on_landed 031, whose US4 last changed api.ts"
+        reason: "032 depends_on_landed 031, whose US7 last changed api.ts"
       - path: crates/finder/web/src/components/ImagingPage.tsx
         other_spec: 031-imaging-frames-on-console
-        other_story: US4
+        other_story: US7
         disposition: merge_order
-        reason: "032 depends_on_landed 031, whose US4 creates ImagingPage.tsx"
+        reason: "032 depends_on_landed 031, whose US7 creates ImagingPage.tsx"
     open_questions: []
   US7:
     tests:
@@ -2657,13 +2657,13 @@ stories:
     shared_writes:
       - path: crates/finder/src/mcp/tools.rs
         other_spec: 031-imaging-frames-on-console
-        other_story: US5
+        other_story: US8
         disposition: merge_order
-        reason: "032 depends_on_landed 031, whose US5 last changed tools.rs"
+        reason: "032 depends_on_landed 031, whose US8 last changed tools.rs"
       - path: crates/finder/tests/mcp/main.rs
         other_spec: 031-imaging-frames-on-console
-        other_story: US5
+        other_story: US8
         disposition: merge_order
-        reason: "032 depends_on_landed 031, whose US5 last changed mcp/main.rs"
+        reason: "032 depends_on_landed 031, whose US8 last changed mcp/main.rs"
     open_questions: []
 ```

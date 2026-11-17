@@ -11,7 +11,7 @@ depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", 
 # third session). A review of the trio by a second agent was applied the same day
 # (§ Clarifications, the fourth session), and then the series audit of 030 to 037
 # (§ Clarifications, the fifth session): the imaging camera's lease, which User Story 5
-# is written against, is cited from 031's User Story 6, which the same audit gave
+# is written against, is cited from 031's User Story 9, which the same audit gave
 # 031's trio (plan.md § The camera lease, § Prerequisites 11).
 # Citations checked against 49bb210fe4860dd98ba24727074e7bd3cc0d7124, the worktree's
 # HEAD, on 2026-11-15 in the fifth session: every `path:line` in spec.md and plan.md
@@ -176,10 +176,10 @@ focuser to turn.
     lease), `CameraView`, `RoiView`,
     `Refusal`, `Imaging::view`, `Imaging::set`, and the words a request is refused with
     while the camera is not `ready` or an exposure is in progress;
-  - `crates/finder/src/imaging/frames.rs` (031 US2): `FrameView`, `Imaging::take`,
-    `Imaging::abort` and `Imaging::ended`, the purpose label, and a saved frame's `id`,
-    `file`, `width`, `height`, `bits`, `bayer`, `binning`, `roi`, `start` and
-    `exposure_ms`;
+  - `crates/finder/src/imaging/frames.rs` (031 US2 and US5): `FrameView`,
+    `Imaging::take`, `Imaging::abort` and `Imaging::ended`, the purpose label, and a
+    saved frame's `id`, `file`, `width`, `height`, `bits`, `bayer`, `binning`, `roi`,
+    `start` and `exposure_ms`;
   - `crates/finder/src/imaging/routes.rs` (031 US1), where the two routes go, with
     `SessionWrite` and `sim_json`, which 031 makes visible to it;
   - `crates/finder/src/imaging/solver.rs` (032 US1): `Region`, `SolveFrame`,
@@ -199,10 +199,10 @@ focuser to turn.
     `set_imaging_optics` on `optics::Simulator`, reached through
     `controls::Simulator`'s `Deref`, beside which this spec's US1 puts the focuser;
   - `crates/finder/web/src/components/ImagingPage.tsx` and
-    `crates/finder/web/src/useImaging.ts` (031 US4), and 032's Imaging solve block,
+    `crates/finder/web/src/useImaging.ts` (031 US7), and 032's Imaging solve block,
     which 032's own scenarios find as a region named `Imaging solve`;
-  - the MCP tools `get_imaging_camera` and `take_imaging_frame` (031 US5);
-  - the imaging camera's lease (031 US6), which the plan document's amendment 1 gives
+  - the MCP tools `get_imaging_camera` and `take_imaging_frame` (031 US8);
+  - the imaging camera's lease (031 US9), which the plan document's amendment 1 gives
     to 031's imaging state: `Lease`, `Imaging::lease`, `Imaging::holder`, `Lease::set`
     and `Lease::take`, whose refusal while another holds the camera is a 409 with the
     words `the imaging camera is held by {holder}` (the third and fifth sessions below;
@@ -317,7 +317,7 @@ focuser to turn.
   6. Owner decision 10 is weighed again against the "Another telescope later" row.
 - Q: Which of the plan document's amendments reach this spec? → A: Six of the seven.
   - *1, one holder of the camera at a time*: the aid and the check take 031's lease
-    (031 US6) under the name `the focus aid` and release it when they have ended;
+    (031 US9) under the name `the focus aid` and release it when they have ended;
     this spec adds no lock of its own (FR-020, FR-027, SC-007).
   - *3, the storage root*: `focus.json` lies in the imaging folder itself, beside
     032's `relation.json`; the aid's imaging frames are 031's, under `frames/`.
@@ -332,14 +332,14 @@ focuser to turn.
   - *7, dependencies*: `depends_on_landed` names 030, 031 and 032, which is all this spec
     builds on. 034 names this spec in its own.
   - *2, white balance*, does not reach it.
-- Q: Which lease is this trio written against? → A: 031's, as its User Story 6 gives
+- Q: Which lease is this trio written against? → A: 031's, as its User Story 9 gives
   it. When this session ran, 031's reviewed plan.md had no lease: its `take` and `set`
   refused only while an imaging frame was in flight, and its `SettingsEdit` named a
   `RoiEdit` it never defined. So this trio wrote down the smallest shape that says
   what the amendment says (one lease on 031's imaging state, naming its holder; a
   second taker refused with the holder's name; taken and released by each later
   spec), and 035's and 037's drafts assumed the same. The series audit (the fifth
-  session) gave that shape to 031's trio unchanged, as its US6 with `RoiEdit`
+  session) gave that shape to 031's trio unchanged, as its US9 with `RoiEdit`
   defined: the same four functions, `Imaging::lease`, `Imaging::holder`, `Lease::set`
   and `Lease::take`, the same six rules, and the refusal words `the imaging camera is
   held by {holder}`. plan.md § The camera lease now cites it. No story here creates
@@ -414,10 +414,10 @@ focuser to turn.
   was done? → A:
   Three findings, each applied in all three files:
   1. *The lease.* 031's trio now carries the imaging camera's lease as its User Story
-     6 (its owner approval 12), with `RoiEdit` defined in its US1, in the shape this
+     9 (its owner approval 12), with `RoiEdit` defined in its US1, in the shape this
      trio had written down: the four functions, the six rules, and the refusal words
      `the imaging camera is held by {holder}`. plan.md § The camera lease is a
-     citation of 031 US6, with nothing
+     citation of 031 US9, with nothing
      changed in shape; the rule that a single imaging frame holds no lease (its point
      6) is 031's rule now, not an assumption of this trio. US5-S2, US5-S4, US5-S5 and
      the test setup's "The lease" keep their assertions. plan.md § Prerequisites 11 is
@@ -579,7 +579,7 @@ to a story.
     no file, which the solver port could not measure; or, for the exception, removing
     such a frame later, once its solve has ended.
 14. **How the focus aid holds the imaging camera.** That it takes 031's lease (031
-    US6) is the plan document's amendment 1 and not open. What is open is how. Recommended: one
+    US9) is the plan document's amendment 1 and not open. What is open is how. Recommended: one
     holder's name, `the focus aid`, for the aid and for a focus check; the lease is
     taken at the start, after the request has passed every other check, and held
     through finding the region, every imaging frame and putting the settings back,
@@ -702,7 +702,7 @@ and the following. Each is named in the FR or success criterion that makes it.
    and `SimulatedSolver::with_sharpest_at` (FR-005); on `Imaging`, the methods
    `focus_start`, `focus_stop`, `focus_running` and `focus_ended` (FR-020, FR-028,
    FR-029, FR-026); and `focus` in `ImagingView`. The lease is not among them, and
-   neither is `RoiEdit`: both are 031's (the lease is 031 US6), approved with 031's
+   neither is `RoiEdit`: both are 031's (the lease is 031 US9), approved with 031's
    trio, and flipping this spec approves no change to it (plan.md § Prerequisites 11).
 8. **Two MCP tools**: `get_focus_reading` and `set_focus_aid` (FR-035, FR-036).
 9. **`DESIGN.md`**: one new entry, Focus block; the Display line of its Hierarchy gains
@@ -744,7 +744,7 @@ and the following. Each is named in the FR or success criterion that makes it.
     An owner who settles decision 4, 6, 7 or 8 the other way drops that rewording,
     and the trio is changed to match before the flip. "Lease" and "holder" are the
     plan document's words for 031's one holder of the imaging camera (amendment 1;
-    031 US6). The glossary's entry Lease is 031's, not this spec's.
+    031 US9). The glossary's entry Lease is 031's, not this spec's.
 12. **Edits to existing test files** (SC-002), and no others: one `mod` line for each
     new finder test module, in alphabetical order, in
     `crates/finder/tests/console/main.rs` (`mod imaging_focus_aid;`,
@@ -806,7 +806,7 @@ Every scenario shares these definitions unless it says otherwise.
   solver "with a slow measure of m ms" awaits `tokio::time::sleep` of m ms before
   each `measure` answers, and one "with a slow solve of s ms" does the same before
   each `solve` answers; without those words neither waits.
-- **The lease** is 031's (031 US6), as plan.md § The camera lease cites it. In a
+- **The lease** is 031's (031 US9), as plan.md § The camera lease cites it. In a
   scenario, `imaging` is `state.imaging().unwrap()`. "The test takes the lease as `a
   test`" means it calls `imaging.lease("a test")`, requires `Ok`, and keeps the value
   until the scenario says it is dropped. An answer "names" a holder when it is a 409
@@ -1280,7 +1280,7 @@ development, `cargo nextest run -p finder --locked --test console imaging_focus_
      the lease as `a test` and called `take("test")` on it: while `frame.state` is
      `exposing`, `POST /api/imaging/focus` with `{"tile":{"col":1,"row":1}}` names `a
      test`, its `error` is not `an exposure is in progress`, and `focus` has no `aid`;
-   - oracle: the plan document's amendment 1 and 031 US6's rules (a second taker is
+   - oracle: the plan document's amendment 1 and 031 US9's rules (a second taker is
      refused with the holder's name, and the lease is released).
 5. **Given** the focus rig with the scripted solver, `exposure_ms` first set to 2000
    with `PUT /api/imaging/settings`, an aid started with `{"tile":{"col":1,"row":1}}`
@@ -1305,7 +1305,7 @@ development, `cargo nextest run -p finder --locked --test console imaging_focus_
      `set_unresponsive(false)` and a wait until `state` is `ready`, `focus.aid` has
      `ended_reason` `failed` and a `restore_error` that is not empty;
    - oracle: the stated reasons and words, compared exactly, and the plan document's
-     amendment 1 with 031 US6's rules for the lease being free after every ending.
+     amendment 1 with 031 US9's rules for the lease being free after every ending.
 6. **Given** the focus rig with no kept region and the scripted solver whose list is:
    nine entries, each `(25.0, 12)` but the fifth, which is `(22.0, 12)`; then
    `(22.0, 12)`, `(21.0, 12)`, `(12.0, 12)`, `(12.0, 12)`, `(12.0, 12)`; then nine
@@ -2048,7 +2048,7 @@ and `cargo nextest run -p finder --locked --test cli imaging_focus::`.
 
 - **Earlier features are in place.** 030-imaging-camera-link, 031-imaging-frames-on-console and
   032-imaging-solve-and-aim-point have landed, with the interfaces Clarifications list,
-  031 among them with its User Story 6, the imaging camera's lease of the plan
+  031 among them with its User Story 9, the imaging camera's lease of the plan
   document's amendment 1, and a defined `RoiEdit` (plan.md § Prerequisites 11). Every
   `path:line` here was read at 49bb210, the drafting worktree's HEAD, and checked
   there again in the fifth session; every file of 030, 031 and 032 is named without a line.
@@ -2061,7 +2061,7 @@ and `cargo nextest run -p finder --locked --test cli imaging_focus::`.
   - what the imaging run does with a verdict, the "go anyway", where on the sky it
     takes its focus check, and what focus exposure it gives the check (037);
   - dropping subs that measure poorly (035), which calls `focus::read`;
-  - the imaging camera's lease itself (031 US6) and `RoiEdit`, which are 031's, and
+  - the imaging camera's lease itself (031 US9) and `RoiEdit`, which are 031's, and
     how 034's sets, 035's stack and 037's run take the lease; this spec only takes and
     releases it;
   - a lease that its holder can lend to a focus check (037's alternative to its owner
