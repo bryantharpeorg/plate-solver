@@ -1,15 +1,16 @@
 //! The INDI adapter: a client of an INDI server, one connection at a time
 //! (plan.md § The INDI adapter). The adapter is one task that owns the
 //! connection and the properties, and answers every call through a channel of
-//! commands, so `status` works while a later story's `expose` waits.
+//! commands, so `status` and `abort` work while `expose` waits.
 
 pub mod protocol;
 
 use super::{
-    check_settings, BayerPattern, Exposure, ImagingCamera, ImagingError, ImagingFrame,
-    ImagingFuture, ImagingInfo, ImagingSettings, ImagingStatus, Range, Roi,
+    check_exposure, check_settings, fits, BayerPattern, Exposure, ImagingCamera, ImagingError,
+    ImagingFrame, ImagingFuture, ImagingInfo, ImagingSettings, ImagingStatus, Range, Roi,
 };
 use crate::clock::NodeClock;
+use base64::prelude::{Engine as _, BASE64_STANDARD};
 use std::{
     collections::{HashMap, VecDeque},
     future::Future,
@@ -368,6 +369,12 @@ impl Devices {
     }
 }
 
+/// One exposure request, as the port's `expose` sends it (US6).
+struct ExposeRequest {
+    exposure_ms: f64,
+    purpose: String,
+}
+
 /// A command from the port's methods.
 enum Command {
     Describe(oneshot::Sender<Result<ImagingInfo, ImagingError>>),
@@ -376,6 +383,11 @@ enum Command {
         Box<ImagingSettings>,
         oneshot::Sender<Result<ImagingSettings, ImagingError>>,
     ),
+    Expose(
+        Box<ExposeRequest>,
+        oneshot::Sender<Result<ImagingFrame, ImagingError>>,
+    ),
+    Abort(oneshot::Sender<Result<(), ImagingError>>),
 }
 
 /// Where a connection stands in the connecting sequence of plan.md § The INDI
@@ -409,6 +421,41 @@ struct ApplyFlight {
     rest: VecDeque<(String, String)>,
 }
 
+/// Where an exposure stands between its tries (plan.md § The INDI adapter,
+/// **When it goes wrong**).
+enum Stage {
+    /// Steps 1 and 2 of `expose` are sent; the adapter waits for the device
+    /// to report the exposure `Busy` (the start), to fail it with `Alert`,
+    /// or to send the frame.
+    Waiting,
+    /// The try failed; the abort switch was sent while the connection was
+    /// alive, and `RETRY_PAUSE` runs out before the next try, which is made
+    /// on a new connection when the failure lost this one.
+    Retry,
+}
+
+/// The exposure in flight (US6): its answer, its try, its timings and the
+/// region the exposure was asked for (plan.md § The INDI adapter, `expose`).
+struct Flight {
+    reply: oneshot::Sender<Result<ImagingFrame, ImagingError>>,
+    exposure_ms: f64,
+    purpose: String,
+    /// The clock reading when the request was sent (step 2): the fallback
+    /// start, and the anchor of the download wait.
+    sent_s: f64,
+    /// The region of interest as `CCD_FRAME` stood when the exposure was
+    /// asked for (step 2), the frame's `roi`.
+    roi: Roi,
+    /// The clock reading at the first `Busy` answer, when one has come.
+    start_s: Option<f64>,
+    /// Which try is in flight: 1 for the first, 2 for the second.
+    tries: u32,
+    stage: Stage,
+    /// The instant of the stage's end: the frame's arrival, or the pause
+    /// before the next try.
+    deadline: Instant,
+}
+
 /// The adapter's one task.
 struct Adapter {
     connect: IndiConnect,
@@ -417,8 +464,7 @@ struct Adapter {
     device: Option<String>,
     /// The controls set on each connection (US5).
     neutral: NeutralControls,
-    /// US6's exposures read it; US5 carries it.
-    #[allow(dead_code)]
+    /// US6's exposures read it; US5 carried it.
     clock: Arc<dyn NodeClock>,
     cmd_rx: mpsc::UnboundedReceiver<Command>,
     /// The connection's write half, when there is one.
@@ -445,6 +491,8 @@ struct Adapter {
     neutral_rest: VecDeque<(String, String)>,
     /// The apply in flight, when one is.
     applying: Option<ApplyFlight>,
+    /// The exposure in flight, when one is (US6).
+    exposing: Option<Flight>,
     /// The set temperature the adapter was last asked for, sent when the
     /// cooler is on and remembered when it is not.
     set_temp_c: Option<f64>,
@@ -453,15 +501,25 @@ struct Adapter {
 /// The error of a lost connection, whatever the phase.
 const CLOSED: &str = "the INDI server closed the connection";
 
+/// A sleep far past every deadline, for the waits the connection carries.
+const FAR: Duration = Duration::from_secs(365 * 86_400);
+
 impl Adapter {
     async fn run(mut self) {
         // A sleep far past every deadline, for the phases without one.
-        let far = Instant::now() + Duration::from_secs(365 * 86_400);
+        let far = Instant::now() + FAR;
         loop {
             let cmd_rx = &mut self.cmd_rx;
             let elements = &mut self.elements;
             let dial = &mut self.dial;
-            let sleep = tokio::time::sleep_until(self.deadline.unwrap_or(far));
+            // The exposure keeps its own deadline beside the connection's,
+            // because an exposure can wait while a settings change is in
+            // flight, and either can come first.
+            let next = match (self.deadline, self.exposing.as_ref().map(|f| f.deadline)) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (a, b) => a.or(b),
+            };
+            let sleep = tokio::time::sleep_until(next.unwrap_or(far));
             tokio::select! {
                 biased;
                 element = async {
@@ -473,7 +531,7 @@ impl Adapter {
                     Some(Ok(element)) => self.element(element).await,
                     // The stream ended, or failed; either way the connection
                     // is lost.
-                    Some(Err(_)) | None => self.stream_ended(),
+                    Some(Err(_)) | None => self.stream_ended().await,
                 },
                 // The receiver is polled by pin, never consumed, so a command
                 // or an element winning the wait loses nothing.
@@ -495,7 +553,7 @@ impl Adapter {
                         Err(_) => self.fail(CLOSED.to_string()),
                     }
                 }
-                _ = sleep => self.deadline_fired().await,
+                _ = sleep => self.timers_fired().await,
                 cmd = cmd_rx.recv() => match cmd {
                     None => return,
                     Some(cmd) => self.command(cmd).await,
@@ -514,7 +572,9 @@ impl Adapter {
     }
 
     /// Lose the connection, whatever it was. An apply in flight is answered
-    /// with the loss; a connecting failure answers its own error first.
+    /// with the loss; an exposure between its tries keeps its pause and
+    /// connects again when the pause is out; a connecting failure answers
+    /// its own error first.
     fn drop_connection(&mut self) {
         if let Some(flight) = self.applying.take() {
             let _ = flight
@@ -535,10 +595,18 @@ impl Adapter {
     }
 
     /// Fail the connection: drop it, and answer every waiting command with
-    /// the failure, so the next command connects again.
+    /// the failure, so the next command connects again. An exposure waiting
+    /// out the pause before its second try answers the same failure with the
+    /// failed-twice words around it (plan.md § The INDI adapter, **When it
+    /// goes wrong**).
     fn fail(&mut self, text: String) {
         if let Some(flight) = self.applying.take() {
             let _ = flight.reply.send(Err(ImagingError::Failed(text.clone())));
+        }
+        if let Some(flight) = self.exposing.take() {
+            let _ = flight.reply.send(Err(ImagingError::Failed(format!(
+                "the exposure failed twice: {text}"
+            ))));
         }
         self.drop_connection();
         let error = ImagingError::Failed(text);
@@ -553,14 +621,32 @@ impl Adapter {
                 Command::Apply(_, reply) => {
                     let _ = reply.send(Err(error.clone()));
                 }
+                Command::Expose(_, reply) => {
+                    let _ = reply.send(Err(error.clone()));
+                }
+                Command::Abort(reply) => {
+                    let _ = reply.send(Ok(()));
+                }
             }
         }
     }
 
-    /// The connection ended: a live one is quietly dropped, so the next
+    /// The connection ended: a live one fails an exposure's try without an
+    /// abort (the connection is gone) and is quietly dropped, so the next
     /// command connects again; a connecting one is a failure.
-    fn stream_ended(&mut self) {
+    async fn stream_ended(&mut self) {
         if self.phase.is_ready() {
+            // The stream is gone, so the write half is gone with it: no
+            // abort switch is sent, and the failure's try goes on to its
+            // pause and a new connection.
+            self.writer = None;
+            if self
+                .exposing
+                .as_ref()
+                .is_some_and(|flight| matches!(flight.stage, Stage::Waiting))
+            {
+                self.attempt_failed(CLOSED.to_string()).await;
+            }
             self.drop_connection();
         } else {
             self.fail(CLOSED.to_string());
@@ -638,6 +724,7 @@ impl Adapter {
                         self.apply_answer(&element).await;
                     }
                 }
+                self.exposure_element(element).await;
             }
         }
     }
@@ -741,6 +828,22 @@ impl Adapter {
             Some(quiet) if self.ready() => Some(quiet.min(ready)),
             _ => Some(ready),
         };
+    }
+
+    /// The loop's sleep ran out: whichever of the connection's and the
+    /// exposure's deadlines is due has fired, and both can be due at once.
+    async fn timers_fired(&mut self) {
+        let now = Instant::now();
+        if self
+            .exposing
+            .as_ref()
+            .is_some_and(|flight| flight.deadline <= now)
+        {
+            self.exposure_tick().await;
+        }
+        if self.deadline.is_some_and(|deadline| deadline <= now) {
+            self.deadline_fired().await;
+        }
     }
 
     async fn deadline_fired(&mut self) {
@@ -932,6 +1035,21 @@ impl Adapter {
             .collect()
     }
 
+    /// Start a connection: the connector is called on its own task, so a
+    /// slow dial never holds the adapter's.
+    fn start_dial(&mut self) {
+        if !matches!(self.phase, Phase::Idle) {
+            return;
+        }
+        let (tx, dial) = oneshot::channel();
+        let connect = self.connect.clone();
+        tokio::spawn(async move {
+            let _ = tx.send(connect().await);
+        });
+        self.dial = Some(dial);
+        self.phase = Phase::Dialing;
+    }
+
     /// A call of the port. A connected camera is answered from what the
     /// adapter holds; any other one waits for the connection being made.
     async fn command(&mut self, cmd: Command) {
@@ -939,22 +1057,22 @@ impl Adapter {
             self.answer(cmd).await;
             return;
         }
-        if matches!(self.phase, Phase::Idle) {
-            let (tx, dial) = oneshot::channel();
-            let connect = self.connect.clone();
-            tokio::spawn(async move {
-                let _ = tx.send(connect().await);
-            });
-            self.dial = Some(dial);
-            self.phase = Phase::Dialing;
-        }
+        self.start_dial();
         self.waiting.push_back(cmd);
     }
 
-    /// Answer every waiting command from what the adapter holds.
+    /// Answer every waiting command from what the adapter holds, and then
+    /// arm an exposure that waited out its pause for this new connection.
     async fn answer_waiting(&mut self) {
         while let Some(cmd) = self.waiting.pop_front() {
             self.answer(cmd).await;
+        }
+        if self
+            .exposing
+            .as_ref()
+            .is_some_and(|flight| matches!(flight.stage, Stage::Retry))
+        {
+            self.arm().await;
         }
     }
 
@@ -967,6 +1085,24 @@ impl Adapter {
                 let _ = reply.send(Ok(self.status()));
             }
             Command::Apply(edit, reply) => self.apply(*edit, reply).await,
+            Command::Expose(request, reply) => self.expose(*request, reply).await,
+            Command::Abort(reply) => {
+                // With an exposure waiting, the abort switch ends it with
+                // `Aborted` at once; with none, there is nothing to send.
+                if let Some(flight) = self.exposing.take() {
+                    if let Some(device) = self.chosen.clone() {
+                        let _ = self
+                            .write(&protocol::new_switch(
+                                &device,
+                                "CCD_ABORT_EXPOSURE",
+                                "ABORT",
+                            ))
+                            .await;
+                    }
+                    let _ = flight.reply.send(Err(ImagingError::Aborted));
+                }
+                let _ = reply.send(Ok(()));
+            }
         }
     }
 
@@ -1042,8 +1178,7 @@ impl Adapter {
             temp_c: number("CCD_TEMPERATURE", "CCD_TEMPERATURE_VALUE"),
             cooler_power: number("CCD_COOLER_POWER", "CCD_COOLER_VALUE"),
             set_temp_c: self.set_temp_c,
-            // US6 replaces this with the exposure's mark.
-            exposing: false,
+            exposing: self.exposing.is_some(),
         }
     }
 
@@ -1085,6 +1220,50 @@ impl Adapter {
         }
     }
 
+    /// US6's `expose` (plan.md § The INDI adapter, `expose`): the request is
+    /// checked against the description, refused with `Busy` when one waits,
+    /// and then armed — the frame type the purpose chooses and
+    /// `CCD_EXPOSURE` in seconds, the clock and the region noted. The frame
+    /// arrives with the BLOB; a failure is retried once (§ **When it goes
+    /// wrong**).
+    async fn expose(
+        &mut self,
+        request: ExposeRequest,
+        reply: oneshot::Sender<Result<ImagingFrame, ImagingError>>,
+    ) {
+        let exposure = Exposure {
+            exposure_ms: request.exposure_ms,
+            purpose: request.purpose.clone(),
+        };
+        let info = match self.describe() {
+            Ok(info) => info,
+            Err(error) => {
+                let _ = reply.send(Err(error));
+                return;
+            }
+        };
+        if let Err(error) = check_exposure(&info, &exposure) {
+            let _ = reply.send(Err(error));
+            return;
+        }
+        if self.exposing.is_some() {
+            let _ = reply.send(Err(ImagingError::Busy));
+            return;
+        }
+        self.exposing = Some(Flight {
+            reply,
+            exposure_ms: request.exposure_ms,
+            purpose: request.purpose,
+            sent_s: 0.0,
+            roi: Roi::default(),
+            start_s: None,
+            tries: 1,
+            stage: Stage::Waiting,
+            deadline: Instant::now() + FAR,
+        });
+        self.arm().await;
+    }
+
     /// US5's `apply`: check the edit against the description and the
     /// settings in force, then send one vector for each setting present, in
     /// plan.md's order, awaiting each answer within `ANSWER_WAIT` (plan.md §
@@ -1097,6 +1276,13 @@ impl Adapter {
         reply: oneshot::Sender<Result<ImagingSettings, ImagingError>>,
     ) {
         if self.applying.is_some() {
+            let _ = reply.send(Err(ImagingError::Busy));
+            return;
+        }
+        // During an exposure, an edit that names any setting answers `Busy`
+        // before any check and changes nothing; an empty one answers the
+        // settings in force (plan.md § The port, **During an exposure**).
+        if self.exposing.is_some() && edit != ImagingSettings::default() {
             let _ = reply.send(Err(ImagingError::Busy));
             return;
         }
@@ -1261,6 +1447,308 @@ impl Adapter {
         }
     }
 
+    /// One element of the connected device while an exposure is in flight:
+    /// the first `Busy` answer of `CCD_EXPOSURE` is the frame's start, an
+    /// `Alert` answer fails the try, and a `setBLOBVector` of `CCD1` is the
+    /// frame itself. A BLOB that arrives in any other state is dropped
+    /// (plan.md § The INDI adapter, `expose`).
+    async fn exposure_element(&mut self, element: protocol::Element) {
+        let waiting = self
+            .exposing
+            .as_ref()
+            .is_some_and(|flight| matches!(flight.stage, Stage::Waiting));
+        if !waiting {
+            return;
+        }
+        if self.is_answer(&element, "CCD_EXPOSURE") {
+            match State::parse(element.attr("state")) {
+                State::Busy => {
+                    if let Some(flight) = self.exposing.as_mut() {
+                        if flight.start_s.is_none() {
+                            flight.start_s = Some(self.clock.now());
+                        }
+                    }
+                }
+                State::Alert => {
+                    // The answer's own `message` attribute alone: an earlier
+                    // `message` element is never used, since a device sends
+                    // unrelated messages during an exposure.
+                    let reason = match element.attr("message") {
+                        Some(message) if !message.is_empty() => {
+                            format!("the camera reported a failed exposure: {message}")
+                        }
+                        _ => "the camera reported a failed exposure".to_string(),
+                    };
+                    self.attempt_failed(reason).await;
+                }
+                _ => {}
+            }
+            return;
+        }
+        if self.is_answer(&element, "CCD1") && element.tag == "setBLOBVector" {
+            self.the_blob(element).await;
+        }
+    }
+
+    /// Steps 1 and 2 of `expose`: the frame type the purpose chooses, then
+    /// `CCD_EXPOSURE` in seconds; and the clock and the region noted, the
+    /// download wait counted from this instant (plan.md § The INDI adapter).
+    async fn arm(&mut self) {
+        let Some(device) = self.chosen.clone() else {
+            self.attempt_failed(CLOSED.to_string()).await;
+            return;
+        };
+        let (purpose, seconds) = {
+            let Some(flight) = self.exposing.as_ref() else {
+                return;
+            };
+            (flight.purpose.clone(), flight.exposure_ms / 1000.0)
+        };
+        if self.devices.defined(&device, "CCD_FRAME_TYPE") {
+            let element = match purpose.as_str() {
+                "dark" => "FRAME_DARK",
+                "flat" => "FRAME_FLAT",
+                _ => "FRAME_LIGHT",
+            };
+            if self
+                .write(&protocol::new_switch(&device, "CCD_FRAME_TYPE", element))
+                .await
+                .is_err()
+            {
+                self.attempt_failed(CLOSED.to_string()).await;
+                return;
+            }
+        }
+        if self
+            .write(&protocol::new_number(
+                &device,
+                "CCD_EXPOSURE",
+                &[("CCD_EXPOSURE_VALUE", seconds)],
+            ))
+            .await
+            .is_err()
+        {
+            self.attempt_failed(CLOSED.to_string()).await;
+            return;
+        }
+        let roi = self.noted_roi(&device);
+        let Some(flight) = self.exposing.as_mut() else {
+            return;
+        };
+        flight.sent_s = self.clock.now();
+        flight.roi = roi;
+        flight.start_s = None;
+        flight.stage = Stage::Waiting;
+        flight.deadline =
+            Instant::now() + Duration::from_secs_f64(seconds.max(0.0)) + DOWNLOAD_WAIT;
+    }
+
+    /// The region the exposure was asked for: `CCD_FRAME` as it stands, or
+    /// the whole sensor of `CCD_INFO` when the device defines no `CCD_FRAME`.
+    fn noted_roi(&self, device: &str) -> Roi {
+        let Some(world) = self.devices.map.get(device) else {
+            return Roi::default();
+        };
+        let frame = |name: &str| {
+            world
+                .props
+                .get("CCD_FRAME")
+                .and_then(|prop| match &prop.kind {
+                    Kind::Number(elements) => elements
+                        .iter()
+                        .find(|element| element.name == name)
+                        .map(|element| element.value.round() as u32),
+                    _ => None,
+                })
+        };
+        if let (Some(x), Some(y), Some(width), Some(height)) =
+            (frame("X"), frame("Y"), frame("WIDTH"), frame("HEIGHT"))
+        {
+            return Roi {
+                x,
+                y,
+                width,
+                height,
+            };
+        }
+        Roi {
+            x: 0,
+            y: 0,
+            width: world
+                .number_value("CCD_INFO", "CCD_MAX_X")
+                .unwrap_or_default()
+                .round() as u32,
+            height: world
+                .number_value("CCD_INFO", "CCD_MAX_Y")
+                .unwrap_or_default()
+                .round() as u32,
+        }
+    }
+
+    /// One try of the exposure failed. The first failure sends the abort
+    /// switch while the connection is alive, waits out `RETRY_PAUSE` and
+    /// tries once more; the second sends the abort again, if it can, and
+    /// answers `Failed` with the reason (plan.md § The INDI adapter, **When
+    /// it goes wrong**).
+    async fn attempt_failed(&mut self, reason: String) {
+        let connected = self.phase.is_ready() && self.writer.is_some();
+        if connected {
+            let Some(device) = self.chosen.clone() else {
+                return;
+            };
+            let _ = self
+                .write(&protocol::new_switch(
+                    &device,
+                    "CCD_ABORT_EXPOSURE",
+                    "ABORT",
+                ))
+                .await;
+        }
+        let Some(flight) = self.exposing.as_mut() else {
+            return;
+        };
+        if flight.tries >= 2 {
+            let flight = self.exposing.take().unwrap();
+            let _ = flight.reply.send(Err(ImagingError::Failed(format!(
+                "the exposure failed twice: {reason}"
+            ))));
+            return;
+        }
+        flight.tries += 1;
+        flight.stage = Stage::Retry;
+        flight.deadline = Instant::now() + RETRY_PAUSE;
+    }
+
+    /// The exposure's own deadline fired: no frame came within the exposure
+    /// plus `DOWNLOAD_WAIT` of the request, or the pause before the next try
+    /// is over and the try is made — on this connection while it lives, on a
+    /// new one when the failure lost it.
+    async fn exposure_tick(&mut self) {
+        let stage = self
+            .exposing
+            .as_ref()
+            .map(|flight| matches!(flight.stage, Stage::Waiting));
+        match stage {
+            Some(true) => {
+                self.attempt_failed(
+                    "no imaging frame arrived within 60 s of the exposure's end".to_string(),
+                )
+                .await;
+            }
+            Some(false) => {
+                if matches!(self.phase, Phase::Idle) {
+                    // The failure lost the connection; the try is made on a
+                    // new one.
+                    self.start_dial();
+                }
+                if self.phase.is_ready() {
+                    self.arm().await;
+                } else if let Some(flight) = self.exposing.as_mut() {
+                    // The exposure is armed when the connection is ready,
+                    // and the connection's own waits carry it there; the
+                    // flight's deadline rests meanwhile.
+                    flight.deadline = Instant::now() + FAR;
+                }
+            }
+            None => {}
+        }
+    }
+
+    /// A `setBLOBVector` of `CCD1` while an exposure waits: its format must
+    /// be `.fits`, its text base64 and a FITS image, all read on the blocking
+    /// pool since a full frame is 43 MB of text. A BLOB that cannot be read
+    /// fails the exposure at once, with no abort and no second try.
+    async fn the_blob(&mut self, element: protocol::Element) {
+        let Some(blob) = element
+            .children
+            .into_iter()
+            .find(|child| child.tag == "oneBLOB")
+        else {
+            self.instant_failure("the camera sent a BLOB with no oneBLOB".to_string());
+            return;
+        };
+        let format = blob.attr("format").unwrap_or_default().to_string();
+        if format != ".fits" {
+            self.instant_failure(format!("the camera sent {format}, not .fits"));
+            return;
+        }
+        let text = blob.text;
+        let picture = tokio::task::spawn_blocking(move || -> Result<fits::Picture, String> {
+            let bytes: Vec<u8> = text
+                .chars()
+                .filter(|char| !char.is_whitespace())
+                .collect::<String>()
+                .into_bytes();
+            let bytes = BASE64_STANDARD
+                .decode(bytes)
+                .map_err(|error| format!("the camera's BLOB is not base64: {error}"))?;
+            fits::read(&bytes)
+        })
+        .await
+        .unwrap_or_else(|_| Err("the camera's BLOB could not be read".to_string()));
+        match picture {
+            Err(text) => self.instant_failure(text),
+            Ok(picture) => self.answer_frame(picture).await,
+        }
+    }
+
+    /// Answer the frame of the BLOB (step 5 of plan.md § The INDI adapter's
+    /// `expose`): the times of the exposure, the controls from the device's
+    /// properties, the mosaic and binning from the header with the device
+    /// standing in, and the region the exposure was asked for.
+    async fn answer_frame(&mut self, picture: fits::Picture) {
+        let Some(flight) = self.exposing.take() else {
+            return;
+        };
+        let world = self
+            .chosen
+            .as_ref()
+            .and_then(|chosen| self.devices.map.get(chosen));
+        let number = |property: &str, element: &str| {
+            world.and_then(|world| world.number_value(property, element))
+        };
+        let number_of = |text: Option<&str>| text.and_then(|text| text.trim().parse::<f64>().ok());
+        let bayer = picture
+            .card("BAYERPAT")
+            .and_then(BayerPattern::parse)
+            .or_else(|| {
+                world
+                    .and_then(|world| world.text_value("CCD_CFA", "CFA_TYPE"))
+                    .and_then(|text| BayerPattern::parse(&text))
+            });
+        let binning = number_of(picture.card("XBINNING"))
+            .map(|value| value as u32)
+            .or_else(|| number("CCD_BINNING", "HOR_BIN").map(|value| value as u32))
+            .unwrap_or(1);
+        let temp_c = number_of(picture.card("CCD-TEMP"))
+            .or_else(|| number("CCD_TEMPERATURE", "CCD_TEMPERATURE_VALUE"));
+        let start_s = flight.start_s.unwrap_or(flight.sent_s);
+        let frame = ImagingFrame {
+            width: picture.width,
+            height: picture.height,
+            bits: picture.bits,
+            samples: picture.samples,
+            bayer,
+            start_s,
+            end_s: start_s + flight.exposure_ms / 1000.0,
+            exposure_ms: flight.exposure_ms,
+            gain: number("CCD_CONTROLS", "Gain").or_else(|| number("CCD_GAIN", "GAIN")),
+            offset: number("CCD_CONTROLS", "Offset").or_else(|| number("CCD_OFFSET", "OFFSET")),
+            binning,
+            temp_c,
+            roi: flight.roi,
+        };
+        let _ = flight.reply.send(Ok(frame));
+    }
+
+    /// A BLOB that cannot be read fails the exposure at once: no abort, no
+    /// second try (plan.md § The INDI adapter, **When it goes wrong**).
+    fn instant_failure(&mut self, text: String) {
+        if let Some(flight) = self.exposing.take() {
+            let _ = flight.reply.send(Err(ImagingError::Failed(text)));
+        }
+    }
+
     /// One `CCD_CONTROLS` vector's values: every element in its defined
     /// order at its latest value, the changed ones changed (owner decision
     /// 13). `None` when the device defines no `CCD_CONTROLS`.
@@ -1335,6 +1823,7 @@ impl IndiCamera {
                 neutral_wait: None,
                 neutral_rest: VecDeque::new(),
                 applying: None,
+                exposing: None,
                 set_temp_c: None,
             }
             .run(),
@@ -1382,19 +1871,25 @@ impl ImagingCamera for IndiCamera {
         Box::pin(answer(rx))
     }
 
-    /// Exposures arrive with US6.
-    fn expose<'a>(&'a self, _exposure: &'a Exposure) -> ImagingFuture<'a, ImagingFrame> {
-        Box::pin(async {
-            Err(ImagingError::Failed(
-                "exposures arrive with US6".to_string(),
-            ))
-        })
+    /// One exposure through INDI: the request travels to the adapter's one
+    /// task, which arms it and answers the frame or the failure (US6).
+    fn expose<'a>(&'a self, exposure: &'a Exposure) -> ImagingFuture<'a, ImagingFrame> {
+        let (tx, rx) = oneshot::channel();
+        let _ = self.cmd.send(Command::Expose(
+            Box::new(ExposeRequest {
+                exposure_ms: exposure.exposure_ms,
+                purpose: exposure.purpose.clone(),
+            }),
+            tx,
+        ));
+        Box::pin(answer(rx))
     }
 
-    /// US6 ends a waiting exposure with `Aborted`; until then there is none
-    /// to end.
+    /// End a waiting exposure with `Aborted` (US6).
     fn abort(&self) -> ImagingFuture<'_, ()> {
-        Box::pin(async { Ok(()) })
+        let (tx, rx) = oneshot::channel();
+        let _ = self.cmd.send(Command::Abort(tx));
+        Box::pin(answer(rx))
     }
 }
 
