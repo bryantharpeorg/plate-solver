@@ -114,7 +114,7 @@ disk, two MCP tools, one page block.
 | II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS`, `ergane.yaml` or `playwright.config.ts` is edited. New tests are new module files; each adds one `mod` line to its binary's `main.rs`, which holds no test (spec owner approval 12). 032's scenario of the simulated adapter's star measure passes unchanged, because the two new builders are off unless called. |
 | III. Tests first, independent expectations | Oracles: the simulator's star size, worked from 030's point-spread constants in spec.md; worked examples whose arithmetic is shown; the published SplitMix64 stream; a `focus.json` written by hand in a test; and, for scenarios that check only words, statuses and keys, the scenario's own stated text. Every scenario names its oracle and tolerance. Time comes from the console's clock (`crates/finder/src/session.rs:24`) and tokio's paused time; nothing here reads a system clock. |
 | IV. Critical paths | No `unsafe`, no `Cargo.toml` or `Cargo.lock` change, nothing under `proto/` or `crates/math-core`. |
-| V. Standalone Rust, honest licensing | The focus reading is measured by the imaging solver, ASTAP, through 032's solver port: the same reading of V that 032 needs from the owner (§ Prerequisites 4). Nothing of ASTAP or of any focusing tool is copied; PHD2, SharpCap, N.I.N.A. and Ekos are cited in the research note as prior art for behaviour, not as sources of code. |
+| V. Proven open source first, honest licensing | The focus reading is measured by the imaging solver, ASTAP, through 032's solver port, as principle V of constitution 1.3.0 allows (§ Prerequisites 4). Nothing of ASTAP or of any focusing tool is copied; PHD2, SharpCap, N.I.N.A. and Ekos are cited in the research note as prior art for behaviour, not as sources of code. |
 
 ## Project Structure
 
@@ -1598,7 +1598,7 @@ These are not changed by any story:
    measurable stars at a sparse field: 2 (the tiles), 16 (the focus exposure), 21 (the
    measure's floor) and 24 (far out at the start).
 4. **Constitution V is read or amended by the owner**, as 032's Prerequisites ask: the
-   focus reading is measured by ASTAP through the same port. Not met.
+   focus reading is measured by ASTAP through the same port. Met: constitution 1.3.0 (PR 239, merged 2026-11-17 as `cc593c7`).
 5. **The trio is probe-built.** Not met. No story has been compiled. Before the flip
    each of the eight is built from this trio in a throwaway worktree on `main` with 030, 031
    and 032 landed, tests first, with both gates; each diff is measured as plan trap 3

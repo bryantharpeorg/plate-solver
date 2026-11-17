@@ -165,7 +165,7 @@ An imaging frame of an evenly lit field, to record vignetting and dust shadows. 
 _Avoid_: flat field
 
 **Calibration library**:
-The console's master darks and master flats, each kept with the camera, gain, offset, binning and set temperature it was made with, and for a master dark its exposure.
+The console's master darks and master flats, each kept with a record of how it was made: the camera, gain, offset, binning and set temperature, and for a master dark its exposure.
 _Avoid_: calibration set, dark library
 
 **Stack**:

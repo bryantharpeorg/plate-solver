@@ -114,7 +114,7 @@ four routes, three MCP tools, one page block, nine stories.
 | II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS`, `ergane.yaml` or `playwright.config.ts` is edited. The only edits to existing test files are the `mod` lines spec owner approval 9 names. Every test 030, 031, 032 and 033 land must pass unchanged, and § Shapes that existing tests pin says what that requires. |
 | III. Tests first, independent expectations | Oracles: the simulator's declared patterns (themselves pinned by worked examples in US1), worked examples by hand, a scripted camera of the test's own, and files the test reads with its own FITS reader. A master is compared with the mean the test takes of the saved frames. Clocks are injected; virtual time only in tests. |
 | IV. Critical paths | No `unsafe`, no dependency or `Cargo.toml` change, nothing under `proto/`, no scope-link change, no database-format change, no `build.rs` change. |
-| V. Standalone Rust, honest licensing | The finder camera's solver is untouched. The arithmetic here is this project's own; the open stackers the research note cites were read for their order of steps, and none of their code is copied. |
+| V. Proven open source first, honest licensing | The finder camera's solver is untouched. The arithmetic here is this project's own; the open stackers the research note cites were read for their order of steps, and none of their code is copied. |
 
 ## Project Structure
 

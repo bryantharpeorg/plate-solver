@@ -104,7 +104,7 @@ one chart mark.
 | II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS`, `ergane.yaml` or `playwright.config.ts` is edited. New tests are new module files; each adds one `mod` line to its binary's `main.rs`, which holds no test (spec owner approval 13). |
 | III. Tests first, independent expectations | Oracles: the simulator's truth read by each test itself; two worked answers and the worked examples whose arithmetic is in spec.md; ASTAP's documents; saved captures whose star places come from a catalogue; and, for the scenarios that check only words, statuses and keys, the scenario's own stated text. Every scenario names its oracle and its tolerances. Time comes from outside everywhere but one place: the ASTAP adapter reads `std::time::Instant` twice, for the deadline of the child process it waits on and for `took_ms`, because a real program cannot be waited for on paused tokio time (§ Plan traps 7). The limits themselves are injected with `with_limits`, so US1-S5 proves the deadline in under two seconds; every other wait in a test is on virtual time. |
 | IV. Critical paths | No `unsafe`, no `Cargo.toml` or `Cargo.lock` change, nothing under `proto/` or `crates/math-core`. |
-| V. Standalone Rust, honest licensing | "The solver is our own Rust" stays true of the finder camera's solver. The imaging solver is ASTAP, by the owner's decision (ADR-0002): that needs the owner's amendment or written reading of V before the flip (§ Prerequisites 4). ASTAP is MPL-2.0, run as a separate program; none of its source is copied; the README names it and the database's credit line. |
+| V. Proven open source first, honest licensing | The finder camera's solver stays our own Rust. The imaging solver is ASTAP, by the owner's decision (ADR-0002), reached the way principle V of constitution 1.3.0 allows: a separate program behind the solver port, never linked, which the gates reach through the simulated adapter and saved captures (§ Prerequisites 4). ASTAP is MPL-2.0; none of its source is copied; the README names it, its licence and the database's credit line (FR-013). |
 
 ## Project Structure
 
@@ -1702,10 +1702,10 @@ These are not changed by any story:
    | `crates/scope-node/tests/rpicam.rs` | 129 | 140 |
 3. **The owner decisions are settled and the approvals given** (spec § Owner decisions,
    § Owner approvals). Not met: all twenty-five decisions are open.
-4. **Constitution V is read or amended by the owner.** Not met. Principle V says "The
-   solver is our own Rust"; the imaging solver is ASTAP. The owner either amends V, in a
-   pull request of its own, or writes that V covers the finder camera's solver. No story
-   may do either.
+4. **Constitution V is read or amended by the owner.** Met: the owner amended it in
+   constitution 1.3.0 (PR 239, merged 2026-11-17 as `cc593c7`). Principle V now reads "Proven open source first, with honest
+   licensing": the plate solver stays our own Rust, and a separate program called
+   behind one of our ports, never linked, is one of the ways reused software comes in.
 5. **The saved captures are recorded and staged.** Not met: the grilling session could
    not run ASTAP. The owner runs § Capturing ASTAP's output and commits
    `fixtures/finder/astap/`. US1 cannot pass without it, and no story may write it. If

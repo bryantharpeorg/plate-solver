@@ -127,7 +127,7 @@ tools, one README section, in eleven stories.
 | II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS`, `ergane.yaml` or `playwright.config.ts` is edited. The only edits to existing test files are the `mod` lines spec owner approval 8 names. |
 | III. Tests first, independent expectations | Oracles: for the machine, the words, states and call lists each scenario states, compared with what a scripted stand-in recorded; for the real parts, the simulator's truth (the true aim point, the true centre of the imaging frame, the mount's true motion), the session, and the answers of 031's and 033's own routes. `run.json` and `stack.json` are parsed by the tests themselves. Clocks are injected; virtual time only in tests and `finder --simulate`. |
 | IV. Critical paths | No `unsafe`, no dependency or `Cargo.toml` change, no database-format change, nothing under `proto/`, nothing in `crates/scope-link`. |
-| V. Standalone Rust, honest licensing | The finder camera's solver is untouched. The run reaches ASTAP only through 032's solver port; the constitution's reading of principle V for that is the plan document's first item before any flip. |
+| V. Proven open source first, honest licensing | The finder camera's solver is untouched. The run reaches ASTAP only through 032's solver port; principle V of constitution 1.3.0 allows that. |
 
 ## Project Structure
 

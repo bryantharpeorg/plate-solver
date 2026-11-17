@@ -84,7 +84,7 @@ one config table with a sub-table.
 | II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. Every test of this trio is a new file, and no existing test or gate file gains a line. |
 | III. Tests first, independent expectations | Oracles: the stand-in camera's sample rule, worked examples (FITS bytes, chunk counts), the simulator's truth (itself checked against the existing sky functions), INDI's documents through hand-written scripts, and one saved capture with values read from it by a separate program. Tests read FITS files with code of their own. Clocks are injected; virtual time only in tests. |
 | IV. Critical paths | No `unsafe`. Two dependency changes, `quick-xml` in US4 and `base64` in US5, each named for the owner and made by the story that uses the crate. One scope-link change, additive, in `crates/scope-link/proto`, named for the owner. Nothing under `proto/`, no database-format change, no `build.rs` change. |
-| V. Standalone Rust, honest licensing | The finder camera's solver is untouched. INDI is reached over a socket and nothing of it is linked or copied; both new crates are permissively licensed. |
+| V. Proven open source first, honest licensing | The finder camera's solver is untouched. INDI is reached over a socket and nothing of it is linked or copied; both new crates are permissively licensed. |
 
 ## Project Structure
 

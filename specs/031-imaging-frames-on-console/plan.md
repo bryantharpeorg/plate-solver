@@ -87,7 +87,7 @@ console flag, one lease.
 | II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. The only edits to existing test or gate files are the `mod` lines and the two list entries in `playwright.config.ts` that spec owner approval 8 names, with the re-wrap of one list that Prettier requires. |
 | III. Tests first, independent expectations | Oracles: the stand-in camera's sample rule, worked examples (FITS bytes, the preview, the time a paced frame takes), the simulator's truth, and the bytes a test's own node sends. Tests read FITS files with code of their own. Clocks are injected; virtual time only in tests and `finder --simulate`. |
 | IV. Critical paths | No `unsafe`. No dependency change: no `Cargo.toml` and no `Cargo.lock` is written. No scope-link change: 030 made it. Nothing under `proto/`, no database-format change, no `build.rs` change. |
-| V. Standalone Rust, honest licensing | The finder camera's solver is untouched. Nothing of another project is linked or copied, and no crate is added. |
+| V. Proven open source first, honest licensing | The finder camera's solver is untouched. Nothing of another project is linked or copied, and no crate is added. |
 
 ## Project Structure
 

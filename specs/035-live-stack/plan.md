@@ -121,7 +121,7 @@ three routes, two MCP tools, one page block, ten stories.
 | II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. The only edits to existing test and gate files are the `mod` lines and the two list entries in `playwright.config.ts` that spec owner approval 9 names. Every test 030 to 034 land must pass unchanged; § Shapes that existing tests pin says what that requires. |
 | III. Tests first, independent expectations | Oracles: worked examples by hand; the simulator's truth and its declared scene (itself pinned by worked examples in US1); the stand-in camera's sample rule; a scripted solver and a scripted camera of the tests' own; a by-hand tangent-plane projection that calls nothing under `finder::imaging`; and files the test reads with its own FITS reader. Clocks are injected, and virtual time is used only in tests. One reading is not: `took_ms` is taken with `std::time::Instant`, because it measures real work; no behaviour depends on it and no test asserts its size. |
 | IV. Critical paths | No `unsafe`, no dependency or `Cargo.toml` change, nothing under `proto/`, no scope-link change, no database-format change, no `build.rs` change. |
-| V. Standalone Rust, honest licensing | The stacker is this project's own code. `seiza-stacking` and AstraLite's stacking modules were read about and not adopted (§ Decisions); none of their source is copied. The imaging solve the stack registers by is ASTAP's, by the owner's decision in ADR-0002, which needs the owner's reading of V before 032 is flipped (§ Prerequisites 4). |
+| V. Proven open source first, honest licensing | The stacker is this project's own code. `seiza-stacking` and AstraLite's stacking modules were read about and not adopted (§ Decisions); none of their source is copied. The imaging solve the stack registers by is ASTAP's, by the owner's decision in ADR-0002, which needs the owner's reading of V before 032 is flipped (§ Prerequisites 4). |
 
 ## Project Structure
 
@@ -1848,10 +1848,9 @@ These are not changed by any story:
    its other answer, a folder per run, which is written into the trio; the other
    twenty-five are written with their recommended answers. Any answer other than the
    recommended one is written into the trio and re-validated before the flip.
-4. **The constitution covers an imaging solve that is not our own Rust.** Not met, and
-   032's to meet: principle V says "The solver is our own Rust", the stack registers
-   every sub by ASTAP's solve, and the plan document's § Before any flip asks for the
-   maintainer's amendment or written reading. This spec changes nothing there.
+4. **The constitution covers an imaging solve that is not our own Rust.** Met: the
+   stack registers every sub by ASTAP's solve, and principle V of constitution 1.3.0 (PR 239, merged 2026-11-17 as `cc593c7`)
+   lets a separate program behind 032's port do that. This spec changes nothing there.
 5. **033 has settled, and this trio is read against what it becomes.** Met in the
    drafts; not met on `main`. 033's trio was being revised the evening this one was
    finished, and was read here as it stood then; it changed under this trio once

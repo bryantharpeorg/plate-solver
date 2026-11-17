@@ -9,7 +9,7 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
   and this trio has been re-anchored to them: not met (plan.md § Prerequisites 1 and 2);
 - the owner decisions in spec.md are settled and its owner approvals given: not met;
 - the owner has amended Constitution V or written how it reads for the imaging solver:
-  not met (plan.md § Prerequisites 4);
+  met, constitution 1.3.0 (plan.md § Prerequisites 4);
 - the saved captures of ASTAP's real output are staged under `fixtures/finder/astap/`:
   not met (plan.md § Prerequisites 5); US1 cannot pass without them;
 - the trio has been probe-built: not met (plan.md § Prerequisites 6);

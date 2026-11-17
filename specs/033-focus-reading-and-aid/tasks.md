@@ -14,7 +14,7 @@ description: "Task list for 033-focus-reading-and-aid: Focus Reading and Focus A
   (plan.md § The camera lease, § Prerequisites 2 and 11);
 - the owner decisions in spec.md are settled and its owner approvals given: not met;
 - the owner has amended Constitution V or written how it reads for the imaging solver:
-  not met (plan.md § Prerequisites 4);
+  met, constitution 1.3.0 (plan.md § Prerequisites 4);
 - the trio has been probe-built: not met (plan.md § Prerequisites 5);
 - the plan document, ADR-0002, the research note and the changed `GLOSSARY.md` are on
   `main`, and the glossary carries the two new entries and the three reworded ones of

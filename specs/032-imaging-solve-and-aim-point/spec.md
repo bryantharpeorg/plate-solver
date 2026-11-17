@@ -511,8 +511,8 @@ and the following. Each is named in the FR or success criterion that makes it.
 3. **An external program as the imaging solver**: ASTAP's `astap_cli`, MPL-2.0, run as
    a separate process and never linked, with a star database that asks for the credit
    "ESA/Gaia/DPAC". It is not a cargo dependency, and no `Cargo.toml`, `Cargo.lock` or
-   `deny.toml` changes (FR-003, SC-003). Constitution V is the owner's to read or amend
-   first (plan.md § Prerequisites 4).
+   `deny.toml` changes (FR-003, SC-003). Principle V of constitution 1.3.0 allows it: a
+   separate program behind one of our ports, never linked (plan.md § Prerequisites 4).
 4. **One route and two parts of the imaging object**: `POST /api/imaging/solve`
    (FR-009), and `solve` and `relation` in `GET /api/imaging` and in the `imaging`
    object of `GET /api/session`, which the MCP tools that return either carry too

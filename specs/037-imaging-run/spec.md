@@ -359,6 +359,11 @@ the settings, starts, watches and stops; it never puts the steps in order itself
   README's field checklist step 8, the Refinement Record, tasks.md T018 and T023, and
   this spec's Clarifications, Edge Cases and Assumptions say the same. No story id,
   scenario id or FR number moved, and no scenario's text changed.
+- Q: Where are a stack's subs, after 035's owner decision 13? → A: In `subs/` inside the
+  stack's folder, which is the run's folder once the run stacks (035's owner decision 13,
+  settled the same day as a folder per run). `stack.json` names each sub by its path
+  there, and `stop(keep_subs)` removes them there. US2-S4's scripted path and US8-S1 and
+  US8-S2 say the same.
 
 ## Owner decisions
 

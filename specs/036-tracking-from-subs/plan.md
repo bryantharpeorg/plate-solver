@@ -111,7 +111,7 @@ tracker, 60 to the simulator and 40 to 035's stack.
 | II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS`, `ergane.yaml` or `playwright.config.ts` is edited. New tests are new files; each finder module adds one `mod` line to its binary's `main.rs`, which holds no test (spec owner approval 9). No existing assertion changes: 035's tests read `dropped` key by key and never count its keys (035 spec.md § User Scenarios), and § Prerequisites 3 checks that in the landed tests. |
 | III. Tests first, independent expectations | Oracles: the simulator's truth, read by each test; worked examples whose arithmetic is in spec.md; the simulator's own horizon transform, differentiated by the test, for the axes; 015's `longest_exposure` for the cap; the rate log of a wrapper the test puts round the mount. Every scenario names its oracle and tolerance. Time is virtual throughout. |
 | IV. Critical paths | No `unsafe`, no `Cargo.toml` or `Cargo.lock` change, nothing under `proto/` or `crates/math-core`. |
-| V. Standalone Rust, honest licensing | Unaffected: no solver is touched and nothing is copied. 032's use of ASTAP is 032's to settle (its plan.md § Prerequisites 4). |
+| V. Proven open source first, honest licensing | Unaffected: no solver is touched and nothing is copied. 032's use of ASTAP is 032's to settle (its plan.md § Prerequisites 4). |
 
 ## Project Structure
 
