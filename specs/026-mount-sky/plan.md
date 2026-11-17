@@ -824,36 +824,10 @@ stories:
       - crates/finder/tests/motion/mount_sky.rs
     no_write_reason: ""
     shared_writes:
-      - path: crates/finder/README.md
-        other_spec: 026-mount-sky
-        other_story: US2
-        disposition: merge_order
-        reason: "US2 depends_on_merged US1, and adds its flags to US1's section"
-      - path: crates/finder/src/api.rs
-        other_spec: 026-mount-sky
-        other_story: US2
-        disposition: merge_order
-        reason: "US2 depends_on_merged US1, and adds with_night_clock"
-      - path: crates/finder/src/main.rs
-        other_spec: 026-mount-sky
-        other_story: US2
-        disposition: merge_order
-        reason: "US2 depends_on_merged US1, and adds the night flags"
-      - path: crates/finder/src/mount_sky.rs
-        other_spec: 026-mount-sky
-        other_story: US2
-        disposition: merge_order
-        reason: "US2 depends_on_merged US1, and adds night_utc"
-      - path: crates/finder/tests/cli/main.rs
-        other_spec: 026-mount-sky
-        other_story: US2
-        disposition: merge_order
-        reason: "US2 depends_on_merged US1, and adds mod mount_sky_night after US1's mod mount_sky"
-      - path: crates/finder/tests/motion/main.rs
-        other_spec: 026-mount-sky
-        other_story: US2
-        disposition: merge_order
-        reason: "US2 depends_on_merged US1, and adds mod mount_sky_night after US1's mod mount_sky"
+      # US1 and US2 landed on 2026-11-17 (b9ccf47, 86ebeb8). Their six merge_order
+      # entries for the files they shared are removed so the delta re-dispatch of US3 is
+      # not refused (Ergane finding spec/refinement-contention-check-ignores-satisfied-
+      # stories-so-a-delta-redispatch-is-refused, as for 014 on 2026-11-01).
       - path: crates/finder/README.md
         other_spec: 017-console-stop-confirm
         other_story: US4
