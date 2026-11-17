@@ -96,6 +96,10 @@ _Avoid_: tracking mode (that is the solver's hinted solving)
 The spot in the finder camera's frame on which the main telescope's eyepiece is centred. Moves bring the aim point, not the boresight, onto the target.
 _Avoid_: telescope boresight, frame centre
 
+**Chart rotation**:
+How far the page turns every live view of a frame, in degrees counter-clockwise, set in Setup to match how the finder camera sits in its holder. A display setting: marks, taps and the aim point stay in the frame's own pixels.
+_Avoid_: turn (the base's motion in azimuth), roll (the solve's angle to north)
+
 ### Equipment
 
 **Finder console**:

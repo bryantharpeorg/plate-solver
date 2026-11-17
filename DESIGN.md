@@ -356,6 +356,18 @@ The `/setup` page edits the shared observing session: site latitude and longitud
 ### Live chart and preview — built
 While the scope link is connected, live events feed the existing chart, its title block, stars and target guidance. Pointing sequence numbers keep a newer uploaded solve on screen until a newer live solve arrives. The five legend chips are unchanged. The occasional JPEG preview sits below the chart and its legend, inside `.photo` so the night edition passes it through the luminance-to-red filter. It keeps the last preview between photographs. Nothing is added above the phone's legend.
 
+### Chart rotation — built
+Setup's Chart rotation section, after Minimum altitude, holds one ruled degrees field
+and a Save chart rotation action. An empty field clears the setting.
+
+The live chart, the live photo and the aim-point photo turn counter-clockwise by the
+session's chart rotation. The frame, the graticule, the compass and every mark turn
+together inside a level paper edge, and the compass stays true. Star and object labels
+are laid out where they are seen and read upright; edge labels read along their edges
+and never upside down. A tap on the turned aim-point photo maps back to the frame pixel
+under it. The "Just off the frame" arrows turn with the chart. Uploads and samples are
+drawn as captured.
+
 ### Stale pointing — built
 More than 5 s after a live pointing, the guidance block replaces its directions with “Pointing stale” and “Waiting for a live solve.” The chart title replaces its solved-time clause with “Pointing stale.” These replacements use existing lines and ink tokens. A 250 ms timer uses the console time supplied by session reads and live events; the next live solve restores guidance. Uploaded pointings keep their existing behaviour.
 

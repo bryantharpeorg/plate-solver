@@ -8,5 +8,6 @@ mod axis_moves;
 mod endpoint;
 mod frames;
 mod motion;
+mod session_rotation;
 mod session_tools;
 mod tracking;

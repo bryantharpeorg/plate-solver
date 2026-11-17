@@ -14,6 +14,7 @@ import { SurveyView } from "./components/SurveyView";
 import { TopBar } from "./components/TopBar";
 import { TargetSheet } from "./components/TargetSheet";
 import { useLastSample, useNight, useSite } from "./settings";
+import { rotatedBox, rotationOf } from "./rotation";
 import { useSolve } from "./useSolve";
 import { useSession } from "./useSession";
 import { useLive } from "./useLive";
@@ -140,13 +141,18 @@ export function App() {
   const busy = !showLive && state.phase === "solving";
   const hasFrame = showLive || state.phase !== "idle";
   const chartSession = showLive ? liveSession : session;
+  // Only the live views turn, by the session's chart rotation (FR-009).
+  const rotation = showLive ? rotationOf(chartSession) : 0;
 
   // The frame's shape sets how wide the page is on a big screen (see .page-width); keep
-  // the last one while the next frame solves.
+  // the last one while the next frame solves. A turned frame's shape is its turned box.
   const [aspect, setAspect] = useState(4 / 3);
   useEffect(() => {
-    if (report) setAspect(report.width / report.height);
-  }, [report]);
+    if (report) {
+      const b = rotatedBox(report.width, report.height, rotation);
+      setAspect(b.width / b.height);
+    }
+  }, [report, rotation]);
 
   return (
     <div className="contents" style={{ "--chart-aspect": aspect } as CSSProperties}>
@@ -239,7 +245,14 @@ export function App() {
                     onLayers={setLayers}
                     session={chartSession}
                   />
-                  {showLive && <LivePreview seq={previewSeq} />}
+                  {showLive && (
+                    <LivePreview
+                      seq={previewSeq}
+                      width={live?.report.width}
+                      height={live?.report.height}
+                      rotation={rotation}
+                    />
+                  )}
                 </div>
               </div>
             )}
@@ -262,6 +275,7 @@ export function App() {
                   nearby={report.nearby}
                   site={site}
                   minAlt={session.min_alt_deg}
+                  rotation={rotation}
                   onSetSite={() => navigate("/setup")}
                 />
                 <SurveyView pointing={report.pointing} />

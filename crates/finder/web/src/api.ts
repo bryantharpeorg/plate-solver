@@ -265,6 +265,8 @@ export interface ObservingSession {
   node?: SessionNode;
   camera_settings?: { exposure_ms: "auto" | number; gain: "auto" | number; sigma: number };
   aim?: { x: number; y: number };
+  /** How far the live views are turned, degrees counter-clockwise; omitted until set. */
+  chart_rotation_deg?: number;
   field?: { fov_deg: number | null; db_min_fov_deg: number; db_max_fov_deg: number; unsolved_s: number };
 }
 
