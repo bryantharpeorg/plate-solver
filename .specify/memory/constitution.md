@@ -62,13 +62,33 @@ paths is the authoritative list:
 - `Cargo.toml` and `Cargo.lock`: every dependency change.
 - `build.rs` and `.cargo/**`: these decide what runs under a test's name.
 
-### V. Standalone Rust with honest licensing
+### V. Proven open source first, with honest licensing
 
-The solver is our own Rust. The references are oracles for development and tests, never
-runtime dependencies, and their source is never copied into `crates/`. Keep their
-licenses and credits intact: tetra3 and cedar-solve are Apache-2.0, cedar-detect is
-FSL-1.1-MIT. Keep detection, numerics, database access, database generation, solving and
-transports in their separate crates.
+Before a plan designs a component, it looks for proven open-source software that already
+does the job, and uses it where it fits cleanly. The plan names what it looked for, what
+it found and why each candidate was taken or turned down: writing our own is the choice
+that needs the reason. Adopting one is an owner approval in its spec.
+
+The plate solver is the exception, and stays our own Rust. The references are oracles
+for development and tests, never runtime dependencies, and their source is never copied
+into `crates/`. Keep detection, numerics, database access, database generation, solving
+and transports in their separate crates.
+
+Reused software comes in one of three ways:
+
+- **A crate:** a dependency change under Principle IV, under a license `deny.toml`
+  allows, building on the MSRV.
+- **A separate program or service,** such as ASTAP's command-line solver or INDI's server
+  and drivers: called across a process or network boundary behind one of our ports, and
+  never linked, so its license stays on its own side. The gates reach it through a
+  simulated adapter and saved captures of its real output (Principle III), so they pass
+  on a machine without it.
+- **Copied source,** only under a permissive license that allows it, with its license
+  text kept beside it and its credit in the crate's `THIRD_PARTY_NOTICES.md`.
+
+Keep every license and credit intact. tetra3 and cedar-solve are Apache-2.0 and
+cedar-detect is FSL-1.1-MIT. The README of a crate that calls a reused program names it,
+its license and any credit its data asks for.
 
 ## Additional Constraints
 
@@ -136,4 +156,4 @@ Amending this document is the maintainer's act, in its own PR, never part of a s
 So is amending `ergane.yaml`, `ENVIRONMENT.md` § Enforcement status, or the oracle files
 named in `.github/CODEOWNERS`.
 
-**Version**: 1.2.0 | **Ratified**: 2026-10-28 | **Last Amended**: 2026-11-15
+**Version**: 1.3.0 | **Ratified**: 2026-10-28 | **Last Amended**: 2026-11-16
