@@ -202,11 +202,7 @@ impl Simulator {
         ];
         (
             RotationMatrix {
-                rows: [
-                    [boresight.x, boresight.y, boresight.z],
-                    left,
-                    up,
-                ],
+                rows: [[boresight.x, boresight.y, boresight.z], left, up],
             },
             p.imaging,
         )

@@ -5,7 +5,9 @@
 use math_core::{angular_distance, UnitVector};
 use pattern_database::PatternDatabase;
 use scope_node::{
-    imaging::{BayerPattern, Exposure, ImagingCamera, ImagingError, ImagingFrame, ImagingSettings, Roi},
+    imaging::{
+        BayerPattern, Exposure, ImagingCamera, ImagingError, ImagingFrame, ImagingSettings, Roi,
+    },
     mount::{Axis, Mount},
 };
 use simulator::{
@@ -30,7 +32,11 @@ static DB: LazyLock<Arc<PatternDatabase>> = LazyLock::new(|| {
 /// The sim rig of spec.md § User Scenarios: the test database, 40 N 75 W, a
 /// virtual clock from Unix 1768528800 and the tube pushed to alt 50, az 120.
 fn rig() -> Simulator {
-    let sim = Simulator::new(DB.clone(), Site::default(), VirtualClock::new(1_768_528_800.0));
+    let sim = Simulator::new(
+        DB.clone(),
+        Site::default(),
+        VirtualClock::new(1_768_528_800.0),
+    );
     sim.push_to(50.0, 120.0);
     sim
 }
@@ -39,8 +45,10 @@ fn rig() -> Simulator {
 fn samples(frame: &ImagingFrame) -> Vec<f64> {
     frame
         .samples
-        .chunks_exact(2)
-        .map(|pair| f64::from(u16::from_le_bytes([pair[0], pair[1]])))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|pair| f64::from(u16::from_le_bytes(*pair)))
         .collect()
 }
 
@@ -65,7 +73,10 @@ fn brightest(values: &[f64], width: usize, near: (f64, f64), scan: f64) -> (usiz
             }
         }
     }
-    assert!(best_value > f64::NEG_INFINITY, "no sample within {scan} px of {near:?}");
+    assert!(
+        best_value > f64::NEG_INFINITY,
+        "no sample within {scan} px of {near:?}"
+    );
     best
 }
 
@@ -80,9 +91,8 @@ fn moments(
     background: f64,
 ) -> ((f64, f64), [f64; 3]) {
     let height = values.len() / width;
-    let window = |centre: usize, count: usize| {
-        centre.saturating_sub(half)..=(centre + half).min(count - 1)
-    };
+    let window =
+        |centre: usize, count: usize| centre.saturating_sub(half)..=(centre + half).min(count - 1);
     let mut total = 0.0;
     let mut place = [0.0; 2];
     for row in window(at.1, height) {
@@ -286,18 +296,37 @@ async fn the_truth_answers_scale_centre_and_frame_angle() {
     });
     let flat = sim.imaging_truth_at(t);
     let site = Site::default();
-    let p0 = sky::to_j2000(sky::horizontal_to_date(50.0, 120.0, site, t), sky::julian_date(t));
-    let p1 = sky::to_j2000(sky::horizontal_to_date(50.01, 120.0, site, t), sky::julian_date(t));
+    let p0 = sky::to_j2000(
+        sky::horizontal_to_date(50.0, 120.0, site, t),
+        sky::julian_date(t),
+    );
+    let p1 = sky::to_j2000(
+        sky::horizontal_to_date(50.01, 120.0, site, t),
+        sky::julian_date(t),
+    );
     let (ra0, dec0) = p0.to_radec();
     let (ra1, dec1) = p1.to_radec();
-    let pa = position_angle(ra0.to_degrees(), dec0.to_degrees(), ra1.to_degrees(), dec1.to_degrees());
-    assert!((flat.up_east_of_north_deg - pa).abs() <= 0.01, "{} vs {pa}", flat.up_east_of_north_deg);
+    let pa = position_angle(
+        ra0.to_degrees(),
+        dec0.to_degrees(),
+        ra1.to_degrees(),
+        dec1.to_degrees(),
+    );
+    assert!(
+        (flat.up_east_of_north_deg - pa).abs() <= 0.01,
+        "{} vs {pa}",
+        flat.up_east_of_north_deg
+    );
     // The imaging angle turns it by its own amount, east of north.
     sim.set_imaging_optics(ImagingOptics::default());
     let turned = sim.imaging_truth_at(t);
     let expected = (pa + 17.0).rem_euclid(360.0);
     let difference = (turned.up_east_of_north_deg - expected + 180.0).rem_euclid(360.0) - 180.0;
-    assert!(difference.abs() <= 0.01, "{} vs {expected}", turned.up_east_of_north_deg);
+    assert!(
+        difference.abs() <= 0.01,
+        "{} vs {expected}",
+        turned.up_east_of_north_deg
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -322,7 +351,10 @@ async fn two_stars_land_by_the_truth() {
     let values = samples(&frame);
     let (column, row) = brightest(&values, 1236, (618.0, 411.0), 4.0);
     let ((ax, ay), _) = moments(&values, 1236, (column, row), 12, 160.0);
-    assert!((ax - 618.0).abs() <= 0.3 && (ay - 411.0).abs() <= 0.3, "({ax}, {ay})");
+    assert!(
+        (ax - 618.0).abs() <= 0.3 && (ay - 411.0).abs() <= 0.3,
+        "({ax}, {ay})"
+    );
     // B is 300 arcsec north of A: (d·sin θ, −d·cos θ) with θ and s from the
     // truth, d = 300/s.
     let theta = truth.up_east_of_north_deg.to_radians();
@@ -396,7 +428,10 @@ async fn focus_error_widens_the_star_as_the_quadrature() {
         let (column, row) = brightest(&values, 1236, (618.0, 411.0), 6.0);
         let (_, [sxx, _, syy]) = moments(&values, 1236, (column, row), 12, 160.0);
         let measured = ((sxx + syy) / 2.0).sqrt();
-        assert!((measured - width).abs() <= tolerance, "{measured} vs {width}");
+        assert!(
+            (measured - width).abs() <= tolerance,
+            "{measured} vs {width}"
+        );
     }
 }
 
@@ -541,7 +576,12 @@ async fn binning_keeps_the_mosaic_and_the_roi_shifts_the_star() {
         let values = samples(&frame);
         let (column, row) = brightest(&values, size.0, place, 4.0);
         assert!(column % 2 == 0 && row % 2 == 0, "({column}, {row})");
-        assert!(values[row * size.0 + column] > 1000.0, "{}, {}", values[row * size.0 + column], place.0);
+        assert!(
+            values[row * size.0 + column] > 1000.0,
+            "{}, {}",
+            values[row * size.0 + column],
+            place.0
+        );
         assert!(
             (column as f64 + 0.5 - place.0).abs() <= 2.0
                 && (row as f64 + 0.5 - place.1).abs() <= 2.0,
@@ -652,7 +692,10 @@ async fn binning_keeps_the_mosaic_and_the_roi_shifts_the_star() {
         let values = samples(&frame);
         let (column, row) = brightest(&values, 400, (218.0, 211.0), 4.0);
         let ((cx, cy), _) = moments(&values, 400, (column, row), 12, 160.0);
-        assert!((cx - 218.0).abs() <= 0.3 && (cy - 211.0).abs() <= 0.3, "({cx}, {cy})");
+        assert!(
+            (cx - 218.0).abs() <= 0.3 && (cy - 211.0).abs() <= 0.3,
+            "({cx}, {cy})"
+        );
     }
 }
 
@@ -665,7 +708,10 @@ fn deep_field_is_seeded_dense_sorted_and_stable() {
     let bright = field.iter().filter(|s| s.magnitude < 14.0).count();
     assert!((768..=977).contains(&bright), "{bright}");
     for pair in field.windows(2) {
-        assert!(pair[0].magnitude < pair[1].magnitude, "not rising, or shared");
+        assert!(
+            pair[0].magnitude < pair[1].magnitude,
+            "not rising, or shared"
+        );
     }
     for star in &field {
         assert!((8.0..=16.0).contains(&star.magnitude), "{}", star.magnitude);

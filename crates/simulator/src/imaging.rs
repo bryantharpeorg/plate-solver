@@ -91,7 +91,9 @@ const BAND_DEG: f64 = 0.25;
 /// The cells of a Dec band: the cells the plan's field cuts the sky into.
 fn cells(band: i64) -> u32 {
     let middle = -90.0 + BAND_DEG * band as f64 + BAND_DEG / 2.0;
-    (360.0 * middle.to_radians().cos() / BAND_DEG).round().max(1.0) as u32
+    (360.0 * middle.to_radians().cos() / BAND_DEG)
+        .round()
+        .max(1.0) as u32
 }
 
 /// One cell's stars: a Poisson count of the plan's density over the cell's
@@ -115,18 +117,14 @@ fn cell_stars(seed: u64, band: i64, cell: u32) -> Vec<SimStar> {
         let ra = f64::from(cell) * delta + delta * random.uniform();
         let dec = dec_lo + BAND_DEG * random.uniform();
         let uniform = random.uniform();
-        let magnitude = 8.0
-            + (1.0 + uniform * (10f64.powf(MAG_SLOPE * 8.0) - 1.0)).log10() / MAG_SLOPE;
+        let magnitude =
+            8.0 + (1.0 + uniform * (10f64.powf(MAG_SLOPE * 8.0) - 1.0)).log10() / MAG_SLOPE;
         let colour_uniform = random.uniform();
         stars.push(SimStar {
             ra_deg: ra,
             dec_deg: dec,
             magnitude,
-            colour: [
-                0.6 + 0.8 * colour_uniform,
-                1.0,
-                1.4 - 0.8 * colour_uniform,
-            ],
+            colour: [0.6 + 0.8 * colour_uniform, 1.0, 1.4 - 0.8 * colour_uniform],
         });
     }
     stars
@@ -167,10 +165,8 @@ pub fn deep_field(seed: u64, ra_deg: f64, dec_deg: f64, radius_deg: f64) -> Vec<
         };
         for cell in touched.map(|index| index.rem_euclid(count as i64) as u32) {
             for star in cell_stars(seed, band, cell) {
-                let place = UnitVector::from_radec(
-                    star.ra_deg.to_radians(),
-                    star.dec_deg.to_radians(),
-                );
+                let place =
+                    UnitVector::from_radec(star.ra_deg.to_radians(), star.dec_deg.to_radians());
                 if math_core::angular_distance(centre, place).to_degrees() <= radius_deg {
                     stars.push(star);
                 }
@@ -362,18 +358,12 @@ impl SimImagingCamera {
             };
             // The smear is drawn along the straight line from the star's
             // place at the start to its place at the end.
-            let steps = (p1.0 - p0.0)
-                .hypot(p1.1 - p0.1)
-                .ceil()
-                .clamp(1.0, 64.0) as u32;
+            let steps = (p1.0 - p0.0).hypot(p1.1 - p0.1).ceil().clamp(1.0, 64.0) as u32;
             let electrons_total =
                 ELECTRONS_MAG10_PER_S * 10f64.powf(-0.4 * (star.magnitude - 10.0)) * shot.seconds;
             for step in 0..steps {
                 let along = (f64::from(step) + 0.5) / f64::from(steps);
-                let (px, py) = (
-                    p0.0 + along * (p1.0 - p0.0),
-                    p0.1 + along * (p1.1 - p0.1),
-                );
+                let (px, py) = (p0.0 + along * (p1.0 - p0.0), p0.1 + along * (p1.1 - p0.1));
                 // The samples whose column and row are each within reach of
                 // the point, a square box, clipped to the region.
                 let columns = (
@@ -385,12 +375,14 @@ impl SimImagingCamera {
                     (py + reach as f64 - 0.5).floor() as i64,
                 );
                 let point = electrons_total / f64::from(steps);
-                for row in rows.0.max(i64::from(roi.y))
-                    ..=rows.1.min(i64::from(roi.y + roi.height) - 1) {
+                for row in
+                    rows.0.max(i64::from(roi.y))..=rows.1.min(i64::from(roi.y + roi.height) - 1)
+                {
                     for column in columns.0.max(i64::from(roi.x))
-                        ..=columns.1.min(i64::from(roi.x + roi.width) - 1) {
-                        let distance = (column as f64 + 0.5 - px).powi(2)
-                            + (row as f64 + 0.5 - py).powi(2);
+                        ..=columns.1.min(i64::from(roi.x + roi.width) - 1)
+                    {
+                        let distance =
+                            (column as f64 + 0.5 - px).powi(2) + (row as f64 + 0.5 - py).powi(2);
                         // The sensor's mosaic: red at an even column and row,
                         // blue at odd and odd, green otherwise.
                         let filter = match (column % 2, row % 2) {
@@ -398,12 +390,11 @@ impl SimImagingCamera {
                             (1, 1) => 2,
                             _ => 1,
                         };
-                        let index =
-                            (row - i64::from(roi.y)) as usize * width + (column - i64::from(roi.x)) as usize;
-                        electrons[index] += point
-                            * star.colour[filter]
-                            * (-distance / (2.0 * sigma * sigma)).exp()
-                            / (TAU * sigma * sigma);
+                        let index = (row - i64::from(roi.y)) as usize * width
+                            + (column - i64::from(roi.x)) as usize;
+                        electrons[index] +=
+                            point * star.colour[filter] * (-distance / (2.0 * sigma * sigma)).exp()
+                                / (TAU * sigma * sigma);
                     }
                 }
             }
@@ -423,8 +414,7 @@ impl SimImagingCamera {
         // Electrons become counts; binning 2 averages samples of the same
         // colour, keeping the mosaic; rounding is half away from zero.
         let counts = ADU_PER_OFFSET * shot.settings.offset.unwrap_or(0.0);
-        let scale =
-            ADU_PER_E_AT_GAIN_0 * 10f64.powf(shot.settings.gain.unwrap_or(0.0) / 200.0);
+        let scale = ADU_PER_E_AT_GAIN_0 * 10f64.powf(shot.settings.gain.unwrap_or(0.0) / 200.0);
         let delivered = |value: f64| (value.round().clamp(0.0, 65535.0) as u16).to_le_bytes();
         let mut samples = Vec::with_capacity(width * height * 2);
         if binning == 1 {
@@ -481,13 +471,8 @@ fn cooler(settings: &ImagingSettings) -> (f64, f64) {
 }
 
 /// A star's place in the frame, as (x, y), or none behind the boresight.
-fn place(
-    camera: &PinholeCamera,
-    rotation: &RotationMatrix,
-    star: &SimStar,
-) -> Option<(f64, f64)> {
-    let direction =
-        UnitVector::from_radec(star.ra_deg.to_radians(), star.dec_deg.to_radians());
+fn place(camera: &PinholeCamera, rotation: &RotationMatrix, star: &SimStar) -> Option<(f64, f64)> {
+    let direction = UnitVector::from_radec(star.ra_deg.to_radians(), star.dec_deg.to_radians());
     let local = rotation.rotate(direction);
     if local.x <= 0.0 {
         return None;
