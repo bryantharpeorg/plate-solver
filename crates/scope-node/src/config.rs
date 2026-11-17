@@ -82,6 +82,84 @@ pub struct MountConfig {
     pub device: std::path::PathBuf,
 }
 
+/// The imaging camera's adapter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ImagingAdapter {
+    Indi,
+    Simulated,
+}
+
+/// Optional imaging camera; unknown keys are errors, as everywhere in this
+/// file.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ImagingConfig {
+    pub adapter: ImagingAdapter,
+    #[serde(default)]
+    pub address: Option<SocketAddr>,
+    #[serde(default)]
+    pub device: Option<String>,
+    /// `indi` only: controls set to these values on each connection, keyed
+    /// `"<property>.<element>"` (owner decision 13). Empty by default.
+    #[serde(default)]
+    pub neutral: std::collections::BTreeMap<String, f64>,
+}
+
+impl ImagingConfig {
+    /// `address`, or 127.0.0.1:7624, INDI's own default port.
+    pub fn address(&self) -> SocketAddr {
+        self.address
+            .unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 7624)))
+    }
+
+    /// `neutral` as `(property, element, value)`, each key split at its first
+    /// `.`, in the table's sorted order. `validate` has refused a key that
+    /// does not split.
+    pub fn neutral_controls(&self) -> Vec<(String, String, f64)> {
+        self.neutral
+            .iter()
+            .map(|(key, value)| {
+                let (property, element) = key.split_once('.').unwrap_or((key.as_str(), ""));
+                (property.to_string(), element.to_string(), *value)
+            })
+            .collect()
+    }
+
+    /// What `--check-config` prints after `[imaging]`, one line a key:
+    /// `adapter`; for `indi`, `address` (the default included), `device`
+    /// when set and `neutral` when not empty. Texts are `key = "value"`;
+    /// `neutral` is one inline table, keys in sorted order, each quoted and
+    /// its `\` escaped, values with `Display`.
+    pub fn printed(&self) -> String {
+        let mut out = match self.adapter {
+            ImagingAdapter::Indi => "adapter = \"indi\"\n".to_string(),
+            ImagingAdapter::Simulated => "adapter = \"simulated\"\n".to_string(),
+        };
+        if matches!(self.adapter, ImagingAdapter::Indi) {
+            out.push_str(&format!("address = \"{}\"\n", self.address()));
+            if let Some(device) = &self.device {
+                out.push_str(&format!("device = \"{device}\"\n"));
+            }
+            if !self.neutral.is_empty() {
+                let entries = self
+                    .neutral
+                    .iter()
+                    .map(|(key, value)| {
+                        format!(
+                            "\"{}\" = {value}",
+                            key.replace('\\', "\\\\").replace('"', "\\\"")
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                out.push_str(&format!("neutral = {{ {entries} }}\n"));
+            }
+        }
+        out
+    }
+}
+
 /// Token-bearing config deliberately has no Debug/Serialize implementation.
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -101,6 +179,8 @@ pub struct Config {
     pub detection: DetectSettings,
     #[serde(default)]
     pub mount: Option<MountConfig>,
+    #[serde(default)]
+    pub imaging: Option<ImagingConfig>,
 }
 fn default_listen() -> SocketAddr {
     SocketAddr::from(([0, 0, 0, 0], 50051))
@@ -138,6 +218,8 @@ impl Config {
                 " (missing token)"
             } else if error.message().contains("missing field `device`") {
                 " (missing mount.device)"
+            } else if error.message().contains("missing field `adapter`") {
+                " (missing imaging.adapter)"
             } else {
                 ""
             };
@@ -158,6 +240,47 @@ impl Config {
             .is_some_and(|mount| mount.device.as_os_str().is_empty())
         {
             return Err(ConfigError("mount.device must not be empty".into()));
+        }
+        if let Some(imaging) = &self.imaging {
+            if matches!(imaging.adapter, ImagingAdapter::Simulated) {
+                if imaging.address.is_some() {
+                    return Err(ConfigError(
+                        "imaging.address applies only to the indi adapter".into(),
+                    ));
+                }
+                if imaging.device.is_some() {
+                    return Err(ConfigError(
+                        "imaging.device applies only to the indi adapter".into(),
+                    ));
+                }
+                if !imaging.neutral.is_empty() {
+                    return Err(ConfigError(
+                        "imaging.neutral applies only to the indi adapter".into(),
+                    ));
+                }
+            }
+            if imaging
+                .device
+                .as_ref()
+                .is_some_and(|device| device.is_empty())
+            {
+                return Err(ConfigError("imaging.device must not be empty".into()));
+            }
+            for (key, value) in &imaging.neutral {
+                match key.split_once('.') {
+                    Some((property, element)) if !property.is_empty() && !element.is_empty() => {}
+                    _ => {
+                        return Err(ConfigError(format!(
+                            "imaging.neutral key {key} must be PROPERTY.ELEMENT"
+                        )))
+                    }
+                }
+                if !value.is_finite() {
+                    return Err(ConfigError(format!(
+                        "imaging.neutral {key} must be a finite number"
+                    )));
+                }
+            }
         }
         if self.token.trim().is_empty() {
             return Err(ConfigError("token must not be empty".into()));
