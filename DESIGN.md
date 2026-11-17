@@ -213,6 +213,8 @@ At night, body text is weight 540 and small text is a step larger: `text-xs` is 
 - **Display** (680, 2.75rem on wide screens and 2.35rem on phones, line-height 1, -0.02em): RA and Dec. Unit marks (h m s, ° ′ ″) are set at 0.5em in Second Ink and raised as superscripts.
 - **Chart Title** (640, wdth 118%, 0.3em tracking, uppercase, 1.05 to 1.3rem): the constellation name, and the title of the no-frame, no-match and first-run blocks. It is the atlas's chart title, not a kicker.
 - **Headline** (650, 1.125rem, -0.01em): section titles ("In the field", "What to look at next") and sheet titles.
+- **Push** (600, 1.5rem, line-height 1.25): the push line in the guidance block, the
+  largest text there.
 - **Title** (600, 0.875rem, Second Ink): group titles inside a section.
 - **Body** (400, 1rem, 1.45, tabular figures): list entries and prose. Prose is capped at 60ch.
 - **Body Quiet** (400, 0.9375rem): the fact lines (Clauses) and quiet notes.
@@ -291,7 +293,10 @@ was seen in two of the three frames before, for at most 10 s after it was last s
 Tapping a solid ring the solver did not use says why it is solid.
 
 ### Guidance block — built
-An ink-only ruled block leads the page when a target is set, before the doubled-rule title block. It names the target and kind, and prints the session's pointability class in Second Ink. Pointable guidance gives the whole-degree turn and tilt and the latest pointing's age, or asks for a solved frame. Down targets show the session's rising, transit and setting in device-local time to the minute; a target that never reaches the minimum altitude says so. The Sun guard refuses directions within 15° of the Sun. Without a site the block links to `/setup`. It uses no object colours, fill or shadow; night uses the existing red ink tokens.
+An ink-only ruled block leads the page when a target is set, before the doubled-rule title block. It names the target and kind, and prints the session's pointability class in Second Ink. Pointable guidance leads with the push in the observer's own directions, "right 2.7°
+· down 1.4°", in the Push style, to a tenth of a degree. Under it, in Body Quiet, are
+the distance left on the sky ("2.8° away"), the whole-degree turn and tilt, and the
+latest pointing's age. Without a pointing it asks for a solved frame. Down targets show the session's rising, transit and setting in device-local time to the minute; a target that never reaches the minimum altitude says so. The Sun guard refuses directions within 15° of the Sun. Without a site the block links to `/setup`. It uses no object colours, fill or shadow; night uses the existing red ink tokens.
 
 ### MCP motion note — built
 `McpNote` prints “Moved by an MCP client · <tool>” only while the session's `motion.by` is `mcp`. It is plain Second Ink text in the guidance block and beside the top bar's single Stop, with no status or alert role and no guidance Stop. While this note is present, the top bar adds a full-width ruled row for the wrapping note and the 44px Stop, keeping both readable on phones. Any `motion` keeps Stop enabled even before mount telemetry arrives, and disables Setup's model actions. The note uses the same red-only night tokens as other text.

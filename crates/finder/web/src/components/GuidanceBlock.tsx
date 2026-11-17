@@ -74,7 +74,15 @@ export function GuidanceBlock({
         </>
       ) : pointing && guidance.turn_deg !== undefined && guidance.tilt_deg !== undefined ? (
         <>
-          <p className="font-semibold">
+          <p className="text-2xl leading-tight font-semibold" data-push>
+            {push(guidance.turn_deg, "right", "left")} · {push(guidance.tilt_deg, "up", "down")}
+          </p>
+          {guidance.separation_deg !== undefined && (
+            <p className="quiet" data-away>
+              {tenths(guidance.separation_deg).toFixed(1)}° away
+            </p>
+          )}
+          <p className="quiet">
             turn {guidance.turn_deg >= 0 ? "clockwise" : "anticlockwise"} {Math.round(Math.abs(guidance.turn_deg))}° ·
             tilt {guidance.tilt_deg >= 0 ? "up" : "down"} {Math.round(Math.abs(guidance.tilt_deg))}°
           </p>
@@ -88,6 +96,15 @@ export function GuidanceBlock({
       <McpNote motion={session.motion} />
     </section>
   );
+}
+
+/** A magnitude to a tenth of a degree, rounded half up. */
+const tenths = (degrees: number) => Math.round(Math.abs(degrees) * 10) / 10;
+
+/** One axis of the push to a tenth of a degree. A reading that rounds to zero keeps the positive word. */
+function push(degrees: number, positive: string, negative: string): string {
+  const t = tenths(degrees);
+  return `${degrees < 0 && t > 0 ? negative : positive} ${t.toFixed(1)}°`;
 }
 
 function EventTimes({ guidance }: { guidance: Guidance }) {

@@ -35,8 +35,10 @@ Moving the telescope by hand, following the console's directions from where it p
 _Avoid_: manual slew
 
 **Turn**:
-A direction of motion in azimuth: clockwise or anticlockwise, as seen from above.
-_Avoid_: left, right, pan
+A direction of motion in azimuth: clockwise or anticlockwise, as seen from above. The
+page prints a clockwise turn as "right" and an anticlockwise one as "left", as the
+observer faces where the telescope points.
+_Avoid_: pan
 
 **Tilt**:
 A direction of motion in altitude: up or down.
