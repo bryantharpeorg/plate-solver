@@ -15,6 +15,8 @@ depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "016-mcp", "01
 # build of 022 (plan.md § Refinement Record). No scenario's Given, When or Then, no owner
 # approval and no `depends_on_landed` entry changed. `main` then moved to cc593c7, which
 # changes only the constitution, so all of it holds there.
+# On 2026-11-17 the owner had US2-S4 state its formula outright, the reading it was
+# built to (Clarifications, last session); nothing else changed.
 ---
 
 # Feature Specification: A Chart Turned to the Sky
@@ -149,6 +151,15 @@ the chart, the live photo and the aim-point tap all turned alike.
   2026-11-14. `cargo test --workspace --all-targets --all-features --locked`, which this
   spec named before, is no longer a gate command.
 
+### Session 2026-11-17 (the owner's answer on US2-S4)
+
+- Q: US2-S4's check that a label's middle lands on its box read two ways. Which holds?
+  → A: `toView(anchor + (box centre − box anchor point))`, the reading both refinements
+  built and plan.md § Interfaces describes. The other, `toView(anchor) + (box centre −
+  box anchor point)`, cannot hold at any angle but 0. The owner had the scenario state
+  the formula outright ("Yes, reword it"); no other scenario, approval or
+  `depends_on_landed` entry changed.
+
 ## Owner approvals
 
 Flipping this spec to `ready` approves the following. Each is named in the FR that makes
@@ -272,9 +283,10 @@ on his Dob.
    star label's `box` overlaps another label's box, or the square around any star's ring
    or any detection centred at `toView` of its pixel; that every star label's box, its
    corners taken back through `fromView`, lies inside the frame by at least 3u; and that
-   `toView` of the spot's anchor, moved by the box's centre less the box's own anchor
-   point (plan.md § Interfaces), gives the box's centre, to 1e-6. With `rotation` 0 it
-   asserts the spots equal those with no `rotation`.
+   `toView(anchor + (box centre − box anchor point))` is the box's centre, to 1e-6, with
+   `anchor` the spot's anchor and the box's anchor point as plan.md § Interfaces defines
+   it: the sum is taken before `toView`, not after. With `rotation` 0 it asserts the
+   spots equal those with no `rotation`.
 5. **Given** `AimTap` showing a live preview of 1296 × 972 with `chart_rotation_deg` 90
    and the photo's bounding box mocked at 364 × 485.33 CSS px, **When** a committed test
    clicks at box pixel (200, 996) scaled to that box, **Then** it asserts the aim request
