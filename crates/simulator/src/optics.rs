@@ -1,10 +1,11 @@
 //! Known finder optics and shared telescope state. Public angles are degrees.
 use crate::{
     clock::VirtualClock,
+    imaging::{ImagingOptics, ImagingTruth},
     render::{self, RenderStar},
     sky::{self, Site},
 };
-use math_core::{PinholeCamera, UnitVector};
+use math_core::{attitude::RotationMatrix, PinholeCamera, UnitVector};
 use pattern_database::PatternDatabase;
 use std::sync::{Arc, Mutex};
 
@@ -64,6 +65,7 @@ pub struct TrueDirections {
 #[derive(Clone, Copy)]
 pub(crate) struct Pointing {
     pub optics: Optics,
+    pub imaging: ImagingOptics,
     pub site: Site,
     pub alt: f64,
     pub az: f64,
@@ -84,6 +86,7 @@ impl Simulator {
             db,
             state: Arc::new(Mutex::new(Pointing {
                 optics: Optics::default(),
+                imaging: ImagingOptics::default(),
                 site,
                 alt: 45.0,
                 az: 180.0,
@@ -146,6 +149,69 @@ impl Simulator {
         }
     }
 
+    /// The imaging optics in force: the sensor, its field, the imaging angle,
+    /// the focus error and the pixel size.
+    pub fn imaging_optics(&self) -> ImagingOptics {
+        self.state.lock().unwrap().imaging
+    }
+
+    /// Set the imaging optics. The sensor must have pixels and a field.
+    pub fn set_imaging_optics(&self, optics: ImagingOptics) {
+        assert!(optics.width > 0 && optics.height > 0);
+        assert!(optics.fov_deg > 0.0 && optics.fov_deg < 180.0);
+        self.state.lock().unwrap().imaging = optics;
+    }
+
+    /// Where the imaging frame points now, on the clock's reading.
+    pub fn imaging_truth(&self) -> ImagingTruth {
+        self.imaging_truth_at(self.clock.now())
+    }
+
+    /// Where the imaging frame points at the supplied instant.
+    pub fn imaging_truth_at(&self, unix_s: f64) -> ImagingTruth {
+        let (rotation, optics) = self.imaging_rotation_at(unix_s);
+        imaging_truth_of(&rotation, &optics)
+    }
+
+    /// The imaging frame's axes in J2000, with the optics in force.
+    pub(crate) fn imaging_rotation_at(&self, unix_s: f64) -> (RotationMatrix, ImagingOptics) {
+        let p = *self.state.lock().unwrap();
+        let rotation = sky::camera_rotation(p.alt, p.az, p.site, unix_s);
+        let boresight = sky::unrotate(rotation, p.optics.eyepiece_ray());
+        let up = unit(rotation.rows[2]);
+        let along = up.x * boresight.x + up.y * boresight.y + up.z * boresight.z;
+        // Frame-up, less its part along the boresight, and the left it turns
+        // toward as the imaging angle grows.
+        let flat_up = unit([
+            up.x - along * boresight.x,
+            up.y - along * boresight.y,
+            up.z - along * boresight.z,
+        ]);
+        let flat_left = cross(flat_up, boresight);
+        let angle = p.imaging.angle_deg.to_radians();
+        let (sin, cos) = angle.sin_cos();
+        let up = [
+            cos * flat_up.x + sin * flat_left.x,
+            cos * flat_up.y + sin * flat_left.y,
+            cos * flat_up.z + sin * flat_left.z,
+        ];
+        let left = [
+            cos * flat_left.x - sin * flat_up.x,
+            cos * flat_left.y - sin * flat_up.y,
+            cos * flat_left.z - sin * flat_up.z,
+        ];
+        (
+            RotationMatrix {
+                rows: [
+                    [boresight.x, boresight.y, boresight.z],
+                    left,
+                    up,
+                ],
+            },
+            p.imaging,
+        )
+    }
+
     /// Place a J2000 direction at the eyepiece pixel, accounting for the tube's roll.
     /// Like alt-az pointing itself, this is singular at the zenith: a fixed lateral
     /// offset cannot reach the tiny polar cap inside that offset.
@@ -180,6 +246,63 @@ impl Simulator {
             exposure_ms,
             gain,
         )
+    }
+}
+
+/// A unit vector from its components.
+fn unit(components: [f64; 3]) -> UnitVector {
+    UnitVector {
+        x: components[0],
+        y: components[1],
+        z: components[2],
+    }
+    .normalize()
+    .expect("a nonzero direction")
+}
+
+/// The cross product of two unit vectors.
+fn cross(a: UnitVector, b: UnitVector) -> UnitVector {
+    UnitVector {
+        x: a.y * b.z - a.z * b.y,
+        y: a.z * b.x - a.x * b.z,
+        z: a.x * b.y - a.y * b.x,
+    }
+}
+
+/// The truth of an imaging frame's pointing, from its axes and its optics: the
+/// boresight's J2000 place, the angle of frame-up east of celestial north and
+/// the scale in arcseconds a pixel.
+fn imaging_truth_of(rotation: &RotationMatrix, optics: &ImagingOptics) -> ImagingTruth {
+    let boresight = unit(rotation.rows[0]);
+    let up = unit(rotation.rows[2]);
+    let (ra, dec) = boresight.to_radec();
+    // Celestial north and east as the frame sees them: the parts of the pole
+    // perpendicular to the boresight, and the pole's cross with it.
+    let north = unit([
+        -boresight.z * boresight.x,
+        -boresight.z * boresight.y,
+        1.0 - boresight.z * boresight.z,
+    ]);
+    let east = cross(
+        UnitVector {
+            x: 0.0,
+            y: 0.0,
+            z: 1.0,
+        },
+        boresight,
+    )
+    .normalize()
+    .expect("a boresight off the pole");
+    let angle = (up.x * east.x + up.y * east.y + up.z * east.z)
+        .atan2(up.x * north.x + up.y * north.y + up.z * north.z)
+        .to_degrees()
+        .rem_euclid(360.0);
+    let radians = 2.0 * (optics.fov_deg.to_radians() / 2.0).tan() / f64::from(optics.width);
+    ImagingTruth {
+        ra_deg: ra.to_degrees(),
+        dec_deg: dec.to_degrees(),
+        up_east_of_north_deg: angle,
+        arcsec_per_px: radians * 180.0 / std::f64::consts::PI * 3600.0,
     }
 }
 

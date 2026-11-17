@@ -23,7 +23,7 @@ impl SplitMix64 {
         word ^ (word >> 31)
     }
 
-    fn uniform(&mut self) -> f64 {
+    pub fn uniform(&mut self) -> f64 {
         // Open interval: log and reciprocal operations never see an endpoint.
         ((self.next() >> 12) as f64 + 0.5) / 4_503_599_627_370_496.0
     }

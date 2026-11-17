@@ -114,12 +114,12 @@ fn moments(
 }
 
 /// The eigenvalues of [[Sxx, Sxy], [Sxy, Syy]], larger first, and the angle in
-/// radians of the larger one's axis.
+/// radians of the larger one's axis: the eigenvector (Sxy, λ − Sxx).
 fn eigen([sxx, sxy, syy]: [f64; 3]) -> ((f64, f64), f64) {
     let half = (sxx + syy) / 2.0;
     let radius = ((sxx - syy).powi(2) / 4.0 + sxy * sxy).sqrt();
     let large = half + radius;
-    ((large, half - radius), sxy.atan2(large - sxx))
+    ((large, half - radius), (large - sxx).atan2(sxy))
 }
 
 /// The J2000 vector of a place, and its separation in degrees from another.
@@ -171,14 +171,17 @@ fn offset_star(
 }
 
 /// A star's place in the frame whose truth is given, by the tangent-plane
-/// geometry of the truth's centre, frame angle and scale.
+/// geometry of the truth's centre, frame angle and scale: a displacement at
+/// position angle φ is (−sin(φ − θ), −cos(φ − θ)) times its distance, θ the
+/// angle of frame-up east of north. US2-S3 checks the same geometry for
+/// φ = 0 as (d·sin θ, −d·cos θ).
 fn place_by_truth(star: &SimStar, truth: &ImagingTruth, centre: (f64, f64)) -> (f64, f64) {
     let rho = separation((star.ra_deg, star.dec_deg), (truth.ra_deg, truth.dec_deg)) * 3600.0;
     let pa = position_angle(truth.ra_deg, truth.dec_deg, star.ra_deg, star.dec_deg);
     let distance = rho / truth.arcsec_per_px;
     let from_up = (pa - truth.up_east_of_north_deg).to_radians();
     (
-        centre.0 + distance * from_up.sin(),
+        centre.0 - distance * from_up.sin(),
         centre.1 - distance * from_up.cos(),
     )
 }
@@ -347,21 +350,27 @@ async fn frames_repeat_by_seed_and_the_noise_matches_the_worked_example() {
             .await
             .unwrap();
     }
-    let take = |camera: &SimImagingCamera| {
-        let camera = camera.clone();
-        async move {
-            camera
-                .expose(&Exposure {
-                    exposure_ms: 1000.0,
-                    purpose: "dark".into(),
-                })
-                .await
-                .unwrap()
-        }
-    };
-    let first = take(&one).await;
-    let second = take(&two).await;
-    let third = take(&one).await;
+    let first = one
+        .expose(&Exposure {
+            exposure_ms: 1000.0,
+            purpose: "dark".into(),
+        })
+        .await
+        .unwrap();
+    let second = two
+        .expose(&Exposure {
+            exposure_ms: 1000.0,
+            purpose: "dark".into(),
+        })
+        .await
+        .unwrap();
+    let third = one
+        .expose(&Exposure {
+            exposure_ms: 1000.0,
+            purpose: "dark".into(),
+        })
+        .await
+        .unwrap();
     assert_eq!(first.samples, second.samples);
     assert_ne!(first.samples, third.samples);
     // Worked example: offset 10 gives 160; 20 electrons of sky at 0.25 a count
@@ -516,7 +525,8 @@ async fn binning_keeps_the_mosaic_and_the_roi_shifts_the_star() {
             })
             .await
             .unwrap();
-        assert_eq!((frame.width, frame.height), size);
+        assert_eq!(frame.width as usize, size.0);
+        assert_eq!(frame.height as usize, size.1);
         assert_eq!(frame.binning, binning);
         assert_eq!(frame.bayer, Some(BayerPattern::Rggb));
         assert_eq!(
@@ -697,9 +707,15 @@ async fn the_default_field_shows_a_star_above_the_sky() {
     let values = samples(&frame);
     let columns = (x - 10.5).ceil().max(0.0) as usize..=(x + 9.5).floor().min(1235.0) as usize;
     let rows = (y - 10.5).ceil().max(0.0) as usize..=(y + 9.5).floor().min(821.0) as usize;
-    let found = rows
-        .flat_map(|r| columns.clone().map(move |c| values[r * 1236 + c]))
-        .any(|v| v >= 480.0);
+    let mut found = false;
+    'scan: for row in rows {
+        for column in columns.clone() {
+            if values[row * 1236 + column] >= 480.0 {
+                found = true;
+                break 'scan;
+            }
+        }
+    }
     assert!(found, "nothing 300 above 180 within 10 of ({x}, {y})");
 }
 
