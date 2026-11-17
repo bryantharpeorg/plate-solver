@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use crate::link::{self, LinkStatus, OutOfRange};
-use scope_link::proto::CameraInfo;
+use scope_link::proto::{Axis, CameraInfo};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::watch;
 
@@ -899,6 +899,8 @@ impl Session {
     }
 
     /// Arm Track for the selected target, starting a GoTo first above one arcminute.
+    /// Track on while a push by hand is held goes back the same way: the tracker
+    /// ends, the push state clears, and the axes rest before the GoTo (FR-008).
     /// All context is taken from the session's console clock and current model.
     pub async fn start_tracking(
         self: &Arc<Self>,
@@ -913,7 +915,10 @@ impl Session {
             .expect("observing session")
             .track_generation;
         let target = self.track_target(clock.now(), &link)?;
-        {
+        // Track on is the no-op it is today only with no push by hand held
+        // (FR-008). The effective push is read before the values lock below,
+        // because reading it takes that lock itself.
+        if self.effective_push() == Push::None {
             let values = self.values.lock().expect("observing session");
             if let Some(track) = &values.track {
                 if track.wanted
@@ -928,8 +933,34 @@ impl Session {
                 }
             }
         }
-        if let Some(tracker) = self.tracker() {
+        let old = self.tracker();
+        if let Some(tracker) = &old {
             tracker.stop("stopped").await;
+            // StopAll only brakes the axes, and a GoTo refuses a moving mount:
+            // read both axes until neither is moving, every 50 ms for at most
+            // 2 s. A missing link or a failed read ends the wait; the GoTo
+            // reports the mount. A Track change meanwhile answers as stopped.
+            for _ in 0..40 {
+                if self.track_replaced(generation) {
+                    return Err("stopped".into());
+                }
+                let Some(mut client) = link.mount() else {
+                    break;
+                };
+                let (Ok(azimuth), Ok(altitude)) = (
+                    client.axis_state(Axis::Azimuth).await,
+                    client.axis_state(Axis::Altitude).await,
+                ) else {
+                    break;
+                };
+                if !azimuth.moving && !altitude.moving {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+            if self.track_replaced(generation) {
+                return Err("stopped".into());
+            }
         }
         let running = goto
             .progress()
@@ -1253,6 +1284,16 @@ impl Session {
             }
             _ => Push::None,
         }
+    }
+
+    /// Whether the Track run in force when this request began has since been
+    /// replaced or ended, by an observer's Stop or a dropped console.
+    fn track_replaced(&self, generation: u64) -> bool {
+        self.values
+            .lock()
+            .expect("observing session")
+            .track_generation
+            != generation
     }
 
     /// Mark the model's next sync as a slip, persisting as `reset_model` does.
