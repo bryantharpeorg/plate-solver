@@ -141,6 +141,7 @@ export interface LiveReport {
   stars: number;
   report: SolveReport;
   guidance?: Guidance;
+  up_deg?: number;
 }
 
 export interface SessionSite {
@@ -155,6 +156,7 @@ export interface SessionPointing {
   dec_deg: number;
   alt_deg?: number;
   az_deg?: number;
+  up_deg?: number;
   source?: "upload" | "live";
   frame_id?: number;
 }

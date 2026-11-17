@@ -59,6 +59,23 @@ fn observer(site: Site, time: f64) -> Observer {
     }
 }
 
+/// Where the zenith points in the frame at a J2000 position, degrees clockwise from the
+/// frame's up, in [0, 360). Right, the way azimuth grows, is a quarter turn clockwise
+/// from it.
+pub fn up_deg(frame: &Frame, ra_deg: f64, dec_deg: f64, observer: &Observer) -> Option<f64> {
+    let at = frame.project(UnitVector::from_radec(
+        ra_deg.to_radians(),
+        dec_deg.to_radians(),
+    ))?;
+    let (ra, dec) = frame.unproject((at.0, at.1 - 0.01))?.to_radec();
+    let (alt, az) = sky::alt_az(ra_deg, dec_deg, observer);
+    let (up_alt, up_az) = sky::alt_az(ra.to_degrees(), dec.to_degrees(), observer);
+    let right = ((up_az - az + 180.0).rem_euclid(360.0) - 180.0) * alt.to_radians().cos();
+    // The frame's up lies this far clockwise of the zenith; the zenith lies as far the other way.
+    let roll = right.atan2(up_alt - alt).to_degrees();
+    Some((-roll).rem_euclid(360.0))
+}
+
 /// Guidance derived together with a session snapshot. Event times are Unix seconds.
 #[derive(Debug, Clone, Serialize)]
 pub struct Guidance {

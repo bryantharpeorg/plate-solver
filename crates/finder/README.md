@@ -379,9 +379,11 @@ An exposure already in progress finishes before a push or stop takes effect. Out
 simulate mode every `/api/sim/*` path answers 404. Unknown request fields are refused.
 
 `GET /api/live` is `text/event-stream`. Each `live` event carries
-`{frame_id, time, pointing_seq, preview_seq, stars, report, guidance?}`. Time is the
+`{frame_id, time, pointing_seq, preview_seq, stars, report, guidance?, up_deg?}`. Time is the
 mid-exposure instant mapped to the console clock; `report` is the same `SolveReport`
-as an upload, with `name: null`. Guidance is evaluated at that solve. Keep-alive comments
+as an upload, with `name: null`. Guidance is evaluated at that solve. On solved events,
+`up_deg` is present when the session has a site: the zenith's bearing in the frame at the
+pointing, clockwise from the frame's up, in degrees in [0, 360). Keep-alive comments
 arrive every 15 seconds; subscribers lagging beyond 16 reports skip missed events.
 
 `GET /api/live/preview.jpg?seq=N` serves the JPEG carried by exposure N, while it remains

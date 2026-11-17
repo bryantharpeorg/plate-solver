@@ -430,6 +430,10 @@ pub struct LatestPointing {
     /// Exposure id, for live pointings only.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub frame_id: Option<u64>,
+    /// Where the zenith points in the frame at this pointing, degrees clockwise from up,
+    /// when a site is set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub up_deg: Option<f64>,
 }
 impl std::ops::Deref for LatestPointing {
     type Target = Pointing;
@@ -635,6 +639,18 @@ impl Values {
             min_alt_deg: self.min_alt_deg,
             target: self.target,
             pointing: self.pointing.clone().map(|pointing| LatestPointing {
+                up_deg: self.site.and_then(|site| {
+                    pushto::up_deg(
+                        &pointing.frame,
+                        pointing.ra_deg,
+                        pointing.dec_deg,
+                        &Observer {
+                            lat: site.lat_deg,
+                            lon: site.lon_deg,
+                            time: pointing.time,
+                        },
+                    )
+                }),
                 pointing,
                 source: self.source,
                 frame_id: self.frame_id,
