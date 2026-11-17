@@ -8,11 +8,12 @@ description: "Task list for 030-imaging-camera-link: The Imaging Camera on the S
 - `025-frame-capture` and `028-finder-tests-do-less` have landed on `main`: met (028
   completely at 49bb210);
 - this trio has been re-anchored to `main`: met at 49bb210 (plan.md § Prerequisites 2
-  lists the citations corrected), and `main` at 2f6a777 changes none of the cited
-  files; done again if `main` moves before the flip;
+  lists the citations corrected), and again at the flip against `main` at 86ebeb8,
+  where two `crates/finder/src/link.rs` citations moved and are corrected;
 - the owner decisions in spec.md, thirteen of them, are settled and its owner
-  approvals given: not met (3, 8, 12 and the white balance of 13 are settled by the plan
-  document's amendments; nine are open);
+  approvals given: met on 2026-11-17 (3, 8, 12 and the white balance of 13 by the plan
+  document's amendments, the other nine on their recommended answers; the approvals at
+  the flip);
 - the saved capture `fixtures/scope-node/indi/ccd-simulator.script` and its
   `ccd-simulator.expect.json` are recorded and staged: met on 2026-11-17, from INDI
   1.9.9's camera simulator, committed with this spec's flip;
@@ -25,7 +26,7 @@ description: "Task list for 030-imaging-camera-link: The Imaging Camera on the S
 - the plan document's § Interfaces shared across the specs agrees with the settled
   decisions: met in the plan document that lands with the flip, which carries `save` on
   `ExposeRequest` and `[imaging] save_dir` as this trio has them (owner decision 9,
-  still open) and lists this trio's stories by subject, not number.
+  settled as recommended) and lists this trio's stories by subject, not number.
 
 **Rules for every story:**
 - Never edit an existing test, golden, fixture, `scripts/ci/`, `.github/`, `deny.toml`,

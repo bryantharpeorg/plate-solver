@@ -1,6 +1,13 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["025-frame-capture", "028-finder-tests-do-less"]
+# Flipped to ready 2026-11-17 by the operator seat on the owner's answer the same day ("Yes"
+# to flipping it now, after round 1's probes), which gives the owner approvals listed under
+# "Owner approvals". Every owner decision takes its settled answer: 3, 8, 12 and the white
+# balance of 13 by the plan document's amendments, and the rest the recommended one, which
+# the owner approved on 2026-11-17 with the imaging series' other decisions. Re-anchored
+# first to `main` at 86ebeb8: two `crates/finder/src/link.rs` citations moved, after
+# 026's US1, and are corrected; no other cited file changed. Validated there.
 # Drafted 2026-11-15 against `main` at dbc2b5b from
 # docs/plans/2026-11-15-specs-030-037-imaging.md, by the grilling session of that day.
 # Reviewed on 2026-11-15 and the review's findings applied; then
@@ -16,8 +23,6 @@ depends_on_landed: ["025-frame-capture", "028-finder-tests-do-less"]
 # to 44) are in, and the first INDI story is split in two as measured, US4 connected
 # and described and US5 configured, so the trio holds eight stories (plan.md
 # § Refinement Record).
-# It stays draft until the owner settles the owner decisions and flips it to `ready`,
-# which gives the approvals listed under "Owner approvals" and dispatches it.
 ---
 
 # Feature Specification: The Imaging Camera on the Scope Link
@@ -90,7 +95,7 @@ focuses, calibrates or stacks.
      A new service does not: 025 added `ScopeNodeRaw` that way
      (`crates/scope-link/proto/scope_node/v1/scope_node.proto:151`).
   3. The console builds every client from clones of one channel
-     (`crates/finder/src/link.rs:360`), sends a heartbeat every 250 ms and treats 1 s of
+     (`crates/finder/src/link.rs:377`), sends a heartbeat every 250 ms and treats 1 s of
      silence as a lost link (`crates/finder/src/link.rs:29`,
      `crates/finder/src/link.rs:30`); the node's watchdog stops the mount after 1 s
      without a heartbeat (`crates/scope-node/src/mount/watchdog.rs:42`). 025 refused raw
@@ -176,10 +181,11 @@ focuses, calibrates or stacks.
   3. `ExposeRequest` also carries `save`, the ask for a copy at the scope node, and the
      node's config table holds `save_dir`: the plan document's `Expose` now takes
      "whether the node also keeps the frame", and its `[imaging]` table lists
-     `save_dir`. Whether and how the node keeps a copy is still open (owner decision 9).
+     `save_dir`. How the node keeps a copy is owner decision 9, settled at the flip on its
+     recommended answer.
 
-  Should the owner settle owner decision 9 otherwise, the plan document is corrected in
-  the same change (plan.md § Prerequisites 9). The review's fourth finding, where the console
+  Had the owner settled owner decision 9 otherwise, the plan document would have been
+  corrected in the same change (plan.md § Prerequisites 9). The review's fourth finding, where the console
   puts its files, is 031's, and Amendment 3 settles it there.
 - Q: Which FITS keywords does the scope node's own copy write, and against what were
   they checked? → A: On 2026-11-15. `XORGSUBF` and `YORGSUBF`, in the SBIG FITS
@@ -293,9 +299,9 @@ Each is a design or taste call the plan document leaves open, or, where its head
 says so, a place where this trio departs from the plan document. Decisions 3 and 8 are
 settled by the plan document's Amendments 4 and 5, as recommended here, and decision 12
 and the white balance of decision 13 by Amendments 6 and 2; each says so, and keeps its
-other answer only as the record of what was closed. The rest are open: the owner
-settles each before the flip, and a different answer is written into the trio and
-re-validated, never left to a story.
+other answer only as the record of what was closed. The rest take their recommended
+answers: the owner approved the imaging series' recommendations on 2026-11-17
+("im good with all of the info in the decisions doc") and flipped this spec the same day. None is left to a story.
 
 1. **Eight stories on this side of the link.** Recommended: eight, so that each stays
    under 64 KiB: the port and the simulated camera are two stories, the INDI adapter is
@@ -797,7 +803,7 @@ development, `cargo nextest run -p scope-node --locked --test imaging_service` a
    16-bit frame whose i-th sample is `i mod 65521`, served with `routes()` over two
    connections; the mount's azimuth rate set to 0.5°/s on the first connection; a task
    sending `Heartbeat` on the first connection every 250 ms, as
-   `crates/finder/src/link.rs:526` paces it, and keeping each reply; **When** a test
+   `crates/finder/src/link.rs:547` paces it, and keeping each reply; **When** a test
    calls `Expose` on the second connection with `max_bytes_per_s` 4,194,304 and reads
    the whole stream, and then again with 0, **Then** a committed test asserts that:
    - each stream's header has `byte_count` 32,472,192 and is followed by exactly 124

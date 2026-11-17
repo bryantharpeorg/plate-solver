@@ -1505,14 +1505,17 @@ These are not changed by any story:
    trio cites, and the round-1 probes read every citation of their stories at 20ce2fe as
    claimed; two cited lines one off are corrected (`.github/workflows/ci.yml:411`, the
    `cargo machete` run, and `crates/scope-node/Cargo.toml:10`, the `[dependencies]`
-   table). If `main` moves again before the flip, this is done again and the validator
-   re-run.
+   table). Checked again at the flip on 2026-11-17, against `main` at 86ebeb8: 026's US1
+   moved two cited lines of `crates/finder/src/link.rs`, `let channel = transport` from
+   360 to 377 and `next_beat += HEARTBEAT;` from 526 to 547, both corrected; no other
+   cited file changed, and the validator was re-run there.
 3. **The owner decisions are settled and the approvals given** (spec § Owner decisions,
-   § Owner approvals). Not met. Of the thirteen decisions, 3 and 8 are settled by the
-   plan document's Amendments 4 and 5, 12 by Amendment 6 and the white balance of 13 by
-   Amendment 2; the other nine are open, with the open part of 13 (a name the camera
-   lacks). Any answer other than the recommended one is written into the trio and
-   re-validated before the flip.
+   § Owner approvals). Met on 2026-11-17. Of the thirteen decisions, 3 and 8 are settled
+   by the plan document's Amendments 4 and 5, 12 by Amendment 6 and the white balance of
+   13 by Amendment 2; the other nine, with the open part of 13 (a name the camera lacks),
+   take their recommended answers, which the owner approved that day with the imaging
+   series' other decisions ("im good with all of the info in the decisions doc"). The owner gave the approvals by
+   flipping the spec the same day.
 4. **The saved capture is recorded and staged.** Met on 2026-11-17: § Recording the
    conversation was run, unchanged, against INDI 1.9.9's camera simulator, and
    `fixtures/scope-node/indi/ccd-simulator.script` and
@@ -1553,9 +1556,9 @@ These are not changed by any story:
    this side (owner decisions 3 and 8), and Amendments 2 and 6 are carried here (owner
    decisions 13 and 12). Its § Interfaces shared across the specs now carries the third,
    `save` on `ExposeRequest` ("whether the node also keeps the frame") with
-   `[imaging] save_dir`, as this trio has it; owner decision 9 is still open. If the
-   owner settles it otherwise, the plan document's § Interfaces shared across the specs
-   is corrected in the same change, so that 031 to 037 read what 030 builds.
+   `[imaging] save_dir`, as this trio has it; owner decision 9 is settled on its
+   recommended answer, so the plan document's § Interfaces shared across the specs
+   stands as it is, and 031 to 037 read what 030 builds.
 
 ## Plan traps
 
@@ -1656,7 +1659,7 @@ with the check that keeps it from recurring. They bind every story.
 | A frame of 32 MiB on the node costs about 110 MB at its peak: the base64 text, the FITS bytes and the samples, if the white space is removed from the text in place; a build that holds the text and a compacted copy at once, as round 1's did, peaks higher. | Stated here so the owner can weigh it against the node's memory; `binning` 2 quarters it. Not measured. |
 | The second connection doubles what a poor link must carry at the worst moment. | The rate limit (US3-S8); the heartbeat is on its own connection, and on the simulator it kept every slot while a paced stream ran, though paused time over memory links cannot show bandwidth sharing; the real link is a field check. |
 | Specs 031 to 037 need a field this spec's types lack. | `ImagingFrame` gains `roi` here (the plan document's Amendment 6) and derives `Default`; tests end every literal of it, and of a scope-link message, with `..Default::default()`, so a field added later breaks none of this spec's tests, though it still changes the scope link, which a later spec must name for approval. |
-| `main` moves again before the flip and shifts a cited line. | Prerequisite 2: the line-for-line comparison is run again against the new `main`, as it was for 49bb210. |
+| `main` moves again before the flip and shifts a cited line. | Prerequisite 2: the line-for-line comparison was run again at the flip, against 86ebeb8, as it was for 49bb210. |
 | A camera's white balance is not in `[imaging] neutral`, because its controls have other names or the table was not written, so its files are scaled by values no file records. | The README says the table is how white balance is made neutral and gives the research note's camera as the example; reading the real camera's control names and writing the table is a field check (spec Assumptions, Outside the factory). No spec records controls per frame (the plan document's Amendment 2). |
 | The real camera rejects or clamps a neutral value, or answers it in the state `Alert`. | The connection fails with the camera's words (`the camera refused CCD_CONTROLS: …`) and the console shows `error`; the table is corrected. |
 | Owner decision 9 is settled otherwise than recommended, after 032 to 037 were drafted from the plan document, which carries `save` on `ExposeRequest` and `save_dir` as this trio has them. | Prerequisite 9; no spec after 031 calls `Expose` or reads `save_dir`, and 031 takes both from this trio's plan.md. |
@@ -1737,6 +1740,12 @@ and add the assertions that the probes' bite checks showed missing (spec.md
 attaching of the imaging camera and its `save_dir` (§ Risks), that frames need their
 own connection, the probe's flush and a live INDI server's timing.
 
+**Flip, 2026-11-17.** The owner flipped this spec after round 1. The trio was re-read
+first on `main` at 86ebeb8, where 026's US1 and US2 had landed: two cited lines of
+`crates/finder/src/link.rs` moved and are corrected (§ Prerequisites 2), and no file
+this trio writes changed. Every owner decision takes its settled answer (§ Prerequisites
+3).
+
 The record below is round 1's account: its tests are the scenarios the probes built and
 ran, its writes are the files their diffs changed, and its shared writes
 name the merge edge that orders two stories of this spec on one file, or the story of
@@ -1750,7 +1759,7 @@ owner approval: those are in spec.md, and flipping to `ready` gives them.
 
 ```yaml
 version: 1
-reviewed_revision: 2f6a777592b7ff2767e71317da90eb3376d179e0
+reviewed_revision: 86ebeb87f0152d4656bc0e2a2b4d44a0a6df7817
 stories:
   US1:
     tests:
