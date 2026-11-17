@@ -104,17 +104,24 @@ async fn serve(
     // finder camera. The adapter connects at its first use, so the node
     // starts whether or not the INDI server is up.
     let service = match &config.imaging {
-        Some(imaging) => match imaging.adapter {
-            ImagingAdapter::Indi => service.with_imaging(IndiCamera::tcp(
-                imaging.address(),
-                imaging.device.clone(),
-                imaging.neutral_controls(),
-                clock.clone(),
-            )),
-            ImagingAdapter::Simulated => {
-                service.with_imaging(SyntheticImagingCamera::new(clock.clone()))
+        Some(imaging) => {
+            let service = match imaging.adapter {
+                ImagingAdapter::Indi => service.with_imaging(IndiCamera::tcp(
+                    imaging.address(),
+                    imaging.device.clone(),
+                    imaging.neutral_controls(),
+                    clock.clone(),
+                )),
+                ImagingAdapter::Simulated => {
+                    service.with_imaging(SyntheticImagingCamera::new(clock.clone()))
+                }
+            };
+            // US7: the folder of the node's own copy of each saved frame.
+            match &imaging.save_dir {
+                Some(dir) => service.with_imaging_save_dir(dir.clone()),
+                None => service,
             }
-        },
+        }
         None => service,
     };
     tonic::transport::Server::builder()

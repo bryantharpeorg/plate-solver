@@ -204,6 +204,15 @@ impl NodeService {
     pub(crate) fn imaging_host(&self) -> Option<&Arc<ImagingHost>> {
         self.runtime.imaging.get()
     }
+    /// Where the node keeps its own copy of each frame asked for with `save`
+    /// (030 US7). Without an imaging camera it does nothing; the first call
+    /// sets the folder and a later one changes nothing.
+    pub fn with_imaging_save_dir(self, dir: std::path::PathBuf) -> Self {
+        if let Some(host) = self.imaging_host() {
+            host.set_save_dir(dir);
+        }
+        self
+    }
     /// The command queue, when the node has a connected mount.
     pub fn mount_queue(&self) -> Option<&Arc<MountQueue>> {
         self.runtime.shared.mount.as_ref()
