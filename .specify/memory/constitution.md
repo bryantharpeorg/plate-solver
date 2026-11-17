@@ -44,7 +44,9 @@ Each story lands the tests that prove it, in the same change. An expected value 
 from somewhere other than the code under test: a cedar golden, a worked example (Meeus
 and others), a fixture, the simulator's truth, or a saved capture. Every scenario
 states its oracle and an explicit tolerance. Time-dependent behaviour takes its clock
-from outside. A virtual clock is allowed only in tests and `finder --simulate`.
+from outside. A virtual clock is allowed only in tests, `finder --simulate`, and
+`finder --mount-sky --mount-sky-night` started with `--covers-on`, where the observer has
+confirmed the telescope is covered and the Sun guard checks the virtual clock's Sun.
 
 ### IV. Read the critical paths twice
 
@@ -156,4 +158,4 @@ Amending this document is the maintainer's act, in its own PR, never part of a s
 So is amending `ergane.yaml`, `ENVIRONMENT.md` § Enforcement status, or the oracle files
 named in `.github/CODEOWNERS`.
 
-**Version**: 1.3.0 | **Ratified**: 2026-10-28 | **Last Amended**: 2026-11-16
+**Version**: 1.4.0 | **Ratified**: 2026-10-28 | **Last Amended**: 2026-11-17

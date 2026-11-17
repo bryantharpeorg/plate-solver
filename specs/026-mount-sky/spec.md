@@ -1,6 +1,12 @@
 ---
-state: draft
-depends_on_landed: ["016-mcp", "017-console-stop-confirm", "018-live-chart-steady", "020-live-chart-calm", "024-mount-link-recovery"]
+state: ready
+depends_on_landed: ["016-mcp", "017-console-stop-confirm", "018-live-chart-steady", "020-live-chart-calm", "021-chart-orientation", "024-mount-link-recovery"]
+# Flipped to ready 2026-11-17 by the operator seat on the owner's approval of PR 207 the same day
+# ("207 is reviewed and approved"), which gives the owner approvals listed under "Owner
+# approvals" and the Principle III amendment, made in this pull request as constitution
+# 1.4.0 (plan.md § Prerequisites 4). Probe-built in round 1 and re-anchored to `main` at
+# 2f6a777 after 021 landed; 021-chart-orientation joins `depends_on_landed` to record that
+# order. Validated there: no validator findings, preflight 0, US1 then US2 and US3.
 # Drafted 2026-11-14 against `main` at c1ed295, at the owner's request ("even during the
 # day, can we simulate the night sky for testing goto"), with the scope in a garage under
 # cloud. The owner chose to include the daytime story ("Include daytime story") after

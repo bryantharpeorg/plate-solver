@@ -534,7 +534,8 @@ These are not changed by any story:
    and re-running the validator.
 3. **The owner approvals are given** (spec § Owner approvals). Flipping to `ready`
    records them.
-4. **Constitution III is amended in the flip PR**, so the dispatch freezes it. The last
+4. **Constitution III is amended in the flip PR**, so the dispatch freezes it. Met on
+   2026-11-17: the flip pull request makes it constitution 1.4.0. The last
    sentence of Principle III, unchanged by 1.2.0 and 1.3.0
    (`.specify/memory/constitution.md:47`), reads:
 
