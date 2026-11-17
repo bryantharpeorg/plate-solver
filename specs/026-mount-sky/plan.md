@@ -233,6 +233,8 @@ impl FrameFilter for MountSky { /* below */ }
    `optics = Optics { width: frame.width, height: frame.height, fov_deg: FOV_DEG,
    eyepiece_px: (frame.width as f64 / 2.0, frame.height as f64 / 2.0) }`;
    `simulator::render::field_stars(&db, optics, rotation, frame.exposure_ms, frame.gain)`.
+   This `rotation` is the camera's attitude on the sky. It is not 021's chart rotation,
+   which only turns the page's view: the filter never reads `chart_rotation_deg`.
 9. **Centroids.** Each star becomes `Centroid { x, y, brightness: 1e6 × 10^(−0.4 ×
    magnitude) }`, sorted by brightness, highest first, and cut to `MAX_CENTROIDS`.
    Replace `centroids`, set `preview_jpeg` to `None`, and return the frame.
@@ -255,12 +257,12 @@ impl Session {
 
 It reads `values.site`, `values.counts_per_revolution` and `values.mount_resets`, the
 last reset count a good mount poll saw, which spec 024 keeps in the session
-(`crates/finder/src/session.rs:587`; none before the first poll), under the existing
-lock, as `record_frame_sync` does (`crates/finder/src/session.rs:1123`). A good poll
+(`crates/finder/src/session.rs:594`; none before the first poll), under the existing
+lock, as `record_frame_sync` does (`crates/finder/src/session.rs:1133`). A good poll
 sets that count and the counts per revolution together, and a failed poll clears only
-the counts per revolution (`Session::set_mount`, `crates/finder/src/session.rs:1049`),
+the counts per revolution (`Session::set_mount`, `crates/finder/src/session.rs:1059`),
 so the session holds a reset count whenever it holds counts per revolution.
-`Session::mount_resets` (`crates/finder/src/session.rs:1045`) reads the count alone;
+`Session::mount_resets` (`crates/finder/src/session.rs:1055`) reads the count alone;
 `mount_sky_terms` takes all three under one lock.
 
 ### The console (`crates/finder/src/api.rs`)
@@ -406,12 +408,16 @@ export interface MountSky {
 }
 ```
 
-and `mount_sky?: MountSky;` in `ObservingSession`.
+and `mount_sky?: MountSky;` in `ObservingSession`. On `main` the interface goes right
+before `export interface ObservingSession`, after `McpStatus`, and the field is
+`ObservingSession`'s last, after `field?`; 021's `chart_rotation_deg?` sits between
+`aim?` and `field?`, above it.
 
 `useSession.ts`: `request` keeps only the session fields it names
-(`crates/finder/web/src/useSession.ts:28`). After `backlash`
-(`crates/finder/web/src/useSession.ts:48`), add
-`...(body?.mount_sky != null && { mount_sky: body.mount_sky }),`.
+(`crates/finder/web/src/useSession.ts:29`). After `backlash`
+(`crates/finder/web/src/useSession.ts:50`), still the last spread on `main` (021's
+`chart_rotation_deg` spread sits after `aim`, earlier in the list), add
+`...(body?.mount_sky != null && { mount_sky: body.mount_sky }),` as the new last line.
 
 `components/MountSkyBanner.tsx`:
 
@@ -444,9 +450,11 @@ the page switch, so the banner shows on `/setup` too (US3-S1).
 
 ### `DESIGN.md` (US3)
 
-At the end of `## Components`, after the `### Recording — built` entry (025's, now the
-last there), add a `### Drawn sky banner — built` entry, written as one paragraph line
-under its heading, as the other `— built` entries are:
+At the end of `## Components`, after the `### Recording — built` entry (025's, still the
+last there on `main`; 021's `### Chart rotation — built` sits higher, after
+`### Live chart and preview — built`), add a `### Drawn sky banner — built` entry,
+written as one paragraph line under its heading, as its neighbours Aim-point tap and
+Recording are:
 
 > Under `finder --mount-sky` a one-line status sits under the top bar on every page:
 > "Drawn sky." in semibold, then that the stars come from the mount's encoders and that
@@ -493,8 +501,8 @@ These are not changed by any story:
 
 ## Verification (every story, before proposing)
 
-- **The factory gates** (`ergane.yaml` at 20ce2fe; `test`'s Rust half has run under
-  cargo-nextest since 2026-11-14):
+- **The factory gates** (`ergane.yaml` at 2f6a777, gates unchanged since 20ce2fe;
+  `test`'s Rust half has run under cargo-nextest since 2026-11-14):
   - `lint` = `cargo fmt --all --check`,
     `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`,
     `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked`
@@ -520,9 +528,10 @@ These are not changed by any story:
    `depends_on_landed`, § Interfaces' session and filter steps were re-read against its
    code, and the validator was re-run (spec.md § Clarifications, Session 2026-11-17).
 2. **`main` is still as read.** Every citation here was read at c1ed295, re-read at
-   f8dab49 and re-read at 20ce2fe, where it is cited, after 022, 024, 025, 027 and 028
-   had landed. A spec that lands before this one and edits a cited file means re-reading
-   those citations and the shared writes, and re-running the validator.
+   f8dab49, re-read at 20ce2fe after 022, 024, 025, 027 and 028 had landed, and re-read
+   at 2f6a777, where it is cited, after 021 had landed. A spec that lands before this
+   one and edits a cited file means re-reading those citations and the shared writes,
+   and re-running the validator.
 3. **The owner approvals are given** (spec § Owner approvals). Flipping to `ready`
    records them.
 4. **Constitution III is amended in the flip PR**, so the dispatch freezes it. The last
@@ -541,11 +550,15 @@ These are not changed by any story:
    The version goes from 1.3.0 to 1.4.0 (the next minor version, if another amendment
    lands first) and `Last Amended` to the flip's date.
 5. **No operator-staged files are needed.**
-6. **Files shared with two drafts are ordered at the flip.** 021-chart-orientation (a
-   draft on `main`) and 038-track-follows-a-push (a draft in pull request 238, not on
-   `main`) write files this spec writes too:
+6. **Files shared with 021 and 038 are ordered.** 021-chart-orientation and
+   038-track-follows-a-push (a draft in pull request 238, not on `main`) write files
+   this spec writes too. The 021 overlap is met: 021 landed on 2026-11-17, its US1 at
+   158fb41 (#248) and its US2 at 2f6a777 (#249), and this trio was re-anchored to
+   `main` at 2f6a777 (spec.md § Clarifications, Session 2026-11-17, re-anchored), with
+   its citations in those files re-read, its write places named for `main` and the
+   validator re-run. The overlap left is 038's, which the operator orders at the flip:
 
-   | File | 026 | 021 | 038 |
+   | File | 026 | 021 (landed) | 038 |
    |---|---|---|---|
    | `crates/finder/README.md` | US1, US2 | US1 | US3 |
    | `GLOSSARY.md` | US2 | US1 | US1 |
@@ -557,10 +570,11 @@ These are not changed by any story:
    | `crates/finder/web/src/useSession.ts` | US3 | US1 | |
    | `crates/finder/tests/cli/main.rs` | US1, US2 | US1 | |
 
-   None of them is in another's `depends_on_landed`, and this spec adds neither for
-   ordering. The operator orders them at the flip; whichever lands later re-reads its
-   citations in those files and its shared writes, and re-runs the validator. The
-   imaging drafts 031 to 037 in the same pull request write several of these files too.
+   Neither 021 nor 038 is in this spec's `depends_on_landed`, and this spec adds neither
+   for ordering. The operator orders 026 and 038 at the flip; whichever lands later
+   re-reads its citations in those files and its shared writes, and re-runs the
+   validator. The imaging drafts 031 to 037 in the same pull request write several of
+   these files too.
 7. **The refinement probe has run.** Met on 2026-11-17, in one round: each story was
    built once, and the fixes are in this trio (§ Refinement Record, Round 1).
 
@@ -700,16 +714,40 @@ frame, survived the probe and are answered by D3's and D5's fixes, which no prob
 run yet. Every citation the fixes add was read on this branch, whose code is `main` at
 20ce2fe.
 
+**Re-anchored on 2026-11-17 to `main` at 2f6a777** by the plate-solver operator, after
+021-chart-orientation landed (US1 at 158fb41, #248; US2 at 2f6a777, #249); `main` was
+merged in, not rebased onto. Between 20ce2fe and 2f6a777, outside `specs/`, only 021's
+files and `ergane.yaml`'s roadmap widths changed, and the gates did not. Every
+`path:line` the trio held was re-read at 2f6a777 by content: 8 had moved with 021's
+added lines, none changing what it cites. In `crates/finder/src/session.rs` (021's
+`chart_rotation_deg` fields) they are 514 → 518, 587 → 594, 810 → 820, 1045 → 1055,
+1049 → 1059 and 1123 → 1133, and in `crates/finder/web/src/useSession.ts` (021's edit field and spread)
+28 → 29 and 48 → 50. The citations into files that 020, 022, 024 and 025 touched had
+not moved. The write places in 021's files were checked against `main` and now name it:
+the `useSession.ts` spread still follows `backlash`, the last; `api.ts`'s `MountSky` goes
+before `ObservingSession` and its field last, after `field?`; `DESIGN.md`'s entry still
+follows `### Recording — built`, the last of `## Components`, and the line-form note
+names its one-line neighbours, since 021's entry wraps; the `cli/main.rs` `mod` line,
+the README's rows and section, the `GLOSSARY.md:30` line and the `App.tsx` banner place
+hold as written. § Interfaces step 8 now says its `rotation` is not 021's chart
+rotation. Nothing 021 built changes what the trio assumes: chart rotation turns only the
+page's live views, the drawn frames are made at the link before anything reads them,
+and the banner's scenarios read only its text. A test merge of the round-1 probe
+branch onto 2f6a777 conflicted only in `crates/finder/web/dist`, which US3 rebuilds. The
+021 overlap of § Prerequisites 6 is met. No scenario's Given, When or Then, no FR, no
+owner approval and no Principle III text changed.
+
 Shared writes name the story in this spec that writes the same file next and a landed
 story in `depends_on_landed` that wrote it before; where a later landed spec not in
-`depends_on_landed` wrote it last (025, 028 or 022), the reason says so, and since it is
-on `main` no order against it is left to keep. `crates/finder/tests/cli/main.rs` was last
-written by 028's US3, 025's US1 and 027's US2, and `GLOSSARY.md` by 022's US1 and 025's
-US1 and US2; none of them is in `depends_on_landed`, and both are on `main`.
+`depends_on_landed` wrote it last (025, 028, 022 or 021), the reason says so, and since it
+is on `main` no order against it is left to keep. `crates/finder/tests/cli/main.rs` was
+last written by 021's US1, and before it by 028's US3, 025's US1 and 027's US2, and
+`GLOSSARY.md` by 021's US1, and before it by 022's US1 and 025's US1 and US2; none of
+them is in `depends_on_landed`, and all are on `main`.
 
 ```yaml
 version: 1
-reviewed_revision: 20ce2fe15a3a9609e49219eb9ed7b2875c6d673a
+reviewed_revision: 2f6a777592b7ff2767e71317da90eb3376d179e0
 stories:
   US1:
     tests:
@@ -819,7 +857,7 @@ stories:
         other_spec: 017-console-stop-confirm
         other_story: US4
         disposition: merge_order
-        reason: "026 depends_on_landed 017, whose US4 changed the README; 025's US1 and US2 and 022's US3 wrote it later, and are on main"
+        reason: "026 depends_on_landed 017, whose US4 changed the README; 025's US1 and US2, 022's US3 and 021's US1 wrote it later, and are on main"
       - path: crates/finder/src/api.rs
         other_spec: 024-mount-link-recovery
         other_story: US3
@@ -844,7 +882,7 @@ stories:
         other_spec: 024-mount-link-recovery
         other_story: US3
         disposition: merge_order
-        reason: "026 depends_on_landed 024, whose US3 changed session.rs; 028's US4 and 022's US3 wrote it later, and are on main"
+        reason: "026 depends_on_landed 024, whose US3 changed session.rs; 028's US4, 022's US3 and 021's US1 wrote it later, and are on main"
       - path: crates/finder/tests/motion/main.rs
         other_spec: 024-mount-link-recovery
         other_story: US3
@@ -935,26 +973,26 @@ stories:
         other_spec: 020-live-chart-calm
         other_story: US2
         disposition: merge_order
-        reason: "026 depends_on_landed 020-live-chart-calm, whose US2 changed DESIGN.md; 025's US3 and 022's US1 to US3 wrote it later, and are on main"
+        reason: "026 depends_on_landed 020-live-chart-calm, whose US2 changed DESIGN.md; 025's US3, 022's US1 to US3 and 021's US1 and US2 wrote it later, and are on main"
       - path: crates/finder/web/dist
         other_spec: 020-live-chart-calm
         other_story: US2
         disposition: merge_order
-        reason: "026 depends_on_landed 020-live-chart-calm, whose US2 rebuilt the bundle; 025's US3 and 022's US1 to US3 rebuilt it later, and are on main"
+        reason: "026 depends_on_landed 020-live-chart-calm, whose US2 rebuilt the bundle; 025's US3, 022's US1 to US3 and 021's US1 and US2 rebuilt it later, and are on main"
       - path: crates/finder/web/src/App.tsx
         other_spec: 020-live-chart-calm
         other_story: US2
         disposition: merge_order
-        reason: "026 depends_on_landed 020-live-chart-calm, whose US2 last changed App.tsx"
+        reason: "026 depends_on_landed 020-live-chart-calm, whose US2 changed App.tsx; 021's US2 wrote it later, and is on main"
       - path: crates/finder/web/src/api.ts
         other_spec: 020-live-chart-calm
         other_story: US2
         disposition: merge_order
-        reason: "026 depends_on_landed 020-live-chart-calm, whose US2 changed api.ts; 025's US3 and 022's US1 and US3 wrote it later, and are on main"
+        reason: "026 depends_on_landed 020-live-chart-calm, whose US2 changed api.ts; 025's US3, 022's US1 and US3 and 021's US1 wrote it later, and are on main"
       - path: crates/finder/web/src/useSession.ts
         other_spec: 016-mcp
         other_story: US7
         disposition: merge_order
-        reason: "026 depends_on_landed 016, whose US7 changed useSession.ts; 025's US3 wrote it later, and is on main"
+        reason: "026 depends_on_landed 016, whose US7 changed useSession.ts; 025's US3 and 021's US1 wrote it later, and are on main"
     open_questions: []
 ```

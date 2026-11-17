@@ -19,6 +19,9 @@ depends_on_landed: ["016-mcp", "017-console-stop-confirm", "018-live-chart-stead
 # or Then, no FR and no owner approval changed (Clarifications, Session 2026-11-17). It
 # stays draft.
 # 2026-11-17: the round-1 probe fixes (D1 to D17) are in; see plan.md § Refinement Record.
+# Re-anchored 2026-11-17 to `main` at 2f6a777, after 021-chart-orientation landed
+# (158fb41, 2f6a777): moved citations and the write places in 021's files follow `main`;
+# no scenario, FR or owner approval changed (Clarifications, re-anchor). It stays draft.
 ---
 
 # Feature Specification: A Drawn Sky on the Real Mount
@@ -47,7 +50,7 @@ clock, once the observer confirms the telescope is covered.
   interfaces, the shapes that existing tests pin and the alternatives rejected. A story
   that would change a decision escalates rather than re-deciding it.
 - Q: What was found? → A: Six things, each checked against the code at c1ed295 and
-  unchanged at f8dab49 and at 20ce2fe, where the lines below are cited:
+  unchanged at f8dab49, at 20ce2fe and at 2f6a777, where the lines below are cited:
   1. A node frame carries centroids, not pixels: up to 200 `Centroid`s, brightest first,
      plus an optional preview JPEG (`crates/scope-link/proto/scope_node/v1/scope_node.proto:53`).
   2. Every frame carries the mount's encoder counts read just before and just after the
@@ -65,7 +68,7 @@ clock, once the observer confirms the telescope is covered.
   5. The Sun guard refuses every motorised move, raw axis moves included, while the Sun
      is at or above −0.83° on the console clock (`crates/finder/src/goto.rs:333`,
      `crates/finder/src/goto.rs:716`, `crates/finder/src/goto.rs:816`,
-     `crates/finder/src/session.rs:810`, `crates/finder/src/tracking.rs:392`). So in
+     `crates/finder/src/session.rs:820`, `crates/finder/src/tracking.rs:392`). So in
      daylight no motor moves through the console, whatever the sky.
   6. The constitution allows a virtual clock only in tests and `finder --simulate`
      (`.specify/memory/constitution.md:47`), and `--simulate` never reaches a real node
@@ -133,9 +136,9 @@ clock, once the observer confirms the telescope is covered.
   from `Mount::resets` (`crates/scope-node/src/mount/mod.rs:72`,
   `crates/scope-node/src/service.rs:522`); the console's mount poll reads the azimuth
   axis's count (`crates/finder/src/live.rs:327`) into the session's last-seen count
-  (`crates/finder/src/session.rs:587`, set at `crates/finder/src/session.rs:1049`); and
+  (`crates/finder/src/session.rs:594`, set at `crates/finder/src/session.rs:1059`); and
   `GET /api/session` reports it as `mount.resets`, omitted while it is 0
-  (`crates/finder/src/session.rs:514`). After a reset GoTo answers `409` with 024's
+  (`crates/finder/src/session.rs:518`). After a reset GoTo answers `409` with 024's
   `The mount was power-cycled: sync again first` (`crates/finder/src/goto.rs:653`).
   FR-014 and US1-S8 hold as written.
 - Q: Does this spec use anything 025 added? → A: No, so 025 is not in
@@ -174,6 +177,8 @@ clock, once the observer confirms the telescope is covered.
 - Q: What else writes the files this spec writes? → A: Two drafts, 021-chart-orientation
   (on `main`) and 038-track-follows-a-push (not on `main`). Neither goes into
   `depends_on_landed`; the operator orders them at the flip (plan.md § Prerequisites 6).
+  021 has since landed, at 158fb41 and 2f6a777, and this trio was re-anchored to it
+  (Session 2026-11-17, re-anchored to `main` at 2f6a777); only 038 is left to order.
 
 ### Session 2026-11-17 (round-1 probe builds)
 
@@ -194,6 +199,39 @@ clock, once the observer confirms the telescope is covered.
   banner sits outside the page switch, so it shows on `/setup` too, but every scenario
   rendered `/`, so a banner moved into the main page's branch still passed US3. US3-S1
   now asserts the same at `/setup`. FR-012 and owner approval 4 are unchanged.
+
+### Session 2026-11-17 (re-anchored to `main` at 2f6a777, after 021)
+
+- Q: What changed on `main` since 20ce2fe? → A: 021-chart-orientation landed, its US1 at
+  158fb41 (#248) and its US2 at 2f6a777 (#249); outside `specs/`, only `ergane.yaml`'s
+  roadmap widths changed besides, not its gates. 021 wrote nine of the files this spec
+  writes: the README, `GLOSSARY.md`, `DESIGN.md`, `session.rs`,
+  `crates/finder/tests/cli/main.rs`, `api.ts`, `useSession.ts`, `App.tsx` and `dist`.
+  Every `path:line` the trio holds was re-read at 2f6a777 by content: 8 had moved with
+  021's added lines, six in `session.rs` and two in `useSession.ts`, and none changed
+  what it says (plan.md § Refinement Record). The 021 overlap of plan.md
+  § Prerequisites 6 is met; 038 is what is left.
+- Q: Do this spec's writes still go where the plan puts them? → A: Yes, each at a place
+  now named for `main`. `mod mount_sky;` still follows `mod flags;` in
+  `crates/finder/tests/cli/main.rs` (021 added `mod session_rotation;` after
+  `mod session;`). In `useSession.ts`, `backlash` is still the last spread (021's sits
+  after `aim`). The README's rows still follow `--sim-start` and its section still sits
+  between `## Simulated night and live stream` and `## Recording a night` (021 added a
+  paragraph to `## API`). The Sun guard entry is still `GLOSSARY.md:30` (021's Chart
+  rotation entry follows Aim point). `### Recording — built` is still the last entry
+  under `## Components` (021's `### Chart rotation — built` follows Live chart and
+  preview). In `api.ts` the `MountSky` interface goes before `ObservingSession` and
+  `mount_sky?` is its last field. In `App.tsx` the banner still goes right after
+  `<TopBar … />`, before the session error and outside the page switch.
+- Q: Does anything 021 built change what this spec assumes? → A: No. Chart rotation
+  only changes the display: the page turns the live chart and photos, while marks, taps,
+  the aim point and everything the console reads stay in the frame's own pixels. The
+  drawn frames are made at the link, before the page or anything else in the console
+  reads them, and `simulator::sky::camera_rotation` is the camera's attitude on the sky,
+  not chart rotation. The banner sits outside the turned chart, and its scenarios read
+  only its text. The `mount-sky/` session keeps its own chart rotation, as it keeps its
+  own pairing and site, so it starts unset. No scenario's Given, When or Then, no FR and
+  no owner approval changed.
 
 ## Owner approvals
 
@@ -484,7 +522,8 @@ must stay on.
 
 - **Earlier features are in place.** 014 to 019, 020-live-chart-calm and
   024-mount-link-recovery have landed (plan.md § Prerequisites). Every citation here was
-  read at c1ed295, re-read at f8dab49 and re-read again at 20ce2fe, where it is cited.
+  read at c1ed295, re-read at f8dab49 and at 20ce2fe, and re-read again at 2f6a777,
+  where it is cited.
 - **Out of scope:**
   - noise, trails, clouds or a daylight background in the drawn sky;
   - drawing the sky on the scope node, or any change under `crates/scope-node` or
