@@ -198,6 +198,10 @@ export interface ImagingCamera {
   pitch_um: number;
 }
 
+/** The push by hand Track holds: moving, or the place it follows. */
+export type SessionTrackPush =
+  { state: "moving" } | { state: "following"; ra_deg: number; dec_deg: number; at: number };
+
 export interface SessionTrack {
   wanted: boolean;
   state: "off" | "armed" | "tracking" | "keyhole_wait";
@@ -208,6 +212,8 @@ export interface SessionTrack {
     field_rotation_deg_per_min: number;
     longest_exposure_s?: number | "no limit";
   };
+  /** The push by hand Track is holding, absent unless it is moving or followed. */
+  push?: SessionTrackPush;
 }
 
 export interface SessionRecording {
