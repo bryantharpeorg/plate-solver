@@ -18,6 +18,7 @@ depends_on_landed: ["016-mcp", "017-console-stop-confirm", "018-live-chart-stead
 # and plan.md § Constitution Check answers 1.3.0's Principle V. No scenario's Given, When
 # or Then, no FR and no owner approval changed (Clarifications, Session 2026-11-17). It
 # stays draft.
+# 2026-11-17: the round-1 probe fixes (D1 to D17) are in; see plan.md § Refinement Record.
 ---
 
 # Feature Specification: A Drawn Sky on the Real Mount
@@ -174,6 +175,26 @@ clock, once the observer confirms the telescope is covered.
   (on `main`) and 038-track-follows-a-push (not on `main`). Neither goes into
   `depends_on_landed`; the operator orders them at the flip (plan.md § Prerequisites 6).
 
+### Session 2026-11-17 (round-1 probe builds)
+
+- Q: What did the probe builds change in the scenarios? → A: Clauses that make a test
+  able to fail or a setup possible to follow, each from a defect the probe found
+  (plan.md § Refinement Record, Round 1). The shared setup names the target M42 and no
+  aim, and drives the `SimMount` off the counts `[0, 0]` it starts at
+  (`crates/simulator/src/mount.rs:85`) before the console is built. US1-S3 and S4 wait
+  for a sync, since GoTo refuses `the night has no sync yet`
+  (`crates/finder/src/goto.rs:697`) before it checks the Sun
+  (`crates/finder/src/goto.rs:716`). US1-S6 and US2-S2 assert that clap's
+  `unexpected argument` is absent, so they fail before the change. US1-S8 waits out
+  the node's 5 s preview interval (`crates/scope-node/src/preview.rs:12`), and for the
+  count to read 0 again. US1-S5 asserts `mount_sky` whole, US2-S4 says which clock each
+  console uses and asserts its `time`, and US3-S3 waits for the session to load. No FR
+  and no owner approval changed.
+- Q: Why does US3-S1 also render `/setup`? → A: A coverage addition from the probe. The
+  banner sits outside the page switch, so it shows on `/setup` too, but every scenario
+  rendered `/`, so a banner moved into the main page's branch still passed US3. US3-S1
+  now asserts the same at `/setup`. FR-012 and owner approval 4 are unchanged.
+
 ## Owner approvals
 
 Flipping this spec to `ready` approves the following. Each is named in the FR that makes
@@ -204,13 +225,17 @@ All Rust scenarios share one setup unless a scenario says otherwise:
   mount port, wrapped in a test `Mount` that passes every call to it and answers
   `resets()` (024's `Mount::resets`) with a count the test sets, 0 unless a scenario
   sets it, over a memory transport, with a session holding that node's pairing, the
-  site 40° N 75° W and camera settings of 200 ms and gain 1. Instead of `with_link` it
-  calls `with_mount_sky(transport, 30.0)`.
+  site 40° N 75° W, the target M42 and camera settings of 200 ms and gain 1, and no
+  aim, so a live pointing is at the frame centre. Instead of `with_link` it calls
+  `with_mount_sky(transport, 30.0)`.
 - The clock is a `VirtualClock` at `2026-01-16T02:00:00Z` ("the night"), when the Sun is
   below −15° at that site, unless a scenario names `2026-01-16T17:00:00Z` ("the day").
 - The `SimMount`'s zero points are `[300, 70]`, so the node's own `SimCamera` points more
   than 40° from where the drawn sky does. A solve that agrees with the drawn sky
   therefore cannot come from the node's stars.
+- Before the console is built, the test drives the `SimMount` to counts
+  `[20000, 10000]` through its own `Mount::goto` and waits until neither axis moves, so
+  the first frame's counts are not zero.
 - "The truth of counts `[a, e]`" is, with `[a0, e0]` the session's
   `mount_sky.zero_counts` and `c` the counts per revolution: azimuth
   `180 + (a − a0) × 360 / c[0]` modulo 360 and apparent altitude
@@ -254,22 +279,26 @@ development, `cargo nextest run -p finder --locked --test motion mount_sky::` an
    offset 0, **Then** it asserts that the returned frame keeps the id, times, size,
    exposure, gain and both counts, has no preview, has between 20 and 200 centroids, and
    lists them in non-increasing brightness.
-3. **Given** the setup at night with the aim set to the frame's centre, **When** the
-   test starts a GoTo to M42 through `POST /api/goto` and it reads `done`, **Then** it
-   asserts that the truth of the last frame's mid-exposure counts is within 0.05° of
-   M42's apparent azimuth and altitude at that frame's console time, computed with
-   `simulator::sky::horizontal` and `finder::ephemeris::apparent_from_true`.
-4. **Given** the setup in the day, **When** the test asks for the same GoTo, **Then** it
-   asserts that the answer is the GoTo refusal `Sun is up` and that the recording mount
+3. **Given** the setup at night with the aim set to the frame's centre, once the
+   session's model holds a sync, **When** the test starts a GoTo to M42 through
+   `POST /api/goto` and it reads `done`, **Then** it asserts that the truth of the last
+   frame's mid-exposure counts is within 0.05° of M42's apparent azimuth and altitude
+   at that frame's console time, computed with `simulator::sky::horizontal` and
+   `finder::ephemeris::apparent_from_true`.
+4. **Given** the setup in the day, once the session's model holds a sync (the drawn sky
+   solves in daylight), **When** the test asks for the same GoTo, **Then** it asserts
+   that the answer is the GoTo refusal `Sun is up` and that the recording mount
    received no `GotoAxis` or `RateAxis` command.
 5. **Given** the setup with the node built without a mount, **When** three frames have
    arrived, **Then** a test asserts that each frame the link publishes has no
-   centroids, that the session has no live pointing, and that
-   `mount_sky.zero_counts` is `null`.
+   centroids, that the session has no live pointing, and that `mount_sky` equals
+   `{"tube_alt_deg":30.0,"zero_counts":null}`.
 6. **Given** the built `finder` binary, **When** a test runs it with `--mount-sky` and no
-   `--tube-alt`, with `--tube-alt 95`, with `--tube-alt 30` alone, and with
+   `--tube-alt`, with `--mount-sky --tube-alt 95`, with `--tube-alt 30` alone, and with
    `--mount-sky --tube-alt 30 --simulate`, **Then** it asserts that each exits with a
-   non-zero status before listening.
+   non-zero status before listening, that no standard error contains
+   `unexpected argument`, and that the second's contains
+   `--tube-alt requires degrees from 0 to 90`.
 7. **Given** the built binary run with `--mount-sky --tube-alt 30`, listening on port 0
    of `127.0.0.1`, with `XDG_STATE_HOME` set to an empty temporary folder and no `--state`, **When** a test
    sends `PUT /api/session` with `{"min_alt_deg":20}`, **Then** it asserts that
@@ -278,13 +307,14 @@ development, `cargo nextest run -p finder --locked --test motion mount_sky::` an
    `finder/session.json` does not.
 8. **Given** the setup at night after the first frame with encoder counts has been
    solved, **When** the test sets the mount's reset count to 1, waits until
-   `GET /api/session` shows `mount.resets` 1, and lets three more frames arrive,
-   **Then** a committed test asserts that the last frame the link published before the
-   count was set had at least 20 centroids, that each of the three has no centroids and
-   no preview, that `mount_sky.power_cycled` is `true` with `mount_sky.zero_counts`
-   unchanged, and that `POST /api/goto` to M42 answers `409`; and that after the test
-   sets the count back to 0 and three more frames arrive, those have no centroids either
-   and `mount_sky.power_cycled` is still `true`.
+   `GET /api/session` shows `mount.resets` 1, and lets eleven more frames arrive (more
+   than the node's 5 s preview interval), **Then** a committed test asserts that the
+   last frame the link published before the count was set had at least 20 centroids,
+   that each of the eleven has no centroids and no preview, that
+   `mount_sky.power_cycled` is `true` with `mount_sky.zero_counts` unchanged, and that
+   `POST /api/goto` to M42 answers `409`; and that after the test sets the count back
+   to 0, waits until `GET /api/session` omits `mount.resets`, and three more frames
+   arrive, those have no centroids either and `mount_sky.power_cycled` is still `true`.
 
 ---
 
@@ -314,18 +344,21 @@ development, `cargo nextest run -p finder --locked --test cli mount_sky_night::`
    error contains `--covers-on`.
 2. **Given** the built binary, **When** a test runs it with
    `--mount-sky-night 2026-01-16T02:00:00Z --covers-on` and no `--mount-sky`, and with
-   `--covers-on` alone, **Then** it asserts a non-zero exit before listening each time.
+   `--covers-on` alone, **Then** it asserts a non-zero exit before listening each time,
+   and that neither standard error contains `unexpected argument`.
 3. **Given** the built binary run with `--mount-sky --tube-alt 30
    --mount-sky-night 2026-01-16T02:00:00Z --covers-on`, listening on port 0 of
    `127.0.0.1`, with a temporary `--state`, **When** a test reads `GET /api/session` within 30 s of start,
    **Then** it asserts that `mount_sky.night_utc` is `2026-01-16T02:00:00Z`, that `time`
    lies between 1768528800 and 1768528860, and that standard error contains
    `pretend Sun`.
-4. **Given** two consoles built as in US1's setup, one through
-   `with_night_clock(1768528800.0, "2026-01-16T02:00:00Z")` before `with_mount_sky` and
-   one without, **When** a test reads `GET /api/session` from each, **Then** it asserts
-   that the first has `mount_sky.night_utc` equal to `2026-01-16T02:00:00Z` and the
-   second has no `night_utc` key in `mount_sky`.
+4. **Given** two consoles built as in US1's setup in the day, without its live solver:
+   one with `with_night_clock(1768528800.0, "2026-01-16T02:00:00Z")` in place of the
+   setup's `with_clock`, before `with_mount_sky`, and one as the setup builds it,
+   **When** a test reads `GET /api/session` from each, **Then** it asserts that the
+   first has `mount_sky.night_utc` equal to `2026-01-16T02:00:00Z` and `time` within
+   1 s of 1768528800, and that the second has no `night_utc` key in `mount_sky` and
+   `time` within 1 s of 1768582800.
 
 ---
 
@@ -347,12 +380,13 @@ must stay on.
    `{"tube_alt_deg":30,"zero_counts":[1,2]}`, **When** a committed test reads it,
    **Then** it asserts one element with role `status` whose text contains `Drawn sky`,
    `not seen by the camera` and `No hand pushes`, and none containing
-   `Night clock` or `power-cycled`.
+   `Night clock` or `power-cycled`, and that the same holds with the page at `/setup`.
 2. **Given** the same with `night_utc` `2026-01-16T02:00:00Z`, **Then** the test asserts
    that the status also contains `Night clock from 2026-01-16T02:00:00Z` and
    `Keep the mirror cover and the finder cap on`.
-3. **Given** a session without `mount_sky`, **Then** the test asserts no element
-   contains `Drawn sky`.
+3. **Given** the page rendered with US3-S1's session without `mount_sky`, once it shows
+   the session's target guidance, **Then** the test asserts no element contains
+   `Drawn sky`.
 4. **Given** the session of US3-S1 with `power_cycled` `true`, **Then** the test asserts
    that the status also contains `The mount was power-cycled` and
    `restart the console with a fresh --tube-alt`.

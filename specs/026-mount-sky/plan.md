@@ -57,15 +57,27 @@ about the drawn sky is persisted: zero counts live for the process.
   and holds only the setup its own tests use, since an unused helper fails
   `clippy -D warnings`. The in-process modules copy `Rig::new`
   (`crates/finder/tests/support/mcp.rs:191`), whose recording mount is private, keep its
-  solver's `timeout_ms: u64::MAX` (`crates/finder/tests/support/mcp.rs:122`), and give
-  the copied mount a `resets()` the test sets. The binary modules start `finder` as
-  `crates/finder/tests/cli/simulate.rs:25` does. They run alone with
+  solver's `timeout_ms: u64::MAX` (`crates/finder/tests/support/mcp.rs:122`), leave out
+  its `set_aim` (`crates/finder/tests/support/mcp.rs:248`), since a live pointing sits
+  at the aim and the setup's is the frame centre, and give the copied mount a
+  `resets()` the test sets. `crates/finder/tests/motion/mount_identity.rs` is that copy
+  with a settable reset count; copy it, keeping its `DB`, `NodeTime`, `Stars` and
+  `Recorded`. The binary modules start `finder` as
+  `crates/finder/tests/cli/simulate.rs:25` does, without its `--simulate` argument. A
+  refusal test spawns the binary and fails, killing it, as soon as standard error shows
+  a `finder console:` line, instead of waiting on `output()`. They run alone with
   `cargo nextest run -p finder --locked --test motion mount_sky::`,
   `cargo nextest run -p finder --locked --test cli mount_sky::`,
   `cargo nextest run -p finder --locked --test cli mount_sky_night::` and
   `cargo nextest run -p finder --locked --test motion mount_sky_night::`.
-- US3: `crates/finder/web/src/components/MountSkyBanner.test.tsx` (new), Vitest.
-- No Playwright test: the e2e projects run `--simulate`, which this spec doesn't touch.
+- US3: `crates/finder/web/src/components/MountSkyBanner.test.tsx` (new), Vitest. It
+  renders `App` with `fetch` stubbed as `crates/finder/web/src/App.target.test.tsx:12`
+  does: `/api/session` answers `crates/finder/web/src/test/targets.ts`'s `SESSION` with
+  or without `mount_sky`, `/api/samples` answers `[]`, and the rest answer health data.
+  It waits for the target's guidance region before reading the statuses; at `/setup`
+  (US3-S1), which has no guidance region, it waits for the drawn-sky status itself.
+- No Playwright test: no e2e server runs `--mount-sky`
+  (`crates/finder/web/playwright.config.ts:62`), so no e2e page has `mount_sky`.
 
 **Target Platform**: the `finder` console, on the Surface (WSL2) or any desk machine.
 
@@ -107,6 +119,7 @@ crates/finder/
 ├── tests/cli/mount_sky_night.rs        # US2: new
 └── web/
     ├── src/api.ts                      # US3: MountSky type
+    ├── src/useSession.ts               # US3: request keeps mount_sky
     ├── src/App.tsx                     # US3: banner placement
     ├── src/components/MountSkyBanner.tsx       # US3: new
     ├── src/components/MountSkyBanner.test.tsx  # US3: new
@@ -139,7 +152,8 @@ impl LinkManager {
 ```
 
 `LinkManager::start` becomes `start_with_filter(session, clock, transport, None)`. The
-filter is threaded to `active`, where the frame arm becomes:
+filter is threaded through `run`, which gains `#[allow(clippy::too_many_arguments)]` as
+`active` has, to `active`, where the frame arm becomes:
 
 ```rust
 frame = stream.message() => {
@@ -155,7 +169,7 @@ frame = stream.message() => {
 }
 ```
 
-Nothing else in `link.rs` changes.
+Beyond that argument and that allow, nothing else in `link.rs` changes.
 
 ### `MountSky` (`crates/finder/src/mount_sky.rs`, new)
 
@@ -199,9 +213,10 @@ impl FrameFilter for MountSky { /* below */ }
 2. **Counts.** Both `axis_start` and `axis_end` present: the mid counts are their
    per-axis mean as `f64`. Otherwise the frame is unusable.
 3. **Terms.** `session.mount_sky_terms()` gives the site, the counts per revolution and
-   the last-seen reset count. Missing any of them, or `offset_s`, makes the frame
-   unusable. So does a width, height, exposure or gain that is not finite and above
-   zero: `field_stars` asserts all four (`crates/simulator/src/render.rs:20`).
+   the last-seen reset count. Missing any of them, or `offset_s`, or counts per
+   revolution holding a 0, makes the frame unusable. So does a width or height of 0, or
+   an exposure or gain that is not finite and above zero, which `field_stars` asserts
+   (`crates/simulator/src/optics.rs:33`, `crates/simulator/src/render.rs:20`).
 4. **Unusable.** Return the frame with `centroids` cleared and `preview_jpeg` `None`.
 5. **Zero.** If no zero is held, store the mid counts rounded to `i32` with the reset
    count beside them. If one is held and the reset count differs from the one stored
@@ -222,7 +237,11 @@ impl FrameFilter for MountSky { /* below */ }
    magnitude) }`, sorted by brightness, highest first, and cut to `MAX_CENTROIDS`.
    Replace `centroids`, set `preview_jpeg` to `None`, and return the frame.
 
-The filter never panics on a frame: a `predict` of `None` makes the frame unusable.
+The filter never panics on a frame: a `predict` of `None` makes the frame unusable, and
+step 3 refuses a count per revolution of 0 before step 6 divides by it, since
+`load_known_terms` asserts finite zero points (`crates/finder/src/model.rs:354`). The
+mount poll already drops a 0 count (`crates/finder/src/live.rs:306`), so that frame
+cannot arise today.
 
 ### The session (`crates/finder/src/session.rs`)
 
@@ -273,8 +292,9 @@ US2 adds `night_utc: Option<String>` to `AppState`, and:
 pub fn with_night_clock(self, start_unix_s: f64, utc: impl Into<String>) -> Self;
 ```
 
-which calls `with_clock(Arc::new(ConsoleClock(VirtualClock::new(start_unix_s))))` and
-keeps `utc`. `with_mount_sky` then builds its `MountSky` with `.with_night_utc(utc)`.
+which calls
+`with_clock(Arc::new(crate::simulate::ConsoleClock(simulator::VirtualClock::new(start_unix_s))))`
+and keeps `utc`. `with_mount_sky` then builds its `MountSky` with `.with_night_utc(utc)`.
 
 ### US2 in `MountSky`
 
@@ -325,11 +345,12 @@ mount_sky_night: Option<Night>,
 covers_on: bool,
 ```
 
-`Night { unix_s: f64, utc: String }`. `parse_night` calls `finder::simulate::parse_start`
+`#[derive(Clone)] struct Night { unix_s: f64, utc: String }`: clap's typed
+`value_parser` needs `Clone`. `parse_night` calls `finder::simulate::parse_start`
 and keeps the argument text as `utc`; its error is
 `--mount-sky-night requires YYYY-MM-DDTHH:MM:SSZ (optional fractional seconds)`. With a
 night, `with_night_clock(night.unix_s, night.utc)` comes before `with_mount_sky`, and the
-console also prints:
+console also prints, after the drawn-sky line and before its address line:
 
 ```text
 finder console: night clock from <utc>: the Sun guard checks a pretend Sun; keep the mirror cover and the finder cap on
@@ -353,24 +374,24 @@ the counts, so the drawn sky stops matching the tube and nothing detects it; tha
 a power cycle (spec 024's reset count) the drawn sky stops for good, and the console must
 be restarted with a fresh `--tube-alt` and the night then reset; and that it can't test slip,
 gear backlash after the encoder, the base's tilt or the 2 to 3% shortfall seen on the
-sky in the real board's 1° moves. US2 adds two rows:
+sky in the real board's 1° moves. US2 adds two rows after US1's `--tube-alt DEG` row:
 
 ```markdown
 | `--mount-sky-night UTC` | | Run the console on a night clock from `YYYY-MM-DDTHH:MM:SSZ`, so a daylight test can move the mount. The Sun guard then checks that clock's Sun. Requires `--mount-sky` and `--covers-on`. |
 | `--covers-on` | off | Confirm that the mirror's cover and the finder's cap are on. Requires `--mount-sky-night`. |
 ```
 
-and a paragraph in that section repeating the warning line.
+and a paragraph in that section, before its last paragraph (what the drawn sky cannot
+test), repeating the warning line.
 
 ### `GLOSSARY.md` (US2)
 
-The **Sun guard** entry becomes:
+The **Sun guard** entry's line, `GLOSSARY.md:30`, gains at its end:
 
-> The console's standing refusal to point at the Sun or move the telescope near it, and
-> to make any motorised move while the Sun is up. Always on, with no override from the
-> page or an MCP client. Under `finder --mount-sky --mount-sky-night`, started with
-> `--covers-on`, it checks the Sun of the night clock: the observer has confirmed the
-> telescope is covered.
+> Under `finder --mount-sky --mount-sky-night`, started with `--covers-on`, it checks
+> the Sun of the night clock: the observer has confirmed the telescope is covered.
+
+Its `_Avoid_` line is kept.
 
 ### The page (`crates/finder/web/src/`, US3)
 
@@ -386,6 +407,11 @@ export interface MountSky {
 ```
 
 and `mount_sky?: MountSky;` in `ObservingSession`.
+
+`useSession.ts`: `request` keeps only the session fields it names
+(`crates/finder/web/src/useSession.ts:28`). After `backlash`
+(`crates/finder/web/src/useSession.ts:48`), add
+`...(body?.mount_sky != null && { mount_sky: body.mount_sky }),`.
 
 `components/MountSkyBanner.tsx`:
 
@@ -407,16 +433,20 @@ export function MountSkyBanner({ sky }: { sky: MountSky }) {
 }
 ```
 
-The test reads the status's `textContent`, so the words in spec US3 must survive the
-line breaks above: write each phrase the test asserts on one line of JSX.
+The test reads the status's `textContent`. JSX joins text lines with one space, so
+prettier's line breaks keep each phrase. Never join two words of an asserted phrase
+across an expression such as `{""}`. Run `npx prettier --write` on the new files before
+`npm run format:check`.
 
 `App.tsx`: right after `<TopBar … />`, before the session error,
-`{session.mount_sky && <MountSkyBanner sky={session.mount_sky} />}`.
+`{session.mount_sky && <MountSkyBanner sky={session.mount_sky} />}`. That is outside
+the page switch, so the banner shows on `/setup` too (US3-S1).
 
 ### `DESIGN.md` (US3)
 
 At the end of `## Components`, after the `### Recording — built` entry (025's, now the
-last there), add a `### Drawn sky banner — built` entry:
+last there), add a `### Drawn sky banner — built` entry, written as one paragraph line
+under its heading, as the other `— built` entries are:
 
 > Under `finder --mount-sky` a one-line status sits under the top bar on every page:
 > "Drawn sky." in semibold, then that the stars come from the mount's encoders and that
@@ -524,12 +554,15 @@ These are not changed by any story:
    | `crates/finder/src/session.rs` | US1 | US1 | US1, US2 |
    | `crates/finder/web/dist` | US3 | US1, US2 | US3 |
    | `crates/finder/web/src/App.tsx` | US3 | US2 | |
+   | `crates/finder/web/src/useSession.ts` | US3 | US1 | |
    | `crates/finder/tests/cli/main.rs` | US1, US2 | US1 | |
 
    None of them is in another's `depends_on_landed`, and this spec adds neither for
    ordering. The operator orders them at the flip; whichever lands later re-reads its
    citations in those files and its shared writes, and re-runs the validator. The
    imaging drafts 031 to 037 in the same pull request write several of these files too.
+7. **The refinement probe has run.** Met on 2026-11-17, in one round: each story was
+   built once, and the fixes are in this trio (§ Refinement Record, Round 1).
 
 ## Plan traps
 
@@ -551,7 +584,9 @@ that keeps it from recurring. They bind every story.
 7. **A solve that agrees by accident.** If the node's own camera pointed where the drawn
    sky does, US1-S1 and S3 would pass with no filter at all. *Check:* the `SimMount`'s
    zero points of `[300, 70]` keep the node's sky more than 40° away, and US1-S1 also
-   asserts the zero counts.
+   asserts the zero counts. The `SimMount` starts at counts `[0, 0]`
+   (`crates/simulator/src/mount.rs:85`), so the setup drives it to `[20000, 10000]`
+   before the console is built, and a zero always fixed at `[0, 0]` fails US1-S1.
 8. **A binary test that never reaches the mode.** *Check:* US1-S7 and US2-S3 read
    `mount_sky` from the running binary, not only its exit status.
 9. **The bundle must be rebuilt.** *Check:* US3 commits `crates/finder/web/dist` after
@@ -559,7 +594,8 @@ that keeps it from recurring. They bind every story.
 10. **Each worktree builds on its own.** *Check:* no story sets `CARGO_TARGET_DIR`.
 11. **A stop that only compares.** A filter that compared the reset count on each frame
     would draw again from a stale zero once the count read as before. *Check:* US1-S8
-    sets the count back to 0 and asserts the frames stay empty.
+    sets the count back to 0, waits until `GET /api/session` omits `mount.resets`, and
+    asserts the frames stay empty.
 12. **A new top-level finder test fails the layout test, and one module lives in one
     binary.** Spec 027 groups finder's Rust tests into one binary per system, and its
     `layout` test refuses a file at the top level of `crates/finder/tests` or a new file
@@ -573,6 +609,10 @@ that keeps it from recurring. They bind every story.
 14. **A rig solver with a deadline fails on a busy machine.** Spec 028 gave every
     inline rig solver `timeout_ms: u64::MAX`, so virtual time cannot outrun a solve.
     *Check:* the rig the `motion` modules copy keeps it.
+15. **A session field the page reads must pass through `useSession`.** `request()`
+    copies only the fields it names. *Check:* the story that adds a field to
+    `ObservingSession` adds it to `request` too, and its test renders `App` over a
+    served session.
 
 ## Risks
 
@@ -637,6 +677,29 @@ with the drafts 021 and 038. No scenario's Given, When or Then, no FR and no own
 approval changed. Nothing was probed in this refresh either: no story of this spec has
 been built.
 
+**Round 1 (probe builds), 2026-11-17.** Each story was built once, tests first and as
+this trio tells a builder, in a throwaway worktree on c8f4408, with no existing test
+edited and nothing pushed; the code is not kept. US1 (`probe/026-r1-us1`, `153ac24`):
+8 tests, the `test` gate's `cargo nextest run` at 677 (669 before), a diff of 42,197 B,
+declared writes only. US2 (`b54ce94`, on US1): 4 tests, 681, 20,595 B, declared writes
+only. US3 (`8a6fffa`, on US2): 4 Vitest tests, the web gate and its e2e run (29) green,
+7,443 B, plus one line of `crates/finder/web/src/useSession.ts` (8,029 B with it) that
+was not a declared write and now is (D10, trap 15). The line-up of `field_stars` and
+`predict` that the first paragraph left to US1-S1 and S3 held on the first build. The
+fixes, D1 to D17, give the setup the target M42, no aim and counts away from zero, make
+US1-S3 and S4 wait for a sync, make US1-S5, S6 and S8, US2-S2 and S4 and US3-S3 able to
+fail, add `/setup` to US3-S1, kill a refused binary that starts listening, name
+`useSession.ts`, the rig to copy and the Vitest rig, and correct the plan's text on
+`run`'s allow, step 3's guards, the night clock's paths, the warning's, README's,
+GLOSSARY's and `DESIGN.md`'s places and line forms, prettier and the e2e servers (spec.md
+§ Clarifications, Session 2026-11-17, round-1 probe builds). Still caught by no test:
+M05, the refraction step dropped (about 1.7′ at 30°, under the 0.05° tolerance), and
+M22, start counts used in place of mid counts (no checked frame is taken while an axis
+moves); M04, a zero always fixed at `[0, 0]`, and M08b, a preview kept on an unusable
+frame, survived the probe and are answered by D3's and D5's fixes, which no probe has
+run yet. Every citation the fixes add was read on this branch, whose code is `main` at
+20ce2fe.
+
 Shared writes name the story in this spec that writes the same file next and a landed
 story in `depends_on_landed` that wrote it before; where a later landed spec not in
 `depends_on_landed` wrote it last (025, 028 or 022), the reason says so, and since it is
@@ -653,7 +716,7 @@ stories:
       - path: crates/finder/tests/motion/mount_sky.rs
         status: new
         disposition: add
-        assertion: "the first usable frame fixes zero_counts at its mid counts, and the live pointing reads azimuth 180 and altitude 30 within 0.05 deg while the node's own camera points elsewhere"
+        assertion: "the first usable frame, at counts the setup drove away from zero, fixes zero_counts at its mid counts, and the live pointing reads azimuth 180 and altitude 30 within 0.05 deg while the node's own camera points elsewhere"
         decision: "spec.md:US1-S1"
       - path: crates/finder/tests/motion/mount_sky.rs
         status: new
@@ -663,22 +726,22 @@ stories:
       - path: crates/finder/tests/motion/mount_sky.rs
         status: new
         disposition: add
-        assertion: "a GoTo to M42 ends done with the truth of the last frame's counts within 0.05 deg of M42; in the day it is refused with Sun is up and no motion command reaches the mount"
+        assertion: "once the model holds a sync, a GoTo to M42 ends done with the truth of the last frame's counts within 0.05 deg of M42; in the day, once a sync is held, it is refused with Sun is up and no motion command reaches the mount"
         decision: "spec.md:US1-S3..S4"
       - path: crates/finder/tests/motion/mount_sky.rs
         status: new
         disposition: add
-        assertion: "a node without a mount gives frames with no centroids, no live pointing and null zero_counts"
+        assertion: "a node without a mount gives frames with no centroids, no live pointing and mount_sky equal to tube_alt_deg 30 with null zero_counts"
         decision: "spec.md:US1-S5"
       - path: crates/finder/tests/cli/mount_sky.rs
         status: new
         disposition: add
-        assertion: "the built binary refuses bad flag combinations before listening and keeps its session in mount-sky/"
+        assertion: "the built binary refuses bad flag combinations before listening, never with clap's unexpected argument and with the range error for --tube-alt 95, and keeps its session in mount-sky/"
         decision: "spec.md:US1-S6..S7"
       - path: crates/finder/tests/motion/mount_sky.rs
         status: new
         disposition: add
-        assertion: "once the session's reset count changes, every later frame has no centroids and no preview, power_cycled is true, zero_counts is unchanged and a GoTo is refused; a count set back to 0 does not resume drawing"
+        assertion: "once the session's reset count changes, every later frame, over more than the node's 5 s preview interval, has no centroids and no preview, power_cycled is true, zero_counts is unchanged and a GoTo is refused; a count set back to 0 and seen by the session does not resume drawing"
         decision: "spec.md:US1-S8"
       - path: crates/finder/tests/cli/simulate.rs
         status: existing
@@ -793,7 +856,7 @@ stories:
       - path: crates/finder/tests/cli/mount_sky_night.rs
         status: new
         disposition: add
-        assertion: "--mount-sky-night without --covers-on, without --mount-sky, and --covers-on alone each exit non-zero before listening, the first naming --covers-on"
+        assertion: "--mount-sky-night without --covers-on, without --mount-sky, and --covers-on alone each exit non-zero before listening, the first naming --covers-on and the others never with clap's unexpected argument"
         decision: "spec.md:US2-S1..S2"
       - path: crates/finder/tests/cli/mount_sky_night.rs
         status: new
@@ -803,7 +866,7 @@ stories:
       - path: crates/finder/tests/motion/mount_sky_night.rs
         status: new
         disposition: add
-        assertion: "a console built with with_night_clock reports night_utc and one built without has no night_utc key"
+        assertion: "a day console built with with_night_clock in place of with_clock reports night_utc and a time within 1 s of the night, and one built without has no night_utc key and a time within 1 s of the day"
         decision: "spec.md:US2-S4"
       - path: crates/finder/tests/layout/main.rs
         status: existing
@@ -840,7 +903,7 @@ stories:
       - path: crates/finder/web/src/components/MountSkyBanner.test.tsx
         status: new
         disposition: add
-        assertion: "a session with mount_sky shows one status saying Drawn sky, not seen by the camera and No hand pushes; with night_utc it adds the night clock and the covers; with power_cycled it says the mount was power-cycled and to restart with a fresh --tube-alt; without mount_sky nothing says Drawn sky"
+        assertion: "a session with mount_sky shows one status saying Drawn sky, not seen by the camera and No hand pushes, at / and at /setup; with night_utc it adds the night clock and the covers; with power_cycled it says the mount was power-cycled and to restart with a fresh --tube-alt; without mount_sky, once the target's guidance shows, nothing says Drawn sky"
         decision: "spec.md:US3-S1"
       - path: crates/finder/web/e2e/simulate.spec.ts
         status: existing
@@ -865,6 +928,7 @@ stories:
       - crates/finder/web/src/api.ts
       - crates/finder/web/src/components/MountSkyBanner.test.tsx
       - crates/finder/web/src/components/MountSkyBanner.tsx
+      - crates/finder/web/src/useSession.ts
     no_write_reason: ""
     shared_writes:
       - path: DESIGN.md
@@ -887,5 +951,10 @@ stories:
         other_story: US2
         disposition: merge_order
         reason: "026 depends_on_landed 020-live-chart-calm, whose US2 changed api.ts; 025's US3 and 022's US1 and US3 wrote it later, and are on main"
+      - path: crates/finder/web/src/useSession.ts
+        other_spec: 016-mcp
+        other_story: US7
+        disposition: merge_order
+        reason: "026 depends_on_landed 016, whose US7 changed useSession.ts; 025's US3 wrote it later, and is on main"
     open_questions: []
 ```

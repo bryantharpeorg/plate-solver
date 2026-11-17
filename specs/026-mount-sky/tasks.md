@@ -9,7 +9,8 @@ description: "Task list for 026-mount-sky: A Drawn Sky on the Real Mount"
   and `024-mount-link-recovery` have landed on `main`;
 - the owner approvals in spec.md are given;
 - Constitution III is amended (1.4.0) before dispatch;
-- no operator-staged file is needed.
+- no operator-staged file is needed;
+- the refinement probe has run (met on 2026-11-17, one round).
 
 **Rules for every story:**
 - Never edit an existing test, golden, fixture, `scripts/ci/`, `.github/`, `deny.toml`,
@@ -39,19 +40,26 @@ description: "Task list for 026-mount-sky: A Drawn Sky on the Real Mount"
 - [ ] T001 [US1] Create `crates/finder/tests/motion/mount_sky.rs`, declared by
   `mod mount_sky;` after `mod mount_identity;` in `crates/finder/tests/motion/main.rs`,
   with the shared setup of spec.md § User Scenarios, copied from `Rig::new` in
-  `crates/finder/tests/support/mcp.rs` (with `use crate::support::mcp as support;`, and
-  its solver's `timeout_ms: u64::MAX`) but calling `with_mount_sky(transport, 30.0)`,
-  with the `SimMount`'s zero points at `[300, 70]` behind a test `Mount` whose reset
-  count the test sets, and helpers for the truth of counts and for horizontal from a
-  pointing. Write failing tests for US1-S1 and US1-S2.
+  `crates/finder/tests/support/mcp.rs` by way of its copy in
+  `crates/finder/tests/motion/mount_identity.rs`, which has a settable reset count
+  (keeping its `DB`, `NodeTime`, `Stars` and `Recorded`, with
+  `use crate::support::mcp as support;`, and its solver's `timeout_ms: u64::MAX`), but
+  without its `set_aim` (`crates/finder/tests/support/mcp.rs:248`) and calling
+  `with_mount_sky(transport, 30.0)`, with the `SimMount`'s zero points at `[300, 70]`,
+  driven to counts `[20000, 10000]` before the console is built, behind a test `Mount`
+  whose reset count the test sets, and helpers for the truth of counts and for
+  horizontal from a pointing. Write failing tests for US1-S1 and US1-S2.
 - [ ] T002 [US1] Add failing tests to `crates/finder/tests/motion/mount_sky.rs` for the
-  GoTo at night and its refusal in the day (US1-S3, US1-S4), for a node without a mount
-  (US1-S5), and for the drawn sky stopping for good after a reset (US1-S8).
+  GoTo at night and its refusal in the day, each once the session's model holds a sync
+  (US1-S3, US1-S4), for a node without a mount (US1-S5), and for the drawn sky stopping
+  for good after a reset (US1-S8).
 - [ ] T003 [US1] Create `crates/finder/tests/cli/mount_sky.rs`, declared by
   `mod mount_sky;` after `mod flags;` in `crates/finder/tests/cli/main.rs`, with failing
   tests that run the built binary, started as `crates/finder/tests/cli/simulate.rs`
-  starts it, for the refused flag combinations and the `mount-sky/` state folder
-  (US1-S6, US1-S7).
+  starts it but without its `--simulate` argument, for the refused flag combinations
+  and the `mount-sky/` state folder (US1-S6, US1-S7). A refusal test fails, killing the
+  binary, as soon as standard error shows a `finder console:` line, instead of waiting
+  on `output()`.
 
 ### Implementation
 
@@ -78,11 +86,15 @@ description: "Task list for 026-mount-sky: A Drawn Sky on the Real Mount"
 - [ ] T009 [US2] Create two failing test modules:
   - `crates/finder/tests/cli/mount_sky_night.rs`, declared by `mod mount_sky_night;`
     after `mod mount_sky;` in `crates/finder/tests/cli/main.rs`, for the refused flag
-    combinations (US2-S1, US2-S2) and the running binary on a night clock (US2-S3);
+    combinations (US2-S1, US2-S2), each refusal test killing the binary as US1's
+    `crates/finder/tests/cli/mount_sky.rs` does, and the running binary on a night
+    clock (US2-S3);
   - `crates/finder/tests/motion/mount_sky_night.rs`, declared by `mod mount_sky_night;`
     after `mod mount_sky;` in `crates/finder/tests/motion/main.rs`, for `night_utc`
-    present only with a night clock (US2-S4), with its own copy of the setup it needs
-    from US1's `crates/finder/tests/motion/mount_sky.rs`, which it does not edit.
+    present only with a night clock (US2-S4), with its own copy of the part of that
+    setup it needs (the node, the session and `with_mount_sky`, with no solver or
+    recording mount) from US1's `crates/finder/tests/motion/mount_sky.rs`, which it
+    does not edit.
 
 ### Implementation
 
@@ -91,7 +103,8 @@ description: "Task list for 026-mount-sky: A Drawn Sky on the Real Mount"
   pass the night's UTC to the `MountSky`. In `crates/finder/src/main.rs`, add
   `--mount-sky-night` and `--covers-on` with `parse_night` and the warning line.
 - [ ] T011 [US2] Add US2's two rows and paragraph to `crates/finder/README.md`, and the
-  new Sun guard entry to `GLOSSARY.md` (plan.md § Interfaces).
+  night clock sentence to the end of the Sun guard entry's line in `GLOSSARY.md`
+  (plan.md § Interfaces).
 - [ ] T012 [US2] Run the `lint` and `test` gates with every existing test unchanged and
   green. Commit the green story (US2-S1 to US2-S4).
 
@@ -100,11 +113,13 @@ description: "Task list for 026-mount-sky: A Drawn Sky on the Real Mount"
 ### Tests first
 
 - [ ] T013 [US3] Create `crates/finder/web/src/components/MountSkyBanner.test.tsx` with
-  failing tests for US3-S1, US3-S2, US3-S3 and US3-S4.
+  failing tests for US3-S1, US3-S2, US3-S3 and US3-S4, rendering `App` over a served
+  session as plan.md § Technical Context says.
 
 ### Implementation
 
-- [ ] T014 [US3] Add the `MountSky` type, with `power_cycled`, to `crates/finder/web/src/api.ts`, create
+- [ ] T014 [US3] Add the `MountSky` type, with `power_cycled`, to `crates/finder/web/src/api.ts`, keep
+  `mount_sky` in `request` in `crates/finder/web/src/useSession.ts`, create
   `crates/finder/web/src/components/MountSkyBanner.tsx`, and place it in
   `crates/finder/web/src/App.tsx` (plan.md § Interfaces).
 - [ ] T015 [US3] Add the banner paragraph to `DESIGN.md`. Run the `lint` and `test`
