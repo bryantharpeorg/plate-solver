@@ -1,6 +1,6 @@
 ---
 state: draft
-depends_on_landed: ["016-mcp", "017-console-stop-confirm", "018-live-chart-steady", "020-live-chart-calm"]
+depends_on_landed: ["016-mcp", "017-console-stop-confirm", "018-live-chart-steady", "020-live-chart-calm", "024-mount-link-recovery"]
 # Drafted 2026-11-14 against `main` at c1ed295, at the owner's request ("even during the
 # day, can we simulate the night sky for testing goto"), with the scope in a garage under
 # cloud. The owner chose to include the daytime story ("Include daytime story") after
@@ -11,6 +11,13 @@ depends_on_landed: ["016-mcp", "017-console-stop-confirm", "018-live-chart-stead
 # (020 is live-chart-calm; 021 to 025 are taken), with the field-finding edits from the
 # dark-site night of 13-14 November: power cycles, hand pushes and the real board's figures.
 # Re-read against `main` at f8dab49. It stays draft.
+# Refreshed 2026-11-17 to `main` at 20ce2fe, after 022, 024, 025, 027 and 028 had landed:
+# 024 joins `depends_on_landed`, every citation was re-read and the moved ones follow
+# their lines, the Rust tests are modules of finder's `motion` and `cli` test binaries as
+# constitution 1.2.0 asks, the Principle III amendment takes the constitution to 1.4.0,
+# and plan.md § Constitution Check answers 1.3.0's Principle V. No scenario's Given, When
+# or Then, no FR and no owner approval changed (Clarifications, Session 2026-11-17). It
+# stays draft.
 ---
 
 # Feature Specification: A Drawn Sky on the Real Mount
@@ -39,14 +46,14 @@ clock, once the observer confirms the telescope is covered.
   interfaces, the shapes that existing tests pin and the alternatives rejected. A story
   that would change a decision escalates rather than re-deciding it.
 - Q: What was found? → A: Six things, each checked against the code at c1ed295 and
-  unchanged at f8dab49:
+  unchanged at f8dab49 and at 20ce2fe, where the lines below are cited:
   1. A node frame carries centroids, not pixels: up to 200 `Centroid`s, brightest first,
      plus an optional preview JPEG (`crates/scope-link/proto/scope_node/v1/scope_node.proto:53`).
   2. Every frame carries the mount's encoder counts read just before and just after the
      exposure, `axis_start` and `axis_end`
      (`crates/scope-link/proto/scope_node/v1/scope_node.proto:68`). Syncs already take
      their counts from the frame, not from a separate read.
-  3. Frames reach the console in one place, `active` in `crates/finder/src/link.rs:435`,
+  3. Frames reach the console in one place, `active` in `crates/finder/src/link.rs:486`,
      which publishes the newest frame on a watch channel. Live solving and GoTo's
      settle wait both read that channel.
   4. The simulator's catalog renderer, `simulator::render::field_stars`
@@ -55,9 +62,9 @@ clock, once the observer confirms the telescope is covered.
      rotation from an altitude, azimuth, site and time. `finder` already depends on the
      `simulator` crate.
   5. The Sun guard refuses every motorised move, raw axis moves included, while the Sun
-     is at or above −0.83° on the console clock (`crates/finder/src/goto.rs:332`,
-     `crates/finder/src/goto.rs:711`, `crates/finder/src/goto.rs:811`,
-     `crates/finder/src/session.rs:768`, `crates/finder/src/tracking.rs:382`). So in
+     is at or above −0.83° on the console clock (`crates/finder/src/goto.rs:333`,
+     `crates/finder/src/goto.rs:716`, `crates/finder/src/goto.rs:816`,
+     `crates/finder/src/session.rs:810`, `crates/finder/src/tracking.rs:392`). So in
      daylight no motor moves through the console, whatever the sky.
   6. The constitution allows a virtual clock only in tests and `finder --simulate`
      (`.specify/memory/constitution.md:47`), and `--simulate` never reaches a real node
@@ -110,6 +117,63 @@ clock, once the observer confirms the telescope is covered.
   try to detect one: the README and the banner forbid hand pushes in this mode (owner
   approval 5).
 
+### Session 2026-11-17 (refreshed to `main` at 20ce2fe, after 022, 024, 025, 027 and 028)
+
+- Q: What changed on `main` since f8dab49? → A: 024-mount-link-recovery,
+  025-frame-capture, 027-finder-tests-by-system, 028-finder-tests-do-less and
+  022-altaz-guidance landed, and the constitution went to 1.2.0 and then 1.3.0. Every
+  `path:line` the trio held was re-read at 20ce2fe: 8 of the 20 had moved with their
+  lines, in `link.rs`, `goto.rs`, `session.rs`, `tracking.rs` and the test rig, which 027
+  moved to `crates/finder/tests/support/mcp.rs`; none changed what it says (plan.md
+  § Refinement Record).
+- Q: Is 024 in `depends_on_landed` now, and is its code what this spec reads? → A: Yes;
+  its last story landed at f0ea2d5. The names match: the node reports
+  `AxisState.mount_resets` (`crates/scope-link/proto/scope_node/v1/scope_node.proto:121`)
+  from `Mount::resets` (`crates/scope-node/src/mount/mod.rs:72`,
+  `crates/scope-node/src/service.rs:522`); the console's mount poll reads the azimuth
+  axis's count (`crates/finder/src/live.rs:327`) into the session's last-seen count
+  (`crates/finder/src/session.rs:587`, set at `crates/finder/src/session.rs:1049`); and
+  `GET /api/session` reports it as `mount.resets`, omitted while it is 0
+  (`crates/finder/src/session.rs:514`). After a reset GoTo answers `409` with 024's
+  `The mount was power-cycled: sync again first` (`crates/finder/src/goto.rs:653`).
+  FR-014 and US1-S8 hold as written.
+- Q: Does this spec use anything 025 added? → A: No, so 025 is not in
+  `depends_on_landed`. 025 changed `link.rs`, `api.rs`, `main.rs`, `lib.rs` and the
+  README, which US1 writes too; it is on `main`, and the frame arm of `active` is still
+  as plan.md § Interfaces gives it. One consequence, with nothing to build: 025's
+  recorder reads the link's frame channel (`crates/finder/src/recording.rs:91`), so a
+  recording made under `--mount-sky` keeps the drawn frames, without previews, while its
+  raw frames come from the node's camera by their own call and are not drawn. It lands
+  in `recordings/` of the state folder (`crates/finder/src/main.rs:102`), so, without
+  `--state`, in `mount-sky/recordings/`.
+- Q: Where do the Rust tests go? → A: Constitution 1.2.0 puts a new finder test in the
+  existing binary that matches what it needs, and the `layout` test fails any test file
+  at the top level of `crates/finder/tests` (`crates/finder/tests/layout/main.rs:109`).
+  So each file the draft planned is two modules. US1-S1 to US1-S5 and US1-S8 move or read
+  the simulated mount in paused time: `crates/finder/tests/motion/mount_sky.rs`, the
+  module `mount_sky` of `motion` (US1-S5 is the same rig with no mount, as
+  `crates/finder/tests/motion/goto/refusals.rs:117` is). US1-S6 and US1-S7 start the
+  built `finder`: `crates/finder/tests/cli/mount_sky.rs`, the module `mount_sky` of
+  `cli`. US2-S1 to US2-S3 start it too: `crates/finder/tests/cli/mount_sky_night.rs`.
+  US2-S4 builds two consoles on US1's rig: `crates/finder/tests/motion/mount_sky_night.rs`.
+  Each is declared by one `mod` line in its binary's `main.rs` (plan.md § Technical
+  Context). No scenario names a test file, so no Then clause changed.
+- Q: Which command runs them? → A: The `test` gate's
+  `cargo nextest run --workspace --all-targets --all-features --locked`, since
+  2026-11-14. `cargo test -p finder --test mount_sky --locked` and
+  `--test mount_sky_night`, which this spec named before, no longer resolve.
+- Q: What does the Principle III amendment do now? → A: The same words, a version later.
+  The sentence it replaces is unchanged at `.specify/memory/constitution.md:47`, and the
+  constitution is at 1.3.0, so the amendment takes it to 1.4.0 (plan.md § Prerequisites
+  4).
+- Q: What does Principle V (1.3.0) ask of this plan? → A: That it say what proven open
+  source it looked for, what it found and why each was taken or turned down. INDI's CCD
+  Simulator, KStars with Ekos and Stellarium were looked at and turned down; none fits
+  cleanly, so the design is unchanged (plan.md § Constitution Check).
+- Q: What else writes the files this spec writes? → A: Two drafts, 021-chart-orientation
+  (on `main`) and 038-track-follows-a-push (not on `main`). Neither goes into
+  `depends_on_landed`; the operator orders them at the flip (plan.md § Prerequisites 6).
+
 ## Owner approvals
 
 Flipping this spec to `ready` approves the following. Each is named in the FR that makes
@@ -135,7 +199,7 @@ it. No existing test, golden or CI file changes.
 ## User Scenarios & Testing *(mandatory)*
 
 All Rust scenarios share one setup unless a scenario says otherwise:
-- An in-process console built as `crates/finder/tests/mcp/support.rs:188` builds its
+- An in-process console built as `crates/finder/tests/support/mcp.rs:191` builds its
   `Rig`: a `NodeService` with a `SimCamera` and a recording `SimMount` behind the node's
   mount port, wrapped in a test `Mount` that passes every call to it and answers
   `resets()` (024's `Mount::resets`) with a count the test sets, 0 unless a scenario
@@ -166,7 +230,13 @@ console already has.
 2.09, 14 November); long slews, rate moves and Stop on a moving axis are not, and the
 first powered GoTo is the riskiest step left. It needs no real sky to rehearse.
 
-**Independent Test**: `cargo test -p finder --test mount_sky --locked`.
+**Independent Test**: `crates/finder/tests/motion/mount_sky.rs`, the module `mount_sky` of
+finder's `motion` test binary (US1-S1 to US1-S5 and US1-S8), and, for US1-S6 and US1-S7,
+which start the built `finder`, `crates/finder/tests/cli/mount_sky.rs`, the module
+`mount_sky` of `cli`. The `test` gate's
+`cargo nextest run --workspace --all-targets --all-features --locked` runs both; during
+development, `cargo nextest run -p finder --locked --test motion mount_sky::` and
+`cargo nextest run -p finder --locked --test cli mount_sky::`.
 
 **Acceptance Scenarios**:
 
@@ -227,7 +297,14 @@ are on.
 
 **Why this priority**: The scope is reachable in daylight; clear, dark nights are scarce.
 
-**Independent Test**: `cargo test -p finder --test mount_sky_night --locked`.
+**Independent Test**: `crates/finder/tests/cli/mount_sky_night.rs`, the module
+`mount_sky_night` of finder's `cli` test binary (US2-S1 to US2-S3), and, for US2-S4,
+which builds two consoles on US1's simulated mount,
+`crates/finder/tests/motion/mount_sky_night.rs`, the module `mount_sky_night` of
+`motion`. The `test` gate's
+`cargo nextest run --workspace --all-targets --all-features --locked` runs both; during
+development, `cargo nextest run -p finder --locked --test cli mount_sky_night::` and
+`cargo nextest run -p finder --locked --test motion mount_sky_night::`.
 
 **Acceptance Scenarios**:
 
@@ -371,9 +448,9 @@ must stay on.
 
 ## Assumptions
 
-- **Earlier features are in place.** 014 to 019 and 020-live-chart-calm have landed,
-  and 024-mount-link-recovery lands before this spec is flipped (plan.md
-  § Prerequisites). Every citation here was read at c1ed295 and re-read at f8dab49.
+- **Earlier features are in place.** 014 to 019, 020-live-chart-calm and
+  024-mount-link-recovery have landed (plan.md § Prerequisites). Every citation here was
+  read at c1ed295, re-read at f8dab49 and re-read again at 20ce2fe, where it is cited.
 - **Out of scope:**
   - noise, trails, clouds or a daylight background in the drawn sky;
   - drawing the sky on the scope node, or any change under `crates/scope-node` or

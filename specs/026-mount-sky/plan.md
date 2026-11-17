@@ -23,14 +23,47 @@ also forbids hand pushes.
 
 **Primary Dependencies**: nothing new. `finder` already depends on `simulator`. US1
 reads spec 024's reset count (`AxisState.mount_resets`, `Mount::resets` and the
-session's last-seen count), so 024 lands first (§ Prerequisites).
+session's last-seen count), so 024 landed first and is in `depends_on_landed`
+(§ Prerequisites).
 
 **Storage**: `mount-sky/session.json` under the default state folder (FR-002). Nothing
 about the drawn sky is persisted: zero counts live for the process.
 
 **Testing**:
-- US1: `crates/finder/tests/mount_sky.rs` (new), in-process and against the built binary.
-- US2: `crates/finder/tests/mount_sky_night.rs` (new), the same way.
+- US1 and US2: four new Rust test modules, one in each test binary a story's scenarios
+  need, as constitution 1.2.0 asks of a new finder test:
+  - `crates/finder/tests/motion/mount_sky.rs` (US1) for US1-S1 to US1-S5 and US1-S8,
+    which move or read the simulated mount in paused time
+    (`crates/finder/tests/motion/main.rs:1`), declared by `mod mount_sky;` after
+    `mod mount_identity;` in `crates/finder/tests/motion/main.rs`. US1-S5 is the same
+    rig with no mount, as `crates/finder/tests/motion/goto/refusals.rs:117` is.
+  - `crates/finder/tests/cli/mount_sky.rs` (US1) for US1-S6 and US1-S7, which start the
+    built `finder` (`crates/finder/tests/cli/main.rs:1`), declared by `mod mount_sky;`
+    after `mod flags;` in `crates/finder/tests/cli/main.rs`.
+  - `crates/finder/tests/cli/mount_sky_night.rs` (US2) for US2-S1 to US2-S3, declared by
+    `mod mount_sky_night;` after US1's `mod mount_sky;` in
+    `crates/finder/tests/cli/main.rs`.
+  - `crates/finder/tests/motion/mount_sky_night.rs` (US2) for US2-S4, whose two consoles
+    stand on US1's rig, declared by `mod mount_sky_night;` after US1's `mod mount_sky;`
+    in `crates/finder/tests/motion/main.rs`.
+
+  A binary's `main.rs` holds only its support include and `mod` lines
+  (`crates/finder/tests/layout/main.rs:156`). The `layout` test fails a file at the top
+  level of `crates/finder/tests` (`crates/finder/tests/layout/main.rs:109`) and a new
+  file in `crates/finder/tests/support` (`crates/finder/tests/layout/main.rs:126`). Each
+  module reaches shared helpers through `crate::support`
+  (`use crate::support::mcp as support;` in process, `crate::support::Scratch` for every
+  temporary folder), copies any private helper it needs from the test it is built like,
+  and holds only the setup its own tests use, since an unused helper fails
+  `clippy -D warnings`. The in-process modules copy `Rig::new`
+  (`crates/finder/tests/support/mcp.rs:191`), whose recording mount is private, keep its
+  solver's `timeout_ms: u64::MAX` (`crates/finder/tests/support/mcp.rs:122`), and give
+  the copied mount a `resets()` the test sets. The binary modules start `finder` as
+  `crates/finder/tests/cli/simulate.rs:25` does. They run alone with
+  `cargo nextest run -p finder --locked --test motion mount_sky::`,
+  `cargo nextest run -p finder --locked --test cli mount_sky::`,
+  `cargo nextest run -p finder --locked --test cli mount_sky_night::` and
+  `cargo nextest run -p finder --locked --test motion mount_sky_night::`.
 - US3: `crates/finder/web/src/components/MountSkyBanner.test.tsx` (new), Vitest.
 - No Playwright test: the e2e projects run `--simulate`, which this spec doesn't touch.
 
@@ -50,10 +83,10 @@ about the drawn sky is persisted: zero counts live for the process.
 | Principle | How this plan honours it |
 |---|---|
 | I. Agreeing with cedar is correctness | Nothing touches the solver or `crates/math-core`. |
-| II. Never weaken a gate | No existing test, golden, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. New tests go in new files. |
-| III. Tests first, independent expectations | The oracles are the truth formula of spec § User Scenarios, computed in each test, and the simulator's sky maths. US2's night clock is allowed by the amendment made before flipping (§ Prerequisites). |
+| II. Never weaken a gate | No existing test, golden, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. New tests are new modules; each adds one `mod` line to a binary's `main.rs`, which holds no test (`motion/main.rs`, `cli/main.rs`), as constitution 1.2.0 asks. |
+| III. Tests first, independent expectations | The oracles are the truth formula of spec § User Scenarios, computed in each test, and the simulator's sky maths. US2's night clock is allowed by the amendment made before flipping, which takes the constitution to 1.4.0 (§ Prerequisites). |
 | IV. Critical paths | No `unsafe`, no dependency change, no database-format change, no proto change. |
-| V. Standalone Rust, honest licensing | Unaffected. |
+| V. Proven open source first, with honest licensing | **Looked for:** a program that draws catalog stars at a telescope's pointing, to stand in for the sky in front of a real mount. **Found and turned down:** *INDI's CCD Simulator* (`indi_simulator_ccd`, part of INDI core, LGPL-2.1-or-later) renders 16-bit pixel frames of Guide Star Catalog stars at the RA and Dec it snoops from an INDI mount device (`EQUATORIAL_EOD_COORD`). It does not fit cleanly. Our mount is driven by our own scope node and has no INDI driver, so a bridge of ours would have to turn the encoder counts into RA and Dec, which is the count-to-sky step this plan writes anyway. Its frames are pixels: to reach the console through our scope link they would have to enter the node as its camera (a scope-node change and a release to the Pi, out of scope) or be detected in the console, the pixel path § Decisions turns down. It draws no stars without the separate GSC catalogue program installed, and its alt-az field rotation was only on INDI's development branch, in no release, when read on 2026-11-15. *KStars with Ekos* (GPL-2.0-or-later) rehearses a night on INDI's simulators, so it brings the same limits. *Stellarium* (GPL-2.0-or-later) draws the sky for a screen, not a camera's frame at a set field and magnitude limit, so its pixels too would need detecting. *INDI's Telescope Simulator* simulates the mount, the part this mode keeps real. **Taken:** our own `simulator` crate's `field_stars` and `camera_rotation`, which `finder` already depends on, so the new code is the filter and the count-to-sky step. Nothing is copied in, linked or called out to, and no license changes. |
 
 ## Project Structure
 
@@ -66,8 +99,12 @@ crates/finder/
 ├── src/lib.rs                          # US1: pub mod mount_sky
 ├── src/main.rs                         # US1: --mount-sky, --tube-alt; US2: --mount-sky-night, --covers-on
 ├── README.md                           # US1, US2: flags and a section
-├── tests/mount_sky.rs                  # US1: new
-├── tests/mount_sky_night.rs            # US2: new
+├── tests/motion/main.rs                # US1: mod mount_sky; US2: mod mount_sky_night
+├── tests/motion/mount_sky.rs           # US1: new
+├── tests/motion/mount_sky_night.rs     # US2: new
+├── tests/cli/main.rs                   # US1: mod mount_sky; US2: mod mount_sky_night
+├── tests/cli/mount_sky.rs              # US1: new
+├── tests/cli/mount_sky_night.rs        # US2: new
 └── web/
     ├── src/api.ts                      # US3: MountSky type
     ├── src/App.tsx                     # US3: banner placement
@@ -197,12 +234,15 @@ impl Session {
 }
 ```
 
-It reads `values.site`, `values.counts_per_revolution` and the last reset count a good
-mount poll saw, which spec 024 keeps in the session (none before the first poll), under
-the existing lock, as `record_frame_sync` does (`crates/finder/src/session.rs:1061`).
-A good poll sets that count and the counts per revolution together, and a failed poll
-clears only the counts per revolution, so the session holds a reset count whenever it
-holds counts per revolution.
+It reads `values.site`, `values.counts_per_revolution` and `values.mount_resets`, the
+last reset count a good mount poll saw, which spec 024 keeps in the session
+(`crates/finder/src/session.rs:587`; none before the first poll), under the existing
+lock, as `record_frame_sync` does (`crates/finder/src/session.rs:1123`). A good poll
+sets that count and the counts per revolution together, and a failed poll clears only
+the counts per revolution (`Session::set_mount`, `crates/finder/src/session.rs:1049`),
+so the session holds a reset count whenever it holds counts per revolution.
+`Session::mount_resets` (`crates/finder/src/session.rs:1045`) reads the count alone;
+`mount_sky_terms` takes all three under one lock.
 
 ### The console (`crates/finder/src/api.rs`)
 
@@ -215,8 +255,9 @@ pub fn with_mount_sky(mut self, transport: Transport, tube_alt_deg: f64) -> Self
 ```
 
 It builds `MountSky::new(self.db.clone(), self.session.clone(), tube_alt_deg)`, starts
-`LinkManager::start_with_filter` with it, starts the `MountMonitor` as `with_link` does,
-and keeps the `MountSky`. `SessionResponse` gains:
+`LinkManager::start_with_filter` with it, keeps that link and starts the `MountMonitor`
+as `with_link` does (`crates/finder/src/api.rs:222`), and keeps the `MountSky`. So
+`with_live`, GoTo and 025's recorder read the filtered frames. `SessionResponse` gains:
 
 ```rust
 #[serde(skip_serializing_if = "Option::is_none")]
@@ -304,10 +345,10 @@ US1 adds two rows after `--sim-start`:
 ```
 
 and a section `## Drawn sky on the real mount` after `## Simulated night and live
-stream`, saying: what the mode does; that the first frame's counts read as azimuth 180°
-and `--tube-alt`; that it keeps its session in `mount-sky/session.json` and the node is
-paired there once; that every guard is unchanged; that the tube must not be pushed by
-hand in this mode, because with the board's encoders off a push moves the tube and not
+stream` (before 025's `## Recording a night`), saying: what the mode does; that the
+first frame's counts read as azimuth 180° and `--tube-alt`; that it keeps its session in
+`mount-sky/session.json` and the node is paired there once; that every guard is
+unchanged; that the tube must not be pushed by hand in this mode, because with the board's encoders off a push moves the tube and not
 the counts, so the drawn sky stops matching the tube and nothing detects it; that after
 a power cycle (spec 024's reset count) the drawn sky stops for good, and the console must
 be restarted with a fresh `--tube-alt` and the night then reset; and that it can't test slip,
@@ -374,8 +415,8 @@ line breaks above: write each phrase the test asserts on one line of JSX.
 
 ### `DESIGN.md` (US3)
 
-At the end of `## Components`, after the `### Aim-point tap — built` entry, add a
-`### Drawn sky banner — built` entry:
+At the end of `## Components`, after the `### Recording — built` entry (025's, now the
+last there), add a `### Drawn sky banner — built` entry:
 
 > Under `finder --mount-sky` a one-line status sits under the top bar on every page:
 > "Drawn sky." in semibold, then that the stars come from the mount's encoders and that
@@ -387,14 +428,19 @@ At the end of `## Components`, after the `### Aim-point tap — built` entry, ad
 
 These are not changed by any story:
 - **`LinkManager::start`'s signature**, used by many tests through `with_link` and
-  directly in `crates/finder/tests/link.rs`.
+  directly in `crates/finder/tests/console/link.rs` and in `motion`'s `mount_calls` and
+  `tracking` modules.
 - **`GET /api/session` outside the mode.** `mount_sky` is skipped when absent, so every
   existing body is byte-for-byte what it was.
-- **`--simulate` and `--sim-start`.** `crates/finder/tests/simulate_cli.rs` pins their
+- **`--simulate` and `--sim-start`.** `crates/finder/tests/cli/simulate.rs` pins their
   refusals and the address line `finder console: http://`; the new lines print before
   that line and only in the new mode.
-- **The frame a real link publishes** without a filter: `crates/finder/tests/link.rs` and
-  `crates/finder/tests/e2e_live.rs` read it unchanged.
+- **The frame a real link publishes** without a filter:
+  `crates/finder/tests/console/link.rs` and
+  `crates/finder/tests/console/live/whole_loop.rs` read it unchanged.
+- **The test layout.** `crates/finder/tests/layout/main.rs` pins the five folders, the six
+  files of `tests/support/` and that each binary's `main.rs` holds only its support
+  include and `mod` lines: each new module adds one `mod` line and no other file.
 - **The page without `mount_sky`**: no new element, so every Vitest and Playwright test
   of the page, and the night screenshots, are unchanged.
 
@@ -417,12 +463,13 @@ These are not changed by any story:
 
 ## Verification (every story, before proposing)
 
-- **The factory gates** (`ergane.yaml` at f8dab49, unchanged since c1ed295):
+- **The factory gates** (`ergane.yaml` at 20ce2fe; `test`'s Rust half has run under
+  cargo-nextest since 2026-11-14):
   - `lint` = `cargo fmt --all --check`,
     `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`,
     `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked`
     and `RUSTDOCFLAGS="-D warnings" cargo doc -p finder --no-deps`;
-  - `test` = `cargo test --workspace --all-targets --all-features --locked`,
+  - `test` = `cargo nextest run --workspace --all-targets --all-features --locked`,
     `cargo test --workspace --locked --doc`, and then, in `crates/finder/web`,
     `npm ci --no-audit --no-fund`, `npm run typecheck`, `npm run format:check`,
     `npm test`, `npm run build`, `git status --porcelain -- dist | (! grep .)` and
@@ -436,34 +483,57 @@ These are not changed by any story:
 ## Prerequisites before this spec is flipped to `ready`
 
 1. **The earlier specs have landed:** `016-mcp`, `017-console-stop-confirm`,
-   `018-live-chart-steady` and `020-live-chart-calm`. Met: 020-live-chart-calm's last
-   story landed at f8dab49. **And `024-mount-link-recovery` has landed.** Not met: 024
-   is a draft. US1 needs its `AxisState.mount_resets`, `Mount::resets`, the session's
-   last-seen reset count and `mount.resets` in `GET /api/session` (FR-014, US1-S8). 024
-   is not in `depends_on_landed` only because the validator refuses a dependency on a
-   spec that isn't on `main`; when it lands, add it there, re-read § Interfaces' session
-   and filter steps against its code, and re-run the validator.
-2. **`main` is still as read.** Every citation here was read at c1ed295 and re-read at
-   f8dab49. 024 will change `crates/finder/src/api.rs` and `crates/finder/src/session.rs`,
-   and the draft 025-frame-capture touches `crates/finder/src/link.rs`, all three written
-   by US1: once either lands, re-read the cited lines and the shared writes and re-run
-   the validator.
+   `018-live-chart-steady`, `020-live-chart-calm` and `024-mount-link-recovery`. Met:
+   020-live-chart-calm's last story landed at f8dab49 and 024's at f0ea2d5. US1 needs
+   024's `AxisState.mount_resets`, `Mount::resets`, the session's last-seen reset count
+   and `mount.resets` in `GET /api/session` (FR-014, US1-S8). On 2026-11-17 024 joined
+   `depends_on_landed`, § Interfaces' session and filter steps were re-read against its
+   code, and the validator was re-run (spec.md § Clarifications, Session 2026-11-17).
+2. **`main` is still as read.** Every citation here was read at c1ed295, re-read at
+   f8dab49 and re-read at 20ce2fe, where it is cited, after 022, 024, 025, 027 and 028
+   had landed. A spec that lands before this one and edits a cited file means re-reading
+   those citations and the shared writes, and re-running the validator.
 3. **The owner approvals are given** (spec § Owner approvals). Flipping to `ready`
    records them.
 4. **Constitution III is amended in the flip PR**, so the dispatch freezes it. The last
-   sentence of Principle III becomes:
+   sentence of Principle III, unchanged by 1.2.0 and 1.3.0
+   (`.specify/memory/constitution.md:47`), reads:
+
+   > A virtual clock is allowed only in tests and `finder --simulate`.
+
+   It becomes:
 
    > A virtual clock is allowed only in tests, `finder --simulate`, and
    > `finder --mount-sky --mount-sky-night` started with `--covers-on`, where the
    > observer has confirmed the telescope is covered and the Sun guard checks the
    > virtual clock's Sun.
 
-   The version goes from 1.1.0 to 1.2.0 and `Last Amended` to the flip's date.
+   The version goes from 1.3.0 to 1.4.0 (the next minor version, if another amendment
+   lands first) and `Last Amended` to the flip's date.
 5. **No operator-staged files are needed.**
+6. **Files shared with two drafts are ordered at the flip.** 021-chart-orientation (a
+   draft on `main`) and 038-track-follows-a-push (a draft in pull request 238, not on
+   `main`) write files this spec writes too:
+
+   | File | 026 | 021 | 038 |
+   |---|---|---|---|
+   | `crates/finder/README.md` | US1, US2 | US1 | US3 |
+   | `GLOSSARY.md` | US2 | US1 | US1 |
+   | `DESIGN.md` | US3 | US1, US2 | US3 |
+   | `crates/finder/web/src/api.ts` | US3 | US1 | US3 |
+   | `crates/finder/src/session.rs` | US1 | US1 | US1, US2 |
+   | `crates/finder/web/dist` | US3 | US1, US2 | US3 |
+   | `crates/finder/web/src/App.tsx` | US3 | US2 | |
+   | `crates/finder/tests/cli/main.rs` | US1, US2 | US1 | |
+
+   None of them is in another's `depends_on_landed`, and this spec adds neither for
+   ordering. The operator orders them at the flip; whichever lands later re-reads its
+   citations in those files and its shared writes, and re-runs the validator. The
+   imaging drafts 031 to 037 in the same pull request write several of these files too.
 
 ## Plan traps
 
-Lessons from building 012 to 019 on this factory, each with its mechanism and the check
+Lessons from building 012 to 028 on this factory, each with its mechanism and the check
 that keeps it from recurring. They bind every story.
 
 1. **Gate evidence or nothing.** The judge credits only gate results and the story's
@@ -490,6 +560,19 @@ that keeps it from recurring. They bind every story.
 11. **A stop that only compares.** A filter that compared the reset count on each frame
     would draw again from a stale zero once the count read as before. *Check:* US1-S8
     sets the count back to 0 and asserts the frames stay empty.
+12. **A new top-level finder test fails the layout test, and one module lives in one
+    binary.** Spec 027 groups finder's Rust tests into one binary per system, and its
+    `layout` test refuses a file at the top level of `crates/finder/tests` or a new file
+    in `tests/support/`. *Check:* each story adds the modules § Technical Context names,
+    each with one `mod` line in its alphabetical place, and
+    `cargo nextest run -p finder --locked --test layout` passes.
+13. **A gate command is copied from `ergane.yaml`, never remembered.** The `test` gate's
+    Rust half has been `cargo nextest run` since 2026-11-14. *Check:* § Verification and
+    the spec's Independent Tests name
+    `cargo nextest run --workspace --all-targets --all-features --locked`.
+14. **A rig solver with a deadline fails on a busy machine.** Spec 028 gave every
+    inline rig solver `timeout_ms: u64::MAX`, so virtual time cannot outrun a solve.
+    *Check:* the rig the `motion` modules copy keeps it.
 
 ## Risks
 
@@ -528,46 +611,89 @@ joins `depends_on_landed`. 024 is not on `main`, so no 024 story can be named he
 when it lands, its US3 becomes the last writer of `api.rs` and `session.rs`
 (§ Prerequisites 1 and 2).
 
+**Refreshed on 2026-11-17 to `main` at 20ce2fe** by the plate-solver operator, after 024,
+025, 027, 028 and 022 had landed and the constitution had gone to 1.3.0; `main` was
+merged in, not rebased onto. Every `path:line` the trio held was re-read there by
+content: 12 of 20 were unchanged and 8 had moved with their lines, none changing what
+it cites. They are `crates/finder/src/link.rs` 435 → 486 (025 added the raw-frame
+client), `crates/finder/src/goto.rs` 332 → 333, 711 → 716 and 811 → 816,
+`crates/finder/src/session.rs` 768 → 810 and 1061 → 1123, and
+`crates/finder/src/tracking.rs` 382 → 392 (024's reset count, 022's guidance), and the
+test rig's `Rig::new`, line 188 of the old `mcp/support.rs`, now
+`crates/finder/tests/support/mcp.rs:191` (027 moved the file). 024's code was read
+against § Interfaces' session and filter steps: its names and shapes are the ones this
+trio uses, and § Interfaces now cites them. 024 joins
+`depends_on_landed`, and its US3 is the landed writer named for `api.rs`, `session.rs` and
+`motion/main.rs`; 025 does not join, since this spec uses nothing it added. The planned
+`tests/mount_sky.rs` and `tests/mount_sky_night.rs` would each fail the `layout` test,
+so each became two modules (§ Technical Context), and US1's and US2's writes gain them and
+the two `main.rs` files that declare them. The two `existing` tests that no longer
+resolved now name their new paths, `crates/finder/tests/cli/simulate.rs` and
+`crates/finder/tests/console/link.rs`. § Verification, the development checks and the
+spec's Independent Tests name the `test` gate's `cargo nextest run`; the Principle III
+amendment goes to 1.4.0; § Constitution Check answers Principle V; the README and
+`DESIGN.md` places name 025's sections; and § Prerequisites 6 records the files shared
+with the drafts 021 and 038. No scenario's Given, When or Then, no FR and no owner
+approval changed. Nothing was probed in this refresh either: no story of this spec has
+been built.
+
+Shared writes name the story in this spec that writes the same file next and a landed
+story in `depends_on_landed` that wrote it before; where a later landed spec not in
+`depends_on_landed` wrote it last (025, 028 or 022), the reason says so, and since it is
+on `main` no order against it is left to keep. `crates/finder/tests/cli/main.rs` was last
+written by 028's US3, 025's US1 and 027's US2, and `GLOSSARY.md` by 022's US1 and 025's
+US1 and US2; none of them is in `depends_on_landed`, and both are on `main`.
+
 ```yaml
 version: 1
-reviewed_revision: f8dab49c00411f1fa70c2bde374182e4fe9d2ffc
+reviewed_revision: 20ce2fe15a3a9609e49219eb9ed7b2875c6d673a
 stories:
   US1:
     tests:
-      - path: crates/finder/tests/mount_sky.rs
+      - path: crates/finder/tests/motion/mount_sky.rs
         status: new
         disposition: add
         assertion: "the first usable frame fixes zero_counts at its mid counts, and the live pointing reads azimuth 180 and altitude 30 within 0.05 deg while the node's own camera points elsewhere"
         decision: "spec.md:US1-S1"
-      - path: crates/finder/tests/mount_sky.rs
+      - path: crates/finder/tests/motion/mount_sky.rs
         status: new
         disposition: add
         assertion: "a filtered frame keeps id, times, size, exposure, gain and counts, drops its preview, and carries 20 to 200 centroids in non-increasing brightness"
         decision: "spec.md:US1-S2"
-      - path: crates/finder/tests/mount_sky.rs
+      - path: crates/finder/tests/motion/mount_sky.rs
         status: new
         disposition: add
         assertion: "a GoTo to M42 ends done with the truth of the last frame's counts within 0.05 deg of M42; in the day it is refused with Sun is up and no motion command reaches the mount"
-        decision: "spec.md:US1-S3"
-      - path: crates/finder/tests/mount_sky.rs
+        decision: "spec.md:US1-S3..S4"
+      - path: crates/finder/tests/motion/mount_sky.rs
         status: new
         disposition: add
-        assertion: "a node without a mount gives frames with no centroids, no live pointing and null zero_counts; the binary refuses bad flag combinations and keeps its session in mount-sky/"
+        assertion: "a node without a mount gives frames with no centroids, no live pointing and null zero_counts"
         decision: "spec.md:US1-S5"
-      - path: crates/finder/tests/mount_sky.rs
+      - path: crates/finder/tests/cli/mount_sky.rs
+        status: new
+        disposition: add
+        assertion: "the built binary refuses bad flag combinations before listening and keeps its session in mount-sky/"
+        decision: "spec.md:US1-S6..S7"
+      - path: crates/finder/tests/motion/mount_sky.rs
         status: new
         disposition: add
         assertion: "once the session's reset count changes, every later frame has no centroids and no preview, power_cycled is true, zero_counts is unchanged and a GoTo is refused; a count set back to 0 does not resume drawing"
         decision: "spec.md:US1-S8"
-      - path: crates/finder/tests/simulate_cli.rs
+      - path: crates/finder/tests/cli/simulate.rs
         status: existing
         disposition: preserve
         assertion: "--simulate and --sim-start refusals and the address line are unchanged"
         decision: "plan.md:Shapes that existing tests pin"
-      - path: crates/finder/tests/link.rs
+      - path: crates/finder/tests/console/link.rs
         status: existing
         disposition: preserve
         assertion: "a link without a filter publishes the node's frames unchanged"
+        decision: "plan.md:Shapes that existing tests pin"
+      - path: crates/finder/tests/layout/main.rs
+        status: existing
+        disposition: preserve
+        assertion: "no file at the top level of crates/finder/tests or new file in its support folder, and each binary's main.rs holds only its support include and mod lines, with mount_sky added to motion's and cli's"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
       - "every guard (Sun, minimum altitude, Stop, watchdog) behaves as without the mode (spec.md FR-007)"
@@ -575,7 +701,9 @@ stories:
       - "--simulate is unchanged and refused with --mount-sky"
     checks:
       development:
-        - "cargo test -p finder --test mount_sky --locked"
+        - "cargo nextest run -p finder --locked --test motion mount_sky::"
+        - "cargo nextest run -p finder --locked --test cli mount_sky::"
+        - "cargo nextest run -p finder --locked --test layout"
       handoff: declared_gates
       independent: declared_pipeline
       release:
@@ -588,7 +716,10 @@ stories:
       - crates/finder/src/main.rs
       - crates/finder/src/mount_sky.rs
       - crates/finder/src/session.rs
-      - crates/finder/tests/mount_sky.rs
+      - crates/finder/tests/cli/main.rs
+      - crates/finder/tests/cli/mount_sky.rs
+      - crates/finder/tests/motion/main.rs
+      - crates/finder/tests/motion/mount_sky.rs
     no_write_reason: ""
     shared_writes:
       - path: crates/finder/README.md
@@ -611,60 +742,82 @@ stories:
         other_story: US2
         disposition: merge_order
         reason: "US2 depends_on_merged US1, and adds night_utc"
+      - path: crates/finder/tests/cli/main.rs
+        other_spec: 026-mount-sky
+        other_story: US2
+        disposition: merge_order
+        reason: "US2 depends_on_merged US1, and adds mod mount_sky_night after US1's mod mount_sky"
+      - path: crates/finder/tests/motion/main.rs
+        other_spec: 026-mount-sky
+        other_story: US2
+        disposition: merge_order
+        reason: "US2 depends_on_merged US1, and adds mod mount_sky_night after US1's mod mount_sky"
       - path: crates/finder/README.md
         other_spec: 017-console-stop-confirm
         other_story: US4
         disposition: merge_order
-        reason: "026 depends_on_landed 017, whose US4 last changed the README"
+        reason: "026 depends_on_landed 017, whose US4 changed the README; 025's US1 and US2 and 022's US3 wrote it later, and are on main"
       - path: crates/finder/src/api.rs
-        other_spec: 017-console-stop-confirm
-        other_story: US1
+        other_spec: 024-mount-link-recovery
+        other_story: US3
         disposition: merge_order
-        reason: "026 depends_on_landed 017, whose US1 last changed api.rs"
+        reason: "026 depends_on_landed 024, whose US3 changed api.rs; 025's US1 and US2 wrote it later, and are on main"
       - path: crates/finder/src/lib.rs
         other_spec: 017-console-stop-confirm
         other_story: US1
         disposition: merge_order
-        reason: "026 depends_on_landed 017, whose US1 last changed lib.rs"
+        reason: "026 depends_on_landed 017, whose US1 changed lib.rs; 025's US1 and US2 wrote it later, and are on main"
       - path: crates/finder/src/link.rs
         other_spec: 017-console-stop-confirm
         other_story: US1
         disposition: merge_order
-        reason: "026 depends_on_landed 017, whose US1 last changed link.rs"
+        reason: "026 depends_on_landed 017, whose US1 changed link.rs; 025's US2 wrote it later, and is on main"
       - path: crates/finder/src/main.rs
         other_spec: 016-mcp
         other_story: US1
         disposition: merge_order
-        reason: "026 depends_on_landed 016, whose US1 last changed main.rs"
+        reason: "026 depends_on_landed 016, whose US1 changed main.rs; 025's US1 wrote it later, and is on main"
       - path: crates/finder/src/session.rs
-        other_spec: 017-console-stop-confirm
-        other_story: US2
+        other_spec: 024-mount-link-recovery
+        other_story: US3
         disposition: merge_order
-        reason: "026 depends_on_landed 017, whose US2 last changed session.rs"
+        reason: "026 depends_on_landed 024, whose US3 changed session.rs; 028's US4 and 022's US3 wrote it later, and are on main"
+      - path: crates/finder/tests/motion/main.rs
+        other_spec: 024-mount-link-recovery
+        other_story: US3
+        disposition: merge_order
+        reason: "026 depends_on_landed 024, whose US3 added mod mount_identity; 025's US2 wrote it later, and is on main"
     open_questions: []
   US2:
     tests:
-      - path: crates/finder/tests/mount_sky_night.rs
+      - path: crates/finder/tests/cli/mount_sky_night.rs
         status: new
         disposition: add
         assertion: "--mount-sky-night without --covers-on, without --mount-sky, and --covers-on alone each exit non-zero before listening, the first naming --covers-on"
-        decision: "spec.md:US2-S1"
-      - path: crates/finder/tests/mount_sky_night.rs
+        decision: "spec.md:US2-S1..S2"
+      - path: crates/finder/tests/cli/mount_sky_night.rs
         status: new
         disposition: add
         assertion: "with every flag the running binary reports night_utc and a session time within 60 s of the night start, and prints the pretend Sun warning"
         decision: "spec.md:US2-S3"
-      - path: crates/finder/tests/mount_sky_night.rs
+      - path: crates/finder/tests/motion/mount_sky_night.rs
         status: new
         disposition: add
         assertion: "a console built with with_night_clock reports night_utc and one built without has no night_utc key"
         decision: "spec.md:US2-S4"
+      - path: crates/finder/tests/layout/main.rs
+        status: existing
+        disposition: preserve
+        assertion: "each binary's main.rs holds only its support include and mod lines, with mount_sky_night added to cli's and motion's"
+        decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
       - "without --mount-sky-night the console clock is the system clock (constitution III)"
       - "--simulate is unchanged"
     checks:
       development:
-        - "cargo test -p finder --test mount_sky_night --locked"
+        - "cargo nextest run -p finder --locked --test cli mount_sky_night::"
+        - "cargo nextest run -p finder --locked --test motion mount_sky_night::"
+        - "cargo nextest run -p finder --locked --test layout"
       handoff: declared_gates
       independent: declared_pipeline
       release:
@@ -675,7 +828,10 @@ stories:
       - crates/finder/src/api.rs
       - crates/finder/src/main.rs
       - crates/finder/src/mount_sky.rs
-      - crates/finder/tests/mount_sky_night.rs
+      - crates/finder/tests/cli/main.rs
+      - crates/finder/tests/cli/mount_sky_night.rs
+      - crates/finder/tests/motion/main.rs
+      - crates/finder/tests/motion/mount_sky_night.rs
     no_write_reason: ""
     shared_writes: []
     open_questions: []
@@ -715,12 +871,12 @@ stories:
         other_spec: 020-live-chart-calm
         other_story: US2
         disposition: merge_order
-        reason: "026 depends_on_landed 020-live-chart-calm, whose US2 last changed DESIGN.md"
+        reason: "026 depends_on_landed 020-live-chart-calm, whose US2 changed DESIGN.md; 025's US3 and 022's US1 to US3 wrote it later, and are on main"
       - path: crates/finder/web/dist
         other_spec: 020-live-chart-calm
         other_story: US2
         disposition: merge_order
-        reason: "026 depends_on_landed 020-live-chart-calm, whose US2 last rebuilt the bundle"
+        reason: "026 depends_on_landed 020-live-chart-calm, whose US2 rebuilt the bundle; 025's US3 and 022's US1 to US3 rebuilt it later, and are on main"
       - path: crates/finder/web/src/App.tsx
         other_spec: 020-live-chart-calm
         other_story: US2
@@ -730,6 +886,6 @@ stories:
         other_spec: 020-live-chart-calm
         other_story: US2
         disposition: merge_order
-        reason: "026 depends_on_landed 020-live-chart-calm, whose US2 last changed api.ts"
+        reason: "026 depends_on_landed 020-live-chart-calm, whose US2 changed api.ts; 025's US3 and 022's US1 and US3 wrote it later, and are on main"
     open_questions: []
 ```
