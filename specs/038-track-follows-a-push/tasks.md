@@ -7,13 +7,14 @@ description: "Task list for 038-track-follows-a-push: Track Follows a Push"
 **Prerequisites** (plan.md § Prerequisites):
 - every spec in `depends_on_landed` has landed on `main`: met at 49bb210;
 - the owner decisions in spec.md are settled: met on 2026-11-17; its owner approvals
-  are given at the flip;
+  were given at the flip the same day;
 - every story has been probe-built: met on 2026-11-17, in two rounds;
 - no operator-staged file is needed;
 - 021 and 022 have landed and this trio is re-read against them: met on 2026-11-17,
   with 021 at 2f6a777 and 022 at 20ce2fe (plan.md § Prerequisites 6);
-- 026-mount-sky lands first, and whether `depends_on_landed` gains it is the owner's
-  call at the flip (plan.md § Prerequisites 7).
+- 026-mount-sky lands first: met at the flip, which put it in `depends_on_landed`; the
+  trio was re-read on `main` at 86ebeb8 with 026's US1 and US2 landed (plan.md
+  § Prerequisites 7).
 
 **Rules for every story:**
 - Never edit an existing test, golden, fixture, `scripts/ci/`, `.github/`, `deny.toml`,

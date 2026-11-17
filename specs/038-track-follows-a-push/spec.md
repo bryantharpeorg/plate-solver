@@ -1,6 +1,12 @@
 ---
-state: draft
-depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-confirm", "024-mount-link-recovery", "025-frame-capture", "027-finder-tests-by-system", "028-finder-tests-do-less"]
+state: ready
+depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-confirm", "024-mount-link-recovery", "025-frame-capture", "026-mount-sky", "027-finder-tests-by-system", "028-finder-tests-do-less"]
+# Flipped to ready 2026-11-17 by the operator seat on the owner's answer the same day ("Yes"
+# to flipping it now, ordered after 026), which gives the owner approvals listed under
+# "Owner approvals". 026-mount-sky joins `depends_on_landed`, so 038 is dispatched only once
+# 026 has landed. Re-anchored first to `main` at 86ebeb8, after 026's US1 (b9ccf47) and US2
+# (86ebeb8) landed: two `session.rs` citations moved 11 lines, and no decision, requirement
+# or scenario changed (Clarifications, the flip). Validated there.
 # Drafted 2026-11-16 against `main` at 49bb210 (49bb210fe4860dd98ba24727074e7bd3cc0d7124),
 # at the owner's ask the same day: "If I push it away from the Orion nebula to look at
 # something near it. I don't want it to try to point back to the Orion nebula without me
@@ -16,9 +22,7 @@ depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-con
 # Re-anchored on 2026-11-17 to `main` at 2f6a777, after 021 (2f6a777) and 022 (20ce2fe)
 # landed: citations in session.rs and live.rs moved, and no decision, requirement or
 # scenario changed (Clarifications, last session; plan.md § Refinement Record, Re-anchor).
-# The owner settled the owner decisions on 2026-11-17. It stays draft until the owner
-# flips it to `ready`, which gives the approvals listed under "Owner approvals" and
-# dispatches it.
+# The owner settled the owner decisions on 2026-11-17.
 ---
 
 # Feature Specification: Track Follows a Push
@@ -199,6 +203,23 @@ text above or below:
   readout", the design.json component and `SessionTrack` are as 021 and 022 found them.
 - Q: What comes next on these files? → A: 026-mount-sky, about to be flipped, writes
   several of them; plan.md § Prerequisites 7 says how 038 follows it.
+
+### Session 2026-11-17 (the flip, ordered after 026)
+
+- Q: How does 038 follow 026? → A: The owner flipped 038 on 2026-11-17 with
+  026-mount-sky in `depends_on_landed`, so it is dispatched only once 026 has landed.
+- Q: What moved? → A: 026's US1 (b9ccf47) put 11 lines into
+  `crates/finder/src/session.rs` (`mount_sky_terms`) above `set_mount`, so the
+  citations of `record_frame_sync` and `set_aim` moved 11 lines. 026's US1 and US2 also
+  added four flag rows and a "Drawn sky on the real mount" section to
+  `crates/finder/README.md`, and a sentence to `GLOSSARY.md`'s **Sun guard**, away from
+  the Track paragraphs, the `POST /api/track` row and the places this spec's entries go.
+  Every other citation reads as it did on `main` at 2f6a777.
+- Q: Does 026's US3, still to land, move anything cited here? → A: No. It writes only
+  page files (`DESIGN.md`, `dist`, `App.tsx`, `api.ts`, `useSession.ts` and its new
+  banner), and this trio cites no line of them. Its `useSession.ts` change keeps
+  `mount_sky` in the session request beside `track`, which US3 here still receives
+  whole.
 
 ## Owner decisions
 

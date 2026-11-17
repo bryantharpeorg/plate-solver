@@ -192,7 +192,7 @@ pub struct TrackView {
 
 - `TrackRun` gains `push: Push`, `check_armed: bool` and `model_due: bool`, all clear
   in a new `TrackRun`. `stop_tracking` (`crates/finder/src/session.rs:976`), which edits
-  the run in place, clears all three too. `set_aim` (`crates/finder/src/session.rs:1260`)
+  the run in place, clears all three too. `set_aim` (`crates/finder/src/session.rs:1271`)
   clears `check_armed`.
 - **The effective push** is `run.push` while the run's tracker is not `off`, and
   `Push::None` otherwise. The view, the sync rule and `start_tracking` read only the
@@ -226,7 +226,7 @@ pub struct TrackView {
   Every write of `run.push` re-reads `track_generation` under the values lock and writes
   nothing if it has changed, so a Track run replaced meanwhile is never given another
   run's push. The values lock is never held while calling into the tracker.
-- `record_frame_sync` (`crates/finder/src/session.rs:1124`) answers `Ok(false)` before
+- `record_frame_sync` (`crates/finder/src/session.rs:1135`) answers `Ok(false)` before
   anything else while the effective push is `Moving`. After a sync is recorded with
   `model_due` set, it clears `model_due` and, if the tracker is still running, calls
   `tracker.set_model` with the session's model.
@@ -323,7 +323,7 @@ on requires…") and the `POST /api/track` row.
 
 ## Verification (every story, before proposing)
 
-- **The factory gates** (`ergane.yaml` at 2f6a777, its gates as at 49bb210):
+- **The factory gates** (`ergane.yaml` at 86ebeb8, its gates as at 49bb210):
   - `lint` = `cargo fmt --all --check`,
     `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` and
     the two `cargo doc` runs with `RUSTDOCFLAGS="-D warnings"`;
@@ -339,12 +339,12 @@ on requires…") and the `POST /api/track` row.
 ## Prerequisites before this spec is flipped to `ready`
 
 1. **The earlier specs have landed:** every spec in `depends_on_landed`. Met at 49bb210.
-2. **`main` is still as read.** Every citation here is at 2f6a777, re-read by content on
-   2026-11-17 (§ Refinement Record, Re-anchor). If `main` has moved in these files,
+2. **`main` is still as read.** Every citation here is at 86ebeb8, re-read by content on
+   2026-11-17 (§ Refinement Record, Re-anchor and Flip). If `main` has moved in these files,
    re-read them and re-run the validator.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
    decisions, § Owner approvals). Met on 2026-11-17: the owner settled every owner
-   decision (spec § Owner decisions); the approvals are given at the flip.
+   decision (spec § Owner decisions), and gave the approvals by flipping it the same day.
 4. **Probe builds.** Met on 2026-11-17: two rounds of probe builds (§ Refinement
    Record).
 5. **No operator-staged files are needed.**
@@ -355,16 +355,17 @@ on requires…") and the `POST /api/track` row.
    `crates/finder/tests/mcp/main.rs`. Met on 2026-11-17: 021 landed at 2f6a777 and 022
    at 20ce2fe, and every anchor was re-read on `main` at 2f6a777 (§ Refinement Record,
    Re-anchor). `depends_on_landed` is left as it is: both are on `main`, so the order
-   holds without them, and adding them stays the owner's choice at the flip.
-7. **026-mount-sky lands first.** 026, a draft in PR 207 about to be flipped, writes
-   `crates/finder/src/session.rs`, `crates/finder/web/src/api.ts`,
-   `crates/finder/README.md`, `GLOSSARY.md`, `DESIGN.md` and `crates/finder/web/dist`,
-   as US1, US2 and US3 do, and also `crates/finder/web/src/useSession.ts` and
-   `crates/finder/web/src/App.tsx`, which bring `track` to `TrackControl`. 038 should
-   land after 026. Whether `depends_on_landed` gains `026-mount-sky` is the owner's call
-   at the flip. If 026 lands before 038 is dispatched, this trio is re-read on `main`
-   again (its `session.rs` anchors move, and US3 relies on `useSession.ts` passing
-   `track` whole) and re-validated.
+   holds without them. The owner left them out at the flip.
+7. **026-mount-sky lands first.** 026 writes `crates/finder/src/session.rs`,
+   `crates/finder/web/src/api.ts`, `crates/finder/README.md`, `GLOSSARY.md`,
+   `DESIGN.md` and `crates/finder/web/dist`, as US1, US2 and US3 do, and also
+   `crates/finder/web/src/useSession.ts` and `crates/finder/web/src/App.tsx`, which
+   bring `track` to `TrackControl`. Met at the flip on 2026-11-17: `depends_on_landed`
+   gains `026-mount-sky`, so 038 is dispatched only after 026 has landed. 026's US1
+   (b9ccf47) and US2 (86ebeb8) are on `main`, and every anchor was re-read there; the
+   two `session.rs` citations below 026's `mount_sky_terms` moved 11 lines. 026's US3,
+   still to land, writes only the page files above and its banner, and no line of them is
+   cited here (§ Refinement Record, Flip).
 
 Outside the factory, before it is relied on at the telescope: GoTo and Track proven on
 the real mount, then one push of about 2° and one of about 5′ while tracking, to see that
@@ -436,7 +437,7 @@ They bind every story.
 | A real push smears frames for several seconds, so the moving state lasts longer. | It costs nothing: nothing pulls while moving. The field check measures it. |
 | A knock of more than 5′ that stays put for 5 s is followed instead of corrected. | One press goes back. The threshold and the settle are constants (owner decisions 1 and 2). |
 | 036 lets imaging subs steer the tracker. Its sub errors would pull toward the old place at up to 30″ a pulse after a follow. | 036 is re-anchored to `main` after this lands and must end the subs' claim on a follow. 037's run ends `pushed_away` first in any case. |
-| Draft `026-mount-sky` writes `session.rs`, `README.md`, `GLOSSARY.md`, `DESIGN.md`, `api.ts` and `dist`, as US1, US2 and US3 do. | 038 lands after it (§ Prerequisites 7): re-read on `main` once 026 has landed, and re-validated; whether `depends_on_landed` gains it is the owner's call at the flip. |
+| `026-mount-sky` writes `session.rs`, `README.md`, `GLOSSARY.md`, `DESIGN.md`, `api.ts` and `dist`, as US1, US2 and US3 do. | 038 lands after it: 026 is in `depends_on_landed` (§ Prerequisites 7). Its US1 and US2 are on `main` and were re-read; its US3 writes no line cited here. |
 
 ## Refinement Record
 
@@ -504,9 +505,16 @@ shared writes below now name 021 and 022 where they wrote a file later; they sta
 outside `depends_on_landed` (§ Prerequisites 6). The page's one note on the word "push"
 is in § The page; 026's overlap is § Prerequisites 7.
 
+**Flip, 2026-11-17.** The owner flipped 038 with `026-mount-sky` in `depends_on_landed`.
+The trio was re-read first on `main` at 86ebeb8, by content, with 026's US1 (b9ccf47) and
+US2 (86ebeb8) landed. Two cited lines of `session.rs` moved 11 lines, below US1's
+`mount_sky_terms`; every other citation reads as before. The shared writes below now name
+026 where it writes a file last: US1 for `session.rs`, US2 for `GLOSSARY.md` and the
+README, and US3, still to land, for `DESIGN.md`, `api.ts` and `dist`.
+
 ```yaml
 version: 1
-reviewed_revision: 2f6a777592b7ff2767e71317da90eb3376d179e0
+reviewed_revision: 86ebeb87f0152d4656bc0e2a2b4d44a0a6df7817
 stories:
   US1:
     tests:
@@ -560,10 +568,10 @@ stories:
         disposition: merge_order
         reason: "US2 depends_on_merged US1, and adds mod push_back"
       - path: crates/finder/src/session.rs
-        other_spec: 028-finder-tests-do-less
-        other_story: US4
+        other_spec: 026-mount-sky
+        other_story: US1
         disposition: merge_order
-        reason: "038 depends_on_landed 028, whose US4 changed session.rs; 022's US3 and 021's US1 wrote it later, and are on main"
+        reason: "038 depends_on_landed 026, whose US1 last changed session.rs (b9ccf47); 028's US4, 022's US3 and 021's US1 wrote it earlier, and are on main"
       - path: crates/finder/src/tracking.rs
         other_spec: 024-mount-link-recovery
         other_story: US3
@@ -575,10 +583,10 @@ stories:
         disposition: merge_order
         reason: "038 depends_on_landed 015, whose US5 last changed model.rs"
       - path: GLOSSARY.md
-        other_spec: 025-frame-capture
+        other_spec: 026-mount-sky
         other_story: US2
         disposition: merge_order
-        reason: "038 depends_on_landed 025, whose US2 changed GLOSSARY.md; 022's US1 and 021's US1 wrote it later, and are on main"
+        reason: "038 depends_on_landed 026, whose US2 last changed GLOSSARY.md (86ebeb8); 025's US2, 022's US1 and 021's US1 wrote it earlier, and are on main"
       - path: crates/finder/tests/motion/tracking/mod.rs
         other_spec: 027-finder-tests-by-system
         other_story: US2
@@ -664,30 +672,30 @@ stories:
     no_write_reason: ""
     shared_writes:
       - path: crates/finder/README.md
-        other_spec: 025-frame-capture
+        other_spec: 026-mount-sky
         other_story: US2
         disposition: merge_order
-        reason: "038 depends_on_landed 025, whose US2 changed the README; 022's US3 and 021's US1 wrote it later, and are on main"
+        reason: "038 depends_on_landed 026, whose US2 last changed the README (86ebeb8); 025's US2, 022's US3 and 021's US1 wrote it earlier, and are on main"
       - path: DESIGN.md
-        other_spec: 025-frame-capture
+        other_spec: 026-mount-sky
         other_story: US3
         disposition: merge_order
-        reason: "038 depends_on_landed 025, whose US3 changed DESIGN.md; 022 and 021 wrote it later, and are on main"
+        reason: "038 depends_on_landed 026, whose US3 changes DESIGN.md; 025's US3, 022 and 021 wrote it earlier, and are on main"
       - path: .impeccable/design.json
         other_spec: 025-frame-capture
         other_story: US3
         disposition: merge_order
         reason: "038 depends_on_landed 025, whose US3 last changed design.json"
       - path: crates/finder/web/dist
-        other_spec: 025-frame-capture
+        other_spec: 026-mount-sky
         other_story: US3
         disposition: merge_order
-        reason: "038 depends_on_landed 025, whose US3 rebuilt dist; 022 and 021 rebuilt it later, and are on main"
+        reason: "038 depends_on_landed 026, whose US3 rebuilds dist; 025's US3, 022 and 021 rebuilt it earlier, and are on main"
       - path: crates/finder/web/src/api.ts
-        other_spec: 025-frame-capture
+        other_spec: 026-mount-sky
         other_story: US3
         disposition: merge_order
-        reason: "038 depends_on_landed 025, whose US3 changed api.ts; 022's US1 and US3 and 021's US1 wrote it later, and are on main"
+        reason: "038 depends_on_landed 026, whose US3 changes api.ts; 025's US3, 022's US1 and US3 and 021's US1 wrote it earlier, and are on main"
       - path: crates/finder/web/src/components/TrackControl.tsx
         other_spec: 015-tracking
         other_story: US8
