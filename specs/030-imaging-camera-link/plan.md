@@ -417,7 +417,7 @@ literal. `crates/simulator/src/lib.rs` gains `pub mod imaging;` and
 **The attitude.** With R the finder's sky-to-camera rotation at the instant
 (`sky::camera_rotation`, `crates/simulator/src/sky.rs:109`), whose rows are the finder's
 boresight, left and up in J2000, and e the eyepiece pixel's ray in the finder's frame
-(`crates/simulator/src/optics.rs:42`): the imaging boresight is b = `sky::unrotate(R, e)`;
+(`crates/simulator/src/optics.rs:43`): the imaging boresight is b = `sky::unrotate(R, e)`;
 u0 is the finder's up less its part along b, normalised; l0 = u0 × b; and with α the
 imaging angle, up = cos α·u0 + sin α·l0 and left = cos α·l0 − sin α·u0. The imaging
 rotation is the `RotationMatrix` with the rows b, left, up, and a star's place is
@@ -1819,12 +1819,7 @@ stories:
       - crates/scope-node/src/lib.rs
       - crates/scope-node/tests/imaging_port.rs
     no_write_reason: ""
-    shared_writes:
-      - path: crates/scope-node/src/imaging/mod.rs
-        other_spec: 030-imaging-camera-link
-        other_story: US3
-        disposition: merge_order
-        reason: "US3 depends_on_merged US1, and adds pub mod service to the module US1 created"
+    shared_writes: []
     open_questions: []
   US2:
     tests:
