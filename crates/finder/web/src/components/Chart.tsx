@@ -232,6 +232,7 @@ export function Chart({ report: newest, imageUrl, label, busy, layers, onLayers,
               />
             ))}
             {furniture && <Furniture geometry={furniture} u={u} intro={intro} />}
+            {live && session?.aim && <AimMark x={session.aim.x} y={session.aim.y} W={W} u={u} />}
             {solved &&
               session?.target &&
               session.guidance?.placement &&
@@ -251,6 +252,27 @@ export function Chart({ report: newest, imageUrl, label, busy, layers, onLayers,
         )}
       </figcaption>
     </figure>
+  );
+}
+
+function AimMark({ x, y, W, u }: { x: number; y: number; W: number; u: number }) {
+  const r = 9 * u;
+  const labelRight = x < W / 2;
+  return (
+    <g data-aim transform={`translate(${x} ${y})`} className="aim-mark pointer-events-none" strokeWidth={1.6 * u}>
+      <title>Aim point: where the telescope looks</title>
+      <circle className="aim-ring" r={r} />
+      <circle className="aim-dot" r={1.6 * u} />
+      <text
+        x={(labelRight ? 1 : -1) * (r + 5 * u)}
+        y={4 * u}
+        textAnchor={labelRight ? "start" : "end"}
+        fontSize={12 * u}
+        strokeWidth={3 * u}
+      >
+        aim
+      </text>
+    </g>
   );
 }
 

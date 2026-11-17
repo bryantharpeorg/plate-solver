@@ -437,6 +437,28 @@
     stroke: var(--color-on-photo);
     fill: var(--color-on-photo);
   }
+  .aim-mark .aim-ring {
+    fill: none;
+    stroke: var(--color-on-photo);
+  }
+  .aim-mark .aim-dot {
+    fill: var(--color-on-photo);
+    stroke: none;
+  }
+  .aim-mark text {
+    fill: var(--color-on-photo);
+    paint-order: stroke;
+    stroke: var(--color-photo);
+    stroke-linejoin: round;
+    font-weight: 600;
+  }
+  [data-theme="night"] .aim-mark .aim-ring {
+    stroke-width: 2.2px;
+    vector-effect: non-scaling-stroke;
+  }
+  [data-theme="night"] .aim-mark text {
+    font-weight: 680;
+  }
   .furniture text {
     stroke: none;
     font-weight: 600;

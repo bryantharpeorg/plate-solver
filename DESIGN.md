@@ -307,6 +307,13 @@ latest pointing's age. Without a pointing it asks for a solved frame. Down targe
 ### Target reticle — built
 On the latest pointing's chart, the target's atlas family symbol sits at the supplied pixel coordinates inside four open square corner ticks in Frame Ink. Galaxy symbols retain the supplied axes and position angle. The italic object-colour label sits toward the interior of the frame. This is session furniture, outside the legend: the five chips and their counts stay the same, and hiding Deep sky leaves the target drawn. A missing or different `pointing_seq` suppresses the mark. Existing object and Frame Ink tokens collapse to red at night.
 
+### Aim mark — built
+On a live chart with an aim point set, a Frame Ink ring of 9 chart units with a centre
+dot marks the pixel the eyepiece is centred on, with the upright word "aim" toward the
+frame's middle, cased like a star name. It is session furniture, outside the legend,
+and it leaves the centre reticle where it is. At night the ring is 2.2px and
+non-scaling.
+
 ### GoTo — built
 `GoToControl` sits inside the guidance block, under its directions, while mount telemetry is present. Its square 44px primary button uses the existing dim primary treatment at night. Only a connected mount with no running GoTo or second sync and no `goto_refusal` enables it. The refusal is the server planner's exact text, linked to the button and printed in Second Ink. The page does no motion planning. An ink status line shows Slewing, Solving, each numbered Correction, and On target with the final error rounded to 0.1″; failures and halts retain their reason. Requests refresh the session immediately, and mount sessions poll every 500ms, waiting for an outstanding read to finish.
 
