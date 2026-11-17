@@ -337,6 +337,10 @@ an `error`. The last eight preview frames are held. The snapped `aim: {x,y}` sur
 restarts until reset. Without an aim, reads omit it and pointings use the frame centre.
 Unprojection includes the solved camera, distortion and attitude.
 
+`PUT /api/session` also takes `chart_rotation_deg`, in degrees counter-clockwise,
+stored within [0, 360); `null` clears it. Reads omit it until set. The page turns its
+live chart and photos by it. The MCP tools do not change it.
+
 After the first star frame, reads include `field`: `fov_deg` (null until solved),
 `db_min_fov_deg`, `db_max_fov_deg`, and `unsolved_s`, the console seconds of frames
 holding at least ten stars without a solve. Any live solve resets that interval.

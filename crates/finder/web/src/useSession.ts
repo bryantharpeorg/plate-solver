@@ -8,6 +8,7 @@ export interface SessionEdit {
   site?: SessionSite | null;
   min_alt_deg?: number;
   target?: string | null;
+  chart_rotation_deg?: number | null;
 }
 
 const EMPTY: ObservingSession = { site: null, min_alt_deg: undefined, target: null };
@@ -36,6 +37,7 @@ async function request(init?: RequestInit): Promise<ObservingSession> {
     ...(body?.node != null && { node: body.node }),
     ...(body?.camera_settings != null && { camera_settings: body.camera_settings }),
     ...(body?.aim != null && { aim: body.aim }),
+    ...(body?.chart_rotation_deg != null && { chart_rotation_deg: body.chart_rotation_deg }),
     ...(body?.field != null && { field: body.field }),
     ...(body?.mount != null && { mount: body.mount }),
     ...(body?.model != null && { model: body.model }),
