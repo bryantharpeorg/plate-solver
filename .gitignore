@@ -12,6 +12,9 @@
 
 # Rust
 /target
+# A target/ anywhere below the root is a stray build: a cargo command run from a
+# subfolder with CARGO_TARGET_DIR="$PWD/target" (026's US3 builder, 2026-11-17).
+target/
 
 # Finder console page (NOTE: crates/finder/web/dist is committed by design: the Rust
 # binary embeds it via rust-embed, so cargo builds never need node)
