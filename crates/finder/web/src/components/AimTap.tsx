@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { resetAim, setAim, type LiveReport, type ObservingSession } from "../api";
+import { boxToFrame, rotationOf } from "../rotation";
+import { rotatedPhoto } from "./LivePreview";
 
 export function AimTap({ session, live }: { session: ObservingSession; live: LiveReport | null }) {
+  const rotation = rotationOf(session);
   const [aim, setPoint] = useState(session.aim);
   const [preview, setPreview] = useState<{ id: number; width: number; height: number } | null>(null);
   const [loaded, setLoaded] = useState<number | null>(null);
@@ -36,6 +39,9 @@ export function AimTap({ session, live }: { session: ObservingSession; live: Liv
     }
   };
 
+  // The turned photo, like the live preview's, or nothing when the rotation is 0.
+  const turned = rotation !== 0 && preview ? rotatedPhoto(preview.width, preview.height, rotation) : null;
+
   return (
     <section aria-labelledby="aim-point-title" className="space-y-3">
       <h2 id="aim-point-title" className="section-title">
@@ -52,12 +58,21 @@ export function AimTap({ session, live }: { session: ObservingSession; live: Liv
           aria-label="Set aim point on live preview"
           disabled={busy}
           className="block w-full cursor-crosshair border border-ink bg-photo"
+          style={turned?.box}
           onClick={(event) => {
             if (busy || loaded !== preview.id || !image.current) return;
             const rect = image.current.getBoundingClientRect();
             if (rect.width <= 0 || rect.height <= 0) return;
-            const x = ((event.clientX - rect.left) * preview.width) / rect.width;
-            const y = ((event.clientY - rect.top) * preview.height) / rect.height;
+            // The frame pixel under the tap, whatever way the photo is turned: pixels sent
+            // to the server stay in frame coordinates.
+            const [x, y] = boxToFrame(
+              preview.width,
+              preview.height,
+              rotation,
+              rect,
+              event.clientX - rect.left,
+              event.clientY - rect.top,
+            );
             if (x < 0 || y < 0 || x >= preview.width || y >= preview.height) return;
             void write(() => setAim(preview.id, x, y), "Aim point set.");
           }}
@@ -70,6 +85,7 @@ export function AimTap({ session, live }: { session: ObservingSession; live: Liv
             width={preview.width}
             height={preview.height}
             className="photo block h-auto w-full"
+            style={turned?.photo}
             onLoad={() => {
               setLoaded(preview.id);
               setUnavailable(false);
