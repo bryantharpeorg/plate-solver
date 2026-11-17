@@ -120,7 +120,7 @@ focuses, calibrates or stacks.
      simulated imaging camera therefore has a renderer and a star field of its own.
   8. The main telescope's axis is already simulator state: the eyepiece pixel of the
      finder frame (`crates/simulator/src/optics.rs:13`,
-     `crates/simulator/src/optics.rs:42`), and a connected mount's true direction is
+     `crates/simulator/src/optics.rs:43`), and a connected mount's true direction is
      that direction (`crates/simulator/src/controls.rs:35`). The simulated imaging
      camera looks along it.
   9. Per-pixel rendering is already most of the `test` gate (`Cargo.toml:15`). The
