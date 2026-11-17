@@ -34,6 +34,8 @@ cargo run --release -p finder -- --db my_camera.npz --samples ~/frames
 | `--sim-start UTC` | now | Start the simulated night at `YYYY-MM-DDTHH:MM:SSZ`, optionally with fractional seconds. Requires `--simulate`. |
 | `--mount-sky` | off | Draw each frame's stars from the real mount's encoders instead of the camera, for testing GoTo without a sky. Needs `--tube-alt`; not with `--simulate`. Do not push the tube by hand in this mode. |
 | `--tube-alt DEG` | | The tube's altitude when the console starts, from a level, 0 to 90. Requires `--mount-sky`. |
+| `--mount-sky-night UTC` | | Run the console on a night clock from `YYYY-MM-DDTHH:MM:SSZ`, so a daylight test can move the mount. The Sun guard then checks that clock's Sun. Requires `--mount-sky` and `--covers-on`. |
+| `--covers-on` | off | Confirm that the mirror's cover and the finder's cap are on. Requires `--mount-sky-night`. |
 | `--allow-host NAME` | none | DNS name permitted for same-origin writes, in addition to IP literals and `localhost`. Repeat for multiple names. |
 | `--licenses` | | Print the third-party notices for the embedded page and data, and exit. |
 
@@ -461,6 +463,14 @@ the tube and not the counts, so the drawn sky stops matching the tube and nothin
 detects it. After a power cycle (the node's reset count changes) the drawn sky stops
 for good, and `mount_sky` carries `power_cycled: true`: restart the console with a
 fresh `--tube-alt` and reset the night then. Check the tube is level before long moves.
+
+To run the same test in daylight, with the mirror's cover and the finder's cap on,
+start with `--mount-sky-night UTC --covers-on`: the console then runs on a night
+clock from that UTC and prints `night clock from <UTC>: the Sun guard checks a
+pretend Sun; keep the mirror cover and the finder cap on`. The Sun guard checks
+that clock's Sun, so a GoTo works in daylight, and every other guard is unchanged.
+`mount_sky` carries `night_utc` then. The covers are the observer's own act:
+`--covers-on` only confirms it, and the warning repeats it.
 
 What the drawn sky cannot test: slip, gear backlash after the encoder, the base's tilt,
 and the 2 to 3% shortfall seen on the sky in the real board's 1° moves.

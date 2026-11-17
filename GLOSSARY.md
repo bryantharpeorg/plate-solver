@@ -27,7 +27,7 @@ The lowest altitude the observer will point at, one number for the whole sky (de
 _Avoid_: altitude limit, horizon limit
 
 **Sun guard**:
-The console's standing refusal to point at the Sun or move the telescope near it, and to make any motorised move while the Sun is up. Always on, with no override from the page or an MCP client.
+The console's standing refusal to point at the Sun or move the telescope near it, and to make any motorised move while the Sun is up. Always on, with no override from the page or an MCP client. Under `finder --mount-sky --mount-sky-night`, started with `--covers-on`, it checks the Sun of the night clock: the observer has confirmed the telescope is covered.
 _Avoid_: sun warning
 
 **Push-to**:
