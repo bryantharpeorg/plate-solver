@@ -293,7 +293,7 @@ impl Console {
         tool_result(result)
     }
 
-    #[tool(description = "Move a real telescope by turning Track on for the session's target, or stop all motion by turning it off, as the page's Track toggle does.",
+    #[tool(description = "Move a real telescope by turning Track on for the session's target, or stop all motion by turning it off, as the page's Track toggle does. Turning Track on while it follows a push by hand sends the telescope back to the target.",
         output_schema = object_schema())]
     async fn set_tracking(
         &self,
