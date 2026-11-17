@@ -24,8 +24,10 @@ export function SetupPage({ session, put, onBack, onChange, mcp }: Props) {
   const [lat, setLat] = useState("");
   const [lon, setLon] = useState("");
   const [minAlt, setMinAlt] = useState("15");
+  const [rotation, setRotation] = useState("");
   const [siteMessage, setSiteMessage] = useState<string | null>(null);
   const [altMessage, setAltMessage] = useState<string | null>(null);
+  const [rotationMessage, setRotationMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -33,6 +35,10 @@ export function SetupPage({ session, put, onBack, onChange, mcp }: Props) {
     setLon(session.site ? String(session.site.lon_deg) : "");
   }, [session.site?.lat_deg, session.site?.lon_deg]);
   useEffect(() => setMinAlt(String(session.min_alt_deg ?? 15)), [session.min_alt_deg]);
+  useEffect(
+    () => setRotation(session.chart_rotation_deg != null ? String(session.chart_rotation_deg) : ""),
+    [session.chart_rotation_deg],
+  );
 
   const save = async (edit: SessionEdit, message: string, tell: (message: string) => void) => {
     setSaving(true);
@@ -61,6 +67,18 @@ export function SetupPage({ session, put, onBack, onChange, mcp }: Props) {
       return;
     }
     void save({ min_alt_deg: value }, "Minimum altitude saved.", setAltMessage);
+  };
+  const saveRotation = () => {
+    if (!rotation.trim()) {
+      void save({ chart_rotation_deg: null }, "Chart rotation cleared.", setRotationMessage);
+      return;
+    }
+    const value = Number(rotation);
+    if (!Number.isFinite(value)) {
+      setRotationMessage("Chart rotation must be a number of degrees.");
+      return;
+    }
+    void save({ chart_rotation_deg: value }, "Chart rotation saved.", setRotationMessage);
   };
   const locate = () => {
     if (!window.isSecureContext || !navigator.geolocation) {
@@ -170,6 +188,35 @@ export function SetupPage({ session, put, onBack, onChange, mcp }: Props) {
           )}
           <button type="submit" className="button button-primary" disabled={saving}>
             Save minimum altitude
+          </button>
+        </form>
+      </section>
+
+      <section aria-labelledby="setup-rotation-title" className="space-y-3">
+        <h2 id="setup-rotation-title" className="section-title">
+          Chart rotation
+        </h2>
+        <form
+          className="space-y-3 border-y border-rule py-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveRotation();
+          }}
+        >
+          <div className="max-w-[12rem]">
+            <Field label="Chart rotation" unit="°" value={rotation} onChange={setRotation} placeholder="0" />
+          </div>
+          <p className="quiet">
+            Turns the live chart and photos counter-clockwise, in degrees. Set it once to match how the camera sits in
+            its holder.
+          </p>
+          {rotationMessage && (
+            <p role="status" className="text-[0.9375rem] text-ink">
+              {rotationMessage}
+            </p>
+          )}
+          <button type="submit" className="button button-primary" disabled={saving}>
+            Save chart rotation
           </button>
         </form>
       </section>

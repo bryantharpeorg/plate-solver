@@ -367,6 +367,10 @@ pub struct SessionEdit {
     /// Partial camera settings edit.
     #[serde(default, deserialize_with = "present_value")]
     pub camera_settings: Option<CameraSettingsEdit>,
+    /// Chart rotation in degrees counter-clockwise, stored within [0, 360), or explicit
+    /// null to clear it.
+    #[serde(default, deserialize_with = "present_nullable")]
+    pub chart_rotation_deg: Option<Option<f64>>,
 }
 
 fn present_nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
@@ -571,6 +575,9 @@ pub struct SessionView {
     /// Calibrated pixel, omitted until set.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub aim: Option<Aim>,
+    /// Chart rotation in degrees counter-clockwise, within [0, 360); omitted until set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chart_rotation_deg: Option<f64>,
     /// Live field report, omitted before the first star frame.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub field: Option<FieldView>,
@@ -595,6 +602,7 @@ struct Values {
     camera_settings: Option<CameraSettings>,
     link_status: LinkStatus,
     aim: Option<Aim>,
+    chart_rotation_deg: Option<f64>,
     source: PointingSource,
     frame_id: Option<u64>,
     field: Option<LiveField>,
@@ -620,6 +628,7 @@ impl Default for Values {
             camera_settings: None,
             link_status: LinkStatus::default(),
             aim: None,
+            chart_rotation_deg: None,
             source: PointingSource::Upload,
             frame_id: None,
             field: None,
@@ -656,6 +665,7 @@ impl Values {
                 frame_id: self.frame_id,
             }),
             aim: self.aim,
+            chart_rotation_deg: self.chart_rotation_deg,
             field: self.field.as_ref().map(|field| FieldView {
                 fov_deg: field.fov_deg,
                 db_min_fov_deg: field.range.0,
@@ -1333,6 +1343,13 @@ impl Values {
         if let Some(min) = edit.min_alt_deg {
             check_range("min_alt_deg", min, 0.0, 80.0)?;
         }
+        if let Some(Some(rotation)) = edit.chart_rotation_deg {
+            if !rotation.is_finite() {
+                return Err(SessionError::Invalid(
+                    "chart_rotation_deg must be a finite number of degrees".into(),
+                ));
+            }
+        }
         let target = edit
             .target
             .map(|id| {
@@ -1355,6 +1372,17 @@ impl Values {
         }
         if let Some(target) = target {
             next.target = target;
+        }
+        if let Some(rotation) = edit.chart_rotation_deg {
+            // `rem_euclid` rounds a tiny negative angle up to 360 and keeps -0: both are 0.
+            next.chart_rotation_deg = rotation.map(|deg| {
+                let deg = deg.rem_euclid(360.0);
+                if deg == 0.0 || deg >= 360.0 {
+                    0.0
+                } else {
+                    deg
+                }
+            });
         }
         if let Some(node) = edit.node {
             next.node = match node {
@@ -1481,6 +1509,8 @@ struct StoredSession {
     camera_settings: Option<CameraSettings>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     aim: Option<Aim>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    chart_rotation_deg: Option<f64>,
 }
 
 fn read_state(path: &Path) -> io::Result<Values> {
@@ -1509,6 +1539,7 @@ fn read_state(path: &Path) -> io::Result<Values> {
             site: Some(stored.site),
             min_alt_deg: Some(stored.min_alt_deg),
             target: Some(stored.target),
+            chart_rotation_deg: Some(stored.chart_rotation_deg),
             node: stored.node.map(|node| {
                 Some(NodeEdit {
                     address: node.address,
@@ -1564,6 +1595,7 @@ fn write_state(path: &Path, values: &Values) -> io::Result<()> {
             node: values.node.clone(),
             camera_settings: values.camera_settings.clone(),
             aim: values.aim,
+            chart_rotation_deg: values.chart_rotation_deg,
         },
     )
     .map_err(io::Error::other)?;

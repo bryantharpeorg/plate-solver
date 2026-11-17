@@ -368,12 +368,14 @@ impl Console {
                 target: _,
                 node,
                 camera_settings,
+                chart_rotation_deg,
             } = &edit;
             if imaging_camera.is_some()
                 || site.is_some()
                 || min_alt_deg.is_some()
                 || node.is_some()
                 || camera_settings.is_some()
+                || chart_rotation_deg.is_some()
             {
                 return Err("set_target changes only target".to_owned());
             }
@@ -404,8 +406,13 @@ impl Console {
                 target: _,
                 node,
                 camera_settings,
+                chart_rotation_deg,
             } = &edit;
-            if imaging_camera.is_some() || node.is_some() || camera_settings.is_some() {
+            if imaging_camera.is_some()
+                || node.is_some()
+                || camera_settings.is_some()
+                || chart_rotation_deg.is_some()
+            {
                 return Err("set_session changes only site, min_alt_deg and target".to_owned());
             }
             if site.is_some()
