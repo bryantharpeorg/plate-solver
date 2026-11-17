@@ -48,6 +48,7 @@ async function request(init?: RequestInit): Promise<ObservingSession> {
     ...(body?.recording != null && { recording: body.recording }),
     ...(body?.imaging_camera != null && { imaging_camera: body.imaging_camera }),
     ...(body?.backlash != null && { backlash: body.backlash }),
+    ...(body?.mount_sky != null && { mount_sky: body.mount_sky }),
   };
 }
 

@@ -382,6 +382,9 @@ Setup's Aim point section asks the observer to centre a star in the eyepiece and
 ### Recording — built
 On the Setup page, after the aim point, while a scope node is paired: a section titled Recording with one primary button, Start recording. While recording, one status line names the folder and counts, with Stop recording and Save 3 raw frames as secondary buttons; raw progress is a second line of the status and a failure is an alert, such as Raw frames stopped: the mount started moving. After a recording the status says what was saved, and why when it hit its frame limit or the scope node restarted, which asks for a new recording. Ink on paper with existing tokens only; at night it is red like every other section.
 
+### Drawn sky banner — built
+Under `finder --mount-sky` a one-line status sits under the top bar on every page: “Drawn sky.” in semibold, then that the stars come from the mount's encoders and that the tube must not be pushed by hand; after a power cycle, that the drawn sky has stopped and the console must be restarted with a fresh `--tube-alt`; and on a night clock, that the covers must stay on. Ink on paper, with a rule below; no new token.
+
 ## Do's and Don'ts
 
 ### Do:
