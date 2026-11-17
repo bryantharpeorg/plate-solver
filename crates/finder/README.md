@@ -179,7 +179,7 @@ The page uses the API types in `web/src/api.ts`, which mirror the Rust structs i
 | `GET /api/similar?id=M42&lat=&lon=&time=` | Objects like `id`, best first. With `lat`/`lon` (degrees, east positive) and optional Unix `time`, each has its altitude and whether it is up. |
 | `GET /api/session` | One shared observing session: `{site, min_alt_deg, target, pointing, time}`. |
 | `PUT /api/session` | JSON partial edit: `{site?, min_alt_deg?, target?}`. Answers the updated observing session. |
-| `POST /api/track` | JSON `{"on":true}` or `{"on":false}`. Answers 200 with the session; on refusal, 409 with a JSON `error`. Same-origin writes only. |
+| `POST /api/track` | JSON `{"on":true}` or `{"on":false}`. Answers 200 with the session; on refusal, 409 with a JSON `error`. Track on while it follows a push by hand sends the telescope back to the target. Same-origin writes only. |
 | `POST /api/record` | JSON `{"on":true}` or `{"on":false}`. Start or stop a recording; answers 200 with the session, 409 or 500 with a JSON `error`. Same-origin writes only. |
 | `POST /api/record/raw` | JSON `{"frames":N}`, N from 1 to 10. While recording, save the next N star frames' 8-bit pixels as `raw-<id>.png`; progress is `recording.raw` in the session. Needs a scope node built with 025. Refused while the mount moves. Same-origin writes only. |
 | `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
@@ -233,12 +233,36 @@ armed request and retains its reason. Track off stops tracking and both axes,
 leaving the telescope where it is. `POST /api/stop` also ends tracking as `stopped`
 and clears arming, so the next rate update cannot restart the axes.
 
+While Track is tracking, a live pointing more than 5′ from the place Track holds is
+a push by hand: it is not corrected, and the pointing model's next sync is marked
+as a slip. Once the pointings have stayed within 1′ of one another for 5 s, Track
+follows the place the telescope was left at and holds it in place of the target.
+A pointing put back within 5′ ends the moving state and is corrected as before.
+The check is armed only by a pointing within 5′ of the target, so a keyhole exit
+or a moved aim point is not read as a push, and it does not run while a backlash
+is being measured.
+
+Track on while Track follows a push by hand or the telescope is still moving by
+hand sends the telescope back: the tracker ends, the push clears, both axes are
+waited to rest, and the request starts a GoTo to the target and tracks it. With
+no push, Track on for the target already being tracked stays the no-op it always
+was. Track on for another target while Track is on goes the same way: the old
+tracker ends and the request starts a GoTo to the new target. The page offers a
+Recenter button while a push is shown and the session's target is the tracked
+one.
+
 After the first accepted Track-on request, session reads include
-`track: {wanted, state, target, ended_reason?, readout?}`. `state` is `armed`,
+`track: {wanted, state, target, ended_reason?, readout?, push?}`. `state` is `armed`,
 `tracking`, `keyhole_wait` or `off`; `target` is the canonical object being tracked.
 `ended_reason` holds the last tracker or GoTo ending reason. While tracking, the
 readout reports `rms_arcsec` over the last 60 s of live pointing errors and
-`field_rotation_deg_per_min` at the target. Uploaded frames never drive tracking.
+`field_rotation_deg_per_min` at the target; while Track follows a push by hand,
+the readout's field rotation and longest exposure are computed at the place
+followed. While the telescope is pushed by hand, session reads carry `track.push`:
+`{"state":"moving"}` while it moves, or
+`{"state":"following","ra_deg":…,"dec_deg":…,"at":…}` once Track holds the place
+followed; the key is omitted once the push ends with Track. Uploaded frames never
+drive tracking.
 Track state is never persisted: every binary start has tracking off and omits
 `track` until Track is turned on again.
 

@@ -18,11 +18,11 @@ export function TrackControl({ session, onChange }: { session: ObservingSession;
   const readout = on ? track?.readout : undefined;
   const exposure = session.imaging_camera ? readout?.longest_exposure_s : undefined;
   const target = track?.target ?? session.target;
-  const change = async () => {
+  const change = async (next: boolean) => {
     setPending(true);
     setError(null);
     try {
-      await postTrack(!on);
+      await postTrack(next);
       onChange?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Track could not be changed. Try again.");
@@ -30,6 +30,10 @@ export function TrackControl({ session, onChange }: { session: ObservingSession;
       setPending(false);
     }
   };
+  // The push by hand is Track's own news, so the Recenter button appears only
+  // while the session's target is the tracked one.
+  const recenter =
+    track?.push !== undefined && session.target != null && target != null && session.target.id === target.id;
   return (
     <section aria-label="Track" className="space-y-2">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -42,9 +46,14 @@ export function TrackControl({ session, onChange }: { session: ObservingSession;
             aria-checked={on}
             className="switch"
             disabled={pending}
-            onClick={() => void change()}
+            onClick={() => void change(!on)}
           />
         </label>
+        {recenter && (
+          <button type="button" className="button" disabled={pending} onClick={() => void change(true)}>
+            Recenter <span className="italic">{target?.messier ?? target?.id}</span>
+          </button>
+        )}
         {on && (
           <p role="status">
             {track?.state === "armed"

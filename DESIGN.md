@@ -339,6 +339,8 @@ With mount telemetry present, both the target and frame sheets use nonmodal dial
 ### Track and tracking readout — built
 `TrackControl` sits beside GoTo in the guidance block. Only a connected mount offers its labelled Track Switch, using the square 44 × 24px track and ink thumb above. It sends `POST /api/track` with `on`, then refreshes the shared session; the switch reflects the server's wanted state and turns off when tracking ends. An ink status names the tracked target, the wait for GoTo or the keyhole wait. Endings remain inside the labelled Track region: stopped by the observer, scope link lost, Sun up, target too low, or the server's GoTo reason. Refused requests stay readable as ink alerts.
 
+While the session's `track` reports a push by hand — moving or followed — and the session's target is the tracked one, a Recenter button sits between the switch's label and the status, with the target named in italic as the status names it. It uses the existing `button` styling, not GoTo's primary, and sends `POST /api/track` with `on: true` to send the telescope back, refreshing the shared session and showing a refusal as an ink alert exactly as the switch does; while either request is pending, both are disabled. It adds no words to the status or the readout.
+
 The tracking readout uses tabular figures and Second Ink labels: Tracking error (RMS, last minute) rounded to 1″, Field rotation to 0.01°/min, and, with an imaging camera set, Longest exposure (1 px smear) to 0.1 s or the exact text “no limit”. Values wrap on phones. The page only formats the session's readout. No mount means no Track region or added height above the chart. All parts use existing red-only night tokens.
 
 ### Imaging camera — built
