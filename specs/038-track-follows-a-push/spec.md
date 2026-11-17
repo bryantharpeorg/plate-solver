@@ -9,9 +9,13 @@ depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-con
 # into 037. It changes 015's Track, which has landed, and lands on its own: nothing in
 # 030 to 037 is needed for it. 037 gains one ending from it.
 # A second agent reviewed the first draft the same day against the code; its nine
-# findings are answered in this text (Clarifications, last session).
+# findings are answered in this text (Clarifications, the second agent's review).
 # Probe-built on 2026-11-17 in two rounds (plan.md § Refinement Record); this text holds
-# both rounds' fixes. Every `path:line` here was read at 49bb210.
+# both rounds' fixes. Every `path:line` here was read at 49bb210 and re-read, by content,
+# on `main` at 2f6a777 (2f6a777592b7ff2767e71317da90eb3376d179e0).
+# Re-anchored on 2026-11-17 to `main` at 2f6a777, after 021 (2f6a777) and 022 (20ce2fe)
+# landed: citations in session.rs and live.rs moved, and no decision, requirement or
+# scenario changed (Clarifications, last session; plan.md § Refinement Record, Re-anchor).
 # The owner settled the owner decisions on 2026-11-17. It stays draft until the owner
 # flips it to `ready`, which gives the approvals listed under "Owner approvals" and
 # dispatches it.
@@ -41,14 +45,15 @@ the observer asks. A small disturbance, such as a knock, is still corrected as t
   holds every requirement and scenario, and `plan.md` holds every design decision, the
   interfaces, the shapes that existing tests pin and the alternatives rejected. A story
   that would change a decision escalates rather than re-deciding it.
-- Q: What does Track do today after a push? → A: Five facts, each read at 49bb210:
+- Q: What does Track do today after a push? → A: Five facts, each read at 49bb210 and
+  again at 2f6a777:
   1. The scope node turns the mount's own hand-push encoders off when it connects
      (`crates/scope-node/README.md`, "`:W sent`"), so a push changes no axis count. The
      console sees a push only in the finder camera's next live pointing.
   2. Each live pointing reaches the tracker through `Session::track_live_pointing`
-     (`crates/finder/src/session.rs:972`), called by the live loop before the same
-     frame is offered as a sync (`crates/finder/src/live.rs:216`,
-     `crates/finder/src/live.rs:223`). It is handed over as the aim point's error
+     (`crates/finder/src/session.rs:998`), called by the live loop before the same
+     frame is offered as a sync (`crates/finder/src/live.rs:219`,
+     `crates/finder/src/live.rs:226`). It is handed over as the aim point's error
      from the tracker's target.
   3. The tracker turns every error of 10″ or more into a proportional rate, −0.6 of
      the error over the interval since the last pointing, with no bound on its size
@@ -58,7 +63,7 @@ the observer asks. A small disturbance, such as a knock, is still corrected as t
      push "ahead" of it stops that axis until the sky brings the target back. Either
      way the telescope ends on the target.
   4. Turning Track on while it already tracks the same target is answered at once and
-     changes nothing (`crates/finder/src/session.rs:825`), so the observer has no way
+     changes nothing (`crates/finder/src/session.rs:851`), so the observer has no way
      to send the telescope back except Track off and on.
   5. The pointing model calls a sync a slip when it lies more than 0.5° from the
      model's prediction once a base tilt is fitted, and 2.5° before
@@ -166,6 +171,34 @@ text above or below:
   object. Round 2 adds one more: FR-008's recheck of Track's generation, in US2-S6.
 - Q: What else changed? → A: The trio as fixed by round 1's and round 2's probe builds;
   plan.md § Refinement Record lists them.
+
+### Session 2026-11-17 (re-anchored to `main` at 2f6a777 after 021 and 022 landed)
+
+- Q: What moved? → A: Line numbers only. 021's `chart_rotation_deg` and 022's `up_deg`
+  put 26 lines into `crates/finder/src/session.rs` above `start_tracking`, and 022's
+  `up_deg` put 3 into `crates/finder/src/live.rs` above the frame's time. Every other
+  citation reads as it did. Neither spec changed `start_tracking`, `stop_tracking`,
+  `track_live_pointing`, `record_frame_sync`, `set_aim`, `TrackRun::view`,
+  `tracking.rs`, `model.rs`, `goto.rs`, the rig, the tracking tests, `TrackControl`,
+  `SessionTrack` or the gates.
+- Q: Does anything 021 or 022 built change a decision or a scenario here? → A: No. The
+  live loop still hands a pointing to Track before offering the frame as a sync (plan.md
+  § Plan traps 9). `set_tracking`'s description is the same, so US2-S4's "description
+  before this spec" is today's. 022's `up_deg` and 021's `chart_rotation_deg` are new
+  session fields this spec neither reads nor changes, and a session with no push keeps
+  the same `track` (SC-004). 022's guidance block now also prints how far the latest
+  pointing is from the target ("2.8° away"), so after a followed push the page already
+  shows the drift the owner asked about, with no words from this spec (FR-013).
+- Q: Is "push" now two things on the page? → A: 022 calls the guidance block's
+  direction line the push, push-to's directions (`DESIGN.md`'s **Push** style). Here a
+  push is one by hand, and `DESIGN.md`'s entry says so (plan.md § The page).
+- Q: Do the placements still hold? → A: Yes. `mod push_tool;` now sits between
+  `mod motion;` and 021's `mod session_rotation;`; **Followed push** goes between
+  **Tracking** and **Aim point**, with 021's **Chart rotation** after them; the README's
+  Track paragraphs and `POST /api/track` row, `DESIGN.md`'s "Track and tracking
+  readout", the design.json component and `SessionTrack` are as 021 and 022 found them.
+- Q: What comes next on these files? → A: 026-mount-sky, about to be flipped, writes
+  several of them; plan.md § Prerequisites 7 says how 038 follows it.
 
 ## Owner decisions
 
