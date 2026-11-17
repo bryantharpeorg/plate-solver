@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["013-live-finder", "015-tracking", "016-mcp", "017-console-stop-confirm", "018-live-chart-steady", "019-night-legibility", "020-live-chart-calm"]
 # Drafted 2026-11-13 against `main` at ce80f67, from the owner's report at the lake site
 # that night, after a hand push to NGC 253: "the goto movement was not intuitive at all.
@@ -18,6 +18,11 @@ depends_on_landed: ["013-live-finder", "015-tracking", "016-mcp", "017-console-s
 # helpers they copy at the paths 027 moved them to. No owner approval and no
 # `depends_on_landed` entry changed.
 # `main` then moved to cc593c7, which changes only the constitution, so all of it holds there.
+# Flipped to ready 2026-11-17 by the operator seat on the owner's pre-approval of 2026-11-14
+# ("once they're refined and merge for you to take over and do ergane spec validate on and
+# then move it to a ready state"), after pull request 240 put the re-refined trio on `main`,
+# giving the nine owner approvals. Validated against `main` at a8bd25b: no validator
+# findings, preflight 0, US1 then US2 then US3.
 ---
 
 # Feature Specification: Push-To in the Observer's Own Directions
