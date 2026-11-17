@@ -71,6 +71,7 @@ pub mod grid;
 pub mod link;
 pub mod live;
 pub mod mcp;
+pub mod mount_sky;
 pub mod pushto;
 pub mod recording;
 pub mod samples;

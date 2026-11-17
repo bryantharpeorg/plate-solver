@@ -40,6 +40,12 @@ struct Args {
     /// Simulated UTC start, YYYY-MM-DDTHH:MM:SSZ (optional fractional seconds).
     #[arg(long, requires = "simulate", value_parser = parse_start)]
     sim_start: Option<f64>,
+    /// Draw each frame's stars from the real mount's encoders instead of the camera.
+    #[arg(long, requires = "tube_alt", conflicts_with = "simulate")]
+    mount_sky: bool,
+    /// The tube's altitude now, in degrees from a level (0 to 90). With --mount-sky.
+    #[arg(long, requires = "mount_sky", value_parser = parse_tube_alt)]
+    tube_alt: Option<f64>,
     /// Turn off the MCP endpoint.
     #[arg(long)]
     no_mcp: bool,
@@ -53,6 +59,18 @@ struct Args {
 
 /// The licenses of the third-party works compiled into this binary.
 const THIRD_PARTY_NOTICES: &str = include_str!("../THIRD_PARTY_NOTICES.md");
+
+/// The tube's altitude from a level, in degrees from 0 to 90 inclusive.
+fn parse_tube_alt(value: &str) -> Result<f64, String> {
+    let degrees: f64 = value
+        .parse()
+        .map_err(|_| "--tube-alt requires degrees from 0 to 90".to_string())?;
+    if degrees.is_finite() && (0.0..=90.0).contains(&degrees) {
+        Ok(degrees)
+    } else {
+        Err("--tube-alt requires degrees from 0 to 90".into())
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -95,6 +113,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.simulate && !explicit_state {
         state_dir = state_dir.join("simulate");
     }
+    if args.mount_sky && !explicit_state {
+        state_dir = state_dir.join("mount-sky");
+    }
     let session = Session::with_state_file(state_dir.join("session.json"))?;
 
     let state = AppState::new(db, samples)
@@ -108,6 +129,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 SimulationTransport::Loopback,
             )
             .await?
+    } else if args.mount_sky {
+        state.with_mount_sky(finder::link::Transport::Tcp, args.tube_alt.unwrap())
     } else {
         state.with_link(finder::link::Transport::Tcp)
     }
@@ -120,6 +143,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         bound_addr,
         ..Default::default()
     });
+    if args.mount_sky {
+        eprintln!(
+            "finder console: drawn sky: stars come from the mount's encoders, not the camera"
+        );
+    }
     eprintln!("finder console: http://{bound_addr}");
     if args.listen.ip().is_loopback() {
         eprintln!("(to open it from a phone, run with --listen 0.0.0.0:8080)");

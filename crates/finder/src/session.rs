@@ -1056,6 +1056,17 @@ impl Session {
         self.values.lock().expect("observing session").mount_resets
     }
 
+    /// The site, counts per revolution and last-seen count of the node's mount resets
+    /// that a drawn sky needs (026).
+    pub fn mount_sky_terms(&self) -> (Option<Site>, Option<[u32; 2]>, Option<u64>) {
+        let values = self.values.lock().expect("observing session");
+        (
+            values.site,
+            values.counts_per_revolution,
+            values.mount_resets,
+        )
+    }
+
     pub(crate) fn set_mount(&self, reading: MountReading, time: f64) {
         let mut values = self.values.lock().expect("observing session");
         if let Some(resets) = reading.resets {
