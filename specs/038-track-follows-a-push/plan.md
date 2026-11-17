@@ -164,8 +164,16 @@ enum Push {
     #[default]
     None,
     /// The first pointing of the current still stretch, and its console time.
-    Moving { ra_deg: f64, dec_deg: f64, since: f64 },
-    Following { ra_deg: f64, dec_deg: f64, at: f64 },
+    Moving {
+        ra_deg: f64,
+        dec_deg: f64,
+        since: f64,
+    },
+    Following {
+        ra_deg: f64,
+        dec_deg: f64,
+        at: f64,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -229,11 +237,12 @@ pub struct TrackView {
 - `start_tracking`'s early answer (`crates/finder/src/session.rs:825`) also requires the
   effective push to be `Push::None`, read with `effective_push()` before the block that
   locks the values, since `effective_push()` takes that lock. With a push it goes on as
-  for any other start. The old tracker is stopped. The session then reads both axes
-  through `link.mount()` every 50 ms, for at most 2 s, until neither is moving, because
-  StopAll only brakes them and a GoTo refuses a moving mount
-  (`crates/finder/src/goto.rs:739`). It answers `Err("stopped")` if `track_generation`
-  has changed meanwhile. Then a GoTo starts and Track is armed when the pointing is
+  for any other start. The old tracker is stopped. Only after stopping an old tracker,
+  the session reads both axes through `link.mount()` every 50 ms, for at most 2 s, until
+  neither is moving, because StopAll only brakes them and a GoTo refuses a moving mount
+  (`crates/finder/src/goto.rs:739`). A missing link or a failed read ends the wait; the
+  GoTo then reports it. It answers `Err("stopped")` if `track_generation` has changed
+  meanwhile. Then a GoTo starts and Track is armed when the pointing is
   more than 1′ from the target (`crates/finder/src/session.rs:844`). The same wait
   mends 015's Track on for another target while Track is on, which today answers 409
   (spec owner approval 9).
@@ -253,18 +262,20 @@ export type SessionTrackPush =
 ```
 
 `TrackControl` (`crates/finder/web/src/components/TrackControl.tsx`): while
-`track.push` is present and `session.target.id` equals `track.target.id`, a button
-`Recenter {target}`, placed between the switch's label and the status paragraph, with
-the target in italic as the status sets it, calling `postTrack(true)` with the same
-pending, refresh and alert handling as the switch. The status paragraph and the readout
-are not changed. The button uses the existing `button` class without `button-primary`
-(GoTo's button has both); no new class or token.
+`track.push` is present, and `session.target` and `track.target` are both present with
+the same `id`, a button `Recenter {target}`, placed between the switch's label and the
+status paragraph, with the target in italic as the status sets it, calling
+`postTrack(true)` with the same pending, refresh and alert handling as the switch. The
+button shares the switch's `pending` state, so each disables the other. The status
+paragraph and the readout are not changed. The button uses the existing `button` class
+without `button-primary` (GoTo's button has both); no new class or token.
 
 ## Shapes that existing tests pin
 
 - **`Tracker::pointing`'s meaning.** `held_integral_applies_in_deadband_is_clamped_and_clears_on_stop_and_restart`
-  (`crates/finder/tests/motion/tracking/pi_loop.rs:412`) feeds errors of 10,000″ to clamp
-  the offset. The push check is in the session, so the tracker still integrates them.
+  (`crates/finder/tests/motion/tracking/pi_loop.rs:411`) feeds errors of 10,000″
+  (`crates/finder/tests/motion/tracking/pi_loop.rs:432`) to clamp the offset. The push
+  check is in the session, so the tracker still integrates them.
 - **The session's `track` view.** `crates/finder/tests/mcp/tracking.rs:245` compares two
   `track` objects whole. `push` is left out when there is none, so both still match.
 - **`set_tracking`'s description** must still contain `real telescope`
@@ -302,8 +313,10 @@ The one condition and the wait for rest in `start_tracking`, the description sen
 ## User Story 3 — The page
 
 `api.ts`, `TrackControl.tsx`, `TrackPush.test.tsx`, `DESIGN.md`, `.impeccable/design.json`,
-the README's Track paragraphs under `## API` and its `POST /api/track` row, then
-`npm run build` and the rebuilt `dist`.
+the README, then `npm run build` and the rebuilt `dist`. The README describes the push
+check, the `push` key, the readout at the place followed, going back, and Track on for
+another target while Track is on, in the Track paragraphs under `## API` (after "Track
+on requires…") and the `POST /api/track` row.
 
 ## Verification (every story, before proposing)
 
@@ -328,9 +341,16 @@ the README's Track paragraphs under `## API` and its `POST /api/track` row, then
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
    decisions, § Owner approvals). Met on 2026-11-17: the owner settled every owner
    decision (spec § Owner decisions); the approvals are given at the flip.
-4. **Probe builds.** Round 1 done on 2026-11-17 (§ Refinement Record); round 2 builds
-   the fixed text.
+4. **Probe builds.** Met on 2026-11-17: two rounds of probe builds (§ Refinement
+   Record).
 5. **No operator-staged files are needed.**
+6. **021 and 022 have landed, and this trio is re-read against them.** Both write
+   `crates/finder/src/session.rs`, `crates/finder/web/src/api.ts`,
+   `crates/finder/README.md`, `GLOSSARY.md`, `DESIGN.md` and `crates/finder/web/dist`,
+   and 021 also writes `crates/finder/src/mcp/tools.rs` and
+   `crates/finder/tests/mcp/main.rs`. Not met: they are flipped or about to be. At this
+   spec's flip, every anchor in those files is re-read on `main`, and
+   `depends_on_landed` gains the two if the owner wants the roadmap to keep the order.
 
 Outside the factory, before it is relied on at the telescope: GoTo and Track proven on
 the real mount, then one push of about 2° and one of about 5′ while tracking, to see that
@@ -365,8 +385,9 @@ They bind every story.
    state the sync rule reads is the one set for that frame.
 10. **Locks.** `track_live_pointing` reads the tracker's state and the session's values
     under two locks. *Check:* in `track_live_pointing`, `record_frame_sync` and
-    `start_tracking`, never hold the values lock while calling into the tracker;
-    `TrackRun::view` reads `tracker.state()` under it as today, which is safe because the
+    `start_tracking`, never hold the values lock while calling into the tracker, except
+    the early answer's `tracker.state()` read in `start_tracking`, which, like
+    `TrackRun::view`'s `tracker.state()` read under it as today, is safe because the
     tracker never locks the session.
 11. **The bundle must be rebuilt.** *Check:* US3 commits `crates/finder/web/dist` after
     `npm run build`.
@@ -380,14 +401,18 @@ They bind every story.
     effective push, and US1-S4 ends Track while moving.
 14. **A sync's time is mid-exposure** (`crates/finder/src/live.rs:199`), earlier than the
     console time at which its frame was handed over. *Check:* US1-S5 compares sync
-    times with the push's time, never with the follow's `at`, and US1-S5 pushes just
-    after a new `pointing.seq`, so no frame open at the push is timed after it.
-15. **Model thinning replaces syncs** (`crates/finder/src/model.rs:512`), so a count of
-    syncs says nothing about which were added. *Check:* US1-S5 reads each sync's time
-    and epoch.
+    times with the push's time, never with the follow's `at`, and US1-S5 and US1-S3
+    push just after a new `pointing.seq`, so no frame open at the push is timed after
+    it.
+15. **Model thinning replaces syncs** (`crates/finder/src/model.rs:512`): a later sync of
+    the same epoch within 120 s and 2° replaces an earlier one, so a count of syncs says
+    nothing about which were added, and a single read at the follow cannot see a sync
+    recorded while moving. *Check:* US1-S5 reads each sync's time and epoch, and US1-S3
+    reads the model at every view from the first push until the follow.
 16. **A stopped mount still moves.** StopAll brakes; a GoTo refuses a moving axis
     (`crates/finder/src/goto.rs:739`). *Check:* US2's Track on waits for both axes at
-    rest, and US2-S1, US2-S2 and US2-S5 fail without the wait.
+    rest, and US2-S1, US2-S2 and US2-S5 fail without the wait; US2-S6 fails without the
+    generation recheck.
 
 ## Risks
 
@@ -430,6 +455,29 @@ behaviours: FR-004's rates at the place followed, FR-007's model hand-over, step
 reopen and owner decision 7's kept offset. FR-006 and FR-010 now have assertions
 (US1-S3, US1-S1).
 
+**Round 2 (probe builds), 2026-11-17.** Fresh builders worked from the trio as fixed by
+round 1 (`70a1a4e`), on `main` at cc593c7, and read nothing of round 1:
+
+- US1 (`probe/038-r2-us1`, `a53731e`): 8 tests, each failing or passing first as T001
+  and T002 say; finder tests 374; diff 43,494 B; FR-010 now caught; FR-006 caught only
+  once the model is read at each view, as US1-S3 now does;
+- US2 (`probe/038-r2-us2`, `7393b3b`, on US1): 5 tests; US2-S5 failed first with
+  today's 409; 379 green; diff 11,465 B; no test caught a missing generation recheck,
+  which US2-S6 now guards;
+- US3 (`probe/038-r2-us3`, `b83b9c8`): 6 Vitest tests; web gate and e2e (29) green;
+  diff 18,453 B; US3-S5's condition caught.
+
+No round-2 finding blocks. Its fixes are written into this text: US1-S3 pushes just after
+a new `pointing.seq` and reads the model at every view, with a bound that leaves out the
+follow's own sync; US2-S6 is new; US2-S3, US2-S4, US2-S5, US3-S3, US3-S4 and US3-S5 now
+say what a test can check; the wait for rest runs only after stopping an old tracker,
+and a missing link or a failed read ends it; trap 10 names the early answer's read;
+FR-012's condition needs both targets present; the button shares the switch's
+`pending`; FR-016 names all the README describes; T013 names the fixture and the
+component it renders; the `pi_loop.rs` anchor and the `enum Push` block are corrected.
+Still caught by no test: the rates and forecasts at the place followed, FR-007's
+hand-over, step 4's reopen and owner decision 7's kept offset.
+
 ```yaml
 version: 1
 reviewed_revision: 49bb210fe4860dd98ba24727074e7bd3cc0d7124
@@ -444,7 +492,7 @@ stories:
       - path: crates/finder/tests/motion/tracking/push.rs
         status: new
         disposition: add
-        assertion: "a 3′ push is corrected within 30 s with no push key; a push in two steps 1 s apart shows moving from the first view with a push until the follow, never pulls back by more than 1′, records no sync between the first step and the follow (FR-006), and follows the final place at least 5 s after the second step"
+        assertion: "a 3′ push is corrected within 30 s with no push key; a push in two steps 1 s apart, the first just after a new pointing.seq, shows moving from the first view with a push until the follow, never pulls back by more than 1′, has at every view from the first step until the follow no sync timed after the first step and before push.at (FR-006), and follows the final place at least 5 s after the second step"
         decision: "spec.md:US1-S2"
       - path: crates/finder/tests/motion/tracking/push.rs
         status: new
@@ -516,12 +564,12 @@ stories:
       - path: crates/finder/tests/motion/tracking/push_back.rs
         status: new
         disposition: add
-        assertion: "Track on while following, or while moving by hand, answers armed with no push key, starts a GoTo and ends tracking with no push key and the eyepiece within 60″ of M42; Track on with no push starts no GoTo and keeps the same tracker; Track on after a new target of M43 answers armed for M43 and ends tracking within 60″ of it"
+        assertion: "Track on while following, or while moving by hand, answers armed with no push key, starts a GoTo and ends tracking with no push key and the eyepiece within 60″ of M42; Track on with no push answers with no goto key and keeps the same tracker; Track on after a new target of M43 answers armed for M43 with a GoTo under way and ends tracking within 60″ of it; Track off 20 ms into the wait for rest makes Track on answer 409 stopped, with no GoTo in the next 5 s and both axes at rest"
         decision: "spec.md:US2-S1"
       - path: crates/finder/tests/mcp/push_tool.rs
         status: new
         disposition: add
-        assertion: "set_tracking's description contains real telescope and the sentence of FR-011"
+        assertion: "set_tracking's description contains real telescope and is exactly the description before this spec, a space, and the sentence of FR-011"
         decision: "spec.md:US2-S4"
       - path: crates/finder/tests/mcp/tracking.rs
         status: existing
@@ -563,7 +611,7 @@ stories:
       - path: crates/finder/web/src/components/TrackPush.test.tsx
         status: new
         disposition: add
-        assertion: "a Recenter M42 button while a push is moving or followed, with the status unchanged, that posts Track on once and shows a refusal, and no button without a push, and no button while the session's target is not Track's"
+        assertion: "a Recenter M42 button while a push is moving or followed, with the status unchanged, that posts Track on once and keeps the switch on, refreshing the session once after a 200 and showing a 409's error as an alert; without a push, no Recenter button, the switch the only button element and no element with the role button; and no Recenter button while the session's target is not Track's"
         decision: "spec.md:US3-S1"
       - path: crates/finder/web/src/components/TrackControl.test.tsx
         status: existing

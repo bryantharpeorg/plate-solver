@@ -8,8 +8,10 @@ description: "Task list for 038-track-follows-a-push: Track Follows a Push"
 - every spec in `depends_on_landed` has landed on `main`: met at 49bb210;
 - the owner decisions in spec.md are settled: met on 2026-11-17; its owner approvals
   are given at the flip;
-- every story has been probe-built: round 1 done, round 2 pending;
-- no operator-staged file is needed.
+- every story has been probe-built: met on 2026-11-17, in two rounds;
+- no operator-staged file is needed;
+- 021 and 022 have landed and this trio is re-read against them: not met (plan.md
+  § Prerequisites 6).
 
 **Rules for every story:**
 - Never edit an existing test, golden, fixture, `scripts/ci/`, `.github/`, `deny.toml`,
@@ -72,28 +74,29 @@ description: "Task list for 038-track-follows-a-push: Track Follows a Push"
 
 - [ ] T008 [US2] Create `crates/finder/tests/motion/tracking/push_back.rs` and add
   `mod push_back;` after `mod push;`. Copy the rig helpers it needs from `push.rs`. Write
-  failing tests for US2-S1, US2-S2 and US2-S5, and the test for US2-S3, which passes
-  before the change too and guards today's no-op.
+  failing tests for US2-S1, US2-S2, US2-S5 and US2-S6, and the test for US2-S3, which
+  passes before the change too and guards today's no-op.
 - [ ] T009 [US2] Create `crates/finder/tests/mcp/push_tool.rs` and add `mod push_tool;`
   to `crates/finder/tests/mcp/main.rs`. Write a failing test for US2-S4.
 
 ### Implementation
 
 - [ ] T010 [US2] In `crates/finder/src/session.rs`, make `start_tracking`'s early answer
-  also require `Push::None`, read with `effective_push()` before the values lock; after
-  stopping the old tracker, wait for both axes at rest (50 ms reads, at most 2 s) and
-  recheck the Track generation (plan.md § The session, last bullet).
+  also require `Push::None`, read with `effective_push()` before the values lock; only
+  after stopping an old tracker, wait for both axes at rest (50 ms reads, at most 2 s)
+  and recheck the Track generation (plan.md § The session, last bullet).
 - [ ] T011 [US2] Append the sentence of FR-011 to `set_tracking`'s description in
   `crates/finder/src/mcp/tools.rs`.
 - [ ] T012 [US2] Run the `lint` and `test` gates with every existing test unchanged and
-  green, then commit the green story (FR-008, FR-011; US2-S1 to US2-S5).
+  green, then commit the green story (FR-008, FR-011; US2-S1 to US2-S6).
 
 ## Phase 3: User Story 3 — A Recenter button for visual observing (Priority: P2)
 
 ### Tests first
 
 - [ ] T013 [US3] Create `crates/finder/web/src/components/TrackPush.test.tsx` in the
-  shape of `TrackControl.test.tsx`, with failing tests for US3-S1, US3-S2 and US3-S3,
+  shape of `TrackControl.test.tsx` (its `session-track` fixture and `fetch` stub),
+  rendering `TrackControl` directly, with failing tests for US3-S1, US3-S2 and US3-S3,
   and the tests for US3-S4 and US3-S5, which pass before the change too, since no
   button exists yet.
 
@@ -105,8 +108,10 @@ description: "Task list for 038-track-follows-a-push: Track Follows a Push"
 - [ ] T015 [US3] Record the button in `DESIGN.md`'s "Track and tracking
   readout" section and in the "Track and Tracking Readout" component of
   `.impeccable/design.json`.
-- [ ] T016 [US3] Describe the push check, the `push` key and going back in the Track
-  paragraphs under `## API` and the `POST /api/track` row of `crates/finder/README.md`.
+- [ ] T016 [US3] Describe the push check, the `push` key, the readout at the place
+  followed, going back, and Track on for another target while Track is on, in the Track
+  paragraphs under `## API` (after "Track on requires…") and the `POST /api/track` row of
+  `crates/finder/README.md`.
 - [ ] T017 [US3] Run `npm run build` in `crates/finder/web` and commit `dist`. Run the
   `lint` and `test` gates with every existing test unchanged and green, then commit the
   green story (FR-012 to FR-014, FR-016; US3-S1 to US3-S5).

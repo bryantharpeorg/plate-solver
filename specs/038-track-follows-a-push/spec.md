@@ -10,8 +10,8 @@ depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-con
 # 030 to 037 is needed for it. 037 gains one ending from it.
 # A second agent reviewed the first draft the same day against the code; its nine
 # findings are answered in this text (Clarifications, last session).
-# Probe-built in round 1 on 2026-11-17 (plan.md § Refinement Record); this text holds
-# round 1's fixes. Every `path:line` here was read at 49bb210.
+# Probe-built on 2026-11-17 in two rounds (plan.md § Refinement Record); this text holds
+# both rounds' fixes. Every `path:line` here was read at 49bb210.
 # The owner settled the owner decisions on 2026-11-17. It stays draft until the owner
 # flips it to `ready`, which gives the approvals listed under "Owner approvals" and
 # dispatches it.
@@ -68,7 +68,8 @@ the observer asks. A small disturbance, such as a knock, is still corrected as t
   before the tracker is handed the error. The tracker's own `pointing` keeps its
   meaning: aim point minus target, corrected as 015 has it. An existing test feeds it
   errors of 10,000″ on purpose to clamp the tracking offset
-  (`crates/finder/tests/motion/tracking/pi_loop.rs:412`), and that test stays as it is
+  (`crates/finder/tests/motion/tracking/pi_loop.rs:411`, the feed at
+  `crates/finder/tests/motion/tracking/pi_loop.rs:432`), and that test stays as it is
   (plan.md § Shapes that existing tests pin).
 - Q: What counts as a push? → A: A live pointing more than the push threshold, 5′ by
   default, from the place Track holds (owner decision 1). From that pointing the
@@ -145,7 +146,7 @@ text above or below:
 - `follow` could race the keyhole: it is now refused unless the tracker is tracking and
   measuring nothing, and the session rechecks Track's generation before writing.
 
-### Session 2026-11-17 (the owner's answers and round-1 probes)
+### Session 2026-11-17 (the owner's answers and two rounds of probes)
 
 - Q: What did the owner answer on the nine owner decisions? → A: The recommended answer
   to each: "im good with all of the info". § Owner decisions says so, and each entry
@@ -159,11 +160,12 @@ text above or below:
   refuses a moving axis (`crates/finder/src/goto.rs:739`). Going back after a push
   needs the same wait for both axes at rest, so this spec mends both (owner approval 9,
   FR-008, US2-S5). The owner was told and did not object.
-- Q: Which requirements gained an assertion? → A: FR-006, in US1-S3 (no sync between
-  the first push and the follow), and FR-010, in US1-S1 (the field rotation at the
-  place followed). The owner was told and did not object.
-- Q: What else changed? → A: The trio as fixed by round 1's probe builds; plan.md
-  § Refinement Record lists them.
+- Q: Which requirements gained an assertion? → A: FR-006, in US1-S3 (no sync timed
+  after the first push and before the follow, read at every view), and FR-010, in
+  US1-S1 (the field rotation at the place followed). The owner was told and did not
+  object. Round 2 adds one more: FR-008's recheck of Track's generation, in US2-S6.
+- Q: What else changed? → A: The trio as fixed by round 1's and round 2's probe builds;
+  plan.md § Refinement Record lists them.
 
 ## Owner decisions
 
@@ -293,9 +295,10 @@ on. The console does not drag it back. Once I let go, it tracks where I left it.
    sky, **Then** it asserts that within 30 s the true place is within 60″ of M42, that
    no view in those 30 s has a `push` key, and that `track.state` is `tracking`
    throughout.
-3. **Given** the rig on M42, **When** a committed test pushes by (0.0, −1.0), waits 1 s
-   of virtual time, pushes by (0.0, −1.0) again and waits until `track.push.state` is
-   `following`, **Then** it asserts that:
+3. **Given** the rig on M42, **When** a committed test waits until a view shows a new
+   `pointing.seq`, at once pushes by (0.0, −1.0), waits 1 s of virtual time, pushes by
+   (0.0, −1.0) again and waits until `track.push.state` is `following`, **Then** it
+   asserts that:
    - every view from the first that shows `track.push` until the follow had
      `track.push.state` `moving` and no place, and every earlier view after the first
      push had `track.state` `tracking`;
@@ -303,7 +306,9 @@ on. The console does not drag it back. Once I let go, it tracks where I left it.
      that time;
    - `track.push.at` is at least 5 s after the second push, and the place followed is
      within 60″ of the true place then;
-   - the model has no sync timed between the first push and `track.push.at`.
+   - at every view from the first push until the follow, the model has no sync timed
+     after the first push and before `track.push.at`; the follow's own sync is timed at
+     `at`, so the bound leaves it out.
 4. **Given** the rig on M42, pushed by (0.0, −1.0) until a view shows `track.push.state`
    `moving`, **When** a committed test posts `POST /api/track` with `{"on":false}`,
    **Then** it asserts that the answer's `track.state` is `off`, `track.ended_reason`
@@ -359,21 +364,29 @@ test by then.
    a view shows `track.push.state` `moving`, and at once posts `POST /api/track` with
    `{"on":true}`, **Then** it asserts the same as scenario 1.
 3. **Given** the rig on M42 with no push, **When** a committed test posts
-   `POST /api/track` with `{"on":true}`, **Then** it asserts that no GoTo starts, that
-   `track.state` stays `tracking`, as today, and that `Session::tracker()` is the same
-   tracker before and after, as `crates/finder/tests/motion/tracking/routes.rs:432`
-   checks.
+   `POST /api/track` with `{"on":true}`, **Then** it asserts that no GoTo starts (the
+   answer has no `goto` key), that `track.state` stays `tracking`, as today, and that
+   `Session::tracker()` is the same tracker before and after, as
+   `crates/finder/tests/motion/tracking/routes.rs:432` checks.
 4. **Given** an MCP app built from `crate::support::mcp::state()` and `app(state,
    "127.0.0.1")` (`crates/finder/tests/support/mcp.rs:24`), **When** a committed test
    in the new module `crates/finder/tests/mcp/push_tool.rs` sends `tools/list`,
-   **Then** it asserts that `set_tracking`'s description contains `real telescope` and,
-   exactly, the sentence of FR-011.
+   **Then** it asserts that `set_tracking`'s description contains `real telescope`, and
+   that it is exactly the description before this spec, a space, and the sentence of
+   FR-011.
 5. **Given** the rig on M42, **When** a committed test sets the session's target to M43
    with `PUT /api/session` and posts `POST /api/track` with `{"on":true}`, **Then** it
    asserts that the answer is 200 with `track.state` `armed` and `track.target.id` the
-   id of M43, that a GoTo starts, and that it then waits until `track.state` is
-   `tracking`, after which the true place is within 60″ of M43: Track on for another
-   target goes to it, where today it answers 409.
+   id of M43, that the answer's `goto.state` is `slewing`, `solving` or `correcting`,
+   and that it then waits until `track.state` is `tracking`, after which the true place
+   is within 60″ of M43: Track on for another target goes to it, where today it answers
+   409.
+6. **Given** the rig following a push as in US1 scenario 1, **When** a committed test
+   posts `POST /api/track` with `{"on":true}` and, 20 ms of virtual time later and
+   concurrently, `POST /api/track` with `{"on":false}`, **Then** it asserts that the
+   first answer is 409 with error `stopped`, that no view in the next 5 s has
+   `goto.state` `slewing`, `solving` or `correcting`, and that both axes are at rest:
+   Track off during the wait for rest starts no GoTo.
 
 ---
 
@@ -397,16 +410,18 @@ Vitest file run by `npm test`.
    session with no `push`.
 2. **Given** the same session with `push` `{"state":"moving"}`, **When** a committed test
    renders `TrackControl`, **Then** it asserts that the same button is shown.
-3. **Given** scenario 1's session, **When** a committed test presses `Recenter M42`,
-   **Then** it asserts that one `POST /api/track` was sent with `{"on":true}`, that no
-   `{"on":false}` was sent and the switch still reads `aria-checked` true, and that a
-   refusal's error is shown as an alert.
+3. **Given** scenario 1's session, **When** a committed test presses `Recenter M42`, once
+   answered 200 and once answered 409 with an `error`, **Then** it asserts for each that
+   exactly one `POST /api/track` was sent, with `{"on":true}`, and that the switch still
+   reads `aria-checked` true; that after the 200 the session was refreshed once
+   (`onChange`); and that after the 409 the error is shown as an alert.
 4. **Given** a session with no `push`, **When** a committed test renders `TrackControl`,
-   **Then** no `Recenter` button is shown and the Track region holds no button but the
-   switch.
-5. **Given** scenario 1's session with the session's target M43 while `track.target` is
-   M42, **When** a committed test renders `TrackControl`, **Then** no `Recenter` button
-   is shown.
+   **Then** no `Recenter` button is shown, the Track region's only `<button>` element is
+   the switch, and no element has the role `button`.
+5. **Given** scenario 1's session with the session's target M43, OpenNGC's NGC 1982 row
+   (`crates/finder/data/openngc.csv:7672`) as a `Target`, while `track.target` is M42,
+   **When** a committed test renders `TrackControl`, **Then** no `Recenter` button is
+   shown.
 
 ---
 
@@ -489,10 +504,10 @@ Vitest file run by `npm test`.
   moving by hand SHALL end the tracker and clear the push state, then do what any Track
   start does under 015's FR-014: a GoTo first when the pointing is more than 1′ from the
   target, then tracking. Turning it on with no push state SHALL stay the no-op it is
-  today (owner decision 6). Before the GoTo starts, the session SHALL wait until both
-  axes read at rest, for at most 2 s, and SHALL answer as stopped if Track was changed
-  meanwhile. The same holds for Track on for another target while Track is on (owner
-  approval 9).
+  today (owner decision 6). After ending the tracker and before the GoTo starts, the
+  session SHALL wait until both axes read at rest, for at most 2 s, and SHALL answer as
+  stopped if Track was changed meanwhile. The same holds for Track on for another target
+  while Track is on (owner approval 9).
 
 **The session** (US1):
 
@@ -511,8 +526,8 @@ Vitest file run by `npm test`.
 
 **The page** (US3):
 
-- **FR-012**: While `track.push` is present and the session's target is Track's target
-  (`session.target.id` equals `track.target.id`), `TrackControl` SHALL offer a button
+- **FR-012**: While `track.push` is present, and `session.target` and `track.target` are
+  both present with the same `id`, `TrackControl` SHALL offer a button
   `Recenter {target}`, the target named as the status names it today, that sends
   `POST /api/track` with `{"on":true}` and refreshes the session, showing a refusal as
   an alert, as the switch does.
@@ -529,8 +544,10 @@ Vitest file run by `npm test`.
   the push threshold while Track is on, after which Track holds the place the telescope
   was left at until the observer turns Track on for the target again." The term SHALL
   be placed after **Tracking**, with `_Avoid_: drift, pushed target`.
-- **FR-016**: `crates/finder/README.md` SHALL describe the push check, the `push` key and
-  going back, in the Track paragraphs under `## API` (after "Track on requires…").
+- **FR-016**: `crates/finder/README.md` SHALL describe the push check, the `push` key,
+  the readout at the place followed, going back, and Track on for another target while
+  Track is on, in the Track paragraphs under `## API` (after "Track on requires…") and
+  the `POST /api/track` row.
 
 ### Key Entities
 
@@ -590,4 +607,5 @@ Every edge is a merge edge, and the stories run one after another.
   `crates/finder/src/session.rs`, copies the few rig helpers it needs from US1's
   `push.rs` into its own `push_back.rs`, and adds its `mod` line after US1's.
 - **US3** reads the `push` key US1 adds and sends the request US2 gives meaning to; it
-  writes the README after US2's MCP sentence so the two agree.
+  writes the README once US2 has landed, so its going-back text matches FR-011's
+  sentence.
