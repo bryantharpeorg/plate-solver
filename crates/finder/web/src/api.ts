@@ -245,6 +245,13 @@ export interface McpStatus {
   allowed_hosts: string[];
 }
 
+export interface MountSky {
+  tube_alt_deg: number;
+  zero_counts: [number, number] | null;
+  power_cycled?: boolean;
+  night_utc?: string;
+}
+
 export interface ObservingSession {
   motion?: SessionMotion;
   track?: SessionTrack;
@@ -268,6 +275,8 @@ export interface ObservingSession {
   /** How far the live views are turned, degrees counter-clockwise; omitted until set. */
   chart_rotation_deg?: number;
   field?: { fov_deg: number | null; db_min_fov_deg: number; db_max_fov_deg: number; unsolved_s: number };
+  /** The drawn sky of `--mount-sky`, present only in that mode. */
+  mount_sky?: MountSky;
 }
 
 export interface Observer {

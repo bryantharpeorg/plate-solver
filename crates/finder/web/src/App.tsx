@@ -7,6 +7,7 @@ import { FieldList, FieldRoster } from "./components/FieldList";
 import { FramePicker, SampleGrid } from "./components/FramePicker";
 import { GuidanceBlock } from "./components/GuidanceBlock";
 import { LivePreview } from "./components/LivePreview";
+import { MountSkyBanner } from "./components/MountSkyBanner";
 import { Upload } from "./components/Icons";
 import { NextTargets } from "./components/NextTargets";
 import { SetupPage } from "./components/SetupPage";
@@ -174,6 +175,7 @@ export function App() {
         setup={path === "/setup"}
         onNight={setNight}
       />
+      {session.mount_sky && <MountSkyBanner sky={session.mount_sky} />}
       {sessionError && (
         <p role="alert" className="page-width px-4 pt-3 text-ink">
           {sessionError}
