@@ -51,6 +51,7 @@ export function useLive(session: ObservingSession) {
         dec_deg: solved.report.pointing!.dec_deg,
         source: "live",
         frame_id: solved.frame_id,
+        ...(solved.up_deg !== undefined && { up_deg: solved.up_deg }),
       }
     : session.pointing;
   const guidance = useStreamPointing ? live?.guidance : session.guidance;

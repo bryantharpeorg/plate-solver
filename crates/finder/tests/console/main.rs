@@ -12,6 +12,7 @@ mod link;
 mod live;
 mod notices;
 mod pointing;
+mod pointing_up;
 mod pushto;
 mod pushto_separation;
 mod rates;
