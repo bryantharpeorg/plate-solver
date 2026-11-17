@@ -694,12 +694,11 @@ within `SETTING_TOLERANCE`. A master of either kind **fits** a key when `model`,
   `SENSOR_TEMP_TOLERANCE_C`, or at least one has none. Its **distance** is the
   difference that was compared, 0.0 when none was. Of the matching darks the least
   distance wins, then the greatest `made_at`, then the greatest `id`.
-- A **flat** matches when it fits, `same` holds for gain and for offset, the set
-  temperatures agree (both have one and they differ by at most `SET_TEMP_TOLERANCE_C`,
-  or neither has one), and, with `flat_label` given, its label is that one. A flat's
-  exposure and its sensor temperature are not compared. The greatest `made_at` wins,
-  then the greatest `id`. This is the plan document's key read as it is written (spec
-  owner decision 7).
+- A **flat** matches when it fits and, with `flat_label` given, its label is that one.
+  Its gain, offset, set temperature, exposure and sensor temperature are not compared.
+  The greatest `made_at` wins, then the greatest `id`. This is the wider match the owner
+  settled on 2026-11-17, a departure from the plan document's first key that he
+  approves and that the plan document now writes (spec owner decision 7).
 - `flat_turned_deg`: with a flat chosen, `angle_deg` given and the flat's
   `imaging_angle_deg` present, d = |((angle − flat's + 180) mod 360, taken in 0 to 360)
   − 180|; when d is above `FLAT_ANGLE_WARN_DEG` the selection carries d.
@@ -1265,7 +1264,8 @@ master flat and the bad-pixel map remove, and that a sub is calibrated dark firs
 flat, then bad pixels, before any colour; the folder `calibration/` under the imaging
 folder, its four kinds of file and the cards of a master; every key of a master's entry;
 when a master dark matches and when a master flat does, with the five tolerances and
-that a flat needs the sub's gain, offset and set temperature but not its exposure; the
+that a flat needs only the sub's camera, size, origin, bits, pattern and binning, not
+its gain, offset, set temperature or exposure; the
 turned-camera warning, and that the imaging angle is known only while the aim point is
 the measured one; that `calibrate` reports `applied` or `missing` for each master and
 `map` or `sub` for bad pixels; that `match` describes the latest imaging frame seen
@@ -1414,7 +1414,8 @@ exactly:
     `Master flat {label} · gain {gain} · offset {offset} · {b} × {b} · {temp} · {frames} frames · {date}`,
     with the same {temp} and the same parts left out when null, followed by
     ` · camera at {imaging_angle_deg to one decimal}°` when it has an angle. Its gain,
-    offset and set temperature are shown because a sub must share them to get the flat;
+    offset and set temperature are shown as what its flats were taken at, though none
+    of them restricts the match (spec owner decision 7);
   - either, when `checked` is false, followed by ` · dark test skipped`;
   - each with a button `Remove` (`button`) whose `aria-label` is `Remove {id}`, which
     calls `deleteCalibration(id)`.
@@ -1606,7 +1607,7 @@ its code when this trio is re-anchored (§ Prerequisites 2 and 5).
 | The key's set temperature from `frame.set_temp_c` | From the settings when the frame is first seen | The frame's own value is the one in its file, so the view's key and the file's agree whatever changed in between (spec owner decision 22). |
 | The key of that frame is kept until a newer sub is saved | Only while the very latest frame is a saved sub | Once frames follow one another the latest frame is exposing most of the time, and the page would say nothing matches. |
 | The imaging angle read from the imaging view's `relation` | A setter for a later spec to call | 032 lands first and already carries it; a setter with no caller leaves the warning dead and lets the factory run this epic beside 032 or 033 (spec owner decision 20). |
-| A flat matched by the plan document's key: gain, offset and set temperature as well | Camera, size and binning alone | The key is the plan document's settled sentence; the wider match is physically sound and is the owner's to choose as a departure (spec owner decision 7). |
+| A flat matched on camera, size, origin, bits, pattern and binning alone | The plan document's key as it was first written: gain, offset and set temperature as well | Settled by the owner on 2026-11-17, a departure he approves and the plan document now writes: a master flat has its own dark taken off, so gain, offset and temperature do not change it, and flats made once serve every gain, with the cooler on or off (spec owner decision 7). |
 | A turned camera warns and the flat is still applied | Treating it as missing | Most of a flat is the radial fall-off, which a turn about the axis leaves alone (spec owner decision 8). |
 | No Playwright test | One in the simulate project | It needs an edit of `playwright.config.ts`, the simulate console has no cover to take darks under, and the block has no picture for the night rule to bite on beyond what 031's full-page check counts. |
 | The scripted camera wraps the stand-in | A camera written from nothing | Settings, timing, `Busy` and abort come with it; the test writes only the level. |
@@ -1673,8 +1674,9 @@ its code when this trio is re-anchored (§ Prerequisites 2 and 5).
    validator is re-run.
 3. **The owner decisions are settled and the approvals given** (spec § Owner decisions,
    § Owner approvals). Not met: of the twenty-four, 17 and 23 are settled by the plan
-   document's amendments 2 and 1 and ask nothing more of the owner; the other
-   twenty-two are open. Nothing left reaches outside this trio: the line of the plan
+   document's amendments 2 and 1 and ask nothing more of the owner, and 7 was settled
+   by the owner on 2026-11-17 and is written in (the wider match of a master flat); the
+   other twenty-one are open. Nothing left reaches outside this trio: the line of the plan
    document's Deferred list that amendment 2 implies is there now, written by the
    series audit's shared edit of that document, not by this trio.
 4. **A probe build of every story.** Not met. No story has been compiled or run
@@ -1944,6 +1946,11 @@ and 1; `match` passes over `focus` frames and takes the set temperature from
 `the flat's level does not rise with the exposure`; and the shared writes below name
 033's stories.
 
+What the owner's answer of 2026-11-17 changed: a master flat matches on camera, size,
+origin, bits, pattern and binning alone, so gain, offset and set temperature no longer
+restrict it (spec owner decision 7, FR-015, US3-S4, and § The library's **Matching**).
+A master dark's match is unchanged. No citation moved.
+
 What a first refinement round must do is § Prerequisites 2, 4 and 11, and its findings
 replace these paragraphs. Until then the record below is the draft's own account: its
 tests are the scenarios, its writes are the files § Project Structure names, and its
@@ -2165,7 +2172,7 @@ stories:
       - path: crates/finder/tests/console/calibration_library.rs
         status: new
         disposition: add
-        assertion: "a master flat matches by camera, size, binning, gain, offset and set temperature whatever its exposure and sensor temperature, the newest or the named label wins, and a camera turned by more than 1 degree is reported with the flat still chosen"
+        assertion: "a master flat matches by camera, size, origin, bits, pattern and binning alone, whatever its gain, offset, set temperature, exposure and sensor temperature, the newest or the named label wins, and a camera turned by more than 1 degree is reported with the flat still chosen"
         decision: "spec.md:US3-S4"
       - path: crates/finder/tests/console/calibration_library.rs
         status: new

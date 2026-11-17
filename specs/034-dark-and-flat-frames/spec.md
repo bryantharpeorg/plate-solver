@@ -11,6 +11,8 @@ depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", 
 # Citations checked against 49bb210fe4860dd98ba24727074e7bd3cc0d7124, the worktree's
 # HEAD, on 2026-11-15 in that fourth session: every `path:line` in spec.md and plan.md
 # was read there again; three were corrected (plan.md § Refinement Record).
+# Revised on 2026-11-17 for the owner's answer to owner decision 7, the wider match of a
+# master flat (§ Clarifications, the session of that day).
 # Not yet probe-built: no story of this trio has been compiled or run (plan.md
 # § Refinement Record). It builds on 030, 031, 032 and 033, in the plan document's settled
 # order, and all four are drafts: every interface of theirs named here is taken from
@@ -192,8 +194,10 @@ shadow, hot pixels and a column pattern, and its known patterns are the oracles.
      to take them anyway": this trio's refusal and its way past it, the request key
      `anyway`, for an observer who knows the telescope is covered (owner decision 4).
 
-  The library's key is not among them: a master flat is matched by the plan document's
-  key as it is written (owner decision 7).
+  The library's key is not among them: a master flat was then matched by the plan
+  document's key as it was written (owner decision 7). The owner's answer of 2026-11-17
+  widens the flat's part of that key, a departure he approves, and the plan document now
+  writes the wider key (§ Clarifications, the session of 2026-11-17).
 - Q: Which numbers here come from a source, and which are design values? → A: The
   research note gives four things (`docs/research/2026-11-15-imaging-camera.md` § 9.
   Calibration frames): one stacker maps the pixels of a master dark that are more than
@@ -221,7 +225,9 @@ shadow, hot pixels and a column pattern, and its known patterns are the oracles.
      imaging angle is read from 032's view where an earlier copy gave a setter no spec
      called (owner decision 20).
   3. A master flat is matched by the plan document's key as it is written; the wider
-     match is now the alternative, shown as a departure (owner decision 7).
+     match is now the alternative, shown as a departure (owner decision 7). The owner's
+     answer of 2026-11-17 reverses this: the wider match is settled, and the plan
+     document's first key is the alternative (the session of that day).
   4. The dark test gained a third part, because its level test passed an uncovered
      camera at this spec's own simulated settings, and a way past it, `anyway` (owner
      decision 4).
@@ -285,6 +291,24 @@ shadow, hot pixels and a column pattern, and its known patterns are the oracles.
   `GLOSSARY.md:331` now. The scratch-folder helper 028's US5 added is cited at
   `crates/finder/tests/support/mod.rs:12`.
 
+### Session 2026-11-17 (the owner's answers)
+
+- Q: What did the owner's answer to owner decision 7 change? → A: The match of a master
+  flat. The owner chose the wider match, a departure from the plan document's key that
+  he approves: a master flat matches a sub on the camera's model and serial, the frame's
+  size and origin, bits, Bayer pattern and binning only, and gain, offset and set
+  temperature no longer restrict it, since a master flat has its own dark taken off. A
+  flat's exposure and sensor temperature are still kept with it and shown, the newest
+  still wins, and a caller may still ask for one flat label. A master dark keeps its key
+  as written, and owner decision 8's warning is unchanged. Changed here: owner decision
+  7, FR-015, US3-S4 and two edge cases (a sensor still cooling; a camera with no gain,
+  offset or temperature). In plan.md: § The library's **Matching**, the README's
+  paragraph, the note on the page's flat line, § Decisions, § Prerequisites 3 and
+  § Refinement Record (US3-S4's assertion, and what this answer changed). In tasks.md:
+  the owner-decisions prerequisite and T012. And the plan document's paragraph on this
+  spec, which now keys a master flat the same way. 035, 036 and 037 say only that a
+  master may be missing, so they do not change.
+
 ## Owner decisions
 
 Each is a design or taste call the plan document leaves open, or, where its heading says
@@ -292,7 +316,9 @@ so, one that departed from the plan document and that the plan document now writ
 recommended here (§ Clarifications, the second session). Two, 17 and 23, have since
 been settled by the plan document's amendments and are kept, under their numbers, so
 that every reference
-to them still reads; they ask nothing of the owner. None of the others is settled yet:
+to them still reads; they ask nothing of the owner. One, 7, has since been settled by the
+owner, against this trio's recommendation, and its answer is written into the trio
+(§ Clarifications, the session of 2026-11-17). None of the others is settled yet:
 the owner settles each before the flip, and a different answer is written into the trio
 and re-validated, never left to a story.
 
@@ -351,18 +377,21 @@ and re-validated, never left to a story.
    (`docs/research/2026-11-15-imaging-camera.md` § 9. Calibration frames), or when
    either has no reading. A cooled dark never matches an uncooled sub. Among several,
    the nearest in temperature wins, then the newest. Instead: other tolerances.
-7. **When a master flat matches a sub.** Recommended: the plan document's key as it is
-   written, "camera, gain, offset, binning, set temperature and, for darks, exposure":
-   the same camera model and serial, frame size and origin, bits, Bayer pattern and
-   binning; gain and offset each equal within 0.001; and the set temperatures within
-   1.0 °C, or neither frame with one. A flat's exposure and its sensor temperature are
-   kept with it and shown, and do not restrict the match. The newest wins; a caller may
-   ask for one flat label only. The cost: flats taken at one gain, or with the cooler
-   off, serve no sub taken at another gain or with the cooler on, and the match says
-   `flat` is missing. Instead, as a departure from the plan document that the owner
-   would have to approve: camera, size, origin, bits, pattern and binning alone. A
-   master flat is a ratio with its own dark taken off, so gain, offset and temperature
-   do not change it, and flats made once would serve every gain.
+7. **When a master flat matches a sub.** **Settled by the owner on 2026-11-17: the wider
+   match.** A master flat matches a sub with the same camera model and serial, frame
+   size and origin, bits, Bayer pattern and binning, and on nothing else: gain, offset
+   and set temperature do not restrict it. A master flat is a ratio with its own dark
+   taken off, so gain, offset and temperature do not change it, and flats made once
+   serve every gain, with the cooler on or off. A flat's exposure and its sensor
+   temperature are kept with it and shown, and do not restrict the match either. The
+   newest wins; a caller may ask for one flat label only. This is a departure from the
+   plan document's key that the owner approves, and the plan document now writes it.
+   Instead, the plan document's key as it was first written, "camera, gain, offset,
+   binning, set temperature and, for darks, exposure", which this trio recommended until
+   then: gain and offset each equal within 0.001 as well, and the set temperatures
+   within 1.0 °C, or neither frame with one. Its cost: flats taken at one gain, or with
+   the cooler off, serve no sub taken at another gain or with the cooler on, and the
+   match says `flat` is missing.
 8. **A camera turned in the focuser.** Recommended: when the imaging angle is known now
    and was known when the flats were taken, and the two differ by more than 1.0°, the
    match carries the difference as a warning and the flat is still applied. At the worked
@@ -950,16 +979,20 @@ Every scenario here is a plain `#[test]` on a scratch folder: none builds a cons
      `SIM-0002`, with width 6 and with origin (2, 0).
 4. **Given** a library holding the master flat **F1**, like A but of kind flat with the
    label `desk`, the imaging angle 17.0 and made at 1768528803.7, **Then** a committed
-   test asserts that K gives `flat` F1's id; that K with exposure 2.0, K with the sensor
-   temperature 20.0 and K with the set temperature −10.9 each give F1 (worked example: a
-   flat's exposure and its sensor temperature do not restrict it); that K with gain
-   121.0, with no gain, with offset 11.0, with the set temperature −11.1, with no set
-   temperature and with binning 2 each give no flat; that in a library holding only
-   **F3**, like F1 but with no set temperature and a sensor temperature of 20.0, K with
-   no set temperature and a sensor temperature of 35.0 gives F3; that with **F2**, like
-   F1 but labelled `corrector` and made 1000 s later, K gives F2,
-   `select(&K, Some("desk"), None)` gives F1 and `select(&K, Some("other"), None)` gives
-   none; and that with F1 alone `select(&K, None, Some(17.9))` has no `flat_turned_deg`,
+   test asserts that K gives `flat` F1's id; that K with exposure 2.0, with the sensor
+   temperature 20.0, with gain 121.0, with no gain, with offset 11.0, with the set
+   temperature −11.1 and with no set temperature each give F1 (worked example: a flat's
+   gain, offset, set temperature, exposure and sensor temperature do not restrict it);
+   that K with binning 2, with no serial, with the serial `SIM-0002`, with the model
+   `another camera`, with width 6, with origin (2, 0), with no Bayer pattern and with 8
+   bits each give no flat; that in a library holding only **F3**, like F1 but with no
+   set temperature and a sensor temperature of 20.0, K gives F3, and so does K with no
+   set temperature and a sensor temperature of 35.0 (worked example: a flat taken with
+   the cooler off serves a sub taken with it on); that with **F2**, like F1 but labelled
+   `corrector`, with gain 0.0 and made 1000 s later, K gives F2 (worked example: the
+   newest wins, whatever its gain), `select(&K, Some("desk"), None)` gives F1 and
+   `select(&K, Some("other"), None)` gives none; and that with F1 alone
+   `select(&K, None, Some(17.9))` has no `flat_turned_deg`,
    `select(&K, None, Some(19.5))` has `flat_turned_deg` 2.5 and still gives F1, and, for
    a flat taken at 179.5, an angle now of −179.6 gives none and −178.4 gives 2.1 (worked
    example: the difference is taken the short way round, and warned of above 1.0°). A
@@ -1632,7 +1665,8 @@ often the only thing to hand.
 - **A sensor still cooling.** A frame whose sensor temperature is more than 1.0 °C from
   its set temperature fails the set, with or without `anyway`: the observer waits, or
   sets a temperature the cooler can hold. A sub taken while the sensor is still cooling
-  is matched by its set temperature all the same; holding subs back until the sensor
+  is matched to a master dark by its set temperature all the same, and a master flat
+  does not look at it (owner decision 7); holding subs back until the sensor
   has settled is left to the specs that take subs, and neither 035's nor 037's draft
   does it yet (owner decision 24).
 - **The camera clips below its samples' full scale.** A flat can never reach 45 percent
@@ -1690,8 +1724,9 @@ often the only thing to hand.
 - **A frame taken with a region of interest.** A master matches only a sub of the same
   size and origin. Darks and flats may be taken with a region and serve subs of that
   region.
-- **A camera with no gain, offset or temperature.** Those keys are null in the master and
-  match a sub that has none either.
+- **A camera with no gain, offset or temperature.** Those keys are null in the master. A
+  master dark with no gain, offset or set temperature matches only a sub with none
+  either; a master flat is not matched on them (owner decision 7).
 - **Darks taken at binning 2.** A hot pixel is diluted by the three good samples it is
   averaged with, and still stands far above the line (US6-S2).
 - **A hot pixel next to another of its colour.** The search in the sub itself sees
@@ -1781,14 +1816,12 @@ often the only thing to hand.
   absent. Of several, the one nearest in that temperature SHALL be chosen, then the
   newest (US3-S3; owner decision 6).
 - **FR-015**: A master flat SHALL match a frame when their camera model and serial,
-  width, height, origin, bits, Bayer pattern and binning are equal; their gain and their
-  offset are each both absent or equal within 0.001; either both have a set temperature
-  and these differ by at most 1.0 °C, or neither has one; and, when the caller names a
-  flat label, its label is that one. Its exposure and its sensor temperature SHALL not
-  restrict the match; the newest SHALL be chosen. When the
-  imaging angle now and the flat's are both known and differ, the short way round, by
-  more than 1.0°, the selection SHALL carry the difference as `flat_turned_deg`, and the
-  flat SHALL still be chosen (US3-S4; owner decisions 7 and 8).
+  width, height, origin, bits, Bayer pattern and binning are equal and, when the caller
+  names a flat label, its label is that one. Its gain, offset, set temperature, exposure
+  and sensor temperature SHALL not restrict the match; the newest SHALL be chosen. When
+  the imaging angle now and the flat's are both known and differ, the short way round,
+  by more than 1.0°, the selection SHALL carry the difference as `flat_turned_deg`, and
+  the flat SHALL still be chosen (US3-S4; owner decisions 7 and 8).
 - **FR-016**: A selection SHALL carry the chosen dark's and flat's ids and the chosen
   dark's `bad_pixels`, and name in `missing`, in this order, those of `dark`, `flat` and
   `bad_pixels` that it lacks. `Library::calibrate` SHALL select the masters for a frame

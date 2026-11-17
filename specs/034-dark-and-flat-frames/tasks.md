@@ -17,7 +17,8 @@ description: "Task list for 034-dark-and-flat-frames: Dark and Flat Frames"
   file they create given its line (plan.md § Prerequisites 2): not met;
 - 033's draft has been read for the four points of plan.md § Prerequisites 5: met;
 - the owner decisions in spec.md are settled and its owner approvals given: not met,
-  but for decisions 17 and 23, which the plan document's amendments 2 and 1 settle;
+  but for decisions 17 and 23, which the plan document's amendments 2 and 1 settle, and
+  7, which the owner settled on 2026-11-17 and which is written in;
 - every story has been probe-built: not met;
 - the plan document's rewrite of `GLOSSARY.md` is on `main`: not met;
 - the scratch-folder helper `crate::support::Scratch` is on `main`: met, at
@@ -146,8 +147,9 @@ description: "Task list for 034-dark-and-flat-frames: Dark and Flat Frames"
   (US3-S1), the library's files, cards, index and ids (US3-S2), and the matching of
   darks with `FrameKey::agrees` (US3-S3).
 - [ ] T012 [US3] Add failing tests to
-  `crates/finder/tests/console/calibration_library.rs` for the matching of flats by the
-  plan document's key and the turned-camera rule (US3-S4), `Library::calibrate`, its
+  `crates/finder/tests/console/calibration_library.rs` for the matching of flats on
+  camera, size, origin, bits, pattern and binning alone, whatever their gain, offset and
+  set temperature, and the turned-camera rule (US3-S4), `Library::calibrate`, its
   empty-library case repairing the hot sample included (US3-S5), and `remove` and an
   unreadable index (US3-S6).
 
