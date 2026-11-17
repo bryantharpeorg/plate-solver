@@ -1,6 +1,7 @@
 //! The imaging side of the camera port (030): one exposure on request.
 use std::{fmt, future::Future, pin::Pin};
 
+pub mod fits;
 pub mod indi;
 pub mod service;
 pub mod synthetic;

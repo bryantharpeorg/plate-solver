@@ -212,3 +212,15 @@ settings change names stays as the device reports it, and no control is recorded
 frame. A name the camera does not define fails the connection with
 `the camera has no control <property>.<element>`, and a camera that refuses a vector
 fails it with its own message; the console shows the camera's error either way.
+
+An exposure that fails — the camera reports `Alert`, no frame arrives within the
+exposure plus 60 s of the request, or the server closes the connection — is aborted
+with `CCD_ABORT_EXPOSURE` where the connection still stands, waited out 1 s, and
+tried once more, reconnecting first when the connection was lost, the frame type set
+again before the second request. A second failure answers with the reason in
+`the exposure failed twice: <reason>`. A BLOB the adapter cannot read — a format other
+than `.fits`, or a FITS header or data it cannot parse — fails at once, with no abort
+and no second try. The adapter adds only this to the device program's own handling: it
+relies on that program starting an exposure up to three times and restarting a failed
+exposure once, by itself, and it does not rely on that program's USB reset, which stays
+off unless it is switched on.
