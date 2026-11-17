@@ -1,0 +1,1054 @@
+@ device CCD Simulator
+@ expect getProperties
+@ send
+<defSwitchVector device="CCD Simulator" name="CONNECTION" label="Connection" group="Main Control" state="Idle" perm="rw" rule="OneOfMany" timeout="60" timestamp="2026-11-17T03:58:28">
+    <defSwitch name="CONNECT" label="Connect">
+Off
+    </defSwitch>
+    <defSwitch name="DISCONNECT" label="Disconnect">
+On
+    </defSwitch>
+</defSwitchVector>
+<defTextVector device="CCD Simulator" name="DRIVER_INFO" label="Driver Info" group="General Info" state="Idle" perm="ro" timeout="60" timestamp="2026-11-17T03:58:28">
+    <defText name="DRIVER_NAME" label="Name">
+CCD Simulator
+    </defText>
+    <defText name="DRIVER_EXEC" label="Exec">
+indi_simulator_ccd
+    </defText>
+    <defText name="DRIVER_VERSION" label="Version">
+1.0
+    </defText>
+    <defText name="DRIVER_INTERFACE" label="Interface">
+22
+    </defText>
+</defTextVector>
+<defNumberVector device="CCD Simulator" name="POLLING_PERIOD" label="Polling" group="Options" state="Idle" perm="rw" timeout="0" timestamp="2026-11-17T03:58:28">
+    <defNumber name="PERIOD_MS" label="Period (ms)" format="%.f" min="10" max="600000" step="1000">
+1000
+    </defNumber>
+</defNumberVector>
+<defSwitchVector device="CCD Simulator" name="DEBUG" label="Debug" group="Options" state="Idle" perm="rw" rule="OneOfMany" timeout="0" timestamp="2026-11-17T03:58:28">
+    <defSwitch name="ENABLE" label="Enable">
+Off
+    </defSwitch>
+    <defSwitch name="DISABLE" label="Disable">
+On
+    </defSwitch>
+</defSwitchVector>
+<defSwitchVector device="CCD Simulator" name="CONFIG_PROCESS" label="Configuration" group="Options" state="Idle" perm="rw" rule="AtMostOne" timeout="0" timestamp="2026-11-17T03:58:28">
+    <defSwitch name="CONFIG_LOAD" label="Load">
+Off
+    </defSwitch>
+    <defSwitch name="CONFIG_SAVE" label="Save">
+Off
+    </defSwitch>
+    <defSwitch name="CONFIG_DEFAULT" label="Default">
+Off
+    </defSwitch>
+    <defSwitch name="CONFIG_PURGE" label="Purge">
+Off
+    </defSwitch>
+</defSwitchVector>
+<defTextVector device="CCD Simulator" name="ACTIVE_DEVICES" label="Snoop devices" group="Options" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:28">
+    <defText name="ACTIVE_TELESCOPE" label="Telescope">
+Telescope Simulator
+    </defText>
+    <defText name="ACTIVE_ROTATOR" label="Rotator">
+Rotator Simulator
+    </defText>
+    <defText name="ACTIVE_FOCUSER" label="Focuser">
+Focuser Simulator
+    </defText>
+    <defText name="ACTIVE_FILTER" label="Filter">
+CCD Simulator
+    </defText>
+    <defText name="ACTIVE_SKYQUALITY" label="Sky Quality">
+SQM
+    </defText>
+</defTextVector>
+<defNumberVector device="CCD Simulator" name="SIMULATOR_SETTINGS" label="Settings" group="Simulator Config" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:28">
+    <defNumber name="SIM_XRES" label="CCD X resolution" format="%4.0f" min="512" max="8192" step="512">
+1280
+    </defNumber>
+    <defNumber name="SIM_YRES" label="CCD Y resolution" format="%4.0f" min="512" max="8192" step="512">
+1024
+    </defNumber>
+    <defNumber name="SIM_XSIZE" label="CCD X Pixel Size" format="%4.2f" min="1" max="30" step="5">
+5.2000000000000001776
+    </defNumber>
+    <defNumber name="SIM_YSIZE" label="CCD Y Pixel Size" format="%4.2f" min="1" max="30" step="5">
+5.2000000000000001776
+    </defNumber>
+    <defNumber name="SIM_MAXVAL" label="CCD Maximum ADU" format="%4.0f" min="255" max="65000" step="1000">
+65000
+    </defNumber>
+    <defNumber name="SIM_SATURATION" label="Saturation Mag" format="%4.1f" min="0" max="20" step="1">
+1
+    </defNumber>
+    <defNumber name="SIM_LIMITINGMAG" label="Limiting Mag" format="%4.1f" min="0" max="20" step="1">
+17
+    </defNumber>
+    <defNumber name="SIM_NOISE" label="CCD Noise" format="%4.0f" min="0" max="6000" step="500">
+10
+    </defNumber>
+    <defNumber name="SIM_SKYGLOW" label="Sky Glow (magnitudes)" format="%4.1f" min="0" max="6000" step="500">
+19.5
+    </defNumber>
+    <defNumber name="SIM_OAGOFFSET" label="Oag Offset (arcminutes)" format="%4.1f" min="0" max="6000" step="500">
+0
+    </defNumber>
+    <defNumber name="SIM_POLAR" label="PAE (arcminutes)" format="%4.1f" min="-600" max="600" step="100">
+0
+    </defNumber>
+    <defNumber name="SIM_POLARDRIFT" label="PAE Drift (minutes)" format="%4.1f" min="0" max="60" step="5">
+0
+    </defNumber>
+    <defNumber name="SIM_PEPERIOD" label="PE Period (seconds)" format="%4.1f" min="0" max="60" step="5">
+0
+    </defNumber>
+    <defNumber name="SIM_PEMAX" label="PE Max (arcsec)" format="%4.1f" min="0" max="6000" step="500">
+0
+    </defNumber>
+    <defNumber name="SIM_TIME_FACTOR" label="Time Factor (x)" format="%.2f" min="0.010000000000000000208" max="100" step="10">
+1
+    </defNumber>
+    <defNumber name="SIM_ROTATION" label="CCD Rotation" format="%.2f" min="0" max="360" step="10">
+0
+    </defNumber>
+</defNumberVector>
+<defNumberVector device="CCD Simulator" name="EQUATORIAL_PE" label="EQ PE" group="Simulator Config" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:28">
+    <defNumber name="RA_PE" label="RA (hh:mm:ss)" format="%010.6m" min="0" max="24" step="0">
+0
+    </defNumber>
+    <defNumber name="DEC_PE" label="DEC (dd:mm:ss)" format="%010.6m" min="-90" max="90" step="0">
+0
+    </defNumber>
+</defNumberVector>
+<defNumberVector device="CCD Simulator" name="SIM_FOCUSING" label="Focus Simulation" group="Simulator Config" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:28">
+    <defNumber name="SIM_FOCUS_POSITION" label="Focus" format="%.f" min="0" max="100000" step="1">
+36700
+    </defNumber>
+    <defNumber name="SIM_FOCUS_MAX" label="Max. Position" format="%.f" min="0" max="100000" step="1">
+100000
+    </defNumber>
+    <defNumber name="SIM_SEEING" label="Seeing (arcsec)" format="%4.2f" min="0" max="60" step="0">
+3.5
+    </defNumber>
+</defNumberVector>
+<defSwitchVector device="CCD Simulator" name="SIMULATE_BAYER" label="Bayer" group="Simulator Config" state="Idle" perm="rw" rule="OneOfMany" timeout="60" timestamp="2026-11-17T03:58:28">
+    <defSwitch name="INDI_ENABLED" label="Enabled">
+Off
+    </defSwitch>
+    <defSwitch name="INDI_DISABLED" label="Disabled">
+On
+    </defSwitch>
+</defSwitchVector>
+<defSwitchVector device="CCD Simulator" name="CCD_SIMULATE_CRASH" label="Crash" group="Simulator Config" state="Idle" perm="wo" rule="AtMostOne" timeout="0" timestamp="2026-11-17T03:58:28">
+    <defSwitch name="CRASH" label="Crash driver">
+Off
+    </defSwitch>
+</defSwitchVector>
+<defTextVector device="CCD Simulator" name="ACTIVE_DEVICES" label="Snoop devices" group="Options" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:28">
+    <defText name="ACTIVE_TELESCOPE" label="Telescope">
+Telescope Simulator
+    </defText>
+    <defText name="ACTIVE_ROTATOR" label="Rotator">
+Rotator Simulator
+    </defText>
+    <defText name="ACTIVE_FOCUSER" label="Focuser">
+Focuser Simulator
+    </defText>
+    <defText name="ACTIVE_FILTER" label="Filter">
+CCD Simulator
+    </defText>
+    <defText name="ACTIVE_SKYQUALITY" label="Sky Quality">
+SQM
+    </defText>
+</defTextVector>
+<defNumberVector device="CCD Simulator" name="SIMULATOR_SETTINGS" label="Settings" group="Simulator Config" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:28">
+    <defNumber name="SIM_XRES" label="CCD X resolution" format="%4.0f" min="512" max="8192" step="512">
+1280
+    </defNumber>
+    <defNumber name="SIM_YRES" label="CCD Y resolution" format="%4.0f" min="512" max="8192" step="512">
+1024
+    </defNumber>
+    <defNumber name="SIM_XSIZE" label="CCD X Pixel Size" format="%4.2f" min="1" max="30" step="5">
+5.2000000000000001776
+    </defNumber>
+    <defNumber name="SIM_YSIZE" label="CCD Y Pixel Size" format="%4.2f" min="1" max="30" step="5">
+5.2000000000000001776
+    </defNumber>
+    <defNumber name="SIM_MAXVAL" label="CCD Maximum ADU" format="%4.0f" min="255" max="65000" step="1000">
+65000
+    </defNumber>
+    <defNumber name="SIM_SATURATION" label="Saturation Mag" format="%4.1f" min="0" max="20" step="1">
+1
+    </defNumber>
+    <defNumber name="SIM_LIMITINGMAG" label="Limiting Mag" format="%4.1f" min="0" max="20" step="1">
+17
+    </defNumber>
+    <defNumber name="SIM_NOISE" label="CCD Noise" format="%4.0f" min="0" max="6000" step="500">
+10
+    </defNumber>
+    <defNumber name="SIM_SKYGLOW" label="Sky Glow (magnitudes)" format="%4.1f" min="0" max="6000" step="500">
+19.5
+    </defNumber>
+    <defNumber name="SIM_OAGOFFSET" label="Oag Offset (arcminutes)" format="%4.1f" min="0" max="6000" step="500">
+0
+    </defNumber>
+    <defNumber name="SIM_POLAR" label="PAE (arcminutes)" format="%4.1f" min="-600" max="600" step="100">
+0
+    </defNumber>
+    <defNumber name="SIM_POLARDRIFT" label="PAE Drift (minutes)" format="%4.1f" min="0" max="60" step="5">
+0
+    </defNumber>
+    <defNumber name="SIM_PEPERIOD" label="PE Period (seconds)" format="%4.1f" min="0" max="60" step="5">
+0
+    </defNumber>
+    <defNumber name="SIM_PEMAX" label="PE Max (arcsec)" format="%4.1f" min="0" max="6000" step="500">
+0
+    </defNumber>
+    <defNumber name="SIM_TIME_FACTOR" label="Time Factor (x)" format="%.2f" min="0.010000000000000000208" max="100" step="10">
+1
+    </defNumber>
+    <defNumber name="SIM_ROTATION" label="CCD Rotation" format="%.2f" min="0" max="360" step="10">
+0
+    </defNumber>
+</defNumberVector>
+<defNumberVector device="CCD Simulator" name="EQUATORIAL_PE" label="EQ PE" group="Simulator Config" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:28">
+    <defNumber name="RA_PE" label="RA (hh:mm:ss)" format="%010.6m" min="0" max="24" step="0">
+0
+    </defNumber>
+    <defNumber name="DEC_PE" label="DEC (dd:mm:ss)" format="%010.6m" min="-90" max="90" step="0">
+0
+    </defNumber>
+</defNumberVector>
+<defNumberVector device="CCD Simulator" name="SIM_FOCUSING" label="Focus Simulation" group="Simulator Config" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:28">
+    <defNumber name="SIM_FOCUS_POSITION" label="Focus" format="%.f" min="0" max="100000" step="1">
+36700
+    </defNumber>
+    <defNumber name="SIM_FOCUS_MAX" label="Max. Position" format="%.f" min="0" max="100000" step="1">
+100000
+    </defNumber>
+    <defNumber name="SIM_SEEING" label="Seeing (arcsec)" format="%4.2f" min="0" max="60" step="0">
+3.5
+    </defNumber>
+</defNumberVector>
+<defSwitchVector device="CCD Simulator" name="SIMULATE_BAYER" label="Bayer" group="Simulator Config" state="Idle" perm="rw" rule="OneOfMany" timeout="60" timestamp="2026-11-17T03:58:28">
+    <defSwitch name="INDI_ENABLED" label="Enabled">
+Off
+    </defSwitch>
+    <defSwitch name="INDI_DISABLED" label="Disabled">
+On
+    </defSwitch>
+</defSwitchVector>
+<defSwitchVector device="CCD Simulator" name="CCD_SIMULATE_CRASH" label="Crash" group="Simulator Config" state="Idle" perm="wo" rule="AtMostOne" timeout="0" timestamp="2026-11-17T03:58:28">
+    <defSwitch name="CRASH" label="Crash driver">
+Off
+    </defSwitch>
+</defSwitchVector>
+
+@ expect newSwitchVector CONNECTION CONNECT=On
+@ send
+<setSwitchVector device="CCD Simulator" name="CONNECTION" state="Ok" timeout="60" timestamp="2026-11-17T03:58:31">
+    <oneSwitch name="CONNECT">
+On
+    </oneSwitch>
+    <oneSwitch name="DISCONNECT">
+Off
+    </oneSwitch>
+</setSwitchVector>
+<defNumberVector device="CCD Simulator" name="CCD_EXPOSURE" label="Expose" group="Main Control" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="CCD_EXPOSURE_VALUE" label="Duration (s)" format="%5.2f" min="0.010000000000000000208" max="3600" step="1">
+1
+    </defNumber>
+</defNumberVector>
+<defSwitchVector device="CCD Simulator" name="CCD_ABORT_EXPOSURE" label="Abort" group="Main Control" state="Idle" perm="rw" rule="AtMostOne" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="ABORT" label="Abort">
+Off
+    </defSwitch>
+</defSwitchVector>
+<defNumberVector device="CCD Simulator" name="CCD_FRAME" label="Frame" group="Image Settings" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="X" label="Left " format="%4.0f" min="0" max="0" step="0">
+0
+    </defNumber>
+    <defNumber name="Y" label="Top" format="%4.0f" min="0" max="0" step="0">
+0
+    </defNumber>
+    <defNumber name="WIDTH" label="Width" format="%4.0f" min="0" max="0" step="0">
+0
+    </defNumber>
+    <defNumber name="HEIGHT" label="Height" format="%4.0f" min="0" max="0" step="0">
+0
+    </defNumber>
+</defNumberVector>
+<defSwitchVector device="CCD Simulator" name="CCD_FRAME_RESET" label="Frame Values" group="Image Settings" state="Idle" perm="wo" rule="OneOfMany" timeout="0" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="RESET" label="Reset">
+Off
+    </defSwitch>
+</defSwitchVector>
+<defNumberVector device="CCD Simulator" name="CCD_BINNING" label="Binning" group="Image Settings" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="HOR_BIN" label="X" format="%2.0f" min="1" max="4" step="1">
+1
+    </defNumber>
+    <defNumber name="VER_BIN" label="Y" format="%2.0f" min="1" max="4" step="1">
+1
+    </defNumber>
+</defNumberVector>
+<defTextVector device="CCD Simulator" name="FITS_HEADER" label="FITS Header" group="General Info" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defText name="FITS_OBSERVER" label="Observer">
+Unknown
+    </defText>
+    <defText name="FITS_OBJECT" label="Object">
+Unknown
+    </defText>
+</defTextVector>
+<defNumberVector device="CCD Simulator" name="GUIDER_EXPOSURE" label="Guide Head" group="Main Control" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="GUIDER_EXPOSURE_VALUE" label="Duration (s)" format="%5.2f" min="0.010000000000000000208" max="3600" step="1">
+1
+    </defNumber>
+</defNumberVector>
+<defSwitchVector device="CCD Simulator" name="GUIDER_ABORT_EXPOSURE" label="Abort" group="Main Control" state="Idle" perm="rw" rule="AtMostOne" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="ABORT" label="Abort">
+Off
+    </defSwitch>
+</defSwitchVector>
+<defNumberVector device="CCD Simulator" name="GUIDER_FRAME" label="Frame" group="Guider Head" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="X" label="Left " format="%4.0f" min="0" max="0" step="0">
+0
+    </defNumber>
+    <defNumber name="Y" label="Top" format="%4.0f" min="0" max="0" step="0">
+0
+    </defNumber>
+    <defNumber name="WIDTH" label="Width" format="%4.0f" min="0" max="0" step="0">
+0
+    </defNumber>
+    <defNumber name="HEIGHT" label="Height" format="%4.0f" min="0" max="0" step="0">
+0
+    </defNumber>
+</defNumberVector>
+<defNumberVector device="CCD Simulator" name="CCD_TEMPERATURE" label="Temperature" group="Main Control" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="CCD_TEMPERATURE_VALUE" label="Temperature (C)" format="%5.2f" min="-50" max="50" step="0">
+0
+    </defNumber>
+</defNumberVector>
+<defNumberVector device="CCD Simulator" name="CCD_TEMP_RAMP" label="Temp. Ramp" group="Main Control" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="RAMP_SLOPE" label="Max. dT (C/min)" format="%.f" min="0" max="30" step="1">
+0
+    </defNumber>
+    <defNumber name="RAMP_THRESHOLD" label="Threshold (C)" format="%.1f" min="0.10000000000000000555" max="2" step="0.10000000000000000555">
+0.2000000000000000111
+    </defNumber>
+</defNumberVector>
+<defSwitchVector device="CCD Simulator" name="CCD_CAPTURE_FORMAT" label="Format" group="Image Settings" state="Idle" perm="rw" rule="OneOfMany" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="INDI_MONO" label="Mono">
+On
+    </defSwitch>
+</defSwitchVector>
+<defSwitchVector device="CCD Simulator" name="CCD_TRANSFER_FORMAT" label="Encode" group="Image Settings" state="Idle" perm="rw" rule="OneOfMany" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="FORMAT_FITS" label="FITS">
+On
+    </defSwitch>
+    <defSwitch name="FORMAT_NATIVE" label="Native">
+Off
+    </defSwitch>
+</defSwitchVector>
+<defNumberVector device="CCD Simulator" name="CCD_INFO" label="CCD Information" group="Image Info" state="Idle" perm="ro" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="CCD_MAX_X" label="Max. Width" format="%.f" min="1" max="16000" step="0">
+0
+    </defNumber>
+    <defNumber name="CCD_MAX_Y" label="Max. Height" format="%.f" min="1" max="16000" step="0">
+0
+    </defNumber>
+    <defNumber name="CCD_PIXEL_SIZE" label="Pixel size (um)" format="%.2f" min="1" max="40" step="0">
+0
+    </defNumber>
+    <defNumber name="CCD_PIXEL_SIZE_X" label="Pixel size X" format="%.2f" min="1" max="40" step="0">
+0
+    </defNumber>
+    <defNumber name="CCD_PIXEL_SIZE_Y" label="Pixel size Y" format="%.2f" min="1" max="40" step="0">
+0
+    </defNumber>
+    <defNumber name="CCD_BITSPERPIXEL" label="Bits per pixel" format="%.f" min="8" max="64" step="0">
+0
+    </defNumber>
+</defNumberVector>
+<defNumberVector device="CCD Simulator" name="GUIDER_INFO" label="Info" group="Image Info" state="Idle" perm="ro" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="CCD_MAX_X" label="Max. Width" format="%4.0f" min="1" max="16000" step="0">
+0
+    </defNumber>
+    <defNumber name="CCD_MAX_Y" label="Max. Height" format="%4.0f" min="1" max="16000" step="0">
+0
+    </defNumber>
+    <defNumber name="CCD_PIXEL_SIZE" label="Pixel size (um)" format="%5.2f" min="1" max="40" step="0">
+0
+    </defNumber>
+    <defNumber name="CCD_PIXEL_SIZE_X" label="Pixel size X" format="%5.2f" min="1" max="40" step="0">
+0
+    </defNumber>
+    <defNumber name="CCD_PIXEL_SIZE_Y" label="Pixel size Y" format="%5.2f" min="1" max="40" step="0">
+0
+    </defNumber>
+    <defNumber name="CCD_BITSPERPIXEL" label="Bits per pixel" format="%3.0f" min="8" max="64" step="0">
+0
+    </defNumber>
+</defNumberVector>
+<defNumberVector device="CCD Simulator" name="GUIDER_BINNING" label="Binning" group="Guider Head" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="HOR_BIN" label="X" format="%2.0f" min="1" max="4" step="1">
+1
+    </defNumber>
+    <defNumber name="VER_BIN" label="Y" format="%2.0f" min="1" max="4" step="1">
+1
+    </defNumber>
+</defNumberVector>
+<defSwitchVector device="CCD Simulator" name="CCD_COMPRESSION" label="Compression" group="Image Settings" state="Idle" perm="rw" rule="OneOfMany" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="INDI_ENABLED" label="Enabled">
+Off
+    </defSwitch>
+    <defSwitch name="INDI_DISABLED" label="Disabled">
+On
+    </defSwitch>
+</defSwitchVector>
+<defBLOBVector device="CCD Simulator" name="CCD1" label="Image Data" group="Image Info" state="Idle" perm="ro" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defBLOB name="CCD1" label="Image"/>
+</defBLOBVector>
+<defSwitchVector device="CCD Simulator" name="GUIDER_COMPRESSION" label="Compression" group="Guider Head" state="Idle" perm="rw" rule="OneOfMany" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="INDI_ENABLED" label="Enabled">
+Off
+    </defSwitch>
+    <defSwitch name="INDI_DISABLED" label="Disabled">
+On
+    </defSwitch>
+</defSwitchVector>
+<defBLOBVector device="CCD Simulator" name="CCD2" label="Image Data" group="Image Info" state="Idle" perm="ro" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defBLOB name="CCD2" label="Guider Image"/>
+</defBLOBVector>
+<defNumberVector device="CCD Simulator" name="TELESCOPE_TIMED_GUIDE_NS" label="Guide N/S" group="Guider Control" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="TIMED_GUIDE_N" label="North (ms)" format="%.f" min="0" max="60000" step="100">
+0
+    </defNumber>
+    <defNumber name="TIMED_GUIDE_S" label="South (ms)" format="%.f" min="0" max="60000" step="100">
+0
+    </defNumber>
+</defNumberVector>
+<defNumberVector device="CCD Simulator" name="TELESCOPE_TIMED_GUIDE_WE" label="Guide E/W" group="Guider Control" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="TIMED_GUIDE_W" label="West (ms)" format="%.f" min="0" max="60000" step="100">
+0
+    </defNumber>
+    <defNumber name="TIMED_GUIDE_E" label="East (ms)" format="%.f" min="0" max="60000" step="100">
+0
+    </defNumber>
+</defNumberVector>
+<defSwitchVector device="CCD Simulator" name="CCD_FRAME_TYPE" label="Type" group="Image Settings" state="Idle" perm="rw" rule="OneOfMany" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="FRAME_LIGHT" label="Light">
+On
+    </defSwitch>
+    <defSwitch name="FRAME_BIAS" label="Bias">
+Off
+    </defSwitch>
+    <defSwitch name="FRAME_DARK" label="Dark">
+Off
+    </defSwitch>
+    <defSwitch name="FRAME_FLAT" label="Flat">
+Off
+    </defSwitch>
+</defSwitchVector>
+<defSwitchVector device="CCD Simulator" name="GUIDER_FRAME_TYPE" label="Type" group="Guider Head" state="Idle" perm="rw" rule="OneOfMany" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="FRAME_LIGHT" label="Light">
+On
+    </defSwitch>
+    <defSwitch name="FRAME_BIAS" label="Bias">
+Off
+    </defSwitch>
+    <defSwitch name="FRAME_DARK" label="Dark">
+Off
+    </defSwitch>
+    <defSwitch name="FRAME_FLAT" label="Flat">
+Off
+    </defSwitch>
+</defSwitchVector>
+<defNumberVector device="CCD Simulator" name="SCOPE_INFO" label="Scope" group="Options" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="FOCAL_LENGTH" label="Focal Length (mm)" format="%.2f" min="10" max="10000" step="100">
+0
+    </defNumber>
+    <defNumber name="APERTURE" label="Aperture (mm)" format="%.2f" min="10" max="3000" step="100">
+0
+    </defNumber>
+</defNumberVector>
+<defSwitchVector device="CCD Simulator" name="WCS_CONTROL" label="WCS" group="WCS" state="Idle" perm="rw" rule="OneOfMany" timeout="0" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="WCS_ENABLE" label="Enable">
+Off
+    </defSwitch>
+    <defSwitch name="WCS_DISABLE" label="Disable">
+On
+    </defSwitch>
+</defSwitchVector>
+<defSwitchVector device="CCD Simulator" name="UPLOAD_MODE" label="Upload" group="Options" state="Idle" perm="rw" rule="OneOfMany" timeout="0" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="UPLOAD_CLIENT" label="Client">
+On
+    </defSwitch>
+    <defSwitch name="UPLOAD_LOCAL" label="Local">
+Off
+    </defSwitch>
+    <defSwitch name="UPLOAD_BOTH" label="Both">
+Off
+    </defSwitch>
+</defSwitchVector>
+<defTextVector device="CCD Simulator" name="UPLOAD_SETTINGS" label="Upload Settings" group="Options" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defText name="UPLOAD_DIR" label="Dir">
+/home/observer
+    </defText>
+    <defText name="UPLOAD_PREFIX" label="Prefix">
+IMAGE_XXX
+    </defText>
+</defTextVector>
+<defSwitchVector device="CCD Simulator" name="CCD_FAST_TOGGLE" label="Fast Exposure" group="Options" state="Idle" perm="rw" rule="OneOfMany" timeout="0" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="INDI_ENABLED" label="Enabled">
+Off
+    </defSwitch>
+    <defSwitch name="INDI_DISABLED" label="Disabled">
+On
+    </defSwitch>
+</defSwitchVector>
+<defNumberVector device="CCD Simulator" name="CCD_FAST_COUNT" label="Fast Count" group="Options" state="Idle" perm="rw" timeout="0" timestamp="2026-11-17T03:58:31">
+    <defNumber name="FRAMES" label="Frames" format="%.f" min="0" max="100000" step="1">
+1
+    </defNumber>
+</defNumberVector>
+<defSwitchVector device="CCD Simulator" name="CCD_VIDEO_STREAM" label="Video Stream" group="Streaming" state="Idle" perm="rw" rule="OneOfMany" timeout="0" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="STREAM_ON" label="Stream On">
+Off
+    </defSwitch>
+    <defSwitch name="STREAM_OFF" label="Stream Off">
+On
+    </defSwitch>
+</defSwitchVector>
+<defNumberVector device="CCD Simulator" name="STREAM_DELAY" label="Video Stream Delay" group="Streaming" state="Idle" perm="ro" timeout="0" timestamp="2026-11-17T03:58:31">
+    <defNumber name="STREAM_DELAY_TIME" label="Delay (s)" format="%.3f" min="0" max="60" step="0.0010000000000000000208">
+0
+    </defNumber>
+</defNumberVector>
+<defNumberVector device="CCD Simulator" name="STREAMING_EXPOSURE" label="Expose" group="Streaming" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="STREAMING_EXPOSURE_VALUE" label="Duration (s)" format="%.6f" min="9.9999999999999995475e-07" max="60" step="0.10000000000000000555">
+0.10000000000000000555
+    </defNumber>
+    <defNumber name="STREAMING_DIVISOR_VALUE" label="Divisor" format="%.f" min="1" max="15" step="1">
+1
+    </defNumber>
+</defNumberVector>
+<defNumberVector device="CCD Simulator" name="FPS" label="FPS" group="Streaming" state="Idle" perm="ro" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="EST_FPS" label="Instant." format="%.2f" min="0" max="999" step="0">
+30
+    </defNumber>
+    <defNumber name="AVG_FPS" label="Average (1 sec.)" format="%.2f" min="0" max="999" step="0">
+30
+    </defNumber>
+</defNumberVector>
+<defSwitchVector device="CCD Simulator" name="RECORD_STREAM" label="Video Record" group="Streaming" state="Idle" perm="rw" rule="OneOfMany" timeout="0" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="RECORD_ON" label="Record On">
+Off
+    </defSwitch>
+    <defSwitch name="RECORD_DURATION_ON" label="Record (Duration)">
+Off
+    </defSwitch>
+    <defSwitch name="RECORD_FRAME_ON" label="Record (Frames)">
+Off
+    </defSwitch>
+    <defSwitch name="RECORD_OFF" label="Record Off">
+On
+    </defSwitch>
+</defSwitchVector>
+<defTextVector device="CCD Simulator" name="RECORD_FILE" label="Record File" group="Streaming" state="Idle" perm="rw" timeout="0" timestamp="2026-11-17T03:58:31">
+    <defText name="RECORD_FILE_DIR" label="Dir.">
+/home/observer/indi__D_
+    </defText>
+    <defText name="RECORD_FILE_NAME" label="Name">
+indi_record__T_
+    </defText>
+</defTextVector>
+<defNumberVector device="CCD Simulator" name="RECORD_OPTIONS" label="Record Options" group="Streaming" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="RECORD_DURATION" label="Duration (sec)" format="%.3f" min="0.0010000000000000000208" max="999999" step="0">
+1
+    </defNumber>
+    <defNumber name="RECORD_FRAME_TOTAL" label="Frames" format="%.f" min="1" max="999999999" step="1">
+30
+    </defNumber>
+</defNumberVector>
+<defNumberVector device="CCD Simulator" name="CCD_STREAM_FRAME" label="Frame" group="Streaming" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="X" label="Left" format="%.f" min="0" max="0" step="0">
+0
+    </defNumber>
+    <defNumber name="Y" label="Top" format="%.f" min="0" max="0" step="0">
+0
+    </defNumber>
+    <defNumber name="WIDTH" label="Width" format="%.f" min="0" max="0" step="0">
+0
+    </defNumber>
+    <defNumber name="HEIGHT" label="Height" format="%.f" min="0" max="0" step="0">
+0
+    </defNumber>
+</defNumberVector>
+<defSwitchVector device="CCD Simulator" name="CCD_STREAM_ENCODER" label="Encoder" group="Streaming" state="Idle" perm="rw" rule="OneOfMany" timeout="0" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="RAW" label="RAW">
+On
+    </defSwitch>
+    <defSwitch name="MJPEG" label="MJPEG">
+Off
+    </defSwitch>
+</defSwitchVector>
+<defSwitchVector device="CCD Simulator" name="CCD_STREAM_RECORDER" label="Recorder" group="Streaming" state="Idle" perm="rw" rule="OneOfMany" timeout="0" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="SER" label="SER">
+On
+    </defSwitch>
+</defSwitchVector>
+<defNumberVector device="CCD Simulator" name="LIMITS" label="Limits" group="Streaming" state="Idle" perm="rw" timeout="0" timestamp="2026-11-17T03:58:31">
+    <defNumber name="LIMITS_BUFFER_MAX" label="Maximum Buffer Size (MB)" format="%.0f" min="1" max="65536" step="1">
+512
+    </defNumber>
+    <defNumber name="LIMITS_PREVIEW_FPS" label="Maximum Preview FPS" format="%.0f" min="1" max="120" step="1">
+10
+    </defNumber>
+</defNumberVector>
+<defSwitchVector device="CCD Simulator" name="DSP_ACTIVATE_CONVOLUTION" label="Convolution" group="Signal Processing" state="Idle" perm="rw" rule="OneOfMany" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="DSP_ACTIVATE_ON" label="On">
+Off
+    </defSwitch>
+    <defSwitch name="DSP_ACTIVATE_OFF" label="Off">
+On
+    </defSwitch>
+</defSwitchVector>
+<defSwitchVector device="CCD Simulator" name="DSP_ACTIVATE_DFT" label="DFT" group="Signal Processing" state="Idle" perm="rw" rule="OneOfMany" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="DSP_ACTIVATE_ON" label="On">
+Off
+    </defSwitch>
+    <defSwitch name="DSP_ACTIVATE_OFF" label="Off">
+On
+    </defSwitch>
+</defSwitchVector>
+<defSwitchVector device="CCD Simulator" name="DSP_ACTIVATE_IDFT" label="IDFT" group="Signal Processing" state="Idle" perm="rw" rule="OneOfMany" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="DSP_ACTIVATE_ON" label="On">
+Off
+    </defSwitch>
+    <defSwitch name="DSP_ACTIVATE_OFF" label="Off">
+On
+    </defSwitch>
+</defSwitchVector>
+<defSwitchVector device="CCD Simulator" name="DSP_ACTIVATE_SPECTRUM" label="Spectrum" group="Signal Processing" state="Idle" perm="rw" rule="OneOfMany" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="DSP_ACTIVATE_ON" label="On">
+Off
+    </defSwitch>
+    <defSwitch name="DSP_ACTIVATE_OFF" label="Off">
+On
+    </defSwitch>
+</defSwitchVector>
+<defSwitchVector device="CCD Simulator" name="DSP_ACTIVATE_HISTOGRAM" label="Histogram" group="Signal Processing" state="Idle" perm="rw" rule="OneOfMany" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="DSP_ACTIVATE_ON" label="On">
+Off
+    </defSwitch>
+    <defSwitch name="DSP_ACTIVATE_OFF" label="Off">
+On
+    </defSwitch>
+</defSwitchVector>
+<defSwitchVector device="CCD Simulator" name="DSP_ACTIVATE_WAVELETS" label="Wavelets" group="Signal Processing" state="Idle" perm="rw" rule="OneOfMany" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="DSP_ACTIVATE_ON" label="On">
+Off
+    </defSwitch>
+    <defSwitch name="DSP_ACTIVATE_OFF" label="Off">
+On
+    </defSwitch>
+</defSwitchVector>
+<defSwitchVector device="CCD Simulator" name="CCD_COOLER" label="Cooler" group="Main Control" state="Idle" perm="wo" rule="OneOfMany" timeout="0" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="COOLER_ON" label="ON">
+Off
+    </defSwitch>
+    <defSwitch name="COOLER_OFF" label="OFF">
+On
+    </defSwitch>
+</defSwitchVector>
+<defNumberVector device="CCD Simulator" name="CCD_GAIN" label="Gain" group="Main Control" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="GAIN" label="value" format="%.f" min="0" max="100" step="10">
+90
+    </defNumber>
+</defNumberVector>
+<defNumberVector device="CCD Simulator" name="CCD_OFFSET" label="Offset" group="Main Control" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="OFFSET" label="value" format="%.f" min="0" max="6000" step="500">
+0
+    </defNumber>
+</defNumberVector>
+<defTextVector device="CCD Simulator" name="CCD_DIRECTORY_LOCATION" label="Directory" group="Simulator Config" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defText name="LOCATION" label="Location">
+/home/observer
+    </defText>
+</defTextVector>
+<defSwitchVector device="CCD Simulator" name="CCD_DIRECTORY_TOGGLE" label="Use Dir." group="Simulator Config" state="Idle" perm="rw" rule="OneOfMany" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defSwitch name="INDI_ENABLED" label="Enabled">
+Off
+    </defSwitch>
+    <defSwitch name="INDI_DISABLED" label="Disabled">
+On
+    </defSwitch>
+</defSwitchVector>
+<setNumberVector device="CCD Simulator" name="CCD_INFO" state="Idle" timeout="60" timestamp="2026-11-17T03:58:31">
+    <oneNumber name="CCD_MAX_X">
+1280
+    </oneNumber>
+    <oneNumber name="CCD_MAX_Y">
+1024
+    </oneNumber>
+    <oneNumber name="CCD_PIXEL_SIZE">
+0
+    </oneNumber>
+    <oneNumber name="CCD_PIXEL_SIZE_X">
+0
+    </oneNumber>
+    <oneNumber name="CCD_PIXEL_SIZE_Y">
+0
+    </oneNumber>
+    <oneNumber name="CCD_BITSPERPIXEL">
+0
+    </oneNumber>
+</setNumberVector>
+<setNumberVector device="CCD Simulator" name="CCD_FRAME" state="Idle" timeout="60" timestamp="2026-11-17T03:58:31">
+    <oneNumber name="X" min="0" max="1279" step="0">
+0
+    </oneNumber>
+    <oneNumber name="Y" min="0" max="1023" step="0">
+0
+    </oneNumber>
+    <oneNumber name="WIDTH" min="1" max="1280" step="0">
+0
+    </oneNumber>
+    <oneNumber name="HEIGHT" min="1" max="1024" step="0">
+0
+    </oneNumber>
+</setNumberVector>
+<setNumberVector device="CCD Simulator" name="CCD_FRAME" state="Idle" timeout="60" timestamp="2026-11-17T03:58:31">
+    <oneNumber name="X">
+0
+    </oneNumber>
+    <oneNumber name="Y">
+0
+    </oneNumber>
+    <oneNumber name="WIDTH">
+1280
+    </oneNumber>
+    <oneNumber name="HEIGHT">
+1024
+    </oneNumber>
+</setNumberVector>
+<setNumberVector device="CCD Simulator" name="CCD_BINNING" state="Idle" timeout="60" timestamp="2026-11-17T03:58:31">
+    <oneNumber name="HOR_BIN">
+1
+    </oneNumber>
+    <oneNumber name="VER_BIN">
+1
+    </oneNumber>
+</setNumberVector>
+<setNumberVector device="CCD Simulator" name="CCD_INFO" state="Idle" timeout="60" timestamp="2026-11-17T03:58:31">
+    <oneNumber name="CCD_MAX_X">
+1280
+    </oneNumber>
+    <oneNumber name="CCD_MAX_Y">
+1024
+    </oneNumber>
+    <oneNumber name="CCD_PIXEL_SIZE">
+5.1999998092651367188
+    </oneNumber>
+    <oneNumber name="CCD_PIXEL_SIZE_X">
+5.1999998092651367188
+    </oneNumber>
+    <oneNumber name="CCD_PIXEL_SIZE_Y">
+5.1999998092651367188
+    </oneNumber>
+    <oneNumber name="CCD_BITSPERPIXEL">
+0
+    </oneNumber>
+</setNumberVector>
+<setNumberVector device="CCD Simulator" name="CCD_INFO" state="Idle" timeout="60" timestamp="2026-11-17T03:58:31">
+    <oneNumber name="CCD_MAX_X">
+1280
+    </oneNumber>
+    <oneNumber name="CCD_MAX_Y">
+1024
+    </oneNumber>
+    <oneNumber name="CCD_PIXEL_SIZE">
+5.1999998092651367188
+    </oneNumber>
+    <oneNumber name="CCD_PIXEL_SIZE_X">
+5.1999998092651367188
+    </oneNumber>
+    <oneNumber name="CCD_PIXEL_SIZE_Y">
+5.1999998092651367188
+    </oneNumber>
+    <oneNumber name="CCD_BITSPERPIXEL">
+16
+    </oneNumber>
+</setNumberVector>
+<setNumberVector device="CCD Simulator" name="CCD_STREAM_FRAME" state="Ok" timeout="60" timestamp="2026-11-17T03:58:31">
+    <oneNumber name="X" min="0" max="1279" step="0">
+0
+    </oneNumber>
+    <oneNumber name="Y" min="0" max="1023" step="0">
+0
+    </oneNumber>
+    <oneNumber name="WIDTH" min="10" max="1280" step="0">
+1280
+    </oneNumber>
+    <oneNumber name="HEIGHT" min="10" max="1024" step="0">
+1024
+    </oneNumber>
+</setNumberVector>
+<setNumberVector device="CCD Simulator" name="GUIDER_INFO" state="Idle" timeout="60" timestamp="2026-11-17T03:58:31">
+    <oneNumber name="CCD_MAX_X">
+500
+    </oneNumber>
+    <oneNumber name="CCD_MAX_Y">
+290
+    </oneNumber>
+    <oneNumber name="CCD_PIXEL_SIZE">
+0
+    </oneNumber>
+    <oneNumber name="CCD_PIXEL_SIZE_X">
+0
+    </oneNumber>
+    <oneNumber name="CCD_PIXEL_SIZE_Y">
+0
+    </oneNumber>
+    <oneNumber name="CCD_BITSPERPIXEL">
+0
+    </oneNumber>
+</setNumberVector>
+<setNumberVector device="CCD Simulator" name="GUIDER_FRAME" state="Idle" timeout="60" timestamp="2026-11-17T03:58:31">
+    <oneNumber name="X" min="0" max="499" step="0">
+0
+    </oneNumber>
+    <oneNumber name="Y" min="0" max="289" step="0">
+0
+    </oneNumber>
+    <oneNumber name="WIDTH" min="1" max="500" step="0">
+0
+    </oneNumber>
+    <oneNumber name="HEIGHT" min="1" max="290" step="0">
+0
+    </oneNumber>
+</setNumberVector>
+<setNumberVector device="CCD Simulator" name="GUIDER_FRAME" state="Idle" timeout="60" timestamp="2026-11-17T03:58:31">
+    <oneNumber name="X">
+0
+    </oneNumber>
+    <oneNumber name="Y">
+0
+    </oneNumber>
+    <oneNumber name="WIDTH">
+500
+    </oneNumber>
+    <oneNumber name="HEIGHT">
+290
+    </oneNumber>
+</setNumberVector>
+<setNumberVector device="CCD Simulator" name="GUIDER_INFO" state="Idle" timeout="60" timestamp="2026-11-17T03:58:31">
+    <oneNumber name="CCD_MAX_X">
+500
+    </oneNumber>
+    <oneNumber name="CCD_MAX_Y">
+290
+    </oneNumber>
+    <oneNumber name="CCD_PIXEL_SIZE">
+9.8000001907348632812
+    </oneNumber>
+    <oneNumber name="CCD_PIXEL_SIZE_X">
+9.8000001907348632812
+    </oneNumber>
+    <oneNumber name="CCD_PIXEL_SIZE_Y">
+12.600000381469726562
+    </oneNumber>
+    <oneNumber name="CCD_BITSPERPIXEL">
+0
+    </oneNumber>
+</setNumberVector>
+<setNumberVector device="CCD Simulator" name="GUIDER_INFO" state="Idle" timeout="60" timestamp="2026-11-17T03:58:31">
+    <oneNumber name="CCD_MAX_X">
+500
+    </oneNumber>
+    <oneNumber name="CCD_MAX_Y">
+290
+    </oneNumber>
+    <oneNumber name="CCD_PIXEL_SIZE">
+9.8000001907348632812
+    </oneNumber>
+    <oneNumber name="CCD_PIXEL_SIZE_X">
+9.8000001907348632812
+    </oneNumber>
+    <oneNumber name="CCD_PIXEL_SIZE_Y">
+12.600000381469726562
+    </oneNumber>
+    <oneNumber name="CCD_BITSPERPIXEL">
+16
+    </oneNumber>
+</setNumberVector>
+<defNumberVector device="CCD Simulator" name="FILTER_SLOT" label="Filter Slot" group="Filter Wheel" state="Idle" perm="rw" timeout="60" timestamp="2026-11-17T03:58:31">
+    <defNumber name="FILTER_SLOT_VALUE" label="Filter" format="%3.0f" min="1" max="8" step="1">
+1
+    </defNumber>
+</defNumberVector>
+<defTextVector device="CCD Simulator" name="FILTER_NAME" label="Filter" group="Filter Wheel" state="Idle" perm="rw" timeout="0" timestamp="2026-11-17T03:58:31">
+    <defText name="FILTER_SLOT_NAME_1" label="Filter#1">
+Red
+    </defText>
+    <defText name="FILTER_SLOT_NAME_2" label="Filter#2">
+Green
+    </defText>
+    <defText name="FILTER_SLOT_NAME_3" label="Filter#3">
+Blue
+    </defText>
+    <defText name="FILTER_SLOT_NAME_4" label="Filter#4">
+H_Alpha
+    </defText>
+    <defText name="FILTER_SLOT_NAME_5" label="Filter#5">
+SII
+    </defText>
+    <defText name="FILTER_SLOT_NAME_6" label="Filter#6">
+OIII
+    </defText>
+    <defText name="FILTER_SLOT_NAME_7" label="Filter#7">
+LPR
+    </defText>
+    <defText name="FILTER_SLOT_NAME_8" label="Filter#8">
+Luminance
+    </defText>
+</defTextVector>
+
+@ expect enableBLOB text=Also
+@ send
+
+@ expect newSwitchVector CCD_COMPRESSION INDI_DISABLED=On
+@ send
+<setSwitchVector device="CCD Simulator" name="CCD_COMPRESSION" state="Ok" timeout="60" timestamp="2026-11-17T03:58:37">
+    <oneSwitch name="INDI_ENABLED">
+Off
+    </oneSwitch>
+    <oneSwitch name="INDI_DISABLED">
+On
+    </oneSwitch>
+</setSwitchVector>
+
+@ expect newSwitchVector CCD_TRANSFER_FORMAT FORMAT_FITS=On
+@ send
+<setSwitchVector device="CCD Simulator" name="CCD_TRANSFER_FORMAT" state="Ok" timeout="60" timestamp="2026-11-17T03:58:39">
+    <oneSwitch name="FORMAT_FITS">
+On
+    </oneSwitch>
+    <oneSwitch name="FORMAT_NATIVE">
+Off
+    </oneSwitch>
+</setSwitchVector>
+
+@ expect newSwitchVector UPLOAD_MODE UPLOAD_CLIENT=On
+@ send
+<message device="CCD Simulator" timestamp="2026-11-17T03:58:41" message="[INFO] Upload settings set to client only."/>
+<setSwitchVector device="CCD Simulator" name="UPLOAD_MODE" state="Ok" timeout="0" timestamp="2026-11-17T03:58:41">
+    <oneSwitch name="UPLOAD_CLIENT">
+On
+    </oneSwitch>
+    <oneSwitch name="UPLOAD_LOCAL">
+Off
+    </oneSwitch>
+    <oneSwitch name="UPLOAD_BOTH">
+Off
+    </oneSwitch>
+</setSwitchVector>
+
+@ expect newNumberVector CCD_FRAME X=0 Y=0 WIDTH=64 HEIGHT=48
+@ send
+<setNumberVector device="CCD Simulator" name="CCD_STREAM_FRAME" state="Ok" timeout="60" timestamp="2026-11-17T03:58:43">
+    <oneNumber name="X" min="0" max="63" step="0">
+0
+    </oneNumber>
+    <oneNumber name="Y" min="0" max="47" step="0">
+0
+    </oneNumber>
+    <oneNumber name="WIDTH" min="10" max="64" step="0">
+64
+    </oneNumber>
+    <oneNumber name="HEIGHT" min="10" max="48" step="0">
+48
+    </oneNumber>
+</setNumberVector>
+<setNumberVector device="CCD Simulator" name="CCD_FRAME" state="Idle" timeout="60" timestamp="2026-11-17T03:58:43">
+    <oneNumber name="X">
+0
+    </oneNumber>
+    <oneNumber name="Y">
+0
+    </oneNumber>
+    <oneNumber name="WIDTH">
+64
+    </oneNumber>
+    <oneNumber name="HEIGHT">
+48
+    </oneNumber>
+</setNumberVector>
+<setNumberVector device="CCD Simulator" name="CCD_FRAME" state="Ok" timeout="60" timestamp="2026-11-17T03:58:43">
+    <oneNumber name="X">
+0
+    </oneNumber>
+    <oneNumber name="Y">
+0
+    </oneNumber>
+    <oneNumber name="WIDTH">
+64
+    </oneNumber>
+    <oneNumber name="HEIGHT">
+48
+    </oneNumber>
+</setNumberVector>
+
+@ expect newSwitchVector CCD_FRAME_TYPE FRAME_LIGHT=On
+@ send
+<setSwitchVector device="CCD Simulator" name="CCD_FRAME_TYPE" state="Ok" timeout="60" timestamp="2026-11-17T03:58:46">
+    <oneSwitch name="FRAME_LIGHT">
+On
+    </oneSwitch>
+    <oneSwitch name="FRAME_BIAS">
+Off
+    </oneSwitch>
+    <oneSwitch name="FRAME_DARK">
+Off
+    </oneSwitch>
+    <oneSwitch name="FRAME_FLAT">
+Off
+    </oneSwitch>
+</setSwitchVector>
+
+@ expect newNumberVector CCD_EXPOSURE CCD_EXPOSURE_VALUE=1
+@ send
+<message device="CCD Simulator" timestamp="2026-11-17T03:58:48" message="[ERROR] Got no stars, is gsc installed with appropriate environment variables set ??"/>
+<setNumberVector device="CCD Simulator" name="CCD_EXPOSURE" state="Busy" timeout="60" timestamp="2026-11-17T03:58:48">
+    <oneNumber name="CCD_EXPOSURE_VALUE">
+1
+    </oneNumber>
+</setNumberVector>
+<setNumberVector device="CCD Simulator" name="CCD_EXPOSURE" state="Busy" timeout="60" timestamp="2026-11-17T03:58:49">
+    <oneNumber name="CCD_EXPOSURE_VALUE">
+0.0070000002160668373108
+    </oneNumber>
+</setNumberVector>
+<setNumberVector device="CCD Simulator" name="CCD_EXPOSURE" state="Busy" timeout="60" timestamp="2026-11-17T03:58:49">
+    <oneNumber name="CCD_EXPOSURE_VALUE">
+0
+    </oneNumber>
+</setNumberVector>
+<message device="CCD Simulator" timestamp="2026-11-17T03:58:49" message="[WARNING] Telescope focal length is missing."/>
+<message device="CCD Simulator" timestamp="2026-11-17T03:58:49" message="[WARNING] Telescope aperture is missing."/>
+<setBLOBVector device="CCD Simulator" name="CCD1" state="Ok" timeout="60" timestamp="2026-11-17T03:58:49">
+    <oneBLOB name="CCD1" size="11520" format=".fits" len="11520">
+U0lNUExFICA9ICAgICAgICAgICAgICAgICAgICBUIC8gZmlsZSBkb2VzIGNvbmZvcm0gdG8gRklUUyBzdGFuZGFyZCAgICAgICAgICAgICBCSVRQSVggID0gICAgICAgICAgICAgICAgICAgMTYgLyBudW1iZXIgb2YgYml0cyBwZXIgZGF0YSBwaXhlbCAgICAgICAgICAgICAgICAgIE5BWElTICAgPSAgICAgICAgICAgICAgICAgICAgMiAvIG51bWJlciBvZiBkYXRhIGF4ZXMgICAgICAgICAgICAgICAgICAgICAgICAgICAgTkFYSVMxICA9ICAgICAgICAgICAgICAgICAgIDY0IC8gbGVuZ3RoIG9mIGRhdGEgYXhpcyAxICAgICAgICAgICAgICAgICAgICAgICAgICBOQVhJUzIgID0gICAgICAgICAgICAgICAgICAgNDggLyBsZW5ndGggb2YgZGF0YSBheGlzIDIgICAgICAgICAgICAgICAgICAgICAgICAgIEVYVEVORCAgPSAgICAgICAgICAgICAgICAgICAgVCAvIEZJVFMgZGF0YXNldCBtYXkgY29udGFpbiBleHRlbnNpb25zICAgICAgICAgICAgQ09NTUVOVCAgIEZJVFMgKEZsZXhpYmxlIEltYWdlIFRyYW5zcG9ydCBTeXN0ZW0pIGZvcm1hdCBpcyBkZWZpbmVkIGluICdBc3Ryb25vbXlDT01NRU5UICAgYW5kIEFzdHJvcGh5c2ljcycsIHZvbHVtZSAzNzYsIHBhZ2UgMzU5OyBiaWJjb2RlOiAyMDAxQSZBLi4uMzc2Li4zNTlIIEJaRVJPICAgPSAgICAgICAgICAgICAgICAzMjc2OCAvIG9mZnNldCBkYXRhIHJhbmdlIHRvIHRoYXQgb2YgdW5zaWduZWQgc2hvcnQgICAgQlNDQUxFICA9ICAgICAgICAgICAgICAgICAgICAxIC8gZGVmYXVsdCBzY2FsaW5nIGZhY3RvciAgICAgICAgICAgICAgICAgICAgICAgICBST1dPUkRFUj0gJ1RPUC1ET1dOJyAgICAgICAgICAgLyBSb3cgT3JkZXIgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIElOU1RSVU1FPSAnQ0NEIFNpbXVsYXRvcicgICAgICAvIENDRCBOYW1lICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVEVMRVNDT1A9ICdUZWxlc2NvcGUgU2ltdWxhdG9yJyAvIFRlbGVzY29wZSBuYW1lICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBPQlNFUlZFUj0gJ1Vua25vd24gJyAgICAgICAgICAgLyBPYnNlcnZlciBuYW1lICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE9CSkVDVCAgPSAnVW5rbm93biAnICAgICAgICAgICAvIE9iamVjdCBuYW1lICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRVhQVElNRSA9ICAgICAgICAgMS4wMDAwMDBFKzAwIC8gVG90YWwgRXhwb3N1cmUgVGltZSAocykgICAgICAgICAgICAgICAgICAgICAgICBDQ0QtVEVNUD0gICAgICAgICAgICAwLjAwMEUrMDAgLyBDQ0QgVGVtcGVyYXR1cmUgKENlbHNpdXMpICAgICAgICAgICAgICAgICAgICAgIFBJWFNJWkUxPSAgICAgICAgIDUuMjAwMDAwRSswMCAvIFBpeGVsIFNpemUgMSAobWljcm9ucykgICAgICAgICAgICAgICAgICAgICAgICAgUElYU0laRTI9ICAgICAgICAgNS4yMDAwMDBFKzAwIC8gUGl4ZWwgU2l6ZSAyIChtaWNyb25zKSAgICAgICAgICAgICAgICAgICAgICAgICBYQklOTklORz0gICAgICAgICAgICAgICAgICAgIDEgLyBCaW5uaW5nIGZhY3RvciBpbiB3aWR0aCAgICAgICAgICAgICAgICAgICAgICAgIFlCSU5OSU5HPSAgICAgICAgICAgICAgICAgICAgMSAvIEJpbm5pbmcgZmFjdG9yIGluIGhlaWdodCAgICAgICAgICAgICAgICAgICAgICAgWFBJWFNaICA9ICAgICAgICAgNS4yMDAwMDBFKzAwIC8gWCBiaW5uZWQgcGl4ZWwgc2l6ZSBpbiBtaWNyb25zICAgICAgICAgICAgICAgICBZUElYU1ogID0gICAgICAgICA1LjIwMDAwMEUrMDAgLyBZIGJpbm5lZCBwaXhlbCBzaXplIGluIG1pY3JvbnMgICAgICAgICAgICAgICAgIEZSQU1FICAgPSAnTGlnaHQgICAnICAgICAgICAgICAvIEZyYW1lIFR5cGUgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSU1BR0VUWVA9ICdMaWdodCBGcmFtZScgICAgICAgIC8gRnJhbWUgVHlwZSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGSUxURVIgID0gJ1JlZCAgICAgJyAgICAgICAgICAgLyBGaWx0ZXIgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFJPVEFUQU5HPSAgICAgICAgICAgIDAuMDAwRSswMCAvIFJvdGF0b3IgYW5nbGUgaW4gZGVncmVlcyAgICAgICAgICAgICAgICAgICAgICAgREFURS1PQlM9ICcyMDI2LTExLTE3VDAzOjU4OjQ4Ljc4NScgLyBVVEMgc3RhcnQgZGF0ZSBvZiBvYnNlcnZhdGlvbiAgICAgICAgICAgICBDT01NRU5UIEdlbmVyYXRlZCBieSBJTkRJICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEdBSU4gICAgPSAgICAgICAgICAgIDkuMDAwRSswMSAvIEdhaW4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRU5EICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAggAaAAIAGgAmAA4AIgAaAAIAHgAWAAIACgAiAAYAFgAWAAoAJgAeAA4AGgAGABIAGgAeAAYACgAWABYACgAOACIAHgAWABoAJgAGACYABgACAB4ADgAWAAoAJgAWABoAEgAKABoACgAmACIAEgAaAAYAIgAaAA4AEgASAB4AIgAWAB4ADgASAAIAIgAmACYAEgASAAoAIgAiAA4AHgAWAAIAIgAiABIAEgAmAAoAEgAGAB4AIgASAAoADgAWABYAFgACABIABgAGABoAFgACABYAFgAGAA4ADgAiAAoAGgAmACIAHgAWAB4ADgAKACYAEgAiAAIACgASABoAIgAOAAoAFgAaACYAIgAiAA4ADgAiAA4AGgAGACYAHgACABIAIgACABoABgAaAAoACgAWACIACgACABIAHgAKAAoAEgACAB4AJgACAAIAHgAeACYACgAKAAYAHgAKAA4ABgAmAAIAGgAiAA4AJgAGABIAEgAiAAYAHgAKAAoAJgAKAAYAEgAOAAYAFgAiAA4AGgAOAAIABgAWACYAGgAmABIAJgACAA4AHgAGABoABgAGACYAHgAOAAYAEgAmAAYAGgAOABYAIgASABYAEgAWABIADgACAAoABgAaAB4AEgAOABoABgAiACIACgAeAAoAAgAiABoAGgAOABIAEgAaAAIAIgAeABYAAgACABYABgAiACIAEgASACIAJgACAA4AAgAiABIAHgACAA4AAgAeABoABgACAB4AHgAmAAYAJgAmABoAJgAmABoAHgAGAB4AGgACAAoAIgAmACYADgASAAoAHgASABYACgACAA4ACgAKABIAGgAiAB4AHgAaAAIAHgAKABIAGgAaABIAAgAiAAIAAgAKABoAHgAeAB4AHgAiAA4ABgACABIAAgAKAB4ACgAKABYACgAmACYAJgAeAAYAEgAKACYAIgASAAYAIgASAAoAEgAaAAIAHgAmACYAHgAWABIADgAGAAIAFgAmAB4AAgAaAAIABgASABIAJgAGAB4AHgAKAA4AIgAmACYACgAWACYAJgAmACIAAgAiABYAIgAGAAIAIgAOABYAJgACACIABgAWAAYADgAaABoADgAOABoADgAOAAoAIgAiACYAGgAOABoAAgAKAAIABgAOABoADgASAA4AAgACABYACgAiABoAEgAiAAYAJgAmABIAAgAWACYACgAeABoAGgAGABoAGgASABoACgAGAB4ABgAWAA4ADgASAAoAIgAeAAoAJgAGAA4AAgAiAA4AIgAOAAYAIgAmAAoAAgAaACYABgASAB4AAgACABoABgAeAA4AEgAKAAIAIgAmABIAFgACABIABgAiABIAGgAiABYAGgAWABoABgACAAYADgASAAIAGgAGAAoAAgAWAAIAEgAaAAoAFgASACIABgAmABoACgAaAAIAHgAOAA4AGgAKAAYAJgAWABIADgACABIAAgAKAA4ADgACAAoAEgAWABYACgAOABYABgAmACIABgASAAYAEgAeABIAHgAGABIABgAGAAoAFgAKABoAHgAiAA4AFgASAAIACgASAA4ABgAGABoACgAmACYABgAeABYACgAmAAIADgAaABYACgAiAAIAFgAGAAoAGgAaAA4ADgAeAA4AIgACACYAFgACAAIAHgAOAAIABgAeAA4AAgAmABoAGgAiACIAEgAaABoACgAeAAYAGgAeAB4ABgAKABYADgAGAAIAEgAaAAYAEgAOACYACgAKAA4ACgAaABYAAgAeAB4AGgACACIAJgAmABIAGgAKAAIAIgASAAoADgASACIABgAaAAIABgAeAB4AGgAaACIAAgAOAB4AFgAmABIADgAGAAoACgAKACIAIgAWAA4ACgAGABoAAgAWAB4AGgAOAAYAAgAKABIAAgAmAB4AAgAGAB4AEgAeACIAGgAaAAYAEgASAAIABgASABYAGgASABoAJgAOABYACgAmAB4AAgAiAB4ABgAKABoAFgAmAAoAGgAKAAoAIgASABoABgAGACYAEgAmACYAJgAeAB4AAgAiAAYAJgAmABYACgAGACIAAgASAAoABgASAAIAHgAmACYAAgAGABIAFgAWAAIAFgAOAAIAEgAOACIAEgAaAA4AJgASABoAFgASAAIAHgAOAAYAAgAWABoAJgASAB4AEgAGABYAGgACAAYAHgASAAoAEgAKABoAGgAaAAIACgAiACIAHgAeAA4AEgAKAAYAGgAiABoACgAKACIACgAKACIAGgAOABYACgAKABIAIgAiABYAJgAWABoAEgAOAB4ADgASABYAHgAWAB4AEgACAAYADgAiACIAJgAGAAIAJgAKABoADgACACIACgAKAA4AAgAmAB4AFgASAA4AEgAeABYAHgAiAAIAGgAeABoAFgACABYACgACACIAHgACABoAIgASABIAAgAWAAYACgAOACIAGgASABIAEgAaACYACgAaABIAGgAiABoAAgAOAB4AAgAiAAYAAgASACYABgAKABYAAgAiABoAJgAKAAYAGgAaACYAHgAmABYAJgAmABIAEgAGACIADgACABoABgAmABIAAgAaABYAIgACAAYAEgAWACIAGgAiAAoAJgAKAB4AEgAGABYACgACACYAEgAeACYAGgAKAB4AAgASAA4AEgAOACYAJgACACIAIgAKACIAFgAmABYAJgAeAB4AEgASABYAGgAmABIAFgAaABoAEgAOAAIAGgAKABoAFgACACIAIgAaAB4AFgAmACIAJgAWACIAAgAOAA4AEgAmAAYAIgAWABIAEgASAA4ACgAmABIAAgACABYACgAaACYAEgAWABoACgAiAAIACgAeACIAJgACAAYAAgAaACIAHgASAAoABgAmACYADgASACYAJgACACYABgAeAA4ACgAaABoAEgAiABIAFgAKAAoAGgAaAAoAEgAiABoAFgASABoAHgAKABoAAgAaACYAFgAmABYABgASAB4AJgAaAAoAGgAKAA4AHgASAAYAEgAiABoAAgAmABYAJgAWACIADgAmACIACgAmABIADgAeAB4AHgAWABYAEgACAB4AIgAaACYABgAiACIAGgAaACYAIgAKAAoAAgAOAAYADgAaAA4AAgAKAAYAFgAOABoAJgAiAAIAFgACACIAEgAGABoAGgAWABIAAgAOABYAGgAeAAoAFgAGACIACgAGABoAAgAmAAYAEgAeABIACgAmACIAAgAWAAYAGgAaAB4AEgACAAYADgAWAAYAJgAKACYAAgAiABIABgAKAB4AAgAOABYAIgAaABIAAgAaAAYADgAmABYADgAeAAIAFgAOAB4ACgAmABIAFgAeAAoABgASABYAHgAGABYAJgAmABYAGgAiAB4AEgAmABoAEgACACIACgAWABoAGgACAAoAJgAmABYAIgAeACYAAgAeABYAIgAKACIAHgAKACYABgAKABIAJgAaABIABgAWACIACgAmABIAAgACAA4AGgAGAB4AHgAmACYAGgAOAAoACgACACIADgAiAAYACgAOAB4AAgAeABoACgACACIABgAaAAoAEgAiAB4AAgACAAIADgACAAIACgAeABIAEgAOAB4AIgAeACIAGgAmAAIAAgAOAAoAEgAmAAIAJgAaACIAEgAeACYAJgAmAA4AJgASAAoAJgASAB4ACgASACIAJgAGAAIAFgAGABoAEgACABoAHgAmAA4AHgAWABIAEgAiACIADgACACIAGgAWAAoAEgAiAB4AAgAWACYAFgAmAAIAGgAaAAoADgAiAA4AHgAmACIAJgAOAAIAIgAmABYAFgAiAB4AFgAiACYADgACABIAJgACAAYAAgAmAAoABgAmABYABgACABIAHgAiAB4ADgAaABIAEgAWAAIAHgASABYABgAaACIAHgASAAoACgACABoAGgAKAAYACgAKAAIAEgASAAoAIgAiAA4AJgAOACYAAgAeACYAHgAmAAIAHgAWACIAJgAKAAYAIgAeAB4ADgAeAAIABgAOABoAFgAGAA4ADgAOAAYACgAeABYABgAaACIAJgACABIACgAiAAYABgACACIAAgAaAA4AHgAKAA4ACgAmAB4AFgACABYAJgASAA4AIgAKAAIAIgAKAAYAEgAmABYAHgAaAAoAIgAiAAIADgAiAAYAGgACACYACgAeAA4ACgAmAB4AFgAGAA4AAgAOAA4AFgACAAIAHgAaAAIABgAaACIAEgASAB4AJgAGACIAJgAWAAIAFgAaAAoACgAeAA4ABgAGAAoAEgAGABIAAgASACYAEgAOACIABgAWAB4AGgAKAA4ACgAmABYAHgAiAAYADgAOAAoAEgAeAA4AIgAKAAYACgAWABoABgAKACIAAgAmAAYAJgAaABIAEgAKACIAAgAaACIAGgAaAA4ABgAKACYAEgAOABoAHgACAAIADgAaAAYADgAeAB4AEgAOAB4AJgACAA4ADgAmAAYAJgASABYAHgAOAA4AJgAOAB4AAgACACYAEgAmAAoAEgACABoADgAOAA4ABgAWAB4ACgACAB4ADgASABoAJgASAAIACgAiAAIAAgAiACIAAgAKACIAAgAmAB4ADgAOACIAHgAaAAoAFgAeABIAHgAeAAIACgAaACYADgACAAIAAgAmABoAIgAaAAYABgAKACIAFgAeACYADgAmACYAJgAeACYAJgAiABYAIgAOACIAJgAiAAIAAgACABYAJgAWACYADgASAAYAFgAaAAIAAgAaACYAGgAmAAYADgAKABoAGgAaABIAAgAiABYAEgAGABoAJgASAAIABgAiAAYAFgAOAA4ADgAmAAYAIgASAB4ACgAKABoAJgAOAAIABgACAAoACgACAB4ABgAaAB4ABgAmABYACgAaAAIAEgAGAA4AGgAKABoAFgAWAAoAIgAmABIAIgAeAAYACgAKABIABgAmAB4AJgASACYAJgAOAAYADgAKAAIACgAmAAIAHgAaAB4ACgAeAAIAFgAOACIADgAOABIAAgAGABIABgAmABYABgAOAA4AEgAeAB4AHgAOABYAIgAKAAoAEgAKABIAFgAaACIAFgAOAA4AGgAaAA4AEgAiAA4AIgAKACIADgACACYAEgAiACIADgAKAAIAFgAGABYAGgAeABoAEgAiAB4AIgASACYACgACABIAJgAaAAIAFgAGAA4AGgAKABIAAgAeAAYAFgAmACIADgAGAA4ACgACAAoAIgAiAAoADgAGABIAHgAOABYAJgAWAAYAGgAeABoAFgAKAAoADgAaAAIACgAOABIACgAOAAoAHgAmAB4AEgAKABoACgAeACYAHgAiAA4AHgASABoACgAaABIAHgACAAIAEgAGAAIACgASACYAIgAWAA4AJgAaAAoAJgACACIAEgAmAAoADgAaAAYABgASABIABgAGABoAEgAOABYAIgAOACIAEgACAAIAHgAOAAYAGgAKABoAIgAiAB4AFgACACYABgAWABoABgASABoAHgASAB4AFgAKAB4AHgAeABYACgAWABYAAgACAAYAFgAeACIABgASAAIABgAeACIAGgAeABYACgAmAB4AAgAmABoAHgAGABYAGgAWACIADgAKABYAHgAaACIAEgAKABYACgAmAA4AHgAmABoAHgAmABYAJgAOABIAIgAWAAIAAgAGACYAGgACABIAHgAmAB4AHgAWACIAGgAaABoAHgAaABIAHgAOAAYACgACABYADgAmACYAAgACABoAGgACACIADgASABIAAgAOAAoAJgAiAAIAJgAaAAIAGgAOAA4AEgASACYADgAiAB4AIgAaABoAJgACAAoAEgAmABIAGgASAAoABgAWACIAFgAOAB4AGgAOAAYAFgAGAA4AFgAmACIABgAGACIAGgAaACIAEgAWAA4AIgAKAAoAFgAmAB4AAgAiAB4AAgASABIAFgAWAAoACgAWACIACgAaABoABgAiAB4AHgAKABoADgAiAB4ACgASACIABgAmAAIAJgASABoACgAeAB4ABgAGAB4ACgAmAAoAJgAeAB4AJgAmAA4AJgAaAB4AHgASACYAJgASACYADgAWAB4AEgAeAB4AAgASAAIABgAGACYABgAmAAIAHgASACYAEgAOACYADgACAAYAFgAiAB4ACgAaABIADgAGABoABgAWACYAGgAKAB4AHgACAAIABgAKAB4ABgAKAAYAHgAeAA4ACgACABYAGgAWAA4AAgAmAA4ADgACACYAGgAeABIACgAWABIAGgAiACYAEgASAAYAGgAeAA4ABgAOACYAHgAiACYAHgAeAB4AAgAWAAIACgAWAAYADgAaAB4AJgAOACYADgAiABYAEgAaAAoAGgAOAAoAFgAKAAYABgAKAAYADgAKACIAGgAKABYAIgAaAA4AFgACAAYAGgAWABIAHgAiACIADgACAAYAAgAmAAIAIgAeAAYAIgAeABYAIgAmACYAIgAGABIAEgAeACIABgASAAYACgAGABYAIgAKAAYAJgAaAB4AHgAiAAIABgACAA4AGgAeAAoAGgAmAAYADgAiACYADgAGAAYACgAWAAIAIgASACIADgAeABoADgAiAAYAEgAmACYAGgAWAB4AEgAWABIADgAiAAYADgAGACYAIgAaACYAJgAiAAoAAgASABYAAgAmABIAGgAWAAoABgAGAAIAJgASABYAJgAeACIADgAmAAYABgAOAAIADgAGACYACgAiAAYACgAGABYAEgAiACIAHgASAAoADgAeABoAHgACABIAAgASABYAJgAiAB4ADgACABIAJgAeABYAAgAOACIADgASAAIAEgAeAA4AEgACAA4AJgAOAB4AEgACABIAFgACACYAIgAeABYAFgAiAAYAGgAWAAIAIgASAAoAFgAiAB4AEgAWABYAAgAGABIAHgAaACIABgACAAYAAgAeACIAEgAeAAYAAgAeAA4AIgACACIADgAiABIAGgAWAB4AGgAeAAoABgAmAB4AFgAGAAIABgAKACYAEgAeAA4AJgACAA4AJgAKABYABgAOABYAAgAmAAIACgAmACYAAgAWAAYADgAOAA4AJgAGAA4AAgAOABYAFgACAAoADgACACYAEgACABoAEgAGABYADgAWACYACgAWAAoAIgASAAoAAgAmAAYAJgAiACYADgAmABoAIgAmAAIAEgAGAB4AEgAGAAoADgASABoAJgAeACYABgASACIAJgAGACIAEgAaAA4ACgAGAB4AJgAmAAoAAgACAA4ACgAiAAYAAgAmABoAHgAKABoAGgAmABoABgASAAYAGgAmAAIAGgACABoABgAeAB4ACgAOAB4ACgAeABIAIgAKABIAGgAiACIAFgACAAIAJgAOABYAAgAeABIAEgACAAoABgACABYAIgAGACIAIgASAAIACgAGAAYAGgAKACIAFgASAAoADgAeABoAEgAmABYAAgAiACIAAgAOABoAGgAaAAIAFgAeAAIAIgACAAYACgAOACIADgAOAB4ADgACACIAHgAiAAYAFgASAA4AHgASAB4AJgAaACIABgAGACIAHgAOABIAGgACACYAHgAaAB4AAgAeACIAGgASACYAGgACAAIACgAeABIAEgAOACIAEgAKAB4AGgAKAB4ABgACAAIABgAmABYABgAaAAoAJgAaABYACgASABoAJgAiABIAIgAiACYACgAmACIAJgAWAA4ADgAOABoAFgAeABYAHgASAA4AAgAWAA4AFgASAAIAIgAWAA4AIgAKACIAGgAiAAYAAgACAB4AHgAKAB4AIgAKAAoAHgAKACIAIgAWACYAEgACAA4AJgAaAA4AAgAaACIAHgASAB4AGgAOABYAIgAeABIACgAmAB4ABgAGACIAFgAKABYAEgAOAAYAEgAaAAIADgAGAAIAHgAeACYADgAaAAIADgAeAAYAFgACAAoAEgAaABoAGgAOAAIAFgAmAB4AIgAaAAoAIgACABYABgAWACIAEgAOABIAFgAaAA4AIgACABYABgAeAAoAFgAiAAIAFgAaAA4AFgAKACYAHgAGABoAHgAaAA4ABgAGAA4ADgAeAA4AAgACABIACgAOAA4ADgAmAAIAAgAaACYADgAWACIADgAOAAIACgAiACIAFgASABoAFgASACYAEgAKACIABgAaACYAFgAeAA4AAgAmAAoAEgAOAB4AAgAKAA4ABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    </oneBLOB>
+</setBLOBVector>
+<setNumberVector device="CCD Simulator" name="CCD_EXPOSURE" state="Ok" timeout="60" timestamp="2026-11-17T03:58:49">
+    <oneNumber name="CCD_EXPOSURE_VALUE">
+0
+    </oneNumber>
+</setNumberVector>
+

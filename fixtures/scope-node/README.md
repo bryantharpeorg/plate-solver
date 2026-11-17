@@ -108,3 +108,5 @@ Night frames have only been timed in the 1296 × 972 mode.
 
 **Power.** The first micro-USB cable undervolted at boot, with `get_throttled` at
 0x50005. A better cable reads 0x0 under capture load.
+
+- `indi/ccd-simulator.script` and `indi/ccd-simulator.expect.json`: INDI 1.9.9 (Ubuntu package 1.9.9+dfsg-6), `indiserver indi_simulator_ccd`, recorded 2026-11-17 with spec 030's recording script unchanged and `HOME=/home/observer`; the expected values written by 030's second program.

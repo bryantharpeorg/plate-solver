@@ -1,0 +1,41 @@
+{
+ "model": "CCD Simulator",
+ "width": 1280.0,
+ "height": 1024.0,
+ "pixel_um": 5.199999809265137,
+ "bits": 16.0,
+ "exposure_ms": [
+  10.0,
+  3600000.0
+ ],
+ "gain": [
+  0.0,
+  100.0
+ ],
+ "offset": [
+  0.0,
+  6000.0
+ ],
+ "binnings": [
+  1,
+  2,
+  3,
+  4
+ ],
+ "frame": {
+  "width": 64,
+  "height": 48,
+  "bits": 16,
+  "first_samples": [
+   6,
+   0,
+   6,
+   9,
+   3,
+   8,
+   6,
+   0
+  ],
+  "sample_sum": 13840
+ }
+}
