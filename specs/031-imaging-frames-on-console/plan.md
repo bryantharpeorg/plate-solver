@@ -231,7 +231,7 @@ plan.md § The stand-in camera): `SyntheticImagingCamera::new(clock: Arc<dyn Nod
 Its description, the settings it starts with, its sample rule and its cooler's rule are
 repeated in spec.md's shared setup, because this trio's scenarios compute from them.
 
-**The node's service** (`crates/scope-node/src/service.rs`, 030 US3 and US6; 030's
+**The node's service** (`crates/scope-node/src/service.rs`, 030 US3 and US7; 030's
 plan.md § The node's service and § The node's copy):
 
 ```rust
@@ -1371,7 +1371,7 @@ renumbered from 1: US1 to US6 were the sixth, seventh, eighth, tenth, eleventh a
 thirteenth stories of the one trio, and their requirements are FR-001 to FR-034 in
 story order. No interface, scenario value or decision changed. One scenario came from a
 story that stayed: US2-S12, the console's reading of the scope node's own copy, was the
-fifth scenario of that story (030's US6 now), and its test moved from a module of its
+fifth scenario of that story (030's US7 now), and its test moved from a module of its
 own into `imaging_frames`. Every edge to a story of 030 became this trio's
 `depends_on_landed`.
 

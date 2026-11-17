@@ -29,8 +29,8 @@ named for the owner (spec owner approval 3): `quick-xml` `=0.42.0` (MIT; its MSR
 1.86; default features are empty; the feature `async-tokio` is taken) and `base64`
 `=0.23.1` (MIT OR Apache-2.0; already in `Cargo.lock` for the console,
 `Cargo.lock:241`). Each is added by the story whose code first uses it, `quick-xml` by
-US4 and `base64` by US5, because the merge queue's `cargo-machete` refuses a dependency
-nothing uses (`.github/workflows/ci.yml:410`). No FITS crate.
+US4 and `base64` by US6, because the merge queue's `cargo-machete` refuses a dependency
+nothing uses (`.github/workflows/ci.yml:411`). No FITS crate.
 
 **Storage**: on the scope node, `frame-<id>.fits` under `save_dir`, when asked. Nothing
 else is kept: the camera keeps its own settings.
@@ -40,21 +40,24 @@ else is kept: the camera keeps its own settings.
 - US2: `crates/simulator/tests/imaging.rs` (new).
 - US3: `crates/scope-node/tests/imaging_service.rs` and
   `crates/simulator/tests/imaging_link.rs` (new).
-- US4: `crates/scope-node/tests/indi.rs`, `crates/scope-node/tests/imaging_config.rs`
-  and the stand-in INDI server, `crates/scope-node/tests/support/mod.rs` (new; a folder
+- US4: `crates/scope-node/tests/indi.rs` and the stand-in INDI server with the two
+  worked scripts, `crates/scope-node/tests/support/mod.rs` (new; a folder
   under `tests/` is not a test binary, as `crates/simulator/tests/support/mod.rs`
   already shows, and like that file it starts `#![allow(dead_code)]`).
-- US5: `crates/scope-node/tests/indi_expose.rs` (new), reusing that stand-in unchanged,
-  and the two operator-staged fixture files.
-- US6: `crates/scope-node/tests/imaging_save.rs` (new).
-- US7: `crates/scope-node/tests/imaging_probe.rs` (new).
+- US5: `crates/scope-node/tests/indi_settings.rs` and
+  `crates/scope-node/tests/imaging_config.rs` (new), reusing that stand-in and its
+  scripts unchanged.
+- US6: `crates/scope-node/tests/indi_expose.rs` (new), reusing that stand-in and its
+  scripts unchanged, and the two operator-staged fixture files.
+- US7: `crates/scope-node/tests/imaging_save.rs` (new).
+- US8: `crates/scope-node/tests/imaging_probe.rs` (new).
 - Every test here is a new integration-test file of `scope-node` or `simulator`, each
   its own test binary; none is a finder test, so none needs a `mod` line in an existing
   file.
 - A test's files go where spec.md's shared setup says (**Scratch folders**): under
   `CARGO_TARGET_TMPDIR`, removed on drop, never in a path built from
   `CARGO_MANIFEST_DIR` and `../../target`.
-- Every Rust test but the tests of the built `scope-node` (US4-S7, US6-S4 and US7-S3)
+- Every Rust test but the tests of the built `scope-node` (US5-S4, US7-S4 and US8-S3)
   runs in paused tokio time over in-memory streams, so every timeout in this plan is
   asserted exactly and none is waited for in real time.
 
@@ -83,35 +86,36 @@ one config table with a sub-table.
 | I. Agreeing with cedar is correctness | Nothing touches the solver, star detection or `crates/math-core`; the finder camera's path is unchanged. Behaviour here is grounded in the cited INDI documents and FITS rules (`docs/research/2026-11-15-imaging-camera.md` § 2. INDI) or in the simulator's truth; the simulator's own constants are declared as such. |
 | II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. Every test of this trio is a new file, and no existing test or gate file gains a line. |
 | III. Tests first, independent expectations | Oracles: the stand-in camera's sample rule, worked examples (FITS bytes, chunk counts), the simulator's truth (itself checked against the existing sky functions), INDI's documents through hand-written scripts, and one saved capture with values read from it by a separate program. Tests read FITS files with code of their own. Clocks are injected; virtual time only in tests. |
-| IV. Critical paths | No `unsafe`. Two dependency changes, `quick-xml` in US4 and `base64` in US5, each named for the owner and made by the story that uses the crate. One scope-link change, additive, in `crates/scope-link/proto`, named for the owner. Nothing under `proto/`, no database-format change, no `build.rs` change. |
-| V. Proven open source first, honest licensing | The finder camera's solver is untouched. INDI is reached over a socket and nothing of it is linked or copied; both new crates are permissively licensed. |
+| IV. Critical paths | No `unsafe`. Two dependency changes, `quick-xml` in US4 and `base64` in US6, each named for the owner and made by the story that uses the crate. One scope-link change, additive, in `crates/scope-link/proto`, named for the owner. Nothing under `proto/`, no database-format change, no `build.rs` change. |
+| V. Proven open source first, honest licensing | The finder camera's solver is untouched. INDI's server and device programs (LGPL-2.1-or-later) are a separate program reached over a socket, behind the camera port, and nothing of them is linked or copied; the gates reach INDI only through the stand-in server and the saved capture; the README names the programs and their licence (spec FR-026, Principle V as amended in 1.3.0). Both new crates are permissively licensed. |
 
 ## Project Structure
 
 ```text
 crates/scope-node/
-├── Cargo.toml                          # US4: quick-xml; US5: base64
-├── README.md                           # US4: ## The imaging camera; US5, US6, US7: its paragraphs
+├── Cargo.toml                          # US4: quick-xml; US6: base64
+├── README.md                           # US5: ## The imaging camera; US6, US7, US8: its paragraphs
 ├── src/lib.rs                          # US1: pub mod imaging
-├── src/imaging/mod.rs                  # US1: new, the port; US3, US4, US5, US6, US7: one pub mod line each
+├── src/imaging/mod.rs                  # US1: new, the port; US3, US4, US6, US7, US8: one pub mod line each
 ├── src/imaging/synthetic.rs            # US1: new, the stand-in camera
-├── src/imaging/service.rs              # US3: new, ScopeNodeImaging; US6: saving
-├── src/imaging/indi/mod.rs             # US4: new, the adapter, its neutral controls; US5: exposures, the frame's roi
+├── src/imaging/service.rs              # US3: new, ScopeNodeImaging; US7: saving
+├── src/imaging/indi/mod.rs             # US4: new, the adapter connected and described; US5: apply, its neutral controls; US6: exposures, the frame's roi
 ├── src/imaging/indi/protocol.rs        # US4: new, INDI elements in and out
-├── src/imaging/fits.rs                 # US5: new, reading a FITS BLOB
-├── src/imaging/save.rs                 # US6: new, the node's own FITS file
-├── src/imaging/probe.rs                # US7: new
-├── src/service.rs                      # US3: with_imaging, the route, ready() visibility; US6: with_imaging_save_dir
-├── src/config.rs                       # US4: [imaging] with neutral; US6: save_dir
-├── src/main.rs                         # US4: build and attach, --check-config; US6: save_dir; US7: --probe-camera
+├── src/imaging/fits.rs                 # US6: new, reading a FITS BLOB
+├── src/imaging/save.rs                 # US7: new, the node's own FITS file
+├── src/imaging/probe.rs                # US8: new
+├── src/service.rs                      # US3: with_imaging, the route, ready() visibility; US7: with_imaging_save_dir
+├── src/config.rs                       # US5: [imaging] with neutral; US7: save_dir
+├── src/main.rs                         # US5: build and attach, --check-config; US7: save_dir; US8: --probe-camera
 ├── tests/imaging_port.rs               # US1: new
 ├── tests/imaging_service.rs            # US3: new
-├── tests/support/mod.rs                # US4: new, the stand-in INDI server
+├── tests/support/mod.rs                # US4: new, the stand-in INDI server and the two worked scripts
 ├── tests/indi.rs                       # US4: new
-├── tests/imaging_config.rs             # US4: new
-├── tests/indi_expose.rs                # US5: new
-├── tests/imaging_save.rs               # US6: new
-└── tests/imaging_probe.rs              # US7: new
+├── tests/indi_settings.rs              # US5: new
+├── tests/imaging_config.rs             # US5: new
+├── tests/indi_expose.rs                # US6: new
+├── tests/imaging_save.rs               # US7: new
+└── tests/imaging_probe.rs              # US8: new
 crates/scope-link/proto/scope_node/v1/scope_node.proto   # US3: ScopeNodeImaging, the header's roi among its fields (adds only)
 crates/simulator/
 ├── src/lib.rs                          # US2: pub mod imaging, exports
@@ -121,7 +125,7 @@ crates/simulator/
 ├── src/node.rs                         # US3: SimNode attaches the imaging camera
 ├── tests/imaging.rs                    # US2: new
 └── tests/imaging_link.rs               # US3: new
-Cargo.lock                              # US4, US5
+Cargo.lock                              # US4, US6
 fixtures/scope-node/indi/               # operator-staged before the flip; no story writes it
 ```
 
@@ -266,10 +270,15 @@ pub fn check_exposure(info: &ImagingInfo, exposure: &Exposure) -> Result<(), Ima
 2. `offset`: the same two texts with `offset`.
 3. `binning` present and not in `info.binnings`:
    `binning {value} is not one of the camera's binnings {the list joined by ", "}`.
-4. The region, the edit's or the one in force, against the binning b that will be in
-   force: `x` and `y` must be multiples of 2·b, `width` and `height` at least b,
+4. When the edit names `roi` or `binning`: the region, the edit's or the one in force,
+   against the binning b that will be in force (1 when neither the edit nor the
+   settings in force name one): `x` and `y` must be multiples of 2·b, `width` and
+   `height` at least b,
    `x + width ≤ info.width` and `y + height ≤ info.height`; otherwise
-   `roi must lie inside the {W} × {H} sensor with x and y multiples of {2·b}`.
+   `roi must lie inside the {W} × {H} sensor with x and y multiples of {2·b}`. An edit
+   that names neither, a gain alone say, is never refused for the region in force, which
+   another INDI client may have set (spec § Edge Cases); only an edit that sends a new
+   region gets out of a region that breaks the rule.
 5. `cooler_on` `Some(true)` or `set_temp_c` present on a camera without a cooler:
    `this camera has no cooler`.
 6. `set_temp_c` not finite or outside −50 to 50: `set_temp_c must be between -50 and 50`.
@@ -310,7 +319,8 @@ impl ImagingCamera for SyntheticImagingCamera { /* … */ }
 - **The sample rule**: with binning b, region origin (x0, y0) and offset o in force,
   sample (c, r) is `256 + 16·round(o) + ((x0/b + c + 3·(y0/b + r)) mod 251)`, as a
   little-endian `u16`.
-- **The cooler's rule**, shared with the simulated camera: with the cooler off, or on
+- **The cooler's rule**, which the simulated camera (US2) repeats in its own code: with
+  the cooler off, or on
   with no set temperature, the sensor reads 20.0 °C and power 0.0; on with a set
   temperature T, it reads T at once and power `clamp(2.5·(20 − T), 0, 100)`.
 - **An exposure**: check it, refuse with `Busy` if one runs, mark the camera exposing,
@@ -418,7 +428,9 @@ b, normalised, and east = ẑ × b, normalised; and the scale `2·tan(fov/2)/wid
 **The field.** The sky is cut into cells 0.25° high in Dec; band j =
 ⌊(dec + 90)/0.25⌋ has n_j = max(1, round(360·cos(dec at the band's middle)/0.25)) cells
 in RA. A cell's stars come from `SplitMix64::new(seed, j·2²⁰ + i)`: a Poisson count of
-mean `STARS_PER_SQ_DEG` times the cell's area in square degrees; then for each star, in
+mean `STARS_PER_SQ_DEG` times the cell's area in square degrees, which is exact on the
+sphere, Δα·(sin δ_high − sin δ_low) in steradians times (180/π)², Δα in radians; then
+for each star, in
 this order, four uniforms: RA across the cell, Dec across it, the magnitude
 `8 + log10(1 + u·(10^(0.33·8) − 1))/0.33`, and the colour
 `[0.6 + 0.8·u, 1.0, 1.4 − 0.8·u]`. `deep_field` gathers the cells that touch the circle,
@@ -437,13 +449,14 @@ keeps the stars inside it, and sorts by magnitude, then RA.
    points at `p0 + (k + 0.5)/n·(p1 − p0)`; at each, a Gaussian of width
    σ = √(1.2² + (1.0·focus_error)²) carrying E/n electrons, where
    E = 400,000·10^(−0.4·(m − 10))·seconds. A sample whose centre is at distance d gets
-   `(E/n)·colour[its filter]·exp(−d²/(2σ²))/(2πσ²)`, for samples within ⌈4σ⌉ + 1. The
+   `(E/n)·colour[its filter]·exp(−d²/(2σ²))/(2πσ²)`, for the samples whose column and
+   row are each within ⌈4σ⌉ + 1 of the point (a square box, not a disc). The
    filter of sensor pixel (x, y) is red at even x and even y, blue at odd and odd,
    green otherwise;
 6. adds the sky, `SKY_E_PER_S`·seconds, to every sample;
 7. with noise on, adds `√(mean + 3²)·z` to each sample, z one `SplitMix64::normal()` a
    sample in row order from `SplitMix64::new(seed, frame number)`, the number counting
-   this camera's frames from 0;
+   the frames this camera has delivered, from 0; an aborted exposure takes none;
 8. turns electrons into counts, `16·offset + electrons·0.25·10^(gain/200)`;
 9. at binning 2, averages samples of the same colour. Delivered sample (c, r), for c
    below ⌊width/2⌋ and r below ⌊height/2⌋ of the region, is the mean of those of the
@@ -464,6 +477,9 @@ sensor, cooler off. These constants are the simulator's own, chosen so a default
 cheap and has a few stars above the noise in one second; the densities they stand for
 are in `docs/research/2026-11-15-imaging-camera.md` § 4. Star counts and limiting
 magnitude at this field.
+
+The camera uses tokio's `sync` and `macros`, which `scope-node`'s tokio enables for
+every build of the simulator, so `crates/simulator/Cargo.toml` does not change.
 
 ### The scope link (`crates/scope-link/proto/scope_node/v1/scope_node.proto`, US3)
 
@@ -585,10 +601,10 @@ pub const CHUNK_BYTES: usize = 262_144;
 /// module; `crates/scope-node/src/service.rs` builds it with `new` and keeps it in the
 /// runtime, and only this module's five calls reach the camera.
 pub(crate) struct ImagingHost { /* camera: Arc<dyn ImagingCamera>, next_id: AtomicU64 (1),
-                                  save_dir: OnceLock<PathBuf> (US6) */ }
+                                  save_dir: OnceLock<PathBuf> (US7) */ }
 impl ImagingHost {
     pub(crate) fn new(camera: Arc<dyn ImagingCamera>) -> Self;
-    /// US6. The first call sets the folder; a later one changes nothing.
+    /// US7. The first call sets the folder; a later one changes nothing.
     pub(crate) fn set_save_dir(&self, dir: PathBuf);
 }
 
@@ -612,8 +628,8 @@ pub(crate) fn imaging_host(&self) -> Option<&Arc<ImagingHost>>;
 
 The four unary calls first await `controls.ready(false)`, as `describe` does
 (`crates/scope-node/src/service.rs:414`), so a node made unresponsive is silent here
-too; then, with no host, they answer `Status::failed_precondition("no imaging camera")`
-as the call's status. `expose` is different, so that its caller meets one shape: the
+too (US3-S4); then, with no host, they answer
+`Status::failed_precondition("no imaging camera")` as the call's status. `expose` is different, so that its caller meets one shape: the
 interceptor's token check alone answers as the call's own status (`Unauthenticated`);
 after it `expose` always returns `Ok` with a stream, at once, and awaits
 `ready(false)` inside its task. Every later failure, a missing host included, is that
@@ -633,7 +649,7 @@ stream's first and only item.
      item, mapped as **Errors** says, and the task ends;
   3. the id is taken (`fetch_add`), whether or not anyone still listens;
   4. with `save` true: no save folder gives `node_save_error`
-     `this scope node has no save_dir` (US6 writes the file here, before the header);
+     `this scope node has no save_dir` (US7 writes the file here, before the header);
   5. the header is sent, its `roi` always set from `frame.roi`, then
      `frame.samples.chunks(CHUNK_BYTES)` in order. With
      `max_bytes_per_s` R above 0, before chunk k the task sleeps until the instant the
@@ -643,7 +659,8 @@ stream's first and only item.
 - **`abort_exposure`** calls `camera.abort()` and answers `AbortExposureReply {}`.
 
 The task holds one frame's samples once; chunks are copied out one at a time, so a
-32 MiB frame costs the node its own 32 MiB plus 256 KiB.
+32 MiB frame costs the node its own 32 MiB, plus the chunks waiting in the channel of 4
+(up to 1 MiB) and the transport's own buffers.
 
 ### `SimNode` (`crates/simulator/src/node.rs`, US3)
 
@@ -662,7 +679,7 @@ pub fn from_cameras(
 ) -> Result<Self, RangeError>;
 ```
 
-### The config (`crates/scope-node/src/config.rs`, US4; `save_dir`, US6)
+### The config (`crates/scope-node/src/config.rs`, US5; `save_dir`, US7)
 
 ```rust
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
@@ -684,7 +701,7 @@ pub struct ImagingConfig {
     #[serde(default)]
     pub neutral: std::collections::BTreeMap<String, f64>,
     #[serde(default)]
-    pub save_dir: Option<std::path::PathBuf>,   // US6
+    pub save_dir: Option<std::path::PathBuf>,   // US7
 }
 impl ImagingConfig {
     /// `address`, or 127.0.0.1:7624.
@@ -694,7 +711,7 @@ impl ImagingConfig {
     pub fn neutral_controls(&self) -> Vec<(String, String, f64)>;
     /// What `--check-config` prints after `[imaging]`, one line a key: `adapter`; for
     /// `indi`, `address` (the default included), `device` when set and `neutral` when
-    /// not empty; `save_dir` when set (US6). Texts are `key = "value"`; `neutral` is one
+    /// not empty; `save_dir` when set (US7). Texts are `key = "value"`; `neutral` is one
     /// inline table, `neutral = { "K1" = v1, "K2" = v2 }`, keys in sorted order, each
     /// quoted with `"` and `\` escaped, values with `Display` (`50`, `52.5`).
     pub fn printed(&self) -> String;
@@ -702,7 +719,7 @@ impl ImagingConfig {
 // Config gains, after `mount`: #[serde(default)] pub imaging: Option<ImagingConfig>,
 ```
 
-Worked example (US4-S7): `neutral = { "CCD_CONTROLS.WB_R" = 50, "CCD_CONTROLS.WB_B" = 50 }`
+Worked example (US5-S4): `neutral = { "CCD_CONTROLS.WB_R" = 50, "CCD_CONTROLS.WB_B" = 50 }`
 in the file prints `neutral = { "CCD_CONTROLS.WB_B" = 50, "CCD_CONTROLS.WB_R" = 50 }`, and
 `neutral_controls()` is `[("CCD_CONTROLS", "WB_B", 50.0), ("CCD_CONTROLS", "WB_R", 50.0)]`.
 A TOML integer is read as an `f64` by serde, so `50` and `50.0` are the same.
@@ -718,10 +735,10 @@ a `device` `imaging.device applies only to the indi adapter` and a non-empty `ne
 `imaging.device must not be empty`; a `neutral` key with no `.`, or with nothing before
 or after its first `.`, gives `imaging.neutral key {key} must be PROPERTY.ELEMENT`; a
 `neutral` value that is not finite gives `imaging.neutral {key} must be a finite number`;
-an empty `save_dir` `imaging.save_dir must not be empty` (US6). The keys are checked in
+an empty `save_dir` `imaging.save_dir must not be empty` (US7). The keys are checked in
 the table's sorted order and the first failure answers. `masked` does not change.
 
-### The INDI adapter (`crates/scope-node/src/imaging/indi/`, new, US4 and US5)
+### The INDI adapter (`crates/scope-node/src/imaging/indi/`, new, US4; US5 and US6)
 
 ```rust
 // indi/mod.rs
@@ -734,7 +751,7 @@ pub type IndiConnect = std::sync::Arc<
 
 /// How long each wait is. Tests assert these exactly in paused time.
 pub const SETUP_WAIT: Duration = Duration::from_secs(5);     // the device and its CONNECTION
-pub const READY_WAIT: Duration = Duration::from_secs(10);    // CCD_EXPOSURE and CCD_INFO
+pub const READY_WAIT: Duration = Duration::from_secs(10);    // CCD_EXPOSURE, CCD_INFO, settle
 pub const SETTLE: Duration = Duration::from_millis(200);     // quiet before the first sends
 pub const ANSWER_WAIT: Duration = Duration::from_secs(5);    // one setting's answer
 pub const DOWNLOAD_WAIT: Duration = Duration::from_secs(60); // a frame, after its exposure
@@ -746,7 +763,9 @@ pub type NeutralControls = Vec<(String, String, f64)>;
 
 pub struct IndiCamera { /* a sender of commands to the adapter's one task */ }
 impl IndiCamera {
-    /// `address` is only the text the errors name.
+    /// `address` is only the text the errors name. US4 keeps `neutral` and does not
+    /// use it, so the signature does not change when US5 sets the controls; US4 and
+    /// US5 do not read the clock, and US6's exposures do.
     pub fn new(connect: IndiConnect, address: String, device: Option<String>,
                neutral: NeutralControls, clock: Arc<dyn NodeClock>) -> Self;
     /// Over TCP, with `TcpStream::connect`.
@@ -788,7 +807,9 @@ escaped (`&amp;`, `&lt;`, `&gt;`, `&quot;`), numbers written with Rust's `Displa
 
 **What it reads.** `def…Vector` and `set…Vector` for numbers, switches, texts and BLOBs,
 `delProperty` and `message`; anything else is skipped. It keeps, for its one device, the
-latest value, range and state of every property. A number is the element's text parsed
+latest value, range and state of every property, but never a BLOB's text, which goes to
+the exposure waiting for it or is dropped (a full frame is 43 MB of text). A number is
+the element's text parsed
 as an `f64` after trimming; a text that does not parse leaves the value as it was. A
 switch is `On` or anything else. States are `Idle`, `Ok`, `Busy` and `Alert`.
 
@@ -796,7 +817,9 @@ switch is `On` or anything else. States are `Idle`, `Ok`, `Busy` and `Alert`.
 a channel of commands; the port's methods send a command and await a oneshot. A second
 task reads `Element`s and hands them to the first through a channel, because a
 half-read element cannot be dropped and picked up again. The task waits, all at once,
-on the next element, the next command and its own deadlines. While an exposure waits,
+on the next element, the next command and its own deadlines. `Box<dyn IndiStream>` is
+`Send` but not `Sync`, so the task holds its state by `&mut self` across every await,
+never by `&self`, or `tokio::spawn` refuses its future. While an exposure waits,
 `describe` and `status` are answered from what it holds, an `apply` with an empty edit
 is answered from what it holds, an `apply` with any field present and a second `expose`
 answer `Busy` and send nothing, and `abort` is carried out (§ The port, **During an
@@ -814,15 +837,19 @@ connection was lost:
    `Failed("the INDI server at {address} has no device {name}")` or
    `Failed("the INDI server at {address} offers no camera")`;
 4. if `CONNECT` is not `On`, send `new_switch(device, "CONNECTION", "CONNECT")`;
-5. within `READY_WAIT`, see `CCD_EXPOSURE` and `CCD_INFO` defined, then wait until no
-   element has come for `SETTLE`; otherwise
-   `Failed("the INDI camera {device} did not come ready within 10 s")`;
+5. within `READY_WAIT` of step 4, see `CCD_EXPOSURE` defined and `CCD_INFO` with a
+   `CCD_BITSPERPIXEL` other than 0, and then no element for `SETTLE`; otherwise
+   `Failed("the INDI camera {device} did not come ready within 10 s")`. The wait
+   covers the settle too, so a device that never goes quiet fails rather than hangs;
+   and INDI's camera simulator first defines `CCD_INFO` with zeros and sends its values
+   in later `setNumberVector`s, which the settle alone would catch only while they come
+   within 200 ms;
 6. send `enable_blob(device)`; then, for each of `CCD_COMPRESSION`, `CCD_TRANSFER_FORMAT`
    and `UPLOAD_MODE` that is defined, in that order and whatever its value,
    `new_switch` of `INDI_DISABLED`, `FORMAT_FITS` and `UPLOAD_CLIENT`. No answer is
    awaited;
-7. with neutral controls (spec owner decision 13, FR-021): first check every one, in the
-   list's order, against what the device has defined; one whose property is not a
+7. (US5) with neutral controls (spec owner decision 13, FR-021): first check every one,
+   in the list's order, against what the device has defined; one whose property is not a
    defined number vector, or whose element is not in it, is
    `Failed("the camera has no control {property}.{element}")`, and nothing more is
    sent. Then, for each property in the order it first appears in the list, send one
@@ -860,7 +887,8 @@ the second try of a failed exposure's included (§ **When it goes wrong**).
 
 **`status`**: `temp_c` is `CCD_TEMPERATURE` `CCD_TEMPERATURE_VALUE`, `cooler_power` is
 `CCD_COOLER_POWER` `CCD_COOLER_VALUE`, each none when undefined; `set_temp_c` is the
-temperature the adapter last sent; `exposing` is whether an exposure waits. Once the
+temperature the adapter was last asked for, whether it sent it or, the cooler being
+off, only remembered it (spec FR-023); `exposing` is whether an exposure waits. Once the
 adapter is connected `status` never waits on the device. The first call of any method
 connects first, and fails as **Connecting** says when it cannot. The set temperature is
 remembered by this process only: after the scope node restarts it is none, though the
@@ -881,7 +909,10 @@ after each the device's next `set…Vector` of that property within `ANSWER_WAIT
    frame (spec owner decision 13);
 4. `cooler_on`: `CCD_COOLER` with `COOLER_ON` or `COOLER_OFF`;
 5. `set_temp_c`, or a remembered one when the cooler was just switched on:
-   `CCD_TEMPERATURE` with `CCD_TEMPERATURE_VALUE`, sent only while the cooler is on.
+   `CCD_TEMPERATURE` with `CCD_TEMPERATURE_VALUE`, sent only while the cooler is on. A
+   `set_temp_c` asked for while the cooler is off sends nothing and is remembered: the
+   answer carries it as the set temperature, and step 5 sends it when the cooler is
+   next switched on.
 
 An answer in the state `Alert` is `Failed("the camera refused {property}: {message}")`,
 the message being the answer's `message` attribute, or the device's latest `message`
@@ -891,11 +922,13 @@ The answer is the settings in force read back from the properties: `Gain` and `O
 (or `GAIN` and `OFFSET`), `HOR_BIN`, `CCD_FRAME`'s four numbers, `COOLER_ON`, and the
 remembered set temperature.
 
-In US4 `expose` answers `Failed("exposures arrive with US5")` and `abort` answers `Ok`;
-US5 replaces both. US4 decodes no BLOB and does not declare `base64`: US5 adds the
+In US4 `apply` answers `Failed("settings arrive with US5")`, the neutral controls are
+kept unused and **Connecting** ends at step 6; US5 replaces `apply` and adds step 7. In
+US4 and US5 `expose` answers `Failed("exposures arrive with US6")` and `abort` answers
+`Ok`; US6 replaces both. Neither decodes a BLOB or declares `base64`: US6 adds the
 crate with the code that uses it (§ Plan traps 19).
 
-**`expose`** (US5) runs `check_exposure`, answers `Busy` if one waits, and then:
+**`expose`** (US6) runs `check_exposure`, answers `Busy` if one waits, and then:
 
 1. when `CCD_FRAME_TYPE` is defined, sends `new_switch` of `FRAME_DARK` for the purpose
    `dark`, `FRAME_FLAT` for `flat`, `FRAME_LIGHT` otherwise, awaiting nothing;
@@ -916,7 +949,9 @@ crate with the code that uses it (§ Plan traps 19).
    `CCD_TEMPERATURE`; `roi` the region noted in step 2.
 
 **When it goes wrong.** An attempt fails when `CCD_EXPOSURE` comes in the state `Alert`
-(`the camera reported a failed exposure`, with `: {message}` when there is one), when no
+(`the camera reported a failed exposure`, with `: {message}` when the `Alert` answer's
+own `message` attribute is not empty; an earlier `message` element is never used, since
+a device sends unrelated messages during an exposure, as the saved capture shows), when no
 BLOB has come `exposure + DOWNLOAD_WAIT` after step 2
 (`no imaging frame arrived within 60 s of the exposure's end`), or when the stream ends
 (`the INDI server closed the connection`). After the first failure the adapter sends
@@ -924,8 +959,13 @@ BLOB has come `exposure + DOWNLOAD_WAIT` after step 2
 `RETRY_PAUSE`, connects again if it must, and runs steps 1 to 5 once more, so the frame
 type is sent again before the exposure. After the
 second it sends the abort again and answers
-`Failed("the exposure failed twice: {the second reason}")`. A BLOB that cannot be read
-fails at once, with no second try. This is all the adapter adds to INDI's own handling:
+`Failed("the exposure failed twice: {the second reason}")`; a reconnect that fails
+before the second try answers `Failed("the exposure failed twice: {the connection's
+error}")`. A BLOB that cannot be read fails at once, with no second try and no abort:
+beside the texts of § Reading a FITS BLOB, text that is not base64 is
+`Failed("the camera's BLOB is not base64: {error}")`, and a `setBLOBVector` with no
+`oneBLOB` is `Failed("the camera sent a BLOB with no oneBLOB")`. This is all the adapter
+adds to INDI's own handling:
 it relies on the device program starting an exposure up to three times and restarting a
 failed one once, by itself (`docs/research/2026-11-15-imaging-camera.md` § 2. INDI; the
 restart count as spec.md's Clarifications give it), and never on that
@@ -934,7 +974,7 @@ program's USB reset, which is off unless switched on.
 **`abort`**: with an exposure waiting, sends the abort switch and ends the exposure with
 `Aborted` at once; a BLOB that comes when none waits is dropped.
 
-### Reading a FITS BLOB (`crates/scope-node/src/imaging/fits.rs`, new, US5)
+### Reading a FITS BLOB (`crates/scope-node/src/imaging/fits.rs`, new, US6)
 
 ```rust
 pub struct Picture {
@@ -952,7 +992,10 @@ pub fn read(bytes: &[u8]) -> Result<Picture, String>;
 ```
 
 The header is 80-byte cards to `END`, padded to a multiple of 2880 bytes; a card's value
-starts after `= ` and ends at a ` /` outside quotes. `SIMPLE` must be `T`, else
+starts after `= ` and ends at a ` /` outside quotes. A card whose columns 9 and 10 are
+not `= ` (`COMMENT`, `HISTORY`, a blank keyword) has no value, whatever it holds, an
+apostrophe included; and a number may be in E notation (`0.000E+00`), as INDI's camera
+simulator writes `CCD-TEMP` and `EXPTIME` in the saved capture. `SIMPLE` must be `T`, else
 `the camera's FITS header is not valid` (also when `END` is missing). `NAXIS` must be 2,
 else `the camera sent a {n}-axis FITS picture`. `BITPIX` 8 gives the bytes as they are;
 `BITPIX` 16 gives, for each big-endian signed sample s, the `u16` `clamp(s + BZERO, 0,
@@ -960,7 +1003,7 @@ else `the camera sent a {n}-axis FITS picture`. `BITPIX` 8 gives the bytes as th
 `unsupported FITS BITPIX {n}`. Fewer data bytes than `NAXIS1 × NAXIS2 × |BITPIX|/8` is
 `the camera's FITS data is short`.
 
-**The worked FITS frame** of US5-S1 is 5760 bytes: one header block with the cards
+**The worked FITS frame** of US6-S1 is 5760 bytes: one header block with the cards
 `SIMPLE  =                    T`, `BITPIX  =                   16`,
 `NAXIS   =                    2`, `NAXIS1  =                    4`,
 `NAXIS2  =                    2`, `BZERO   =                32768`,
@@ -974,16 +1017,18 @@ else `the camera sent a {n}-axis FITS picture`. `BITPIX` 8 gives the bytes as th
 
 The file's first line is `#![allow(dead_code)]`, as
 `crates/simulator/tests/support/mod.rs:1` has it. Each test binary that includes the
-module uses only part of it (`fixture` is called by `indi_expose.rs` alone, and US5 may
-not edit this file), and an unused item in a test binary's private module is a warning
-the gates deny.
+module uses only part of it (`fixture` is called by `indi_expose.rs` alone, and US5 and
+US6 may not edit this file), and an unused item in a test binary's private module is a
+warning the gates deny. Beside the stand-in it holds the two worked scripts of § The two
+worked scripts, as `colour()` and `mono()` and the builders they use, so that `indi.rs`,
+`indi_settings.rs` and `indi_expose.rs` share one copy of them.
 
 A script is UTF-8 text, one directive or one line of the server's own words a line:
 
 ```text
 // a comment
 @ device CCD Simulator
-@ expect getProperties
+@ expect getProperties @version=1.7
 @ send
 <defSwitchVector device="CCD Simulator" name="CONNECTION" state="Idle" perm="rw" rule="OneOfMany">
   <defSwitch name="CONNECT">Off</defSwitch><defSwitch name="DISCONNECT">On</defSwitch>
@@ -1010,15 +1055,20 @@ A script is UTF-8 text, one directive or one line of the server's own words a li
   the oldest not yet taken, waiting for it if none has come. Its tag
   must be TAG; its `name` attribute PROPERTY, when given; for each pair, a child whose
   `name` is KEY must have that text, compared as numbers when both parse as `f64` and
-  as trimmed text otherwise; the pair `text=VALUE` is the element's own text. It must
-  hold no child the pairs do not name. Anything else fails the script, naming both.
+  as trimmed text otherwise; the pair `text=VALUE` is the element's own text; and a
+  pair whose KEY starts with `@`, as `@version=1.7`, compares the element's attribute
+  of that name. It must hold no child the pairs do not name. Anything else fails the
+  script, naming both.
   With `after MS` the element's stamp must be exactly MS milliseconds after the point
   `after` counts from, else the script fails, naming the two times; without it the
   element may come at any time. This is how a test proves when the adapter sent
-  something (US4-S1, US5-S3, US5-S4, US5-S6).
+  something (US4-S1, US6-S3, US6-S4, US6-S6).
 - `@ send [after MS]` sleeps until MS milliseconds of tokio time after the point `after`
   counts from (not at all without `after`, or when that instant has passed), then
-  writes the lines up to the next `@ ` line, joined and ended by a newline.
+  writes the lines up to the next `@ ` line, joined and ended by a newline. An empty
+  `@ send after MS` block only waits: the one newline it writes is ignored by the
+  adapter's reader, so `@ send after 100` then `@ close` closes the connection 100 ms
+  after the point `after` counts from (US6-S5).
 - `@ close` closes the connection. At the end of a script the connection stays open.
 
 ```rust
@@ -1034,21 +1084,28 @@ impl Scripts {
     pub fn connections(&self) -> usize;
     /// Panics with the first mismatch, if any script was not played to its end, or if
     /// the adapter sent an element that no `@ expect` took. This last is how a scenario
-    /// proves that the adapter "sent nothing" (US4-S4, US4-S8, US5-S6).
+    /// proves that the adapter "sent nothing" (US5-S2, US5-S5, US6-S6).
     pub async fn finish(self);
 }
 pub fn fixture(name: &str) -> String;   // reads fixtures/scope-node/indi/<name>
+/// The two worked scripts (§ The two worked scripts), and the builders of their
+/// `def…Vector` and `set…Vector` lines, which every INDI test file shares.
+pub fn colour() -> String;
+pub fn mono() -> String;
 ```
 
-### The two worked scripts (US4, US5)
+### The two worked scripts (`crates/scope-node/tests/support/mod.rs`, US4; used by US5 and US6)
 
-Each `def…Vector` is sent with `state="Idle"` and `perm="rw"`, in the table's order,
+Both are written once, in `crates/scope-node/tests/support/mod.rs`, by US4. Each
+`def…Vector` is sent with `state="Idle"` and `perm="rw"`, in the table's order,
 numbers as `<defNumber name="E" format="%g" min="…" max="…" step="1">value</defNumber>`.
-Values written `v (min–max)`.
+Values written `v (min–max)`; an element the table gives no range is written with `min`
+and `max` equal to its value, and switch vectors also carry `rule="OneOfMany"`. Each
+script's first line is `@ expect getProperties @version=1.7`.
 
 **The colour-camera script**, device `ZWO CCD ASI071MC Pro`:
 
-1. `@ expect getProperties`, then send `CONNECTION` (switch: `CONNECT` Off,
+1. `@ expect getProperties @version=1.7`, then send `CONNECTION` (switch: `CONNECT` Off,
    `DISCONNECT` On) and `DRIVER_INFO` (text: `DRIVER_NAME` `ZWO CCD`, `DRIVER_EXEC`
    `indi_asi_ccd`, `DRIVER_VERSION` `2.8`, `DRIVER_INTERFACE` `2`).
 2. `@ expect newSwitchVector CONNECTION CONNECT=On`, then send, in one `@ send` block,
@@ -1076,18 +1133,23 @@ Values written `v (min–max)`.
 
 It defines none of `CCD_COMPRESSION`, `CCD_TRANSFER_FORMAT` and `UPLOAD_MODE`, so a
 camera built with neutral controls sends its `newNumberVector`s right after
-`enableBLOB` (US4-S8 adds `@ expect newNumberVector CCD_CONTROLS Gain=90 Offset=20
+`enableBLOB` (US5-S5 adds `@ expect newNumberVector CCD_CONTROLS Gain=90 Offset=20
 WB_R=50 WB_B=50` and its answer after step 3). A
 scenario adds its own expectations and answers after these; an answer to a setting is
 the property's `set…Vector` in the state `Ok` with the values asked for, unless the
-scenario says otherwise (US4-S3's `CCD_FRAME` answers `WIDTH` 1928, its
+scenario says otherwise (US5-S1's `CCD_FRAME` answers `WIDTH` 1928, its
 `CCD_TEMPERATURE` answers `Busy` with 12.5, and it later sends `CCD_TEMPERATURE` 5.0
 and `CCD_COOLER_POWER` 80).
 
-**The mono-camera script**, with no device named by the adapter:
+**The mono-camera script**, with no device named by the adapter. Its camera is named
+`CCD Simulator`, like INDI's camera simulator, but its values are a worked example from
+INDI's documents, not the real simulator's: that one has gain 0 to 100, binnings 1 to 4,
+a write-only `CCD_COOLER`, `CCD_FRAME_TYPE` and `CCD_TRANSFER_FORMAT`, compression and
+upload already off and to the client, and pixels of 5.1999998 µm. The saved capture,
+not this script, is the simulator.
 
-1. `@ expect getProperties`, then send, all in one `@ send` block: for the device
-   `Telescope Simulator`,
+1. `@ expect getProperties @version=1.7`, then send, all in one `@ send` block: for the
+   device `Telescope Simulator`,
    `CONNECTION` (`CONNECT` Off) and `DRIVER_INFO` with `DRIVER_INTERFACE` `5`; then, for
    the device `CCD Simulator`, `CONNECTION` (`CONNECT` On), `DRIVER_INFO` with
    `DRIVER_INTERFACE` `22`, and:
@@ -1109,15 +1171,15 @@ and `CCD_COOLER_POWER` 80).
    `@ expect newSwitchVector CCD_COMPRESSION INDI_DISABLED=On`,
    `@ expect newSwitchVector UPLOAD_MODE UPLOAD_CLIENT=On`.
 
-### Recording the conversation (the saved capture; the owner, before the flip)
+### Recording the conversation (the saved capture; recorded before the flip)
 
 The saved capture is the INDI project's own camera simulator answering exactly what the
 adapter sends for: a named device, `describe`, the region (0, 0, 64, 48), and one
 exposure of 1 s with the purpose `frame`. It is recorded once, on any machine with INDI
 installed, with this script and nothing of ours: start `indiserver indi_simulator_ccd`
 in one terminal, then run the script with the output file's name as its one argument.
-It has not been run: the grilling session could not run downloaded programs
-(§ Prerequisites 4).
+The grilling session could not run downloaded programs; the script was run, unchanged,
+on 2026-11-17 against INDI 1.9.9's camera simulator (§ Prerequisites 4).
 
 ```bash
 #!/usr/bin/env bash
@@ -1187,19 +1249,25 @@ json.dump({
 }, sys.stdout, indent=1)
 ```
 
-The two outputs are committed by the owner as
+The two outputs are committed with this spec's flip as
 `fixtures/scope-node/indi/ccd-simulator.script` and
 `fixtures/scope-node/indi/ccd-simulator.expect.json`, with a line in
 `fixtures/scope-node/README.md` giving INDI's version and the date. The capture is
 reviewed before it is committed: it holds nothing but the simulator's properties. If
 the simulator refuses a 64 × 48 region or needs a star catalogue to finish an exposure,
-the region or the simulator's settings are changed in the script and in US5-S8 before
-the flip (§ Risks). A capture of the owner's real camera is a field check, made the
+the region or the simulator's settings are changed in the script and in US6-S8 before
+the flip (§ Risks). It did neither: it took the 64 × 48 region, and it finished its
+exposure with no star catalogue, saying so in a `message`, so the frame is noise
+alone, which still pins the conversion of the bytes. Its conversation also shows what
+the hand-written scripts do not: `CCD_INFO` first defined with zeros, three `Busy`
+answers to one exposure, `COMMENT` cards and reals in E notation in its FITS, and
+messages that have nothing to do with the exposure (§ The INDI adapter, § Reading a
+FITS BLOB). A capture of the owner's real camera is a field check, made the
 same way, and is not needed to flip.
 
-### The binary (`crates/scope-node/src/main.rs`, US4; US6; US7)
+### The binary (`crates/scope-node/src/main.rs`, US5; US7; US8)
 
-`Args` (`crates/scope-node/src/main.rs:18`) is unchanged by US4. After the config is
+`Args` (`crates/scope-node/src/main.rs:18`) is unchanged by US5. After the config is
 loaded, `--check-config` prints, after the mount's lines
 (`crates/scope-node/src/main.rs:49`), `\n[imaging]\n` and `ImagingConfig::printed()`, or
 `\n# no imaging camera configured`. `serve` (`crates/scope-node/src/main.rs:75`) builds
@@ -1208,9 +1276,13 @@ the imaging camera the table names and gives it to the service with `with_imagin
 neutral_controls(), clock.clone())` and `Simulated` is
 `SyntheticImagingCamera::new(clock.clone())`. With no table nothing
 is attached. The adapter connects at its first use, so the node starts whether or not
-the INDI server is up. US6 adds `.with_imaging_save_dir(dir)` when `save_dir` is set.
+the INDI server is up. US7 adds `.with_imaging_save_dir(dir)` when `save_dir` is set.
+No test sees this attaching, nor the `save_dir` passed with it: `--check-config` never
+starts the service, and the probe builds its camera by its own path (§ Risks). One
+builder shared by `serve` and the probe would need `impl ImagingCamera for
+Box<dyn ImagingCamera>`, which the port does not have, so each builds its own.
 
-US7 adds two flags after `probe_mount` (`crates/scope-node/src/main.rs:26`):
+US8 adds two flags after `probe_mount` (`crates/scope-node/src/main.rs:26`):
 
 ```rust
 /// Describe the imaging camera, take three exposures and print their timing, then exit.
@@ -1224,9 +1296,11 @@ probe_exposure_ms: f64,
 With `--probe-camera`: load the config; with no `[imaging]` table fail with
 `no [imaging] table in the config` (the binary prints `scope-node: ` before it and exits
 1, as for every error, `crates/scope-node/src/main.rs:34`); else build the camera as
-`serve` does and run `probe::run` to standard output.
+`serve` does and run `scope_node::imaging::probe::run` to standard output, imported
+under another name, since `probe` in `main.rs` is already the mount's bring-up function
+(`crates/scope-node/src/main.rs:6`).
 
-### The node's copy (`crates/scope-node/src/imaging/save.rs`, new, US6)
+### The node's copy (`crates/scope-node/src/imaging/save.rs`, new, US7)
 
 ```rust
 /// Write one frame as FITS under `dir` and answer the file's name.
@@ -1237,7 +1311,9 @@ pub fn write(dir: &Path, id: u64, frame: &ImagingFrame, model: &str, purpose: &s
 `NodeService::with_imaging_save_dir(self, dir: PathBuf) -> Self` sets the host's folder
 with `ImagingHost::set_save_dir` (doing nothing without an imaging camera). In `expose`,
 with `save` true and a folder, step 4 runs `write` on the blocking pool with the model
-from `describe()`; `Ok(name)` fills `node_file`, an error fills `node_save_error` with
+from `describe()`, the frame moved into the blocking write and handed back, so its
+samples are never copied and § The node's service's memory note holds; `Ok(name)` fills
+`node_file`, an error fills `node_save_error` with
 `could not save the imaging frame: {error}`. `write` makes the folder if it is missing, names the
 file `frame-<id as six digits>.fits`, then `frame-<id>-2.fits`, `-3` and so on while the
 name exists, writes `<name>.part` with `create_new` and renames it. The file's cards, in
@@ -1271,7 +1347,7 @@ a second small writer on purpose: the scope node must not depend on the console'
 crate, and the console's tests read the node's file with code of their own (031's
 US2-S12).
 
-### The probe (`crates/scope-node/src/imaging/probe.rs`, new, US7)
+### The probe (`crates/scope-node/src/imaging/probe.rs`, new, US8)
 
 ```rust
 /// Describe the camera, take three exposures, and write one line for each fact.
@@ -1303,9 +1379,12 @@ link (031's plan.md § The README).
 ### The README
 
 `crates/scope-node/README.md`, a new `## The imaging camera` after `## The mount link`
-(`crates/scope-node/README.md:103`): US4 writes what runs where (an INDI server and the
-camera's device program on the scope node, started by the owner; this program is its
-client), the `[imaging]` table with an example, how a device is chosen, that the
+(`crates/scope-node/README.md:103`): US5 writes what runs where (an INDI server and the
+camera's device program on the scope node, started by the owner; both are INDI's own
+programs, under LGPL-2.1-or-later, `docs/research/2026-11-15-imaging-camera.md` § 2.
+INDI, and this program is their client over a socket and links none of them, as the
+constitution's Principle V asks a crate's README to say), the `[imaging]` table with an
+example, how a device is chosen, that the
 camera's ranges are read from it, and a paragraph on white balance and the camera's
 other controls: `neutral` is how a camera's white balance is made neutral; on a camera
 whose white-balance controls scale the raw samples the table names them with their
@@ -1314,12 +1393,14 @@ neutral values, the research note's camera's `neutral = { "CCD_CONTROLS.WB_R" = 
 so a power-cycled camera is set again when it is next reached; a name the camera lacks
 fails the connection with `the camera has no control {name}`; every control neither the
 table nor a settings change names stays as the device reports it; and no control is
-recorded with a frame (spec owner decision 13). US5 adds the failed-exposure paragraph:
+recorded with a frame (spec owner decision 13). US6 adds the failed-exposure paragraph:
 what the adapter does, that it relies on the device program starting an exposure up to
 three times and restarting a failed one once, and that it does not rely on the USB
-reset. US6 adds
-`save_dir`, the file names and that nothing is ever deleted. US7 adds the probe and a
-sample of its output.
+reset. US7 adds
+`save_dir`, the file names and that nothing is ever deleted. US8 adds the probe and a
+sample of its output on the stand-in, whose 0 or 1 ms is the timer's step: in real time
+tokio's timer rounds the stand-in's wait up to the millisecond, so the sample does not
+copy US8-S1's virtual `0 ms`.
 
 ## Shapes that existing tests pin
 
@@ -1347,8 +1428,9 @@ These are not changed by any story:
   config's unit tests read them. The imaging table is printed by `main`, after the
   mount's lines.
 - **Shapes this spec pins for its own later stories and for 031 to 037.** Tests build
-  scope-link messages with `..Default::default()`; the stand-in INDI server of US4 is
-  used by US5 unchanged. Three more, which the later specs will meet. 031's console
+  scope-link messages with `..Default::default()`; the stand-in INDI server of US4 and
+  its two worked scripts are used by US5 and US6 unchanged. Three more, which the later
+  specs will meet. 031's console
   tests implement `ScopeNodeImaging` by hand (its US2-S5 and US2-S11), so from then on
   a new call on that service stops an existing test compiling, which is plan trap 7
   again for the new service: a later spec's calls go in a new service of its own. A
@@ -1368,8 +1450,8 @@ These are not changed by any story:
 | An unlimited, unary-free stream of chunks of at most 256 KiB | One message a frame; a larger chunk | tonic's 4 MiB default stays; memory per message is small; the size is the plan document's. |
 | The rate limit is asked for by the console with each exposure | A node config key | The observer tunes it at the telescope from the Imaging page's `Forwarding limit` field, or an MCP client does, with no shell on the node. |
 | The node finishes an exposure whose caller has gone | Abort on a dropped call | A dropped call is how a brief link loss looks; the camera stays in a known state and only an explicit abort stops it. |
-| `quick-xml` and `base64` for the INDI adapter, each declared by the story that first calls it (US4, US5) | A hand-written XML reader and decoder; the `indi` client crate; both crates declared in US4 | A stream reader for untrusted-length text is where hand-written code goes wrong; `quick-xml` is small, MIT and pure Rust. The `indi` crate brings a web-server stack with it. A crate declared before its first use is refused by the merge queue's `cargo-machete`. |
-| A timed expectation in the INDI script format | A list of received elements and times that each test reads | The script already says what must come next; saying when in the same place keeps one oracle, and US5 uses the stand-in unchanged. |
+| `quick-xml` and `base64` for the INDI adapter, each declared by the story that first calls it (US4, US6) | A hand-written XML reader and decoder; the `indi` client crate; both crates declared in US4 | A stream reader for untrusted-length text is where hand-written code goes wrong; `quick-xml` is small, MIT and pure Rust. The `indi` crate brings a web-server stack with it. A crate declared before its first use is refused by the merge queue's `cargo-machete`. |
+| A timed expectation in the INDI script format | A list of received elements and times that each test reads | The script already says what must come next; saying when in the same place keeps one oracle, and US5 and US6 use the stand-in unchanged. |
 | One INDI connection, BLOBs enabled with `Also` | A second connection with `Only`; fast BLOBs | One connection is enough for one exposure at a time; fast BLOBs need file-descriptor passing, which means `unsafe` or another crate. |
 | The adapter as one task with a command channel | A mutex round the connection | `status` and `abort` must be answered while an exposure waits. |
 | The adapter always sends the three transfer switches and the frame type when they are defined | Sending only when the value differs | The conversation then depends only on what the device defines, so a saved capture can be recorded by a script. |
@@ -1386,7 +1468,8 @@ These are not changed by any story:
 
 ## Verification (every story, before proposing)
 
-- **The factory gates** (`ergane.yaml` at 49bb210, unchanged since dbc2b5b):
+- **The factory gates** (`ergane.yaml` at 49bb210, unchanged since dbc2b5b; at
+  2f6a777 only its roadmap's concurrency differs):
   - `lint` = `cargo fmt --all --check`,
     `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`,
     `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked`
@@ -1398,12 +1481,13 @@ These are not changed by any story:
     `CI=1 npm run e2e`.
 
   Every story runs both, and the judge sees their results. `--locked` means US4 commits
-  `Cargo.lock` with `quick-xml` and what it brings, and US5 commits it again with
+  `Cargo.lock` with `quick-xml` and what it brings, and US6 commits it again with
   `base64` as a dependency of `scope-node`; every other story leaves it alone.
 - **CI in the merge queue** runs every `ci.yml` job, including `cargo-deny`,
   `cargo-machete`, the build on Rust 1.96 and the finder-page checks. No gate here runs
   them, so the operator runs `cargo deny check` and `cargo machete` on the probe builds
-  of US4 and of US5 before the flip (§ Prerequisites 5). `cargo-machete` is why each
+  of US4 and of US6 before the flip (§ Prerequisites 5; done in round 1, with the same
+  findings as `main`). `cargo-machete` is why each
   crate is declared by the story that first calls it (§ Plan traps 19).
 
 ## Prerequisites before this spec is flipped to `ready`
@@ -1417,7 +1501,11 @@ These are not changed by any story:
    and are corrected: `run` in `crates/scope-node/tests/cli.rs` from line 8 to 15 and
    `CONFIG` from 46 to 50. The scope node's own scratch guard is now cited at
    `crates/scope-node/tests/cli.rs:8`. Every other citation reads the same at both
-   commits. If `main` moves again before the flip, this is done again and the validator
+   commits. Checked again on 2026-11-17: `main` at 2f6a777 changes none of the files the
+   trio cites, and the round-1 probes read every citation of their stories at 20ce2fe as
+   claimed; two cited lines one off are corrected (`.github/workflows/ci.yml:411`, the
+   `cargo machete` run, and `crates/scope-node/Cargo.toml:10`, the `[dependencies]`
+   table). If `main` moves again before the flip, this is done again and the validator
    re-run.
 3. **The owner decisions are settled and the approvals given** (spec § Owner decisions,
    § Owner approvals). Not met. Of the thirteen decisions, 3 and 8 are settled by the
@@ -1425,22 +1513,23 @@ These are not changed by any story:
    Amendment 2; the other nine are open, with the open part of 13 (a name the camera
    lacks). Any answer other than the recommended one is written into the trio and
    re-validated before the flip.
-4. **The saved capture is recorded and staged.** Not met. The owner runs § Recording the
-   conversation against the INDI project's camera simulator and commits
+4. **The saved capture is recorded and staged.** Met on 2026-11-17: § Recording the
+   conversation was run, unchanged, against INDI 1.9.9's camera simulator, and
    `fixtures/scope-node/indi/ccd-simulator.script` and
-   `fixtures/scope-node/indi/ccd-simulator.expect.json`. US5 cannot pass without them,
-   and no story may write them. If the recording shows the adapter's conversation must
-   differ (a property the simulator lacks, a region it refuses), this plan is corrected
-   first.
-5. **The trio is probe-built.** Not met. No story has been compiled. Before the flip
-   each of the seven stories is built from this trio in a throwaway worktree, tests
-   first, with both gates, `cargo deny check` and `cargo machete`; each diff is measured
-   as plan trap 3 says; and what the probes find is folded back in. US2 and US4 are
-   built first: US2 because every later story stands on its camera, US4 because it looks
-   the largest and carries the new dependency. The first things to prove are in § Risks.
-6. **The documents this trio cites are on `main`.** Not met: the plan document,
-   ADR-0002, the changed `GLOSSARY.md` and the research note are in the drafting
-   worktree, uncommitted. They land with or before this trio, none of them by a story.
+   `fixtures/scope-node/indi/ccd-simulator.expect.json`, with their line in
+   `fixtures/scope-node/README.md`, are committed with this spec's flip. US6 cannot pass
+   without them, and no story may write them. The recording needed no change to the
+   adapter's conversation; what it showed is folded into § The INDI adapter and
+   § Reading a FITS BLOB.
+5. **The trio is probe-built.** Met on 2026-11-17, round 1, every story: each was built
+   from this trio in a throwaway worktree, tests first, with both gates' cargo commands,
+   `cargo deny check` and `cargo machete`; each diff was measured as plan trap 3 says;
+   and what the probes found is folded back in (§ Refinement Record, round 1). The
+   first INDI story as drafted measured over the budget, and it is split in two as
+   measured, US4 and US5.
+6. **The documents this trio cites are on `main`.** They land with this spec's flip
+   pull request: the plan document, ADR-0002, the changed `GLOSSARY.md` and the
+   research note, none of them by a story.
    The three changes this trio asked of them are made in that worktree and land with
    them: `GLOSSARY.md` carries the new **Purpose label** that spec owner approval 6
    words, with `probe` and `run` among its labels as the audit's glossary edit has
@@ -1448,12 +1537,18 @@ These are not changed by any story:
    spec.md's Clarifications cite for `XORGSUBF` and `YORGSUBF`; and the note's § 2
    sentence on the ZWO program reads one restart, two attempts in all.
 7. **No constitution change is needed for this spec.** Met. Principle V's "the solver is
-   our own Rust" is not touched here; the imaging solver is 032's.
+   our own Rust" is not touched here; the imaging solver is 032's. Principle V as
+   amended in 1.3.0 treats INDI's server and device programs as a separate program
+   reached over a network boundary and never linked, which is how this trio reaches
+   them, and asks the README to name them and their licence (spec FR-026).
 8. **Outside the factory, before the first use at the telescope:** INDI and the camera's
    device program installed on the scope node, the node's `[imaging]` table written, the
-   scope node rebuilt from `main` after US7, and the probe run. Not needed to flip.
-9. **The plan document agrees with the settled decisions.** Not met on `main`, where the
-   plan document is not yet (Prerequisite 6); met in the drafting worktree. The plan
+   scope node rebuilt from `main` after US8, and the probe run. Not needed to flip.
+9. **The plan document agrees with the settled decisions.** Met in the plan document
+   that lands with this spec's flip (Prerequisite 6). Its § 030-imaging-camera-link
+   lists this trio's stories by subject, not by number, and still reads true after the
+   INDI adapter's first story was split: "the INDI adapter and, tested against a
+   recorded conversation, its exposures" now covers US4, US5 and US6. The plan
    document's Amendments 4 and 5 settle two of the three departures the review found on
    this side (owner decisions 3 and 8), and Amendments 2 and 6 are carried here (owner
    decisions 13 and 12). Its § Interfaces shared across the specs now carries the third,
@@ -1495,8 +1590,10 @@ with the check that keeps it from recurring. They bind every story.
    adapter's task selects on the channel.
 10. **Blocking the node's two worker threads.** Decoding 43 MB of base64 or writing a
     32 MB file inline would hold a worker the heartbeat needs. *Check:* base64, FITS
-    conversion and the node's file write run on `spawn_blocking`; US3-S8 proves the
-    stream itself never holds a heartbeat.
+    conversion and the node's file write run on `spawn_blocking`; US3-S8 proves, in
+    paused time over memory links, that a paced stream never holds a heartbeat. It
+    cannot show bandwidth sharing, so the second connection is a design rule, which
+    031's link manager keeps.
 11. **A guard that outlives its exposure.** A camera left `exposing` after an error or a
     dropped future refuses every later exposure. *Check:* both stand-ins clear the mark
     with a drop guard; US1-S7, US3-S5 and US3-S7 take a frame after an abort or a drop.
@@ -1515,9 +1612,10 @@ with the check that keeps it from recurring. They bind every story.
     rule guards at the console are 031's.)
 16. **A pacing rule that counts the chunk it is about to send.** *Check:* the wait before
     chunk k is the bytes already sent over the rate; US3-S8 gives the worked time,
-    7.69 s.
+    7.6875 s, which tokio's timer rounds up to 7.688 s, inside a window of 7.68 to
+    7.70 s that the rule counting the chunk about to leave, 7.742 s, misses.
 17. **A FITS card one column out.** Readers are strict about `= ` in columns 9 and 10
-    and numbers ending in column 30. *Check:* US6-S1 reads the file with the test's own
+    and numbers ending in column 30. *Check:* US7-S1 reads the file with the test's own
     fixed-column reader, and § Reading a FITS BLOB gives the worked bytes.
 18. **Each worktree builds on its own, and scratch files go where cargo says.** *Check:*
     no story sets `CARGO_TARGET_DIR`; every file or folder a test makes is under
@@ -1526,12 +1624,13 @@ with the check that keeps it from recurring. They bind every story.
 19. **A dependency declared before anything calls it.** `cargo-machete` is a required
     check of the merge queue and no local gate runs it, so a story that declares a crate
     early passes both gates and is refused at the queue. *Check:* `quick-xml` is
-    declared by US4, whose reader calls it, and `base64` by US5, whose `expose` decodes
+    declared by US4, whose reader calls it, and `base64` by US6, whose `expose` decodes
     with it; no story declares a crate its own diff does not call.
 20. **A time that includes connecting.** The INDI adapter connects at its first call and
     then waits 200 ms of quiet. *Check:* every timed INDI scenario uses a camera on
-    which `describe()` has returned, or says that it times the first call (spec.md's
-    shared setup, **The camera of US4-S1**).
+    which `describe()` has returned, or says that it times the first call, and makes
+    its first timed call 1 s after `describe()` returned, which the script's
+    `@ expect after 1000` states (spec.md's shared setup, **The camera of US4-S1**).
 21. **A stand-in that cannot say when.** An expectation that only waits for the next
     element proves order, not time. *Check:* every scenario that states when the adapter
     sent something uses `@ expect after MS`, whose stamp is taken when the element
@@ -1539,38 +1638,42 @@ with the check that keeps it from recurring. They bind every story.
 22. **Neutral values undone by the next change.** If the adapter sent its neutral
     vector without awaiting the answer, a quick `apply` would send the device's old
     white balance back as "the latest value". *Check:* step 7 of **Connecting** awaits
-    each answer before the call that connected goes on; US4-S8 asserts the `apply`
-    after it sends `WB_R` 50 and `WB_B` 50.
+    each answer before the call that connected goes on. US5-S5's `Alert` case can
+    answer the camera's refusal only if the adapter awaited the answer, and US5-S5
+    asserts the `apply` after it sends `WB_R` 50 and `WB_B` 50. (Its first case alone
+    cannot catch the trap: in paused time the device's answer comes in the same
+    instant and is taken before the `apply` is served.)
 
 ## Risks
 
 | Risk | Mitigation |
 |---|---|
-| Nothing here has been compiled. An interface may not build as written: `quick-xml`'s async reader over a stream with many top-level elements and a 43 MB text; a `dyn` connector's bounds; `OnceLock` in `Runtime`; prost's names for `ImagingStatus` the call and `ImagingStatusReply` the message. | Prerequisite 5: probe builds of all seven stories before the flip, US2 and US4 first, then US5. If `quick-xml` cannot read the stream, owner decision 4's alternative (a hand-written reader) is taken and the trio corrected. |
-| A story passes 64 KiB. The likeliest, by what each writes, are US4 (eleven files: the XML reader, the adapter's property model and task with its neutral controls, the script interpreter with its timed expectations, both worked scripts written out, the config with `neutral`, the binary, a README section and eight scenarios) and US2 (a renderer and nine scenarios), then US5. This is an estimate from the interfaces; nothing has been measured. | Measured on the probes, US2 and US4 first. The splits are written in advance. US4: the config table with `neutral`, the binary's attaching and `--check-config`, and the README section (US4-S6, US4-S7; the `[imaging]` table of FR-020, the binary's half of FR-025, FR-026) become a story of their own after the adapter, `depends_on_merged` on it, writing `crates/scope-node/src/config.rs`, `crates/scope-node/src/main.rs`, `crates/scope-node/README.md` and `crates/scope-node/tests/imaging_config.rs`; the adapter story keeps `quick-xml`, the stand-in and US4-S1 to US4-S5 and US4-S8. US2 can shed US2-S8 and US2-S9 into a story of their own (the seeded field). Each split is a spec change made before the flip. |
-| The saved capture cannot be recorded as written: the INDI simulator may refuse a 64 × 48 region, need a star catalogue program to finish an exposure, or define properties in an order that breaks the script's quiet period. | Prerequisite 4 is the owner's, before the flip; the recording script and US5-S8 are corrected to what the simulator does. US5's other seven scenarios need no capture. |
+| An interface may not build as written: `quick-xml`'s async reader over a stream with many top-level elements and a 43 MB text; a `dyn` connector's bounds; `OnceLock` in `Runtime`; prost's names for `ImagingStatus` the call and `ImagingStatusReply` the message. | Proved in round 1 (Prerequisite 5): every interface built as plan.md writes it, with private additions only, and the reader took a 43 MB `.fits` BLOB over a duplex. If `quick-xml` cannot read the stream after a later change, owner decision 4's alternative (a hand-written reader) is taken and the trio corrected. |
+| A story passes 64 KiB. | Measured in round 1 (§ Refinement Record): US1 28,104 bytes, US2 48,201, US3 46,610, US4 53,460, US5 38,979, US6 42,948, US7 27,635 and US8 16,520. The first INDI story as drafted measured 86,286 bytes, and the split prepared here before the probes (the config, the binary and the README moved out) still left 69,756, so it is split as measured instead: US4 keeps connecting and describing, `quick-xml`, the stand-in with both worked scripts and the scenarios of reaching a camera; US5 takes `apply`, the neutral controls, the config, the binary and the README section, with its settings tests in `crates/scope-node/tests/indi_settings.rs`. US2 needed no split. |
+| The saved capture cannot be recorded as written: the INDI simulator may refuse a 64 × 48 region, need a star catalogue program to finish an exposure, or define properties in an order that breaks the script's quiet period. | Recorded (Prerequisite 4): the simulator took the 64 × 48 region and finished its exposure with no star catalogue, and US6-S8 plays the capture to its end. The replay has no times, so it proves the conversation's content and order only; on a live server the simulator's first `CCD_INFO` of zeros is met by step 5 of **Connecting**, which waits for a sample size other than 0. US6's other seven scenarios need no capture. |
 | The real camera's device program names its controls otherwise than `Gain` and `Offset`, or reports no offset. | The description then has no gain or offset range, which the console, the files and the page already handle. A capture of the real camera is a field check; a correction is one table row in § The INDI adapter. |
 | 60 s is too short, or too long, for a real download on the real node. | The probe measures it at bring-up; the constant is one line and owner decision 6. |
-| A frame of 32 MiB on the node costs about 110 MB at its peak: the base64 text, the FITS bytes and the samples. | Stated here so the owner can weigh it against the node's memory; `binning` 2 quarters it. Not measured. |
-| The second connection doubles what a poor link must carry at the worst moment. | The rate limit (US3-S8); the heartbeat is on its own connection and proven unaffected on the simulator; the real link is a field check. |
+| A frame of 32 MiB on the node costs about 110 MB at its peak: the base64 text, the FITS bytes and the samples, if the white space is removed from the text in place; a build that holds the text and a compacted copy at once, as round 1's did, peaks higher. | Stated here so the owner can weigh it against the node's memory; `binning` 2 quarters it. Not measured. |
+| The second connection doubles what a poor link must carry at the worst moment. | The rate limit (US3-S8); the heartbeat is on its own connection, and on the simulator it kept every slot while a paced stream ran, though paused time over memory links cannot show bandwidth sharing; the real link is a field check. |
 | Specs 031 to 037 need a field this spec's types lack. | `ImagingFrame` gains `roi` here (the plan document's Amendment 6) and derives `Default`; tests end every literal of it, and of a scope-link message, with `..Default::default()`, so a field added later breaks none of this spec's tests, though it still changes the scope link, which a later spec must name for approval. |
 | `main` moves again before the flip and shifts a cited line. | Prerequisite 2: the line-for-line comparison is run again against the new `main`, as it was for 49bb210. |
 | A camera's white balance is not in `[imaging] neutral`, because its controls have other names or the table was not written, so its files are scaled by values no file records. | The README says the table is how white balance is made neutral and gives the research note's camera as the example; reading the real camera's control names and writing the table is a field check (spec Assumptions, Outside the factory). No spec records controls per frame (the plan document's Amendment 2). |
 | The real camera rejects or clamps a neutral value, or answers it in the state `Alert`. | The connection fails with the camera's words (`the camera refused CCD_CONTROLS: …`) and the console shows `error`; the table is corrected. |
 | Owner decision 9 is settled otherwise than recommended, after 032 to 037 were drafted from the plan document, which carries `save` on `ExposeRequest` and `save_dir` as this trio has them. | Prerequisite 9; no spec after 031 calls `Expose` or reads `save_dir`, and 031 takes both from this trio's plan.md. |
-| The INDI scripts' timed expectations are exact to the millisecond of virtual time; a reader or a channel that needs a timer tick between two sends would fail an `after 0`. | The 1 s pause, the 60.5 s wait and the 200 ms settle are the times that matter and stay timed. If a probe build shows an `after 0` cannot hold, that one expectation is made untimed before the flip. |
+| The INDI scripts' timed expectations are exact to the millisecond of virtual time; a reader or a channel that needs a timer tick between two sends would fail an `after 0`. | The 1 s pause, the 60.5 s wait and the 200 ms settle are the times that matter and stay timed. Round 1 held every `after 0` and every stated time exactly, with no timer tick between two sends. If a later build shows an `after 0` cannot hold, that one expectation is made untimed before its story is dispatched again. |
+| The binary's attaching of the imaging camera in `serve`, and the `save_dir` it passes, are wiring no test sees: `--check-config` never starts the service, and the probe builds its camera by its own path, so a `serve` that attached nothing or dropped `with_imaging_save_dir` passes every gate (round 1 built both and they did). One builder shared by `serve` and the probe cannot compile, because `with_imaging` takes `impl ImagingCamera + 'static` and the port has no `impl ImagingCamera` for `Box<dyn ImagingCamera>` or `Arc<T>`. | Accepted and stated here rather than adding those impls to the port. A rebuilt scope node with an `[imaging]` table either describes its camera or answers `no imaging camera`, which the console shows at once (031), and the bring-up of Prerequisite 8 starts the node and runs the probe. A later spec that adds the two impls can share one builder and test it. |
 
 ## Refinement Record
 
 Drafted on 2026-11-15 by the grilling session against `main` at dbc2b5b, from
 `docs/plans/2026-11-15-specs-030-037-imaging.md`, the surveys of the camera path and the
 console made that morning, and INDI's documents and two device programs' sources read
-that day. **No probe build has been run.** No story of this trio has been compiled,
-linted or tested, no interface above has been built, and no diff has been measured: the
-session wrote documents only. Every `path:line` was read at dbc2b5b, re-read at
+that day. **No probe build had been run then.** No story of this trio had been
+compiled, linted or tested, no interface above built and no diff measured: the session
+wrote documents only. Every `path:line` was read at dbc2b5b, re-read at
 49bb210 and checked by the validator there; every number in a scenario was worked by
 hand and is shown as a worked
-example where it is not obvious. The two programs of § Recording the conversation have
+example where it is not obvious. The two programs of § Recording the conversation had
 not been run either.
 
 A second agent reviewed the draft the same day, when this trio and 031 were one. Its
@@ -1596,28 +1699,58 @@ two that moved are corrected (§ Prerequisites 2), so the record below is review
 The trio was then split in two at the owner's ask, the same day and still with no probe
 build. The console's stories, with their scenarios, requirements, decisions, traps and
 record entries, moved to 031, and what stayed was renumbered from 1: the story of the
-node's copy is US6 and the probe's US7, where they were the ninth and twelfth; the
+node's copy is US7 and the probe's US8, where they were the ninth and twelfth; the
 node's copy's requirements are FR-033 to FR-036 and the probe's FR-037 and FR-038. No
-interface, scenario value or decision changed. The one cut inside a story is US6's: the
-scenario that read the node's file from the console is 031's US2-S12, and US6 writes
+interface, scenario value or decision changed. The one cut inside a story is US7's: the
+scenario that read the node's file from the console is 031's US2-S12, and US7 writes
 nothing under `crates/finder`.
 
-What a first refinement round must do is § Prerequisites 5, and its findings replace
-this paragraph. Until then the record below is the draft's own account: its tests are
-the scenarios, its writes are the files § Project Structure names, and its shared writes
+**Round 1 (probe builds), 2026-11-17.** Every story was built from this trio, tests
+first, by three probe agents in throwaway worktrees, each story on the commit of the one
+before it and nothing pushed. Their base was `main` at 20ce2fe with this trio, the
+imaging documents and the saved capture (`probe/030-r1-base` at 8e82eb0). Each story
+passed the `lint` gate, the `test` gate's cargo commands, `cargo deny check` (with the
+base's findings) and `cargo machete`; each new test failed before the story's change
+and passed after; and each diff, measured as plan trap 3 says, changed the story's
+declared writes and no other file:
+
+- US1: `probe/030-r1-a` at 01dcd27; 7 tests; 28,104 bytes; 4 files.
+- US2: `probe/030-r1-a` at bc00d14; 9 tests; 48,201 bytes; 5 files.
+- US3: `probe/030-r1-b` at aecd88a; 9 tests; 46,610 bytes; 7 files.
+- US4: `probe/030-r1-b-split` at eeba9fc; 3 tests; 53,460 bytes; 7 files.
+- US5: `probe/030-r1-b-split` at 6c01b82; 6 tests; 38,979 bytes; 6 files.
+- US6: `probe/030-r1-c` at 3dbab44; 8 tests; 42,948 bytes; 7 files.
+- US7: `probe/030-r1-c` at 4c1f428; 4 tests; 27,635 bytes; 8 files.
+- US8: `probe/030-r1-c` at d727848; 3 tests; 16,520 bytes; 5 files.
+
+The draft's single story for US4 and US5 was built first, at 99fa1b0 on
+`probe/030-r1-b`: its 9 tests passed, but its 11 declared writes measured 86,286 bytes,
+which is why it is now two stories, cut where the measured split cut it. The workspace
+ran 669 tests on the base and 718 after US8. The saved capture played to its end in
+US6-S8, through the stand-in and its own scanner: the description and the imaging
+frame equalled `ccd-simulator.expect.json`, and § Recording the conversation's reader
+program, run again offline on the capture, reproduced that file exactly. The probes
+reported forty-four defects, one blocking (the split), and their fixes are in this
+trio: they settle choices the plan left open, correct wording a builder could misread,
+and add the assertions that the probes' bite checks showed missing (spec.md
+§ Clarifications, the round-1 session); what is still caught by no test is `serve`'s
+attaching of the imaging camera and its `save_dir` (§ Risks), that frames need their
+own connection, the probe's flush and a live INDI server's timing.
+
+The record below is round 1's account: its tests are the scenarios the probes built and
+ran, its writes are the files their diffs changed, and its shared writes
 name the merge edge that orders two stories of this spec on one file, or the story of
 025 that last wrote the file on `main`. A file last written by an older landed
 spec (013, 014, 016, 017, 020, 024 or 027, each of which 028 already depends on) has no
 entry, because the validator refuses a shared write that names a spec outside this
 spec's `depends_on_landed`. The record's `open_questions` are empty for the same kind of
 reason: the validator refuses a record that holds any. What is not established is
-written where it can stay until a probe settles it: § Risks, and § Prerequisites 4 and
-5. Nothing in this record is an owner approval: those are in spec.md, and flipping to
-`ready` gives them.
+written where it can stay until it is settled: § Risks. Nothing in this record is an
+owner approval: those are in spec.md, and flipping to `ready` gives them.
 
 ```yaml
 version: 1
-reviewed_revision: 49bb210fe4860dd98ba24727074e7bd3cc0d7124
+reviewed_revision: 2f6a777592b7ff2767e71317da90eb3376d179e0
 stories:
   US1:
     tests:
@@ -1629,7 +1762,7 @@ stories:
       - path: crates/scope-node/tests/imaging_port.rs
         status: new
         disposition: add
-        assertion: "an empty apply answers the settings in force, an edit changes only what it names, and the cooler follows its rule"
+        assertion: "an empty apply answers the settings in force, an edit changes only what it names, so the cooler's apply keeps gain 200 and binning 2, and the cooler follows its rule"
         decision: "spec.md:US1-S2"
       - path: crates/scope-node/tests/imaging_port.rs
         status: new
@@ -1682,7 +1815,7 @@ stories:
         other_spec: 030-imaging-camera-link
         other_story: US3
         disposition: merge_order
-        reason: "US3 depends_on_merged US1, and adds pub mod service after US1's module line"
+        reason: "US3 depends_on_merged US1, and adds pub mod service to the module US1 created"
     open_questions: []
   US2:
     tests:
@@ -1714,7 +1847,7 @@ stories:
       - path: crates/simulator/tests/imaging.rs
         status: new
         disposition: add
-        assertion: "a star smears by the sky's drift in 2 s, and by the mount's motion between its two true places"
+        assertion: "a star smears by the sky's drift in 2 s, and by the mount's motion between its two true places, its centroid within 0.2 px of their midpoint over 41 x 41 samples"
         decision: "spec.md:US2-S6"
       - path: crates/simulator/tests/imaging.rs
         status: new
@@ -1724,7 +1857,7 @@ stories:
       - path: crates/simulator/tests/imaging.rs
         status: new
         disposition: add
-        assertion: "the seeded field repeats, has the worked density and magnitude share, is sorted, and agrees where two fields overlap"
+        assertion: "the seeded field repeats, has the worked density and magnitude share, is sorted, holds no two stars of one magnitude, and agrees where two fields overlap"
         decision: "spec.md:US2-S8"
       - path: crates/simulator/tests/imaging.rs
         status: new
@@ -1781,7 +1914,7 @@ stories:
       - path: crates/scope-node/tests/imaging_service.rs
         status: new
         disposition: add
-        assertion: "a node with no imaging camera answers FailedPrecondition and no imaging camera, and a node without the service Unimplemented"
+        assertion: "a node with no imaging camera answers FailedPrecondition and no imaging camera, a node without the service Unimplemented, and an unresponsive node not at all"
         decision: "spec.md:US3-S4"
       - path: crates/scope-node/tests/imaging_service.rs
         status: new
@@ -1801,7 +1934,7 @@ stories:
       - path: crates/simulator/tests/imaging_link.rs
         status: new
         disposition: add
-        assertion: "a 32472192-byte frame crosses in 124 chunks, paced at 4 MiB/s in 7.5 to 8 s and unpaced at once, while 30 heartbeats on the other connection keep their 250 ms slots and the mount keeps moving"
+        assertion: "a 32472192-byte frame crosses in 124 chunks, paced at 4 MiB/s in 7.68 to 7.70 s and unpaced at once, while 30 heartbeats on the other connection keep their 250 ms slots and the mount keeps moving"
         decision: "spec.md:US3-S8"
       - path: crates/simulator/tests/imaging_link.rs
         status: new
@@ -1862,26 +1995,26 @@ stories:
         reason: "030 depends_on_landed 025, whose US2 last changed service.rs"
       - path: crates/scope-node/src/service.rs
         other_spec: 030-imaging-camera-link
-        other_story: US6
+        other_story: US7
         disposition: merge_order
-        reason: "US6 depends_on_merged US3, and adds with_imaging_save_dir"
+        reason: "US7 depends_on_merged US3, and adds with_imaging_save_dir"
       - path: crates/scope-node/src/imaging/service.rs
         other_spec: 030-imaging-camera-link
-        other_story: US6
+        other_story: US7
         disposition: merge_order
-        reason: "US6 depends_on_merged US3, and adds saving before the header"
+        reason: "US7 depends_on_merged US3, and adds saving before the header"
       - path: crates/scope-node/src/imaging/mod.rs
         other_spec: 030-imaging-camera-link
         other_story: US4
         disposition: merge_order
-        reason: "US4 depends_on_merged US3, and adds pub mod indi after US3's line"
+        reason: "US4 depends_on_merged US3, and adds pub mod indi to the module US3 last wrote"
     open_questions: []
   US4:
     tests:
       - path: crates/scope-node/tests/indi.rs
         status: new
         disposition: add
-        assertion: "over the colour-camera script the adapter sends getProperties, CONNECT and, exactly 200 ms after the last definition, enableBLOB Also, and describes and reports the script's camera exactly"
+        assertion: "over the colour-camera script the adapter sends getProperties with version 1.7, CONNECT and, exactly 200 ms after the last definition, enableBLOB Also, and describes and reports the script's camera exactly"
         decision: "spec.md:US4-S1"
       - path: crates/scope-node/tests/indi.rs
         status: new
@@ -1891,33 +2024,81 @@ stories:
       - path: crates/scope-node/tests/indi.rs
         status: new
         disposition: add
-        assertion: "apply sends CCD_BINNING, CCD_CONTROLS, CCD_FRAME, CCD_COOLER and CCD_TEMPERATURE in order and answers the settings the camera reports, the rounded width included"
+        assertion: "an unreachable server, a missing device, a server with no camera and a 12-bit sample size each answer Failed with their text, the two waits after exactly 5 s, and a closed connection is made again"
         decision: "spec.md:US4-S3"
-      - path: crates/scope-node/tests/indi.rs
+      - path: crates/scope-node/tests/cli.rs
+        status: existing
+        disposition: preserve
+        assertion: "the node's command line, config and service behave as before: US4 adds only the adapter and its tests"
+        decision: "plan.md:Shapes that existing tests pin"
+    preserved_behavior:
+      - "the node's config, binary and service are unchanged by US4"
+      - "no unsafe in crates/scope-node"
+    checks:
+      development:
+        - "cargo nextest run -p scope-node --locked --test indi"
+      handoff: declared_gates
+      independent: declared_pipeline
+      release:
+        - "release owner: the repository owner, through the merge queue's ci.yml jobs: cargo-deny, cargo-machete and msrv judge quick-xml"
+    writes:
+      - Cargo.lock
+      - crates/scope-node/Cargo.toml
+      - crates/scope-node/src/imaging/indi/mod.rs
+      - crates/scope-node/src/imaging/indi/protocol.rs
+      - crates/scope-node/src/imaging/mod.rs
+      - crates/scope-node/tests/indi.rs
+      - crates/scope-node/tests/support/mod.rs
+    no_write_reason: ""
+    shared_writes:
+      - path: Cargo.lock
+        other_spec: 030-imaging-camera-link
+        other_story: US6
+        disposition: merge_order
+        reason: "US6 depends_on_merged US4, and adds base64 to scope-node's entry after US4 added quick-xml"
+      - path: crates/scope-node/Cargo.toml
+        other_spec: 030-imaging-camera-link
+        other_story: US6
+        disposition: merge_order
+        reason: "US6 depends_on_merged US4, and adds base64 after US4 added quick-xml"
+      - path: crates/scope-node/src/imaging/mod.rs
+        other_spec: 030-imaging-camera-link
+        other_story: US6
+        disposition: merge_order
+        reason: "US6 depends_on_merged US4, and adds pub mod fits"
+      - path: crates/scope-node/src/imaging/indi/mod.rs
+        other_spec: 030-imaging-camera-link
+        other_story: US5
+        disposition: merge_order
+        reason: "US5 depends_on_merged US4, and replaces apply and adds the neutral controls"
+    open_questions: []
+  US5:
+    tests:
+      - path: crates/scope-node/tests/indi_settings.rs
+        status: new
+        disposition: add
+        assertion: "the three applies send CCD_BINNING then CCD_CONTROLS, then CCD_FRAME, then CCD_COOLER then CCD_TEMPERATURE, and answer the settings the camera reports, the rounded width included"
+        decision: "spec.md:US5-S1"
+      - path: crates/scope-node/tests/indi_settings.rs
         status: new
         disposition: add
         assertion: "an out-of-range gain is Invalid and sends nothing, an Alert answer is Failed with the camera's message, and no answer is Failed after exactly 5 s"
-        decision: "spec.md:US4-S4"
-      - path: crates/scope-node/tests/indi.rs
-        status: new
-        disposition: add
-        assertion: "an unreachable server, a missing device, a server with no camera and a 12-bit sample size each answer Failed with their text, the two waits after exactly 5 s, and a closed connection is made again"
-        decision: "spec.md:US4-S5"
+        decision: "spec.md:US5-S2"
       - path: crates/scope-node/tests/imaging_config.rs
         status: new
         disposition: add
-        assertion: "the [imaging] table parses with its defaults and its neutral table, and refuses a missing adapter, misplaced keys, an empty device, unknown keys and bad neutral keys or values without printing the token"
-        decision: "spec.md:US4-S6"
+        assertion: "the [imaging] table parses with its defaults and its neutral table, each key split at its first dot, and refuses a missing adapter, misplaced keys, an empty device, unknown keys and bad neutral keys or values without printing the token"
+        decision: "spec.md:US5-S3"
       - path: crates/scope-node/tests/imaging_config.rs
         status: new
         disposition: add
         assertion: "the built scope-node --check-config prints the [imaging] table with its neutral line, or that no imaging camera is configured"
-        decision: "spec.md:US4-S7"
-      - path: crates/scope-node/tests/indi.rs
+        decision: "spec.md:US5-S4"
+      - path: crates/scope-node/tests/indi_settings.rs
         status: new
         disposition: add
-        assertion: "with neutral controls the adapter sends one CCD_CONTROLS vector after enableBLOB on each connection, the named elements at their values and the rest as reported, a later apply keeps them, and a control the camera lacks or refuses fails describe with its text"
-        decision: "spec.md:US4-S8"
+        assertion: "with neutral controls the adapter sends one CCD_CONTROLS vector after enableBLOB on each connection, the named elements at their values and the rest as reported, a later apply keeps them, and a control the camera lacks or refuses fails describe with its text and fails the connection"
+        decision: "spec.md:US5-S5"
       - path: crates/scope-node/tests/cli.rs
         status: existing
         disposition: preserve
@@ -1934,104 +2115,84 @@ stories:
       - "no unsafe in crates/scope-node"
     checks:
       development:
-        - "cargo nextest run -p scope-node --locked --test indi"
+        - "cargo nextest run -p scope-node --locked --test indi_settings"
         - "cargo nextest run -p scope-node --locked --test imaging_config"
       handoff: declared_gates
       independent: declared_pipeline
       release:
-        - "release owner: the repository owner, through the merge queue's ci.yml jobs: cargo-deny, cargo-machete and msrv judge quick-xml"
+        - "release owner: the repository owner, through the merge queue's ci.yml jobs, and a rebuild of the scope node"
     writes:
-      - Cargo.lock
-      - crates/scope-node/Cargo.toml
       - crates/scope-node/README.md
       - crates/scope-node/src/config.rs
       - crates/scope-node/src/imaging/indi/mod.rs
-      - crates/scope-node/src/imaging/indi/protocol.rs
-      - crates/scope-node/src/imaging/mod.rs
       - crates/scope-node/src/main.rs
       - crates/scope-node/tests/imaging_config.rs
-      - crates/scope-node/tests/indi.rs
-      - crates/scope-node/tests/support/mod.rs
+      - crates/scope-node/tests/indi_settings.rs
     no_write_reason: ""
     shared_writes:
-      - path: Cargo.lock
-        other_spec: 030-imaging-camera-link
-        other_story: US5
-        disposition: merge_order
-        reason: "US5 depends_on_merged US4, and adds base64 to scope-node's entry after US4 added quick-xml"
-      - path: crates/scope-node/Cargo.toml
-        other_spec: 030-imaging-camera-link
-        other_story: US5
-        disposition: merge_order
-        reason: "US5 depends_on_merged US4, and adds base64 after US4 added quick-xml"
       - path: crates/scope-node/README.md
         other_spec: 030-imaging-camera-link
-        other_story: US5
-        disposition: merge_order
-        reason: "US5 depends_on_merged US4, and adds the failed-exposure paragraph"
-      - path: crates/scope-node/src/main.rs
-        other_spec: 030-imaging-camera-link
         other_story: US6
         disposition: merge_order
-        reason: "US6 depends_on_merged US4, and passes save_dir to the service"
-      - path: crates/scope-node/src/config.rs
-        other_spec: 030-imaging-camera-link
-        other_story: US6
-        disposition: merge_order
-        reason: "US6 depends_on_merged US4, and adds save_dir"
-      - path: crates/scope-node/src/imaging/mod.rs
-        other_spec: 030-imaging-camera-link
-        other_story: US5
-        disposition: merge_order
-        reason: "US5 depends_on_merged US4, and adds pub mod fits"
+        reason: "US6 depends_on_merged US5, and adds the failed-exposure paragraph"
       - path: crates/scope-node/src/imaging/indi/mod.rs
         other_spec: 030-imaging-camera-link
-        other_story: US5
+        other_story: US6
         disposition: merge_order
-        reason: "US5 depends_on_merged US4, and adds exposures to the adapter"
+        reason: "US6 depends_on_merged US5, and adds exposures to the adapter"
+      - path: crates/scope-node/src/main.rs
+        other_spec: 030-imaging-camera-link
+        other_story: US7
+        disposition: merge_order
+        reason: "US7 depends_on_merged US5, and passes save_dir to the service"
+      - path: crates/scope-node/src/config.rs
+        other_spec: 030-imaging-camera-link
+        other_story: US7
+        disposition: merge_order
+        reason: "US7 depends_on_merged US5, and adds save_dir"
     open_questions: []
-  US5:
+  US6:
     tests:
       - path: crates/scope-node/tests/indi_expose.rs
         status: new
         disposition: add
-        assertion: "an exposure sets the frame type and CCD_EXPOSURE, times start at Busy on the node clock, the frame's roi is the device's CCD_FRAME, and the worked FITS BLOB becomes the worked little-endian samples"
-        decision: "spec.md:US5-S1"
+        assertion: "an exposure sets the frame type and CCD_EXPOSURE, times start at the first of two Busy answers on the node clock, the frame's roi is the device's CCD_FRAME, and the worked FITS BLOB becomes the worked little-endian samples"
+        decision: "spec.md:US6-S1"
       - path: crates/scope-node/tests/indi_expose.rs
         status: new
         disposition: add
-        assertion: "dark and flat choose their frame types, an 8-bit mono BLOB passes through with gain and offset from CCD_GAIN and CCD_OFFSET, and the roi follows the region the device reports"
-        decision: "spec.md:US5-S2"
+        assertion: "dark and flat choose their frame types, an 8-bit mono BLOB passes through with gain and offset from CCD_GAIN and CCD_OFFSET, the roi follows the region the device reported when the exposure was asked for, not one set during it, and the header's binning wins while CCD_CFA stands in for a missing BAYERPAT"
+        decision: "spec.md:US6-S2"
       - path: crates/scope-node/tests/indi_expose.rs
         status: new
         disposition: add
         assertion: "an Alert is followed at once by an abort, exactly 1 s later by the frame type and one more try that succeeds, each element at the time the script states, and two Alerts answer Failed with the camera's message"
-        decision: "spec.md:US5-S3"
+        decision: "spec.md:US6-S3"
       - path: crates/scope-node/tests/indi_expose.rs
         status: new
         disposition: add
-        assertion: "no frame within 60 s of the exposure's end, twice, answers Failed after exactly 122 s, the aborts and the second try at the times the script states, with status answered at once meanwhile"
-        decision: "spec.md:US5-S4"
+        assertion: "no frame within the exposure plus 60 s of the request, twice, answers Failed after exactly 122 s, the aborts and the second try at the times the script states, counted from the request and not from Busy, with status answered at once meanwhile"
+        decision: "spec.md:US6-S4"
       - path: crates/scope-node/tests/indi_expose.rs
         status: new
         disposition: add
         assertion: "a closed connection is made again for the second try, and two closed connections answer Failed"
-        decision: "spec.md:US5-S5"
+        decision: "spec.md:US6-S5"
       - path: crates/scope-node/tests/indi_expose.rs
         status: new
         disposition: add
-        assertion: "abort sends CCD_ABORT_EXPOSURE at the time the script states and answers Aborted in that instant, a late BLOB is discarded, and a second expose and an apply that names a setting are Busy and send nothing"
-        decision: "spec.md:US5-S6"
+        assertion: "abort sends CCD_ABORT_EXPOSURE at the time the script states and answers Aborted in that instant, a late BLOB of another picture is discarded, and a second expose and an apply that names a setting are Busy and send nothing"
+        decision: "spec.md:US6-S6"
       - path: crates/scope-node/tests/indi_expose.rs
         status: new
         disposition: add
         assertion: "a compressed BLOB, a 3-axis FITS, a float FITS and short data each answer Failed with their text and no second try"
-        decision: "spec.md:US5-S7"
+        decision: "spec.md:US6-S7"
       - path: crates/scope-node/tests/indi_expose.rs
         status: new
         disposition: add
         assertion: "the saved capture of the INDI camera simulator is played to its end and the description and frame equal the values a separate program read from it"
-        decision: "spec.md:US5-S8"
+        decision: "spec.md:US6-S8"
       - path: crates/scope-node/tests/cli.rs
         status: existing
         disposition: preserve
@@ -2039,7 +2200,7 @@ stories:
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
       - "the scope node does no pixel work: samples change byte order and nothing else (spec.md FR-028)"
-      - "the stand-in INDI server of US4 is used unchanged"
+      - "the stand-in INDI server and the two worked scripts of US4 are used unchanged"
     checks:
       development:
         - "cargo nextest run -p scope-node --locked --test indi_expose"
@@ -2059,37 +2220,37 @@ stories:
     shared_writes:
       - path: crates/scope-node/README.md
         other_spec: 030-imaging-camera-link
-        other_story: US6
+        other_story: US7
         disposition: merge_order
-        reason: "US6 depends_on_merged US5, and adds save_dir to the section"
+        reason: "US7 depends_on_merged US6, and adds save_dir to the section"
       - path: crates/scope-node/src/imaging/mod.rs
         other_spec: 030-imaging-camera-link
-        other_story: US6
+        other_story: US7
         disposition: merge_order
-        reason: "US6 depends_on_merged US5, and adds pub mod save"
+        reason: "US7 depends_on_merged US6, and adds pub mod save"
     open_questions: []
-  US6:
+  US7:
     tests:
       - path: crates/scope-node/tests/imaging_save.rs
         status: new
         disposition: add
         assertion: "with a save folder a saved frame is frame-000001.fits, written before the header, with the node's cards, the region's origin among them, NODE-T0 and the stream's samples"
-        decision: "spec.md:US6-S1"
+        decision: "spec.md:US7-S1"
       - path: crates/scope-node/tests/imaging_save.rs
         status: new
         disposition: add
-        assertion: "save false writes nothing, names count up, a taken name gets -2 and is never replaced, dark and flat set IMAGETYP, and a binned region's origin is written in binned pixels"
-        decision: "spec.md:US6-S2"
+        assertion: "names count up, a taken name gets -2 and is never replaced, dark and flat set IMAGETYP, a binned region's origin is written in binned pixels, save false writes nothing, and an 8-bit mono frame without controls is saved with none of their cards"
+        decision: "spec.md:US7-S2"
       - path: crates/scope-node/tests/imaging_save.rs
         status: new
         disposition: add
         assertion: "without a save folder, or with one that cannot be written, the header says why and the whole frame still follows"
-        decision: "spec.md:US6-S3"
+        decision: "spec.md:US7-S3"
       - path: crates/scope-node/tests/imaging_save.rs
         status: new
         disposition: add
         assertion: "the [imaging] table takes save_dir, refuses an empty one, and --check-config prints it"
-        decision: "spec.md:US6-S4"
+        decision: "spec.md:US7-S4"
       - path: crates/scope-node/tests/cli.rs
         status: existing
         disposition: preserve
@@ -2118,37 +2279,37 @@ stories:
     shared_writes:
       - path: crates/scope-node/README.md
         other_spec: 030-imaging-camera-link
-        other_story: US7
+        other_story: US8
         disposition: merge_order
-        reason: "US7 depends_on_merged US6, and adds the probe to the section"
+        reason: "US8 depends_on_merged US7, and adds the probe to the section"
       - path: crates/scope-node/src/main.rs
         other_spec: 030-imaging-camera-link
-        other_story: US7
+        other_story: US8
         disposition: merge_order
-        reason: "US7 depends_on_merged US6, and adds --probe-camera"
+        reason: "US8 depends_on_merged US7, and adds --probe-camera"
       - path: crates/scope-node/src/imaging/mod.rs
         other_spec: 030-imaging-camera-link
-        other_story: US7
+        other_story: US8
         disposition: merge_order
-        reason: "US7 depends_on_merged US6, and adds pub mod probe"
+        reason: "US8 depends_on_merged US7, and adds pub mod probe"
     open_questions: []
-  US7:
+  US8:
     tests:
       - path: crates/scope-node/tests/imaging_probe.rs
         status: new
         disposition: add
         assertion: "the probe writes the stand-in camera's description and three exposure lines with 0 ms in hand, in exactly 1.5 s"
-        decision: "spec.md:US7-S1"
+        decision: "spec.md:US8-S1"
       - path: crates/scope-node/tests/imaging_probe.rs
         status: new
         disposition: add
         assertion: "a mono camera without controls prints none and no, a frame 350 ms after a 100 ms exposure reads 250 ms, and a camera error ends the run"
-        decision: "spec.md:US7-S2"
+        decision: "spec.md:US8-S2"
       - path: crates/scope-node/tests/imaging_probe.rs
         status: new
         disposition: add
-        assertion: "the built scope-node --probe-camera prints the lines and exits 0, fails without an [imaging] table, and conflicts with --check-config"
-        decision: "spec.md:US7-S3"
+        assertion: "the built scope-node --probe-camera prints the lines, takes its exposure flag and exits 0 within 2.5 s, fails without an [imaging] table, and conflicts with --check-config"
+        decision: "spec.md:US8-S3"
       - path: crates/scope-node/tests/cli.rs
         status: existing
         disposition: preserve

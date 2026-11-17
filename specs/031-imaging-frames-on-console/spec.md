@@ -201,7 +201,7 @@ and `finder --simulate`. Nothing here solves, focuses, calibrates or stacks.
   `030-imaging-camera-link` keeps the scope node's side and the link, seven stories,
   and this trio names it in `depends_on_landed`. No decision changed in the split. One
   story straddled the link, the scope node's own copy of a frame, and was cut there:
-  what the scope node does is 030's US6, and what the console shows of it is US2-S12
+  what the scope node does is 030's US7, and what the console shows of it is US2-S12
   here.
 - Q: What does this spec take from 030? → A: These, by name, from 030's plan.md as
   drafted. None exists on `main` yet, so each is named without a line:
@@ -218,7 +218,7 @@ and `finder --simulate`. Nothing here solves, focuses, calibrates or stacks.
     `Roi`, `BayerPattern` and `ImagingError`, which a test's own camera implements;
   - `crates/scope-node/src/imaging/synthetic.rs` (030 US1): `SyntheticImagingCamera`,
     with its description, starting settings, sample rule and cooler's rule;
-  - `crates/scope-node/src/service.rs` (030 US3 and US6): `NodeService::with_imaging`
+  - `crates/scope-node/src/service.rs` (030 US3 and US7): `NodeService::with_imaging`
     and `with_imaging_save_dir`;
   - `crates/simulator/src/imaging.rs` and `crates/simulator/src/node.rs` (030 US2 and
     US3): `SimImagingCamera` with `with_stars` and `with_noise`, `SimStar`,
@@ -787,7 +787,7 @@ development, `cargo nextest run -p finder --locked --test console imaging_frames
     data begins with those six bytes unchanged (oracle: the bytes the test's node
     sent).
 12. **Given** the stand-in console rig whose node was given `.with_imaging_save_dir(D)`
-    (030's US6), D a child path of the test's scratch folder that does not exist yet,
+    (030's US7), D a child path of the test's scratch folder that does not exist yet,
     **When** a test applies `{"exposure_ms":100,"save_at_node":true}` and takes a frame,
     **Then** a committed test asserts that the saved view's `frame.node_file` is
     `frame-000001.fits` with no `node_save_error` key; that D holds that file; and that
