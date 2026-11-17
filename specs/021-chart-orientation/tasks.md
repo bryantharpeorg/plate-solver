@@ -14,7 +14,16 @@ description: "Task list for 021-chart-orientation: A Chart Turned to the Sky"
 **Rules for every story:**
 - Never edit an existing test, golden, fixture, `scripts/ci/`, `.github/`, `deny.toml`,
   `CODEOWNERS` or `ergane.yaml`. If an existing test pins the old behaviour, stop and
-  escalate with its exact output. Do not edit it.
+  escalate with its exact output. Do not edit it. The one exception is the `mod` line of
+  each new finder test module, added in its alphabetical place to the file your story's
+  tasks name (`crates/finder/tests/console/session/mod.rs`,
+  `crates/finder/tests/cli/main.rs` or `crates/finder/tests/mcp/main.rs`), none of which
+  holds a test (constitution 1.2.0). Change nothing else there.
+- A new finder test is a module file in its binary's folder, never a file at the top
+  level of `crates/finder/tests` or in `crates/finder/tests/support`, either of which
+  fails the `layout` test. It reaches shared helpers through `crate::support`, never
+  with `#[path]`, and holds only the setup its own tests use, since an unused helper
+  fails `clippy -D warnings`.
 - Write only the files your story's tasks name; they are its `writes` in plan.md
   § Refinement Record. A story that needs another file escalates.
 - Taps, the aim point and every pixel sent to the server stay in frame coordinates.
@@ -27,10 +36,20 @@ description: "Task list for 021-chart-orientation: A Chart Turned to the Sky"
 
 ### Tests first
 
-- [ ] T001 [US1] Create `crates/finder/tests/session_rotation.rs` with failing tests for
-  US1-S1, US1-S2, US1-S3 and US1-S4, restarting on a state folder as
-  `crates/finder/tests/session_cli.rs` does and calling the MCP tools as
-  `crates/finder/tests/mcp_session_tools.rs` does, with its own copies of their helpers.
+- [ ] T001 [US1] Create three failing test modules, each with its own copies of the
+  private helpers it needs:
+  - `crates/finder/tests/console/session/rotation.rs`, declared by `mod rotation;` after
+    `mod node;` in `crates/finder/tests/console/session/mod.rs`, for US1-S1 and US1-S2,
+    sending `PUT /api/session` to the router in process as
+    `crates/finder/tests/console/session/edits.rs` does;
+  - `crates/finder/tests/cli/session_rotation.rs`, declared by `mod session_rotation;`
+    after `mod session;` in `crates/finder/tests/cli/main.rs`, for US1-S3, restarting
+    the built binary on a state folder (`crate::support::Scratch`) as
+    `crates/finder/tests/cli/session.rs` does;
+  - `crates/finder/tests/mcp/session_rotation.rs`, declared by `mod session_rotation;`
+    after `mod motion;` in `crates/finder/tests/mcp/main.rs`, for US1-S4, calling the
+    MCP tools as `crates/finder/tests/mcp/session_tools.rs` does, with
+    `use crate::support::mcp as support;`.
 - [ ] T002 [US1] Create `crates/finder/web/src/components/SetupRotation.test.tsx` with
   failing tests for US1-S5, US1-S6 and US1-S7, rendering `SetupPage` with a mocked `put`
   as `crates/finder/web/src/components/SetupPage.test.tsx` does, and `useSession` with a
@@ -95,6 +114,8 @@ US1 → US2 (US2 waits for US1 to merge)
 ```
 
 - **US1** touches `crates/finder/src/session.rs`, `crates/finder/src/mcp/tools.rs`, the
-  README, the page's session and Setup, `GLOSSARY.md` and `DESIGN.md`.
+  README, the page's session and Setup, `GLOSSARY.md`, `DESIGN.md`, and one `mod` line
+  each in `crates/finder/tests/console/session/mod.rs`,
+  `crates/finder/tests/cli/main.rs` and `crates/finder/tests/mcp/main.rs`.
 - **US2** touches only `crates/finder/web/` and `DESIGN.md`. It reads the field US1 adds.
 - Both rebuild `dist`, so the edge is a merge edge.

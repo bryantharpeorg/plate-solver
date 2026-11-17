@@ -14,7 +14,15 @@ description: "Task list for 022-altaz-guidance: Push-To in the Observer's Own Di
 **Rules for every story:**
 - Never edit an existing test, golden, fixture, `scripts/ci/`, `.github/`, `deny.toml`,
   `CODEOWNERS` or `ergane.yaml`. If an existing test pins the old behaviour, stop and
-  escalate with its exact output. Do not edit it.
+  escalate with its exact output. Do not edit it. The one exception is the `mod` line of
+  each new finder test module, added in its alphabetical place to
+  `crates/finder/tests/console/main.rs`, which holds no test (constitution 1.2.0).
+  Change nothing else there.
+- A new finder test is a module file in `crates/finder/tests/console/`, never a file at
+  the top level of `crates/finder/tests` or in `crates/finder/tests/support`, either of
+  which fails the `layout` test. It binds the live helpers with
+  `use crate::support::live as support;`, never with `#[path]`, and holds only the setup
+  its own tests use, since an unused helper fails `clippy -D warnings`.
 - Write only the files your story's tasks name; they are its `writes` in plan.md
   § Refinement Record. A story that needs another file escalates.
 - Add no field to `session::Pointing`. Leave `turn_deg`, `tilt_deg`, the target's
@@ -28,10 +36,11 @@ description: "Task list for 022-altaz-guidance: Push-To in the Observer's Own Di
 
 ### Tests first
 
-- [ ] T001 [US1] Create `crates/finder/tests/pushto_separation.rs` with failing tests for
-  US1-S7, US1-S8 and US1-S9, on a fixed clock with a solved sample as
-  `crates/finder/tests/pushto_api.rs` does, and live pointings 5.0 s and 5.1 s old as
-  `crates/finder/tests/freshness_api.rs` builds them.
+- [ ] T001 [US1] Create `crates/finder/tests/console/pushto_separation.rs`, declared by
+  `mod pushto_separation;` after `mod pushto;` in `crates/finder/tests/console/main.rs`,
+  with failing tests for US1-S7, US1-S8 and US1-S9, on a fixed clock with a solved
+  sample as `crates/finder/tests/console/pushto.rs` does, and live pointings 5.0 s and
+  5.1 s old as `crates/finder/tests/console/freshness.rs` builds them.
 - [ ] T002 [US1] Create `crates/finder/web/src/components/GuidancePush.test.tsx` with
   failing tests for US1-S1, US1-S2, US1-S3, US1-S4, US1-S5 and US1-S6, using `SESSION`
   from `crates/finder/web/src/test/targets.ts` and rebuilding inline the five sessions
@@ -67,9 +76,11 @@ description: "Task list for 022-altaz-guidance: Push-To in the Observer's Own Di
 
 ## Phase 3: User Story 3 — The chart shows which way is up (Priority: P2)
 
-- [ ] T011 [US3] Create `crates/finder/tests/pointing_up.rs` with failing tests for
-  US3-S1, US3-S2, US3-S3 and US3-S4, taking the live event for US3-S4 as
-  `crates/finder/tests/live/support.rs` does; `crates/finder/web/src/useLiveUp.test.ts`
+- [ ] T011 [US3] Create `crates/finder/tests/console/pointing_up.rs`, declared by
+  `mod pointing_up;` after `mod pointing;` in `crates/finder/tests/console/main.rs`,
+  with failing tests for US3-S1, US3-S2, US3-S3 and US3-S4, taking the live event for
+  US3-S4 with `event` from `crates/finder/tests/support/live.rs`;
+  `crates/finder/web/src/useLiveUp.test.ts`
   for US3-S5; and `crates/finder/web/src/components/ChartUp.test.tsx` for US3-S6,
   US3-S7, US3-S8 and US3-S9.
 - [ ] T012 [US3] Add `up_deg` to `crates/finder/src/pushto.rs`, and the `up_deg` field to
@@ -93,9 +104,10 @@ description: "Task list for 022-altaz-guidance: Push-To in the Observer's Own Di
 US1 → US2 → US3 (each waits for the one before it to merge)
 ```
 
-- **US1** touches `crates/finder/src/pushto.rs`, the guidance block, `GLOSSARY.md` and
-  `DESIGN.md`.
+- **US1** touches `crates/finder/src/pushto.rs`, the guidance block, `GLOSSARY.md`,
+  `DESIGN.md` and `crates/finder/tests/console/main.rs`.
 - **US2** touches `Chart.tsx`, `index.css` and `DESIGN.md`.
 - **US3** touches `pushto.rs`, `session.rs`, `live.rs`, the README, the live hook,
-  `Chart.tsx`, `index.css` and `DESIGN.md`.
+  `Chart.tsx`, `index.css`, `DESIGN.md` and `crates/finder/tests/console/main.rs`, one
+  line from US1's.
 - Every story rebuilds `dist`, so every edge is a merge edge.

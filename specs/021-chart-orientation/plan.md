@@ -25,9 +25,31 @@ page.
 **Storage**: one new optional field in `session.json` (US1).
 
 **Testing**:
-- US1: `crates/finder/tests/session_rotation.rs` (new) for the session and the MCP
-  refusals, and `crates/finder/web/src/components/SetupRotation.test.tsx` (new) for
-  Setup and the page's session read.
+- US1: three new Rust test modules, one per test binary its server scenarios need, as
+  constitution 1.2.0 asks of a new finder test:
+  - `crates/finder/tests/console/session/rotation.rs` for US1-S1 and US1-S2, through the
+    router in process (`crates/finder/tests/console/main.rs:1`), declared by
+    `mod rotation;` after `mod node;` in `crates/finder/tests/console/session/mod.rs`;
+  - `crates/finder/tests/cli/session_rotation.rs` for US1-S3, restarting the built
+    `finder` (`crates/finder/tests/cli/main.rs:1`), declared by `mod session_rotation;`
+    after `mod session;` in `crates/finder/tests/cli/main.rs`;
+  - `crates/finder/tests/mcp/session_rotation.rs` for US1-S4, through the MCP endpoint
+    (`crates/finder/tests/mcp/main.rs:1`), declared by `mod session_rotation;` after
+    `mod motion;` in `crates/finder/tests/mcp/main.rs`.
+
+  None of those three files holds a test, and a binary's `main.rs` holds only its support
+  include and `mod` lines (`crates/finder/tests/layout/main.rs:156`). The `layout` test
+  fails a file at the top level of `crates/finder/tests`
+  (`crates/finder/tests/layout/main.rs:109`). Each module reaches shared helpers through
+  `crate::support` (the scratch folder is `crate::support::Scratch`, the MCP harness
+  `use crate::support::mcp as support;`), copies any private helper it needs from the
+  test it is built like, and holds only the setup its own tests use, since an unused
+  helper fails `clippy -D warnings`. They run alone with
+  `cargo nextest run -p finder --locked --test console session::rotation::`,
+  `cargo nextest run -p finder --locked --test cli session_rotation::` and
+  `cargo nextest run -p finder --locked --test mcp session_rotation::`.
+- US1: `crates/finder/web/src/components/SetupRotation.test.tsx` (new) for Setup and the
+  page's session read.
 - US2: `crates/finder/web/src/labelsRotation.test.ts` (new) for the layout,
   `crates/finder/web/src/components/ChartRotation.test.tsx` (new) for the chart, the
   photos, the tap and the arrows, and `crates/finder/web/src/App.rotation.test.tsx` (new)
@@ -42,10 +64,10 @@ page.
 | Principle | How this plan honours it |
 |---|---|
 | I. Agreeing with cedar is correctness | Display only; the solver is untouched. |
-| II. Never weaken a gate | No existing test, golden, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. |
+| II. Never weaken a gate | No existing test, golden, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. Each new Rust test module adds one `mod` line to a file that holds no test (`console/session/mod.rs`, `cli/main.rs`, `mcp/main.rs`), as constitution 1.2.0 asks. |
 | III. Tests first, independent expectations | The oracles are hand-computed quarter turns, trigonometry on the frame's size, and round trips through the tap mapping. |
 | IV. Critical paths | No `unsafe`, no dependency change, nothing under `proto/`. |
-| V. Standalone Rust, honest licensing | Unaffected. |
+| V. Proven open source first, with honest licensing | No new component and no dependency: the turning is SVG's own `rotate` transform and CSS's `rotate` property, and the rest extends what finder already has (the session field, Setup, the label layout, the aim tap). Nothing is copied in or called out to. |
 
 ## Project Structure
 
@@ -54,7 +76,12 @@ crates/finder/
 ├── README.md                                   # US1: the field
 ├── src/session.rs                              # US1: chart_rotation_deg
 ├── src/mcp/tools.rs                            # US1: both tools refuse it
-├── tests/session_rotation.rs                   # US1: new
+├── tests/console/session/mod.rs                # US1: mod rotation
+├── tests/console/session/rotation.rs           # US1: new
+├── tests/cli/main.rs                           # US1: mod session_rotation
+├── tests/cli/session_rotation.rs               # US1: new
+├── tests/mcp/main.rs                           # US1: mod session_rotation
+├── tests/mcp/session_rotation.rs               # US1: new
 └── web/
     ├── src/api.ts                              # US1: the session's field
     ├── src/useSession.ts                       # US1: edit type, read keeps it
@@ -78,7 +105,8 @@ GLOSSARY.md                                     # US1: Chart rotation
 
 ## Interfaces
 
-Line numbers are at 0a33c19 unless marked. § Prerequisites says which to re-read.
+Line numbers are at da1120d, before 022 lands, unless marked. § Prerequisites says which
+to re-read.
 
 ### US1: the session (`crates/finder/src/session.rs`)
 
@@ -93,20 +121,20 @@ Line numbers are at 0a33c19 unless marked. § Prerequisites says which to re-rea
 
   `present_nullable` (`crates/finder/src/session.rs:372`) already gives absent → `None`,
   `null` → `Some(None)` and a number → `Some(Some(v))`. A string, boolean or array fails
-  to deserialize, and `api::session_edit_error` (`crates/finder/src/api.rs:812` to
-  `crates/finder/src/api.rs:819`) answers it 400 with a JSON `error`, with no new code.
-- `SessionView` (`crates/finder/src/session.rs:513`) gains
+  to deserialize, and `api::session_edit_error` (`crates/finder/src/api.rs:934` to
+  `crates/finder/src/api.rs:941`) answers it 400 with a JSON `error`, with no new code.
+- `SessionView` (`crates/finder/src/session.rs:532`) gains
   `#[serde(skip_serializing_if = "Option::is_none")] pub chart_rotation_deg: Option<f64>`
-  after `aim` (`crates/finder/src/session.rs:550`), and the view sets it from `Values`
-  beside `aim: self.aim` (`crates/finder/src/session.rs:619`).
-- `Values` (`crates/finder/src/session.rs:557`) gains a plain
-  `chart_rotation_deg: Option<f64>` after `aim` (`crates/finder/src/session.rs:572`).
+  after `aim` (`crates/finder/src/session.rs:569`), and the view sets it from `Values`
+  beside `aim: self.aim` (`crates/finder/src/session.rs:642`).
+- `Values` (`crates/finder/src/session.rs:576`) gains a plain
+  `chart_rotation_deg: Option<f64>` after `aim` (`crates/finder/src/session.rs:593`).
   `Values` derives only `Clone`, so it takes no serde attribute. `Values::default()`
-  (`crates/finder/src/session.rs:578`) sets it to `None`.
+  (`crates/finder/src/session.rs:599`) sets it to `None`.
 - `Values::edited` checks it after `min_alt_deg`
-  (`crates/finder/src/session.rs:1264`), refusing a non-finite number with
-  `SessionError::Invalid("chart_rotation_deg must be a finite number of degrees")`, and
-  stores it after the target (`crates/finder/src/session.rs:1286`):
+  (`crates/finder/src/session.rs:1318`), refusing a non-finite number with
+  `SessionError::Invalid("chart_rotation_deg must be a finite number of degrees".into())`, and
+  stores it after the target (`crates/finder/src/session.rs:1340`):
 
   ```rust
   if let Some(rotation) = edit.chart_rotation_deg {
@@ -124,16 +152,16 @@ Line numbers are at 0a33c19 unless marked. § Prerequisites says which to re-rea
 
   JSON cannot carry a non-finite number: serde_json refuses `1e400` while parsing, which
   answers 400. The check is for callers that build a `SessionEdit` in Rust.
-- `StoredSession` (`crates/finder/src/session.rs:1398`) gains, after `aim`
-  (`crates/finder/src/session.rs:1413`),
+- `StoredSession` (`crates/finder/src/session.rs:1452`) gains, after `aim`
+  (`crates/finder/src/session.rs:1467`),
   `#[serde(default, skip_serializing_if = "Option::is_none")] chart_rotation_deg: Option<f64>`,
   so a file without it reads as unset and an unset value writes nothing.
-- `read_state`'s `SessionEdit` (`crates/finder/src/session.rs:1437`) passes
+- `read_state`'s `SessionEdit` (`crates/finder/src/session.rs:1491`) passes
   `chart_rotation_deg: Some(stored.chart_rotation_deg)`, so a stored value is checked and
   normalised exactly as a `PUT` is. `write_state`'s `StoredSession`
-  (`crates/finder/src/session.rs:1487`) writes `values.chart_rotation_deg`.
+  (`crates/finder/src/session.rs:1541`) writes `values.chart_rotation_deg`.
 - Every other `SessionEdit` literal ends in `..Default::default()` or
-  `..SessionEdit::default()` and needs nothing (`crates/finder/src/session.rs:1529`,
+  `..SessionEdit::default()` and needs nothing (`crates/finder/src/session.rs:1583`,
   `crates/finder/src/simulate.rs:94`, `crates/finder/src/simulate.rs:118`).
 
 ### US1: the MCP tools (`crates/finder/src/mcp/tools.rs`)
@@ -147,8 +175,8 @@ Both exhaustive patterns name the field, and both tools refuse it:
 
 ### US1: the page's session
 
-- `ObservingSession` (`crates/finder/web/src/api.ts:230`) gains, after `aim`
-  (`crates/finder/web/src/api.ts:248`):
+- `ObservingSession` (`crates/finder/web/src/api.ts:245`) gains, after `aim`
+  (`crates/finder/web/src/api.ts:264`):
 
   ```ts
   /** How far the live views are turned, degrees counter-clockwise; omitted until set. */
@@ -160,11 +188,11 @@ Both exhaustive patterns name the field, and both tools refuse it:
   after `aim` (`crates/finder/web/src/useSession.ts:38`):
   `...(body?.chart_rotation_deg != null && { chart_rotation_deg: body.chart_rotation_deg }),`.
 - `SetupPage` (`crates/finder/web/src/components/SetupPage.tsx`) gets a section after
-  Minimum altitude (`crates/finder/web/src/components/SetupPage.tsx:150` to
-  `crates/finder/web/src/components/SetupPage.tsx:174`), built like it:
+  Minimum altitude (`crates/finder/web/src/components/SetupPage.tsx:151` to
+  `crates/finder/web/src/components/SetupPage.tsx:175`), built like it:
   - state `rotation` (a string, `""` when unset) and `rotationMessage`, set from
     `session.chart_rotation_deg` in an effect like the one for `min_alt_deg`
-    (`crates/finder/web/src/components/SetupPage.tsx:34`);
+    (`crates/finder/web/src/components/SetupPage.tsx:35`);
   - `<section aria-labelledby="setup-rotation-title">` titled "Chart rotation", with
     `<Field label="Chart rotation" unit="°" … placeholder="0" />`, the hint as a
     `quiet` paragraph, the message as `role="status"` only once there is one, and a
@@ -173,7 +201,7 @@ Both exhaustive patterns name the field, and both tools refuse it:
     cleared."; a value that `Number()` makes finite saves it with "Chart rotation
     saved."; anything else says "Chart rotation must be a number of degrees." and saves
     nothing. Saving goes through the page's `save` helper
-    (`crates/finder/web/src/components/SetupPage.tsx:36`).
+    (`crates/finder/web/src/components/SetupPage.tsx:37`).
 
 ### US1: the words
 
@@ -186,14 +214,14 @@ Both exhaustive patterns name the field, and both tools refuse it:
   > _Avoid_: turn (the base's motion in azimuth), roll (the solve's angle to north)
 
 - `crates/finder/README.md`, after the aim point's paragraph
-  (`crates/finder/README.md:331` to `crates/finder/README.md:336`):
+  (`crates/finder/README.md:333` to `crates/finder/README.md:338`):
 
   > `PUT /api/session` also takes `chart_rotation_deg`, in degrees counter-clockwise,
   > stored within [0, 360); `null` clears it. Reads omit it until set. The page turns its
   > live chart and photos by it. The MCP tools do not change it.
 
 - `DESIGN.md`, a new section after § Live chart and preview
-  (`DESIGN.md:332` to `DESIGN.md:333`):
+  (`DESIGN.md:336` to `DESIGN.md:337`):
 
   > ### Chart rotation — built
   > Setup's Chart rotation section, after Minimum altitude, holds one ruled degrees field
@@ -274,25 +302,25 @@ agrees with `rotationTransform`. At 90° a 1296 × 972 frame's pixel (300, 200) 
 
 ### US2: labels laid out where they are seen (`crates/finder/web/src/labels.ts`)
 
-`LabelInput` (`crates/finder/web/src/labels.ts:30`) gains:
+`LabelInput` (`crates/finder/web/src/labels.ts:31`) gains:
 
 ```ts
 /** The live chart's rotation, degrees counter-clockwise; absent or 0 lays out in the frame's axes. */
 rotation?: number;
 ```
 
-`layoutLabels` (`crates/finder/web/src/labels.ts:143`) lays out in the rotated view, with
+`layoutLabels` (`crates/finder/web/src/labels.ts:144`) lays out in the rotated view, with
 every mapping the identity when the rotation is 0 or absent, so today's layout is
 unchanged to the bit:
 - **Inputs into the view.** Each star, each detection and each object outline point
-  (`outline`, `crates/finder/web/src/labels.ts:75`) goes through `toView`; an object's
+  (`outline`, `crates/finder/web/src/labels.ts:76`) goes through `toView`; an object's
   label is placed from `toView` of its centre. Each furniture box becomes the bounding box
   of its four corners through `toView`. `W` and `H` become `rotatedBox`'s width and
   height.
 - **Reach.** An object's reach in view direction `(dx, dy)` is its reach
-  (`crates/finder/web/src/labels.ts:61`) in the frame direction
+  (`crates/finder/web/src/labels.ts:62`) in the frame direction
   `(dx·cos − dy·sin, dx·sin + dy·cos)`.
-- **The frame check.** `intoFrame` (`crates/finder/web/src/labels.ts:165`) takes a
+- **The frame check.** `intoFrame` (`crates/finder/web/src/labels.ts:166`) takes a
   candidate's four corners back through `fromView`, works out the shortfall against the
   frame's 3u margin in frame pixels as it does today, `[fx, fy]`, and returns that shift
   turned into the view, `[fx·cos + fy·sin, −fx·sin + fy·cos]`. Moving the box by it moves
@@ -304,8 +332,8 @@ unchanged to the bit:
   middle lands on `c`, upright.
 - **The box's own anchor point**, which US2-S4 uses, is `x0`, `x1` or their middle for
   the anchors `start`, `end` and `middle`, at `y1 − 0.22 × size`, where `size` is
-  `STAR_TEXT × u` for a star (`candidate`, `crates/finder/web/src/labels.ts:129` to
-  `crates/finder/web/src/labels.ts:137`).
+  `STAR_TEXT × u` for a star (`candidate`, `crates/finder/web/src/labels.ts:130` to
+  `crates/finder/web/src/labels.ts:138`).
 
 `sinCos` is exported from `rotation.ts` for this, or `labels.ts` takes `sin` and `cos`
 from `toView` of unit vectors; either keeps the quarter turns exact.
@@ -314,23 +342,23 @@ from `toView` of unit vectors; either keeps the quarter turns exact.
 
 - `Chart` reads `const rotation = live ? rotationOf(session) : 0;` and
   `const b = rotatedBox(W, H, rotation);`.
-- `u` uses `b.width` where it used `W` (`crates/finder/web/src/components/Chart.tsx:153`);
+- `u` uses `b.width` where it used `W` (`crates/finder/web/src/components/Chart.tsx:154`);
   `--chart-aspect` is `b.width / b.height`
-  (`crates/finder/web/src/components/Chart.tsx:177`); the `viewBox` is
+  (`crates/finder/web/src/components/Chart.tsx:178`); the `viewBox` is
   `${-m} ${-m} ${b.width + 2 * m} ${b.height + 2 * m}`
-  (`crates/finder/web/src/components/Chart.tsx:183`); `layoutLabels` gets `rotation`
-  (`crates/finder/web/src/components/Chart.tsx:163`).
+  (`crates/finder/web/src/components/Chart.tsx:184`); `layoutLabels` gets `rotation`
+  (`crates/finder/web/src/components/Chart.tsx:164`).
 - **Unrotated** the SVG's children are today's, in today's order.
 - **Rotated** the SVG has the extra class `chart-rotated` and the style
   `--label-rotation: ${rotation}deg`, and its children are the paper's edge
-  (`crates/finder/web/src/components/Chart.tsx:194` to
-  `crates/finder/web/src/components/Chart.tsx:202`), sized
+  (`crates/finder/web/src/components/Chart.tsx:195` to
+  `crates/finder/web/src/components/Chart.tsx:203`), sized
   `b.width + 2 * m - 3 * u` by `b.height + 2 * m - 3 * u` and level, then one
   `<g transform={rotationTransform(W, H, rotation)}>` holding the `<defs>` and everything
   else, in today's order. Inside the group a turned edge would poke out of the `viewBox`
   (8.9 px a side at 30°).
-- **Grid edge labels** (`crates/finder/web/src/components/Chart.tsx:309` to
-  `crates/finder/web/src/components/Chart.tsx:326`): `Grid` gets `rotation`. Rotated,
+- **Grid edge labels** (`crates/finder/web/src/components/Chart.tsx:310` to
+  `crates/finder/web/src/components/Chart.tsx:327`): `Grid` gets `rotation`. Rotated,
   every edge label gets a `transform`, so the upright rule leaves it alone and it reads
   along its edge:
 
@@ -403,12 +431,12 @@ has a `transform` of its own.
   arrow is inside the rotated group and passes none.
 - `App` (`crates/finder/web/src/App.tsx`) computes
   `const rotation = showLive ? rotationOf(chartSession) : 0;` after `chartSession`
-  (`crates/finder/web/src/App.tsx:141`); the page's aspect
-  (`crates/finder/web/src/App.tsx:145` to `crates/finder/web/src/App.tsx:148`) comes from
+  (`crates/finder/web/src/App.tsx:142`); the page's aspect
+  (`crates/finder/web/src/App.tsx:146` to `crates/finder/web/src/App.tsx:149`) comes from
   `rotatedBox(report.width, report.height, rotation)`, with `rotation` among the effect's
-  dependencies; `LivePreview` (`crates/finder/web/src/App.tsx:241`) gets
+  dependencies; `LivePreview` (`crates/finder/web/src/App.tsx:242`) gets
   `width={live.report.width} height={live.report.height} rotation={rotation}`; and
-  `NextTargets` (`crates/finder/web/src/App.tsx:259`) gets `rotation={rotation}`.
+  `NextTargets` (`crates/finder/web/src/App.tsx:260`) gets `rotation={rotation}`.
 
 ### US2: `DESIGN.md` § Chart rotation
 
@@ -428,7 +456,9 @@ These are not changed by any story:
 - **The unrotated chart.** Every existing `Chart`, `ChartLive`, `App` and e2e test renders
   without `chart_rotation_deg`, and FR-009 keeps their markup byte for byte. The probe
   compared the ORION2, VIRGO, ROOF, busy and live-with-target charts, `LivePreview` and
-  the aim-point region against c1ed295 and found them identical.
+  the aim-point region against c1ed295 and found them identical; the 2026-11-16 probe
+  compared nine renderings, 022's aim and up marks among them, against its build of 022
+  and found them identical too.
 - **The label layout.** `crates/finder/web/src/labels.test.ts` calls `layoutLabels`
   without `rotation`; every mapping is then the identity.
 - **The aim tap.** `crates/finder/web/src/components/AimTap.test.tsx:52` mocks only the
@@ -436,17 +466,23 @@ These are not changed by any story:
   body `{"frame_id":42,"x":700,"y":420}`. Unrotated, `boxToFrame` is today's formula.
 - **The arrows' labels.** `crates/finder/web/src/components/NextTargets.test.tsx:42`
   finds them by `/from up on the frame/`, which they keep.
-- **The session's fields.** `crates/finder/tests/session_cli.rs:144` to
-  `crates/finder/tests/session_cli.rs:152` (a stored file of exactly three keys),
-  `crates/finder/tests/session_api.rs:54` to `crates/finder/tests/session_api.rs:64` (a
-  fresh read of exactly five keys), `crates/finder/tests/session_cli.rs:160` and
-  `crates/finder/tests/mcp_session_tools.rs:232` (named fields only). An unset rotation
+- **The session's fields.** `crates/finder/tests/cli/session.rs:122` to
+  `crates/finder/tests/cli/session.rs:130` (a stored file of exactly three keys),
+  `crates/finder/tests/console/session/edits.rs:54` to `crates/finder/tests/console/session/edits.rs:64` (a
+  fresh read of exactly five keys), `crates/finder/tests/cli/session.rs:138` and
+  `crates/finder/tests/mcp/session_tools.rs:231` (named fields only). An unset rotation
   is neither written nor read.
-- **The MCP refusals.** `crates/finder/tests/mcp_session_tools.rs:185` and
-  `crates/finder/tests/mcp_endpoint.rs:394` keep their messages.
+- **The MCP refusals.** `crates/finder/tests/mcp/session_tools.rs:184` and
+  `crates/finder/tests/mcp/endpoint.rs:390` keep their messages.
 - **Setup's single status.** `crates/finder/web/src/components/SetupPage.test.tsx:37`
   and the e2e checks that find one `status` stay true: the new section shows none until
   it is used.
+- **Finder's test layout.** `crates/finder/tests/layout/main.rs` fails a file at the top
+  level of `crates/finder/tests` (`crates/finder/tests/layout/main.rs:109`), any file
+  added to `crates/finder/tests/support` (`crates/finder/tests/layout/main.rs:127`) and
+  a binary's `main.rs` holding anything but its support include and `mod` lines
+  (`crates/finder/tests/layout/main.rs:156`). Each new Rust test is a module file in its
+  binary's folder and one `mod` line; no existing module, helper or test changes.
 
 ## Decisions and the alternatives rejected
 
@@ -469,12 +505,12 @@ These are not changed by any story:
 
 ## Verification (every story, before proposing)
 
-- **The factory gates** (`ergane.yaml` at 0a33c19):
+- **The factory gates** (`ergane.yaml` at cc593c7):
   - `lint` = `cargo fmt --all --check`,
     `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`,
     `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked`
     and `RUSTDOCFLAGS="-D warnings" cargo doc -p finder --no-deps`;
-  - `test` = `cargo test --workspace --all-targets --all-features --locked`,
+  - `test` = `cargo nextest run --workspace --all-targets --all-features --locked`,
     `cargo test --workspace --locked --doc`, and then, in `crates/finder/web`,
     `npm ci --no-audit --no-fund`, `npm run typecheck`, `npm run format:check`,
     `npm test`, `npm run build`, `git status --porcelain -- dist | (! grep .)` and
@@ -485,32 +521,36 @@ These are not changed by any story:
 ## Prerequisites before this spec is flipped to `ready`
 
 1. **The earlier specs have landed:** 012, 013, 016, 017, 018, 019, 020 and 022. All but
-   020 and 022 are met at 0a33c19; `depends_on_landed` holds this spec until both land.
-2. **`main` is still as read, once 020 and 022 have landed.** Every citation here is at
-   0a33c19. 020 and 022 edit `crates/finder/web/src/components/Chart.tsx`,
-   `crates/finder/web/src/App.tsx`, `crates/finder/web/src/api.ts`,
-   `crates/finder/web/src/labels.ts`, `crates/finder/web/src/index.css`, `DESIGN.md`,
+   022 are met at da1120d, where 024, 025, 027 and 028 have landed too;
+   `depends_on_landed` holds this spec until 022 lands.
+2. **`main` is still as read, once 022 has landed.** Every citation here is at da1120d,
+   and holds at cc593c7, which changed only `.specify/memory/constitution.md`.
+   022 edits `crates/finder/web/src/components/Chart.tsx`,
+   `crates/finder/web/src/api.ts`, `crates/finder/web/src/index.css`, `DESIGN.md`,
    `GLOSSARY.md`, `crates/finder/README.md` and `crates/finder/src/session.rs`; re-read
-   the lines cited in those files after both land and correct them here. For
-   `session.rs`, the probe's build of 022 moved them as follows; re-check them against
-   the real merge:
+   the lines cited in those files after it lands and correct them here. For
+   `session.rs`, the 2026-11-16 probe's build of 022 on da1120d (§ Refinement Record)
+   moved them as follows; re-check them against the real merge:
 
-   | Site | At 0a33c19 | After 022 (probe) |
+   | Site | At da1120d | After 022 (probe) |
    |---|---|---|
    | `SessionEdit` | 351 | 351 |
    | `present_nullable` | 372 | 372 |
-   | `SessionView` | 513 | 517 |
-   | `SessionView.aim` | 550 | 554 |
-   | `Values` | 557 | 561 |
-   | `Values.aim` | 572 | 576 |
-   | `Values::default` | 578 | 582 |
-   | the view's `aim: self.aim` | 619 | 635 |
-   | `edited`'s `min_alt_deg` check | 1264 | 1280 |
-   | `edited`'s target | 1286 | 1302 |
-   | `#[serde(deny_unknown_fields)]` on `StoredSession` | 1397 | 1413 |
-   | `StoredSession.aim` | 1413 | 1429 |
-   | `read_state`'s `SessionEdit` | 1437 | 1453 |
-   | `write_state`'s `StoredSession` | 1487 | 1503 |
+   | `SessionView` | 532 | 536 |
+   | `SessionView.aim` | 569 | 573 |
+   | `Values` | 576 | 580 |
+   | `Values.aim` | 593 | 597 |
+   | `Values::default` | 599 | 603 |
+   | the view's `aim: self.aim` | 642 | 658 |
+   | `edited`'s `min_alt_deg` check | 1318 | 1334 |
+   | `edited`'s target | 1340 | 1356 |
+   | `#[serde(deny_unknown_fields)]` on `StoredSession` | 1451 | 1467 |
+   | `StoredSession.aim` | 1467 | 1483 |
+   | `read_state`'s `SessionEdit` | 1491 | 1507 |
+   | `write_state`'s `StoredSession` | 1541 | 1557 |
+
+   A spec that lands before 021 and edits a file cited here (draft 026, the imaging
+   drafts 030 to 038) means re-reading those citations too.
 
 3. **The owner approvals are given.** The horizon level was dropped on 2026-11-14;
    flipping gives the rest.
@@ -525,8 +565,8 @@ These are not changed by any story:
 2. **A named command is read literally.** *Check:* commands are copied from
    § Verification.
 3. **One evidence budget.** *Check:* each story keeps its diff under 64 KiB, excluding
-   `crates/finder/web/dist`. The probe's single story ran 13 KiB on the server and 41 KiB
-   on the page, before the label, edge and arrow fixes.
+   `crates/finder/web/dist`. The 2026-11-16 probe's US1 ran 27.8 KiB and its US2
+   48.1 KiB (29.3 and 50.2 KiB as `ergane check output` measures them).
 4. **jsdom has no layout, no `@layer` and no `var()`.** *Check:* page tests assert
    attributes, inline styles, selector matches, the rule's text in `index.css` and mocked
    bounding boxes, never `getCTM`, `getBBox` or a computed `rotate`.
@@ -550,6 +590,16 @@ These are not changed by any story:
     clears it with `null`; this spec adds none.
 14. **Formatting is the repository's.** Prettier reflows several of the plan's snippets.
     *Check:* run `npm run format`, then `npm run format:check`.
+15. **A new top-level finder test fails the layout test, and one module lives in one
+    binary.** Spec 027 groups finder's Rust tests into one binary per system, and its
+    `layout` test refuses a file at the top level of `crates/finder/tests`. US1's server
+    scenarios need three binaries. *Check:* US1 adds the three modules named in
+    § Technical Context, each with one `mod` line, and
+    `cargo nextest run -p finder --locked --test layout` passes.
+16. **A gate command is copied from `ergane.yaml`, never remembered.** The `test` gate's
+    Rust half has been `cargo nextest run` since 2026-11-14. *Check:* § Verification and
+    the spec's Independent Test name
+    `cargo nextest run --workspace --all-targets --all-features --locked`.
 
 ## Risks
 
@@ -595,41 +645,115 @@ edited:
   one more section) and `crates/finder/web/e2e/night-legibility.spec.ts:35`, which reads
   the `viewBox`.
 
+**Re-refined on 2026-11-16 against `main` at da1120d**, after 020, 024, 025, 027 and 028
+had landed and before 022. Every citation was re-read there: 31 of 97 were unchanged and
+66 moved with their lines (020 in `Chart.tsx`, `App.tsx` and `labels.ts`; 024 and 025 in
+`session.rs`, `api.rs`, `SetupPage.tsx`, `useSession.ts`, `README.md` and `DESIGN.md`;
+027 and 028 in the test files, where `session_cli.rs`'s `Server::start` now takes a
+`crate::support::Scratch`). None changed what it cites. US1's one planned Rust test file
+became three modules, since its scenarios need three test binaries (§ Technical
+Context), so US1's writes gain them and the three files that declare them. The spec's
+Independent Test and § Verification name the `test` gate's `cargo nextest run`, the
+§ Prerequisites table is measured on a build of 022, and § Constitution Check answers
+constitution 1.3.0's Principle V. No scenario's Given, When or Then, no owner approval and
+no `depends_on_landed` entry changed. Then both stories were built again from this trio in
+a throwaway worktree on the 2026-11-16 probe's build of 022 (`6c68476`, branch
+`probe/021-r2`), tests first, with no existing test edited:
+
+- **US1** (`e04816c`): the 4 server tests failed first (a 400 for the unknown field; for
+  the MCP tools, the deserializer's refusal in place of the tools' own) and the 3 page
+  tests failed (no Chart rotation section; the hook dropped the field); then all passed.
+  `--test layout` (3), `cli session::` (6), `console session::edits::` (9),
+  `mcp session_tools::` (7), `mcp endpoint::` (12), fmt, workspace clippy, typecheck,
+  `format:check`, `npm test` 307, the build and a clean `dist`. Diff 27.8 KiB without
+  `dist`.
+- **US2** (`6a3cbab`): the 13 page tests failed first (no `rotation.ts`; no turned group)
+  and then passed; US2-S4 also fails against today's `labels.ts`, with label middles 13
+  to 20 px off their boxes. `npm test` 320, typecheck, `format:check`, the build and a
+  clean `dist`. The unrotated markup was byte-identical to the 022 build's on nine
+  renderings (FR-009). Diff 48.1 KiB, inside the 64 KiB budget.
+- **The full gates on the US2 tree**, as `ergane.yaml` writes them but with the probe's
+  own target folder: `lint` passed; `test` ran nextest 673 of 673, the doc tests, Vitest
+  320 and a clean `dist`, and Playwright passed 28 of 29, `crates/finder/web/e2e/session.spec.ts:191` and
+  the `viewBox` readers among them. The one failure, `crates/finder/web/e2e/mcp.spec.ts:52`
+  (the eyepiece moved 0.00175° in the 2 s after Stop, against a 1e-8 bound), is in GoTo
+  and Stop, which 021 does not touch; it ran while 022's probe gates loaded the host, and
+  it passed three times out of three when run alone, and a second full Playwright run on
+  the same tree passed 29 of 29.
+- **The builder's mechanical changes:** `SessionError::Invalid` takes `.into()`
+  (§ Interfaces now says so); rustfmt and Prettier reflow the snippets; the GLOSSARY entry
+  is one line, like its neighbours; `sinCos` is exported, as § Interfaces allows; the
+  chart's paper, defs and frame are built once and ordered by the rotation; `App` passes
+  `live?.report.width`, since TypeScript does not narrow `live` through `showLive`.
+- **One reading of US2-S4**, for the owner: "`toView` of the spot's anchor, moved by the
+  box's centre less the box's own anchor point" was built as `toView(anchor + (centre −
+  anchor point))`, which § Interfaces describes. The other reading,
+  `toView(anchor) + (centre − anchor point)`, cannot hold at any angle but 0. The
+  scenario's words are unchanged.
+- **Not run:** `ci.yml`'s other jobs, a gate on a cold target folder, and an e2e test that
+  sets a rotation (the spec adds none).
+
+`main` then moved to cc593c7 (constitution 1.3.0), which changes only
+`.specify/memory/constitution.md`, so every citation and probe above holds there, and this
+record is reviewed at cc593c7.
+
 Writes come from the task text. Shared writes name the story in this spec that writes the
-same file next, and the landed story that last wrote it (022's US3 for the files 022
-touches, 020's US2 for `labels.ts` and `App.tsx`). Nothing in this record is an owner
-approval: those are in spec.md, and flipping to `ready` gives them.
+same file next, and a landed story in `depends_on_landed` that wrote it before (022's US3
+for the files 022 touches, 020's US2 for `labels.ts` and `App.tsx`). Where a later landed
+spec that is not in `depends_on_landed` wrote the file last (025's US3 for
+`useSession.ts` and `SetupPage.tsx`), the reason says so; it is on `main`, so no order
+against it is left to keep. The three test files that declare US1's modules were last
+written by 028's US3 (`crates/finder/tests/cli/main.rs` and
+`crates/finder/tests/console/session/mod.rs`) and 027's US2
+(`crates/finder/tests/mcp/main.rs`), neither of which this spec names in
+`depends_on_landed`. Nothing in this record is an owner approval: those are in spec.md,
+and flipping to `ready` gives them.
 
 ```yaml
 version: 1
-reviewed_revision: 0a33c1914547d327790fc0f1fc28b286729922e9
+reviewed_revision: cc593c7d8cb9327f3ce10fb05fd9191549a1fc20
 stories:
   US1:
     tests:
-      - path: crates/finder/tests/session_rotation.rs
+      - path: crates/finder/tests/console/session/rotation.rs
         status: new
         disposition: add
-        assertion: "450, -90, 0, -1e-20 and -0.0 store 90, 270, 0, 0 and 0, each 0 positive; strings, booleans and arrays answer 400 and change nothing; a fresh read has no key; 90 survives a restart and null clears it from the read and the file; both MCP tools refuse it with their messages"
-        decision: "spec.md:US1-S1..S4"
+        assertion: "450, -90, 0, -1e-20 and -0.0 store 90, 270, 0, 0 and 0, each 0 positive; strings, booleans and arrays answer 400 and change nothing; a fresh read has no key"
+        decision: "spec.md:US1-S1..S2"
+      - path: crates/finder/tests/cli/session_rotation.rs
+        status: new
+        disposition: add
+        assertion: "90 survives a restart of the built binary in the read and session.json, and null clears it from both"
+        decision: "spec.md:US1-S3"
+      - path: crates/finder/tests/mcp/session_rotation.rs
+        status: new
+        disposition: add
+        assertion: "set_target and set_session refuse chart_rotation_deg with their existing messages and leave the read unchanged"
+        decision: "spec.md:US1-S4"
       - path: crates/finder/web/src/components/SetupRotation.test.tsx
         status: new
         disposition: add
         assertion: "the section sits after Minimum altitude and holds the session's value; saving sends the number, an empty field sends null, a word sends nothing, each with its message; the page's session read keeps the field and omits it when absent"
         decision: "spec.md:US1-S5..S7"
-      - path: crates/finder/tests/session_cli.rs
+      - path: crates/finder/tests/cli/session.rs
         status: existing
         disposition: preserve
         assertion: "a stored file of exactly three keys; named fields survive a restart"
         decision: "plan.md:Shapes that existing tests pin"
-      - path: crates/finder/tests/session_api.rs
+      - path: crates/finder/tests/console/session/edits.rs
         status: existing
         disposition: preserve
         assertion: "a fresh read of exactly five keys"
         decision: "plan.md:Shapes that existing tests pin"
-      - path: crates/finder/tests/mcp_session_tools.rs
+      - path: crates/finder/tests/mcp/session_tools.rs
         status: existing
         disposition: preserve
         assertion: "set_session refuses the fields it doesn't change, with its message"
+        decision: "plan.md:Shapes that existing tests pin"
+      - path: crates/finder/tests/layout/main.rs
+        status: existing
+        disposition: preserve
+        assertion: "no file at the top level of crates/finder/tests or new file in its support folder, and each binary's main.rs holds only its support include and mod lines, with session_rotation added to cli's and mcp's"
         decision: "plan.md:Shapes that existing tests pin"
       - path: crates/finder/web/src/components/SetupPage.test.tsx
         status: existing
@@ -637,12 +761,15 @@ stories:
         assertion: "one status at a time on Setup"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
-      - "an unset rotation is neither written to session.json nor read (crates/finder/tests/session_cli.rs:144, crates/finder/tests/session_api.rs:54)"
+      - "an unset rotation is neither written to session.json nor read (crates/finder/tests/cli/session.rs:122, crates/finder/tests/console/session/edits.rs:54)"
       - "the MCP tools change only the fields they did, with the same refusals"
       - "every other session field keeps its validation and storage"
     checks:
       development:
-        - "cargo test -p finder --locked --all-features --test session_rotation"
+        - "cargo nextest run -p finder --locked --all-features --test console session::rotation::"
+        - "cargo nextest run -p finder --locked --all-features --test cli session_rotation::"
+        - "cargo nextest run -p finder --locked --all-features --test mcp session_rotation::"
+        - "cargo nextest run -p finder --locked --test layout"
         - "cargo clippy -p finder --all-targets --all-features --locked -- -D warnings"
         - "npm test"
       handoff: declared_gates
@@ -655,7 +782,12 @@ stories:
       - crates/finder/README.md
       - crates/finder/src/session.rs
       - crates/finder/src/mcp/tools.rs
-      - crates/finder/tests/session_rotation.rs
+      - crates/finder/tests/cli/main.rs
+      - crates/finder/tests/cli/session_rotation.rs
+      - crates/finder/tests/console/session/mod.rs
+      - crates/finder/tests/console/session/rotation.rs
+      - crates/finder/tests/mcp/main.rs
+      - crates/finder/tests/mcp/session_rotation.rs
       - crates/finder/web/dist
       - crates/finder/web/src/api.ts
       - crates/finder/web/src/useSession.ts
@@ -712,12 +844,12 @@ stories:
         other_spec: 016-mcp
         other_story: US7
         disposition: merge_order
-        reason: "021 depends_on_landed 016, whose US7 last wrote useSession.ts"
+        reason: "021 depends_on_landed 016, whose US7 wrote useSession.ts; 025's US3 wrote it last, and is on main"
       - path: crates/finder/web/src/components/SetupPage.tsx
         other_spec: 016-mcp
         other_story: US7
         disposition: merge_order
-        reason: "021 depends_on_landed 016, whose US7 last wrote SetupPage.tsx"
+        reason: "021 depends_on_landed 016, whose US7 wrote SetupPage.tsx; 025's US3 wrote it last, and is on main"
     open_questions: []
   US2:
     tests:

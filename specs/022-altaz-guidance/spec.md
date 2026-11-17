@@ -8,8 +8,16 @@ depends_on_landed: ["013-live-finder", "015-tracking", "016-mcp", "017-console-s
 # Refined 2026-11-14 against `main` at c1ed295: every story was built in throwaway
 # worktrees (plan.md § Refinement Record), and the owner chose azimuth degrees for left
 # and right and to build US3. It waits for 020 to land, and 021 waits for it. It stays
-# draft until the owner flips it to `ready` on Tharpebox, which gives the approvals listed
+# draft until the owner flips it to `ready`, which gives the approvals listed
 # under "Owner approvals" and dispatches it.
+# Re-refined 2026-11-16 against `main` at da1120d, after 020, 024, 025, 027 and 028 had
+# landed: every citation was re-read there and moved with its line, the new Rust tests
+# became modules of the `console` test binary as constitution 1.2.0 asks, and every story
+# was built again in throwaway worktrees (plan.md § Refinement Record). No scenario's
+# Given, When or Then changed in what it says: US1-S9, US3-S3 and US3-S4 cite the test
+# helpers they copy at the paths 027 moved them to. No owner approval and no
+# `depends_on_landed` entry changed.
+# `main` then moved to cc593c7, which changes only the constitution, so all of it holds there.
 ---
 
 # Feature Specification: Push-To in the Observer's Own Directions
@@ -42,8 +50,8 @@ way is up and which way is right there.
   (`crates/finder/src/pushto.rs:162`) takes the azimuth difference, wrapped to ±180°, and
   the altitude difference, between the pointing's altitude and azimuth and the target's
   (`crates/finder/src/pushto.rs:131` to `crates/finder/src/pushto.rs:136`). A live
-  pointing is taken at the aim point (`crates/finder/src/session.rs:1139` to
-  `crates/finder/src/session.rs:1142`). Only the printing and the picture change here.
+  pointing is taken at the aim point (`crates/finder/src/session.rs:1193` to
+  `crates/finder/src/session.rs:1196`). Only the printing and the picture change here.
 - Q: What was found? → A: Seven things, each checked against the code at ce80f67:
   1. The page prints whole degrees, worded as turn and tilt
      (`crates/finder/web/src/components/GuidanceBlock.tsx:78` and
@@ -58,16 +66,16 @@ way is up and which way is right there.
      "right" to mean clockwise, "as you face where the telescope points"
      (`docs/voice/02-tool-contracts.md:65` to `docs/voice/02-tool-contracts.md:68`).
   4. The chart is drawn in the frame's own pixels
-     (`crates/finder/web/src/components/Chart.tsx:183`). Its grid is the RA/Dec graticule
-     (`crates/finder/src/solve.rs:465`, drawn at
-     `crates/finder/web/src/components/Chart.tsx:206`), and its compass points to
-     celestial north and east (`crates/finder/web/src/components/Chart.tsx:521` and
-     `crates/finder/web/src/components/Chart.tsx:533`). Nothing on it is tied to the
+     (`crates/finder/web/src/components/Chart.tsx:184`). Its grid is the RA/Dec graticule
+     (`crates/finder/src/solve.rs:470`, drawn at
+     `crates/finder/web/src/components/Chart.tsx:207`), and its compass points to
+     celestial north and east (`crates/finder/web/src/components/Chart.tsx:523` and
+     `crates/finder/web/src/components/Chart.tsx:535`). Nothing on it is tied to the
      horizon.
   5. The reticle is at the frame's centre
-     (`crates/finder/web/src/components/Chart.tsx:521`, drawn at
-     `crates/finder/web/src/components/Chart.tsx:544`). The session reads carry the aim
-     point (`crates/finder/src/session.rs:550`, `crates/finder/web/src/api.ts:248`), and
+     (`crates/finder/web/src/components/Chart.tsx:523`, drawn at
+     `crates/finder/web/src/components/Chart.tsx:546`). The session reads carry the aim
+     point (`crates/finder/src/session.rs:569`, `crates/finder/web/src/api.ts:264`), and
      `Chart.tsx` never reads it. That night the aim point was (588.7, 380.0) in a
      1296 × 972 frame: 121 px from the centre, 1.2° at 36″ per pixel.
   6. The camera sat with the sky's up 78° clockwise of the frame's up. Three measurements
@@ -116,7 +124,7 @@ way is up and which way is right there.
   `crates/finder/src/pushto.rs:429`), so a new field there stops an existing test
   compiling, and no builder may edit it. `up_deg` goes on the view's wrapper,
   `LatestPointing` (`crates/finder/src/session.rs:424`), which only
-  `crates/finder/src/session.rs:614` builds.
+  `crates/finder/src/session.rs:637` builds.
 - Q: Why must the live event carry `up_deg` too? → A: The page rebuilds a live pointing
   from the event, field by field (`crates/finder/web/src/useLive.ts:46` to
   `crates/finder/web/src/useLive.ts:55`), and uses it in place of the session's whenever
@@ -172,6 +180,26 @@ way is up and which way is right there.
   the aim mark appears on live charts in the GoTo and tracking projects. The marks use
   only `--color-on-photo` and `--color-photo`, which are red and black at night.
 
+### Session 2026-11-16 (re-anchored to `main` at da1120d)
+
+- Q: What changed on `main` since c1ed295? → A: 020, 024, 025, 027 and 028 landed. 027
+  moved finder's Rust tests into four binaries, and its `layout` test fails any test file
+  at the top level of `crates/finder/tests`
+  (`crates/finder/tests/layout/main.rs:109`). 024 and 025 moved lines in `session.rs`,
+  `api.ts`, `Chart.tsx`, `solve.rs`, `README.md` and `DESIGN.md`. Every citation here
+  moved with its line; none changed what it says.
+- Q: Where do the new Rust tests go? → A: In the `console` binary, which calls the router
+  in process (`crates/finder/tests/console/main.rs:1`), as constitution 1.2.0 asks: US1's
+  as the module `pushto_separation` and US3's as `pointing_up`, each declared by one
+  `mod` line in `crates/finder/tests/console/main.rs`, which holds no test. The tests
+  they are built like moved with 027: `crates/finder/tests/console/pushto.rs`,
+  `crates/finder/tests/console/freshness.rs` and the shared helpers in
+  `crates/finder/tests/support/live.rs`.
+- Q: Which command runs the server scenarios? → A: The `test` gate's
+  `cargo nextest run --workspace --all-targets --all-features --locked`, since
+  2026-11-14. `cargo test --workspace --all-targets --all-features --locked`, which this
+  spec named before, is no longer a gate command.
+
 ## Owner approvals
 
 Flipping this spec to `ready` approves the following. Each is named in the FR that makes
@@ -203,9 +231,9 @@ it. No existing test, golden or CI file changes.
 
 ## User Scenarios & Testing *(mandatory)*
 
-Server scenarios run in `cargo test --workspace --all-targets --all-features --locked`.
+Server scenarios run in `cargo nextest run --workspace --all-targets --all-features --locked`.
 They use a fixed console clock, the site 40° N, 75° W and the sample `orion2.jpg`, as
-`crates/finder/tests/pushto_api.rs:58` does. Page scenarios run in `npm test` in
+`crates/finder/tests/console/pushto.rs:58` does. Page scenarios run in `npm test` in
 `crates/finder/web`, with `@testing-library/react`, `SESSION` from
 `crates/finder/web/src/test/targets.ts` (turn 33.6°, tilt 12.4°, pointing `seq` 7) and
 the fixture `ORION2` from `crates/finder/web/src/test/fixtures.ts`. jsdom has no layout,
@@ -219,9 +247,10 @@ tenth of a degree, with the distance left on the sky under it.
 
 **Why this priority**: It is what the owner asked for, and it is the line he steers by.
 
-**Independent Test**: `cargo test --workspace --all-targets --all-features --locked`
-runs `crates/finder/tests/pushto_separation.rs`; `npm test` runs
-`crates/finder/web/src/components/GuidancePush.test.tsx`.
+**Independent Test**: `crates/finder/tests/console/pushto_separation.rs`, the module
+`pushto_separation` of the `console` test binary, which the `test` gate's
+`cargo nextest run --workspace --all-targets --all-features --locked` runs; `npm test`
+runs `crates/finder/web/src/components/GuidancePush.test.tsx`.
 
 **Acceptance Scenarios**:
 
@@ -258,10 +287,10 @@ runs `crates/finder/tests/pushto_separation.rs`; `npm test` runs
    with no pointing, where it asserts the class is `pointable` and there is no
    `separation_deg`.
 9. **Given** a session with a site and the target M78, and a live pointing 5.0 s old,
-   built as `crates/finder/tests/freshness_api.rs:51` builds one, **When** a committed
+   built as `crates/finder/tests/console/freshness.rs:50` builds one, **When** a committed
    test reads the guidance, **Then** it asserts `separation_deg` is within 1e-6° of the
    haversine angle between the read's pointing and target; **and when** a live pointing
-   5.1 s old replaces it (`crates/finder/tests/freshness_api.rs:57`), it asserts the
+   5.1 s old replaces it (`crates/finder/tests/console/freshness.rs:56`), it asserts the
    guidance has `stale` and neither `turn_deg` nor `separation_deg`.
 
 ---
@@ -308,8 +337,9 @@ right, so I can read a push off the chart however the camera sits in its holder.
 **Why this priority**: The numbers lead. This makes the picture agree with them, and
 lets the owner check the camera's angle against the sky.
 
-**Independent Test**: `cargo test --workspace --all-targets --all-features --locked`
-runs `crates/finder/tests/pointing_up.rs`; `npm test` runs
+**Independent Test**: `crates/finder/tests/console/pointing_up.rs`, the module
+`pointing_up` of the `console` test binary, which the `test` gate's
+`cargo nextest run --workspace --all-targets --all-features --locked` runs; `npm test` runs
 `crates/finder/web/src/components/ChartUp.test.tsx` and
 `crates/finder/web/src/useLiveUp.test.ts`.
 
@@ -327,12 +357,12 @@ runs `crates/finder/tests/pointing_up.rs`; `npm test` runs
    `/api/session`, **Then** it asserts the pointing has no `up_deg`; **and when** it then
    sets the site, it asserts the next read's pointing has `up_deg`.
 3. **Given** a session with a site and an aim point of (200, 150), and a live pointing
-   recorded on a hand-built frame as `crates/finder/tests/freshness_api.rs:51` records
+   recorded on a hand-built frame as `crates/finder/tests/console/freshness.rs:50` records
    one, **When** a committed test reads the session, **Then** it asserts `up_deg` is
    within 0.3° of `Frame::north_at` at the aim point's direction less the parallactic
    angle there, modulo 360°.
 4. **Given** a console with a simulated scope node and a site, **When** a committed test
-   takes a solved live event as `crates/finder/tests/live/support.rs:118` does and then
+   takes a solved live event as `crates/finder/tests/support/live.rs:126` does and then
    reads the session, **Then** it asserts the event's `up_deg` equals the session
    pointing's `up_deg` when their sequence numbers match.
 5. **Given** `useLive` fed a live event with `up_deg` 78 and a `pointing_seq` ahead of
@@ -464,9 +494,10 @@ runs `crates/finder/tests/pointing_up.rs`; `npm test` runs
 
 ## Assumptions
 
-- **Earlier features are in place.** 013, 015, 016, 017, 018, 019 and 020 have landed. Every
-  citation here was read at c1ed295; 020 changes `Chart.tsx`, `App.tsx`, `api.ts` and
-  `DESIGN.md` first, so their line numbers are re-read when 020 has landed.
+- **Earlier features are in place.** 013, 015, 016, 017, 018, 019 and 020 have landed, and
+  so have 024, 025, 027 and 028. Every citation here was re-read at da1120d, where all of
+  them are on `main`. 027 moved finder's Rust tests into one binary per system, so this
+  spec's new Rust tests are modules of the `console` binary.
 - **Out of scope:**
   - turning or levelling the chart (spec 021);
   - a horizon grid (Owner approvals, 8);
@@ -501,4 +532,5 @@ US3:
 
 Every edge is a merge edge: all three stories edit `DESIGN.md` and rebuild
 `crates/finder/web/dist`, US2 and US3 both edit `Chart.tsx` and `index.css`, and US1 and
-US3 both edit `pushto.rs` and `api.ts`.
+US3 both edit `pushto.rs`, `api.ts` and `crates/finder/tests/console/main.rs`, where
+their `mod` lines are neighbours.

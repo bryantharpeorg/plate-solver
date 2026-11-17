@@ -6,8 +6,15 @@ depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "016-mcp", "01
 # some offset degree". Refined 2026-11-14 against `main` at 0a33c19: every story was built
 # in throwaway worktrees (plan.md § Refinement Record), and the owner dropped the
 # automatic horizon level, so the typed angle is the whole feature. It waits for 020 and
-# 022 to land. It stays draft until the owner flips it to `ready` on Tharpebox, which
+# 022 to land. It stays draft until the owner flips it to `ready`, which
 # gives the approvals listed under "Owner approvals" and dispatches it.
+# Re-refined 2026-11-16 against `main` at da1120d, after 020, 024, 025, 027 and 028 had
+# landed and before 022: every citation was re-read there and moved with its line, US1's
+# Rust test became one module in each of the `console`, `cli` and `mcp` test binaries as
+# constitution 1.2.0 asks, and both stories were built again in throwaway worktrees on a
+# build of 022 (plan.md § Refinement Record). No scenario's Given, When or Then, no owner
+# approval and no `depends_on_landed` entry changed. `main` then moved to cc593c7, which
+# changes only the constitution, so all of it holds there.
 ---
 
 # Feature Specification: A Chart Turned to the Sky
@@ -36,10 +43,10 @@ the chart, the live photo and the aim-point tap all turned alike.
   that would change a decision escalates rather than re-deciding it.
 - Q: What was found? → A: Five things, each checked again at 0a33c19:
   1. The chart draws in the frame's own pixels: its SVG `viewBox` is the frame plus a
-     paper margin (`crates/finder/web/src/components/Chart.tsx:183`), and its aspect is
-     `W / H` (`crates/finder/web/src/components/Chart.tsx:177`).
+     paper margin (`crates/finder/web/src/components/Chart.tsx:184`), and its aspect is
+     `W / H` (`crates/finder/web/src/components/Chart.tsx:178`).
   2. The compass draws north at the solve's `north_deg`, degrees clockwise from up
-     (`crates/finder/web/src/components/Chart.tsx:521`, from
+     (`crates/finder/web/src/components/Chart.tsx:523`, from
      `crates/finder/src/sky.rs:168`). Drawn inside a turned chart it stays correct.
   3. The live photo is a plain `<img>` under the chart
      (`crates/finder/web/src/components/LivePreview.tsx:6`).
@@ -48,9 +55,9 @@ the chart, the live photo and the aim-point tap all turned alike.
      `crates/finder/web/src/components/AimTap.tsx:61`). A turned photo needs the inverse
      turn as well.
   5. The session persists the aim point in `session.json`
-     (`crates/finder/src/session.rs:572` and `crates/finder/src/session.rs:1413`), and
-     omits it from reads until set (`crates/finder/src/session.rs:550`). The stored struct
-     denies unknown fields (`crates/finder/src/session.rs:1397`).
+     (`crates/finder/src/session.rs:593` and `crates/finder/src/session.rs:1467`), and
+     omits it from reads until set (`crates/finder/src/session.rs:569`). The stored struct
+     denies unknown fields (`crates/finder/src/session.rs:1451`).
 - Q: What already exists? → A: Only a local hotfix used that night, uncommitted and not on
   `main`: a "⟲ Turn 90°" chip under the chart cycling 0, 90, 180 and 270°
   counter-clockwise, kept in the browser's `localStorage` as `finder.turn`. It turned
@@ -90,11 +97,11 @@ the chart, the live photo and the aim-point tap all turned alike.
   fields they don't change (FR-002).
 - Q: Which page files did the draft miss? → A: `crates/finder/web/src/useSession.ts`,
   whose read drops any field it doesn't name (`crates/finder/web/src/useSession.ts:29` to
-  `crates/finder/web/src/useSession.ts:48`) and which holds the page's `SessionEdit`
+  `crates/finder/web/src/useSession.ts:49`) and which holds the page's `SessionEdit`
   (`crates/finder/web/src/useSession.ts:6`); and `crates/finder/web/src/App.tsx`, which
-  places `LivePreview` (`crates/finder/web/src/App.tsx:241`) and sizes the page from the
-  frame's aspect (`crates/finder/web/src/App.tsx:145` to
-  `crates/finder/web/src/App.tsx:148`).
+  places `LivePreview` (`crates/finder/web/src/App.tsx:242`) and sizes the page from the
+  frame's aspect (`crates/finder/web/src/App.tsx:146` to
+  `crates/finder/web/src/App.tsx:149`).
 - Q: Does `value.rem_euclid(360.0)` keep values in [0, 360)? → A: Not quite. Through
   `PUT /api/session` the probe stored `-1e-20` as `360.0` and `-0.0` as `-0.0`. Both are
   stored as 0 (FR-001, US1-S1).
@@ -118,6 +125,30 @@ the chart, the live photo and the aim-point tap all turned alike.
   `<img>`'s box, so measuring the button's would fail three of them; a turned photo's box
   is the turned frame's.
 
+### Session 2026-11-16 (re-anchored to `main` at da1120d)
+
+- Q: What changed on `main` since 0a33c19? → A: 020, 024, 025, 027 and 028 landed; 022
+  has not. 027 moved finder's Rust tests into four binaries, and its `layout` test fails
+  any test file at the top level of `crates/finder/tests`
+  (`crates/finder/tests/layout/main.rs:109`). 020, 024 and 025 moved lines in
+  `session.rs`, `api.rs`, `Chart.tsx`, `SetupPage.tsx`, `labels.ts`, `App.tsx`,
+  `useSession.ts`, `README.md` and `DESIGN.md`. Every citation here moved with its line;
+  none changed what it says.
+- Q: Where does US1's Rust test go? → A: Constitution 1.2.0 puts a new finder test in the
+  binary that matches what it needs, and US1's four server scenarios need three: US1-S1
+  and US1-S2 call the router in process (`console`), US1-S3 restarts the built binary
+  (`cli`), and US1-S4 goes through the MCP endpoint (`mcp`). So the one file the draft
+  planned is three modules, each declared by one `mod` line in a file that holds no test:
+  `mod rotation;` in `crates/finder/tests/console/session/mod.rs`, and
+  `mod session_rotation;` in `crates/finder/tests/cli/main.rs` and
+  `crates/finder/tests/mcp/main.rs`. The tests they copy moved with 027:
+  `crates/finder/tests/cli/session.rs`, `crates/finder/tests/console/session/edits.rs`
+  and `crates/finder/tests/mcp/session_tools.rs`.
+- Q: Which command runs the server scenarios? → A: The `test` gate's
+  `cargo nextest run --workspace --all-targets --all-features --locked`, since
+  2026-11-14. `cargo test --workspace --all-targets --all-features --locked`, which this
+  spec named before, is no longer a gate command.
+
 ## Owner approvals
 
 Flipping this spec to `ready` approves the following. Each is named in the FR that makes
@@ -140,10 +171,10 @@ it. No existing test, golden or CI file changes.
 
 ## User Scenarios & Testing *(mandatory)*
 
-Server scenarios run in `cargo test --workspace --all-targets --all-features --locked`.
+Server scenarios run in `cargo nextest run --workspace --all-targets --all-features --locked`.
 The restart in US1-S3 runs the binary on a state folder, as
-`crates/finder/tests/session_cli.rs:43` does; the MCP calls in US1-S4 go through the
-endpoint as `crates/finder/tests/mcp_session_tools.rs:185` does. Page scenarios run in
+`crates/finder/tests/cli/session.rs:21` does; the MCP calls in US1-S4 go through the
+endpoint as `crates/finder/tests/mcp/session_tools.rs:184` does. Page scenarios run in
 `npm test` in `crates/finder/web`, with `@testing-library/react`, `DEFAULT_LAYERS` and
 the fixture `ORION2` from `crates/finder/web/src/test/fixtures.ts`. `WIDE` is `ORION2`
 with `width` 1296 and `height` 972, built in the test file. jsdom has no layout, so page
@@ -157,9 +188,14 @@ it with the session, across restarts and for every device that views it.
 
 **Why this priority**: The turned views in US2 read it. On its own it is a saved number.
 
-**Independent Test**: `cargo test --workspace --all-targets --all-features --locked`
-runs `crates/finder/tests/session_rotation.rs`; `npm test` runs
-`crates/finder/web/src/components/SetupRotation.test.tsx`.
+**Independent Test**: three new modules, one in each test binary the scenarios need:
+`crates/finder/tests/console/session/rotation.rs` (US1-S1, US1-S2), the module
+`session::rotation` of the `console` binary; `crates/finder/tests/cli/session_rotation.rs`
+(US1-S3), the module `session_rotation` of the `cli` binary; and
+`crates/finder/tests/mcp/session_rotation.rs` (US1-S4), the module `session_rotation` of
+the `mcp` binary. The `test` gate's
+`cargo nextest run --workspace --all-targets --all-features --locked` runs all three;
+`npm test` runs `crates/finder/web/src/components/SetupRotation.test.tsx`.
 
 **Acceptance Scenarios**:
 
@@ -339,10 +375,10 @@ on his Dob.
 ## Assumptions
 
 - **Earlier features are in place.** 012, 013, 016, 017, 018, 019, 020 and 022 have
-  landed. Every citation here was read at 0a33c19, whose code is c1ed295's. 020 and 022
-  change `Chart.tsx`, `App.tsx`, `api.ts`, `labels.ts`, `index.css`, `DESIGN.md`,
-  `GLOSSARY.md`, `README.md` and `session.rs` first, so their line numbers are re-read
-  when both have landed (plan.md § Prerequisites).
+  landed. Every citation here was re-read at da1120d, where 020, 024, 025, 027 and 028
+  have landed and 022 has not. 022 changes `Chart.tsx`, `api.ts`, `index.css`,
+  `DESIGN.md`, `GLOSSARY.md`, `README.md` and `session.rs` first, so the line numbers in
+  those files are re-read when it has landed (plan.md § Prerequisites).
 - **Out of scope:**
   - the automatic horizon level (dropped by the owner on 2026-11-14);
   - mirrored images;
