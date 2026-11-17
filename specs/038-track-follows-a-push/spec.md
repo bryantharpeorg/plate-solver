@@ -10,10 +10,11 @@ depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-con
 # 030 to 037 is needed for it. 037 gains one ending from it.
 # A second agent reviewed the first draft the same day against the code; its nine
 # findings are answered in this text (Clarifications, last session).
-# Not yet probe-built: no story of this trio has been compiled or run (plan.md
-# § Refinement Record). Every `path:line` here was read at 49bb210.
-# It stays draft until the owner settles the owner decisions and flips it to `ready`,
-# which gives the approvals listed under "Owner approvals" and dispatches it.
+# Probe-built in round 1 on 2026-11-17 (plan.md § Refinement Record); this text holds
+# round 1's fixes. Every `path:line` here was read at 49bb210.
+# The owner settled the owner decisions on 2026-11-17. It stays draft until the owner
+# flips it to `ready`, which gives the approvals listed under "Owner approvals" and
+# dispatches it.
 ---
 
 # Feature Specification: Track Follows a Push
@@ -144,10 +145,30 @@ text above or below:
 - `follow` could race the keyhole: it is now refused unless the tracker is tracking and
   measuring nothing, and the session rechecks Track's generation before writing.
 
+### Session 2026-11-17 (the owner's answers and round-1 probes)
+
+- Q: What did the owner answer on the nine owner decisions? → A: The recommended answer
+  to each: "im good with all of the info". § Owner decisions says so, and each entry
+  keeps its text and its "Instead".
+- Q: What happens to a push when a new target is chosen? → A: Track and its push stay
+  as they are, as 015 has it, and turning Track on then starts Track for the new
+  target, which ends both. The page offers Recenter only while the session's target is
+  Track's target (owner decision 10, settled by the owner; FR-009, FR-012, US3-S5).
+- Q: Why does US2 change Track on for another target? → A: Today it answers 409 "the
+  mount is already moving" and leaves Track off: StopAll only brakes, and a GoTo
+  refuses a moving axis (`crates/finder/src/goto.rs:739`). Going back after a push
+  needs the same wait for both axes at rest, so this spec mends both (owner approval 9,
+  FR-008, US2-S5). The owner was told and did not object.
+- Q: Which requirements gained an assertion? → A: FR-006, in US1-S3 (no sync between
+  the first push and the follow), and FR-010, in US1-S1 (the field rotation at the
+  place followed). The owner was told and did not object.
+- Q: What else changed? → A: The trio as fixed by round 1's probe builds; plan.md
+  § Refinement Record lists them.
+
 ## Owner decisions
 
-Each is a design or taste call. None is settled. A different answer is written into
-the trio and re-validated before the flip, never left to a story.
+Each is a design or taste call. The owner settled all nine on 2026-11-17 with the
+recommended answer, and added and settled 10 the same day.
 
 1. **The push threshold.** Recommended: 5′, one constant. M43, 7.5′ from M42, is then a
    push; a knock that moves the eyepiece less is still corrected, and tracking holds
@@ -155,8 +176,9 @@ the trio and re-validated before the flip, never left to a story.
    or 2.5′, which follows more knocks.
 2. **When a push has settled.** Recommended: 5 s with every pointing within 1′ of the
    first of them, and for 10 s after a follow a move of more than 1′ counts as moving
-   again. Instead: two pointings in a row within 1′, which settles mid-push on a slow
-   nudge; or 10 s.
+   again. On the simulator a push in the first 25 s of Track can take about 30 s to
+   settle, while the mount's play is taken up. Instead: two pointings in a row within
+   1′, which settles mid-push on a slow nudge; or 10 s.
 3. **The pointing model after a push.** Recommended: a slip is marked when the telescope
    starts moving by hand, frames taken while it moves are no sync, and the next sync
    opens a new zero-point epoch. Instead: leave it to the model's own slip check, as
@@ -178,6 +200,11 @@ the trio and re-validated before the flip, never left to a story.
 9. **No new MCP tool.** Recommended: an MCP client reads `track.push` through the
    session tools and goes back with `set_tracking`, whose description gains one
    sentence. Instead: a `back_to_target` tool.
+10. **A new target while a push is shown.** Settled by the owner on 2026-11-17: Track
+    and its push stay as they are, as 015 has it, and turning Track on then starts
+    Track for the new target, which ends both. The page offers Recenter only while the
+    session's target is Track's target. Instead: a new target ends Track, which changes
+    015.
 
 ## Owner approvals
 
@@ -202,6 +229,8 @@ it. No existing test, golden or CI file changes, but for the three `mod` lines b
    `mod push;` (US1) and `mod push_back;` (US2) in
    `crates/finder/tests/motion/tracking/mod.rs`, and `mod push_tool;` (US2) in
    `crates/finder/tests/mcp/main.rs`.
+9. **Track on for another target while Track is on goes to it**, where today it answers
+   409 and leaves Track off (FR-008).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -213,13 +242,14 @@ Every Rust scenario shares these definitions.
 - **The rig** is `crate::support::goto::Rig` (`crates/finder/tests/support/goto.rs:104`)
   built with `Rig::new(1_768_528_800.0, 50.0, 120.0, true)` under
   `#[tokio::test(start_paused = true)]`: the simulator at 40° N 75° W, its mount
-  connected, finder frames every 500 ms (`crates/finder/tests/support/goto.rs:146`)
+  connected, finder frames every 500 ms (`crates/finder/tests/support/goto.rs:145`)
   solved by the rig's `Stars` solver, a live loop and a sync. Its model has no base
   tilt. **On M42** means the rig after `rig.sim.point_eyepiece_at` on M42's catalogue
   place, a sync, and `POST /api/track` with `{"on":true}` until `track.state` reads
-  `tracking`, as `centred()` does in `crates/finder/tests/motion/tracking/routes.rs:95`.
-  M42 is then near 43° altitude, rising about 3.6″ a second, 53 minutes before transit;
-  no axis reverses in any scenario's window.
+  `tracking`, as `centred()` does in `crates/finder/tests/motion/tracking/routes.rs:95`,
+  then 30 s more of tracking, so the simulated mount's backlash is taken up before any
+  push. M42 is then near 43° altitude, rising about 3.6″ a second, 53 minutes before
+  transit; no axis reverses in any scenario's window.
 - **A push** is `rig.mount.push_by(turn, tilt)` in degrees
   (`crates/simulator/src/mount.rs:269`): the tube moves, no axis count changes. Every
   scenario pushes down in tilt, behind the rising target, which moves the eyepiece by
@@ -255,7 +285,10 @@ on. The console does not drag it back. Once I let go, it tracks where I left it.
    - `track.push.ra_deg` and `track.push.dec_deg` lie within 60″ of the true place at
      the time of the view;
    - sampled every second for the next 120 s, the true place stays within 60″ of
-     `track.push`'s place and more than 1.9° from M42.
+     `track.push`'s place and more than 1.9° from M42;
+   - `track.readout.field_rotation_deg_per_min` is the field rotation at the place
+     followed, at the view's `time`, within 1e-9, computed as
+     `crates/finder/tests/motion/tracking/routes.rs:321` computes it for the target.
 2. **Given** the rig on M42, **When** a committed test pushes by (0.0, −0.05), 3′ on the
    sky, **Then** it asserts that within 30 s the true place is within 60″ of M42, that
    no view in those 30 s has a `push` key, and that `track.state` is `tracking`
@@ -263,33 +296,37 @@ on. The console does not drag it back. Once I let go, it tracks where I left it.
 3. **Given** the rig on M42, **When** a committed test pushes by (0.0, −1.0), waits 1 s
    of virtual time, pushes by (0.0, −1.0) again and waits until `track.push.state` is
    `following`, **Then** it asserts that:
-   - every view between the first push and the follow had `track.push.state` `moving`
-     and no place;
+   - every view from the first that shows `track.push` until the follow had
+     `track.push.state` `moving` and no place, and every earlier view after the first
+     push had `track.state` `tracking`;
    - the true place's distance from M42 never fell by more than 1′ between two views in
      that time;
    - `track.push.at` is at least 5 s after the second push, and the place followed is
-     within 60″ of the true place then.
+     within 60″ of the true place then;
+   - the model has no sync timed between the first push and `track.push.at`.
 4. **Given** the rig on M42, pushed by (0.0, −1.0) until a view shows `track.push.state`
    `moving`, **When** a committed test posts `POST /api/track` with `{"on":false}`,
    **Then** it asserts that the answer's `track.state` is `off`, `track.ended_reason`
    `stopped`, that `track` has no `push` key, and that within 10 s the model has a sync
    timed after the Track off: a moving state does not outlive Track.
 5. **Given** the rig on M42, whose model has no base tilt and so a slip distance of
-   2.5°, **When** a committed test notes the model's epochs and the push's time, pushes
-   by (0.0, −0.25), 15′, and waits until `track.push.state` is `following` and the
-   model has a sync timed after the push, **Then** it asserts that the model has
-   exactly one more epoch than before the push, that every sync of an earlier epoch is
-   timed before the push, and that every sync of the newest epoch is timed after it.
+   2.5°, **When** a committed test notes the model's epochs, waits until a view shows a
+   new `pointing.seq`, at once pushes by (0.0, −0.25), 15′, and notes the push's time,
+   then waits until `track.push.state` is `following` and the model has a sync timed
+   after the push, **Then** it asserts that the model has exactly one more epoch than
+   before the push, that every sync of an earlier epoch is timed before the push, and
+   that every sync of the newest epoch is timed after it.
 6. **Given** the rig on M42 with the minimum altitude set 1° under M42's altitude,
    **When** a committed test pushes by (0.0, −3.0) and waits until `track.state` is
    `off`, **Then** it asserts that `track.ended_reason` is `too_low`, that `track` has
    no `push` key, and that both axes are at rest within 2 s of that view.
 7. **Given** a tracker on M81 built as `crates/finder/tests/motion/tracking/backlash.rs:9`
    builds one, 600 s before its first azimuth reversal, **When** a committed test reads
-   `tracker.state().checks_push` every second while that rig's own `follow` helper feeds
-   it pointings to 600 s past the reversal, **Then** it asserts that some reading is false while the session has
-   no `backlash.az_deg`, and that the last reading, after `backlash.az_deg` is stored,
-   is true.
+   `tracker.state().checks_push` every second, concurrently (`tokio::join!`) with that
+   rig's own `follow` (`crates/finder/tests/support/tracker.rs:269`) feeding it
+   pointings to 600 s past the reversal, **Then** it asserts that some reading is false
+   while the session has no `backlash.az_deg`, and that the last reading, after
+   `backlash.az_deg` is stored, is true.
 8. **Given** the rig on M42, **When** a committed test moves the aim point with
    `Session::set_aim` 40 pixels to the right of the aim in force, about 20′ on the sky
    at the finder camera's 29.78″ a pixel, **Then** it asserts that no view in the next
@@ -314,20 +351,29 @@ test by then.
 
 1. **Given** the rig following a push as in US1 scenario 1, **When** a committed test
    posts `POST /api/track` with `{"on":true}`, **Then** it asserts that the answer is 200
-   with `track.state` `armed` and no `push` key, that `goto.state` is `slewing`,
-   `solving` or `correcting`, and that it then waits until `track.state` is `tracking`,
-   after which the true place is within 60″ of M42.
+   with `track.state` `armed` and no `push` key, that the answer's `goto.state` is
+   `slewing`, `solving` or `correcting`, and that it then waits until `track.state` is
+   `tracking`, after which `track` has no `push` key and the true place is within 60″
+   of M42.
 2. **Given** the rig on M42, **When** a committed test pushes by (0.0, −1.0), waits until
    a view shows `track.push.state` `moving`, and at once posts `POST /api/track` with
    `{"on":true}`, **Then** it asserts the same as scenario 1.
 3. **Given** the rig on M42 with no push, **When** a committed test posts
-   `POST /api/track` with `{"on":true}`, **Then** it asserts that no GoTo starts and
-   that `track.state` stays `tracking`, as today.
+   `POST /api/track` with `{"on":true}`, **Then** it asserts that no GoTo starts, that
+   `track.state` stays `tracking`, as today, and that `Session::tracker()` is the same
+   tracker before and after, as `crates/finder/tests/motion/tracking/routes.rs:432`
+   checks.
 4. **Given** an MCP app built from `crate::support::mcp::state()` and `app(state,
    "127.0.0.1")` (`crates/finder/tests/support/mcp.rs:24`), **When** a committed test
    in the new module `crates/finder/tests/mcp/push_tool.rs` sends `tools/list`,
    **Then** it asserts that `set_tracking`'s description contains `real telescope` and,
    exactly, the sentence of FR-011.
+5. **Given** the rig on M42, **When** a committed test sets the session's target to M43
+   with `PUT /api/session` and posts `POST /api/track` with `{"on":true}`, **Then** it
+   asserts that the answer is 200 with `track.state` `armed` and `track.target.id` the
+   id of M43, that a GoTo starts, and that it then waits until `track.state` is
+   `tracking`, after which the true place is within 60″ of M43: Track on for another
+   target goes to it, where today it answers 409.
 
 ---
 
@@ -352,10 +398,15 @@ Vitest file run by `npm test`.
 2. **Given** the same session with `push` `{"state":"moving"}`, **When** a committed test
    renders `TrackControl`, **Then** it asserts that the same button is shown.
 3. **Given** scenario 1's session, **When** a committed test presses `Recenter M42`,
-   **Then** it asserts that one `POST /api/track` was sent with `{"on":true}`, that the
-   switch was not touched, and that a refusal's error is shown as an alert.
+   **Then** it asserts that one `POST /api/track` was sent with `{"on":true}`, that no
+   `{"on":false}` was sent and the switch still reads `aria-checked` true, and that a
+   refusal's error is shown as an alert.
 4. **Given** a session with no `push`, **When** a committed test renders `TrackControl`,
-   **Then** no `Recenter` button is shown and the block is as today.
+   **Then** no `Recenter` button is shown and the Track region holds no button but the
+   switch.
+5. **Given** scenario 1's session with the session's target M43 while `track.target` is
+   M42, **When** a committed test renders `TrackControl`, **Then** no `Recenter` button
+   is shown.
 
 ---
 
@@ -374,16 +425,18 @@ Vitest file run by `npm test`.
   moving state and is corrected. The slip mark stays: the next sync opens a new epoch,
   which costs the night's earlier syncs and nothing else.
 - **A push back onto the target by hand after a follow.** It is more than 5′ from the
-  place followed, so it settles and is followed. The status then reads, say,
-  `6′ from M42`; going back stays available.
+  place followed, so it settles and is followed. The status still reads
+  `Tracking M42`; going back stays available.
 - **A follow below the minimum altitude, or into the keyhole.** The tracker's guard ends
   Track as `too_low`, or its keyhole step runs for the new place, from its next turn.
-- **Track off, Stop, a lost link, a new target, or any ending of the tracker** end the
-  push state with it: the view drops `push` and the sync rule lets syncs in again.
-- **A newly measured aim point while Track is on** (032, if its owner decision 25 is
-  answered "use it at once") moves every live pointing by the change. A change of an
-  aim point disarms the check (FR-001), so it is corrected as today, which is the
-  hazard 032's decision is about.
+- **Track off, Stop, a lost link, or any ending of the tracker** end the push state
+  with it: the view drops `push` and the sync rule lets syncs in again.
+- **A new target while a push is shown.** Track and its push stay as they are (owner
+  decision 10). Turning Track on then starts Track for the new target, which ends both,
+  and the page offers no Recenter button while the session's target is not Track's.
+- **A newly measured aim point while Track is on.** 032 holds it until Track is off (its
+  owner decision 25), so it never moves a live pointing while the check runs. A tapped
+  aim change disarms the check (FR-001).
 
 ## Requirements *(mandatory)*
 
@@ -436,16 +489,20 @@ Vitest file run by `npm test`.
   moving by hand SHALL end the tracker and clear the push state, then do what any Track
   start does under 015's FR-014: a GoTo first when the pointing is more than 1′ from the
   target, then tracking. Turning it on with no push state SHALL stay the no-op it is
-  today (owner decision 6).
+  today (owner decision 6). Before the GoTo starts, the session SHALL wait until both
+  axes read at rest, for at most 2 s, and SHALL answer as stopped if Track was changed
+  meanwhile. The same holds for Track on for another target while Track is on (owner
+  approval 9).
 
 **The session** (US1):
 
 - **FR-009**: The session's `track` view SHALL carry `push` while the tracker is running
   and Track is moving by hand, as `{"state":"moving"}`, or follows a push, as
   `{"state":"following","ra_deg","dec_deg","at"}`: the place followed in J2000 degrees
-  and the console time of the follow. It SHALL leave the key out otherwise. A push state SHALL be
-  read as none whenever the tracker is off, and SHALL be cleared by Track off, Stop, a
-  new target and every Track start.
+  and the console time of the follow. It SHALL leave the key out otherwise. A push
+  state SHALL be read as none whenever the tracker is off, and SHALL be cleared by
+  Track off, Stop and every Track start. A new target chosen with `PUT /api/session`
+  leaves Track and its push as they are, as 015 has it (owner decision 10).
 - **FR-010**: While Track follows a push, the readout's field rotation and longest
   exposure SHALL be computed at the place followed (owner decision 8).
 - **FR-011**: The MCP tool `set_tracking`'s description SHALL gain the sentence
@@ -454,7 +511,8 @@ Vitest file run by `npm test`.
 
 **The page** (US3):
 
-- **FR-012**: While `track.push` is present, `TrackControl` SHALL offer a button
+- **FR-012**: While `track.push` is present and the session's target is Track's target
+  (`session.target.id` equals `track.target.id`), `TrackControl` SHALL offer a button
   `Recenter {target}`, the target named as the status names it today, that sends
   `POST /api/track` with `{"on":true}` and refreshes the session, showing a refusal as
   an alert, as the switch does.
@@ -469,9 +527,10 @@ Vitest file run by `npm test`.
 
 - **FR-015**: `GLOSSARY.md` SHALL define **Followed push**: "A push by hand of more than
   the push threshold while Track is on, after which Track holds the place the telescope
-  was left at until the observer turns Track on for the target again."
+  was left at until the observer turns Track on for the target again." The term SHALL
+  be placed after **Tracking**, with `_Avoid_: drift, pushed target`.
 - **FR-016**: `crates/finder/README.md` SHALL describe the push check, the `push` key and
-  going back, in the Track section.
+  going back, in the Track paragraphs under `## API` (after "Track on requires…").
 
 ### Key Entities
 
@@ -491,7 +550,9 @@ Vitest file run by `npm test`.
   would drive it back at once.
 - **SC-002**: After a push of 3′, the target is back within 60″ of the aim point within
   30 s (US1 scenario 2).
-- **SC-003**: One request takes the telescope back to the target and tracks it (US2).
+- **SC-003**: One request takes the telescope back to the target and tracks it (US2),
+  and one request takes it to a new target while Track is on and tracks that (US2
+  scenario 5).
 - **SC-004**: A session read with no push is byte-for-byte what it is today, and every
   existing test passes unchanged.
 
