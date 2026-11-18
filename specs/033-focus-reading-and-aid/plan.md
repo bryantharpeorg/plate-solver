@@ -899,7 +899,10 @@ frame's id, wherever a step below needs it, is that view's `frame.id`.
 4. **One frame**, repeated:
    a. when a stop was asked for, end `stopped`;
    b. take. A `Refusal` ends the run `failed` with the refusal's message. The frame's
-      id is the answered view's `frame.id`;
+      id is the answered view's `frame.id`. An answer with no `frame`, because the
+      camera left `ready` between the take and its answer, ends the run `failed` with
+      031's words for the camera's state, the texts of `focus_start`'s first refusal;
+      the frame id is never unwrapped;
    c. `Imaging::ended(id)`. When a stop was asked for, or the frame is `aborted`, end
       `stopped`. A `failed` frame ends the run `failed` with the frame's `error`. A
       `saved` frame: **remove the aid's previous saved frame** (below), then remember
@@ -951,7 +954,8 @@ frame's id, wherever a step below needs it, is that view's `frame.id`.
 
 **The search** (step 2 and step 4j): the lifecycle becomes `finding`; set e, `b0`, the
 whole sensor (`roi: null`) and no node copy; take one frame as steps 4a to 4d do, so a
-stop ends the run `stopped`, a failed frame ends it `failed`, and the frame becomes
+stop ends the run `stopped`, a failed frame ends it `failed`, an answer with no `frame`
+ends it `failed` as step 4b says, and the frame becomes
 the aid's previous saved frame like any other; build its `SolveFrame` as 4e does,
 without feeding the aid; then `find_region(solver, frame, id, shown)`. An error ends
 the run `failed` with the error's `message()`. A failed set anywhere in steps 2, 3 or

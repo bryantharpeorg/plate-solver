@@ -545,6 +545,16 @@ focuser to turn.
   this spec makes; and a focus check whose camera leaves `ready` before it ends, after
   which `set_focus_aid` answers the not-ready words.
 
+### Session 2026-11-18 (the re-anchoring onto `main`)
+
+- Q: What does the focus aid do when the answer to its take carries no frame? → A: It
+  ends the run `failed` with 031's words for the camera's state. On `main` the view
+  that `Lease::take` answers is built once the lock is released, and it carries `frame`
+  only while the camera is `ready`, so a link that drops between the take and its
+  answer leaves no frame id. The owner chose this ending on 2026-11-18. The alternative,
+  waiting for the camera and taking again, would need a scenario of its own. No
+  scenario reaches the case (plan.md § The aid on the console, step 4b and the search).
+
 ## Owner decisions
 
 Each is a design or taste call the plan document leaves open. None is settled. A
