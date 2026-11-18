@@ -641,6 +641,37 @@ impl Console {
             )]),
         }
     }
+
+    #[tool(description = "Solve the latest imaging frame, as POST /api/imaging/solve does. It waits until the solve ends and returns the imaging camera's state with the solve.",
+        output_schema = object_schema())]
+    async fn solve_imaging_frame(&self, arguments: JsonObject) -> CallToolResult {
+        if !arguments.is_empty() {
+            return CallToolResult::error(vec![ContentBlock::text(
+                "solve_imaging_frame takes no arguments",
+            )]);
+        }
+        let Some(imaging) = self.state.imaging() else {
+            return CallToolResult::error(vec![ContentBlock::text(
+                "this console takes no imaging frames",
+            )]);
+        };
+        match imaging.solve().await {
+            Err(refusal) => CallToolResult::error(vec![ContentBlock::text(refusal.message)]),
+            Ok(view) => {
+                let id = view.solve.as_ref().expect("a solve in the view").frame_id;
+                let solve = imaging.solved(id).await;
+                if solve.state == "solved" {
+                    CallToolResult::structured(
+                        serde_json::to_value(imaging.view()).expect("imaging view JSON"),
+                    )
+                } else {
+                    CallToolResult::error(vec![ContentBlock::text(
+                        solve.error.expect("a failed solve carries its error"),
+                    )])
+                }
+            }
+        }
+    }
 }
 
 #[tool_handler(router = self.tool_router)]
