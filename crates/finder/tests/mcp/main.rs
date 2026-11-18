@@ -8,6 +8,7 @@ mod axis_moves;
 mod endpoint;
 mod frames;
 mod imaging;
+mod imaging_solve;
 mod motion;
 mod push_tool;
 mod session_rotation;
