@@ -2443,9 +2443,9 @@ stories:
         reason: "US3 follows US2 on the merge chain, and adds Stack and its add"
       - path: crates/finder/tests/console/main.rs
         other_spec: 034-dark-and-flat-frames
-        other_story: US7
+        other_story: US10
         disposition: merge_order
-        reason: "035 depends_on_landed 034, whose US7 last changed console/main.rs"
+        reason: "035 depends_on_landed 034, whose US10 last changed console/main.rs"
       - path: crates/finder/tests/console/main.rs
         other_spec: 035-live-stack
         other_story: US3

@@ -19,7 +19,8 @@ description: "Task list for 034-dark-and-flat-frames: Dark and Flat Frames"
 - the owner decisions in spec.md are settled and its owner approvals given: not met,
   but for decisions 17 and 23, which the plan document's amendments 2 and 1 settle, and
   7, which the owner settled on 2026-11-17 and which is written in;
-- every story has been probe-built: not met;
+- every story has been probe-built: met, by round 1 on 2026-11-18 (plan.md
+  § Prerequisites 4), whose fixes are in the trio and which cut US7 into US7 and US10;
 - the plan document's rewrite of `GLOSSARY.md` is on `main`: not met;
 - the scratch-folder helper `crate::support::Scratch` is on `main`: met, at
   `crates/finder/tests/support/mod.rs:12`;
@@ -48,7 +49,9 @@ description: "Task list for 034-dark-and-flat-frames: Dark and Flat Frames"
   the saved frames; V, D and the column pattern come from the formulas of spec.md's
   shared setup; masters for `calibrate` are built by hand. Real numbers are compared
   within 0.001 unless the scenario gives another tolerance.
-- Keep the story's diff under 64 KiB, measured as plan.md § Plan traps 3 says.
+- Keep the story's diff under 64 KiB, measured as plan.md § Plan traps 3 says. Round 1
+  measured US6 and US7 nearest it, at about 96 and 92 percent with their cases (plan.md
+  § Risks).
 - Every `path:line` was checked at 49bb210 and names code that exists there, but for
   the `GLOSSARY.md` lines, which are of the plan document's rewrite; a file named
   without a line is created by 030, 031, 032 or 033, or by an earlier story of this spec. If
@@ -142,9 +145,9 @@ description: "Task list for 034-dark-and-flat-frames: Dark and Flat Frames"
 - [ ] T011 [US3] Create `crates/finder/tests/console/calibration_library.rs`, the module
   `calibration_library` of `console`, with `mod calibration_library;` after
   `mod calibration;` in `crates/finder/tests/console/main.rs`, and a FITS reader of the
-  tests' own for 16-bit and 32-bit real images, declared `pub(crate)` for US6 and US7 to
-  import. Write failing tests, as plain `#[test]`s on a scratch folder, for real images
-  (US3-S1), the library's files, cards, index and ids (US3-S2), and the matching of
+  tests' own for 16-bit and 32-bit real images, declared `pub(crate)` for US6, US7 and
+  US10 to import. Write failing tests, as plain `#[test]`s on a scratch folder, for real
+  images (US3-S1), the library's files, cards, index and ids (US3-S2), and the matching of
   darks with `FrameKey::agrees` (US3-S3).
 - [ ] T012 [US3] Add failing tests to
   `crates/finder/tests/console/calibration_library.rs` for the matching of flats on
@@ -176,10 +179,11 @@ description: "Task list for 034-dark-and-flat-frames: Dark and Flat Frames"
 - [ ] T016 [US4] Create `crates/finder/tests/console/calibration_console.rs`, the module
   `calibration_console` of `console`, with `mod calibration_console;` after
   `mod calibration;` and before `mod calibration_library;` in
-  `crates/finder/tests/console/main.rs`. Give it the console rig of spec.md § User
-  Scenarios, a request helper for `DELETE` and a foreign `Origin`, and a wait on a
-  route's body, each declared `pub(crate)` for the later stories to import. Write
-  failing tests for the two routes, the view, the session and the match (US4-S1), a
+  `crates/finder/tests/console/main.rs`. Give it the console rig, built over a
+  `Simulator` its caller passes and keeps (US4's tests never switch it, so a field
+  holding it would go unread), a request helper for `DELETE` and a foreign `Origin`, and
+  a wait on a route's body, each declared `pub(crate)` for the later stories to import.
+  Write failing tests for the two routes, the view, the session and the match (US4-S1), a
   console without imaging, the origin judged first, and one that is not ready (US4-S2),
   and the two frame keys with the frame's `set_temp_c`, and the match that stays
   through a dark, an exposure, a focus frame and a flat (US4-S3).
@@ -222,8 +226,9 @@ description: "Task list for 034-dark-and-flat-frames: Dark and Flat Frames"
 - [ ] T021 [US5] In `crates/finder/src/imaging/calibration.rs`, add `BAD_PIXEL_SIGMAS`,
   `BAD_PIXEL_MAX_SHARE`, `BadPixels` and `bad_pixel_map`. In
   `crates/finder/src/imaging/calibration/library.rs`, add `BAD_PIXELS_FORMAT` and
-  `attach_bad_pixels`, have `calibrate` read and use the map, and have `remove` delete
-  its file. `add` makes no map, and `select` is not changed (plan.md § Plan traps 9).
+  `attach_bad_pixels`, and have `calibrate` read and use the map (`remove` already
+  deletes the map's file, US3). `add` makes no map, and `select` is not changed
+  (plan.md § Plan traps 9).
 - [ ] T022 [US5] Add the **Bad-pixel map** entry to `GLOSSARY.md` after the
   **Calibration library** entry, with the three lines of spec owner approval 6, and the
   map's paragraph, with the limits of the search in the sub, to `## Calibration frames`
@@ -242,8 +247,8 @@ description: "Task list for 034-dark-and-flat-frames: Dark and Flat Frames"
   console rig, the request helper and the wait from `crate::calibration_console` and the
   FITS reader from `crate::calibration_library`. Write here, `pub(crate)` for US7, the
   scripted camera of spec.md § User Scenarios, with its level function, its frames'
-  carried gain and sensor temperature and its nth `expose` answering `Failed`, and the
-  scripted console rig. Write failing tests for a set under the cover, its master and
+  carried gain, sensor temperature and exposure and its nth `expose` answering `Failed`,
+  and the scripted console rig. Write failing tests for a set under the cover, its master and
   `state.imaging().unwrap().holder()` before, during and after (US6-S1), the settings
   carried (US6-S2), the three refusals on the simulated camera (US6-S3) and the exact
   lines and `anyway` on the scripted camera (US6-S4).
@@ -281,6 +286,10 @@ description: "Task list for 034-dark-and-flat-frames: Dark and Flat Frames"
 
 ## Phase 7: User Story 7 — Take a set of flats (Priority: P2)
 
+This story keeps no imaging angle with the flats: User Story 10 adds it. Until then its
+master flats carry `imaging_angle_deg` null and no `IMGANGLE` card, and none of its
+scenarios runs on the simulated camera or the solving rig.
+
 ### Tests first
 
 - [ ] T029 [US7] Create `crates/finder/tests/console/calibration_flats.rs`, the module
@@ -290,26 +299,25 @@ description: "Task list for 034-dark-and-flat-frames: Dark and Flat Frames"
   the request helper and the wait from `crate::calibration_console`, and the FITS reader
   from `crate::calibration_library`; a level function that changes when the test says
   the camera is covered is a closure over a flag of the test's own, not a new helper.
-  Write failing tests for the two steps on the linear camera (US7-S1), the search's
-  other paths and failures, the eighth exposure named (US7-S2), a flat outside the
-  window, darks taken while lit and darks taken with `anyway` (US7-S3), and the route's
-  refusals and the drop (US7-S4).
-- [ ] T030 [US7] Add failing tests to `crates/finder/tests/console/calibration_flats.rs`
-  for a master flat of simulated flats against V and D (US7-S5); on 032's solving rig,
-  built here from the console rig with `with_imaging_solver`, the imaging angle kept
-  from the view, warned of after the camera is turned, and gone after `DELETE /api/aim`
-  (US7-S6); and a simulated sky frame calibrated with a master dark and a master flat
-  the console made (US7-S7).
+  Declare `pub(crate)`, for US10 to import, the helpers this module's own tests use
+  that US10's need: a settings request, a request on a calibration route, the waits for
+  a set's state and for a set to settle, a comparison of numbers and a master's file
+  read, with the three route paths. Write failing tests for the two steps on the linear
+  camera, `darks_taken` and the flats' sensor temperature (US7-S1), the search's other
+  paths and failures, a bright first frame halved, a search frame held to the first and
+  the eighth exposure named (US7-S2), a flat outside the window, a failed flat, darks
+  taken while lit, after a setting changed between the steps and with `anyway`
+  (US7-S3), and the route's refusals, the drop and a stop of the flats' darks (US7-S4).
 
 ### Implementation
 
 - [ ] T031 [US7] In `crates/finder/src/imaging/calibration/service.rs`, add the six flats
   constants, `FlatsRequest`, the flat keys of `SetView`, `take_flats` with its two
   steps, the search exactly as plan.md's pseudocode gives it with its five texts, its
-  `last` and its rounding, the flats held with the set in `needs_darks` with the imaging
-  angle read from `imaging.view()`'s `relation`, the second step with the three tests
-  and `anyway` and its return to `needs_darks` on failure, the master flat through
-  `normalise_flat` with `checked`, and the drop step of `remove`. Each step takes
+  `last` and its rounding, the flats held with the set in `needs_darks`, the second step
+  with the three tests and `anyway` and its return to `needs_darks` on failure, the
+  master flat through `normalise_flat` with `checked` and `imaging_angle_deg` null
+  (US10 keeps the angle), and the drop step of `remove`. Each step takes
   `imaging.lease(HOLDER)` last of its request's checks and its task owns the `Lease`
   through the ending; the first step's task drops it before writing `needs_darks`, so
   flats that wait hold none (plan.md § The set's lease). Change no key of `SetView` that
@@ -321,7 +329,7 @@ description: "Task list for 034-dark-and-flat-frames: Dark and Flat Frames"
   **Offset level** entry, with the three lines of spec owner approval 6.
 - [ ] T033 [US7] Run the `lint` and `test` gates with every existing test unchanged and
   green, `crates/finder/tests/console/calibration_darks.rs` included and not edited.
-  Commit the green story (US7-S1, US7-S2, US7-S3, US7-S4, US7-S5, US7-S6 and US7-S7).
+  Commit the green story (US7-S1, US7-S2, US7-S3 and US7-S4).
 
 ## Phase 8: User Story 8 — Three MCP tools (Priority: P2)
 
@@ -340,7 +348,8 @@ description: "Task list for 034-dark-and-flat-frames: Dark and Flat Frames"
   `FlatsArguments` and the three tools after the imaging tools already there, each
   parsing its arguments with the route's request type so that the words are the same,
   and each answering at once on a console without a calibration (plan.md § The MCP
-  tools). Add one line a tool to `## MCP clients` in `crates/finder/README.md`.
+  tools). Add one line a tool to `## MCP clients` in `crates/finder/README.md`, and
+  change `Six tools` to `Nine tools` in the sentence before the list.
 - [ ] T036 [US8] Run the `lint` and `test` gates with every existing test unchanged and
   green, `crates/finder/tests/mcp/motion.rs` included. Commit the green story (US8-S1,
   US8-S2, US8-S3 and US8-S4).
@@ -371,24 +380,65 @@ description: "Task list for 034-dark-and-flat-frames: Dark and Flat Frames"
   `crates/finder/web/dist`, and commit the green story (US9-S1, US9-S2, US9-S3, US9-S4,
   US9-S5 and US9-S6).
 
+## Phase 10: User Story 10 — A master flat on the simulated camera, and the imaging angle kept with it (Priority: P2)
+
+Built after User Story 7, beside User Stories 8 and 9 (spec.md § Work Graph). Its
+scenarios were US7-S5 to US7-S7 until round 1 cut US7; its test task keeps the number
+T030 it had then.
+
+### Tests first
+
+- [ ] T030 [US10] Create `crates/finder/tests/console/calibration_flats_sim.rs`, the
+  module `calibration_flats_sim` of `console`, with `mod calibration_flats_sim;` after
+  `mod calibration_flats;` in `crates/finder/tests/console/main.rs`. Import US7's
+  flats helpers from `crate::calibration_flats`, the console rig, the request helper
+  and the wait from `crate::calibration_console`, and the FITS reader from
+  `crate::calibration_library`; do not add to `calibration_flats.rs`. Write tests for a
+  master flat of simulated flats against V and D, at both hot pixels too (US10-S1); on
+  032's solving rig, built here from the console rig with `with_imaging_solver`, the
+  imaging angle kept from the view, warned of after the camera is turned, and gone after
+  `DELETE /api/aim` (US10-S2); and a simulated sky frame calibrated with a master dark
+  and a master flat the console made (US10-S3). On US7's code US10-S1 and US10-S3
+  already pass, and they pass before and after this story's change; only US10-S2 fails
+  first, on the master's `imaging_angle_deg` and its `IMGANGLE` card.
+
+### Implementation
+
+- [ ] T040 [US10] In `crates/finder/src/imaging/calibration/service.rs`, keep the
+  imaging angle with the flats in hand: `imaging.view()`'s `relation.angle_deg` (032)
+  read when the last flat is in hand, or none when the view carries none, given to the
+  master flat's entry as `imaging_angle_deg`, whose `IMGANGLE` card US3's `add` then
+  writes (plan.md § The console's calibration state, **`take_flats`**). Change nothing
+  else of US7's set, and no key of `SetView`.
+- [ ] T041 [US10] Run the `lint` and `test` gates with every existing test unchanged and
+  green, `crates/finder/tests/console/calibration_flats.rs` included and not edited.
+  Commit the green story (US10-S1, US10-S2 and US10-S3).
+
 ## Execution Order
 
 ```text
 US1 ──► US2 ──► US3 ──► US4 ──► US5 ──► US6 ──► US7 ──┬──► US8
-                                                      └──► US9
+                                                      ├──► US9
+                                                      └──► US10
 ```
 
 - **US1** comes first: every later oracle is one of the simulator's patterns.
 - **US2** adds the arithmetic, and **US3** the library on disk that calls it. US3 adds
   its `pub mod` line to US2's file and its `mod` line after US2's.
 - **US4** puts the library in the console: its state, the view and the first two routes.
-  It is a story of its own so that neither it nor US3 passes 64 KiB.
+  It is a story of its own so that neither it nor US3 passes 64 KiB; round 1 measured
+  US3 at 51,019 bytes and US4 at 38,052.
 - **US5** adds the map to US2's file and US3's library, and its paragraph to the README
   section US4 writes, before the story that needs it.
 - **US6** takes darks: it extends US4's state, routes, route list and README section,
   and attaches US5's map.
 - **US7** takes flats with US6's runner, dark test and scripted camera.
-- **US8** and **US9** both follow US7 and share no file, so they may run together: US8
-  writes the MCP tools, their test module and the README; US9 writes only
-  `crates/finder/web/`, `DESIGN.md` and `.impeccable/design.json`.
+- **US10** keeps the imaging angle in US7's flat set and proves the master flat on the
+  simulated camera, in a test module of its own. It was cut from US7 by scenario, as the
+  owner chose once round 1 measured US7 at 67,264 bytes, and numbered 10 so that no other
+  story moved.
+- **US8**, **US9** and **US10** all follow US7 and share no file, so they may run
+  together: US8 writes the MCP tools, their test module and the README; US9 writes only
+  `crates/finder/web/`, `DESIGN.md` and `.impeccable/design.json`; US10 writes
+  `service.rs`, its own test module and the `console` binary's `main.rs`.
 - **`[P]`** marks nothing here: every task shares a file with another in its story.

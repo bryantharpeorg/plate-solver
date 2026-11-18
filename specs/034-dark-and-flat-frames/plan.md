@@ -7,7 +7,10 @@ escalates rather than re-deciding it. It was revised on the day it was drafted, 
 second agent's review; the stories were renumbered then, when the library story was
 split in two. It was revised again after the series audit of 030 to 037, which put the
 sets on 031's lease of the imaging camera (the plan document's amendment 1), and its
-citations were checked at 49bb210 (§ Refinement Record).
+citations were checked at 49bb210 (§ Refinement Record). It was revised on 2026-11-18
+for round 1's probe build of every story (§ Prerequisites 4): its fixes are in, and
+User Story 7, which measured over the budget, is cut by scenario into US7 and US10, as
+the owner chose (§ Risks).
 
 ## Summary
 
@@ -29,7 +32,8 @@ link.
 
 ## Technical Context
 
-**Language/Version**: Rust (MSRV 1.96) for US1 to US8; TypeScript with React 19 for US9.
+**Language/Version**: Rust (MSRV 1.96) for US1 to US8 and US10; TypeScript with React 19
+for US9.
 
 **Primary Dependencies**: nothing new. `finder` already has `serde_json`
 (`crates/finder/Cargo.toml:32`), `tokio` with `fs`, `sync` and `time`, and the simulator
@@ -56,8 +60,10 @@ that wait for their darks, live in memory for a run.
 - US5: `crates/finder/tests/console/calibration_bad_pixels.rs` (new).
 - US6: `crates/finder/tests/console/calibration_darks.rs` (new), on the console rig and
   the scripted console rig.
-- US7: `crates/finder/tests/console/calibration_flats.rs` (new), likewise, and one
-  scenario on 032's solving rig.
+- US7: `crates/finder/tests/console/calibration_flats.rs` (new), on the scripted console
+  rig.
+- US10: `crates/finder/tests/console/calibration_flats_sim.rs` (new), the module
+  `calibration_flats_sim`, on the console rig and, in one scenario, 032's solving rig.
 - US8: `crates/finder/tests/mcp/calibration.rs` (new), the module `calibration` of `mcp`.
 - US9: `crates/finder/web/src/components/CalibrationBlock.test.tsx` (new, Vitest). No
   Playwright test: the block holds no picture, and 031's `e2e/imaging.spec.ts` already
@@ -73,8 +79,9 @@ that wait for their darks, live in memory for a run.
   ones with `use crate::<module>::…`, which the layout test allows: the test's own FITS
   reader in `calibration_library` (US3); the console rig, the request helper for
   `DELETE` and a foreign `Origin`, and the wait in `calibration_console` (US4); the
-  scripted camera and the scripted console rig in `calibration_darks` (US6). A later
-  story adds nothing to an earlier story's module. A module may bind the live helpers
+  scripted camera and the scripted console rig in `calibration_darks` (US6); and the
+  flats helpers in `calibration_flats` (US7), for US10. A later story adds nothing to an
+  earlier story's module. A module may bind the live helpers
   with
   `use crate::support::live as support;` and takes its scratch folder from
   `crate::support::Scratch` (`crates/finder/tests/support/mod.rs:12`), which 028's US5
@@ -102,7 +109,8 @@ rebuilt for this spec.
   camera.
 
 **Scale/Scope**: three new source files in the console, one extended simulator module,
-four routes, three MCP tools, one page block, nine stories.
+four routes, three MCP tools, one page block, ten stories (spec owner decision 1's nine,
+with US10 cut from US7 after round 1).
 
 ## Constitution Check
 
@@ -133,15 +141,16 @@ crates/finder/
 ├── src/imaging/routes.rs               # US4: GET, DELETE; US6: darks; US7: flats
 ├── src/imaging/calibration.rs          # US2: new, the arithmetic; US3: pub mod library; US4: pub mod service; US5: bad_pixel_map
 ├── src/imaging/calibration/library.rs  # US3: new, files, index, match; US5: the map's file
-├── src/imaging/calibration/service.rs  # US4: new, the console's state; US6: darks; US7: flats
+├── src/imaging/calibration/service.rs  # US4: new, the console's state; US6: darks; US7: flats; US10: the imaging angle kept
 ├── src/mcp/tools.rs                    # US8: three tools
-├── tests/console/main.rs               # US2 to US7: one mod line each
+├── tests/console/main.rs               # US2 to US7 and US10: one mod line each
 ├── tests/console/calibration.rs             # US2: new
 ├── tests/console/calibration_library.rs     # US3: new
 ├── tests/console/calibration_console.rs     # US4: new
 ├── tests/console/calibration_bad_pixels.rs  # US5: new
 ├── tests/console/calibration_darks.rs       # US6: new
 ├── tests/console/calibration_flats.rs       # US7: new
+├── tests/console/calibration_flats_sim.rs   # US10: new
 ├── tests/mcp/main.rs                   # US8: mod calibration
 ├── tests/mcp/calibration.rs            # US8: new
 └── web/
@@ -717,10 +726,14 @@ within `SETTING_TOLERANCE`. A master of either kind **fits** a key when `model`,
 US5 on) the dark's map when its entry has one, keeping the last dark, flat and map read
 so that a run of subs reads each once; a master that cannot be read, or whose width and height are
 not the sub's, adds `the master {dark|flat} {id} could not be used: {why}` to `problems`
-and is not given to `calibration::calibrate`, so that step is `missing`; a map that
-cannot be read adds `the bad-pixel map of {id} could not be used: {why}` and the search
-in the sub runs instead. Then `calibration::calibrate`. It reads files, so a caller on
-the runtime runs it on the blocking pool.
+and is not given to `calibration::calibrate`, so that step is `missing`; for a size, why
+is `it is {W} × {H} and the sub {w} × {h}`; a map that cannot be read, whose `format` is
+not `BAD_PIXELS_FORMAT`, or whose `width` and `height` are not the sub's adds
+`the bad-pixel map of {id} could not be used: {why}` (`{why}` being the error,
+`its format is {format}` or `it is {W} × {H} and the sub {w} × {h}`), and the search in
+the sub runs instead. The selection still names the chosen masters; only the report's
+step is `missing`. Then `calibration::calibrate`. It reads files, so a caller on the
+runtime runs it on the blocking pool.
 
 **The map's file** (US5). `attach_bad_pixels`: with `too_many`, nothing is written and
 the entry is answered as it is. Otherwise `darks/<id>.badpixels.json` is written as a
@@ -795,7 +808,7 @@ file's `SET-TEMP` card, the one the settings held with the cooler on when the fr
 asked for, skipped while `None` like the view's other `Option`s. `FrameKey::from_view`
 reads it (§ The library); nothing else here does.
 
-### The console's calibration state (`crates/finder/src/imaging/calibration/service.rs`, new, US4; darks, US6; flats, US7)
+### The console's calibration state (`crates/finder/src/imaging/calibration/service.rs`, new, US4; darks, US6; flats, US7; the imaging angle kept, US10)
 
 ```rust
 //! The calibration library as the console holds it, and the sets it takes (034).
@@ -876,7 +889,7 @@ impl Calibration {
     /// `imaging` is the view the match is worked out from.
     pub fn view(&self, imaging: Option<&ImagingView>) -> CalibrationView;
     /// Remove a master, or (US6, US7) stop or drop the set with this id.
-    pub async fn remove(&self, id: &str) -> Result<CalibrationView, Refusal>;
+    pub async fn remove(self: &Arc<Self>, id: &str) -> Result<CalibrationView, Refusal>;
     // US6:
     pub async fn take_darks(self: &Arc<Self>, request: DarksRequest)
         -> Result<CalibrationView, Refusal>;
@@ -933,12 +946,16 @@ no file and waits for nothing; its one lock is held for step 1 alone.
 **`remove`** (US4): an id that is not `dark-` or `flat-` followed by 8 digits, `T`, 6
 digits, `Z` and optionally `-` and digits answers 404
 `no master or set has the id {id}` without touching the disk. Otherwise
-`library.remove(id)` on the blocking pool: true answers the view, false the same 404, an
-error 500 `could not remove the master: {error}`. US6 puts one step first: when the
-latest set has this id and is being taken (`offset`, `frames`, `search` or
-`flat_darks`), its stop flag is set, `imaging.abort()` is awaited, and the view is
-answered; the runner ends the set `stopped`. US7 adds: when it is in `needs_darks`, the
-flats in hand are dropped and the set becomes `stopped` at once.
+`library.remove(id)` on the blocking pool (`tokio::task::spawn_blocking` over a clone of
+the `Arc`; never `block_in_place`, which panics on the tests' current-thread runtime):
+true answers the view, false the same 404, an error 500
+`could not remove the master: {error}`. US6 puts one step first: when the latest set
+has this id and is being taken (`offset`, `frames`, `search` or `flat_darks`), its stop
+flag is set, `imaging.abort()` is awaited, and the view is answered; the runner ends
+the set `stopped`. US7 adds: when it is in `needs_darks`, the flats in hand are dropped
+and the set becomes `stopped` at once. A `Refusal` of another status is built as
+`Refusal { status, message }`; its fields are public, and 031's own constructors are
+`bad_request` and `conflict`.
 
 **The set's lease** (US6; US7 for the two steps of flats). The plan document's
 amendment 1, as spec owner decision 23 records it. The request takes the lease with
@@ -974,8 +991,9 @@ the camera and no `busy` reading: who holds the camera is `imaging.holder()`, 03
 2. `imaging.ended(id)`. `saved` goes on; `aborted` ends the set `stopped`; `failed` ends
    the step as failed with the frame's `error`.
 3. On the blocking pool: read `imaging.root()` joined with the frame's `file`,
-   `fits::decode` it, take `FrameKey::from_image` and `Mosaic::from_samples`. Any error
-   ends the step as failed with `could not read {file}: {error}`.
+   `fits::decode` it, take `FrameKey::from_image` and `Mosaic::from_samples`, whose
+   `None` is the error `its samples do not fit its size`. Any error ends the step as
+   failed with `could not read {file}: {error}`.
 4. The key must agree with the set's first frame's key and with e:
    `key.agrees(&first, e)`, `first` being this key itself for the set's first frame.
    Otherwise the set fails with `the imaging settings changed during the set`.
@@ -998,10 +1016,12 @@ prefix: they are the set's own.
 
 1. `count` absent or outside `MIN_SET_FRAMES` to `MAX_SET_FRAMES`: 400
    `count must be a whole number from 3 to 64`;
-2. the imaging view not `ready`: 409 with 031's words for its state
-   (`the scope node is not connected`, `this scope node has no imaging service`,
-   `this scope node has no imaging camera`,
-   `the imaging camera is not answering: {error}`);
+2. the imaging view not `ready`: 409 with 031's words for its state, written again
+   here because 031 keeps them inside `set` and `take`: `no_link`
+   `the scope node is not connected`, `no_service`
+   `this scope node has no imaging service`, `no_camera`
+   `this scope node has no imaging camera`, otherwise
+   `the imaging camera is not answering: {error}` with the view's `error`;
 3. a set in `offset`, `frames`, `search` or `flat_darks`: 409
    `a set of darks or flats is already being taken`;
 4. (US7 adds this one) a set in `needs_darks`: 409
@@ -1065,8 +1085,9 @@ Why three tests and a way past them. The level test alone passes an uncovered ca
 wherever the sky adds less than `DARK_RISE_SIGMAS` noises in the exposure: on the
 simulated camera at gain 0 and 200 ms the sky adds one count against a line of two, and
 the master would hold the field's stars. The lit test catches that case by what light
-looks like: about 1200 samples of that simulated frame stand more than 8 noises above
-their medians in touching groups, against 101 allowed, while its three hot pixels, two
+looks like: about 1300 samples of that simulated frame stand more than 8 noises above
+their medians in touching groups (round 1 counted 1275 on the frame alone and 1306
+through the console's set), against 101 allowed, while its three hot pixels, two
 of which touch, are found as hot pixels and not counted (US6-S1, US6-S3). `LIT_MIN`
 keeps one cosmic-ray track in a small region frame from refusing a set. And the tests
 are only as good as their constants on a camera nobody has measured: a warm sensor at a
@@ -1126,8 +1147,8 @@ are taken at it, each checked: a level outside `FLAT_LOW`·F to `FLAT_HIGH`·F f
 set with `a flat reads {p}% of full scale, outside 40 to 50; is the panel steady?`;
 otherwise its samples are summed and `taken` rises. The frames the search took are not
 among the N. Then `level_share` becomes the mean of the N levels over F; the sum, the
-set's first frame's key, the mean sensor temperature and the imaging angle are kept with
-the set, the angle being `imaging.view()`'s `relation.angle_deg` (032) read then, or
+set's first frame's key and the mean sensor temperature are kept with the set, and, from
+US10 on, the imaging angle, `imaging.view()`'s `relation.angle_deg` (032) read then, or
 none when the view carries none; and the step goes through **the ending** with E0, its
 final state being `needs_darks`. A failure goes through it with E0 too and ends the set
 `failed`. Flats in `needs_darks` hold no lease: the observer may take imaging frames
@@ -1144,8 +1165,9 @@ ends it `stopped` and drops them. On success the master is, sample by sample,
 (flats' sum − darks' sum)/N as `f32`, made a `Mosaic` with the flats' pattern and passed
 to `normalise_flat`; then every sample that is not above 0, or not finite, becomes 0.0.
 Its entry takes the flats' key, `exposure_ms` the flats' exposure, `frames` N,
-`dark_frames` N, `checked` true unless `anyway`, the label, the angle kept,
-`level_share`, `made_at` and the set's id; `library.add`; and the step goes through
+`dark_frames` N, `checked` true unless `anyway`, the label, the angle kept as
+`imaging_angle_deg` (US10; null in US7, which keeps none), `level_share`, `made_at` and
+the set's id; `library.add`; and the step goes through
 **the ending** with E1, its final state being `done`.
 
 **What the three requests answer.** `remove`, `take_darks` and `take_flats` answer what
@@ -1177,9 +1199,9 @@ pub(crate) fn attach_calibration(&self, calibration: &Arc<Calibration>);
 ```
 
 Wherever `Imaging` builds the `ImagingView` it answers (`view`, and through it `set`,
-`take` and `abort`), after its own lock is released and only when the view's `state` is
-`ready`, it sets `calibration` to `attached.view(Some(&view))` when a calibration is
-attached and still alive. The view handed over is the finished one, `relation`
+`take`, `abort` and `solve`), after its own lock is released and only when the view's
+`state` is `ready`, it sets `calibration` to `attached.view(Some(&view))` when a
+calibration is attached and still alive. The view handed over is the finished one, `relation`
 included, since that is where `Calibration::view` reads the imaging angle. The
 reference is weak because `Calibration` holds the `Arc<Imaging>`.
 
@@ -1299,7 +1321,8 @@ and the paragraph on taking flats: the two steps, the search and its five failur
 flat label, that each step holds the imaging camera while it runs and that flats in hand
 hold nothing, so the camera is free between the two steps, that flats in hand are lost
 when the console restarts, and that new flats are needed when the camera is turned. US8 adds, in the tool list of `## MCP clients`
-(`crates/finder/README.md:57`), one line a tool after the imaging tools already there.
+(`crates/finder/README.md:57`), one line a tool after the imaging tools already there,
+and changes `Six tools` to `Nine tools` in the sentence before the list.
 
 `GLOSSARY.md`. US5 adds **Bad-pixel map** after the **Calibration library** entry
 (`GLOSSARY.md:167`), US6 adds **Offset level** after the **Flat** entry
@@ -1331,14 +1354,18 @@ the imaging tools already there (031's three, 032's one and 033's two), each
 
 - `list_calibration`, `annotations(read_only_hint = true)`, description
   `List the calibration library's master darks and master flats, the set being taken, and what matches the latest imaging frame.`:
-  `CallToolResult::structured` of what `get_calibration` answers.
+  `CallToolResult::structured` of the calibration object worked out as
+  `get_calibration` does, written again in `tools.rs`: `CalibrationView::empty()`
+  without a calibration, else the `calibration` of `imaging.view()`, else
+  `calibration.view(None)`.
 - `take_darks`, description
   `Take a set of darks with the telescope covered and add their master dark to the calibration library, as POST /api/imaging/calibration/darks does; anyway: true passes the dark test. It answers once the set has started; read its progress with list_calibration.`,
   with `input_schema` from `DarksArguments` as `set_target` declares its own
   (`crates/finder/src/mcp/tools.rs:355`): takes `arguments: JsonObject`, parses them as
-  `DarksRequest` the way `set_target` parses its edit, calls `Calibration::take_darks`,
-  and answers the view; a parse error or a `Refusal` is `CallToolResult::error` with
-  the words.
+  `DarksRequest` the way `set_imaging_camera` parses its edit
+  (`api::sim_json(Json::<DarksRequest>::from_bytes(..))`), so a malformed argument reads
+  as the route's 400, calls `Calibration::take_darks`, and answers the view; a parse
+  error or a `Refusal` is `CallToolResult::error` with the words.
 - `take_flats`, description
   `Take a set of flats of a lit flat panel, or with darks: true the darks that finish them, as POST /api/imaging/calibration/flats does; anyway: true passes the dark test of those darks. It answers once the step has started; read its progress with list_calibration.`,
   with `input_schema` from `FlatsArguments`: the same with `FlatsRequest` and
@@ -1403,7 +1430,8 @@ exactly:
   `Take an imaging frame to see which masters match it.`
 - **The library.** With `error`, an `alert`:
   `The calibration library is unreadable: {error}.` With no masters, the `quiet` line
-  `No master darks or flats yet.` Otherwise a list, one item a master, oldest first:
+  `No master darks or flats yet.` Otherwise a list in the view's order (oldest first),
+  one item a master:
   - a dark:
     `Master dark · {exposure_ms} ms · gain {gain} · offset {offset} · {b} × {b} · {temp} · {frames} frames · {bad} · {date}`,
     where {temp} is `set {set_temp_c to one decimal} °C`, or without one
@@ -1419,10 +1447,12 @@ exactly:
   - either, when `checked` is false, followed by ` · dark test skipped`;
   - each with a button `Remove` (`button`) whose `aria-label` is `Remove {id}`, which
     calls `deleteCalibration(id)`.
-- **Darks.** A number field `Dark frames` (default 20), the button `Take darks`
+- **Darks.** A `type="number"` field, as 033's Focus frame time, named `Dark frames`
+  (default 20), the button `Take darks`
   (`button button-primary`), which calls `postCalibrationDarks`, and the `quiet` line
   `Cover the telescope first. Darks use the exposure, gain, offset, binning and set temperature in force.`
-- **Flats.** A number field `Flat frames` (default 20), a text field `Flat label`, the
+- **Flats.** A `type="number"` field, as 033's Focus frame time, named `Flat frames`
+  (default 20), a text field `Flat label`, the
   button `Take flats` (`button button-primary`), disabled while the label is empty, which
   calls `postCalibrationFlats`, and the `quiet` line
   `Light the flat panel first. The console finds the exposure; the flats' darks follow with the telescope covered.`
@@ -1560,8 +1590,10 @@ its code when this trio is re-anchored (§ Prerequisites 2 and 5).
   `bad_pixels` null after `add`), so the map is attached by a call of its own. US6's
   tests read `SetView` key by key, so US7 adds keys and changes none. The scripted
   camera and the rigs are `pub(crate)` in the module that first needs them, and a later
-  story imports them and edits nothing there. `HOLDER`, `a set of darks or flats`, is
-  the name 035's and 037's takers hear in 031's refusal while a set is taken, and they
+  story imports them and edits nothing there; so are US7's flats helpers, which US10
+  imports. US7's master flats carry `imaging_angle_deg` null, which US7-S1 asserts on a
+  rig with no imaging solver, so US10's kept angle changes no US7 test. `HOLDER`,
+  `a set of darks or flats`, is the name 035's and 037's takers hear in 031's refusal while a set is taken, and they
   pass that refusal on unchanged; no later spec asks this module whether a set is
   running.
 
@@ -1613,6 +1645,7 @@ its code when this trio is re-anchored (§ Prerequisites 2 and 5).
 | The scripted camera wraps the stand-in | A camera written from nothing | Settings, timing, `Busy` and abort come with it; the test writes only the level. |
 | Rigs written once and imported by later test modules | Each module writing its own | The same hundred lines in three modules cost each story's diff budget, and the layout test allows a module to use another's `pub(crate)` items. |
 | Nine stories: the library on disk apart from the library in the console | One library story | One story held the real-image codec, the index, both matching rules, the console's state, the view, two routes and a README section; it would have passed 64 KiB, and a split found mid-epic needs a relaunch. |
+| US7 cut by scenario: US7 keeps US7-S1 to US7-S4 on the scripted camera, and US10 takes the old US7-S5 to US7-S7 on the simulated camera with the imaging angle kept, its own module and the number 10 | The cut along the two steps (the route, the search, the first step and the drop, then the second step, the master, its failures and the angle); renumbering US8 and US9 | The owner's answer of 2026-11-18, once round 1 measured US7 at 67,264 B. The scenario cut was built and measured (54,871 B and 14,888 B). It costs one thing: on US7's code US10-S1 and US10-S3 already pass, so only US10-S2 fails first, where the step cut would have kept every new test red first. Numbering the new story 10 moves no other story or scenario, as 033's US9 did. |
 
 ## Verification (every story, before proposing)
 
@@ -1655,7 +1688,7 @@ its code when this trio is re-anchored (§ Prerequisites 2 and 5).
    fixtures; the stand-in console rig and the stand-in camera. Of 032:
    `ImagingView::relation`, `RelationView::angle_deg` and when it is present; the
    solving rig, `SimulatedSolver` and `with_imaging_solver`; how a first aim reading and
-   three more after a turn of the camera move `relation.angle_deg` (US7-S6); and that
+   three more after a turn of the camera move `relation.angle_deg` (US10-S2); and that
    `DELETE /api/aim` takes the measured angle out of the view. Of 033: the purpose
    `PURPOSE` and its module path, the last writers of § Prerequisites 5, and where its
    Focus block sits. Two points are settled then and written into the trio:
@@ -1679,14 +1712,49 @@ its code when this trio is re-anchored (§ Prerequisites 2 and 5).
    other twenty-one are open. Nothing left reaches outside this trio: the line of the plan
    document's Deferred list that amendment 2 implies is there now, written by the
    series audit's shared edit of that document, not by this trio.
-4. **A probe build of every story.** Not met. No story has been compiled or run
-   (§ Refinement Record). The probe settles, at the least: each story's diff against
-   64 KiB, US3, US6 and US7 first; every worked number of spec.md that rests on the
-   simulator's noise or its seeded field (US1-S2, US2-S8, US2-S11, US5-S4, US6-S1 to
-   US6-S3, US7-S5, US7-S6, US7-S7), and above all the count of lit samples in US6-S3's
-   uncovered frame, which was worked with a model of 030's camera and not with its
-   code; that `Imaging` builds its view in one place; that the router takes `darks` and
-   `flats` beside `{id}`; and that no scenario of 030, 031, 032 or 033 changes.
+4. **A probe build of every story.** Met: round 1, on 2026-11-18, built every story in
+   order on top of 031's, 032's and 033's round-1 probe builds, each inside its
+   declared writes, and reported 51 defects, one of them blocking; their fixes are in
+   the trio (spec.md § Clarifications, the session of 2026-11-18). What it settled of
+   what this prerequisite asked:
+   - **Each story's diff** against 64 KiB is in § Risks. US7 measured over it and is cut,
+     as the owner chose, into US7 and US10.
+   - **The lit test of US6-S3** counted 1275 lit samples when US2's functions were called
+     on the uncovered simulated frame, and 1306 through the console's own set, whose
+     first dark comes after the offset frame, against 101 allowed (a ten-thousandth of
+     1,015,992 samples): about thirteen times the line, where the model of 030's camera
+     gave about 1200.
+   - **The worked numbers** that rest on the simulator's noise or its seeded field all
+     held, the same in three runs: US1-S2 (mean 160.0004, deviation 0.8038); US2-S8
+     (medians 50.034, 50.066 and 49.568, and the raw corner and centre 21 apart);
+     US2-S11 (the largest sample 8803, at (309, 205), and the hot pixels found exactly
+     at H's binned places); US5-S4 (the map exactly H); US6-S1 (the master 366.75,
+     265.5, 2161.75 and 159.75 at its four places); US6-S2 (the binned map exact);
+     US6-S3 (offset levels of 160 with levels of 161 and 180, and 39971 under the
+     panel); US10-S1, US7-S5 when probed (132.941 ms, a `level_share` of 0.45, and V·D
+     met within 0.005); US10-S2, US7-S6 when probed (a0 16.99961, flats at 125.0 ms,
+     a1 19.50057 and a turn of 2.500959); and US10-S3, US7-S7 when probed (44.133 and
+     44.208 against 50·m, 44.125, and the raw blocks 17 apart).
+   - **US10-S2 on 032's behaviour**: a first aim reading near 17°, a median near 19.5°
+     after three more, and no angle after `DELETE /api/aim`, on the probe code and on
+     032's code as it landed on `main` alike.
+   - **That `Imaging` builds its view in one place**: on `main`, where 031 and 032 have
+     landed, `set` and `take` answer `Imaging::view`, as `abort` and `solve` do; the
+     probe base's `set`, `take`, `solve` and focus run answered the imaging state's own
+     view instead. § 031's imaging state follows `main` and now names `solve`; the US4
+     probe made `set` and `take` answer `Imaging::view` inside its own writes, and the
+     re-anchoring reads it again (prerequisite 2).
+   - **The other seams**: the router takes `darks` and `flats` beside `{id}`; the lease's
+     names and its refusal match; `frame.set_temp_c`, `relation.angle_deg`, the saved
+     file's cards, `fits.rs`'s card writer, the simulator's ten frame steps and 033's
+     `PURPOSE` built as written.
+   - **No scenario of 030, 031, 032 or 033 changed**: every existing test passed
+     unchanged after every story, and the Calibration block keeps 031's night check of
+     the Imaging page green.
+
+   The stale anchors the probes met are left for the re-anchoring (prerequisite 2):
+   among them the glossary's **Flat** and **Calibration library** entries, which the
+   probe base's glossary holds at other lines than this worktree's.
 5. **033 is read.** Met against 033's draft in this worktree
    (`specs/033-focus-reading-and-aid/`), and read again in its code at the re-anchoring
    (prerequisite 2). The four questions an earlier copy left open, answered and written
@@ -1878,21 +1946,21 @@ mechanism and the check that keeps it from recurring. They bind every story.
 |---|---|
 | 030, 031, 032 or 033 lands with interfaces other than its draft's. | § Prerequisites 2 and 11: the trio is re-anchored to their code and re-validated before the flip. The seams are few: four methods of `Imaging` and its lease, the view with `frame.set_temp_c` and `relation.angle_deg`, the saved file's cards, `fits.rs`'s card writer, the simulator's frame steps and 033's `PURPOSE`. |
 | 031's lease is in 031's plan.md only since the series audit, and not yet on `main`. | § Prerequisites 11. The shape here is 031's plan.md § The camera lease, the one 033's plan quotes from 031's US9, name for name, and the scenarios assert of its refusal only a 409 with the holder's name. |
-| A story's diff passes 64 KiB. | Not measured: no probe build. The library story was split in two before the flip (US3 the library on disk, US4 the library in the console), and the rigs are written once and imported. The largest that remain are US3, US6 and US7; US6 grew in review by the third dark test, `anyway` and the temperature rule, and lost the waiting restore to the lease. If the probe finds US6 over the limit it splits where its scenarios do: the set and its tests (US6-S1 to US6-S5), then stopping, failures and the lease (US6-S6 to US6-S9). |
-| Worked numbers that rest on simulated noise are wrong by a count. | Each has a tolerance and a worked example; the probe build of § Prerequisites 4 runs them. US2-S8 draws no stars, so no seeded star can sit in a block; US7-S7's blocks are 10,000 samples and use medians. |
+| A story's diff passes 64 KiB. | Measured in round 1 (§ Prerequisites 4) as § Plan traps 3 says: US1 26,229 B, US2 33,887, US3 51,019, US4 38,052, US5 19,905, US6 61,351, US7 67,264 as one story, US8 16,471 and US9 37,371 (`dist` excluded). The library story had been split in two before the flip, and the rigs are written once and imported. US7 was over the limit by 1,728 B, of which generalising US6's darks-only runner for the flats alone is 11,148 B; the owner cut it by scenario: US7 keeps US7-S1 to US7-S4 on the scripted camera, measured at 54,871 B as built, and US10 takes the old US7-S5 to US7-S7 on the simulated camera, at 14,888 B. With round 1's cases folded in, two stories are near the limit: US6 at about 62,938 B (96 percent), and US7 at about 60 KB (92 percent); US10 stays about 15 KB. If a build finds US6 over it, the next cut is where its scenarios divide: the set and its tests (US6-S1 to US6-S5, about 50 KB), then stopping, failures and the lease's scenario (US6-S6 to US6-S9, about 11 to 12 KB), the lease itself staying in the first part, since US6-S1 asserts `holder()` and US6-S5 the checks around it. If a build finds US7 over it, the next cut moves US7-S3, with its two cases of round 1, out of US7, which brings US7 to about 55 KB; the cut along the two steps (about 46 to 48 KB and 20 to 22 KB) is the alternative. |
+| Worked numbers that rest on simulated noise are wrong by a count. | Each has a tolerance and a worked example, and round 1 ran them all on the simulated camera, three runs alike: every one holds (§ Prerequisites 4). US2-S8 draws no stars, so no seeded star can sit in a block; US10-S3's blocks are 10,000 samples and use medians. |
 | The dark test refuses the owner's real darks. | `anyway` takes the set and the master says `checked` false; spec owner decision 4 and the first field check. Each part of the test is one constant: `DARK_RISE_SIGMAS`, `COVER_SHARE`, `LIT_SHARE` with `LIT_MIN`. |
 | The dark test passes an uncovered tube. | The lit test refuses a frame with stars in it, and US6-S3 proves it on the simulated camera where the level passes. What is left is a field with almost no stars; written in spec.md § Edge Cases and in the README. |
-| The lit test's worked number is wrong. | About 1200 lit samples against 101 allowed in US6-S3 was worked with a model of 030's simulated camera, twelve times the line; the probe build runs it on the camera itself (§ Prerequisites 4). |
+| The lit test's worked number is wrong. | About 1200 lit samples against 101 allowed in US6-S3 was worked with a model of 030's simulated camera, twelve times the line. Round 1 counted them on the camera itself: 1275 with US2's functions called on the frame, and 1306 through the console's set, about thirteen times the line (§ Prerequisites 4). |
 | The real camera's full scale is not 65535. | The research note has not established it (§ 13). The search then fails with words that say where the level stopped, and nothing is made; spec owner decision 9 names the alternative of a full-scale setting. |
 | A master is applied to a sub taken at another white balance. | The plan document's amendment 2 (spec owner decision 17, settled): 030's INDI adapter sets each white-balance control neutral each time it connects, so every frame of every night is on the same footing; no spec records the controls per frame, and nothing here can see them. A camera reached by another adapter later must do the same. |
 | Two takers of frames run at once. | The plan document's amendment 1 (spec owner decision 23, settled): a set holds 031's lease from its start to its end, so every other taker is refused with `a set of darks or flats` in the words, and a set is refused while another holds the camera. The one gap is a single frame started on another thread in the instant before the set holds the lease; the set then fails at its first setting, before it has taken anything (spec § Edge Cases). |
 | Disk: a set of 20 at the worked example's size is about 650 MB of frames, and a master 65 MB. | Spec owner decision 2. The page and the README say that each dark and flat is kept. Nothing is deleted by the console. |
-| Memory at the worked example's size. | A set holds one sum of `u32` and one frame as `f32`, about 130 MB together, and a flat set that waits holds its sum, 65 MB. `Library::calibrate` keeps one dark and one flat read, 130 MB. Stated for 035's budget; not measured. |
+| Memory at the worked example's size. | A set holds one sum of `u32` and one frame as `f32`, about 130 MB together, and a flat set that waits holds its sum, 65 MB. `Library::calibrate` keeps one dark and one flat read, 130 MB, and from US5 on one map, a short list. Stated for 035's budget. Round 1 read its builds for this, and found more held for a while: a set of darks held its sum, the current dark and the offset frame through its loop, 12 B a sample (about 195 MB at 16.2 M samples), and about 20 B a sample at its master: the sum, the master, the offset frame and `Library::add`'s two passing copies of the samples (about 325 MB); a flat set's darks held both sums and the current frame, 12 B a sample. No test measures it. |
 | `Library::calibrate` reads files on the caller's thread. | Stated in its interface: a caller on the runtime uses the blocking pool. 035 is its first caller in product code. |
 | The search for hot pixels in the sub takes a star's core. | Test 3 keeps any star at least 1.4 samples across at half its height, at any binning. Sharper stars, stars under about 30 noises at their peak, three hot pixels that touch and hot pixels in bright nebulosity are the stated limits; the rule applies only without a map (spec owner decision 14). |
 | 032, 033 and 035 to 037 write `mod.rs`, `routes.rs`, `tools.rs`, the README, the Imaging page and the simulator's optics too. | 032 and 033 are in `depends_on_landed` and land first, and § Refinement Record's shared writes name the story of each that last writes a file before this spec (§ Prerequisites 5); 035 to 037 name this spec in theirs. § Prerequisites 2 re-anchors the trio to what the three wrote. |
 | The imaging angle is absent on most nights. | It is carried only while the aim point is the measured one (032). Flats taken with a tapped aim point record no angle and nothing warns; the flat label is then all the observer has (spec owner decision 20). |
-| US7-S6 leans on 032's behaviour. | It needs a first aim reading near 17°, a median near 19.5° after three more, and no angle after `DELETE /api/aim`, all from 032's draft. The rule itself is proved without 032 in US3-S4; § Prerequisites 2 re-reads the three points in 032's code. |
+| US10-S2 leans on 032's behaviour. | It needs a first aim reading near 17°, a median near 19.5° after three more, and no angle after `DELETE /api/aim`, all from 032's draft. The rule itself is proved without 032 in US3-S4. Round 1 found all three in 032's code as it landed on `main`, as well as in the probe code (§ Prerequisites 4); § Prerequisites 2 re-reads them at the re-anchoring. |
 | A sensor that cannot reach its set temperature. | A set fails and says so, with or without `anyway`; the observer sets a temperature the cooler holds (spec owner decision 24). |
 | The night rule and a new block. | The block holds no picture and uses existing classes; 031's Playwright check of the whole Imaging page at night counts its pixels in the simulate project. |
 
@@ -1903,13 +1971,15 @@ Drafted on 2026-11-15 by the grilling session against `main` at dbc2b5b, from
 of `030-imaging-camera-link`, `031-imaging-frames-on-console` and `032-imaging-solve-and-aim-point` as they stood in the
 drafting worktree that day; revised the same day after a second agent's review of the
 trio; and revised again after the series audit of 030 to 037, with every citation
-checked at 49bb210. **No probe build has been run.** No story of this trio has been
-compiled, linted or tested, no interface above has been built, and no diff has been
-measured: the sessions wrote documents only. This spec also builds on code that does
-not exist: every type and function of 030, 031, 032 and 033 named here is its draft's, not
-something that was read in a file, and 031's lease and `FrameView::set_temp_c` are as
-031's plan.md now gives them for its US9 and FR-009, in the shape 033's plan quotes
-(§ The camera's lease, § Prerequisites 11).
+checked at 49bb210. **Round 1 of the probe build has been run** (§ Prerequisites 4):
+on 2026-11-18 three agents built every story in order, on top of 031's, 032's and 033's
+round-1 probe builds, ran the gates and the bite checks, and measured every diff; the
+trio was then revised for their 51 defects and for the owner's two answers of that day.
+The trio is not yet re-anchored. Every type and function of 030, 031, 032 and 033 named
+here is still taken from that spec's trio, and 031's lease and `FrameView::set_temp_c`
+are as 031's plan.md gives them for its US9 and FR-009, in the shape 033's plan quotes
+(§ The camera's lease, § Prerequisites 11); round 1 found the probe code and `main`
+name them alike.
 
 Every `path:line` names a file that exists at 49bb210, the worktree's HEAD, and was
 read there, but for four lines of `GLOSSARY.md`, which are lines of the plan document's
@@ -1925,10 +1995,10 @@ entry is now cited at `GLOSSARY.md:331`; the other three glossary lines held. Ev
 number in a scenario was worked by hand or with a short script, and is shown as a
 worked example where it is not obvious. The ones that rest on the simulator's noise or
 its seeded field (a covered frame's standard deviation, the medians of US6-S3, the
-search of US7-S5, the binned frame of US2-S11 and the count of lit samples in US6-S3)
+search of US10-S1, the binned frame of US2-S11 and the count of lit samples in US6-S3)
 were worked from 030's constants, the last two with a model of its camera written for
-the purpose, and have not been run against the camera itself, which is not built
-either.
+the purpose; round 1 ran each against the simulated camera, and each holds
+(§ Prerequisites 4).
 
 What the review changed, so that a reader of an earlier copy knows: the library story
 was split, making nine stories, and every story from the old fourth on moved up one
@@ -1951,8 +2021,24 @@ origin, bits, pattern and binning alone, so gain, offset and set temperature no 
 restrict it (spec owner decision 7, FR-015, US3-S4, and § The library's **Matching**).
 A master dark's match is unchanged. No citation moved.
 
-What a first refinement round must do is § Prerequisites 2, 4 and 11, and its findings
-replace these paragraphs. Until then the record below is the draft's own account: its
+What round 1 and the owner's answers of 2026-11-18 changed (spec.md § Clarifications,
+the session of that day): US7 is cut by scenario, US10 taking the old US7-S5 to US7-S7,
+now US10-S1 to US10-S3, and the imaging angle kept with the flats, now FR-045, split out
+of FR-032, with a record of its own below; US7's record keeps US7-S1 to US7-S4 and names
+US10 as the next writer of `service.rs` and of the `console` binary's `main.rs`. The
+cases the three probe reports proposed are in their scenarios, and the record's
+assertions say what those scenarios now pin. The plan now says what the probes found it
+left open: the library's words for a master or a map that does not fit, and a selection
+that still names a master it could not use; `remove` and the blocking pool; 031's
+not-ready words and `Refusal`'s fields; `Mosaic::from_samples`'s refusal; `solve` among
+the answers that carry the calibration; the MCP tools' answer and their parsing; the
+README's count of tools; and the page's number fields and the order of its masters.
+§ Risks and § Prerequisites 4 hold what round 1 measured. No citation moved: the stale
+anchors the probes met are left for the re-anchoring.
+
+What a first refinement round must still do is § Prerequisites 2 and 11, prerequisite 4
+being met by round 1, and its findings replace these paragraphs. Until then the record
+below is the draft's own account, with round 1's findings in it: its
 tests are the scenarios, its writes are the files § Project Structure names, and its
 shared writes name the merge edge that orders two stories of this spec on one file, or
 the story that, by the drafts of 030, 031, 032 and 033, last writes the file before this
@@ -1987,22 +2073,22 @@ stories:
       - path: crates/simulator/tests/imaging_calibration.rs
         status: new
         disposition: add
-        assertion: "each hot pixel adds its rate times the exposure at its own place, covered or not, and a quarter of it to one binned sample"
+        assertion: "each hot pixel adds its rate times the exposure at its own place, covered or not and unvignetted, and a quarter of it to one binned sample"
         decision: "spec.md:US1-S3"
       - path: crates/simulator/tests/imaging_calibration.rs
         status: new
         disposition: add
-        assertion: "the column pattern adds 2 times x mod 8 less 7 counts whatever the gain and exposure, and its mean to a binned column"
+        assertion: "the column pattern adds 2 times x mod 8 less 7 counts whatever the gain and exposure, by sensor column under a region of interest, and its mean to a binned column"
         decision: "spec.md:US1-S4"
       - path: crates/simulator/tests/imaging_calibration.rs
         status: new
         disposition: add
-        assertion: "the flat panel replaces sky and stars, scales with its colour and the exposure, and falls to the corner by the vignetting formula"
+        assertion: "the flat panel replaces sky and stars, scales with its colour and the exposure, and falls to the corner by the vignetting formula, taken at the sensor pixel under a region of interest"
         decision: "spec.md:US1-S5"
       - path: crates/simulator/tests/imaging_calibration.rs
         status: new
         disposition: add
-        assertion: "a dust shadow dims the samples whose centre is within its radius, the sky falls to the corner too, and the cover hides panel and dust"
+        assertion: "a dust shadow dims the samples whose centre is within its radius, its rim included, the sky falls to the corner too, and the cover hides panel and dust"
         decision: "spec.md:US1-S6"
       - path: crates/simulator/tests/frame_positions.rs
         status: existing
@@ -2064,12 +2150,12 @@ stories:
       - path: crates/finder/tests/console/calibration.rs
         status: new
         disposition: add
-        assertion: "repair replaces a listed sample with the median of its good same-colour neighbours two away, at edges, with bad neighbours left out, for green and for mono, and counts those it cannot repair"
+        assertion: "repair replaces a listed sample with the median of its good same-colour neighbours two away, at edges, with bad neighbours left out, for green, and one away for mono, and counts those it cannot repair"
         decision: "spec.md:US2-S4"
       - path: crates/finder/tests/console/calibration.rs
         status: new
         disposition: add
-        assertion: "find_hot_pixels finds an isolated sample and one six times its neighbours' height with nothing lit around it, leaves a star-like peak of ratio four, and calibrate searches the sub only when no map is given"
+        assertion: "find_hot_pixels finds an isolated sample and one six times its neighbours' height with nothing lit around it, leaves a star-like peak of ratio four and a rise under eight of its colour's noises, and calibrate searches the sub only when no map is given"
         decision: "spec.md:US2-S5"
       - path: crates/finder/tests/console/calibration.rs
         status: new
@@ -2089,7 +2175,7 @@ stories:
       - path: crates/finder/tests/console/calibration.rs
         status: new
         disposition: add
-        assertion: "find_hot_pixels keeps stars 0.8 and 0.5 samples wide whose touching samples are lit, finds two hot pixels that touch, and leaves three that touch"
+        assertion: "find_hot_pixels keeps stars 0.8 and 0.5 samples wide whose touching samples are lit, finds two hot pixels that touch, leaves three that touch, and judges a touching sample lit only above both three noises and a tenth of the candidate's height"
         decision: "spec.md:US2-S9"
       - path: crates/finder/tests/console/calibration.rs
         status: new
@@ -2167,22 +2253,22 @@ stories:
       - path: crates/finder/tests/console/calibration_library.rs
         status: new
         disposition: add
-        assertion: "a master dark matches by camera, size, origin, bits, pattern, binning, gain, offset, exposure within 1 ms and set temperature within 1 degree, or sensor temperature within 8 when neither is set, the nearest then newest wins, and FrameKey::agrees holds a frame to another's settings and to an exposure within 1 ms"
+        assertion: "a master dark matches by camera, size, origin, bits, pattern, binning, gain, offset, exposure within 1 ms and set temperature within 1 degree, or sensor temperature within 8 when neither is set, the nearest then newest wins, FrameKey::agrees holds a frame to another's settings and to an exposure within 1 ms, and FrameKey::from_image names the first card it lacks"
         decision: "spec.md:US3-S3"
       - path: crates/finder/tests/console/calibration_library.rs
         status: new
         disposition: add
-        assertion: "a master flat matches by camera, size, origin, bits, pattern and binning alone, whatever its gain, offset, set temperature, exposure and sensor temperature, the newest or the named label wins, and a camera turned by more than 1 degree is reported with the flat still chosen"
+        assertion: "a master flat matches by camera, size, origin, bits, pattern and binning alone, whatever its gain, offset, set temperature, exposure and sensor temperature, the newest or the named label wins, and a camera turned by more than 1 degree, and not by exactly 1, is reported with the flat still chosen"
         decision: "spec.md:US3-S4"
       - path: crates/finder/tests/console/calibration_library.rs
         status: new
         disposition: add
-        assertion: "Library::calibrate applies the matching dark and flat, finds and repairs a hot sample in the sub when the library is empty and reports what was missing, and names a master whose file is gone in problems"
+        assertion: "Library::calibrate applies the matching dark and flat, finds and repairs a hot sample in the sub when the library is empty and reports what was missing, and names in problems a master whose file is gone or of another size"
         decision: "spec.md:US3-S5"
       - path: crates/finder/tests/console/calibration_library.rs
         status: new
         disposition: add
-        assertion: "remove deletes a master's file and entry, and an unreadable index is reported, moved aside at the next add and replaced"
+        assertion: "remove deletes a master's file and entry, an unreadable index is reported, moved aside at the next add and replaced, and an index of another format is unreadable in its exact words"
         decision: "spec.md:US3-S6"
       - path: crates/finder/tests/layout/main.rs
         status: existing
@@ -2238,12 +2324,12 @@ stories:
       - path: crates/finder/tests/console/calibration_console.rs
         status: new
         disposition: add
-        assertion: "GET /api/imaging/calibration, the imaging view and the session carry the masters and the match for the latest imaging frame, and DELETE removes a master, answers 404 for unknown and ill-formed ids and 403 for a foreign origin"
+        assertion: "GET /api/imaging/calibration, the imaging view and the session carry the masters and the match for the latest imaging frame, the answers of the settings, the frame and the DELETE carry the whole object, and DELETE removes a master, answers 404 for unknown and ill-formed ids and 403 for a foreign origin"
         decision: "spec.md:US4-S1"
       - path: crates/finder/tests/console/calibration_console.rs
         status: new
         disposition: add
-        assertion: "a console without imaging answers an empty library, refuses DELETE with 409 and a foreign origin with 403 first, GET /api/imaging stays exactly off, and a view that is not ready carries no calibration"
+        assertion: "a console without imaging answers an empty library, refuses DELETE with 409 and a foreign origin with 403 first, GET /api/imaging stays exactly off, and a view that is not ready carries no calibration while the route answers the library's own view, its error included"
         decision: "spec.md:US4-S2"
       - path: crates/finder/tests/console/calibration_console.rs
         status: new
@@ -2350,7 +2436,7 @@ stories:
       - path: crates/finder/tests/console/calibration_bad_pixels.rs
         status: new
         disposition: add
-        assertion: "bad_pixel_map lists the samples more than 3.5 spreads above the median, row by row, with a spread floor of one count"
+        assertion: "bad_pixel_map lists the samples more than 3.5 spreads above the median, row by row from the top, with a spread floor of one count"
         decision: "spec.md:US5-S1"
       - path: crates/finder/tests/console/calibration_bad_pixels.rs
         status: new
@@ -2370,7 +2456,7 @@ stories:
       - path: crates/finder/tests/console/calibration_bad_pixels.rs
         status: new
         disposition: add
-        assertion: "attach_bad_pixels writes the map beside its master and its size into the entry and index, select and calibrate use it, remove deletes it, a too-large map leaves null and the search in the sub, and a master only added keeps null"
+        assertion: "attach_bad_pixels writes the map beside its master and its size into the entry and index and refuses an id that is no master dark, select and calibrate use it, a map of another format or size is not used, remove deletes it, a too-large map leaves null and the search in the sub, and a master only added keeps null"
         decision: "spec.md:US5-S5"
       - path: crates/finder/tests/layout/main.rs
         status: existing
@@ -2437,7 +2523,7 @@ stories:
       - path: crates/finder/tests/console/calibration_darks.rs
         status: new
         disposition: add
-        assertion: "on a scripted camera a dark two counts above the offset level passes and three fails with its exact words, an offset level of 13108 is refused where 13107 passes, and with anyway both are taken and the master says checked false and DARKTEST F"
+        assertion: "on a scripted camera a dark two counts above the offset level passes and three fails with its exact words, an offset level of 13108 is refused where 13107 passes, the exposure is put back after a refusal at the offset frame, and with anyway both are taken and the master says checked false and DARKTEST F"
         decision: "spec.md:US6-S4"
       - path: crates/finder/tests/console/calibration_darks.rs
         status: new
@@ -2447,12 +2533,12 @@ stories:
       - path: crates/finder/tests/console/calibration_darks.rs
         status: new
         disposition: add
-        assertion: "DELETE with the running set's id, or an aborted exposure, ends the set stopped with no master and the exposure restored, and the lease is held under HOLDER while the set runs and free after"
+        assertion: "DELETE with the running set's id, or an aborted exposure, ends the set stopped with no master and the exposure restored, also when the DELETE comes before the set's first frame, and the lease is held under HOLDER while the set runs and free after"
         decision: "spec.md:US6-S6"
       - path: crates/finder/tests/console/calibration_darks.rs
         status: new
         disposition: add
-        assertion: "a failed frame ends the set with a dark failed and the frame's words, a frame whose gain differs with the settings changed, and a sensor 2.5 degrees from its set temperature with its exact words whether or not anyway was sent, each with no master"
+        assertion: "a failed frame ends the set with a dark failed and the frame's words, a frame whose gain or exposure differs with the settings changed, and a sensor 2.5 degrees from its set temperature with its exact words whether or not anyway was sent, each with no master; the master's sensor temperature is the mean of the darks alone"
         decision: "spec.md:US6-S7"
       - path: crates/finder/tests/console/calibration_darks.rs
         status: new
@@ -2533,38 +2619,23 @@ stories:
       - path: crates/finder/tests/console/calibration_flats.rs
         status: new
         disposition: add
-        assertion: "on a scripted linear camera the search asks for 100, 200 and 366.634 ms, takes three flats there holding the lease, waits for the darks holding none, then takes the lease again for an offset frame and three darks and adds a master flat of ones with its entry, checked true, its cards and ten kept frames"
+        assertion: "on a scripted linear camera the search asks for 100, 200 and 366.634 ms, takes three flats there holding the lease, waits for the darks holding none, then takes the lease again for an offset frame and three darks, counted in darks_taken, and adds a master flat of ones with its entry, checked true, no imaging angle, the flats' sensor temperature, its cards and ten kept frames"
         decision: "spec.md:US7-S1"
       - path: crates/finder/tests/console/calibration_flats.rs
         status: new
         disposition: add
-        assertion: "the search steps down from a saturated start, and fails with its exact words when the panel is too dim, too bright, does not rise, or eight tries do not find the level, naming the eighth exposure taken, and restoring the exposure each time"
+        assertion: "the search steps down from a saturated start and halves after a bright first frame, and fails with its exact words when the panel is too dim, too bright, does not rise, a search frame's settings differ from the first's, or eight tries do not find the level, naming the eighth exposure taken, and restoring the exposure each time"
         decision: "spec.md:US7-S2"
       - path: crates/finder/tests/console/calibration_flats.rs
         status: new
         disposition: add
-        assertion: "a flat outside 40 to 50 percent fails the set, darks taken with the panel still lit return the set to needs_darks with the dark test's words and not_dark until a covered retry finishes it, and anyway takes darks the test refused and marks the master checked false"
+        assertion: "a flat outside 40 to 50 percent fails the set, a failed flat is worded as a flat, darks taken with the panel still lit, or after a setting changed between the steps, return the set to needs_darks with their words and, for the dark test, not_dark until a covered retry finishes it, and anyway takes darks the test refused and marks the master checked false"
         decision: "spec.md:US7-S3"
       - path: crates/finder/tests/console/calibration_flats.rs
         status: new
         disposition: add
-        assertion: "the flats route refuses bad bodies, counts and labels with 400 and their words, anyway without darks, darks with nothing waiting, a second set, a running set and a console without imaging with 409, and DELETE drops flats that wait"
+        assertion: "the flats route refuses bad bodies, counts and labels with 400 and their words, anyway without darks, darks with nothing waiting, a second set, a running set, the flats' darks being taken and a console without imaging with 409, and DELETE drops flats that wait and stops their darks"
         decision: "spec.md:US7-S4"
-      - path: crates/finder/tests/console/calibration_flats.rs
-        status: new
-        disposition: add
-        assertion: "a master flat made from simulated flats and their darks equals the simulator's vignetting and dust over each colour's median, with the panel's colour, the offset level, the column pattern and a hot pixel gone"
-        decision: "spec.md:US7-S5"
-      - path: crates/finder/tests/console/calibration_flats.rs
-        status: new
-        disposition: add
-        assertion: "the imaging angle 032 measured is kept in the master flat's entry and file, a later match warns once the measured angle has moved by more than a degree, and nothing warns once the aim point is no longer the measured one"
-        decision: "spec.md:US7-S6"
-      - path: crates/finder/tests/console/calibration_flats.rs
-        status: new
-        disposition: add
-        assertion: "a simulated sky frame calibrated with a master dark and a master flat the console made has the same background at corner and centre, and the match names both masters and the map"
-        decision: "spec.md:US7-S7"
       - path: crates/finder/tests/layout/main.rs
         status: existing
         disposition: preserve
@@ -2573,10 +2644,10 @@ stories:
     preserved_behavior:
       - "US6's SetView keys keep their names and meanings; US7 only adds keys"
       - "the dark test, its three texts and anyway are the same for a flat set's darks"
+      - "this story keeps no imaging angle: its master flats carry imaging_angle_deg null until US10 keeps the angle (spec.md FR-045)"
       - "nothing on the scope node or the scope link changes"
       - "crates/finder/tests/console/calibration_darks.rs, a test file this spec's earlier story creates, passes unchanged, and is not edited: US6's dark sets, their refusals, texts and restored exposure, and the scripted camera this story imports from it (plan.md Shapes that existing tests pin)"
       - "crates/finder/tests/console/calibration_library.rs, a test file this spec's earlier story creates, passes unchanged: US3's matching of flats and the turned-camera rule are unchanged (plan.md Shapes that existing tests pin)"
-      - "crates/finder/tests/console/imaging_relation.rs, a test file 032 creates, passes unchanged: 032's aim readings and the imaging angle they give are read and not changed (plan.md Shapes that existing tests pin)"
     checks:
       development:
         - "cargo nextest run -p finder --locked --test console calibration_flats::"
@@ -2601,6 +2672,16 @@ stories:
         other_story: US8
         disposition: merge_order
         reason: "US8 depends_on_merged US7, and adds the three tools' lines"
+      - path: crates/finder/src/imaging/calibration/service.rs
+        other_spec: 034-dark-and-flat-frames
+        other_story: US10
+        disposition: merge_order
+        reason: "US10 depends_on_merged US7, and keeps the imaging angle with the flats"
+      - path: crates/finder/tests/console/main.rs
+        other_spec: 034-dark-and-flat-frames
+        other_story: US10
+        disposition: merge_order
+        reason: "US10 depends_on_merged US7, and adds mod calibration_flats_sim after mod calibration_flats"
     open_questions: []
   US8:
     tests:
@@ -2612,17 +2693,17 @@ stories:
       - path: crates/finder/tests/mcp/calibration.rs
         status: new
         disposition: add
-        assertion: "list_calibration equals GET /api/imaging/calibration, and take_darks answers before its set is done and the library then holds the master"
+        assertion: "list_calibration equals GET /api/imaging/calibration before a set and once it is done, and take_darks answers before its set is done and the library then holds the master"
         decision: "spec.md:US8-S2"
       - path: crates/finder/tests/mcp/calibration.rs
         status: new
         disposition: add
-        assertion: "the two taking tools refuse with the routes' words, take_flats passes through to a set that fails as the route's would, and a second set is refused while one runs"
+        assertion: "the two taking tools refuse with the routes' words, a malformed argument with the route's 400, take_flats passes through to a set that fails as the route's would, and a second set is refused while one runs"
         decision: "spec.md:US8-S3"
       - path: crates/finder/tests/mcp/calibration.rs
         status: new
         disposition: add
-        assertion: "on a console without imaging list_calibration answers an empty library and the other two refuse at once, and no result holds the token"
+        assertion: "on a console without imaging list_calibration answers an empty library and the other two refuse at once without reading their arguments, and no result holds the token"
         decision: "spec.md:US8-S4"
       - path: crates/finder/tests/layout/main.rs
         status: existing
@@ -2677,12 +2758,12 @@ stories:
       - path: crates/finder/web/src/components/CalibrationBlock.test.tsx
         status: new
         disposition: add
-        assertion: "an empty calibration shows the region with its two forms, hints and no status or alert, and the Imaging page shows the block only when its ready view carries calibration"
+        assertion: "an empty calibration shows the region with its two forms, hints and no status or alert, and the Imaging page shows the block, its last, after Focus, only when its ready view carries calibration"
         decision: "spec.md:US9-S1"
       - path: crates/finder/web/src/components/CalibrationBlock.test.tsx
         status: new
         disposition: add
-        assertion: "each master reads its exact line, with and without gain, offset, set temperature, map and angle, with dark test skipped when checked is false, and Remove sends DELETE with its id"
+        assertion: "each master reads its exact line, with and without gain, offset, set temperature, map and angle, with dark test skipped when checked is false, and Remove sends DELETE with its id, also while a set runs"
         decision: "spec.md:US9-S2"
       - path: crates/finder/web/src/components/CalibrationBlock.test.tsx
         status: new
@@ -2756,5 +2837,49 @@ stories:
         other_story: US6
         disposition: merge_order
         reason: "034 depends_on_landed 033, whose US6 last changed the Imaging page, placing its Focus block after 032's"
+    open_questions: []
+  US10:
+    tests:
+      - path: crates/finder/tests/console/calibration_flats_sim.rs
+        status: new
+        disposition: add
+        assertion: "a master flat made from simulated flats and their darks equals the simulator's vignetting and dust over each colour's median, with the panel's colour, the offset level, the column pattern and both hot pixels gone"
+        decision: "spec.md:US10-S1"
+      - path: crates/finder/tests/console/calibration_flats_sim.rs
+        status: new
+        disposition: add
+        assertion: "the imaging angle 032 measured is kept in the master flat's entry and file, a later match warns once the measured angle has moved by more than a degree, and nothing warns once the aim point is no longer the measured one"
+        decision: "spec.md:US10-S2"
+      - path: crates/finder/tests/console/calibration_flats_sim.rs
+        status: new
+        disposition: add
+        assertion: "a simulated sky frame calibrated with a master dark and a master flat the console made has the same background at corner and centre, and the match names both masters and the map"
+        decision: "spec.md:US10-S3"
+      - path: crates/finder/tests/layout/main.rs
+        status: existing
+        disposition: preserve
+        assertion: "no file at the top level of crates/finder/tests or new file in its support folder, and each binary's main.rs holds only its support include and mod lines"
+        decision: "plan.md:Shapes that existing tests pin"
+    preserved_behavior:
+      - "US7's search, its two steps, their refusals and texts and its master flat are unchanged; this story only keeps the imaging angle with the flats in hand and gives it to the master's entry"
+      - "nothing on the scope node or the scope link changes"
+      - "crates/finder/tests/console/calibration_flats.rs, a test file this spec's earlier story creates, passes unchanged, and is not edited: US7's flat sets, their refusals and texts, a master flat with imaging_angle_deg null on a rig with no imaging solver, and the helpers this story imports from it (plan.md Shapes that existing tests pin)"
+      - "crates/finder/tests/console/calibration_darks.rs, a test file this spec's earlier story creates, passes unchanged: US6's dark sets and the scripted camera are unchanged (plan.md Shapes that existing tests pin)"
+      - "crates/finder/tests/console/imaging_relation.rs, a test file 032 creates, passes unchanged: 032's aim readings and the imaging angle they give are read and not changed (plan.md Shapes that existing tests pin)"
+    checks:
+      development:
+        - "cargo nextest run -p finder --locked --test console calibration_flats_sim::"
+        - "cargo nextest run -p finder --locked --test console calibration_flats::"
+        - "cargo nextest run -p finder --locked --test layout"
+      handoff: declared_gates
+      independent: declared_pipeline
+      release:
+        - "release owner: the repository owner, through the merge queue's ci.yml jobs, a rebuild of the console, and a first flat set on the real camera with the aim point measured"
+    writes:
+      - crates/finder/src/imaging/calibration/service.rs
+      - crates/finder/tests/console/calibration_flats_sim.rs
+      - crates/finder/tests/console/main.rs
+    no_write_reason: ""
+    shared_writes: []
     open_questions: []
 ```
