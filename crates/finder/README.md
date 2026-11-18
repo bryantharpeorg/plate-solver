@@ -187,6 +187,7 @@ The page uses the API types in `web/src/api.ts`, which mirror the Rust structs i
 | `PUT /api/imaging/settings` | JSON partial edit of `exposure_ms`, `gain`, `offset`, `binning`, `roi` (a region or null for the whole sensor), `cooler_on`, `set_temp_c`, `forward_kib_per_s` (a whole number from 64 to 1048576 KiB/s, or null for no limit) and `save_at_node`. Answers 200 with the imaging view; 400 with a JSON `error` for a value the console or the camera refuses, 403 for a foreign origin, 415 for another content type, 409 while the state is not `ready` or an exposure is in progress, and 502 with `the scope node did not apply the settings: <message>` when the node's call fails otherwise. Same-origin writes only. |
 | `POST /api/imaging/frame` | No body. Take one imaging frame with the settings' `exposure_ms` and the purpose `frame`, receiving the samples on the imaging connection while the mount keeps tracking, and save them untouched as a FITS file. Answers 200 at once with the imaging view, whose `frame` is the exposure just asked for, `exposing`; the frame moves on through `receiving` to `saved`, `failed` or `aborted`, each state read from `GET /api/imaging`. 409 with the state's words while the state is not `ready`, and 409 `an exposure is already in progress` while a frame is `exposing` or `receiving`. Same-origin writes only. |
 | `POST /api/imaging/abort` | No body. Abort the exposure in progress through the node's `AbortExposure`, or stop a frame still being received, ending it `aborted`; answers 200 with the imaging view, and with nothing in progress answers 200 and changes nothing. Same-origin writes only. |
+| `GET /api/imaging/frames/{id}/preview.jpg` | The colour JPEG preview of the saved imaging frame with this id, `image/jpeg`, while it is among the last eight saved; 404 with `the console no longer holds that preview` otherwise, and 400 for an id that is not a number. A saved frame's view carries the route as `preview`; a frame whose preview cannot be made, such as a mosaic with no whole 2 × 2 cell, is saved with no `preview`. |
 | `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
 | `POST /api/stop` | No body. Always 200, ending tracking, clearing arming and commanding both axes to stop, from any origin, without taking the motion lock. Sends `StopAll` immediately, retrying in its own task with 200 ms per attempt and 50 ms between attempts for a bounded 2 s window, even if the request goes away. Waits for the round and answers exactly `{"stopped":true}` when the scope node answers OK or there is no scope link; otherwise answers `{"stopped":true,"acknowledged":false}`. This means the node did not answer and the mount may still be moving; press Stop again. The MCP tools `stop` and `stop_all` return the same reply. |
 | `POST /api/model/second-sync` | No body. Start the second sync; 200 with `{"started":true}`, or 409 with a JSON `error` naming the refusal. Same-origin writes only. |
@@ -638,3 +639,18 @@ The time a frame took to reach the console is read from the view:
 `received_at − start − exposure_ms/1000`, the time from the end of the exposure
 to the last byte in hand, which is what the forwarding limit paces; that less
 the scope node's own probe figure for the link is the link alone.
+
+Each saved frame is also given a small colour preview, in memory only and kept
+for the last eight saved frames, its route shown as the frame's `preview`. It
+is made from the frame's samples as they were saved: each whole 2 × 2 cell of
+the camera's mosaic becomes one pixel, red and blue their samples and green the
+mean of its two, a mono frame one pixel a sample in all three channels; the
+picture is then box-averaged by a whole factor until its longer side is at most
+1280 pixels; and each channel is stretched from its median over the largest of
+its 99.9th percentile's distance and thirty times its noise, mapped by
+`255·asinh(10·t)/asinh(10)` with `t` the value's place in that span, so faint
+stars show. The result is encoded as a JPEG of quality 85 and served by
+`GET /api/imaging/frames/<id>/preview.jpg`, `image/jpeg`, while the frame is
+among the last eight saved; a preview that cannot be made — a frame with no
+pixels, such as a mosaic with no whole 2 × 2 cell — does not fail the frame,
+whose view then carries no `preview`.

@@ -1,9 +1,10 @@
-//! The imaging routes (031): the view, a settings change, one frame and its
-//! abort.
+//! The imaging routes (031): the view, a settings change, one frame, its
+//! abort and its preview.
 
 use axum::{
-    extract::{rejection::JsonRejection, State},
-    http::StatusCode,
+    extract::{rejection::JsonRejection, Path, State},
+    http::{header, StatusCode},
+    response::IntoResponse,
     routing::{get, post, put},
     Json, Router,
 };
@@ -20,6 +21,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/api/imaging/settings", put(put_settings))
         .route("/api/imaging/frame", post(take_frame))
         .route("/api/imaging/abort", post(abort_frame))
+        .route("/api/imaging/frames/{id}/preview.jpg", get(frame_preview))
 }
 
 /// `GET /api/imaging`: the imaging view, or `{"state":"off"}` without imaging.
@@ -43,6 +45,25 @@ async fn take_frame(
         .await
         .map_err(|refusal| ApiError::new(refusal.status, refusal.message))?;
     Ok(Json(view))
+}
+
+/// `GET /api/imaging/frames/{id}/preview.jpg` (FR-018): the colour JPEG of
+/// one of the last eight saved frames, `image/jpeg`; an id the console no
+/// longer holds answers 404, an id that is not a number 400.
+async fn frame_preview(
+    State(state): State<AppState>,
+    Path(id): Path<u64>,
+) -> Result<impl IntoResponse, ApiError> {
+    let preview = state
+        .imaging()
+        .and_then(|imaging| imaging.preview(id))
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "the console no longer holds that preview",
+            )
+        })?;
+    Ok(([(header::CONTENT_TYPE, "image/jpeg")], preview))
 }
 
 /// `POST /api/imaging/abort` (FR-013): no body; abort the exposure or the
