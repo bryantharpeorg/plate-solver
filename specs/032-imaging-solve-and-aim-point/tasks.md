@@ -14,7 +14,7 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
 - the owner has amended Constitution V or written how it reads for the imaging solver:
   met, constitution 1.3.0 (plan.md § Prerequisites 4);
 - the saved captures of ASTAP's real output are staged under `fixtures/finder/astap/`:
-  not met (plan.md § Prerequisites 5); US1 cannot pass without them;
+  met on 2026-11-18 (plan.md § Prerequisites 5); US1 cannot pass without them;
 - the trio has been probe-built: met on 2026-11-18, round 1, every story (plan.md
   § Prerequisites 6);
 - the drafts outside this series that write the same files (`026-mount-sky`,
@@ -88,7 +88,8 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
   `read_answer` and `from_answer` (US1-S1) and for worked answer B through the stub
   adapter (US1-S2).
 - [ ] T002 [US1] Add failing tests to `crates/finder/tests/console/imaging_astap.rs` for
-  the exact argument lists (US1-S3), every exit code and unreadable answer (US1-S4), and
+  the exact argument lists (US1-S3), every exit code, exit code 1 told apart by its
+  `.ini`'s `ERROR` line, and every unreadable answer (US1-S4), and
   the limits with a sleeping script: `/proc/self` seen first, the process gone, the
   work folder empty, and the longer limit of a hint with no place (US1-S5).
 - [ ] T003 [US1] Add failing tests to `crates/finder/tests/console/imaging_astap.rs` for
@@ -96,8 +97,9 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
   the test's own whose cell mean is rounded, on a mono frame 4 × 2502 that is halved,
   with exit code 1 and the two lines, with the region outside the frame and the region
   with no whole cell (US1-S6), and for the saved captures read
-  through `fixtures/finder/astap/captures.json` and replayed by the stub program, a
-  case whose `ini` is `null` with no `reply.ini` (US1-S7). The captures are staged by
+  through `fixtures/finder/astap/captures.json` and replayed by the stub program, each
+  case with its exit code and its own saved `.ini` as `reply.ini`, and each failed
+  case's detail (US1-S7). The captures are staged by
   the owner; if they are missing, stop and escalate.
 
 ### Implementation
@@ -115,8 +117,9 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
   `read_measure` and `prepare`, exactly as plan.md § The ASTAP adapter gives them: the
   three limits and `with_limits`, the prepared copy's four steps, one call's six steps
   on the blocking pool against a real-time deadline (the whole-sky limit for a hint
-  with no place), the exit-code table, and the work folder removed whatever happened.
-  Add `pub mod astap;` to `crates/finder/src/imaging/mod.rs`.
+  with no place), the exit-code table, exit code 1 told apart by `read_error`'s text,
+  `read_answer` and `read_error` skipping a line with no `=`, and the work folder
+  removed whatever happened. Add `pub mod astap;` to `crates/finder/src/imaging/mod.rs`.
 - [ ] T006 [US1] Run the `lint` and `test` gates with every existing test unchanged and
   green. Commit the green story (US1-S1, US1-S2, US1-S3, US1-S4, US1-S5, US1-S6 and
   US1-S7).

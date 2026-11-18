@@ -18,6 +18,8 @@ depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", 
 # Re-anchored 2026-11-18 to `main` at e9687ce (e9687ce911e0c63529c04ad41ac877f2e4174a83),
 # where 030's eight stories and 031's nine have landed: every citation was compared line
 # for line with 49bb210, and the ones that moved are corrected (plan.md § Prerequisites 2).
+# On 2026-11-18 the owner's captures of ASTAP's real output were folded in, and
+# fixtures/finder/astap/ committed with them (plan.md § Prerequisites 5).
 # It stays draft until the owner settles the owner decisions and flips it to `ready`,
 # which gives the approvals listed under "Owner approvals" and dispatches it.
 ---
@@ -204,7 +206,10 @@ was set, and MCP clients get one tool.
   picture needs 2 × 2 binning. The height should be right "within preferably 5%";
   with `-fov 0` ASTAP "will try all FOV between 10 degrees and 0.3 degrees"; and the
   page's own example of the star measure is `-analyse 30`, printing `HFD_MEDIAN=3.3`
-  and `STARS=666`.
+  and `STARS=666`. The owner's captures of 2026-11-18 found the installed version
+  otherwise in two of these: every failure exits 1, and a solve with no solution writes
+  no `ERROR` line; an `.ini` is written in every case, as the page says (the session of
+  the owner's ASTAP captures, below).
 - Q: What could not be checked? → A: The program itself. The grilling session could not
   run it, so no real output file is in the repository yet (plan.md § Prerequisites 5),
   and five things rest on the saved captures and the field checks: that the `CD`
@@ -213,7 +218,9 @@ was set, and MCP clients get one tool.
   for a hinted solve and for a search of the whole sky; how it measures stars on a
   small region; and how much the finder camera's live solves scatter about a line
   (`docs/research/2026-11-15-imaging-camera.md` § 13. Not established, and § 5.
-  Relating two cameras for the one field figure there is).
+  Relating two cameras for the one field figure there is). The owner's captures of
+  2026-11-18 settled the first two: the row order and the bare lines are as assumed
+  (the session of the owner's ASTAP captures, below).
 - Q: Where does this trio depart from the plan document? → A: Nowhere now. It first
   departed in eight places, each an owner decision or approval below, and the plan
   document in the drafting worktree now carries all eight with the recommended
@@ -437,6 +444,60 @@ was set, and MCP clients get one tool.
   step of more than 5′ is read as a push by hand, which marks the model's slip, rather
   than chased by 015's tracker; a smaller step is still chased. The hold avoids both.
   The owner asked for the same rewording in 035 and 037.
+
+### Session 2026-11-18 (the owner's ASTAP captures)
+
+- Q: What did the owner's captures of ASTAP's real output show? → A: The owner ran
+  plan.md § Capturing ASTAP's output with ASTAP CLI-2025.09.29 (Ubuntu's `astap-cli`
+  2025.10.08-1) and the D50 database, on a DSS2 red picture of M13 given as a prepared
+  copy with only the structural cards, and committed the files as
+  `fixtures/finder/astap/` (owner approval 14, plan.md § Prerequisites 5). Eight of
+  the thirteen facts the probes had assumed held: `-o` writes the `.ini` and, solved,
+  the `.wcs`; the lines are bare `KEY=value` with no `//` note, and their numbers read
+  with `f64`'s `FromStr` once trimmed; `CRPIX` is the centre; the `CD` matrix counts
+  rows in the file's own order, three Gaia DR3 stars landing within 0.56 pixels of
+  ASTAP's places for them; a copy with only the structural cards solves; `-analyse 30`
+  prints its two lines on standard output and exits 0; and the `.wcs` is a FITS
+  header. Three did not. Every failure exits 1, no solution, too few stars and no
+  database alike, where ASTAP's page documents 1, 2 and 32. Without a database ASTAP
+  writes an `.ini`: `PLTSOLVD=F`, `CMDLINE=…` and `ERROR=No star database found.`.
+  With too few stars the `.ini` holds `ERROR=Not enough stars.` and a `WARNING`; with
+  no solution it holds no `ERROR` line at all, and ASTAP prints
+  `No solution found!  :(` on standard output instead. Each failed `.ini` begins with
+  an empty line. The first run also showed that an Ubuntu install keeps the database
+  in `/opt/astap`, where `astap_cli` does not look by itself, so the console needs
+  `--astap-db /opt/astap` (plan.md § Prerequisites 8). Two facts the captures could
+  not show, that ASTAP takes `-r 180.00` and `-fov 0` and that a killed `astap_cli`
+  leaves no child, rest on the first solves on the console machine there.
+- Q: How is an exit code of 1 told apart, and what changed for it? → A: By the `.ini`'s
+  `ERROR` line, as the owner chose on 2026-11-18: `Not enough stars.` is
+  `TooFewStars`, `No star database found.` is `NoDatabase`, and no `ERROR` line, no
+  `.ini` or any other text is `NotSolved`, whose detail is that text when there is one
+  and otherwise `No solution found!`, ASTAP's own words less their `:(`. Codes 2, 32
+  and 33 keep their rows, for another version of ASTAP. FR-005 says so, and so do
+  plan.md's exit-code table and `read_error`; `read_answer` skips a line with no `=`,
+  as a failed `.ini`'s empty first line is. No owner decision changes, and FR-001's
+  reasons and messages stand.
+- Q: Which scenarios changed? → A:
+  - US1-S4: its Given names the failed file, an empty line, `PLTSOLVD=F` and
+    `CMDLINE=…`, the form of the saved `not-solved.ini`. Its Then reads exit code 1 with
+    that file as `NotSolved` with `No solution found!`; with `ERROR=Not enough stars.`
+    after it as `TooFewStars` with that detail; with `ERROR=No star database found.`
+    as `NoDatabase` with that detail; with another `ERROR` as `NotSolved` with that
+    text; and with no `reply.ini` as `NotSolved` with `No solution found!`. Exit code
+    2 with the failed file, and 32 and 33 with no `reply.ini`, stay, for another
+    version. Its oracle names the saved captures for exit code 1;
+  - US1-S7: its Then gives each failed case's detail, `No solution found!`,
+    `Not enough stars.` and `No star database found.`, each case replayed from exit
+    code 1 and its own saved `.ini`; no case's `ini` is `null`.
+- Q: What else changed? → A: US2-S4 is unchanged: its test solver's `NotSolved` already
+  carries `No solution found!`, ASTAP's own words. Beside the scenarios: FR-005; owner
+  approval 14, which now lists `no-database.ini`; the edge case of a missing database;
+  two answers of the review session of 2026-11-15, which now point here; and, in
+  plan.md, the exit-code table, `read_error`, `read_answer`, § Capturing ASTAP's output
+  (its script passes `-d`, its `captures.json` is the committed one, and its thirteen
+  checks are ticked, 11 and 12 left open), § Prerequisites 5, 6 and 8, § Risks and the
+  Refinement Record; and tasks.md's Prerequisites, T002, T003 and T005.
 
 ## Owner decisions
 
@@ -668,8 +729,8 @@ and the following. Each is named in the FR or success criterion that makes it.
     every new finder test.
 14. **Operator-staged fixture files**, written by no story: the saved captures of
     ASTAP's real output under `fixtures/finder/astap/` (`captures.json`, `solved.ini`,
-    `solved.wcs`, `not-solved.ini`, `too-few-stars.ini`, `analyse.stdout` and
-    `README.md`, and `no-database.ini` only if ASTAP wrote one), with three
+    `solved.wcs`, `not-solved.ini`, `too-few-stars.ini`, `no-database.ini`,
+    `analyse.stdout` and `README.md`), with three
     hand-identified catalogue stars for the solved case, made as plan.md § Capturing
     ASTAP's output says (plan.md § Prerequisites 5).
 
@@ -899,12 +960,23 @@ development, `cargo nextest run -p finder --locked --test console imaging_astap:
    30`. Oracle: ASTAP's documents (hours, declination + 90°, the picture's height).
 4. **Given** the stub adapter and a mono test frame 64 × 48, **Then** a committed test
    asserts, for each `code` and `reply.ini` below, the error `solve` answers, its
-   `reason()` and its `message()`:
-   - 1 with `PLTSOLVD=F`, `CMDLINE=astap_cli -f frame.fits` and `ERROR=No solution
-     found!`, each on its own line: `NotSolved` with the detail `No solution found!`,
+   `reason()` and its `message()`. **The failed file** is an empty line, then
+   `PLTSOLVD=F` and `CMDLINE=astap_cli -f frame.fits`, each on its own line, the form of
+   the saved `not-solved.ini`:
+   - 1 with the failed file: `NotSolved` with the detail `No solution found!`,
      `not_solved`, `the imaging solver found no solution`;
-   - 2 with the same file: `TooFewStars`, `too_few_stars`, `the imaging solver found
-     too few stars in the imaging frame`;
+   - 1 with the failed file and `ERROR=Not enough stars.` after it: `TooFewStars` with
+     the detail `Not enough stars.`, `too_few_stars`, `the imaging solver found too few
+     stars in the imaging frame`;
+   - 1 with the failed file and `ERROR=No star database found.` after it: `NoDatabase`
+     with the detail `No star database found.`, `no_database`, `the imaging solver has
+     no star database it can read`;
+   - 1 with the failed file and `ERROR=Something else.` after it: `NotSolved` with the
+     detail `Something else.`, `not_solved`, `the imaging solver found no solution`;
+   - 1 with no `reply.ini`: `NotSolved` with the detail `No solution found!`,
+     `not_solved`, `the imaging solver found no solution`;
+   - 2 with the failed file: `TooFewStars` with no detail, `too_few_stars`, `the
+     imaging solver found too few stars in the imaging frame`;
    - 32 and 33, each with no `reply.ini`: `NoDatabase` with no detail, `no_database`,
      `the imaging solver has no star database it can read`;
    - 16: `Failed`, `failed`, `the imaging solver could not read the imaging frame`;
@@ -920,7 +992,10 @@ development, `cargo nextest run -p finder --locked --test console imaging_astap:
    - an adapter whose program is a path that does not exist: `Failed`, with a message
      beginning `the imaging solver could not be started: `;
    - after each of these, the work folder holds no entry;
-   - oracle: ASTAP's documented exit codes.
+   - oracle: for exit code 1, the saved captures' exit codes and `.ini` files (plan.md
+     § Capturing ASTAP's output) and the owner's rule for telling them apart; for 2,
+     16, 32, 33 and 34, ASTAP's documented exit codes, kept for a version that gives
+     them.
 5. **Given** an `AstapSolver` whose program is a script of the test's own, `#!/bin/sh`,
    then `echo $$ > "$(dirname "$0")/pid"`, then `exec sleep 30`, built
    `with_limits` of 500 ms for a solve, 1500 ms for a search of the whole sky and
@@ -971,10 +1046,11 @@ development, `cargo nextest run -p finder --locked --test console imaging_astap:
      place is within 1.5 pixels of its listed pixel. The tolerance is in the
      picture's own pixels because a star's listed pixel is its brightest sample, good
      to half a pixel, whatever the picture's scale;
-   - `not_solved` answers `NotSolved`, `too_few_stars` answers `TooFewStars`, and
-     `no_database` answers `NoDatabase`, each from the saved exit code and whichever
-     files the case lists (a case whose `ini` is `null` is replayed with no
-     `reply.ini`);
+   - `not_solved` answers `NotSolved` with the detail `No solution found!`,
+     `too_few_stars` answers `TooFewStars` with the detail `Not enough stars.`, and
+     `no_database` answers `NoDatabase` with the detail `No star database found.`, each
+     from the saved exit code, 1 for all three, and the case's saved `.ini` as
+     `reply.ini`;
    - `analyse` answers the `half_flux_px` and `stars` that `captures.json` lists,
      within 1e-9;
    - oracle: the saved captures; the stars' places come from a catalogue, not from
@@ -1726,8 +1802,12 @@ development, `cargo nextest run -p finder --locked --test mcp imaging_solve::`.
   the aim point is the tapped one.
 - **ASTAP is not installed where the flag says.** The first solve fails with `the
   imaging solver could not be started: …`; the console does not check at start.
-- **The database is missing or is not the one named.** ASTAP exits 32 or 33 and the
-  solve fails with the reason `no_database`.
+- **The database is missing or is not the one named.** ASTAP CLI-2025.09.29 exits 1
+  with `ERROR=No star database found.` in its `.ini` (its page documents 32 and 33,
+  which the adapter still reads), and the solve fails with the reason `no_database`.
+  On a Debian or Ubuntu install the `d50` package puts the database in `/opt/astap`,
+  where `astap_cli` does not look by itself, so the console needs
+  `--astap-db /opt/astap` (plan.md § Prerequisites 8).
 - **A field height on ASTAP's own boundary.** The worked example's frame is 0.4997°
   high, where ASTAP's automatic choice of database changes at 0.5°; the adapter always
   names the database with `-D`
@@ -1852,9 +1932,12 @@ development, `cargo nextest run -p finder --locked --test mcp imaging_solve::`.
   copy (US1-S2, US1-S6). The saved imaging frame SHALL never be written to.
 - **FR-005**: The adapter SHALL read the `.ini` the program wrote and map its exit code:
   0 with `PLTSOLVD=T` and the eight numbers to a solve, with `WARNING` kept as the
-  solve's warning; 1 to `NotSolved`; 2 to `TooFewStars`; 32 and 33 to `NoDatabase`; an
-  `ERROR` line as the error's detail; and everything else to `Failed`, with the
-  messages of US1-S4. The saved captures SHALL be read the same way (US1-S7).
+  solve's warning; 1 by the `.ini`'s `ERROR` line, `Not enough stars.` to
+  `TooFewStars`, `No star database found.` to `NoDatabase`, and any other or none to
+  `NotSolved`, whose detail is `No solution found!` when there is no `ERROR` line; 2 to
+  `TooFewStars`; 32 and 33 to `NoDatabase`; an `ERROR` line as the error's detail; and
+  everything else to `Failed`, with the messages of US1-S4. The saved captures SHALL be
+  read the same way (US1-S7).
 - **FR-006**: The adapter SHALL wait for the program on the blocking pool in real time,
   kill and reap it after its limit (by default 120 s for a solve whose hint has a
   place, 600 s for one whose hint has none, and 30 s for a star measure) and answer

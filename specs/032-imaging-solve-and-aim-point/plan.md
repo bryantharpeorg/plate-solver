@@ -102,7 +102,7 @@ one chart mark.
 
 | Principle | How this plan honours it |
 |---|---|
-| I. Agreeing with cedar is correctness | Nothing touches the finder camera's solver, detection or `crates/math-core`. Console work is grounded in the cited sources: ASTAP's own page for its flags, files and exit codes (`docs/research/2026-11-15-imaging-camera.md` § 3. ASTAP), and the simulator's truth for the rest. |
+| I. Agreeing with cedar is correctness | Nothing touches the finder camera's solver, detection or `crates/math-core`. Console work is grounded in the cited sources: ASTAP's own page for its flags, files and exit codes (`docs/research/2026-11-15-imaging-camera.md` § 3. ASTAP), corrected where the owner's captures of its real output differ (`fixtures/finder/astap/`), and the simulator's truth for the rest. |
 | II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS`, `ergane.yaml` or `playwright.config.ts` is edited. New tests are new module files; each adds one `mod` line to its binary's `main.rs`, which holds no test (spec owner approval 13). |
 | III. Tests first, independent expectations | Oracles: the simulator's truth read by each test itself; two worked answers and the worked examples whose arithmetic is in spec.md; ASTAP's documents; saved captures whose star places come from a catalogue; and, for the scenarios that check only words, statuses and keys, the scenario's own stated text. Every scenario names its oracle and its tolerances. Time comes from outside everywhere but one place: the ASTAP adapter reads `std::time::Instant` twice, for the deadline of the child process it waits on and for `took_ms`, because a real program cannot be waited for on paused tokio time (§ Plan traps 7). The limits themselves are injected with `with_limits`, so US1-S5 proves the deadline in under two seconds; every other wait in a test is on virtual time. |
 | IV. Critical paths | No `unsafe`, no `Cargo.toml` or `Cargo.lock` change, nothing under `proto/` or `crates/math-core`. |
@@ -370,7 +370,8 @@ pub fn solve_args(input: &Path, base: &Path, hint: &SolveHint, database_name: &s
 pub fn analyse_args(input: &Path) -> Vec<String>;
 /// The solve an `.ini` holds, or why it holds none.
 pub fn read_answer(ini: &str) -> Result<Answer, String>;
-/// The text of an `.ini`'s `ERROR` line, when it has one that is not empty.
+/// The text of an `.ini`'s `ERROR` line, trimmed, when it has one that is not empty.
+/// Lines are split as `read_answer` splits them. An exit code of 1 is told apart by it.
 pub fn read_error(ini: &str) -> Option<String>;
 /// The two lines `-analyse` prints, in the prepared copy's pixels.
 pub fn read_measure(stdout: &str) -> Result<StarMeasure, SolveError>;
@@ -431,18 +432,29 @@ camera gives 2472 × 1642 at full resolution and 1236 × 821 from a frame binned
 | 0 | read by `read_answer` | the solve, by `from_answer` |
 | 0 | not written | `Failed("the imaging solver's answer could not be read: no .ini file was written")` |
 | 0 | `read_answer` fails | `Failed("the imaging solver's answer could not be read: {why}")` |
-| 1 | any or none | `NotSolved`, its detail from `read_error` |
+| 1 | `read_error` gives `Not enough stars.` | `TooFewStars`, its detail `Not enough stars.` |
+| 1 | `read_error` gives `No star database found.` | `NoDatabase`, its detail `No star database found.` |
+| 1 | any other `ERROR`, none, or no `.ini` | `NotSolved`, its detail from `read_error`, or `No solution found!` when that gives none |
 | 2 | any or none | `TooFewStars`, its detail from `read_error` |
 | 16 | any or none | `Failed("the imaging solver could not read the imaging frame")` |
 | 32, 33 | any or none | `NoDatabase`, its detail from `read_error` |
 | any other N | any or none | `Failed("the imaging solver ended with exit code {N}")` |
 | none (a signal) | any or none | `Failed("the imaging solver ended without an exit code")` |
 
-`read_answer` splits each line at its first `=`, trims both sides, and ignores keys it
-does not know. Its failures, tried in this order: `PLTSOLVD is not T`; then, for
+The rows for 1 are what ASTAP CLI-2025.09.29 does: it ends every failure with 1 and
+says which in its `.ini`'s `ERROR` line, writing none when it found no solution (the
+saved captures; § Capturing ASTAP's output, checks 7 to 9). The two texts are compared
+whole, after trimming. `No solution found!` is ASTAP's own words for that case, which
+it prints on standard output followed by `  :(`. The rows for 2, 32 and 33 are the
+codes ASTAP's page documents, kept for a version that gives them.
+
+`read_answer` splits each line at its first `=`, trims both sides, skips a line with no
+`=` (a failed `.ini` begins with an empty one), and ignores keys it does not know. Its
+failures, tried in this order: `PLTSOLVD is not T`; then, for
 `CRPIX1`, `CRPIX2`, `CRVAL1`, `CRVAL2`, `CD1_1`, `CD1_2`, `CD2_1` and `CD2_2` in that
-order, `{KEY} is missing` or `{KEY} is not a number`. Numbers are read with `f64`'s
-`FromStr`, which takes ASTAP's `1.1645000000000000E+003`. `WARNING` is kept when it is
+order, `{KEY} is missing` or `{KEY} is not a number`. Numbers are read, once trimmed,
+with `f64`'s `FromStr`, which takes ASTAP's `1.1645000000000000E+003` (untrimmed, a
+positive number's leading space would fail it). `WARNING` is kept, trimmed, when it is
 not empty. `CDELT`, `CROTA` and `CMDLINE` are not read.
 
 `measure` runs the same steps with `analyse_args` and `MEASURE_LIMIT`. When
@@ -455,21 +467,24 @@ read")`.
 ### Capturing ASTAP's output (the saved captures; the owner, before the flip)
 
 The saved captures are ASTAP's own files for one real picture, recorded once on any
-machine with `astap_cli` and the D50 database installed. They have not been made: the
-grilling session could not run downloaded programs (§ Prerequisites 5). The picture is
-any real 16-bit mono FITS file of at most 2500 rows that ASTAP solves, finer than 3″ a
-pixel, in which three catalogued stars that do not lie in one line can be picked out
-by hand. The three are stars whose proper motion is under 0.05″ a year, with places
-at epoch 2025, the epoch of ASTAP's star databases, which carry no proper motions
-(`docs/research/2026-11-15-imaging-camera.md` § 3. ASTAP): then a listed place and a
-listed pixel agree to within the half pixel a brightest sample is good to, and
-US1-S7's 1.5 pixels has a pixel to spare.
+machine with `astap_cli` and the D50 database installed. The owner made them on
+2026-11-18, with ASTAP CLI-2025.09.29 (Ubuntu's `astap-cli` 2025.10.08-1) and the D50
+database, and they are committed as `fixtures/finder/astap/`, whose `README.md` says
+where the picture came from (§ Prerequisites 5). The picture is any real 16-bit mono
+FITS file of at most 2500 rows that ASTAP solves, finer than 3″ a pixel, in which three
+catalogued stars that do not lie in one line can be picked out by hand: the one used is
+a DSS2 red cutout of M13, 2376 × 1786 at about 1.01″ a pixel, given to ASTAP as a
+prepared copy with the structural cards only. The three are stars whose proper motion
+is under 0.05″ a year, with places at epoch 2025, the epoch of ASTAP's star databases,
+which carry no proper motions (`docs/research/2026-11-15-imaging-camera.md` § 3.
+ASTAP): then a listed place and a listed pixel agree to within the half pixel a
+brightest sample is good to, and US1-S7's 1.5 pixels has a pixel to spare.
 
 ```bash
 #!/usr/bin/env bash
 # capture-astap.sh FRAME.fits RA_HOURS SPD_DEG FOV_DEG OUT_DIR
 set -uo pipefail
-F=$1; RA=$2; SPD=$3; FOV=$4; OUT=$5; D=${ASTAP_DB:-d50}
+F=$1; RA=$2; SPD=$3; FOV=$4; OUT=$5; D=${ASTAP_DB:-d50}; DIR=${ASTAP_DB_DIR:-/opt/astap}
 mkdir -p "$OUT"; W=$(mktemp -d); cp "$F" "$W/frame.fits"
 run() { n=$1; shift; astap_cli "$@" > "$W/$n.stdout" 2> "$W/$n.stderr"; echo "$n exit $?"; }
 far=$(awk -v r="$RA" 'BEGIN { printf "%.6f", (r + 12) % 24 }')
@@ -479,108 +494,150 @@ python3 -c 'import sys; h = "".join(c.ljust(80) for c in ["SIMPLE  =            
 "BZERO   =                32768", "BSCALE  =                    1", "END"]).ljust(2880)
 d = (1000 - 32768).to_bytes(2, "big", signed=True) * (64 * 48)
 open(sys.argv[1], "wb").write(h.encode() + d + bytes(-len(d) % 2880))' "$W/blank.fits"
-run solved        -f "$W/frame.fits" -o "$W/solved"        -ra "$RA"  -spd "$SPD" -r 3 -fov "$FOV" -z 1 -D "$D"
-run not-solved    -f "$W/frame.fits" -o "$W/not-solved"    -ra "$far" -spd "$SPD" -r 1 -fov "$FOV" -z 1 -D "$D"
-run too-few-stars -f "$W/blank.fits" -o "$W/too-few-stars" -ra "$RA"  -spd "$SPD" -r 1 -fov "$FOV" -z 1 -D "$D"
+run solved        -f "$W/frame.fits" -o "$W/solved"        -ra "$RA"  -spd "$SPD" -r 3 -fov "$FOV" -z 1 -D "$D" -d "$DIR"
+run not-solved    -f "$W/frame.fits" -o "$W/not-solved"    -ra "$far" -spd "$SPD" -r 1 -fov "$FOV" -z 1 -D "$D" -d "$DIR"
+run too-few-stars -f "$W/blank.fits" -o "$W/too-few-stars" -ra "$RA"  -spd "$SPD" -r 1 -fov "$FOV" -z 1 -D "$D" -d "$DIR"
 run no-database   -f "$W/frame.fits" -o "$W/no-database"   -ra "$RA"  -spd "$SPD" -r 1 -fov "$FOV" -z 1 -D "$D" -d "$W/nowhere"
 run analyse       -f "$W/frame.fits" -analyse 30
 cp "$W"/*.ini "$W"/solved.wcs "$W/analyse.stdout" "$OUT"/ 2>/dev/null
 ```
 
+The owner ran it as
+`./capture-astap.sh m13-prepared.fits 16.694789 126.459861 0.50 out`. The three cases
+that need the database pass `-d "$DIR"`, by default `/opt/astap`, where Ubuntu's `d50`
+package puts it and Ubuntu's `astap_cli` does not look by itself; a first run without
+`-d` ended every case but `-analyse` with no database (§ Prerequisites 8).
+
 The owner then writes `captures.json` by hand from what the script printed, and commits
 it with the copied files as `fixtures/finder/astap/`, with a `README.md` giving ASTAP's
-version, the database, the date and where the picture came from:
+version, the database, the date and where the picture came from. This is the committed
+`fixtures/finder/astap/captures.json`:
 
 ```json
-{"astap": "the version astap_cli prints", "database": "d50",
- "frame": {"width": 2472, "height": 1642},
+{"astap": "CLI-2025.09.29", "database": "d50",
+ "frame": {"width": 2376, "height": 1786},
  "cases": {
   "solved": {"exit": 0, "ini": "solved.ini", "wcs": "solved.wcs", "stars": [
-    {"x": 1203.5, "y": 811.5, "ra_deg": 83.8186, "dec_deg": -5.3897},
-    {"x": 310.5, "y": 1422.5, "ra_deg": 84.0534, "dec_deg": -5.6012},
-    {"x": 2010.5, "y": 240.5, "ra_deg": 83.6071, "dec_deg": -5.2148}]},
+    {"x": 243.5, "y": 444.5, "ra_deg": 250.747793, "dec_deg": 36.590747},
+    {"x": 1688.5, "y": 517.5, "ra_deg": 250.244137, "dec_deg": 36.561196},
+    {"x": 1050.5, "y": 1432.5, "ra_deg": 250.474140, "dec_deg": 36.309779}]},
   "not_solved": {"exit": 1, "ini": "not-solved.ini"},
-  "too_few_stars": {"exit": 2, "ini": "too-few-stars.ini"},
-  "no_database": {"exit": 32, "ini": null},
-  "analyse": {"exit": 0, "stdout": "analyse.stdout", "half_flux_px": 3.3, "stars": 666}}}
+  "too_few_stars": {"exit": 1, "ini": "too-few-stars.ini"},
+  "no_database": {"exit": 1, "ini": "no-database.ini"},
+  "analyse": {"exit": 0, "stdout": "analyse.stdout", "half_flux_px": 5.3, "stars": 982}}}
 ```
 
-The numbers above only show the shape. A star's `x` and `y` are the column and row of
-its brightest sample, counted from the first sample in the file, plus 0.5; its place is
-from a star catalogue, not from ASTAP: right ascension and declination in the J2000
-frame at epoch 2025. An `ini` is `null` where ASTAP wrote none: the sample shows that
-for the missing database, as US1-S4 expects, and the capture decides; if ASTAP did
-write one there, its name goes in and US1-S4's bullet for exit 32 is corrected first.
-`half_flux_px` and `stars` are the two numbers in `analyse.stdout`. US1-S7 replays each
-case through the stub program: the case's `.ini` as `reply.ini`, its `.wcs` as
-`reply.wcs`, its `stdout` as `reply.stdout`, its `exit` as `code`, on a mono test frame
-of the `frame` size. If ASTAP's exit codes or files differ from what spec.md says (an
-`.ini` when the database is missing, the code `-analyse` exits with, a `//` note after
-each line of the `.ini` as its page prints them), this plan and US1-S4 are corrected
-first.
+A star's `x` and `y` are the column and row of its brightest sample, counted from the
+first sample in the file, plus 0.5; its place is from a star catalogue, not from ASTAP:
+right ascension and declination in the J2000 frame at epoch 2025. The three are Gaia
+DR3 stars, their places propagated to 2025.0, each moving under 6 mas a year (the
+fixture's `README.md`). Every case names its `.ini`: ASTAP wrote one for each failure,
+the missing database included, and none is `null` (check 8 below). `half_flux_px` and
+`stars` are the two numbers in `analyse.stdout`.
+US1-S7 replays each case through the stub program: the case's `.ini` as `reply.ini`, its
+`.wcs` as `reply.wcs`, its `stdout` as `reply.stdout`, its `exit` as `code`, on a mono
+test frame of the `frame` size. ASTAP's exit codes and files differed from what spec.md
+first said in three ways: every failure exits 1, an `.ini` is written without a
+database, and a solve with no solution writes no `ERROR` line. This plan, spec FR-005,
+US1-S4 and US1-S7 were corrected before the flip (checks 7 to 9 below; spec.md
+§ Clarifications, the session of the owner's ASTAP captures).
 
 **What the captures must confirm.** Round 1's probes ran US1 against stand-in captures
 written from this trio, which prove the replay and nothing of ASTAP. Each of these
 thirteen facts was assumed there; the owner ticks each against the real files, and
 where one disagrees the trio is changed as it says, before the flip. None changes
-behaviour until then.
+behaviour until then. The owner's captures of 2026-11-18 tick eleven: eight agreed, and
+7, 8 and 9 did not, and the trio is changed as each says. 11 and 12 stay open: they
+rest on the first solves on the console machine (§ Prerequisites 8).
 
-- [ ] 1. `-o <base>` makes ASTAP write `<base>.ini` and, when solved, `<base>.wcs`. If
+- [x] 1. `-o <base>` makes ASTAP write `<base>.ini` and, when solved, `<base>.wcs`. If
   not: step 5 of one call (§ The ASTAP adapter) and the exit-code table read the files
   ASTAP does write, and the stub program's copy lines in spec.md's shared setup follow
-  them.
-- [ ] 2. The `.ini` holds bare `KEY=value` lines with no `//` note after a value, and a
+  them. Confirmed 2026-11-18: `solved.ini` and `solved.wcs`, and an `.ini` for each
+  failed case.
+- [x] 2. The `.ini` holds bare `KEY=value` lines with no `//` note after a value, and a
   space after `=` before a positive number, as in `CRPIX1= 1.2365000000000000E+003`. If
   a note follows: `read_answer` cuts each value at ` //`, and worked answer A is
-  corrected (§ Risks).
-- [ ] 3. ASTAP's numbers, `E+003` exponents included, read with `f64`'s `FromStr`. If
+  corrected (§ Risks). Confirmed 2026-11-18. Two things more: a failed `.ini` begins
+  with an empty line, which `read_answer` and `read_error` skip as a line with no `=`;
+  and a `WARNING` may end in a space, which trimming drops.
+- [x] 3. ASTAP's numbers, `E+003` exponents included, read with `f64`'s `FromStr`. If
   one does not: `read_answer` reads ASTAP's form, and US1-S4's `is not a number`
-  bullet is checked again.
-- [ ] 4. `CRPIX` is the picture's centre in FITS pixels, `((w + 1)/2, (h + 1)/2)`, as
+  bullet is checked again. Confirmed 2026-11-18, once trimmed, as `read_answer` trims;
+  untrimmed, a positive number's leading space fails.
+- [x] 4. `CRPIX` is the picture's centre in FITS pixels, `((w + 1)/2, (h + 1)/2)`, as
   worked answer A has it. If not: nothing changes, since `from_answer` takes any
-  `CRPIX`; the solved case then also tests its offset.
-- [ ] 5. The `CD` matrix counts rows in the file's own order, the first row the top, so
+  `CRPIX`; the solved case then also tests its offset. Confirmed 2026-11-18: (1188.5,
+  893.5) for 2376 × 1786.
+- [x] 5. The `CD` matrix counts rows in the file's own order, the first row the top, so
   an unmirrored sky stored top-down has a positive determinant. The three catalogue
   stars of the solved case show it. If ASTAP counts rows from the bottom whatever the
   file holds, those stars fall hundreds of pixels out: the angle and mirror rules of
   `from_cd` (spec FR-002, § Plan traps 10), worked answers A and B and the scenarios
-  built on them are corrected.
-- [ ] 6. ASTAP solves a prepared copy that carries no cards beyond the structural ones
+  built on them are corrected. Confirmed 2026-11-18: the determinant is positive for
+  the unmirrored sky stored top-down, and the three stars land 0.36, 0.14 and 0.56
+  pixels from ASTAP's places for them (a FITS pixel being `x + 0.5`), inside US1-S7's
+  1.5.
+- [x] 6. ASTAP solves a prepared copy that carries no cards beyond the structural ones
   (no `ROWORDER`, no `BAYERPAT`), 16-bit with `BZERO` 32768. The capture shows it only
   if its picture carries no other cards; otherwise the first real solve on the console
   machine shows it (§ Prerequisites 8). If ASTAP needs another card: `prepare`'s
-  step 4 writes it.
-- [ ] 7. The exit codes are 0 solved, 1 no solution, 2 too few stars and 32 no
+  step 4 writes it. Confirmed 2026-11-18: the captured picture carries only
+  `SIMPLE`, `BITPIX`, `NAXIS`, `NAXIS1`, `NAXIS2`, `BZERO` 32768 and `BSCALE` 1, its
+  rows top-first, and it solved.
+- [x] 7. The exit codes are 0 solved, 1 no solution, 2 too few stars and 32 no
   database (33 is an unreadable one), and `-analyse` exits 0. If not: the exit-code
   table, spec FR-005 and US1-S4 are corrected; `measure` reads the two printed lines
-  whatever the code, so only a code with no lines matters there.
-- [ ] 8. With the database missing, ASTAP writes no `.ini` (`"ini": null`). If it
+  whatever the code, so only a code with no lines matters there. Found otherwise on
+  2026-11-18: 0 for the solve and for `-analyse`, but 1 for every failure, no
+  solution, too few stars and no database alike. The trio is corrected: the owner chose
+  to tell an exit code of 1 apart by its `.ini`'s `ERROR` line (the exit-code table,
+  `read_error`, spec FR-005, US1-S4 and US1-S7), and 2, 32 and 33 keep their rows for
+  another version.
+- [x] 8. With the database missing, ASTAP writes no `.ini` (`"ini": null`). If it
   writes one: its name goes into `captures.json` and US1-S4's bullet for exit 32 is
-  corrected first, as above.
-- [ ] 9. A failed solve's `.ini` holds `PLTSOLVD=F`, `CMDLINE=…` and `ERROR=…`, and a
+  corrected first, as above. Found otherwise on 2026-11-18: ASTAP writes one,
+  `PLTSOLVD=F`, `CMDLINE=…` and `ERROR=No star database found.`, and prints where it
+  looked on standard output. The trio is corrected: `captures.json` names
+  `no-database.ini`, US1-S4 has a bullet for exit 1 with that line, and spec owner
+  approval 14 lists the file.
+- [x] 9. A failed solve's `.ini` holds `PLTSOLVD=F`, `CMDLINE=…` and `ERROR=…`, and a
   solved one `PLTSOLVD=T`, the eight numbers, `CDELT`, `CROTA` and `CMDLINE`. The
   stand-in's `ERROR` texts were invented. If the error has another key, or none:
   `read_error` reads ASTAP's key, and the detail `No solution found!` of US1-S4 and
   US2-S4 becomes ASTAP's own words. A `WARNING` in a solved `.ini` changes nothing: it
-  is kept as the solve's warning.
-- [ ] 10. `-analyse 30` prints `HFD_MEDIAN=<number>` and `STARS=<integer>` on standard
+  is kept as the solve's warning. Found in part otherwise on 2026-11-18. The solved
+  `.ini` is as written. A failed one holds `PLTSOLVD=F` and `CMDLINE=…` after an empty
+  line, and `ERROR` only for two of the three failures: `ERROR=Not enough stars.`,
+  followed by `WARNING=Warning, small image dimensions!! `, and
+  `ERROR=No star database found.`. With no solution there is no `ERROR` line, and
+  ASTAP prints `No solution found!  :(` on standard output. The trio is corrected:
+  `read_error` reads the `ERROR` key, an exit code of 1 is told apart by it (check 7),
+  and the detail of a solve with no `ERROR` line is `No solution found!`, ASTAP's own
+  words less their `  :(`, which US1-S4 and US2-S4 already wrote.
+- [x] 10. `-analyse 30` prints `HFD_MEDIAN=<number>` and `STARS=<integer>` on standard
   output, one a line, in the prepared copy's pixels. If they come on standard error,
   in another form or in other units: `read_measure`, the reading of `stdout.txt` and
   the diameter's scaling by k (spec FR-007) are corrected, and 033, whose focus
-  reading rests on `measure`, is read again.
+  reading rests on `measure`, is read again. Confirmed 2026-11-18: `HFD_MEDIAN=5.3` and
+  `STARS=982` on standard output, one a line, exit 0, nothing on standard error.
 - [ ] 11. ASTAP accepts the argument forms of US1-S2 and US1-S3: `-ra` to six places,
   `-spd` to five, `-r 180.00`, `-fov 0`, `-z 1`, `-D d50` and `-d` with a folder. The
   capture shows the forms the owner passes to the script; `-r 180.00` and `-fov 0`
   rest on the first solve with no hint on the console machine (§ Prerequisites 8). If
-  one is refused: `solve_args`' formats and US1-S2 and US1-S3 are corrected.
+  one is refused: `solve_args`' formats and US1-S2 and US1-S3 are corrected. Open: on
+  2026-11-18 ASTAP took every form the script passed (`-ra` and `-spd` to six places,
+  `-r 3`, `-r 1`, `-fov 0.50`, `-z 1`, `-D d50` and `-d` with a folder); `-r 180.00`,
+  `-fov 0` and the adapter's own decimals still rest on Prerequisite 8.
 - [ ] 12. A `SIGKILL` to `astap_cli` ends it, and it leaves no child process of its own
   behind (the adapter kills and reaps only its direct child). The capture cannot show
   it; the first solve killed at its limit on the console machine does, when no
   `astap_cli` is left running. If one is: the adapter starts the program in a process
   group of its own and ends the group, a change to step 4 of one call (§ The ASTAP
-  adapter).
-- [ ] 13. `solved.wcs` is a FITS header, and nothing reads it. If ASTAP writes none:
-  `captures.json` names no `wcs` and US1-S7 replays none.
+  adapter). Open: the captures cannot show it; it rests on Prerequisite 8.
+- [x] 13. `solved.wcs` is a FITS header, and nothing reads it. If ASTAP writes none:
+  `captures.json` names no `wcs` and US1-S7 replays none. Confirmed 2026-11-18: a
+  header written as text, one card a line, not padded to 2880 bytes.
 
 ### The simulated adapter (`crates/finder/src/imaging/simulated.rs`, new, US2)
 
@@ -1837,13 +1894,17 @@ These are not changed by any story:
    constitution 1.3.0 (PR 239, merged 2026-11-17 as `cc593c7`). Principle V now reads "Proven open source first, with honest
    licensing": the plate solver stays our own Rust, and a separate program called
    behind one of our ports, never linked, is one of the ways reused software comes in.
-5. **The saved captures are recorded and staged.** Not met: the grilling session could
-   not run ASTAP. The owner runs § Capturing ASTAP's output and commits
-   `fixtures/finder/astap/`. US1 cannot pass without it, and no story may write it. If
-   the captures show ASTAP behaving otherwise than spec.md says, the trio is corrected
-   first. Round 1 built US1 on stand-in captures written from this trio, so the
-   captures must confirm each of the thirteen facts those had to assume, listed with
-   what each changes in § Capturing ASTAP's output, What the captures must confirm.
+5. **The saved captures are recorded and staged.** Met on 2026-11-18. The grilling
+   session could not run ASTAP; the owner ran § Capturing ASTAP's output with ASTAP
+   CLI-2025.09.29 (Ubuntu's `astap-cli` 2025.10.08-1) and the D50 database, and
+   `fixtures/finder/astap/` is committed with this revision of the trio. US1 cannot
+   pass without it, and no story may write it. Round 1 built US1 on stand-in captures
+   written from this trio, so the captures were checked against each of the thirteen
+   facts those had to assume (§ Capturing ASTAP's output, What the captures must
+   confirm): eleven are ticked, eight of them as assumed. Three were found otherwise,
+   the exit codes, an `.ini` without a database and the `ERROR` lines, and the trio is
+   corrected to the captures (spec.md § Clarifications, the session of the owner's
+   ASTAP captures). Checks 11 and 12 rest on Prerequisite 8.
 6. **The trio is probe-built.** Met on 2026-11-18, round 1, every story: each was built
    from this trio in a throwaway worktree, on `main` at b1f01cc, where 030 had landed,
    with 031's round-1 probe code on it, tests first, with both gates, `cargo deny
@@ -1851,7 +1912,8 @@ These are not changed by any story:
    probes found is folded back in (§ Refinement Record, round 1). No story passed the
    budget, so no split was made. The seeded stars, the tolerances of US4 and US5, the
    simulator's scatter about the stillness line and US4-S8's GoTo and Track were
-   measured (§ Risks). ASTAP was not run: Prerequisite 5 still stands. 031 was then
+   measured (§ Risks). ASTAP was not run in round 1; the owner's captures, made
+   after it, meet Prerequisite 5. 031 was then
    still being built, so the probes stood on its round-1 probe code; § Prerequisites 2
    reads 031's landed code again.
 7. **The documents this trio cites are on `main`.** Not met: the plan document,
@@ -1861,7 +1923,14 @@ These are not changed by any story:
    and Solve sidecar.
 8. **Outside the factory, before the first use at the telescope:** ASTAP and a star
    database installed on the console machine, the console started with the three flags,
-   and one solve timed. Not needed to flip.
+   and one solve timed. Not needed to flip. On a Debian or Ubuntu install, the `d50`
+   package puts the database in `/opt/astap`, and Ubuntu's `astap_cli` looks in
+   `/usr/share/astap/data/` by default, so the console is started with
+   `--astap-db /opt/astap`: the adapter passes `-d` only when a folder is configured,
+   and without one every solve ends `no_database` (the captures' first run). Checks 11
+   and 12 of § Capturing ASTAP's output rest on these first solves: 11, that ASTAP
+   takes `-r 180.00` and `-fov 0` (a solve with no hint) and the adapter's own
+   decimals; 12, that a solve killed at its limit leaves no `astap_cli` running.
 9. **Other drafts that write the same files are ordered.** Met for the drafts named
    here. 031's Prerequisites named `026-mount-sky`, `021-chart-orientation` and
    `022-altaz-guidance` as drafts on branches; of this spec's files they wrote at least
@@ -2030,13 +2099,13 @@ with the check that keeps it from recurring. They bind every story.
 |---|---|
 | An interface may not build as written: `impl Imaging` blocks in child modules against state 031 has not yet fixed; `SessionView::aim` changing type under a `json!` in `recording.rs`; clap's `requires` on an `Option<PathBuf>`; the `Relation` held in 031's state and reached from its task, `solve_frame` borrowing a solver and a clock across an await, and the history's task pushing into that state. | Proved in round 1 (Prerequisite 6), on 031's round-1 probe code: each built as written, and `recording.rs` needed no edit. Two places could not be followed and are now written as they were built: `take_aim_reading` is a free function on the state the task holds, and `Imaging::solve` builds its hint with the lock released. Prerequisite 2: every name taken from 031 is read again on `main` after it lands. |
 | The simulator's seeded field puts fewer stars in a frame than a scenario needs: the count is a Poisson draw on a fixed seed, and no story may change the seed, the density or the scenario. | Every frame expected to solve averages 60 stars or more against the 30 needed, which leaves a chance under one in 100,000 for a half frame; US2-S2 counts first and asks for 40 (a chance of 1 in 400 of falling short), so a shortfall shows as that guard and not as a wrong outcome. Counted in round 1: US2-S1's frame holds 112, US2-S2's whole frame 107 at binning 1 and 2, the top half 49 (the guard passes with 9 to spare) and the corner region 1 (§ Plan traps 28). |
-| ASTAP behaves otherwise than its page says: an `.ini` is or is not written when the database is missing; `-analyse` exits with a code that carries its result; the `CD` matrix counts rows from the bottom whatever the file says. | Prerequisite 5. US1-S7 replays what ASTAP really wrote; `measure` already trusts the two printed lines over the exit code, which US1-S6 now tests; three catalogue stars fix the row order. Round 1 ran US1-S7 on stand-in captures, which prove the replay only; the thirteen facts they assumed are a checklist in § Capturing ASTAP's output. The trio is corrected to the captures before the flip. |
+| ASTAP behaves otherwise than its page says: an `.ini` is or is not written when the database is missing; `-analyse` exits with a code that carries its result; the `CD` matrix counts rows from the bottom whatever the file says. | Closed by the owner's captures of 2026-11-18 (Prerequisite 5). ASTAP did behave otherwise than its page in two ways: every failure exits 1, and a solve with no solution writes no `ERROR` line. An `.ini` is written without a database, as the page says and as the trio had doubted. The trio is corrected to them: an exit code of 1 is told apart by the `.ini`'s `ERROR` line. `-analyse` exits 0 with its two lines on standard output, and the `CD` matrix counts rows in the file's order, the three catalogue stars landing within 0.56 pixels. What stays is a later version changing its codes or texts again: 2, 32 and 33 keep their rows, an `ERROR` text the adapter does not know is `NotSolved` with that text as its detail, and US1-S7 replays this version's own files. |
 | The tolerances of US4 and US5 (1.5 finder pixels, 0.25°) are derived from the 30″ that existing tests allow a live pointing, not measured. | Measured in round 1 over fifty solves on the simulator: the aim point at most 0.015 pixel from (700, 420) and the angle at most 0.0023° from 17°, some 100 times inside the bounds, which are kept; they held in every US5 run too. They catch no subtle error by themselves: US4-S2's worked examples do (the line read at the exposure's start is 0.25 pixel out on the simulator, which only US4-S2 fails). None is widened by a story. |
 | Under paused time the finder camera's live solves cost real time while virtual time runs ahead, so on a busy machine a console's first solve may find fewer than three finder fixes in its reach and end `no_live_pointing`. | Seen in round 1: US5-S4 as first drafted failed 9 times in 18 stress runs, always at the second console's first solve. Every scenario that expects an aim reading now waits first until the session's `pointing` is live, and 5 s more, on each console it builds (US4-S1, US5-S2 to US5-S4); with that wait the stress runs failed none of 24. |
 | A story passes 64 KiB. The likeliest are US1 (the port, the adapter, the prepared copy and seven scenarios), US2 (twelve files, a README section and six scenarios with some thirty assertions: an estimate of 55 to 65 KiB) and US4 (the history, the aim reading, `note_solve`, the session and its held aim point, the sky, eight scenarios and a second test module with its own rig). Each of US2 to US5 and US7 also writes the solving rig out again (§ Technical Context, Testing). | Measured in round 1 (§ Refinement Record), by the draft's text: US1 52,894 bytes, US2 62,085 (3,451 under the budget), US3 49,568, US4 61,196 (4,340 under), US5 34,786, US6 35,843 and US7 11,166; the rig with its helpers is about 3.3 KB a module. The round-1 fixes add assertions to every story but US6, each a few hundred bytes: about 0.5 KB to US2 and 1.3 KB to US4, which leaves each some 3 KB of headroom, and about 1.5 KB to US1. A builder whose tests are wordier than the probes' could still pass the budget on US2 or US4, so their splits stay written. Splits written in advance: US1 sheds `measure` and `prepare`'s regions (US1-S6, FR-007) into a story of its own after it; US2 sheds the simulated adapter (`simulated.rs`, FR-008, US2-S2, in a test module of its own, `imaging_simulated`) into a story before the route, which then needs no rig at all; US4 sheds the session's `source` and its persistence (US4-S5's second half, US4-S6) into a story before it, and the held aim point (FR-036, US4-S8, the `motion` module) into a story after it. Each split is a spec change made before the flip. |
 | The stillness test's figures (60″ of travel, 90″ of scatter, three fixes, 10 s of reach) are set against one field figure for the finder camera's scatter, 0.3′ to 0.5′, and against a simulator whose finder is quieter. Too tight, and no aim reading is ever taken at the telescope; too loose, and a slew's tail is read as a reading. | US4-S2 pins the arithmetic on worked examples, with a still telescope whose fixes are 40″ apart, and now a drift just over 60″ that its own error brings back under. Measured in round 1 over fifty solves: the simulator's finder scatters 0.34″ to 0.53″ about the line (median 0.45″), some 40 to 65 times quieter than the field figure, and the untracked sky travels 14.5″ in a 1 s exposure; so on the simulator only a slew's tail (US4-S8 as first drafted, 478″) or US4-S2's worked examples reach the limits. The field check "the share of solves that take an aim reading while tracking" is the one that settles the figures; they are four constants in `relation.rs` and one owner decision (11). Until that check, an observer who gets no aim reading still has the tap. |
 | A solve with no hint, or one given no field height after three misses, runs ASTAP's slowest search and may be killed at its limit. | The whole-sky limit is 600 s and an owner decision (12); the field check times it. The sources are taken in turn, so a true kept scale comes back after at most six such solves. A target or a finder camera avoids the case. |
-| ASTAP's `.ini` carries a `//` note after each value, as its page prints the example, and `read_answer` then reads no number. | The saved captures show the file as it is (Prerequisite 5); if the notes are there, `read_answer` cuts each value at ` //` and worked answer A is corrected, before the flip. |
+| ASTAP's `.ini` carries a `//` note after each value, as its page prints the example, and `read_answer` then reads no number. | Closed by the owner's captures of 2026-11-18 (Prerequisite 5): the `.ini` holds bare `KEY=value` lines with no note, and its numbers read once trimmed (§ Capturing ASTAP's output, checks 2 and 3). Worked answer A stands. |
 | ASTAP does not solve real frames from this telescope: too few stars in a short sub at a sparse field, stars swollen by coma, a frame binned 2 × 2 and averaged again to 2.2″ a pixel, bright nebulosity. | Field checks, named in spec.md. The port keeps another adapter possible; the database is a flag. Not answerable in the factory. |
 | A hinted solve takes longer than the sub cadence 035 wants. | The first solves at bring-up give it, read from `took_ms` (Prerequisite 8); `-s`, a smaller radius and the database are the levers, each one line here; 035 owns the cadence. |
 | The aim point shifts with altitude as the tube flexes, so a median of five lags after a long slew. | The window turns over in five solves and a jump of more than 120″ replaces it in three. A model of the shift is out of scope; the field check "steady from one part of the sky to another" measures it. |
@@ -2128,6 +2197,17 @@ the bite checks showed missing (spec.md § Clarifications, the round-1 session).
 other four the probes marked as noted only or of low value, and that session names
 what they leave untested.
 
+**The owner's captures, 2026-11-18.** The owner then ran § Capturing ASTAP's output with
+ASTAP CLI-2025.09.29 and the D50 database, and its files are committed as
+`fixtures/finder/astap/` (§ Prerequisites 5). Three of the thirteen facts the probes had
+assumed were otherwise: every failure exits 1, an `.ini` is written without a database,
+and a solve that finds no solution writes no `ERROR` line. The owner chose to tell an
+exit code of 1 apart by its `ERROR` line. The exit-code table, `read_error`, spec FR-005,
+US1-S4 and US1-S7 now say so, and the record's US1-S4 assertion is reworded with them
+(spec.md § Clarifications, the session of the owner's ASTAP captures). No story was
+built again for it: the change is to one table of the adapter and the scenarios that
+test it, and US1's writes are unchanged.
+
 The record below is round 1's account: its tests are the scenarios the probes built and
 ran, its writes are the files their diffs changed, which are those § Project Structure
 names, and its shared writes name the merge edge that orders two stories of this spec on
@@ -2167,7 +2247,7 @@ stories:
       - path: crates/finder/tests/console/imaging_astap.rs
         status: new
         disposition: add
-        assertion: "exit codes 1, 2, 16, 32, 33 and 34, a missing or unreadable .ini and a program that cannot start each give their error, reason and message"
+        assertion: "exit code 1 told apart by the .ini's ERROR line as not solved, too few stars or no database, exit code 1 with no .ini, codes 2, 16, 32, 33 and 34, a missing or unreadable .ini and a program that cannot start each give their error, reason and message"
         decision: "spec.md:US1-S4"
       - path: crates/finder/tests/console/imaging_astap.rs
         status: new

@@ -1,0 +1,26 @@
+SIMPLE  =                    T                                                  
+BITPIX  =                    8                                                  
+NAXIS   =                    0                                                  
+BZERO   =                32768                                                  
+BSCALE  =                    1                                                  
+CTYPE1  = 'RA---TAN'           / first parameter RA,    projection TANgential   
+CTYPE2  = 'DEC--TAN'           / second parameter DEC,  projection TANgential   
+CUNIT1  = 'deg     '           / Unit of coordinates                            
+CRPIX1  =  1.188500000000E+003 / X of reference pixel                           
+CRPIX2  =  8.935000000000E+002 / Y of reference pixel                           
+CRVAL1  =  2.504217848415E+002 / RA of reference pixel (deg)                    
+CRVAL2  =  3.645961016059E+001 / DEC of reference pixel (deg)                   
+CDELT1  =  2.802309163825E-004 / X pixel size (deg)                             
+CDELT2  =  2.796393332923E-004 / Y pixel size (deg)                             
+CROTA1  = -1.786565307554E+002 / Image twist of X axis        (deg)             
+CROTA2  = -1.786510129298E+002 / Image twist of Y axis        (deg)             
+CD1_1   = -2.801538834651E-004 / CD matrix to convert (x,y) to (Ra, Dec)        
+CD1_2   =  6.570241699897E-006 / CD matrix to convert (x,y) to (Ra, Dec)        
+CD2_1   = -6.583294568945E-006 / CD matrix to convert (x,y) to (Ra, Dec)        
+CD2_2   = -2.795618302930E-004 / CD matrix to convert (x,y) to (Ra, Dec)        
+PLTSOLVD=                    T / Astrometric solved by ASTAP_CLI v2025.09.29.   
+COMMENT 7 Solved in 6.5 sec. Offset was 0.9".
+COMMENT cmdline:astap_cli -f /tmp/tmp.JZwm97bezR/frame.fits -o /tmp/tmp.JZwm97be
+COMMENT zR/solved -ra 16.694789 -spd 126.459861 -r 3 -fov 0.50 -z 1 -D d50 -d /o
+COMMENT pt/astap
+END                                                                             
