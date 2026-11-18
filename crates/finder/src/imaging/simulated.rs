@@ -2,7 +2,10 @@
 //! a desk console solves its imaging frames without a star database. It reads
 //! no file (FR-008).
 
-use std::time::Duration;
+use std::{
+    sync::atomic::{AtomicU64, Ordering},
+    time::Duration,
+};
 
 use math_core::{angular_distance, UnitVector};
 use simulator::{
@@ -28,6 +31,16 @@ const FIELD_SLACK_DEG: f64 = 0.05;
 pub struct SimulatedSolver {
     simulator: Simulator,
     delay: Duration,
+    /// The seed and fraction of the measure noise (033 FR-005), off until
+    /// `with_measure_noise` is called.
+    noise: Option<(u64, f64)>,
+    /// The star measures this solver has answered, for the noise stream: a call
+    /// that answers `TooFewStars` takes none.
+    measures: AtomicU64,
+    /// The sharpest point of the sensor, as fractions of its width and
+    /// height, and the growth away from it (033 FR-005), off until
+    /// `with_sharpest_at` is called.
+    sharpest: Option<(f64, f64, f64)>,
 }
 
 impl SimulatedSolver {
@@ -36,12 +49,35 @@ impl SimulatedSolver {
         Self {
             simulator,
             delay: Duration::ZERO,
+            noise: None,
+            measures: AtomicU64::new(0),
+            sharpest: None,
         }
     }
 
     /// Wait this long on tokio time before answering.
     pub fn with_delay(self, delay: Duration) -> Self {
         Self { delay, ..self }
+    }
+
+    /// Multiply each star measure by a seeded factor from `1 − fraction` to
+    /// `1 + fraction`. The n-th star measure this solver answers takes the
+    /// n-th number of the stream, so two solvers built alike answer alike.
+    pub fn with_measure_noise(self, seed: u64, fraction: f64) -> Self {
+        Self {
+            noise: Some((seed, fraction)),
+            ..self
+        }
+    }
+
+    /// Stars are smallest at (x, y), given as fractions of the sensor's width
+    /// and height, and grow away from it: `growth` sensor pixels of width,
+    /// added in quadrature, at half the sensor's diagonal from that point.
+    pub fn with_sharpest_at(self, x: f64, y: f64, growth: f64) -> Self {
+        Self {
+            sharpest: Some((x, y, growth)),
+            ..self
+        }
     }
 }
 
@@ -61,7 +97,7 @@ impl ImagingSolver for SimulatedSolver {
     fn measure(&self, frame: SolveFrame, region: Option<Region>) -> MeasureFuture<'_> {
         Box::pin(async move {
             tokio::time::sleep(self.delay).await;
-            measure(&self.simulator, &frame, region)
+            measure(&self.simulator, self, &frame, region)
         })
     }
 }
@@ -108,9 +144,11 @@ fn answer(
 }
 
 /// The star measure (FR-008): the seeded field's stars in the region, and the
-/// point-spread width the simulator's focus error gives.
+/// point-spread width the simulator's focus error gives, grown away from the
+/// solver's sharpest point and multiplied by its seeded noise (033 FR-005).
 fn measure(
     simulator: &Simulator,
+    solver: &SimulatedSolver,
     frame: &SolveFrame,
     region: Option<Region>,
 ) -> Result<StarMeasure, SolveError> {
@@ -141,13 +179,54 @@ fn measure(
             detail: Some("0 stars".to_string()),
         });
     }
-    let sigma =
-        (PSF_SIGMA_PX * PSF_SIGMA_PX + (FOCUS_SIGMA_PX * optics.focus_error).powi(2)).sqrt();
+    // The measured region's centre, in sensor pixels: the region given, or the
+    // whole frame without one, at the frame's binning over its region of
+    // interest.
+    let r = region.unwrap_or(Region {
+        x: 0,
+        y: 0,
+        width: frame.width,
+        height: frame.height,
+    });
+    let b = f64::from(frame.binning);
+    let (cx, cy) = (
+        f64::from(frame.roi.x) + (f64::from(r.x) + f64::from(r.width) / 2.0) * b,
+        f64::from(frame.roi.y) + (f64::from(r.y) + f64::from(r.height) / 2.0) * b,
+    );
+    // Stars grow away from the sharpest point: `growth` sensor pixels of width,
+    // added in quadrature, at half the sensor's diagonal from it.
+    let grown = match solver.sharpest {
+        Some((x, y, growth)) => {
+            let (w, h) = (f64::from(optics.width), f64::from(optics.height));
+            growth * (cx - x * w).hypot(cy - y * h) / (w.hypot(h) / 2.0)
+        }
+        None => 0.0,
+    };
+    let sigma = (PSF_SIGMA_PX * PSF_SIGMA_PX
+        + (FOCUS_SIGMA_PX * optics.focus_error).powi(2)
+        + grown * grown)
+        .sqrt();
+    let mut half_flux_px = 2.0 * (2.0 * std::f64::consts::LN_2).sqrt() * sigma / b;
+    if let Some((seed, fraction)) = solver.noise {
+        let n = solver.measures.fetch_add(1, Ordering::SeqCst);
+        half_flux_px *= 1.0 + fraction * (2.0 * unit(seed, n) - 1.0);
+    }
     Ok(StarMeasure {
-        half_flux_px: 2.0 * (2.0 * std::f64::consts::LN_2).sqrt() * sigma
-            / f64::from(frame.binning),
+        half_flux_px,
         stars: stars as u32,
     })
+}
+
+/// One number of the seeded noise stream, uniform from 0 to 1: SplitMix64,
+/// whose values for the seed 0 are the published stream (033 FR-005). The
+/// simulator's own generator is private to its crate, which is why these six
+/// lines stand here.
+fn unit(seed: u64, n: u64) -> f64 {
+    let mut z = seed.wrapping_add(n.wrapping_add(1).wrapping_mul(0x9e37_79b9_7f4a_7c15));
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    z ^= z >> 31;
+    ((z >> 11) as f64 + 0.5) / 9_007_199_254_740_992.0
 }
 
 /// The answer's geometry (FR-008's first two steps): the truth's place moved

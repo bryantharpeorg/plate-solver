@@ -4,6 +4,7 @@
 
 pub mod astap;
 pub mod fits;
+pub mod focus;
 pub mod frames;
 pub mod preview;
 pub mod relation;
