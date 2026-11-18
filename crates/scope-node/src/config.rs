@@ -104,6 +104,10 @@ pub struct ImagingConfig {
     /// `"<property>.<element>"` (owner decision 13). Empty by default.
     #[serde(default)]
     pub neutral: std::collections::BTreeMap<String, f64>,
+    /// The folder of the node's own copy of each frame taken with `save`
+    /// (US7).
+    #[serde(default)]
+    pub save_dir: Option<std::path::PathBuf>,
 }
 
 impl ImagingConfig {
@@ -128,9 +132,9 @@ impl ImagingConfig {
 
     /// What `--check-config` prints after `[imaging]`, one line a key:
     /// `adapter`; for `indi`, `address` (the default included), `device`
-    /// when set and `neutral` when not empty. Texts are `key = "value"`;
-    /// `neutral` is one inline table, keys in sorted order, each quoted and
-    /// its `\` escaped, values with `Display`.
+    /// when set and `neutral` when not empty; `save_dir` when set (US7).
+    /// Texts are `key = "value"`; `neutral` is one inline table, keys in
+    /// sorted order, each quoted and its `\` escaped, values with `Display`.
     pub fn printed(&self) -> String {
         let mut out = match self.adapter {
             ImagingAdapter::Indi => "adapter = \"indi\"\n".to_string(),
@@ -155,6 +159,9 @@ impl ImagingConfig {
                     .join(", ");
                 out.push_str(&format!("neutral = {{ {entries} }}\n"));
             }
+        }
+        if let Some(dir) = &self.save_dir {
+            out.push_str(&format!("save_dir = \"{}\"\n", dir.display()));
         }
         out
     }
@@ -280,6 +287,13 @@ impl Config {
                         "imaging.neutral {key} must be a finite number"
                     )));
                 }
+            }
+            if imaging
+                .save_dir
+                .as_ref()
+                .is_some_and(|dir| dir.as_os_str().is_empty())
+            {
+                return Err(ConfigError("imaging.save_dir must not be empty".into()));
             }
         }
         if self.token.trim().is_empty() {

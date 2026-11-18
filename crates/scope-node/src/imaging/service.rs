@@ -1,7 +1,8 @@
 //! The scope link's imaging service (030): five calls under the pairing token,
-//! with an exposure as a header and then chunks of at most 256 KiB.
+//! with an exposure as a header and then chunks of at most 256 KiB, and the
+//! node's own copy of a frame written before the header is sent (US7).
 use crate::imaging::{
-    BayerPattern, Exposure, ImagingCamera, ImagingError, ImagingFrame, ImagingInfo,
+    save, BayerPattern, Exposure, ImagingCamera, ImagingError, ImagingFrame, ImagingInfo,
     ImagingSettings, Range, Roi,
 };
 use crate::service::NodeService;
@@ -11,10 +12,11 @@ use scope_link::proto::{
     ImagingRange, ImagingRoi, ImagingStatusReply, ImagingStatusRequest,
 };
 use std::{
+    path::{Path, PathBuf},
     pin::Pin,
     sync::{
         atomic::{AtomicU64, Ordering},
-        Arc,
+        Arc, OnceLock,
     },
     time::Duration,
 };
@@ -31,13 +33,25 @@ pub const CHUNK_BYTES: usize = 262_144;
 pub(crate) struct ImagingHost {
     camera: Arc<dyn ImagingCamera>,
     next_id: AtomicU64,
+    /// US7: where the node keeps its own copy of a frame asked for with
+    /// `save`.
+    save_dir: OnceLock<PathBuf>,
 }
 impl ImagingHost {
     pub(crate) fn new(camera: Arc<dyn ImagingCamera>) -> Self {
         Self {
             camera,
             next_id: AtomicU64::new(1),
+            save_dir: OnceLock::new(),
         }
+    }
+    /// The first call sets the folder; a later one changes nothing.
+    pub(crate) fn set_save_dir(&self, dir: PathBuf) {
+        let _ = self.save_dir.set(dir);
+    }
+    /// The save folder, when one was set.
+    fn save_dir(&self) -> Option<&Path> {
+        self.save_dir.get().map(PathBuf::as_path)
     }
     /// The next frame's id, taken whether or not anyone still listens.
     fn next_frame_id(&self) -> u64 {
@@ -129,6 +143,52 @@ fn status_to_wire(status: crate::imaging::ImagingStatus) -> ImagingStatusReply {
         cooler_power: status.cooler_power,
         set_temp_c: status.set_temp_c,
         exposing: status.exposing,
+    }
+}
+
+/// US7's copy on the node's disk, written before the header is sent
+/// (FR-033). The file carries the model the camera reports, so it is asked
+/// for here; the frame moves into the blocking write and comes back, so its
+/// samples are never copied. A failure to write is reported in the header
+/// and never stops the frame being sent (owner decision 9).
+async fn save_frame(
+    host: &ImagingHost,
+    id: u64,
+    frame: ImagingFrame,
+    purpose: &str,
+) -> (ImagingFrame, String, String) {
+    let Some(dir) = host.save_dir() else {
+        return (
+            frame,
+            String::new(),
+            "this scope node has no save_dir".to_string(),
+        );
+    };
+    let model = match host.camera.describe().await {
+        Ok(info) => info.model,
+        Err(error) => {
+            return (
+                frame,
+                String::new(),
+                format!("could not save the imaging frame: {error}"),
+            )
+        }
+    };
+    let dir = dir.to_path_buf();
+    let purpose = purpose.to_string();
+    let (frame, saved) = tokio::task::spawn_blocking(move || {
+        let saved = save::write(&dir, id, &frame, &model, &purpose);
+        (frame, saved)
+    })
+    .await
+    .expect("the frame writer cannot be cancelled");
+    match saved {
+        Ok(name) => (frame, name, String::new()),
+        Err(error) => (
+            frame,
+            String::new(),
+            format!("could not save the imaging frame: {error}"),
+        ),
     }
 }
 
@@ -235,11 +295,12 @@ impl ScopeNodeImaging for NodeService {
             };
             // The id is taken whether or not anyone still listens.
             let id = host.next_frame_id();
-            // US7 writes the file here; with no save folder the header says so.
-            let (node_file, node_save_error) = if request.save {
-                (String::new(), "this scope node has no save_dir".to_string())
+            // US7: the copy is taken before the header, so a frame lost on
+            // the link is not lost (FR-033).
+            let (frame, node_file, node_save_error) = if request.save {
+                save_frame(&host, id, frame, &request.purpose).await
             } else {
-                (String::new(), String::new())
+                (frame, String::new(), String::new())
             };
             let sent_header = sender
                 .send(Ok(ExposeEvent {

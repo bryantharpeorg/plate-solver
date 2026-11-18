@@ -190,6 +190,7 @@ adapter = "indi"            # or "simulated": a small stand-in camera, no INDI n
 address = "127.0.0.1:7624"  # the INDI server; the default
 device = "ZWO CCD ASI071MC Pro"  # optional
 neutral = { "CCD_CONTROLS.WB_R" = 50, "CCD_CONTROLS.WB_B" = 50 }
+save_dir = "/var/lib/scope-node/frames"  # keep a copy of every frame here
 ```
 
 The adapter connects when the node is first asked about the camera, so the node starts
@@ -224,3 +225,11 @@ and no second try. The adapter adds only this to the device program's own handli
 relies on that program starting an exposure up to three times and restarting a failed
 exposure once, by itself, and it does not rely on that program's USB reset, which stays
 off unless it is switched on.
+
+`save_dir` in the table names the folder of the node's own copy of every frame taken
+with `save`: `save_dir = "/var/lib/scope-node/frames"`. The folder is made when it is
+missing. Each copy is one FITS file, `frame-<id>.fits` with the node's own count of
+frames — `frame-000001.fits`, then `frame-000002.fits` — and a name already on the
+disk gets `-2`, `-3` and so on, so a restart never replaces an earlier file. The copy
+is written before the frame's header leaves the node, and the header names the file
+and any failure to write it. The node never deletes these files.
