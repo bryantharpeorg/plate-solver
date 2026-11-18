@@ -65,15 +65,17 @@ the imaging folder, `relation.json` and, while an ASTAP call runs,
   paused time (`crates/finder/tests/motion/main.rs:1`). One test of this spec moves a
   mount, US4-S8, which turns Track on, and so it is a module of `motion`. Each
   module is declared by one `mod` line, in alphabetical order, in its binary's
-  `main.rs` (`crates/finder/tests/layout/main.rs:156`), binds the live helpers with
-  `use crate::support::live as support;`
-  (`crates/finder/tests/console/live/loop_.rs:3`), and writes the rest of its setup
-  itself: `crates/finder/tests/support` takes no new file
+  `main.rs` (`crates/finder/tests/layout/main.rs:156`); a module that uses the live
+  helpers binds them with `use crate::support::live as support;`
+  (`crates/finder/tests/console/live/loop_.rs:3`), and one that uses none, as
+  `imaging_astap` does, has no such line, since an unused import fails clippy; and it
+  writes the rest of its setup itself: `crates/finder/tests/support` takes no new file
   (`crates/finder/tests/layout/main.rs:127`). So the solving rig of spec.md is written
   out in each of `imaging_solve`, `imaging_hints`, `imaging_relation`,
   `imaging_smoothing`, the `motion` module `imaging_track` and the `mcp` module
-  `imaging_solve`: about 4 to 5 KiB of the same setup in five stories, US4 paying it
-  twice, counted in each story's budget (§ Risks). No module
+  `imaging_solve`: about 3.3 KB of the same setup with its helpers, as round 1
+  measured it, in five stories, US4 paying it twice, counted in each story's budget
+  (§ Risks). No module
   imports another test module's helpers: a story may not edit an earlier story's test
   file, so a helper shared that way could never change.
 - No Playwright test (spec owner decision 16).
@@ -210,6 +212,10 @@ impl SolveHint {
     /// No place, 180°, no field height.
     pub fn whole_sky() -> Self;
 }
+/// Written by hand, not derived: `position` becomes the two keys `ra_deg` and
+/// `dec_deg`. US2's tests assert nothing of the hint, so US3-S1 is the first to read
+/// these keys.
+impl Serialize for SolveHint { /* … */ }
 
 /// What a solver said about a picture, in the picture's own FITS pixels: column and
 /// row counted from 1, rows in the file's order. Degrees.
@@ -387,7 +393,8 @@ as numbers, and then:
    past the frame's width or height, is the error `the region is outside the imaging
    frame`;
 2. with `bayer`, moves the region inward to whole cells: its left and top edges up to
-   the next even number, its right and bottom edges down to one; a region left with no
+   the next even number, its right and bottom edges down to the previous even number,
+   an edge that is already even staying where it is; a region left with no
    whole cell is the error `the region is too small`. Each 2 × 2 cell becomes
    `(a + b + c + d + 2) / 4` in whole numbers, and k is 2. Without `bayer` the samples
    are copied and k is 1;
@@ -512,6 +519,69 @@ of the `frame` size. If ASTAP's exit codes or files differ from what spec.md say
 each line of the `.ini` as its page prints them), this plan and US1-S4 are corrected
 first.
 
+**What the captures must confirm.** Round 1's probes ran US1 against stand-in captures
+written from this trio, which prove the replay and nothing of ASTAP. Each of these
+thirteen facts was assumed there; the owner ticks each against the real files, and
+where one disagrees the trio is changed as it says, before the flip. None changes
+behaviour until then.
+
+- [ ] 1. `-o <base>` makes ASTAP write `<base>.ini` and, when solved, `<base>.wcs`. If
+  not: step 5 of one call (§ The ASTAP adapter) and the exit-code table read the files
+  ASTAP does write, and the stub program's copy lines in spec.md's shared setup follow
+  them.
+- [ ] 2. The `.ini` holds bare `KEY=value` lines with no `//` note after a value, and a
+  space after `=` before a positive number, as in `CRPIX1= 1.2365000000000000E+003`. If
+  a note follows: `read_answer` cuts each value at ` //`, and worked answer A is
+  corrected (§ Risks).
+- [ ] 3. ASTAP's numbers, `E+003` exponents included, read with `f64`'s `FromStr`. If
+  one does not: `read_answer` reads ASTAP's form, and US1-S4's `is not a number`
+  bullet is checked again.
+- [ ] 4. `CRPIX` is the picture's centre in FITS pixels, `((w + 1)/2, (h + 1)/2)`, as
+  worked answer A has it. If not: nothing changes, since `from_answer` takes any
+  `CRPIX`; the solved case then also tests its offset.
+- [ ] 5. The `CD` matrix counts rows in the file's own order, the first row the top, so
+  an unmirrored sky stored top-down has a positive determinant. The three catalogue
+  stars of the solved case show it. If ASTAP counts rows from the bottom whatever the
+  file holds, those stars fall hundreds of pixels out: the angle and mirror rules of
+  `from_cd` (spec FR-002, § Plan traps 10), worked answers A and B and the scenarios
+  built on them are corrected.
+- [ ] 6. ASTAP solves a prepared copy that carries no cards beyond the structural ones
+  (no `ROWORDER`, no `BAYERPAT`), 16-bit with `BZERO` 32768. The capture shows it only
+  if its picture carries no other cards; otherwise the first real solve on the console
+  machine shows it (§ Prerequisites 8). If ASTAP needs another card: `prepare`'s
+  step 4 writes it.
+- [ ] 7. The exit codes are 0 solved, 1 no solution, 2 too few stars and 32 no
+  database (33 is an unreadable one), and `-analyse` exits 0. If not: the exit-code
+  table, spec FR-005 and US1-S4 are corrected; `measure` reads the two printed lines
+  whatever the code, so only a code with no lines matters there.
+- [ ] 8. With the database missing, ASTAP writes no `.ini` (`"ini": null`). If it
+  writes one: its name goes into `captures.json` and US1-S4's bullet for exit 32 is
+  corrected first, as above.
+- [ ] 9. A failed solve's `.ini` holds `PLTSOLVD=F`, `CMDLINE=…` and `ERROR=…`, and a
+  solved one `PLTSOLVD=T`, the eight numbers, `CDELT`, `CROTA` and `CMDLINE`. The
+  stand-in's `ERROR` texts were invented. If the error has another key, or none:
+  `read_error` reads ASTAP's key, and the detail `No solution found!` of US1-S4 and
+  US2-S4 becomes ASTAP's own words. A `WARNING` in a solved `.ini` changes nothing: it
+  is kept as the solve's warning.
+- [ ] 10. `-analyse 30` prints `HFD_MEDIAN=<number>` and `STARS=<integer>` on standard
+  output, one a line, in the prepared copy's pixels. If they come on standard error,
+  in another form or in other units: `read_measure`, the reading of `stdout.txt` and
+  the diameter's scaling by k (spec FR-007) are corrected, and 033, whose focus
+  reading rests on `measure`, is read again.
+- [ ] 11. ASTAP accepts the argument forms of US1-S2 and US1-S3: `-ra` to six places,
+  `-spd` to five, `-r 180.00`, `-fov 0`, `-z 1`, `-D d50` and `-d` with a folder. The
+  capture shows the forms the owner passes to the script; `-r 180.00` and `-fov 0`
+  rest on the first solve with no hint on the console machine (§ Prerequisites 8). If
+  one is refused: `solve_args`' formats and US1-S2 and US1-S3 are corrected.
+- [ ] 12. A `SIGKILL` to `astap_cli` ends it, and it leaves no child process of its own
+  behind (the adapter kills and reaps only its direct child). The capture cannot show
+  it; the first solve killed at its limit on the console machine does, when no
+  `astap_cli` is left running. If one is: the adapter starts the program in a process
+  group of its own and ends the group, a change to step 4 of one call (§ The ASTAP
+  adapter).
+- [ ] 13. `solved.wcs` is a FITS header, and nothing reads it. If ASTAP writes none:
+  `captures.json` names no `wcs` and US1-S7 replays none.
+
 ### The simulated adapter (`crates/finder/src/imaging/simulated.rs`, new, US2)
 
 ```rust
@@ -536,9 +606,14 @@ impl ImagingSolver for SimulatedSolver { /* name() is "simulated" */ }
    its scale in degrees a sensor pixel, the sensor's solve is `from_cd(truth.ra_deg,
    truth.dec_deg, [[−s1·cos θ, −s1·sin θ], [s1·sin θ, −s1·cos θ]], optics.width,
    optics.height)`.
-2. The frame's centre is the sensor's `sky_at((roi.x + roi.width/2, roi.y +
-   roi.height/2))`. The answer is `from_cd` of that centre, the same matrix times
-   `frame.binning`, and the frame's width and height.
+2. The frame's centre c is the sensor's `sky_at((cx, cy))`, with `(cx, cy) = (roi.x +
+   roi.width/2, roi.y + roi.height/2)`, and its up angle θc is the position angle at c
+   of the sensor's `sky_at((cx, cy − 1))`: the sensor's up seen at c, since north turns
+   across the sensor. The answer is `from_cd` of c, the matrix of step 1 for θc and
+   `s1·frame.binning`, and the frame's width and height. For a whole frame θc is the
+   truth's angle. (Keeping the sensor centre's matrix instead puts US2-S2's truth
+   0.054 pixel from where its top half asks for it: up turns by Δα·sin δ, 0.015°, over
+   the 205 sensor pixels between the two centres.)
 3. Stars: `simulator::imaging::deep_field(FIELD_SEED, truth.ra_deg, truth.dec_deg,
    radius)`, radius being half the sensor's diagonal in degrees plus 0.05; n is how many
    have a `pixel_of` on the answer with 0 ≤ x < width and 0 ≤ y < height. Fewer than
@@ -627,7 +702,8 @@ impl Imaging {
     pub fn solver(&self) -> Option<Arc<dyn ImagingSolver>>;
     /// Start solving the latest imaging frame, and answer the view.
     pub async fn solve(&self) -> Result<ImagingView, Refusal>;
-    /// The solve of the frame with this id once it is solved or failed.
+    /// The latest solve once its `frame_id` is above `frame_id`, or is `frame_id` and
+    /// its `state` is not `solving`, as 031's `ended` answers a frame.
     pub async fn solved(&self, frame_id: u64) -> SolveView;
     // US3:
     /// The focal length in millimetres, for `AppState::with_focal_length_mm`.
@@ -699,8 +775,11 @@ imaging folder joined with `file`; `roi` is `Region::from` of the view's `RoiVie
 `FrameView` that a `saved` frame always has, and were one missing the request is
 refused with `the latest imaging frame was not saved`; `bayer` is as the view has it;
 `exposure_s` is `exposure_ms/1000`. It builds the hint (US2:
-`SolveHint::whole_sky()`; from US3: `self.hint(&frame)`), sets `solve` to `solving` with
-`requested_at` from the console's clock, spawns the task and answers the view.
+`SolveHint::whole_sky()`; from US3: `self.hint(&frame)`, with the lock released, since
+`hint` takes it and reads the session and `std::sync::Mutex` is not re-entrant; the
+lock is then taken again and `an imaging solve is already running` checked once more),
+sets `solve` to `solving` with `requested_at` from the console's clock, spawns the task
+and answers the view.
 
 **The task** awaits `solve_frame` with that frame, hint and `requested_at`, and then,
 in this order:
@@ -713,10 +792,12 @@ in this order:
 3. sets `solve` to `solved` or `failed` from the `Ended`, with its `took_ms` and
    `file` either way; from US3, keeps a solved solve's centre with the session's
    target of that moment as the last imaging solve; and wakes whoever waits in
-   `solved`.
+   `solved`, by bumping 031's watch of changes, as a frame does when it ends.
 
 Steps 1 and 2 come before step 3 so that a reader who sees `solved` also sees what the
-solve changed. Nothing here retries.
+solve changed. Nothing here retries. **`solved(id)`** answers the latest solve once its
+`frame_id` is above `id`, or is `id` and its `state` is not `solving`, waiting on that
+watch until one holds; US7's tool and 037's run wait through it.
 
 **The solve sidecar** is the frame's file name with `.fits` replaced by `.solve.json`.
 It is written whole under that name plus `.part` and renamed over any earlier one, on
@@ -804,7 +885,13 @@ that is written and never read fails `clippy -D warnings`:
   `Imaging` is dropped; and `Imaging::view` passes the aim point in force, as
   `relation.view(in_force, held)` with `(in_force, held) =
   solving::aim_in_force(&session, now)`, read before it takes its own lock, or
-  `(None, false)` before `set_solver`.
+  `(None, false)` before `set_solver`. The view built under the imaging state's lock,
+  which 031's `frames::take`, the settings edit (`Imaging::set`) and `Imaging::solve`
+  answer (`State::view` in round 1's probe code), fills `relation` with
+  `relation.view(None, false)`, since `aim_in_force` cannot be read under that lock
+  (§ Plan traps 30): those answers never show an aim reading, and only `Imaging::view`
+  (`GET /api/imaging`, and `imaging` in `GET /api/session`) measures it against the aim
+  point in force. `frames.rs` is not among US4's writes and does not change.
 
 That is all `mod.rs` holds of the relation. The history, the aim reading held, the
 window, the misses and everything stored are fields of `Relation`, in `relation.rs`:
@@ -1111,8 +1198,11 @@ scatter test is what tells a telescope that was bumped, or a slew that ended ins
 the span, from a steady drift: its fixes do not lie on one line.
 
 **The aim reading's use (US4).** One private function of `solving.rs`,
-`take_aim_reading(&self, frame: &SolveFrame, frame_id: u64, solve: &ImagingSolve)`, is
-step 2 of the task of § Solving on the console and the whole of `note_solve`:
+`take_aim_reading(shared: &Shared, frame: &SolveFrame, frame_id: u64, solve:
+&ImagingSolve)`, a free function, since the task holds only the `Arc` of the imaging
+state that 031's `Imaging` shares with its tasks (`Shared` in round 1's probe code) and
+no `&Imaging`, is step 2 of the task of § Solving on the console and the whole of
+`note_solve`, which passes it the `Imaging`'s own state:
 1. Unless the frame's `roi` is the whole sensor of the description (x and y 0, the
    description's width and height), it returns and nothing changes.
 2. Under the imaging state's lock it reads `relation.fixes()` and releases the lock;
@@ -1210,9 +1300,12 @@ in `relation.rs`.
   other outcomes are as in US4. After every call that reached `Window::take` it
   `save`s `relation.json` with the window's two lists; a failed save is printed to
   standard error.
-- `Relation::describe` takes the stored lists into the window with `from_parts`, and
-  `Relation::store_scale` writes the window's two lists with the scale, so that
-  neither save loses what the other wrote.
+- `Relation::describe` takes the stored lists into the window with `from_parts`.
+  `Relation::store_scale` and `Relation::take` both write `relation.json` through one
+  private `Relation::save`, which writes the scale and the window's two lists, so that
+  neither loses what the other wrote (no scenario catches a `store_scale` that writes
+  the scale alone, since `take`'s save follows it in every solve that reaches the
+  window).
 - `Relation::view`: `aim`, `angle_deg` and `mirrored` are the window's, and `readings`
   its `len()`, while `in_force` has the `source` `measured`; otherwise the three are
   `None` and `readings` is 0. `held` is still the argument. `set_aside` is the window's
@@ -1371,7 +1464,11 @@ JSX:
 - with `relation.held` true, a `quiet` paragraph `The measured aim point waits until
   Track is off.`
 
-Only existing classes are used. `ImagingPage.tsx` (031 US7) renders
+Only existing classes are used. Tailwind v4 builds the CSS from every word under `src`
+outside the tests (`crates/finder/web/src/index.css:5`), comments and strings
+included, so a word that names a utility (`outline`, `border`, `ring`, `shadow`,
+`hidden`) adds a rule; after `npm run build` the CSS asset in `dist/assets` keeps its
+name, or the page has gained CSS. `ImagingPage.tsx` (031 US7) renders
 `<ImagingSolveBlock view={view} refresh={refresh} />` right after its Imaging frame
 section, only when the view is `ready`.
 
@@ -1393,10 +1490,11 @@ corners are `aim + hh·up − hw·right`, `aim + hh·up + hw·right`, `aim − h
 hw·right`, `aim − hh·up − hw·right`. `ImagingField` draws `<g data-imaging-field
 className="furniture pointer-events-none" strokeWidth={1.3 * u}>` holding `<title>Imaging
 field</title>` and one `<path fill="none">` whose `d` is the four corners as `M`, `L`,
-`L`, `L`, `Z`, each number `toFixed(1)` as the chart's `toPath` writes them
-(`crates/finder/web/src/components/Chart.tsx`), followed by a tick from the middle of
-the top side outward by `6·u`. The `furniture` class gives it ink by day and red at
-night with no new CSS.
+`L`, `L`, `Z`, each number `toFixed(1)`, as `Chart.tsx`'s private `toPath` writes them
+(`crates/finder/web/src/components/Chart.tsx`; `ImagingField.tsx` writes its own
+one-line helper, since `Chart.tsx` imports it), followed by a tick from the middle m
+of the top side to `m + 6·u·up`, away from the aim point. The `furniture` class gives
+it ink by day and red at night with no new CSS.
 
 `Chart.tsx`: after the target mark
 (`crates/finder/web/src/components/Chart.tsx:241`), when `live`, the report has a
@@ -1510,7 +1608,11 @@ backticks:
   live pointing a hint uses is the live solve nearest the exposure's own middle; and
   what `relation.json` and `session.json` keep.
 - US7 adds `solve_imaging_frame` to the tool list in `## MCP clients`
-  (`crates/finder/README.md:57`), after 031's three, worded like its neighbours.
+  (`crates/finder/README.md:57`), after 031's three, worded like its neighbours, and
+  changes the count in the sentence 031 puts before the list from three tools to four
+  (round 1's probe README read `Three tools reach the imaging camera`); the new entry
+  says that on a console that takes no imaging frames it too answers `this console
+  takes no imaging frames` at once.
 
 ## Shapes that existing tests pin
 
@@ -1675,11 +1777,19 @@ These are not changed by any story:
    `FrameView`, `Refusal`, `fits::decode`, the routes, `ImagingPage.tsx`,
    `take_imaging_frame`); check that `FrameView` carries `roi`,
    `binning`, `start` and `exposure_ms` for a saved frame, that `Imaging`'s state can
-   take the fields § The imaging state names, that 031's task has one place where the
-   camera's description is kept on reaching `ready`, that `ImagingPage.tsx` renders
+   take the fields § The imaging state names and sits behind an `Arc` that its spawned
+   tasks hold (the solve's task and `take_aim_reading` reach it that way; round 1's
+   probe code calls it `Shared`, and 031's trio does not say), that 031's task has one
+   place where the camera's description is kept on reaching `ready`, that
+   `ImagingPage.tsx` renders
    its Imaging frame block as a region named `Imaging frame` (spec US6-S4), and that
    031's Imaging page tests hold with one more region and button; then re-run the
-   validator on `main`.
+   validator on `main`. Round 1's probes read every citation on `main` at b1f01cc and
+   found each by its content; 038 had moved every line of
+   `crates/finder/src/session.rs` after its first 160, and three citations, one each
+   in `crates/finder/src/api.rs`, `crates/finder/src/session.rs` and
+   `crates/finder/README.md`, landed on a blank line, the validator's three refusals on
+   that base. They are re-anchored with the rest.
 
    Ten of the citations moved when `main` went from dbc2b5b to 49bb210 while this trio
    was being drafted, because that commit rewrote the tests they point into; the
@@ -1710,17 +1820,19 @@ These are not changed by any story:
    not run ASTAP. The owner runs § Capturing ASTAP's output and commits
    `fixtures/finder/astap/`. US1 cannot pass without it, and no story may write it. If
    the captures show ASTAP behaving otherwise than spec.md says, the trio is corrected
-   first.
-6. **The trio is probe-built.** Not met. No story has been compiled. Before the flip
-   each of the seven is built from this trio in a throwaway worktree on `main` with 030
-   and 031 landed, tests first, with both gates; each diff is measured as plan trap 3 says; and
-   what the probes find is folded back in. US1, US2 and US4 are built first: US1
-   because it runs a child process from a test; US2 because US2-S2 and every later
-   scenario rest on how many seeded stars the simulator puts in a frame, which the
-   probe counts (the scenario's own guard asks for 40 in the top half of the sensor
-   and the simulated adapter for 30); US4 because its tolerances, and the 60″ and 90″
-   of the stillness test, are derived and not measured, and because US4-S8 is the
-   trio's one test that moves a mount, through a GoTo of some 30° and Track (§ Risks).
+   first. Round 1 built US1 on stand-in captures written from this trio, so the
+   captures must confirm each of the thirteen facts those had to assume, listed with
+   what each changes in § Capturing ASTAP's output, What the captures must confirm.
+6. **The trio is probe-built.** Met on 2026-11-18, round 1, every story: each was built
+   from this trio in a throwaway worktree, on `main` at b1f01cc, where 030 had landed,
+   with 031's round-1 probe code on it, tests first, with both gates, `cargo deny
+   check` and `cargo machete`; each diff was measured as plan trap 3 says; and what the
+   probes found is folded back in (§ Refinement Record, round 1). No story passed the
+   budget, so no split was made. The seeded stars, the tolerances of US4 and US5, the
+   simulator's scatter about the stillness line and US4-S8's GoTo and Track were
+   measured (§ Risks). ASTAP was not run: Prerequisite 5 still stands. 031 was then
+   still being built, so the probes stood on its round-1 probe code; § Prerequisites 2
+   reads 031's landed code again.
 7. **The documents this trio cites are on `main`.** Not met: the plan document,
    ADR-0002, the changed `GLOSSARY.md` and the research note are in the drafting
    worktree, uncommitted. There `GLOSSARY.md` already carries the six entries spec
@@ -1821,7 +1933,9 @@ with the check that keeps it from recurring. They bind every story.
     US5-S1 asserts 0.0 for angles on both sides of north.
 19. **The first aim reading after a tap.** A window that kept its old readings would
     out-vote the new one. *Check:* the window is cleared when the session's aim point is
-    not the measured one; US4-S5 asserts `readings` 0 after a tap.
+    not the measured one; US5-S4 asserts that the first solve on a console whose
+    session holds no aim point leaves `readings` 1 though `relation.json` held three
+    (US4-S5's `readings` 0 after a tap is `Relation::view`'s filter, not the window).
 20. **Alt-az arithmetic or axis counts in imaging code.** *Check:* SC-005; stillness is
     projections of one sky direction through the finder fixes and a straight line
     through them.
@@ -1834,10 +1948,11 @@ with the check that keeps it from recurring. They bind every story.
 23. **The bundle must be rebuilt.** *Check:* US6 commits `crates/finder/web/dist` after
     `npm run build`.
 24. **A tool that hangs on `{}`.** *Check:* without imaging, and without a solver,
-    `solve_imaging_frame` answers at once (US7-S4).
+    `solve_imaging_frame` answers at once, within 1 s of tokio time (US7-S4).
 25. **027's layout.** *Check:* each new finder test is a module file in its binary's
-    folder with one alphabetical `mod` line, binding helpers with
-    `use crate::support::live as support;` and holding only the setup its tests use.
+    folder with one alphabetical `mod` line, binding the live helpers, when it uses
+    them, with `use crate::support::live as support;` and holding only the setup its
+    tests use.
 26. **Scratch files go where cargo says.** *Check:* every file a test makes, the stub
     program included, is inside a `crate::support::Scratch`.
 27. **The shared simulated console.** *Check:* no Playwright test is added, and nothing
@@ -1868,10 +1983,12 @@ with the check that keeps it from recurring. They bind every story.
 32. **Too many arguments.** `clippy -D warnings` refuses a function of more than seven.
     *Check:* `solve_frame` takes its frame, hint and ids as one `Ask`.
 33. **An aim point that moves under a running tracker.** 015's tracker turns a step in
-    the aim point into a rate nothing bounds. *Check:* `set_measured_aim` holds the aim
-    point while `TrackRun::track_on`; only `record_live_pointing` with Track off and
-    `set_aim` touch `held_aim`; US4-S8 reads the simulator's true direction for 5 s
-    and asserts under 60″; no line of `crates/finder/src/tracking.rs` or of Track's
+    the aim point into a rate nothing bounds; since 038 a step of more than 5′ is read
+    as a push by hand instead, which marks the pointing model's slip. *Check:*
+    `set_measured_aim` holds the aim point while `TrackRun::track_on`; only
+    `record_live_pointing` with Track off and `set_aim` touch `held_aim`; US4-S8 reads
+    the simulator's true direction for 5 s and asserts under 60″, and that the model's
+    slip is never marked; no line of `crates/finder/src/tracking.rs` or of Track's
     routes is in US4's diff.
 34. **A hint that exists but is wrong.** A ranking alone would repeat one failing hint
     for ever. *Check:* `hint_for` takes the source `min(skip, n − 1)` places down, and
@@ -1888,12 +2005,13 @@ with the check that keeps it from recurring. They bind every story.
 
 | Risk | Mitigation |
 |---|---|
-| Nothing here has been compiled, and 030 and 031, which it builds on, have not either. An interface may not build as written: `impl Imaging` blocks in child modules against state 031 has not yet fixed; `SessionView::aim` changing type under a `json!` in `recording.rs`; clap's `requires` on an `Option<PathBuf>`; and what the review added and nobody has built either: the `Relation` held in 031's state and reached from its task, `solve_frame` borrowing a solver and a clock across an await, and the history's task pushing into that state. | Prerequisites 2 and 6: re-anchor after 030 and 031 land, then probe-build all seven. |
-| The simulator's seeded field puts fewer stars in a frame than a scenario needs: the count is a Poisson draw on a fixed seed, and no story may change the seed, the density or the scenario. | Every frame expected to solve averages 60 stars or more against the 30 needed, which leaves a chance under one in 100,000 for a half frame; US2-S2 counts first and asks for 40 (a chance of 1 in 400 of falling short), so a shortfall shows as that guard and not as a wrong outcome. The US2 probe build reads the count; if the guard fails there, the region is changed before the flip (§ Plan traps 28). |
-| ASTAP behaves otherwise than its page says: an `.ini` is or is not written when the database is missing; `-analyse` exits with a code that carries its result; the `CD` matrix counts rows from the bottom whatever the file says. | Prerequisite 5. US1-S7 replays what ASTAP really wrote; `measure` already trusts the two printed lines over the exit code; three catalogue stars fix the row order. The trio is corrected to the captures before the flip. |
-| The tolerances of US4 and US5 (1.5 finder pixels, 0.25°) are derived from the 30″ that existing tests allow a live pointing, not measured. | The first probe build of US4 measures the scatter on the simulator over fifty solves. A tolerance is then kept or the scenario corrected before the flip; none is widened by a story. |
-| A story passes 64 KiB. The likeliest are US1 (the port, the adapter, the prepared copy and seven scenarios), US2 (twelve files, a README section and six scenarios with some thirty assertions: an estimate of 55 to 65 KiB) and US4 (the history, the aim reading, `note_solve`, the session and its held aim point, the sky, eight scenarios and a second test module with its own rig). Each of US2 to US5 and US7 also writes the solving rig out again, 4 to 5 KiB a time (§ Technical Context, Testing). Estimates; nothing is measured. | Measured on the probes. Splits written in advance: US1 sheds `measure` and `prepare`'s regions (US1-S6, FR-007) into a story of its own after it; US2 sheds the simulated adapter (`simulated.rs`, FR-008, US2-S2, in a test module of its own, `imaging_simulated`) into a story before the route, which then needs no rig at all; US4 sheds the session's `source` and its persistence (US4-S5's second half, US4-S6) into a story before it, and the held aim point (FR-036, US4-S8, the `motion` module) into a story after it. Each split is a spec change made before the flip. |
-| The stillness test's figures (60″ of travel, 90″ of scatter, three fixes, 10 s of reach) are set against one field figure for the finder camera's scatter, 0.3′ to 0.5′, and against a simulator whose finder is quieter. Too tight, and no aim reading is ever taken at the telescope; too loose, and a slew's tail is read as a reading. | US4-S2 pins the arithmetic on worked examples, with a still telescope whose fixes are 40″ apart. The first probe build of US4 measures the simulator's scatter about the line. The field check "the share of solves that take an aim reading while tracking" is the one that settles the figures; they are four constants in `relation.rs` and one owner decision (11). Until that check, an observer who gets no aim reading still has the tap. |
+| An interface may not build as written: `impl Imaging` blocks in child modules against state 031 has not yet fixed; `SessionView::aim` changing type under a `json!` in `recording.rs`; clap's `requires` on an `Option<PathBuf>`; the `Relation` held in 031's state and reached from its task, `solve_frame` borrowing a solver and a clock across an await, and the history's task pushing into that state. | Proved in round 1 (Prerequisite 6), on 031's round-1 probe code: each built as written, and `recording.rs` needed no edit. Two places could not be followed and are now written as they were built: `take_aim_reading` is a free function on the state the task holds, and `Imaging::solve` builds its hint with the lock released. Prerequisite 2: every name taken from 031 is read again on `main` after it lands. |
+| The simulator's seeded field puts fewer stars in a frame than a scenario needs: the count is a Poisson draw on a fixed seed, and no story may change the seed, the density or the scenario. | Every frame expected to solve averages 60 stars or more against the 30 needed, which leaves a chance under one in 100,000 for a half frame; US2-S2 counts first and asks for 40 (a chance of 1 in 400 of falling short), so a shortfall shows as that guard and not as a wrong outcome. Counted in round 1: US2-S1's frame holds 112, US2-S2's whole frame 107 at binning 1 and 2, the top half 49 (the guard passes with 9 to spare) and the corner region 1 (§ Plan traps 28). |
+| ASTAP behaves otherwise than its page says: an `.ini` is or is not written when the database is missing; `-analyse` exits with a code that carries its result; the `CD` matrix counts rows from the bottom whatever the file says. | Prerequisite 5. US1-S7 replays what ASTAP really wrote; `measure` already trusts the two printed lines over the exit code, which US1-S6 now tests; three catalogue stars fix the row order. Round 1 ran US1-S7 on stand-in captures, which prove the replay only; the thirteen facts they assumed are a checklist in § Capturing ASTAP's output. The trio is corrected to the captures before the flip. |
+| The tolerances of US4 and US5 (1.5 finder pixels, 0.25°) are derived from the 30″ that existing tests allow a live pointing, not measured. | Measured in round 1 over fifty solves on the simulator: the aim point at most 0.015 pixel from (700, 420) and the angle at most 0.0023° from 17°, some 100 times inside the bounds, which are kept; they held in every US5 run too. They catch no subtle error by themselves: US4-S2's worked examples do (the line read at the exposure's start is 0.25 pixel out on the simulator, which only US4-S2 fails). None is widened by a story. |
+| Under paused time the finder camera's live solves cost real time while virtual time runs ahead, so on a busy machine a console's first solve may find fewer than three finder fixes in its reach and end `no_live_pointing`. | Seen in round 1: US5-S4 as first drafted failed 9 times in 18 stress runs, always at the second console's first solve. Every scenario that expects an aim reading now waits first until the session's `pointing` is live, and 5 s more, on each console it builds (US4-S1, US5-S2 to US5-S4); with that wait the stress runs failed none of 24. |
+| A story passes 64 KiB. The likeliest are US1 (the port, the adapter, the prepared copy and seven scenarios), US2 (twelve files, a README section and six scenarios with some thirty assertions: an estimate of 55 to 65 KiB) and US4 (the history, the aim reading, `note_solve`, the session and its held aim point, the sky, eight scenarios and a second test module with its own rig). Each of US2 to US5 and US7 also writes the solving rig out again (§ Technical Context, Testing). | Measured in round 1 (§ Refinement Record), by the draft's text: US1 52,894 bytes, US2 62,085 (3,451 under the budget), US3 49,568, US4 61,196 (4,340 under), US5 34,786, US6 35,843 and US7 11,166; the rig with its helpers is about 3.3 KB a module. The round-1 fixes add assertions to every story but US6, each a few hundred bytes: about 0.5 KB to US2 and 1.3 KB to US4, which leaves each some 3 KB of headroom, and about 1.5 KB to US1. A builder whose tests are wordier than the probes' could still pass the budget on US2 or US4, so their splits stay written. Splits written in advance: US1 sheds `measure` and `prepare`'s regions (US1-S6, FR-007) into a story of its own after it; US2 sheds the simulated adapter (`simulated.rs`, FR-008, US2-S2, in a test module of its own, `imaging_simulated`) into a story before the route, which then needs no rig at all; US4 sheds the session's `source` and its persistence (US4-S5's second half, US4-S6) into a story before it, and the held aim point (FR-036, US4-S8, the `motion` module) into a story after it. Each split is a spec change made before the flip. |
+| The stillness test's figures (60″ of travel, 90″ of scatter, three fixes, 10 s of reach) are set against one field figure for the finder camera's scatter, 0.3′ to 0.5′, and against a simulator whose finder is quieter. Too tight, and no aim reading is ever taken at the telescope; too loose, and a slew's tail is read as a reading. | US4-S2 pins the arithmetic on worked examples, with a still telescope whose fixes are 40″ apart, and now a drift just over 60″ that its own error brings back under. Measured in round 1 over fifty solves: the simulator's finder scatters 0.34″ to 0.53″ about the line (median 0.45″), some 40 to 65 times quieter than the field figure, and the untracked sky travels 14.5″ in a 1 s exposure; so on the simulator only a slew's tail (US4-S8 as first drafted, 478″) or US4-S2's worked examples reach the limits. The field check "the share of solves that take an aim reading while tracking" is the one that settles the figures; they are four constants in `relation.rs` and one owner decision (11). Until that check, an observer who gets no aim reading still has the tap. |
 | A solve with no hint, or one given no field height after three misses, runs ASTAP's slowest search and may be killed at its limit. | The whole-sky limit is 600 s and an owner decision (12); the field check times it. The sources are taken in turn, so a true kept scale comes back after at most six such solves. A target or a finder camera avoids the case. |
 | ASTAP's `.ini` carries a `//` note after each value, as its page prints the example, and `read_answer` then reads no number. | The saved captures show the file as it is (Prerequisite 5); if the notes are there, `read_answer` cuts each value at ` //` and worked answer A is corrected, before the flip. |
 | ASTAP does not solve real frames from this telescope: too few stars in a short sub at a sparse field, stars swollen by coma, a frame binned 2 × 2 and averaged again to 2.2″ a pixel, bright nebulosity. | Field checks, named in spec.md. The port keeps another adapter possible; the database is a flag. Not answerable in the factory. |
@@ -1902,12 +2020,12 @@ with the check that keeps it from recurring. They bind every story.
 | A wrong solve that ASTAP reports as solved sets a wrong aim point as the first aim reading. | With one or two aim readings held nothing is an outlier, so the next two outvote it: the median of three is right. Until then a GoTo may centre on the wrong spot by the solve's error; the observer can tap or reset. |
 | The 10″ step leaves the session's aim point up to 10″ from the median. | That is a third of a finder pixel, under the finder camera's own scatter; spec owner decision 10's alternative removes it. |
 | A measured aim point changes what every later sync is taken at, and the pointing model mixes syncs from before and after. | Spec owner decision 3: the same is true of a tap today; the closed GoTo loop corrects on the live pointing; a move over 0.5° opens a new epoch. |
-| The new button and region on the Imaging page break a query in 031's page tests. | Prerequisite 2 re-reads them; the block shows no `status` or `alert` until a solve is asked for. |
+| The new button and region on the Imaging page break a query in 031's page tests. | Prerequisite 2 re-reads them; the block shows no `status` or `alert` until a solve is asked for. Not seen in round 1: every Vitest and end-to-end check passed with the block, Setup's one `status` included. |
 | `021-chart-orientation`, a draft, also writes `Chart.tsx`. | Prerequisite 9. |
 | A work folder is left behind by a console that exits mid-solve. | It holds one prepared copy; folders are named by process and count, so a later run never reuses one. The README says they may be deleted. |
 | A measured aim point held for the whole of a long stack (Track on for hours) leaves GoTo and Track on the old aim point, which may be a degree from the sensor's centre before the first measurement. | The target still lands inside the 3° the first hint searches; the page says the aim point waits; the first Track off applies it, and 037's re-centre turns Track off and on for that reason. Owner decision 25, settled on 2026-11-17, chose this. |
 | 037's centring rests on the hold: it reads `Session::held_aim`, and waits after its own Track off for the first live solve, which applies the held aim point. | Prerequisite 11: 037 is written for the settled answer (037's FR-022, FR-025). A change to FR-036 or to `held_aim` is re-read in 037 before either trio is flipped. |
-| US4-S8 needs a GoTo of some 30° and Track to settle on the simulator in virtual time, and its 60″ is set against the tracker's deadband, not measured. | The rig is the one 015's own Track tests run (`crates/finder/tests/motion/tracking/routes.rs:85`); the first probe build of US4 times it and reads the travel without the hold, to show the scenario fails on the first draft. |
+| US4-S8 needs a GoTo of some 30° and Track to settle on the simulator in virtual time, and its 60″ is set against the tracker's deadband, not measured. | The rig is the one 015's own Track tests run (`crates/finder/tests/motion/tracking/routes.rs:85`). Measured in round 1: GoTo and Track settle about 24 s of virtual time after the start; 5 s after `tracking` the GoTo's last approach was still inside the fit's reach and the reading was `moving`, so the scenario waits 15 s, 6 s more than the 9 s that first gave `measured`. With the aim point applied at once the telescope moved 0.5″ in the 5 s watched and 7.7″ in 30 s, since 038's push-by-hand rule hands the tracker nothing: the 60″ bullet does not fail on the first draft. What does is `relation.held`, the absent `aim` and the model's slip, which an aim point applied at once marks from 0.2 s after the solve ends. |
 | A hint turned to `none` after misses runs ASTAP's slowest search on every later failed sub until one solves. | Misses are only `not_solved` and `timed_out`, not `too_few_stars`, which a cloudy sub gives; the whole-sky limit is 600 s; a solved solve starts again from the first source. |
 
 ## Refinement Record
@@ -1916,10 +2034,10 @@ Drafted on 2026-11-15 by the grilling session against `main` at dbc2b5b, from
 `docs/plans/2026-11-15-specs-030-037-imaging.md`, 030's and 031's draft trios (one trio then) in the same worktree,
 the surveys of the console and the solver made that morning, the web research on
 narrow-field solving with its verification, and ASTAP's own page read that day. **No
-probe build has been run.** No story of this trio has been compiled, linted or tested,
-no interface above has been built, and no diff has been measured: the session wrote
-documents only. ASTAP has not been run, and the program of § Capturing ASTAP's output
-has not been run either. Every `path:line` was read at dbc2b5b and is now checked, by
+probe build had been run then.** No story of this trio had been compiled, linted or
+tested, no interface above built and no diff measured: the session wrote documents
+only. ASTAP has not been run, and the program of § Capturing ASTAP's output has not
+been run either. Every `path:line` was read at dbc2b5b and is now checked, by
 hand and by the validator, at 49bb210; every number in a scenario was worked by hand or
 with a calculator and is shown as a worked example where it is not obvious.
 
@@ -1950,12 +2068,48 @@ On 2026-11-17 the owner settled owner decision 25 with the hold this trio recomm
 so no requirement, scenario or interface changed; the decision, § Prerequisites 11 and
 § Risks now say it is settled (spec.md § Clarifications, the last session).
 
-What a first refinement round must do is § Prerequisites 2, 5 and 6, and its findings
-replace this paragraph. Until then the record below is the draft's own account: its
-tests are the scenarios, its writes are the files § Project Structure names, and its
-shared writes name the merge edge that orders two stories of this spec on one file, or
-the story of 031 that last writes the file. A file last written by an older landed spec
-(`crates/finder/src/session.rs`, `crates/finder/src/sky.rs`,
+**Round 1 (probe builds), 2026-11-18.** Every story was built from this trio, tests
+first, by three probe agents in throwaway worktrees, each story on the commit of the one
+before it and nothing pushed. Their base (`probe/032-r1-base` at ba53220) was `main` at
+b1f01cc, where 030 had landed, with 031's round-1 probe code on it, since 031 was then
+being built, and this trio; clippy and the workspace's 826 tests passed there. Each
+story passed the `lint` gate, the `test` gate's cargo commands, `cargo deny check` (with
+the base's findings) and `cargo machete`, and the page commands on the page's story;
+each new test failed before its story's change and passed after it, the five blocking
+scenarios below with the fixes now written into them; and each diff, measured as plan
+trap 3 says, changed exactly its story's declared writes. By the draft's numbers:
+
+- US1: `probe/032-r1-a` at b2b5cbb; 7 tests; 52,894 bytes; 5 files; on a commit of
+  stand-in captures (ee73759) that no story writes.
+- US2: `probe/032-r1-a` at 973fc6f; 6 tests; 62,085 bytes; 12 files.
+- US3: `probe/032-r1-b` at bf96012; 8 tests; 49,568 bytes; 10 files.
+- US4: `probe/032-r1-b` at fa7f8a2; 8 tests; 61,196 bytes; 9 files.
+- US5: `probe/032-r1-c` at d79232f; 4 tests; 34,786 bytes; 5 files.
+- US6: `probe/032-r1-c` at 8f5eef7; 10 Vitest tests; 35,843 bytes; 12 files and
+  `dist`.
+- US7: `probe/032-r1-c` at 2ad73a6; 4 tests; 11,166 bytes; 4 files.
+
+The workspace ran 863 tests after US7, Vitest 359 and Playwright 31. Every interface
+built as written, but for `take_aim_reading`'s signature and the place where
+`Imaging::solve` builds its hint; no story needed an undeclared write, and none passed
+the budget, so no split was tried. ASTAP was not run: US1-S7 replayed stand-in
+captures written from this trio, and the thirteen facts they assumed are a checklist in
+§ Capturing ASTAP's output for the owner's captures. The probes broke each new test's
+main claim on purpose, 175 times in all, and reported thirty-eight defects, five of them
+blocking and each of those in a scenario as worded: the simulated adapter's up for a
+frame of a region (US2-S2), the tapped star of US4-S5, the swung telescope of US4-S4,
+the wait of US4-S8, and US5's first solves, made before the finder camera's history
+could give an aim reading. Thirty-four fixes are in this trio: they settle choices the
+plan left open, correct wording a builder could misread, and add the assertions that
+the bite checks showed missing (spec.md § Clarifications, the round-1 session). The
+other four the probes marked as noted only or of low value, and that session names
+what they leave untested.
+
+The record below is round 1's account: its tests are the scenarios the probes built and
+ran, its writes are the files their diffs changed, which are those § Project Structure
+names, and its shared writes name the merge edge that orders two stories of this spec on
+one file, or the story of 031 that last writes the file. A file last written by an
+older landed spec (`crates/finder/src/session.rs`, `crates/finder/src/sky.rs`,
 `crates/finder/web/src/components/Chart.tsx`,
 `crates/finder/web/src/components/AimTap.tsx`, `crates/finder/web/src/useSession.ts`)
 has no entry, because the validator refuses a shared write that names a spec outside
@@ -2000,7 +2154,7 @@ stories:
       - path: crates/finder/tests/console/imaging_astap.rs
         status: new
         disposition: add
-        assertion: "measure runs -analyse 30 on the copy of a frame or of a region moved inward to whole cells, scales the diameter by the copy's factor, and refuses no stars, unreadable output, a region outside the frame and a region with no whole cell"
+        assertion: "measure runs -analyse 30 on the copy of a frame or of a region moved inward to whole cells, rounds a cell's mean half up, halves a copy of more than 2500 rows, scales the diameter by the copy's factor, reads the two printed lines whatever the exit code, and refuses no stars, unreadable output, a region outside the frame and a region with no whole cell"
         decision: "spec.md:US1-S6"
       - path: crates/finder/tests/console/imaging_astap.rs
         status: new
@@ -2063,7 +2217,7 @@ stories:
       - path: crates/finder/tests/console/imaging_solve.rs
         status: new
         disposition: add
-        assertion: "the simulated adapter answers for binning and for the top half of the sensor once the test has counted at least 40 seeded stars there, refuses too few stars, a hint beyond its radius and a field height over 5 percent out, and measures stars from the point-spread constants"
+        assertion: "the simulated adapter answers for binning and for the top half of the sensor once the test has counted at least 40 seeded stars there, refuses too few stars, a hint beyond its radius and a field height 6 percent out or more while 4 percent solves, and measures stars from the point-spread constants"
         decision: "spec.md:US2-S2"
       - path: crates/finder/tests/console/imaging_solve.rs
         status: new
@@ -2073,7 +2227,7 @@ stories:
       - path: crates/finder/tests/console/imaging_solve.rs
         status: new
         disposition: add
-        assertion: "each of the five solve errors shows its reason, message, detail, took_ms and file in the view and its reason, message and took_ms in the sidecar, and a later solved solve replaces the sidecar"
+        assertion: "each of the five solve errors shows its reason, message, detail, file and a took_ms of the 1.5 s the test's solver waited in the view, and its reason, message and took_ms in the sidecar, and a later solved solve replaces the sidecar"
         decision: "spec.md:US2-S4"
       - path: crates/finder/tests/console/imaging_solve.rs
         status: new
@@ -2209,7 +2363,7 @@ stories:
       - path: crates/finder/tests/console/imaging_hints.rs
         status: new
         disposition: add
-        assertion: "the solved scale is kept per sensor pixel in the view, in relation.json and in Imaging::scale_arcsec_per_px, and sizes the next solve's field at binning 1 and 2"
+        assertion: "the solved scale is kept per sensor pixel in the view, in relation.json, where a solve at binning 2 stores the first solve's figure, and in Imaging::scale_arcsec_per_px, and sizes the next solve's field at binning 1 and 2"
         decision: "spec.md:US3-S2"
       - path: crates/finder/tests/console/imaging_hints.rs
         status: new
@@ -2219,7 +2373,7 @@ stories:
       - path: crates/finder/tests/console/imaging_hints.rs
         status: new
         disposition: add
-        assertion: "with no fresh live pointing the hint is the last solve, then the target, then none with a radius of 180 degrees, a target far from the frame does not solve, and a changed target outranks the last solve"
+        assertion: "with no fresh live pointing the hint is the last solve, then the target, then none with a radius of 180 degrees, a target far from the frame does not solve, a changed target outranks the last solve, and an unchanged one keeps it"
         decision: "spec.md:US3-S4"
       - path: crates/finder/tests/console/imaging_hints.rs
         status: new
@@ -2239,7 +2393,7 @@ stories:
       - path: crates/finder/tests/console/imaging_hints.rs
         status: new
         disposition: add
-        assertion: "a pointing hint about 5 degrees from the truth fails three times, the target then fails three times, and the seventh solve searches the whole sky and solves; with no target the fourth does; Relation::hint_skip counts a place per three misses and hint_for takes that place among the sources that exist, held at none"
+        assertion: "a pointing hint about 5 degrees from the truth fails three times, the target then fails three times, and the seventh solve searches the whole sky and solves; with no target the fourth does; Relation::hint_skip counts a place per three misses and hint_for takes that place among the sources that exist, held at none at a skip of 4 and 7; timed_out counts as a miss and too_few_stars does not"
         decision: "spec.md:US3-S8"
       - path: crates/finder/tests/console/pointing.rs
         status: existing
@@ -2312,7 +2466,7 @@ stories:
       - path: crates/finder/tests/console/imaging_relation.rs
         status: new
         disposition: add
-        assertion: "read_aim fits a line through nine finder fixes and reads it at the middle of the exposure to within 0.01 pixel for a steady drift and 0.1 pixel for a still telescope whose fixes scatter 20 arcseconds either side, answers Moving for 100 arcseconds a second of drift and for a fix half a degree off the line, NoLivePointing for two fixes or none inside the exposure, OffFrame for a centre outside the finder frame, and the history keeps 120 seconds, and thins 3001 fixes to one a second over 1200 seconds rather than cutting them"
+        assertion: "read_aim fits a line through nine finder fixes and reads it at the middle of the exposure to within 0.01 pixel for a steady drift and 0.1 pixel for a still telescope whose fixes scatter 20 arcseconds either side, answers Measured for a drift just over 60 arcseconds that the travel's own error brings back under, Moving for 100 arcseconds a second of drift and for a fix half a degree off the line, NoLivePointing for two fixes or none inside the exposure, OffFrame for a centre outside the finder frame, and the history keeps 120 seconds, and thins 3001 fixes to one a second over 1200 seconds rather than cutting them"
         decision: "spec.md:US4-S2"
       - path: crates/finder/tests/console/imaging_relation.rs
         status: new
@@ -2322,12 +2476,12 @@ stories:
       - path: crates/finder/tests/console/imaging_relation.rs
         status: new
         disposition: add
-        assertion: "a solve with no live pointing in its exposure, or with 8 s of untracked drift, or that fails, sets no aim point and says why, and a solve asked for after the telescope has swung away is hinted by the live solve of the exposure's own moment and solves"
+        assertion: "a solve with no live pointing in its exposure, or with 8 s of untracked drift, or that fails, sets no aim point and says why, and a solve asked for while the session's latest pointing is 49 degrees away is hinted by the live solve of the exposure's own moment and solves"
         decision: "spec.md:US4-S4"
       - path: crates/finder/tests/console/imaging_relation.rs
         status: new
         disposition: add
-        assertion: "a tap on a star of a live preview replaces a measured aim point with a two-key one and leaves the relation no aim reading, the next solve measures again, a reset clears it, and session.json keeps aim_measured only while true"
+        assertion: "a tap on the star of a live preview nearest the true aim point replaces a measured aim point with a two-key one and leaves the relation no aim reading, the next solve is hinted at the tapped pixel and measures again, a reset clears it, and session.json keeps aim_measured only while true"
         decision: "spec.md:US4-S5"
       - path: crates/finder/tests/console/imaging_relation.rs
         status: new
@@ -2342,7 +2496,7 @@ stories:
       - path: crates/finder/tests/motion/imaging_track.rs
         status: new
         disposition: add
-        assertion: "with Track on, an imaging solve's aim reading is held, the session keeps no aim, the main telescope's true direction moves under 60 arcseconds in the next 5 s, and Track off applies the held aim point within 5 s"
+        assertion: "with Track on and the GoTo's approach 15 s past, an imaging solve's aim reading is held, the session keeps no aim, the main telescope's true direction moves under 60 arcseconds in the next 5 s and the model's slip is never marked, and Track off applies the held aim point within 5 s"
         decision: "spec.md:US4-S8"
       - path: crates/finder/tests/motion/tracking/routes.rs
         status: existing
@@ -2455,7 +2609,7 @@ stories:
       - path: crates/finder/tests/console/imaging_smoothing.rs
         status: new
         disposition: add
-        assertion: "a second console over the same folder and session file reads the three aim readings and adds a fourth, without the session file reads none, and drops those stored for another camera"
+        assertion: "a second console over the same folder and session file reads the three aim readings and adds a fourth, without the session file reads none and drops the stored three at its first solve, and drops those stored for another camera"
         decision: "spec.md:US5-S4"
       - path: crates/finder/tests/layout/main.rs
         status: existing
@@ -2546,7 +2700,7 @@ stories:
         assertion: "the simulated console starts with no aim point and Setup shows exactly one status, the aim tap's"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
-      - "the page adds no npm package and no CSS"
+      - "the page adds no npm package and no CSS: after npm run build, the CSS asset in crates/finder/web/dist/assets has the name it had before the story"
       - "red-only night mode: the outline uses the furniture class and the block existing classes; no gate checks them at night (spec.md owner decision 16)"
       - "no Playwright file or playwright.config.ts changes"
     checks:
@@ -2620,7 +2774,7 @@ stories:
       - path: crates/finder/tests/mcp/imaging_solve.rs
         status: new
         disposition: add
-        assertion: "without imaging or without a solver the tool answers at once with its text, and no result holds the node's token"
+        assertion: "without imaging or without a solver the tool answers within 1 s of tokio time with its text, and no result holds the node's token"
         decision: "spec.md:US7-S4"
       - path: crates/finder/tests/mcp/motion.rs
         status: existing

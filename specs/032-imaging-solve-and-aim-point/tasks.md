@@ -12,7 +12,8 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
   met, constitution 1.3.0 (plan.md § Prerequisites 4);
 - the saved captures of ASTAP's real output are staged under `fixtures/finder/astap/`:
   not met (plan.md § Prerequisites 5); US1 cannot pass without them;
-- the trio has been probe-built: not met (plan.md § Prerequisites 6);
+- the trio has been probe-built: met on 2026-11-18, round 1, every story (plan.md
+  § Prerequisites 6);
 - the drafts outside this series that write the same files (`026-mount-sky`,
   `021-chart-orientation`, `022-altaz-guidance`) are ordered against this spec: not
   met (plan.md § Prerequisites 9);
@@ -30,11 +31,12 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
 - New tests go in new files: the ones your story's tasks name. A new finder test is a
   module file in its binary's folder, never a file at the top level of
   `crates/finder/tests` or in `crates/finder/tests/support`, either of which fails the
-  `layout` test. It binds the live helpers with `use crate::support::live as support;`,
-  never with `#[path]`, and holds only the setup its own tests use, since an unused
-  helper fails `clippy -D warnings`. A module that needs the solving rig writes it out
+  `layout` test. A module that uses the live helpers binds them with
+  `use crate::support::live as support;`, never with `#[path]`; one that uses none has
+  no such line. It holds only the setup its own tests use, since an unused helper or
+  import fails `clippy -D warnings`. A module that needs the solving rig writes it out
   itself from spec.md § User Scenarios; it does not import another test module's
-  helpers, and the 4 to 5 KiB this costs is counted in the story's budget (plan.md
+  helpers, and the 3 to 4 KB this costs is counted in the story's budget (plan.md
   § Risks). Every file a test makes is inside a `crate::support::Scratch`.
 - Write only the files your story's tasks name; they are its `writes` in plan.md
   § Refinement Record. A story that needs another file escalates. No story writes
@@ -76,15 +78,21 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
   16-bit FITS file with the test's own writer; a FITS reader of the test's own for
   `input.fits`; the two worked answers as text; and the test's own separation and
   position-angle formulas. Every test here is a plain `#[tokio::test]`, in real time.
-  Write failing tests for worked answer A through `read_answer` and `from_answer`
-  (US1-S1) and for worked answer B through the stub adapter (US1-S2).
+  Write each expected number with no more digits than an `f64` needs
+  (`154.6303399231494`, `1.553441204206e-5`, `7.482973284225123e-4`; clippy's
+  `excessive_precision` refuses the 17-digit forms under `-D warnings`), or parse it
+  from the worked answer's text. Write failing tests for worked answer A through
+  `read_answer` and `from_answer` (US1-S1) and for worked answer B through the stub
+  adapter (US1-S2).
 - [ ] T002 [US1] Add failing tests to `crates/finder/tests/console/imaging_astap.rs` for
   the exact argument lists (US1-S3), every exit code and unreadable answer (US1-S4), and
   the limits with a sleeping script: `/proc/self` seen first, the process gone, the
   work folder empty, and the longer limit of a hint with no place (US1-S5).
 - [ ] T003 [US1] Add failing tests to `crates/finder/tests/console/imaging_astap.rs` for
-  `measure` on a frame and on two regions of an `RGGB` frame, with the region outside
-  the frame and the region with no whole cell (US1-S6), and for the saved captures read
+  `measure` on a frame and on two regions of an `RGGB` frame, on a 2 × 2 `RGGB` frame of
+  the test's own whose cell mean is rounded, on a mono frame 4 × 2502 that is halved,
+  with exit code 1 and the two lines, with the region outside the frame and the region
+  with no whole cell (US1-S6), and for the saved captures read
   through `fixtures/finder/astap/captures.json` and replayed by the stub program, a
   case whose `ini` is `null` with no `reply.ini` (US1-S7). The captures are staged by
   the owner; if they are missing, stop and escalate.
@@ -92,7 +100,8 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
 ### Implementation
 
 - [ ] T004 [US1] Create `crates/finder/src/imaging/solver.rs` with `Region` and its
-  `From<RoiView>`, `SolveFrame`, `HintSource`, `SolveHint` and its serialization,
+  `From<RoiView>`, `SolveFrame`, `HintSource`, `SolveHint` and its `Serialize`, written
+  by hand (`position` becomes `ra_deg` and `dec_deg`),
   `Answer`, `Prepared`,
   `ImagingSolve` with `from_cd`, `from_answer`, `sky_at` and `pixel_of`, `StarMeasure`,
   `SolveError` with its reasons and messages, the two future types and the trait
@@ -123,9 +132,10 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
   simulated adapter called directly, counting the seeded stars in the top half of the
   sensor with the test's own arithmetic before solving it (US2-S2).
 - [ ] T008 [US2] Add failing tests to `crates/finder/tests/console/imaging_solve.rs` for
-  the refusals, the link down among them, and `Imaging::solver()` (US2-S3), for a
-  solver of the test's own that answers the five errors at once and then a solve, with
-  `took_ms` and `file` on each failure (US2-S4), and for the view before any solve and
+  the refusals, the link down among them, the abort sent 1 s after the frame is asked
+  for, and `Imaging::solver()` (US2-S3), for a solver of the test's own that answers
+  the five errors, each after 1.5 s of tokio time, and then a solve, with `took_ms` and
+  `file` on each failure (US2-S4), and for the view before any solve and
   without imaging (US2-S5). Assert nothing about `solve.hint` or `relation`. Create
   `crates/finder/tests/cli/imaging_solve.rs`, the module `imaging_solve` of `cli`, with
   `mod imaging_solve;` after `mod imaging_frames;` in `crates/finder/tests/cli/main.rs`,
@@ -136,12 +146,14 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
 
 - [ ] T009 [US2] Create `crates/finder/src/imaging/simulated.rs` with `SimulatedSolver`
   and its five solve steps and its measure, exactly as plan.md § The simulated adapter
-  gives them, and add `pub mod simulated;` to `crates/finder/src/imaging/mod.rs`.
+  gives them (a frame of a region takes the sensor's up as seen at its own centre), and
+  add `pub mod simulated;` to `crates/finder/src/imaging/mod.rs`.
 - [ ] T010 [US2] Create `crates/finder/src/imaging/solving.rs` with `Ask`, `Ended` and
   `solve_frame`, which solves one frame and writes its solve sidecar with `took_ms`
   whatever the outcome; `SolveView`; `Imaging::set_solver` and `Imaging::solver`;
-  `Imaging::solve` with its refusals in order and its task built on `solve_frame`; and
-  `Imaging::solved`, passing `SolveHint::whole_sky()` (plan.md § Solving on the
+  `Imaging::solve` with its refusals in order and its task built on `solve_frame`, the
+  task bumping 031's watch of changes when the solve ends; and `Imaging::solved`, which
+  waits on that watch, passing `SolveHint::whole_sky()` (plan.md § Solving on the
   console). In `crates/finder/src/imaging/mod.rs` add `pub mod solving;`, the `solve`
   field of `ImagingView`, filled only while `ready`, and to the state the solver and
   the latest solve, and nothing this story does not read: `set_solver` takes the
@@ -172,8 +184,10 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
   another (US3-S5), the field height's sources taken in turn after a change of the
   simulated optics, on the rig and on a `Relation` of the test's own (US3-S7), and the
   hint's source taken one place down after three misses from a tapped aim point 4.98°
-  off, on two rigs, on a `Relation` of the test's own and through `hint_for` with
-  literals (US3-S8). Assert a radius only where spec.md does.
+  off, on two rigs, on a `Relation` of the test's own, through `hint_for` with
+  literals, and on a rig whose solver of the test's own times out and then finds too
+  few stars (US3-S8). US3-S4 includes a rig whose target is set before its first
+  solve. Assert a radius only where spec.md does.
 - [ ] T014 [US3] Create `crates/finder/tests/cli/imaging_hints.rs`, the module
   `imaging_hints` of `cli`, with `mod imaging_hints;` after `mod imaging_frames;` in
   `crates/finder/tests/cli/main.rs`, and in it a failing test for `--focal-length-mm`
@@ -197,7 +211,9 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
   `HintInputs` with every field plan.md gives it, `skip` among them, `hint_for`, which
   takes the source `min(skip, n − 1)` places down among those that exist,
   `Imaging::hint`, `Imaging::set_focal_length_mm` and `Imaging::scale_arcsec_per_px`;
-  build the hint from the session's latest pointing, the last solve while the target
+  call `self.hint(&frame)` in `Imaging::solve` with the imaging state's lock released,
+  and check for a running solve again once it is taken back; build the hint from the
+  session's latest pointing, the last solve while the target
   is unchanged, and the target, with `Relation::height_inputs` for the field height
   and `Relation::hint_skip` for `skip`, read under one lock; and in the task
   call `store_scale` after a solved solve and `miss` after one that ended `not_solved`
@@ -225,8 +241,9 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
   `Frame::up_east_of_north_at` (US4-S3).
 - [ ] T019 [US4] Add failing tests to `crates/finder/tests/console/imaging_relation.rs`
   for the three cases that take no aim reading and for the hint of a solve asked for
-  after the simulated telescope has swung away (US4-S4), for a tap on a star of a live
-  preview, a reset and `session.json` with a measured aim point (US4-S5), for a
+  after the simulated telescope has swung away and back (US4-S4), for a tap on the star
+  of a live preview nearest (700, 420), the next solve's hint, a reset and
+  `session.json` with a measured aim point (US4-S5), for a
   tapped aim point on a console with no imaging (US4-S6), and for a solve the test
   made itself and offered to `note_solve`, whole and as a region (US4-S7).
 - [ ] T020 [US4] Create `crates/finder/tests/motion/imaging_track.rs`, the module
@@ -235,9 +252,10 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
   spec.md US4-S8, written out from the solving rig with
   `with_live_solver(Arc::new(crate::support::goto::Stars))` in place of `with_live()`
   and the target M42, under `#[tokio::test(start_paused = true)]`, and a failing test
-  for US4-S8: a sync, Track on, `tracking`, one solved frame with `relation.held`
-  true and no session `aim`, the true direction sampled every 100 ms for 5 s within
-  60″ of the first sample, and Track off applying the held aim point within 5 s.
+  for US4-S8: a sync, Track on, `tracking` and 15 s more, one solved frame with
+  `relation.held` true and no session `aim`, the true direction sampled every 100 ms
+  for 5 s within 60″ of the first sample with the model's slip never marked, and Track
+  off applying the held aim point within 5 s.
 
 ### Implementation
 
@@ -261,14 +279,17 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
   reading). `FinderHistory::push` keeps a fix only if it follows the newest by at
   least `keep_s / HISTORY_MAX as f64` and drops fixes for their age alone. In
   `crates/finder/src/imaging/solving.rs` start the history's task in `set_solver` from
-  the live loop it is given; add `aim_in_force` and the private `take_aim_reading`
-  with its four steps, call it as the task's step 2 after a solved solve, and add
+  the live loop it is given; add `aim_in_force` and the private `take_aim_reading`, a
+  free function on the state the task holds, with its four steps, call it as the
+  task's step 2 after a solved solve, and add
   `Imaging::note_solve`, which calls only it (plan.md § The relation, the aim
   reading's use); take the hint's `pointing` from the history's fix nearest the
   exposure's middle, and pass `aim_measured` (plan.md § Solving on the console, the
   hint). In `crates/finder/src/imaging/mod.rs` add only the history task's handle to
-  the state and `aim_in_force`'s two values to the call of `Relation::view`. Hold the
-  imaging state's lock across no call into the session (plan.md § Plan traps 30).
+  the state and `aim_in_force`'s two values to the call of `Relation::view` in
+  `Imaging::view`; the view built under the lock passes `(None, false)` (plan.md § The
+  imaging state). Hold the imaging state's lock across no call into the session
+  (plan.md § Plan traps 30).
 - [ ] T023 [US4] Run the `lint` and `test` gates with every existing test, US2's and
   US3's and the `motion` binary's tracking tests included, unchanged and green. Commit
   the green story (US4-S1, US4-S2, US4-S3, US4-S4, US4-S5, US4-S6, US4-S7 and
@@ -281,11 +302,15 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
 - [ ] T024 [US5] Create `crates/finder/tests/console/imaging_smoothing.rs`, the module
   `imaging_smoothing` of `console`, and add `mod imaging_smoothing;` after `mod
   imaging_relation;` in `crates/finder/tests/console/main.rs`, with the solving rig.
-  Write failing tests for the window's worked values, the mirror sense, a finder frame
-  of another size and `should_apply` (US5-S1); six solves, the narrow radius, and
+  Before the first solve on each console it builds, a test waits until the session's
+  `pointing` is live and 5 s more, as US4-S1 does. Write failing tests for the
+  window's worked values, the outliers in the order US5-S1 gives them, the mirror
+  sense, a finder frame of another size and `should_apply` (US5-S1); six solves, the
+  narrow radius, and
   `hint_for` called with literals for a corner region, the floor and the ceiling
   (US5-S2); a turned camera and a moved aim point (US5-S3); and a second console with
-  the session file, without it, and with a `relation.json` of another camera (US5-S4).
+  the session file, without it (whose first solve drops the stored readings), and with
+  a `relation.json` of another camera (US5-S4).
 
 ### Implementation
 
@@ -294,8 +319,9 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
   and the view's `set_aside`; inside `Relation`, replace the one aim reading with a
   `Window`, so that `take` clears it when the session's aim point is not the measured
   one, gives the reading to `Window::take`, answers the median only when `should_apply`
-  says so and saves `relation.json`, while `describe` and `store_scale` read and write
-  the window's lists; `take` and `view(in_force, held)` keep their signatures, and
+  says so and saves `relation.json`, while `describe` reads the window's lists and
+  `store_scale` and `take` write them through one private `Relation::save`; `take` and
+  `view(in_force, held)` keep their signatures, and
   `in_force` is still the held aim point while one is held (plan.md § The relation,
   the window). In `crates/finder/src/imaging/solving.rs` change only `hint_for`: the
   narrow radius, the sensor's diagonal; `take_aim_reading` and `note_solve` stay as
@@ -329,16 +355,20 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
   `imaging` in `request()` of `crates/finder/web/src/useSession.ts`. Create
   `crates/finder/web/src/components/ImagingSolveBlock.tsx` with the words of plan.md
   § The page and place it in `crates/finder/web/src/components/ImagingPage.tsx` after
-  the Imaging frame section.
+  the Imaging frame section. Keep words that name a Tailwind utility (`outline`,
+  `border`, `ring`, `shadow`, `hidden`) out of comments and strings under `src`: each
+  adds CSS (plan.md § The page).
 - [ ] T030 [US6] Create `crates/finder/web/src/components/ImagingField.tsx` with
-  `imagingFieldCorners` and `ImagingField`, draw it in
+  `imagingFieldCorners` and `ImagingField`, with a path helper of its own (`Chart.tsx`'s
+  `toPath` is private, and `Chart.tsx` imports this file), draw it in
   `crates/finder/web/src/components/Chart.tsx` after the target mark under the
   conditions of plan.md § The page, and add the source line to
   `crates/finder/web/src/components/AimTap.tsx`.
 - [ ] T031 [US6] Make the three edits to `DESIGN.md` and add the Imaging field component
   to `.impeccable/design.json` (plan.md § `DESIGN.md` and `.impeccable/design.json`).
   Run the `lint` and `test` gates with every existing Vitest and Playwright test
-  unchanged and green, commit the rebuilt `crates/finder/web/dist`, and commit the green
+  unchanged and green, check that the CSS asset in `crates/finder/web/dist/assets`
+  kept its name, commit the rebuilt `crates/finder/web/dist`, and commit the green
   story (US6-S1, US6-S2, US6-S3, US6-S4, US6-S5, US6-S6 and US6-S7).
 
 ## Phase 7: User Story 7 — One MCP tool (Priority: P3)
@@ -349,13 +379,15 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
   `imaging_solve` of finder's `mcp` test binary, and add `mod imaging_solve;` after `mod
   imaging;` in `crates/finder/tests/mcp/main.rs`, with the solving rig built with MCP
   on. Write failing tests for US7-S1, US7-S2 (its solver built `with_delay` of 5 s, the
-  simulator's clock read before and after the call), US7-S3 and US7-S4.
+  simulator's clock read before and after the call), US7-S3 and US7-S4 (each answer
+  within 1 s of tokio time).
 
 ### Implementation
 
 - [ ] T033 [US7] Add `solve_imaging_frame` to `crates/finder/src/mcp/tools.rs` (plan.md
   § The MCP tool), and its line to the tool list in `## MCP clients` of
-  `crates/finder/README.md`.
+  `crates/finder/README.md`, with the count in the sentence before the list changed
+  from three tools to four.
 - [ ] T034 [US7] Run the `lint` and `test` gates with every existing test unchanged and
   green. Commit the green story (US7-S1, US7-S2, US7-S3 and US7-S4).
 

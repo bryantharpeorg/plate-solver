@@ -9,11 +9,12 @@ depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console"]
 # Every `path:line` in this trio was checked against `main` at 49bb210
 # (49bb210fe4860dd98ba24727074e7bd3cc0d7124, 028's US5), the worktree's HEAD when the
 # audit was applied; the ten citations that commit moved are re-anchored.
-# Not yet probe-built: no story of this trio has been compiled or run (plan.md
-# § Refinement Record). It builds on code that 030-imaging-camera-link and
-# 031-imaging-frames-on-console create and that does not exist yet; every interface of
-# theirs named here is taken from their plan.md as drafted, and the trio is re-anchored
-# to `main` after both land and before the flip
+# Probe-built on 2026-11-18 (round 1, every story), on 030's landed code with 031's
+# round-1 probe code on it: the round-1 probe fixes are in, and no story measured over
+# the budget (plan.md § Refinement Record). It builds on code that
+# 030-imaging-camera-link and 031-imaging-frames-on-console create and that does not
+# exist yet; every interface of theirs named here is taken from their plan.md as
+# drafted, and the trio is re-anchored to `main` after both land and before the flip
 # (plan.md § Prerequisites).
 # It stays draft until the owner settles the owner decisions and flips it to `ready`,
 # which gives the approvals listed under "Owner approvals" and dispatches it.
@@ -331,6 +332,88 @@ was set, and MCP clients get one tool.
   held aim point through `Session::held_aim` (037's FR-022, FR-025). The edge case of
   a measured aim point while Track is on now says how that re-centre takes it up.
 
+### Session 2026-11-18 (round 1 probes)
+
+- Q: What did the probe builds find? → A: Every story was built from this trio in a
+  throwaway worktree, on `main` at b1f01cc, where 030 had landed, with 031's round-1
+  probe code on it, tests first, with both gates, `cargo deny check` and `cargo
+  machete` (plan.md § Refinement Record, round 1). Every interface built as plan.md
+  writes it, but for `take_aim_reading`'s signature and the place where
+  `Imaging::solve` builds its hint; every story's tests passed, every story wrote
+  exactly its declared files, and none passed the budget; US2 and US4 came closest.
+  Five defects were blocking, each in a scenario as worded and none in an interface: the
+  simulated adapter kept the sensor centre's up for a frame of a region, so US2-S2's
+  top half missed its 0.01 pixel; US4-S5 tapped a star too far from the true aim point
+  for the next solve's hint to reach; US4-S4's swung telescope moved the simulated
+  adapter's answer too; US4-S8 solved while the GoTo's last approach was still inside
+  the fit's reach; and US5's scenarios solved before the finder camera's history held
+  enough live solves. Thirty-eight defects were reported in all; thirty-four fixes are
+  in this trio, none adds a requirement, and the four left out were each marked as
+  noted only or of low value by the probe that found it.
+- Q: Which scenarios changed? → A: Each where a build broken on purpose passed every
+  test (the probes' bite checks), or where a scenario as worded could not pass:
+  - the solving rig: its node is served with `node.service().routes()`;
+  - US1-S6: a 2 × 2 frame whose cell mean is rounded, a mono frame 4 × 2502 that is
+    halved, and exit code 1 with the two lines still read;
+  - US2-S2: a field height 1.06 times the frame's also answers `NotSolved`;
+  - US2-S3: the abort is sent 1 s after the frame is asked for, and the frame waited
+    for until it is `aborted`;
+  - US2-S4: the test's solver waits 1.5 s before each failed answer, and `took_ms` is
+    1500;
+  - US3-S2: after the third solve, at binning 2, `relation.json` holds the third
+    frame's scale, equal to the first solve's per sensor pixel;
+  - US3-S4, new bullet: with the target set before the first solve, the last imaging
+    solve still hints;
+  - US3-S8: `hint_for` with `skip` 4, and, new, a rig whose solver times out three
+    times and then finds too few stars three times;
+  - US4-S2, new bullet: a drift of 63″ a second, inside the travel's allowance for its
+    own error;
+  - US4-S4: the simulated telescope is swung back before the solve is asked for, and
+    the frame's truth is read before the swing;
+  - US4-S5: the tap is on the centroid nearest (700, 420), and the next solve's hint
+    is taken at the tapped pixel;
+  - US4-S8: the wait after `tracking` is 15 s, the model's slip is never marked, and
+    the oracle says what an aim point applied at once does on `main` since 038;
+  - US5-S1: the outliers taken in an order that sets each aside, the mirrored one on a
+    fresh window;
+  - US5-S2, US5-S3 and US5-S4: each console waits for a live pointing and 5 s more
+    before its first solve, as US4-S1 does;
+  - US5-S4: a second console without the session file drops the stored readings at
+    its first solve;
+  - US7-S4: "at once" is within 1 s of tokio time.
+- Q: Which behaviours did the probes settle where the plan left a choice, or wrote
+  something that could not be built? → A: These, each written where plan.md gives the
+  behaviour: for a frame of a region the simulated adapter takes the sensor's up as
+  seen at the frame's centre, since north turns across the sensor (FR-008 now says
+  so); `solved(id)` answers the latest solve once it is past `id` or has ended, woken
+  by 031's watch of changes; `SolveHint`'s `Serialize` is written by hand;
+  `Imaging::solve` builds the hint with the imaging state's lock released, then checks
+  for a running solve again; `take_aim_reading` is a free function on the state the
+  solve's task holds; only `Imaging::view` measures the relation against the aim point
+  in force, and the views 031's take, the settings edit and `Imaging::solve` answer
+  show no aim reading; `store_scale` and `Relation::take` save through one private
+  `Relation::save`; a Bayer region's right and bottom edges go down to an even number;
+  a test module binds the live helpers only when it uses them, and writes an expected
+  number with no more digits than an `f64` needs; `ImagingField.tsx` writes its own
+  path helper and its tick points away from the aim point; the README's count of
+  imaging tools goes from three to four; and a word under `src` that names a Tailwind
+  utility adds CSS, so the CSS asset's unchanged name is the check that the page
+  added none.
+- Q: What did the probes have to assume about ASTAP? → A: Thirteen facts. ASTAP was not
+  run, and US1-S7 replayed stand-in captures written from this trio, which prove the
+  replay and nothing of ASTAP. The thirteen are a checklist in plan.md § Capturing
+  ASTAP's output for the owner's real captures (plan.md § Prerequisites 5), each with
+  what changes here if a capture disagrees. No behaviour changed for them.
+- Q: What is still caught by no test? → A: The order of the refusals when two apply at
+  once; a `describe` of another camera zeroing the misses, and an uploaded pointing
+  never hinting; which fix inside the exposure is the nearest, the drop of fixes of
+  another finder size, the history task's span, uploaded pointings kept out of the
+  history, and `track_on`'s `armed` branch, each of little effect on an aim reading; a
+  reading set aside applying the median, which cannot differ from what was applied
+  before it; and the up axis less its part along the sight line, which no test can
+  tell apart. The probes judged each of low value. US1-S5's sleeping script may be
+  killed before it writes its pid on a heavily loaded machine; it was not seen.
+
 ## Owner decisions
 
 Each is a design or taste call the plan document leaves open. None is settled but 25,
@@ -593,8 +676,9 @@ Every scenario shares these definitions unless it says otherwise.
   a `SimMount::new` (`crates/simulator/src/mount.rs:232`) connected first and
   `push_to(50.0, 120.0)` after; a `SimNode` over it with a 500 ms frame interval and
   the token `test-token`, served over a fresh duplex for each connection with
-  `memory::serve_routes_on` and its `routes()`, as
-  `crates/finder/tests/support/mcp.rs:228` serves its node; a session paired to it with
+  `memory::serve_routes_on` and `node.service().routes()` (a `SimNode` has no `routes()`
+  of its own; `crates/finder/tests/support/mcp.rs:228` serves a node's service the same
+  way); a session paired to it with
   the site 40° N 75° W, no target and no aim point; then `AppState::shared` with
   `with_session`, `with_clock` on the simulator's clock, `with_link`, `with_live()`,
   `with_imaging(R)` and `with_imaging_solver(Arc::new(SimulatedSolver::new(sim.clone())))`.
@@ -832,13 +916,23 @@ development, `cargo nextest run -p finder --locked --test console imaging_astap:
      `input.fits` is 10 × 10 with sample (0, 0) 1126 and sample (9, 9) 1342;
    - the same with the region x 11, y 11, width 20, height 20 leaves an `input.fits` of
      9 × 9 whose sample (0, 0) is 1150;
+   - `measure` of an `RGGB` frame 2 × 2 of the test's own, whose samples are 1000 and
+     1001 in its first row and 1001 and 1000 in its second, leaves an `input.fits` of
+     one sample, 1001: the mean of 4002, rounded half up (every cell of the test frame
+     has a whole mean, so only this frame shows the rounding);
+   - `measure` of a mono test frame 4 × 2502 leaves an `input.fits` of 2 × 1251, halved
+     once since it had more than 2500 rows, whose sample (0, 0) is 1006, and answers
+     `half_flux_px` 6.6 within 1e-12;
+   - with `code` 1 and the same two lines, `measure` of the mono test frame 64 × 48
+     still answers 3.3 and 666: the two lines are read whatever the exit code;
    - with `reply.stdout` `HFD_MEDIAN=0.0` and `STARS=0` it answers `TooFewStars`; with
      an empty `reply.stdout`, `Failed` and `the imaging solver's measure could not be
      read`; a region reaching outside the frame (x 60, y 40, width 10, height 10),
      `Failed` and `the region is outside the imaging frame`; and, on the `RGGB` test
      frame, the region x 11, y 11, width 2, height 2, which holds no whole cell,
      `Failed` and `the region is too small`;
-   - oracle: ASTAP's documents (the two printed lines) and the test frame's rule.
+   - oracle: ASTAP's documents (the two printed lines), the test frame's rule and the
+     worked rounding.
 7. **Given** the saved captures under `fixtures/finder/astap/` (owner approval 14), read
    through `captures.json`, and for each case the stub adapter replaying that case's
    saved files and exit code on a mono test frame of the size `captures.json` gives,
@@ -919,8 +1013,8 @@ development, `cargo nextest run -p finder --locked --test console imaging_solve:
      `TooFewStars`;
    - a whole frame at binning 1 with a hint 5° north of T and a radius of 3° answers
      `NotSolved`, and with a hint 2° north and the same radius it solves; with a field
-     height of twice `822·s/3600` it answers `NotSolved`, and with 1.04 times that it
-     solves;
+     height of twice `822·s/3600`, or of 1.06 times `822·s/3600`, it answers
+     `NotSolved`, and with 1.04 times `822·s/3600` it solves;
    - `measure` of a whole frame at binning 1 answers `half_flux_px` 2.825784 within
      1e-6 and at least 30 `stars`; after `set_imaging_optics` with `focus_error` 2.0,
      5.492337 within 1e-4, and 2.746168 within 1e-4 for the whole frame at binning 2;
@@ -935,8 +1029,10 @@ development, `cargo nextest run -p finder --locked --test console imaging_solve:
      until `state` is `no_link`, answers 409 and `the scope node is not connected`,
      031's words for that state;
    - with an exposure of 10000 ms set and a frame just asked for answers 409 and `the
-     imaging frame is still arriving`, and after `POST /api/imaging/abort` has ended
-     that frame, 409 and `the latest imaging frame was not saved`;
+     imaging frame is still arriving`; and 1 s later, after `POST /api/imaging/abort`
+     and a wait until `frame.state` is `aborted`, 409 and `the latest imaging frame was
+     not saved` (an abort sent before the scope node has begun the exposure ends
+     nothing, and the frame is then saved; 031's US5-S2 waits 1 s too);
    - with a saved frame and a foreign `Origin` answers 403;
    - with a solver built `with_delay` of 5 s, a saved frame and a first request
      answered 200, answers a second request 1 s later with 409 and `an imaging solve is
@@ -950,10 +1046,11 @@ development, `cargo nextest run -p finder --locked --test console imaging_solve:
    - after each refusal, R holds no `.solve.json` file that was not there before;
    - oracle: the stated words and statuses, compared exactly.
 4. **Given** the solving rig built instead with a solver of the test's own, which
-   answers its calls in order, each at once, with `NotSolved` and the detail `No
-   solution found!`, `TooFewStars`, `NoDatabase`, `TimedOut { seconds: 120 }` (the
-   test's solver waits for nothing; the wait itself is US1-S5's), `Failed` with `the
-   imaging solver ended with exit code 34`, and then worked answer B's solve, **When**
+   answers its calls in order, each failed answer after 1.5 s of tokio time and the
+   last at once, with `NotSolved` and the detail `No solution found!`, `TooFewStars`,
+   `NoDatabase`, `TimedOut { seconds: 120 }` (the test's solver waits only its 1.5 s;
+   the limit itself is US1-S5's), `Failed` with `the imaging solver ended with exit
+   code 34`, and then worked answer B's solve, **When**
    a test solves one saved frame six times, **Then** a committed test asserts that the
    first five end with `solve.state` `failed` and, in order, `solve.reason` and
    `solve.error` of `not_solved` and `the imaging solver found no solution` (with
@@ -962,10 +1059,13 @@ development, `cargo nextest run -p finder --locked --test console imaging_solve:
    star database it can read`, `timed_out` and `the imaging solver gave no answer
    within 120 s`, `failed` and `the imaging solver ended with exit code 34`; that each
    of the five also has `solve.file` `frames/2026-01-16/000001.solve.json` and a
-   `solve.took_ms` that is a number not below 0; that after each the sidecar has
+   `solve.took_ms` of 1500 within 1, the console clock's time from the request to the
+   failed answer; that after each the sidecar has
    `solved` false, the same `reason` and `error`, and a `took_ms` equal to the view's;
    and that after the sixth the sidecar has `solved` true and no `reason`. Oracle: the
-   words FR-001 gives each `SolveError`, compared exactly.
+   words FR-001 gives each `SolveError`, compared exactly, and the test solver's own
+   1.5 s on the virtual clock (answered at once, a `took_ms` hard-wired to 0 would
+   pass).
 5. **Given** the solving rig, **Then** a committed test asserts that `GET /api/imaging`
    before any solve has no `solve` key; and, on a console built without `with_imaging`,
    that its body is exactly `{"state":"off"}`. Oracle: the stated keys and body; the
@@ -1019,7 +1119,9 @@ development, `cargo nextest run -p finder --locked --test console imaging_hints:
    frame's solve has a `solve.hint.fov_deg` within 1e-3 of the same figure and is
    `solved`; and that `relation.json` under R parses with `format`
    `imaging-relation/1`, a `camera.model` equal to the imaging view's `camera.model`,
-   and the same `scale.arcsec_per_px` within 1e-9. **And** the committed test asserts
+   and, after the third solve, a `scale.frame_id` of the third frame's id and a
+   `scale.arcsec_per_px` within 1e-9 of the first solve's (a scale kept per delivered
+   sample would be twice it at binning 2). **And** the committed test asserts
    that `Imaging::scale_arcsec_per_px()`, reached through `AppState::imaging()`, is
    `None` before the first solve and the view's `relation.scale.arcsec_per_px` within
    1e-12 after it. Oracle: the simulator's truth.
@@ -1051,6 +1153,10 @@ development, `cargo nextest run -p finder --locked --test console imaging_hints:
      stopped and 120 s waited as in the first bullet, and then `PUT /api/session`
      `{"target":"M42"}`, the next frame's solve has `solve.hint.source` `target`: the
      last imaging solve stops being a source when the session's target changes;
+   - on a rig of its own whose session has the target M42 before the first frame, with
+     one frame solved through `pointing`, the star frames then stopped and 120 s
+     waited, the next frame's solve has `solve.hint.source` `last_solve`: the target is
+     unchanged, so the last imaging solve is still a source;
    - oracle: the stated order of sources, each solve here being the first since the
      last solved one or the first of its rig; M42 is nearly 30° from where the rig
      points.
@@ -1124,8 +1230,16 @@ development, `cargo nextest run -p finder --locked --test console imaging_hints:
      −5°, a `target` at RA 82°, Dec −5°, no `scale`, `pixel_um` 19.12, no
      `focal_length_mm` and `aim_measured` false, answers the source `pointing` with
      `skip` 0, `last_solve` with 1, `target` with 2, and `none` with radius 180.0
-     with 3 and with 7; and, with `last_solve` and `target` both `None`, `none` with
+     with 3, with 4 and with 7 (a source picked at `skip` modulo the count would give
+     `pointing` with 4); and, with `last_solve` and `target` both `None`, `none` with
      `skip` 1;
+   - on a rig of its own with the target M42 and no aim point, built with an imaging
+     solver of the test's own that answers `SolveError::TimedOut` to its first three
+     solves, `SolveError::TooFewStars` to the next three and the simulated solver's
+     answer after that, which waits until the session's `pointing` has the `source`
+     `live` and solves seven saved frames, the first three solves have
+     `solve.hint.source` `pointing` and the fourth to seventh `target`: `timed_out` is
+     a miss and `too_few_stars` is not;
    - oracle: the stated order of sources and rule of three; the hint's distance from
      the truth is the test's own separation over the simulator's truth (along the
      rows, the tapped pixel is 632 finder pixels from the frame's centre, 728, and the
@@ -1190,6 +1304,11 @@ and `cargo nextest run -p finder --locked --test motion imaging_track::`.
      The line through them is flat and sits at their mean, 2.2″ from the middle, and
      they scatter 22″ about it; two neighbours differ by 40″, which the difference of
      two fixes would have read as 80″ of travel in this 1 s exposure;
+   - **within the allowance**: the fixes of the second bullet drifting besides at
+     0.018623111° of RA a second (63″ a second on the sky) give `Measured`: the line
+     travels 63″ during the exposure, but the fixes scatter 22.5″ about it over D =
+     15 s², so its travel is uncertain by 5.8″, and 63 less 5.8 is under the 60″
+     allowed;
    - **moving**: the fixes of the first bullet drifting instead at 0.029560494° of RA
      a second (100″ a second on the sky) give `Moving`: the line travels 99″ during
      the exposure;
@@ -1228,24 +1347,33 @@ and `cargo nextest run -p finder --locked --test motion imaging_track::`.
    - on a fresh rig built with `with_focal_length_mm(900.0)`, a failed solve leaves no
      `relation.last` and no `aim`;
    - on a fresh rig, with the session's `pointing` live and 5 s more waited, a frame
-     taken and saved, the simulated telescope then swung away with `sim.push_to(50.0,
-     200.0)` and a wait until the session's `pointing` is more than 20° from the
-     frame's truth, the frame's solve has `solve.hint.source` `pointing`, a hint place
-     within 1.2° of the frame's truth, and is `solved`: the hint is the live solve of
-     the exposure's own moment, not the telescope's place when the solve was asked
-     for, which is some 49° away and outside any radius;
+     taken and saved and its truth read, the simulated telescope then swung away with
+     `sim.push_to(50.0, 200.0)` and a wait until the session's `pointing` is more than
+     20° from the frame's truth, the simulated telescope swung back with
+     `sim.push_to(50.0, 120.0)` and, with no wait between, the solve asked for (the
+     simulated adapter places its answer by the telescope's present altitude and
+     azimuth, `Simulator::imaging_truth_at`, while the session's latest pointing is
+     still the swung one), the frame's solve has `solve.hint.source` `pointing`, a hint
+     place within 1.2° of the frame's truth, and is `solved`: the hint is the live
+     solve of the exposure's own moment, not the session's latest pointing when the
+     solve was asked for, which is some 49° away and outside any radius;
    - oracle: the stated rules; the simulator's truth and its sidereal drift.
 5. **Given** the solving rig with a measured aim point in force, as after US4-S1,
    **Then** a committed test asserts that:
    - a tap is obeyed. The test takes a live preview that holds at least one star, as
      `crates/finder/tests/console/live/whole_loop.rs:63` takes one from a report's
      `preview_seq`, and sends `POST /api/aim` with that preview's `frame_id` and the
-     `x` and `y` of its first centroid, each rounded to a whole number. The answer is
-     200 with an `aim` of exactly the two keys `x` and `y`, each within 0.5 of that
-     centroid's; `GET /api/imaging` then has `relation.readings` 0 and no
+     `x` and `y` of its centroid nearest (700, 420), each rounded to a whole number
+     (the next solve's hint is the live pointing taken at the tapped pixel, so a star
+     more than 3°, some 360 finder pixels, from (700, 420) would put the hint outside
+     its radius; the first centroid of the rig's preview is 483 pixels away). The
+     answer is 200 with an `aim` of exactly the two keys `x` and `y`, each within 0.5
+     of that centroid's; `GET /api/imaging` then has `relation.readings` 0 and no
      `relation.aim` or `relation.angle_deg` key, and still has `relation.scale`;
-   - the next frame's solve measures again: the session's `aim` has `source` `measured`
-     and is within 1.5 pixels of (700, 420);
+   - the next frame's solve measures again: its `solve.hint` place is within 0.1° of
+     the session's `pointing` read when the solve was asked for (both are taken at the
+     tapped pixel), and the session's `aim` has `source` `measured` and is within 1.5
+     pixels of (700, 420);
    - `DELETE /api/aim` then answers 200 with no `aim` key, and `relation.readings` is
      0;
    - on a solving rig whose session was made with `Session::with_state_file` in the
@@ -1286,9 +1414,11 @@ and `cargo nextest run -p finder --locked --test motion imaging_track::`.
    GoTo and Track run in virtual time (`crates/finder/tests/support/goto.rs:42`), and
    its session has the target M42, still with no aim point; **When** a test waits until
    the pointing model holds a sync (`state.session().model(now).syncs` not empty, read
-   every 100 ms as `crates/finder/tests/support/goto.rs:218` reads it, for at most
-   300 s), sends `POST /api/track` with `{"on":true}`, waits until the session's
-   `track.state` is `tracking`, waits 5 s more, takes a saved frame and solves it,
+   every 100 ms of virtual time, for at most 300 s;
+   `crates/finder/tests/support/goto.rs:218` reads it the same way, once a tick),
+   sends `POST /api/track` with `{"on":true}`, waits until the session's `track.state`
+   is `tracking`, waits 15 s more (the fit reaches 10 s before the exposure, and the
+   GoTo's last approach must be outside it), takes a saved frame and solves it,
    **Then** a committed test asserts that:
    - the solve is `solved`, `relation.last.outcome` is `measured`, `relation.held` is
      true, and `relation.aim` has `x` within 1.5 of 700 and `y` within 1.5 of 420;
@@ -1296,16 +1426,20 @@ and `cargo nextest run -p finder --locked --test motion imaging_track::`.
    - the main telescope's true direction, `sim.directions_at(t).eyepiece` read every
      100 ms of virtual time for the 5 s after the test saw the solve end, is never more
      than 60″ from its first reading, the separation computed as the shared setup
-     says;
+     says; and `state.session().model(t).slip_pending`, read with each of those
+     readings, is never true (an aim point applied at once is read as a push by hand,
+     which marks the model's slip);
    - after `POST /api/track` with `{"on":false}`, the session's `aim` has the `source`
      `measured` within 5 s, its `x` and `y` equal `relation.aim`'s within 1e-9, and
      `relation` then has no `held` key;
    - oracle: the simulator's truth. 60″ is the bound existing tracking tests hold the
      telescope to (`crates/finder/tests/support/tracker.rs:3`). An aim point applied at
-     once would have handed the tracker the step from the finder frame's centre, where
-     a live pointing is taken with no aim point, to the measured aim point: about 127
-     finder pixels, 3800″, of which it asks to close 60% before the next live solve
-     (`crates/finder/src/tracking.rs:29`).
+     once moves the live pointing by about 127 finder pixels, 3800″; 038's
+     push-by-hand rule (`Session::track_live_pointing`) reads that step as a push,
+     marks the model's slip and hands nothing over, so the telescope does not chase it
+     either way. The 60″ bullet guards Track against any other lurch; `relation.held`,
+     the absent `aim` and the model's unmarked slip are what fail on an aim point
+     applied at once.
 
 ---
 
@@ -1339,10 +1473,13 @@ development, `cargo nextest run -p finder --locked --test console imaging_smooth
      and `angle_deg()` 0.0 within 1e-9; five at (700, 420) with the angles 359.8°,
      0.2°, 0.0°, 359.6° and 0.4° give 0.0 within 1e-9;
    - with three readings at (700, 420, 17.0°), a reading at (705, 420, 17.0°), 150″
-     away, is `Taken::SetAside` and leaves `aim()` and `len()` as they were; so is one
-     at (700, 420, 18.5°); so is one at (700, 420, 17.0°) that is mirrored; one at
-     (703, 420, 17.0°), 90″ away, is `Taken::Measured` and clears what was set aside;
-     with two readings held, a reading at (760, 400, 40.0°) is `Taken::Measured`;
+     away, is `Taken::SetAside` and leaves `aim()` and `len()` as they were; so, next,
+     is one at (700, 420, 18.5°); then one at (703, 420, 17.0°), 90″ away, is
+     `Taken::Measured` and leaves `set_aside()` 0; on a fresh window of three readings
+     at (700, 420, 17.0°), one at (700, 420, 17.0°) that is mirrored is
+     `Taken::SetAside` (taken third in a row on the first window, it would answer
+     `Taken::Replaced`); with two readings held, a reading at (760, 400, 40.0°) is
+     `Taken::Measured`;
    - with three readings at (700, 420, 17.0°), three in a row at (760, 400, 40.0°) are
      `SetAside`, `SetAside` and `Replaced`, after which `len()` is 3, `set_aside()` is
      0, `aim()` is (760.0, 400.0) and `angle_deg()` 40.0;
@@ -1354,14 +1491,16 @@ development, `cargo nextest run -p finder --locked --test console imaging_smooth
      with a measured one at (700, 420) and 30″ a pixel it is false for a median of
      (700.3, 420.0), 9″ away, and true for (700.4, 420.0), 12″ away;
    - oracle: worked examples.
-2. **Given** the solving rig, **When** a test solves six saved frames, one after
-   another, **Then** a committed test asserts that after the fifth and after the sixth
-   `relation.readings` is 5; that the session's `aim` is within 1.5 pixels of (700,
-   420) with `source` `measured`; that `relation.angle_deg` is within 0.25° of 17.0;
-   that `relation.aim` is within 10″ of the session's `aim` at 29.78″ a pixel (0.336
-   pixels); and that the sixth solve's `solve.hint.radius_deg` is within 0.001 of the
-   sensor's diagonal on the sky, `hypot(1236, 822)·relation.scale.arcsec_per_px/3600`
-   (about 0.9007°), with a hint place within 0.05° of the solved centre. **And** the
+2. **Given** the solving rig, **When** a test waits until the session's `pointing` has
+   the `source` `live`, waits 5 s more, as US4-S1 does, and solves six saved frames,
+   one after another, **Then** a committed test asserts that after the fifth and after
+   the sixth `relation.readings` is 5; that the session's `aim` is within 1.5 pixels of
+   (700, 420) with `source` `measured`; that `relation.angle_deg` is within 0.25° of
+   17.0; that `relation.aim` is within 10″ of the session's `aim` at 29.78″ a pixel
+   (0.336 pixels); and that the sixth solve's `solve.hint.radius_deg` is within 0.001
+   of the sensor's diagonal on the sky,
+   `hypot(1236, 822)·relation.scale.arcsec_per_px/3600` (about 0.9007°), with a hint
+   place within 0.05° of the solved centre. **And** the
    committed test asserts of `solving::hint_for`, called with a `HintInputs` literal
    whose frame is the region 927, 617, 309, 205 at binning 1 (a quarter-size corner of
    a sensor 1236 × 822), with a `pointing`, a `scale` of 2.1845, `skip` 0 and
@@ -1374,7 +1513,9 @@ development, `cargo nextest run -p finder --locked --test console imaging_smooth
    asserts that the first is under the hint's radius and over the second, which is
    why the radius is the sensor's diagonal and not the frame's. Oracle: the
    simulator's truth, and the worked arithmetic of the radius.
-3. **Given** the solving rig with three frames solved, **When** a test turns the
+3. **Given** the solving rig with three frames solved, the first once the session's
+   `pointing` has the `source` `live` and 5 s more have passed, as US4-S1 waits,
+   **When** a test turns the
    simulated imaging camera with `set_imaging_optics` to an imaging angle of 40° and
    solves three more, **Then** a committed test asserts that after the fourth and the
    fifth solve `relation.last.outcome` is `set_aside`, `relation.set_aside` is 1 and
@@ -1386,14 +1527,19 @@ development, `cargo nextest run -p finder --locked --test console imaging_smooth
    (760, 400) and solves three more, **Then** the committed test asserts that the
    session's `aim` ends within 1.5 pixels of (760, 400). Oracle: the simulator's truth.
 4. **Given** a solving rig whose session was made with `Session::with_state_file` in
-   the scratch folder, with three frames solved, **When** the console is dropped and a
-   second one is built over the same R and session file, **Then** a committed test
+   the scratch folder, with three frames solved, the first once the session's
+   `pointing` has the `source` `live` and 5 s more have passed, as US4-S1 waits,
+   **When** the console is dropped, a second one is built over the same R and session
+   file, and the test waits the same way before the second console's first solve (in
+   each variant below too), **Then** a committed test
    asserts that before any solve `relation.readings` is 3 and `relation.aim` and
    `relation.angle_deg` read what the first console's last read gave, within 1e-9; that
    `relation.json` holds three `readings`; and that the second console's first solve
    leaves `relation.readings` 4. **Given** instead that the session file is removed
    before the second console is built, **Then** the committed test asserts that its
-   `relation` has `readings` 0 and no `aim` key, and still has `scale`. **Given**
+   `relation` has `readings` 0 and no `aim` key, and still has `scale`; and that its
+   first solve leaves `relation.readings` 1, the three readings of `relation.json`
+   being dropped since the session's aim point is not the measured one. **Given**
    instead that the session file is kept and the test first rewrites `relation.json`
    with its `camera.serial` changed to `OTHER`, **Then** the committed test asserts
    that the second console's imaging view has no `relation` key before its first
@@ -1535,9 +1681,10 @@ development, `cargo nextest run -p finder --locked --test mcp imaging_solve::`.
    route's and the solve's own.
 4. **Given** a console with MCP on and no `with_imaging`, as
    `crates/finder/tests/support/mcp.rs:24` builds its state, **Then** a committed test
-   asserts that `solve_imaging_frame` with `{}` answers at once with `isError` true
-   and `this console takes no imaging frames`; and, on the solving rig built without
-   `with_imaging_solver`, `this console has no imaging solver`. No result of the tool
+   asserts that `solve_imaging_frame` with `{}` answers within 1 s of tokio time, under
+   `start_paused`, with `isError` true and `this console takes no imaging frames`; and,
+   on the solving rig built without `with_imaging_solver`, within 1 s of tokio time
+   too, `this console has no imaging solver`. No result of the tool
    on the solving rig contains `test-token`. Oracle: the stated words, and the token
    the rig paired with.
 
@@ -1614,7 +1761,10 @@ development, `cargo nextest run -p finder --locked --test mcp imaging_solve::`.
   (`crates/finder/src/session.rs:972`) and turns an offset of 10″ or more into a rate
   that removes 60% of it before the next live solve, a rate nothing bounds
   (`crates/finder/src/tracking.rs:300`). A new aim point set at once would hand it the
-  whole step, some 3800″ on the simulator, outside GoTo's checks. So the aim point
+  whole step, some 3800″ on the simulator, outside GoTo's checks. Since 038 landed, a
+  step of more than 5′ is read as a push by hand instead
+  (`Session::track_live_pointing`): nothing is handed to the tracker, but the pointing
+  model's slip is marked, which the hold avoids too (US4-S8). So the aim point
   waits: it is held while Track is on (`relation.held`, and a line on the Imaging
   page), aim readings taken meanwhile are smoothed against it, and the first live
   solve the session records after Track is off applies it (FR-036, owner decision
@@ -1684,12 +1834,13 @@ development, `cargo nextest run -p finder --locked --test mcp imaging_solve::`.
   on the prepared copy of the frame or region and read `HFD_MEDIAN=` and `STARS=` from
   its standard output, answering the diameter in imaging-frame pixels (US1-S6).
 - **FR-008**: The simulated solver adapter SHALL answer from the simulator: the truth at
-  the middle of the frame's exposure, moved to the centre of the frame's region and
-  scaled by its binning, never mirrored; `TooFewStars` with fewer than 30 stars of the
-  simulator's seeded field in the frame; `NotSolved` when the hint's place is farther
-  from the answer than its radius, or its field height is more than 5% from the
-  frame's, the accuracy ASTAP's page asks for; and a star measure from the simulator's
-  point-spread constants and focus error (US2-S2). It reads no file.
+  the middle of the frame's exposure, moved to the centre of the frame's region, with
+  its up taken there, and scaled by its binning, never mirrored; `TooFewStars` with
+  fewer than 30 stars of the simulator's seeded field in the frame; `NotSolved` when
+  the hint's place is farther from the answer than its radius, or its field height is
+  more than 5% from the frame's, the accuracy ASTAP's page asks for; and a star measure
+  from the simulator's point-spread constants and focus error (US2-S2). It reads no
+  file.
 - **FR-009**: `POST /api/imaging/solve` SHALL take no body, under the same-origin rule,
   and solve the latest imaging frame when it is `saved`, answering 200 with the imaging
   view at once. It SHALL answer 409 with the texts of US2-S3 when the console takes no
