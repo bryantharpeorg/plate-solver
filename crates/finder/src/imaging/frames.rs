@@ -8,6 +8,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use scope_link::proto;
@@ -16,6 +17,22 @@ use tokio::sync::watch;
 use super::{fits, Held, Imaging, Refusal, RoiView};
 use crate::{link::ImagingClient, session::Clock};
 use fits::CardValue;
+
+/// The most bytes of samples the console accepts for one frame (FR-010).
+pub const FRAME_LIMIT: u64 = 256 * 1024 * 1024;
+/// How long after the last chunk the next may take (FR-010).
+pub const CHUNK_WAIT: Duration = Duration::from_secs(30);
+/// The header may take twice the exposure plus this: the node may try twice
+/// (FR-010).
+pub const HEADER_SLACK: Duration = Duration::from_secs(150);
+
+/// The header's wait, twice the exposure plus `HEADER_SLACK`, and its whole
+/// seconds rounded up, as the failure's words give them (152 for a 1000 ms
+/// exposure, 151 for 500 ms).
+fn header_wait(exposure_ms: f64) -> (Duration, u64) {
+    let wait = HEADER_SLACK + Duration::from_secs_f64(exposure_ms * 2.0 / 1000.0);
+    (wait, wait.as_secs_f64().ceil() as u64)
+}
 
 /// The latest imaging frame as the view shows it. Fields appear as the frame
 /// moves on: the first six at once, the rest from the header on, and the last
@@ -228,19 +245,45 @@ async fn follow(task: &mut FrameTask) -> Option<String> {
             .unwrap_or(0),
         save: false, // US5 sends `save_at_node` here.
     };
-    let mut stream = match task.client.expose(request).await {
-        Ok(stream) => stream,
-        Err(status) => return Some(format!("the exposure failed: {}", status.message())),
-    };
-    let mut header = match stream.message().await {
-        Ok(Some(proto::ExposeEvent {
-            event: Some(proto::expose_event::Event::Header(header)),
-        })) => header,
-        Ok(Some(_)) | Ok(None) => {
+    // The call and the first message are both within twice the exposure plus
+    // the node's second try (FR-010).
+    let (wait, whole) = header_wait(task.frame.exposure_ms);
+    let first = tokio::time::timeout(wait, async {
+        let mut stream = task.client.expose(request).await?;
+        let first = stream.message().await?;
+        Ok::<_, tonic::Status>((stream, first))
+    })
+    .await;
+    let (mut stream, mut header) = match first {
+        Err(_) => return Some(format!("no imaging frame header arrived within {whole} s")),
+        Ok(Err(status)) => return Some(format!("the exposure failed: {}", status.message())),
+        Ok(Ok((
+            stream,
+            Some(proto::ExposeEvent {
+                event: Some(proto::expose_event::Event::Header(header)),
+            }),
+        ))) => (stream, header),
+        // No first message, or a first message that is not a header.
+        Ok(Ok((_, None))) | Ok(Ok((_, Some(_)))) => {
             return Some("the scope node sent no imaging frame header".to_string())
         }
-        Err(status) => return Some(format!("the exposure failed: {}", status.message())),
     };
+    // The header's byte count must be its width times its height times its
+    // bytes a sample, above 0 and at most `FRAME_LIMIT` (FR-010). A size too
+    // large to hold is one that does not add up.
+    let bytes_a_sample = match header.bits {
+        8 | 16 => u64::from(header.bits / 8),
+        _ => return Some("the imaging frame's header does not add up".to_string()),
+    };
+    let expected = u64::from(header.width)
+        .checked_mul(u64::from(header.height))
+        .and_then(|pixels| pixels.checked_mul(bytes_a_sample));
+    if header.byte_count == 0
+        || header.byte_count > FRAME_LIMIT
+        || expected != Some(header.byte_count)
+    {
+        return Some("the imaging frame's header does not add up".to_string());
+    }
     // The header fills the view, the state becomes `receiving`, and the
     // header's region, when it carries one, replaces the settings'.
     let start = header.start_s - task.offset_s;
@@ -270,24 +313,29 @@ async fn follow(task: &mut FrameTask) -> Option<String> {
     loop {
         if received >= header.byte_count {
             // The frame is whole; the stream is dropped without reading on.
-            samples.truncate(header.byte_count as usize);
             task.frame.received = Some(header.byte_count);
             task.frame.received_at = Some(task.clock.now());
             drop(stream);
             return save(task, &samples, &date, header.exposure_ms).await;
         }
-        match stream.message().await {
-            Ok(Some(proto::ExposeEvent {
+        // Each chunk is within `CHUNK_WAIT` of the last (FR-010).
+        match tokio::time::timeout(CHUNK_WAIT, stream.message()).await {
+            Err(_) => return Some("the imaging frame stalled".to_string()),
+            Ok(Ok(Some(proto::ExposeEvent {
                 event: Some(proto::expose_event::Event::Chunk(chunk)),
-            })) => {
+            }))) => {
+                // A chunk past the header's count is one too many (FR-010).
+                if received + chunk.len() as u64 > header.byte_count {
+                    return Some("the scope node sent more bytes than the header said".to_string());
+                }
                 samples.extend_from_slice(&chunk);
                 received += chunk.len() as u64;
-                task.frame.received = Some(received.min(header.byte_count));
+                task.frame.received = Some(received);
                 task.publish();
             }
             // The end of the stream, an error on it, or an event that is not a
             // chunk, before the header's count is reached.
-            _ => {
+            Ok(_) => {
                 return Some(format!(
                     "the imaging frame was incomplete: {received} of {} bytes",
                     header.byte_count
