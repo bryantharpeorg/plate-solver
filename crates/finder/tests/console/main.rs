@@ -18,6 +18,7 @@ mod imaging_hints;
 mod imaging_lease;
 mod imaging_preview;
 mod imaging_relation;
+mod imaging_smoothing;
 mod imaging_solve;
 mod link;
 mod live;

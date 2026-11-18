@@ -759,3 +759,54 @@ camera's model, serial, size and pixel size; a file made for another camera is
 ignored. `--focal-length-mm FOCAL_LENGTH_MM` sets the focal length in
 millimetres, shown as `relation.focal_length_mm`, and must be a number above
 0; it sizes a solve's field until a scale is measured.
+
+### The measured aim point
+
+The console measures where the imaging camera's centre falls in the finder
+camera's frame whenever it solves a whole-sensor imaging frame: it fits a
+straight line, by least squares in each axis, through the finder camera's live
+solves from 10 s before the exposure to 10 s after it, and reads the line at the
+middle of the exposure; the imaging angle is the imaging frame's up east of
+north less the finder frame's up seen there. A later spec that solves frames of
+its own may offer each solve the same reading through `Imaging::note_solve`.
+
+Three things take no aim reading instead, and the imaging view names which of
+the six outcomes happened last, as `relation.last`: `no_live_pointing`, when no
+live solve falls inside the exposure or fewer than three fall in its reach;
+`moving`, when the telescope travels more than 60″ during the exposure beyond
+the line's own error, or when the fixes scatter more than 90″ about the line;
+and `off_frame`, when the imaging centre falls outside the finder camera's
+frame.
+
+The readings are smoothed (FR-024 to FR-027): the console holds the last five
+aim readings and answers with the medians of their x, their y and their imaging
+angle taken around the circle. With three or more held, a reading more than
+120″ on the sky from the median aim point, more than 1° from the median angle
+or of the other mirror sense is set aside and moves nothing, shown as
+`relation.set_aside`; a reading that is none of those clears the ones set
+aside. The third set aside in a row replaces what is held with the three, which
+is how a camera turned in the focuser takes over without a control. The
+session's aim point is set from the medians only when none is in force, when
+the one in force was tapped, or when the medians have moved more than 10″ from
+it: a tap or a reset is obeyed, and replaced at the next aim reading. An aim
+reading made in a finder frame of another size drops everything held, since
+its pixels mean something else.
+
+While Track is on, a newly measured aim point is held back instead of applied,
+shown as `relation.held`, and applied at the first live solve after Track is
+off, so the tracker never chases it; a restart forgets a held one.
+
+Once the session's aim point is the measured one and a kept scale sizes the
+solve's field, a hint from a live pointing is narrowed to the sensor's diagonal
+on the sky — the camera's whole width and height, whatever region the frame
+covers, since the hint's place is the sensor's centre and a frame of a region
+may lie anywhere on the sensor — never under 0.2° or over 3°. The live pointing
+the hint uses is the finder camera's live solve nearest the exposure's own
+middle.
+
+`relation.json` in the imaging folder keeps the kept scale with the aim
+readings held and those set aside, each with the size of the finder frame it
+was made in; they are read at start, and dropped when the camera differs. The
+aim point itself is the session's, in `session.json`, marked `aim_measured`
+while it was measured; a session whose aim point is not the measured one drops
+the readings at its first solve.
