@@ -12,10 +12,12 @@ depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console"]
 # Probe-built on 2026-11-18 (round 1, every story), on 030's landed code with 031's
 # round-1 probe code on it: the round-1 probe fixes are in, and no story measured over
 # the budget (plan.md § Refinement Record). It builds on code that
-# 030-imaging-camera-link and 031-imaging-frames-on-console create and that does not
-# exist yet; every interface of theirs named here is taken from their plan.md as
-# drafted, and the trio is re-anchored to `main` after both land and before the flip
-# (plan.md § Prerequisites).
+# 030-imaging-camera-link and 031-imaging-frames-on-console created; every interface of
+# theirs named here was taken from their plan.md as drafted and read again on `main`
+# after both landed.
+# Re-anchored 2026-11-18 to `main` at e9687ce (e9687ce911e0c63529c04ad41ac877f2e4174a83),
+# where 030's eight stories and 031's nine have landed: every citation was compared line
+# for line with 49bb210, and the ones that moved are corrected (plan.md § Prerequisites 2).
 # It stays draft until the owner settles the owner decisions and flips it to `ready`,
 # which gives the approvals listed under "Owner approvals" and dispatches it.
 ---
@@ -114,11 +116,11 @@ was set, and MCP clients get one tool.
 - Q: What was found in the code? → A: Eleven things, each read at dbc2b5b and each
   line re-checked at 49bb210, where 028's US5 had moved ten of them in the tests:
   1. The aim point is `Aim { x, y }`, a durable full-frame pixel of the finder camera
-     (`crates/finder/src/session.rs:395`). Only `Session::set_aim` changes it
-     (`crates/finder/src/session.rs:1234`), called by the two `/api/aim` handlers
-     (`crates/finder/src/api.rs:958`, `crates/finder/src/api.rs:1010`). A live pointing
-     is taken at it (`crates/finder/src/session.rs:1192`) and so is a sync
-     (`crates/finder/src/model.rs:264`). Setting it resets nothing in the pointing
+     (`crates/finder/src/session.rs:467`). Only `Session::set_aim` changes it
+     (`crates/finder/src/session.rs:1589`), called by the two `/api/aim` handlers
+     (`crates/finder/src/api.rs:1026`, `crates/finder/src/api.rs:1078`). A live pointing
+     is taken at it (`crates/finder/src/session.rs:1545`) and so is a sync
+     (`crates/finder/src/model.rs:268`). Setting it resets nothing in the pointing
      model.
   2. Eleven test files build an `Aim` by literal, most as `Aim { x: 700.0, y: 420.0 }`,
      among them `crates/finder/tests/support/live.rs:73`, and six assertions require the
@@ -139,10 +141,10 @@ was set, and MCP clients get one tool.
      the field is private, so the imaging angle needs one new method.
   5. A live report carries no projection (`crates/finder/src/live.rs:53`), only its
      mid-exposure time (`crates/finder/src/live.rs:57`), and reports are broadcast 16
-     deep (`crates/finder/src/live.rs:160`). The session's latest pointing carries the
-     `Frame` (`crates/finder/src/session.rs:461`), and a live pointing is that frame's
+     deep (`crates/finder/src/live.rs:163`). The session's latest pointing carries the
+     `Frame` (`crates/finder/src/session.rs:537`), and a live pointing is that frame's
      sky direction at the aim point, or at the frame's centre without one
-     (`crates/finder/src/session.rs:1195`). The console keeps no history of live
+     (`crates/finder/src/session.rs:1548`). The console keeps no history of live
      solves, so this spec adds one.
   6. `finder`'s tokio has no `process` feature (`crates/finder/Cargo.toml:33`), and no
      `Cargo.toml` may change. The ASTAP adapter runs the program with `std::process` on
@@ -151,7 +153,7 @@ was set, and MCP clients get one tool.
      scratch folder with mode 0700 (`crates/scope-node/tests/rpicam.rs:140`). The ASTAP
      adapter's tests do the same.
   8. The simulated finder camera is 1456 × 1088 over 12° with the main telescope at
-     pixel (700, 420) (`crates/simulator/src/optics.rs:26`): 29.78″ a pixel. Existing
+     pixel (700, 420) (`crates/simulator/src/optics.rs:27`): 29.78″ a pixel. Existing
      tests bound a live pointing at 30″ from the simulator's truth
      (`crates/finder/tests/console/live/loop_.rs:45`), which is one such pixel.
   9. The page's end-to-end checks require the simulated console to start with no aim
@@ -159,17 +161,19 @@ was set, and MCP clients get one tool.
      `status` (`crates/finder/web/e2e/simulate.spec.ts:318`).
   10. The chart draws in the finder frame's pixels, with its reticle at the frame's
       centre and not at the aim point
-      (`crates/finder/web/src/components/Chart.tsx:507`); `useSession` copies known
+      (`crates/finder/web/src/components/Chart.tsx:627`); `useSession` copies known
       session fields one at a time and drops the rest
-      (`crates/finder/web/src/useSession.ts:29`).
+      (`crates/finder/web/src/useSession.ts:30`).
   11. An MCP tool named `solve_frame` already solves an uploaded picture from the
-      finder camera (`crates/finder/src/mcp/tools.rs:458`). The new tool is
+      finder camera (`crates/finder/src/mcp/tools.rs:513`). The new tool is
       `solve_imaging_frame`.
 - Q: What does this spec take from 030 and 031? → A: These, by name, from their plan.md
-  as drafted; none exists on `main` yet, so each is named without a line:
+  as drafted; both have landed, each was read again on `main` at e9687ce (plan.md
+  § Prerequisites 2), and each is named without a line:
   - `crates/finder/src/imaging/mod.rs` (031 US1): `Imaging`, `ImagingView`, `Refusal`,
-    `RoiView`, `CameraView`, `AppState::with_imaging`, and the words a request is
-    refused with while the camera is not `ready`;
+    `RoiView`, `CameraView`, and the words a request is refused with while the camera
+    is not `ready`; and `AppState::with_imaging` in `crates/finder/src/api.rs` (031
+    US1);
   - `crates/finder/src/imaging/routes.rs` (031 US1): the `/api/imaging` routes;
   - `crates/finder/src/imaging/frames.rs` (031 US2): `FrameView`, with a saved frame's
     `id`, `file`, `width`, `height`, `bits`, `bayer`, `binning`, `roi`, `start` and
@@ -290,11 +294,11 @@ was set, and MCP clients get one tool.
   whole-sensor frame takes an aim reading exactly as after the route (FR-037, US4-S7).
 - Q: What does 015's tracker do with an aim point measured while Track is on? → A: It
   chases it. While Track is on, every live pointing reaches the tracker as the
-  target's offset from the aim point in force (`crates/finder/src/session.rs:972`), and
+  target's offset from the aim point in force (`crates/finder/src/session.rs:1106`), and
   an offset of 10″ or more becomes a rate that removes 60% of it within the interval to
   the next live solve (`crates/finder/src/tracking.rs:29`,
-  `crates/finder/src/tracking.rs:300`); only the slow integral term is clamped
-  (`crates/finder/src/tracking.rs:310`). The first live pointing taken at a newly
+  `crates/finder/src/tracking.rs:342`); only the slow integral term is clamped
+  (`crates/finder/src/tracking.rs:352`). The first live pointing taken at a newly
   measured aim point therefore hands the tracker the whole step: on the simulator,
   where the finder frame's centre lies about 127 pixels, some 3800″, from the true aim
   point, about 2300″ within half a second, under Track's guards and outside GoTo's.
@@ -433,7 +437,7 @@ re-validated before the flip, never left to a story.
 3. **What a moved aim point does to the pointing model.** Recommended: nothing is reset,
    as a tap resets nothing today; a sync more than 0.5° from the model's prediction,
    or 2.5° before the base tilt is fitted, already opens a new zero-point epoch
-   (`crates/finder/src/model.rs:501`). Instead: drop the night's syncs when the aim
+   (`crates/finder/src/model.rs:513`). Instead: drop the night's syncs when the aim
    point moves by more than a stated amount.
 4. **What ASTAP is given.** Recommended: a prepared copy in a work folder: a colour
    mosaic with each 2 × 2 cell averaged into one sample, halved again while it is over
@@ -685,7 +689,7 @@ Every scenario shares these definitions unless it says otherwise.
   **R** is the child path `imaging` of the test's scratch folder.
 - **The simulator's truth.** The simulated finder camera is 1456 × 1088 over 12°
   (29.78″ a pixel) and the main telescope looks through its pixel (700, 420)
-  (`crates/simulator/src/optics.rs:26`): **the true aim point**, read by a test as
+  (`crates/simulator/src/optics.rs:27`): **the true aim point**, read by a test as
   `sim.optics().eyepiece_px`. The simulated imaging camera (030 US2) is 1236 × 822 over
   0.75°, turned 17° from the finder camera's frame: **the true imaging angle**, read as
   `sim.imaging_optics().angle_deg`. **The truth of an imaging frame** is
@@ -1758,9 +1762,9 @@ development, `cargo nextest run -p finder --locked --test mcp imaging_solve::`.
   aim point is held back also drops the held one.
 - **A measured aim point arrives while Track is on.** 015's tracker takes every live
   pointing as the target's offset from the aim point in force
-  (`crates/finder/src/session.rs:972`) and turns an offset of 10″ or more into a rate
+  (`crates/finder/src/session.rs:1106`) and turns an offset of 10″ or more into a rate
   that removes 60% of it before the next live solve, a rate nothing bounds
-  (`crates/finder/src/tracking.rs:300`). A new aim point set at once would hand it the
+  (`crates/finder/src/tracking.rs:342`). A new aim point set at once would hand it the
   whole step, some 3800″ on the simulator, outside GoTo's checks. Since 038 landed, a
   step of more than 5′ is read as a push by hand instead
   (`Session::track_live_pointing`): nothing is handed to the tracker, but the pointing
@@ -2054,8 +2058,8 @@ development, `cargo nextest run -p finder --locked --test mcp imaging_solve::`.
 - **Earlier features are in place.** 030-imaging-camera-link and
   031-imaging-frames-on-console have landed, with the interfaces Clarifications list, and so have 014's GoTo and 015's Track, which US4-S8
   turns on. Every `path:line` here was checked at 49bb210, the worktree's HEAD when the
-  audit was applied; every file of 030 and 031 is named without a line. The trio
-  is re-anchored to `main` again after both land (plan.md § Prerequisites 2).
+  audit was applied, and re-anchored to `main` at e9687ce, where both have landed
+  (plan.md § Prerequisites 2); every file of 030 and 031 is named without a line.
 - **Out of scope:**
   - solving every sub of a stack, and dropping subs that fail (035);
   - the focus reading, focus region and focus aid, which use `measure` (033);

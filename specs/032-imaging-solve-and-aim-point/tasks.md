@@ -6,8 +6,11 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
 
 **Prerequisites** (plan.md § Prerequisites):
 - `030-imaging-camera-link` and `031-imaging-frames-on-console` have landed on `main`,
-  and this trio has been re-anchored to them: not met (plan.md § Prerequisites 1 and 2);
-- the owner decisions in spec.md are settled and its owner approvals given: not met;
+  and this trio has been re-anchored to them: met at e9687ce (plan.md § Prerequisites 1
+  and 2);
+- the owner decisions in spec.md are settled and its owner approvals given: met on
+  2026-11-17 for the decisions, the approvals given by the flip (plan.md
+  § Prerequisites 3);
 - the owner has amended Constitution V or written how it reads for the imaging solver:
   met, constitution 1.3.0 (plan.md § Prerequisites 4);
 - the saved captures of ASTAP's real output are staged under `fixtures/finder/astap/`:
@@ -15,8 +18,8 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
 - the trio has been probe-built: met on 2026-11-18, round 1, every story (plan.md
   § Prerequisites 6);
 - the drafts outside this series that write the same files (`026-mount-sky`,
-  `021-chart-orientation`, `022-altaz-guidance`) are ordered against this spec: not
-  met (plan.md § Prerequisites 9);
+  `021-chart-orientation`, `022-altaz-guidance`) are ordered against this spec: met,
+  all three have landed (plan.md § Prerequisites 9);
 - owner decision 25's answer is written into the trio it names: met on 2026-11-17,
   when the owner chose the held aim point (FR-036); 037's owner decision 26 cites it,
   and 037's re-centre is written for it (plan.md § Prerequisites 11).
@@ -60,7 +63,7 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
   checks something first (US1-S5's `/proc/self`, US2-S2's count of 40 stars), that
   check is an assertion too and comes first.
 - Keep the story's diff under 64 KiB, measured as plan.md § Plan traps 3 says.
-- Every code citation is `path:line` as checked at 49bb210, and every file of 030 and 031
+- Every code citation is `path:line` as checked at e9687ce, and every file of 030 and 031
   is named without a line. If a cited line has moved, re-read it rather than guess.
 - Do not edit `specs/032-imaging-solve-and-aim-point/`.
 - Run no tool the gates don't run: no `astap_cli`, `cargo deny`, `cargo machete`, Rust

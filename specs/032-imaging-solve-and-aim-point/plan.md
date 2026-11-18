@@ -159,8 +159,8 @@ fixtures/finder/astap/                  # the owner, before the flip; no story w
 ## Interfaces
 
 Coordinates, angles and the worked answers are as spec.md § User Scenarios defines them.
-Everything 030 and 031 create is named as their plan.md gives it and is re-read on `main`
-before the flip (§ Prerequisites 2).
+Everything 030 and 031 created is named as their plan.md gives it, and was read again on
+`main` at e9687ce, after both landed (§ Prerequisites 2).
 
 ### The port (`crates/finder/src/imaging/solver.rs`, new, US1)
 
@@ -829,13 +829,13 @@ view shows.
 `Imaging::hint` builds the inputs when the request is made:
 - `sensor` and `pixel_um` from the camera's description;
 - `pointing` (US3) from `session.snapshot(now).pointing` when its `source` is `Live`
-  (`crates/finder/src/session.rs:424`): its `ra_deg`, `dec_deg` and `time`. It is
-  already taken at the aim point (`crates/finder/src/session.rs:1192`);
+  (`crates/finder/src/session.rs:496`): its `ra_deg`, `dec_deg` and `time`. It is
+  already taken at the aim point (`crates/finder/src/session.rs:1545`);
 - `pointing` (from US4, spec FR-035): among the history's fixes whose time passes the
   same test as above, the one nearest the exposure's middle, the earlier of two
   equally near. Its place is `fix.frame.unproject((aim.x, aim.y))` with the session's
   aim point of now, or `fix.frame.center` without one, as `record_live_pointing` does
-  (`crates/finder/src/session.rs:1195`), turned to degrees; its time is the fix's.
+  (`crates/finder/src/session.rs:1548`), turned to degrees; its time is the fix's.
   When the history holds no such fix, or the unprojection gives none, the US3 source
   is used;
 - `last_solve`: the centre of the last solved imaging solve since the console
@@ -921,7 +921,7 @@ pub fn with_focal_length_mm(self, mm: f64) -> Self;      // US3
 ```
 
 `with_imaging_solver` calls `set_solver` with the state's session
-(`crates/finder/src/api.rs:242`) and live loop (`crates/finder/src/api.rs:301`).
+(`crates/finder/src/api.rs:282`) and live loop (`crates/finder/src/api.rs:360`).
 `with_focal_length_mm` calls `Imaging::set_focal_length_mm`, which hands the value to
 the `Relation`.
 
@@ -944,11 +944,11 @@ astap_db_name: Option<String>,
 focal_length_mm: Option<f64>,
 ```
 
-`requires` is already used there (`crates/finder/src/main.rs:41`). `focal_length` reads
+`requires` is already used there (`crates/finder/src/main.rs:44`). `focal_length` reads
 an `f64` and refuses one that is not finite or not above 0 with `must be a number above
 0`. After 031's `.with_imaging(dir)`: with `--astap`, `.with_imaging_solver` of an
 `AstapSolver` whose work folder is `dir` joined with `solver`; under `--simulate`, of a
-`SimulatedSolver` over `state.simulator()` (`crates/finder/src/api.rs:216`); otherwise
+`SimulatedSolver` over `state.simulator()` (`crates/finder/src/api.rs:223`); otherwise
 nothing. Then, with the flag, `.with_focal_length_mm`. No new start-up line.
 
 ### The relation (`crates/finder/src/imaging/relation.rs`, new, US3; US4 and US5 add to it)
@@ -1148,7 +1148,7 @@ the view (`readings`) and in the file, though the aim point it gives is still
 "measured" (`Outcome::Measured`, `source: "measured"`).
 
 The history is filled by a task `set_solver` starts when it is given a live loop. It
-reads `live.subscribe()` (`crates/finder/src/live.rs:263`); for each report with a
+reads `live.subscribe()` (`crates/finder/src/live.rs:267`); for each report with a
 `pointing_seq` it reads `session.snapshot(clock.now()).pointing` and, when that
 pointing's `seq` is the report's and its `source` is `Live`, pushes `FinderFix { time:
 pointing.time, frame: pointing.frame, frame_id: report.frame_id }` with `keep_s` the
@@ -1198,11 +1198,14 @@ scatter test is what tells a telescope that was bumped, or a slew that ended ins
 the span, from a steady drift: its fixes do not lie on one line.
 
 **The aim reading's use (US4).** One private function of `solving.rs`,
-`take_aim_reading(shared: &Shared, frame: &SolveFrame, frame_id: u64, solve:
-&ImagingSolve)`, a free function, since the task holds only the `Arc` of the imaging
-state that 031's `Imaging` shares with its tasks (`Shared` in round 1's probe code) and
-no `&Imaging`, is step 2 of the task of § Solving on the console and the whole of
-`note_solve`, which passes it the `Imaging`'s own state:
+`take_aim_reading(held: &Mutex<Held>, clock: &dyn Clock, frame: &SolveFrame, frame_id:
+u64, solve: &ImagingSolve)`, a free function, since the task holds, as 031's frame task
+(`FrameTask`, `crates/finder/src/imaging/frames.rs`) does, a clone of the
+`Arc<Mutex<Held>>` that 031's `Imaging` keeps as `state` and shares with its tasks,
+with clones of the clock and the watch of changes that `Imaging` keeps beside it, and
+no `&Imaging` (round 1's probe code held all of them in one `Shared`). It is step 2 of
+the task of § Solving on the console and the whole of `note_solve`, which passes it the
+`Imaging`'s own `state` and clock:
 1. Unless the frame's `roi` is the whole sensor of the description (x and y 0, the
    description's width and height), it returns and nothing changes.
 2. Under the imaging state's lock it reads `relation.fixes()` and releases the lock;
@@ -1338,17 +1341,17 @@ impl Session {
 }
 ```
 
-- `Aim` (`crates/finder/src/session.rs:395`) does not change. `SessionView::aim`
-  (`crates/finder/src/session.rs:569`) becomes `Option<AimView>`.
-- The session's values (`crates/finder/src/session.rs:593`) gain `aim_measured: bool`,
+- `Aim` (`crates/finder/src/session.rs:467`) does not change. `SessionView::aim`
+  (`crates/finder/src/session.rs:645`) becomes `Option<AimView>`.
+- The session's values (`crates/finder/src/session.rs:672`) gain `aim_measured: bool`,
   false at first. The view builds `AimView` from the aim and that flag. `set_aim`
-  (`crates/finder/src/session.rs:1234`) clears it where it sets the aim
-  (`crates/finder/src/session.rs:1240`); `set_measured_aim` validates, sets both, and
+  (`crates/finder/src/session.rs:1589`) clears it where it sets the aim
+  (`crates/finder/src/session.rs:1595`); `set_measured_aim` validates, sets both, and
   persists before committing, as `set_aim` does.
-- `StoredSession` (`crates/finder/src/session.rs:1452`) gains, after `aim`
-  (`crates/finder/src/session.rs:1467`), `#[serde(default, skip_serializing_if =
+- `StoredSession` (`crates/finder/src/session.rs:1828`) gains, after `aim`
+  (`crates/finder/src/session.rs:1843`), `#[serde(default, skip_serializing_if =
   "std::ops::Not::not")] aim_measured: bool`. It is read as true only with an `aim`, and
-  written from the values (`crates/finder/src/session.rs:1550`).
+  written from the values (`crates/finder/src/session.rs:1929`).
 - A recording's `recording.json` serializes the view's `aim`
   (`crates/finder/src/recording.rs:250`), so a recording made with a measured aim point
   says so, and one made with a tapped one reads as before.
@@ -1360,20 +1363,20 @@ impl Session {
   `fn track_on(&self) -> bool` on `TrackRun`, `self.wanted && (self.armed ||
   self.tracker.as_ref().is_some_and(|t| t.state().state != "off"))`, the same test
   `TrackRun::view` makes for `TrackView::wanted`
-  (`crates/finder/src/session.rs:182`), and false with no `track`. The tracker's state
+  (`crates/finder/src/session.rs:249`), and false with no `track`. The tracker's state
   is read under the values lock exactly as `TrackRun::view` already reads it there.
 - `set_measured_aim(aim, time)` validates the aim as `set_aim` does. With Track on it
   sets `held_aim = Some(aim)` and answers the view, writing nothing. With Track off it
   sets `aim = Some(aim)`, `aim_measured = true` and `held_aim = None`, persisting
   before committing, as `set_aim` does.
-- `set_aim` (`crates/finder/src/session.rs:1234`), the tap's and the reset's way in,
+- `set_aim` (`crates/finder/src/session.rs:1589`), the tap's and the reset's way in,
   also sets `held_aim = None`, so a tap or a reset drops a held aim point.
-- `record_live_pointing` (`crates/finder/src/session.rs:1192`) applies a held aim
+- `record_live_pointing` (`crates/finder/src/session.rs:1545`) applies a held aim
   point first: when `held_aim` is `Some` and Track is off, it does what
   `set_measured_aim` does with Track off, under the lock it already holds, and only
   then takes the live pointing at the aim point, so that pointing is the first one
   taken at the new aim point. A failed write is printed to standard error, as
-  `Session::snapshot` prints one (`crates/finder/src/session.rs:1007`), the held aim
+  `Session::snapshot` prints one (`crates/finder/src/session.rs:1326`), the held aim
   point is dropped and the aim point stays as it was: the next aim reading measures it
   again.
 - Nothing of Track, of `start_tracking`, `stop_tracking`, `track_live_pointing` or of
@@ -1404,7 +1407,7 @@ imaging boresight), so the aim reading's angle and the truth are the same quanti
 ### The page (`crates/finder/web/src/`, US6)
 
 `api.ts`: `aim?: { x: number; y: number; source?: "measured" }` in `ObservingSession`
-(`crates/finder/web/src/api.ts:264`), `imaging?: ImagingView;` beside it, and, after
+(`crates/finder/web/src/api.ts:370`), `imaging?: ImagingView;` beside it, and, after
 031's imaging types:
 
 ```ts
@@ -1434,8 +1437,8 @@ export async function postImagingSolve(): Promise<ImagingView>;   // fetch(url, 
 the answer's `error` on a refusal.
 
 `useSession.ts`: one line after the `recording` line
-(`crates/finder/web/src/useSession.ts:46`): `...(body?.imaging != null && { imaging:
-body.imaging }),`. The `aim` line (`crates/finder/web/src/useSession.ts:38`) already
+(`crates/finder/web/src/useSession.ts:48`): `...(body?.imaging != null && { imaging:
+body.imaging }),`. The `aim` line (`crates/finder/web/src/useSession.ts:39`) already
 copies the whole object, `source` included.
 
 `components/ImagingSolveBlock.tsx`, `ImagingSolveBlock({ view, refresh }: { view:
@@ -1497,14 +1500,14 @@ of the top side to `m + 6·u·up`, away from the aim point. The `furniture` clas
 it ink by day and red at night with no new CSS.
 
 `Chart.tsx`: after the target mark
-(`crates/finder/web/src/components/Chart.tsx:241`), when `live`, the report has a
+(`crates/finder/web/src/components/Chart.tsx:252`), when `live`, the report has a
 pointing, `session?.aim?.source === "measured"`, and `session.imaging?.relation` has
 both `angle_deg` and `field`, it draws `ImagingField` with the corners of the session's
 `aim`, that angle, `mirrored` (false when absent), that field and the report's
 `pointing.arcsec_per_px`; nothing when the corners are null.
 
 `AimTap.tsx`: after the coordinates' paragraph
-(`crates/finder/web/src/components/AimTap.tsx:48`), a `quiet` paragraph: `Measured from
+(`crates/finder/web/src/components/AimTap.tsx:54`), a `quiet` paragraph: `Measured from
 the imaging camera.` followed, when `session.imaging?.relation?.angle_deg` is a number,
 by ` Imaging angle {angle_deg.toFixed(1)}°.`, when the shown aim point has the `source`
 `measured`; `Set by tapping a star.` when it has an aim point without one; nothing with
@@ -1524,7 +1527,7 @@ After 031's Imaging page entry, a plain `###` heading and one paragraph:
 > side. It is furniture, like the reticle and the compass: no fill, no label, not a
 > chart layer, and red at night with the rest. A tapped aim point draws nothing.
 
-At the end of the Aim-point tap entry (`DESIGN.md:347`):
+At the end of the Aim-point tap entry (`DESIGN.md:381`):
 
 > Under the coordinates a quiet line says how the aim point was set: Set by tapping a
 > star, or, when the console measured it, Measured from the imaging camera, with the
@@ -1545,8 +1548,8 @@ formatted as its neighbours: `name` `Imaging field`, `kind` `custom`, `refersTo`
 
 ### The MCP tool (`crates/finder/src/mcp/tools.rs`, US7)
 
-One tool in the `#[tool_router]` block (`crates/finder/src/mcp/tools.rs:165`), with
-`output_schema = object_schema()` (`crates/finder/src/mcp/tools.rs:104`) and no
+One tool in the `#[tool_router]` block (`crates/finder/src/mcp/tools.rs:213`), with
+`output_schema = object_schema()` (`crates/finder/src/mcp/tools.rs:152`) and no
 read-only annotation:
 
 - `solve_imaging_frame`, description
@@ -1569,7 +1572,7 @@ backticks:
 
 `crates/finder/README.md`:
 - US2 adds a row after 031's last row of the `## API` table
-  (`crates/finder/README.md:167`):
+  (`crates/finder/README.md:188`):
 
   ```markdown
   | `POST /api/imaging/solve` | No body. Solve the latest saved imaging frame with the imaging solver; answers 200 with the imaging view, whose `solve` goes from `solving` to `solved` or `failed`, or 409 with a JSON `error`. Same-origin writes only. |
@@ -1608,9 +1611,10 @@ backticks:
   live pointing a hint uses is the live solve nearest the exposure's own middle; and
   what `relation.json` and `session.json` keep.
 - US7 adds `solve_imaging_frame` to the tool list in `## MCP clients`
-  (`crates/finder/README.md:57`), after 031's three, worded like its neighbours, and
+  (`crates/finder/README.md:62`), after 031's three, worded like its neighbours, and
   changes the count in the sentence 031 puts before the list from three tools to four
-  (round 1's probe README read `Three tools reach the imaging camera`); the new entry
+  (on `main` it reads `The imaging camera has three tools of its own, which answer
+  what the page's Imaging page does:`); the new entry
   says that on a console that takes no imaging frames it too answers `this console
   takes no imaging frames` at once.
 
@@ -1664,7 +1668,7 @@ These are not changed by any story:
   neither.
 - **The chart without a measured aim point**: no new element is drawn, so every chart
   test sees the nodes it saw (`crates/finder/web/src/components/ChartLive.test.tsx:46`).
-- **`useSession`'s other fields** (`crates/finder/web/src/useSession.ts:29`): one line
+- **`useSession`'s other fields** (`crates/finder/web/src/useSession.ts:30`): one line
   is added.
 - **The MCP tool list as tests read it.** One test calls every listed tool with `{}`
   and checks for the token (`crates/finder/tests/mcp/motion.rs:528`); the new tool
@@ -1675,11 +1679,11 @@ These are not changed by any story:
 - **Finder's test layout** (`crates/finder/tests/layout/main.rs:109`): no file at the
   top level of `crates/finder/tests`, no new file in `support`, and each binary's
   `main.rs` holding only its support include and `mod` lines.
-- **031's own tests, once they exist.** They compare `settings` and `frame` key by key
+- **031's own tests.** They compare `settings` and `frame` key by key
   and `camera` and `status` whole; this spec adds no key to `camera` or `status`. Its
   MCP test counts nine keys in `set_imaging_camera`'s schema, which is why the focal
-  length is not a setting (spec owner decision 6). Its Imaging page tests are re-read
-  before the flip for a query that an extra button or region would break
+  length is not a setting (spec owner decision 6). Its Imaging page tests were read on
+  `main` for a query that an extra button or region would break, and hold none
   (§ Prerequisites 2).
 - **Shapes this spec pins for its own later stories and for 033 to 037.** `SolveView`
   and `RelationView` are `#[non_exhaustive]` and tests compare them key by key.
@@ -1764,32 +1768,42 @@ These are not changed by any story:
 
 ## Prerequisites before this spec is flipped to `ready`
 
-1. **030-imaging-camera-link and 031-imaging-frames-on-console have landed.** Not met:
-   both are drafts in this worktree. Everything of theirs named here is from their
-   plan.md as drafted.
-2. **The trio is re-anchored to `main` after 030 and 031 land.** Not met. Every `path:line` was
-   read at dbc2b5b and re-checked at 49bb210 (028's US5), the worktree's HEAD when the
-   audit was applied; `main` does not yet hold 030 or 031. To do once they land: re-read every
-   cited line of `crates/finder/src/api.rs`,
-   `crates/finder/src/main.rs`, `crates/finder/src/lib.rs`, `crates/finder/README.md`,
-   `DESIGN.md`, `crates/finder/web/src/api.ts` and the test files 028 and 031 change;
-   give a line to every file of 030 and 031 named without one (`Imaging`, `ImagingView`,
-   `FrameView`, `Refusal`, `fits::decode`, the routes, `ImagingPage.tsx`,
-   `take_imaging_frame`); check that `FrameView` carries `roi`,
-   `binning`, `start` and `exposure_ms` for a saved frame, that `Imaging`'s state can
-   take the fields § The imaging state names and sits behind an `Arc` that its spawned
-   tasks hold (the solve's task and `take_aim_reading` reach it that way; round 1's
-   probe code calls it `Shared`, and 031's trio does not say), that 031's task has one
-   place where the camera's description is kept on reaching `ready`, that
-   `ImagingPage.tsx` renders
-   its Imaging frame block as a region named `Imaging frame` (spec US6-S4), and that
-   031's Imaging page tests hold with one more region and button; then re-run the
-   validator on `main`. Round 1's probes read every citation on `main` at b1f01cc and
-   found each by its content; 038 had moved every line of
-   `crates/finder/src/session.rs` after its first 160, and three citations, one each
-   in `crates/finder/src/api.rs`, `crates/finder/src/session.rs` and
-   `crates/finder/README.md`, landed on a blank line, the validator's three refusals on
-   that base. They are re-anchored with the rest.
+1. **030-imaging-camera-link and 031-imaging-frames-on-console have landed.** Met on
+   `main` at e9687ce. 030's eight stories landed by 49f8dcd (US1 at 3849a0f, US2 at
+   e867598, US3 at 209edcb, US4 at 2ed589c, US5 at e1cc38e, US6 at 58aff47, US7 at
+   4e7eef6, US8 at 49f8dcd), and 031's nine by e9687ce (US1 at 1baecaa, US2 at 3a2f799,
+   US3 at 334e8eb, US4 at e0a5bf6, US5 at 523055b, US6 at f7b58d5, US7 at 11e9f60, US8
+   at def5d6e, US9 at e9687ce). The worktree is at e9687ce.
+2. **The trio is re-anchored to `main` after 030 and 031 land.** Met at e9687ce. Every
+   `path:line` in spec.md, plan.md and tasks.md, 103 in all, was compared line for line
+   at 49bb210 and at e9687ce, and each was then read again by its content. Sixty-two
+   read the same. Thirty-nine had moved and now cite the line that holds the same text,
+   among them all but one cited line of `crates/finder/src/session.rs`, which 021, 022,
+   026 and 038 moved, and the `## MCP clients` and `## API` headings of
+   `crates/finder/README.md`. Two cited `aim: Option<Aim>,`, a line the file holds
+   twice, and were placed by the struct they name: the session's values
+   (`crates/finder/src/session.rs:672`) and `StoredSession`
+   (`crates/finder/src/session.rs:1843`). No line is cited in a file 030 or 031
+   created, and every file of theirs is still named without one. Every name and
+   behaviour this trio takes from 031 was read on `main`: `Imaging` and its state, the
+   watch of changes and `ended`, `Refusal` and its words, `RoiView`, `CameraView`,
+   `FrameView` and its fields (`roi`, `binning`, `start` and `exposure_ms` among them),
+   `fits::encode` and `decode`, `frames::take`, `Imaging::set`, the one place 031's
+   task keeps the camera's description on reaching `ready` (`attempt`), the routes and
+   their guards (`SessionWrite`, `sim_json`), the region named `Imaging frame` on the
+   Imaging page and its tests, which hold with one more region and button,
+   `take_imaging_frame` and the README's tool list. Each is as written here but for
+   three, corrected in place: `AppState::with_imaging` is in `crates/finder/src/api.rs`
+   (spec.md § Clarifications); the state 031's tasks hold is the `Arc<Mutex<Held>>`
+   that `Imaging` keeps as `state`, with its clock and its watch of changes beside it,
+   where round 1's probe code had one `Shared` (§ The relation, the aim reading's
+   use); and the README's sentence before the tool list reads `The imaging camera has
+   three tools of its own` (§ `crates/finder/src/lib.rs` and `crates/finder/README.md`).
+   One differs in what US4 builds and is left for the owner: on `main`, 031's take, its
+   settings edit and its abort answer `Imaging::view` itself, called after the lock is
+   released, so there is no view built under the imaging state's lock for § The
+   imaging state to fill with `relation.view(None, false)`. The validator reports no
+   finding at e9687ce.
 
    Ten of the citations moved when `main` went from dbc2b5b to 49bb210 while this trio
    was being drafted, because that commit rewrote the tests they point into; the
@@ -1811,7 +1825,12 @@ These are not changed by any story:
    | `crates/finder/tests/mcp/motion.rs` | 532 | 528 |
    | `crates/scope-node/tests/rpicam.rs` | 129 | 140 |
 3. **The owner decisions are settled and the approvals given** (spec § Owner decisions,
-   § Owner approvals). Not met: all twenty-five decisions are open.
+   § Owner approvals). Met on 2026-11-17. The owner settled decision 25 that day, and
+   the other twenty-four take their recommended answers, which the owner approved that
+   day with the imaging series' other decisions ("im good with all of the info in the
+   decisions doc"). None of the three rows the owner settled separately that day is
+   this spec's (they are 034's, 035's and 037's). The owner gives the approvals by
+   flipping the spec.
 4. **Constitution V is read or amended by the owner.** Met: the owner amended it in
    constitution 1.3.0 (PR 239, merged 2026-11-17 as `cc593c7`). Principle V now reads "Proven open source first, with honest
    licensing": the plate solver stays our own Rust, and a separate program called
@@ -1841,12 +1860,14 @@ These are not changed by any story:
 8. **Outside the factory, before the first use at the telescope:** ASTAP and a star
    database installed on the console machine, the console started with the three flags,
    and one solve timed. Not needed to flip.
-9. **Other drafts that write the same files are ordered.** Not met. 031's
-   Prerequisites name `026-mount-sky`, `021-chart-orientation` and `022-altaz-guidance`
-   as drafts on branches; of this spec's files they write at least
+9. **Other drafts that write the same files are ordered.** Met for the drafts named
+   here. 031's Prerequisites named `026-mount-sky`, `021-chart-orientation` and
+   `022-altaz-guidance` as drafts on branches; of this spec's files they wrote at least
    `crates/finder/src/api.rs`, `crates/finder/src/session.rs`,
    `crates/finder/web/src/components/Chart.tsx`, `DESIGN.md` and
-   `crates/finder/web/dist`. Whichever of two such specs is flipped second names the
+   `crates/finder/web/dist`. All three have landed (026 at 6cc8724, 021 at 2f6a777, 022
+   at 20ce2fe), and this trio is re-anchored on top of them (Prerequisite 2). The rule
+   stays for any later draft: whichever of two such specs is flipped second names the
    other in `depends_on_landed` and is re-anchored after it lands. Within this series
    every later trio, 033 to 037, already names this one in `depends_on_landed`.
 10. **The plan document agrees with the settled decisions.** Not met on `main`, which
@@ -2021,7 +2042,7 @@ with the check that keeps it from recurring. They bind every story.
 | The 10″ step leaves the session's aim point up to 10″ from the median. | That is a third of a finder pixel, under the finder camera's own scatter; spec owner decision 10's alternative removes it. |
 | A measured aim point changes what every later sync is taken at, and the pointing model mixes syncs from before and after. | Spec owner decision 3: the same is true of a tap today; the closed GoTo loop corrects on the live pointing; a move over 0.5° opens a new epoch. |
 | The new button and region on the Imaging page break a query in 031's page tests. | Prerequisite 2 re-reads them; the block shows no `status` or `alert` until a solve is asked for. Not seen in round 1: every Vitest and end-to-end check passed with the block, Setup's one `status` included. |
-| `021-chart-orientation`, a draft, also writes `Chart.tsx`. | Prerequisite 9. |
+| `021-chart-orientation` also wrote `Chart.tsx`. | It has landed (US2 at 2f6a777), and this trio is re-anchored on top of it (Prerequisite 9). |
 | A work folder is left behind by a console that exits mid-solve. | It holds one prepared copy; folders are named by process and count, so a later run never reuses one. The README says they may be deleted. |
 | A measured aim point held for the whole of a long stack (Track on for hours) leaves GoTo and Track on the old aim point, which may be a degree from the sensor's centre before the first measurement. | The target still lands inside the 3° the first hint searches; the page says the aim point waits; the first Track off applies it, and 037's re-centre turns Track off and on for that reason. Owner decision 25, settled on 2026-11-17, chose this. |
 | 037's centring rests on the hold: it reads `Session::held_aim`, and waits after its own Track off for the first live solve, which applies the held aim point. | Prerequisite 11: 037 is written for the settled answer (037's FR-022, FR-025). A change to FR-036 or to `held_aim` is re-read in 037 before either trio is flipped. |
