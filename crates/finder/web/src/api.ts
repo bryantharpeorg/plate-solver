@@ -227,6 +227,96 @@ export interface SessionRecording {
   raw?: { wanted: number; saved: number; error?: string };
 }
 
+// The imaging camera, as GET /api/imaging relays it (031). Field names and shapes
+// mirror the Rust types they come from; keep the two in step.
+export interface ImagingRange {
+  min: number;
+  max: number;
+}
+
+export interface ImagingCameraInfo {
+  model: string;
+  serial: string | null;
+  width: number;
+  height: number;
+  pixel_um: number;
+  bits: number;
+  bayer: string | null;
+  exposure_ms: ImagingRange;
+  gain: ImagingRange | null;
+  offset: ImagingRange | null;
+  binnings: number[];
+  cooler: boolean;
+}
+
+export interface ImagingStatus {
+  temp_c: number | null;
+  cooler_power: number | null;
+  set_temp_c: number | null;
+  exposing: boolean;
+}
+
+export interface ImagingSettings {
+  exposure_ms: number;
+  gain: number | null;
+  offset: number | null;
+  binning: number;
+  roi: { x: number; y: number; width: number; height: number };
+  cooler_on: boolean;
+  set_temp_c: number | null;
+  forward_kib_per_s: number | null;
+  save_at_node: boolean;
+}
+
+export interface ImagingFrame {
+  id: number;
+  state: "exposing" | "receiving" | "saved" | "failed" | "aborted";
+  purpose: string;
+  exposure_ms: number;
+  start?: number;
+  bytes?: number;
+  received?: number;
+  received_at?: number;
+  file?: string;
+  preview?: string;
+  node_file?: string;
+  node_save_error?: string;
+  error?: string;
+}
+
+export interface ImagingView {
+  state: "off" | "no_link" | "no_service" | "no_camera" | "error" | "ready";
+  error?: string;
+  camera?: ImagingCameraInfo;
+  status?: ImagingStatus;
+  settings?: ImagingSettings;
+  frame?: ImagingFrame;
+}
+
+export type ImagingSettingsEdit = Partial<Omit<ImagingSettings, "roi">>;
+
+export async function getImaging(): Promise<ImagingView> {
+  return json(await fetch("/api/imaging"));
+}
+
+export async function putImagingSettings(edit: ImagingSettingsEdit): Promise<ImagingView> {
+  return json(
+    await fetch("/api/imaging/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(edit),
+    }),
+  );
+}
+
+export async function postImagingFrame(): Promise<ImagingView> {
+  return json(await fetch("/api/imaging/frame", { method: "POST" }));
+}
+
+export async function postImagingAbort(): Promise<ImagingView> {
+  return json(await fetch("/api/imaging/abort", { method: "POST" }));
+}
+
 export interface PointingModel {
   syncs: number;
   epoch: number;

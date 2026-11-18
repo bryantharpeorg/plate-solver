@@ -195,7 +195,7 @@ The dimmer inks sit close to Night Ink so that secondary text keeps at least 3.5
 ### Named Rules
 **The Objects-Only Colour Rule.** Green, gold and red belong to deep-sky objects. Chrome, controls and text stay in ink.
 
-**The Red Torch Rule.** At night every pixel is red or black: no white, no other hue, and no token brighter than Night Ink. Anything new, images and embedded views included, must take a night token or the red-only filter before it ships.
+**The Red Torch Rule.** At night every pixel is red or black: no white, no other hue, and no token brighter than Night Ink. Anything new, images and embedded views included, must take a night token or the red-only filter before it ships. There is one exception. A picture from the imaging camera, an imaging frame's preview or a stack's picture, shows its own colours while the observer holds the Hold to see colour control under it, for at most 10 seconds a hold, and is red again the moment the control is let go. Nothing else on the page changes, nothing keeps colour on, and no other picture has the control.
 
 **The Dim Primary Rule.** At night the primary button is a Night Rule block with Night Ink text, never a solid Night Ink fill. A full-ink block would be the brightest thing on screen.
 
@@ -273,7 +273,7 @@ Ruled, square and quiet. The ink does the work.
 - **Focus:** a 2px ink outline offset 2px on the field box.
 
 ### Navigation
-- **Top bar:** sticky, Cool Paper ground, a hairline bottom rule. It carries the reticle mark and "Finder" (weight 600), then the frame chip with a 28px thumbnail, the target-sheet button, the site chip, the Setup link, Stop while the mount may move, and the Night switch. On phones the wordmark, frame label and target button label are hidden to leave room for the controls.
+- **Top bar:** sticky, Cool Paper ground, a hairline bottom rule. It carries the reticle mark and "Finder" (weight 600), then the frame chip with a 28px thumbnail, the target-sheet button, the site chip, the Setup link, the Imaging link while a scope node is paired, Stop while the mount may move, and the Night switch. On phones the wordmark, frame label and target button label are hidden to leave room for the controls.
 
 ### Sheets
 - **Style:** a native `<dialog>`, Cool Paper ground, 1px ink border, up to 640px wide (448px for the site sheet). It rises from the bottom on phones and centres from 48rem. The header row has a headline title, a quiet Close button and a hairline below. It enters with a 280ms rise and fade on the expo-out curve. The built target sheet searches the catalog as typed and shows its ordered answers as hairline-divided rows: family symbol, italic catalog and Messier IDs, common names, kind, magnitude and pointability class. Picking or clearing saves the shared session before closing; a failed save keeps the sheet open with an ink error.
@@ -384,6 +384,9 @@ Setup's Aim point section asks the observer to centre a star in the eyepiece and
 ### Recording — built
 On the Setup page, after the aim point, while a scope node is paired: a section titled Recording with one primary button, Start recording. While recording, one status line names the folder and counts, with Stop recording and Save 3 raw frames as secondary buttons; raw progress is a second line of the status and a failure is an alert, such as Raw frames stopped: the mount started moving. After a recording the status says what was saved, and why when it hit its frame limit or the scope node restarted, which asks for a new recording. Ink on paper with existing tokens only; at night it is red like every other section.
 
+### Imaging page — built
+The `/imaging` page shows the imaging camera the scope node relays: one ink line for the camera and one for its sensor temperature and cooler; a Settings form of labelled 44px ruled fields for exposure, gain, offset, binning, cooler, set temperature and forwarding limit, with only the controls the camera has, saved by one primary button; and an Imaging frame section whose primary button, Take imaging frame, becomes a status of the exposure and the bytes received, with Abort exposure beside it, then the saved file's name and how long after the exposure it was in hand. The latest imaging frame's preview is a full-width ruled photograph under `.photo`, so at night it is red by luminance like every other picture. Under it, at night only, the Hold to see colour button removes the filter from that one picture while it is held, for at most 10 seconds: the Red Torch Rule's one exception. Everything else uses existing ink, paper and red-only night tokens.
+
 ### Drawn sky banner — built
 Under `finder --mount-sky` a one-line status sits under the top bar on every page: “Drawn sky.” in semibold, then that the stars come from the mount's encoders and that the tube must not be pushed by hand; after a power cycle, that the drawn sky has stopped and the console must be restarted with a fresh `--tube-alt`; and on a night clock, that the covers must stay on. Ink on paper, with a rule below; no new token.
 
@@ -399,7 +402,7 @@ Under `finder --mount-sky` a one-line status sits under the top bar on every pag
 
 ### Don't:
 - **Don't** use navy glass cards, cyan glow or starfield wallpaper.
-- **Don't** show a white or non-red pixel in night mode, including in images, previews, embedded views and the first paint.
+- **Don't** show a white or non-red pixel in night mode, including in images, previews, embedded views and the first paint. The only exception is the Red Torch Rule's held colour.
 - **Don't** use the nebula, cluster or galaxy colours on chrome, controls or text that is not an object.
 - **Don't** use a box-shadow, or round a control's corners.
 - **Don't** fill a night control with solid Night Ink.

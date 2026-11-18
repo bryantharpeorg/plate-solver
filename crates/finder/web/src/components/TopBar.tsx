@@ -29,6 +29,8 @@ interface Props {
   onSetup: () => void;
   onHome: () => void;
   setup: boolean;
+  /** The Imaging link, only while a scope node is paired (031 FR-020). */
+  imaging?: { current: boolean; onOpen: () => void };
   onChange?: () => void;
 }
 
@@ -50,6 +52,7 @@ export function TopBar({
   onSetup,
   onHome,
   setup,
+  imaging,
   onChange,
 }: Props) {
   const mcp = motion?.by === "mcp";
@@ -120,6 +123,20 @@ export function TopBar({
         >
           Setup
         </a>
+        {imaging && (
+          <a
+            href="/imaging"
+            className="chip"
+            aria-current={imaging.current ? "page" : undefined}
+            onClick={(e) => {
+              if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+              e.preventDefault();
+              imaging.onOpen();
+            }}
+          >
+            Imaging
+          </a>
+        )}
         <div
           className={
             mcp ? "order-last flex w-full items-center justify-between gap-3 border-t border-rule py-2" : "contents"

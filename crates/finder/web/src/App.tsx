@@ -6,6 +6,7 @@ import { ChartHeader, ChartHeaderPlaceholder } from "./components/ChartHeader";
 import { FieldList, FieldRoster } from "./components/FieldList";
 import { FramePicker, SampleGrid } from "./components/FramePicker";
 import { GuidanceBlock } from "./components/GuidanceBlock";
+import { ImagingPage } from "./components/ImagingPage";
 import { LivePreview } from "./components/LivePreview";
 import { MountSkyBanner } from "./components/MountSkyBanner";
 import { Upload } from "./components/Icons";
@@ -173,6 +174,7 @@ export function App() {
         onSetup={() => navigate("/setup")}
         onHome={() => navigate("/")}
         setup={path === "/setup"}
+        imaging={session.node ? { current: path === "/imaging", onOpen: () => navigate("/imaging") } : undefined}
         onNight={setNight}
       />
       {session.mount_sky && <MountSkyBanner sky={session.mount_sky} />}
@@ -183,6 +185,8 @@ export function App() {
       )}
       {path === "/setup" ? (
         <SetupPage session={session} mcp={mcp} put={put} onBack={() => navigate("/")} onChange={changed} />
+      ) : path === "/imaging" ? (
+        <ImagingPage night={night} onBack={() => navigate("/")} />
       ) : (
         <>
           {/*
@@ -302,7 +306,7 @@ export function App() {
         onSettings={setSettings}
         onClose={() => setPicker(false)}
         onPick={(source) => {
-          if (path === "/setup") navigate("/");
+          if (path === "/setup" || path === "/imaging") navigate("/");
           open(source);
         }}
       />

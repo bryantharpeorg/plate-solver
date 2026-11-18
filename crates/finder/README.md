@@ -127,7 +127,9 @@ describes the firewall rules.
 ## Night mode
 
 Night mode turns the whole page, frames and sky survey included, into dim red, to keep your
-eyes dark-adapted. It is a toggle in the top bar and the page remembers it.
+eyes dark-adapted. It is a toggle in the top bar and the page remembers it. An imaging
+frame's preview is the one exception: while you hold the Hold to see colour control under
+it, the picture shows its own colours for up to 10 seconds, then goes red again.
 
 ## How it works
 
