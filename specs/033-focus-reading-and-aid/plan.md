@@ -161,8 +161,8 @@ DESIGN.md                               # US6: one entry, one clause, one senten
 ## Interfaces
 
 Sensor pixels, frame pixels, the simulator's star size H(e) and the rig's scale are as
-spec.md § User Scenarios defines them. Everything 030, 031 and 032 create is named as their
-reviewed plan.md gives it and is re-read on `main` before the flip (§ Prerequisites 2).
+spec.md § User Scenarios defines them. Everything 030, 031 and 032 created is named as their
+plan.md gave it and as their code on `main` has it, read there at 670ddcf (§ Prerequisites 2).
 The two names of 031's that this trio leans on hardest, the imaging camera's lease (031
 US9) and `RoiEdit`, which 031's `SettingsEdit` holds, are quoted in § The camera lease.
 
@@ -178,7 +178,7 @@ pub fn focus_error(&self) -> f64;
 pub fn set_focus_error(&self, error: f64);
 ```
 
-Each takes the state's lock once (`crates/simulator/src/optics.rs:65`):
+Each takes the state's lock once (`crates/simulator/src/optics.rs:66`):
 `set_focus_error` writes `imaging.focus_error` and leaves every other field of the
 imaging optics as it is. `ImagingOptics` gains no field, because 030's and 032's tests
 build it by literal. They are reached through `controls::Simulator`'s `Deref`, as the
@@ -186,7 +186,7 @@ rest of the optics is.
 
 ### The simulate route (`crates/finder/src/api.rs`, US1)
 
-Where the simulate routes are registered (`crates/finder/src/api.rs:470`), one more:
+Where the simulate routes are registered (`crates/finder/src/api.rs:551`), one more:
 `.route("/api/sim/focus", get(sim_focus).post(sim_set_focus))`.
 
 ```rust
@@ -195,19 +195,21 @@ Where the simulate routes are registered (`crates/finder/src/api.rs:470`), one m
 struct FocusControl { focus_error: f64 }
 ```
 
-Both handlers take `SessionWrite` (`crates/finder/src/api.rs:349`), as `sim_frames`
-does (`crates/finder/src/api.rs:556`). `sim_focus` answers
+Both handlers take `SessionWrite` (`crates/finder/src/api.rs:430`), as `sim_frames`
+does (`crates/finder/src/api.rs:638`). `sim_focus` answers
 `Json(json!({"focus_error": sim.focus_error()}))`. `sim_set_focus` reads the body
-through `sim_json` (`crates/finder/src/api.rs:570`), which answers 400 for a missing or
+through `sim_json` (`crates/finder/src/api.rs:652`), which answers 400 for a missing or
 unknown key; a value outside −100 to 100 answers `ApiError::bad_request` with exactly
 `focus_error must be a number from -100 to 100`; otherwise it calls `set_focus_error`
 and answers the same body as the `GET`. The key is `focus_error`, never `error`, which
 every refusal of this API already uses for its words. Without a simulation the paths
-fall to the 404 that every `/api/sim/*` path has (`crates/finder/src/api.rs:464`).
+fall to the 404 that every `/api/sim/*` path has (`crates/finder/src/api.rs:545`).
 
 ### The simulated solver adapter (`crates/finder/src/imaging/simulated.rs`, US1)
 
-Two builders on 032's `SimulatedSolver`, both off unless called:
+Two builders on 032's `SimulatedSolver`, both off unless called. On `main` it has
+`SimulatedSolver::new(simulator)` and one builder, `with_delay`; neither of these two
+exists yet:
 
 ```rust
 impl SimulatedSolver {
@@ -681,10 +683,13 @@ shape from 031's: the same four functions, the same six rules, and the same refu
 words. This trio, 035's (its plan.md § The camera's lease) and 037's take the lease in
 this one shape. The first drafts of this trio wrote it down as an assumption, before
 031's trio had it; the series audit gave it to 031 unchanged (spec.md § Clarifications,
-the fifth session).
+the fifth session). 031 landed it in `crates/finder/src/imaging/mod.rs` (US9 at
+`e9687ce`, `RoiEdit` with US1 at `1baecaa`), and its tests are
+`crates/finder/tests/console/imaging_lease.rs`.
 
 ```rust
-// 031's (the lease 031 US9; `RoiEdit` 031 US1, beside `SettingsEdit`), quoted:
+// 031's (the lease 031 US9; `RoiEdit` 031 US1, beside `SettingsEdit`): the signatures
+// as they are on `main`, the doc comments shortened:
 /// The imaging camera, held for one taker. Dropping it releases the camera at once.
 /// It holds no strong reference to the `Imaging`.
 pub struct Lease { /* 031's */ }
@@ -738,10 +743,14 @@ pub struct RoiEdit { pub x: u32, pub y: u32, pub width: u32, pub height: u32 }
 The tests of this spec assert of the refusal only the status 409 and that its words
 contain the holder's name (spec.md § User Scenarios, "The lease"; § Plan traps 27), so
 a later rewording of 031's sentence breaks nothing here. The re-anchoring
-(§ Prerequisites 2) reads these names and rules in 031's code as landed; any difference
-is corrected in this section, the task's "set" and "take" (§ The aid on the console),
-spec US5-S2's one case, US5-S4, US5-S5 and the test setup's "The lease" before the
-flip, and nowhere else, since nothing else in the trio names the lease.
+(§ Prerequisites 2) read these names and rules in 031's code on `main` at 670ddcf and
+found each as written here: the four functions with these signatures, the 409 `the
+imaging camera is held by {holder}`, the lease's check after the state's and before the
+frame in flight in both `set` and `take`, `abort`, `ended`, `view` and `solve` with no
+check of it, a `Weak` in the `Lease`, its release in `Drop`, and no lease for a single
+frame. Had any differed, it would be corrected in this section, the task's "set" and
+"take" (§ The aid on the console), spec US5-S2's one case, US5-S4, US5-S5 and the test
+setup's "The lease", and nowhere else, since nothing else in the trio names the lease.
 
 `RoiEdit` is needed here because the task builds a `SettingsEdit` whose `roi` is
 `Some(Some(RoiEdit { .. }))` for a tile and `Some(None)` for the whole sensor.
@@ -1093,9 +1102,11 @@ exactly `{"unit":"px"}` (spec US5-S2).
   `focus_ended`). The `Lease` is not in the state: the task owns
   it. `root` is the imaging folder, where 032 keeps `relation.json` (the plan
   document's amendment 3). Where 031's task keeps the camera's description on
-  reaching `ready`, and 032 calls `relation.describe`, US5 adds
-  `kept.describe(CameraId { .. })` from the same description. The run's task is aborted
-  where 031's own task is when the `Imaging` is dropped.
+  reaching `ready` (`attempt`), and 032 calls
+  `relation.describe(relation::CameraId::from(&camera))`, US5 adds
+  `kept.describe(CameraId::from(&camera))` from the same description. The run's task
+  is aborted where 031's own task is when the `Imaging` is dropped (`Drop for
+  Imaging`, which also aborts 032's history task).
 - US5: `ImagingView` gains, after 032's `relation`:
 
   ```rust
@@ -1104,11 +1115,14 @@ exactly `{"unit":"px"}` (spec US5-S2).
   ```
 
   filled by `Imaging::view` only while `state` is `ready` and the console has a solver.
-  Only `Imaging::view` fills it. The answers of `PUT /api/imaging/settings`, `POST
-  /api/imaging/frame` and `POST /api/imaging/solve`, which 031 and 032 build from the
-  imaging state's own view under its lock, carry no `focus` (as they carry no aim
-  reading in 032's `relation`, which 032's plan.md fills there with
-  `relation.view(None, false)`), and no scenario asserts it on them.
+  Only `Imaging::view` fills it. On `main` no view is built under the imaging state's
+  lock: 031's take, settings edit and abort (`Imaging::take`, `Imaging::set`,
+  `Imaging::abort`, and the lease's `Lease::take` and `Lease::set`) and 032's
+  `Imaging::solve` answer `Imaging::view` itself, called once the lock is released, as
+  the owner settled for 032 on 2026-11-18. So the answers of `PUT
+  /api/imaging/settings`, `POST /api/imaging/frame`, `POST /api/imaging/abort` and
+  `POST /api/imaging/solve` carry `focus` as `GET /api/imaging` does, and no scenario
+  asserts it on them.
 
 ### The routes (`crates/finder/src/imaging/routes.rs`, US5)
 
@@ -1128,9 +1142,10 @@ exactly `{"unit":"px"}` (spec US5-S2).
 
 ### The binary (`crates/finder/src/main.rs`, US8)
 
-Where 032 builds the simulated solver adapter under `--simulate`, after the state is
-chosen (`crates/finder/src/main.rs:104`), it becomes
-`SimulatedSolver::new(sim).with_measure_noise(32, 0.02).with_sharpest_at(0.60, 0.45, 3.0)`.
+Where 032 builds the simulated solver adapter under `--simulate`
+(`crates/finder/src/main.rs:220`), after the state is chosen
+(`crates/finder/src/main.rs:184`), `SimulatedSolver::new(simulator)` becomes
+`SimulatedSolver::new(simulator).with_measure_noise(32, 0.02).with_sharpest_at(0.60, 0.45, 3.0)`.
 No flag and no new start-up line. With these the middle tile, whose centre is 0.1755 of
 the half-diagonal from the sharpest point, reads 3.0858 sensor pixels at best focus and
 5.6305 at a focus error of 2.0. Its nearest rival is the tile above it, whose centre is
@@ -1141,22 +1156,22 @@ close (1.02/0.98).
 
 ### `crates/finder/src/lib.rs` and `crates/finder/README.md`
 
-`lib.rs`: US5 adds two lines after 032's route line, which follows
-`crates/finder/src/lib.rs:35`, written as they stand here, with no backticks:
+`lib.rs`: US5 adds two lines after 032's route line, `* POST /api/imaging/solve`
+(`crates/finder/src/lib.rs:41`), written as they stand here, with no backticks:
 `* POST /api/imaging/focus: {} or any of find, tile and exposure_ms; start the focus aid.`
 and `* DELETE /api/imaging/focus: no body; stop the focus aid and put the imaging settings back.`
 US8, which adds the key `check`, changes the first of the two to
 `* POST /api/imaging/focus: {} or any of check, find, tile and exposure_ms; start the focus aid, or with check a focus check.`
 
 `crates/finder/README.md`:
-- US1 adds a row after the `POST /api/sim/frames` row (`crates/finder/README.md:374`):
+- US1 adds a row after the `POST /api/sim/frames` row (`crates/finder/README.md:434`):
 
   ```markdown
   | `GET /api/sim/focus`, `POST /api/sim/focus` | `{focus_error}`, from -100 to 100: the simulated focuser. 0 is best focus; the simulated imaging camera's stars grow with its size either way. Answers `{focus_error}`. |
   ```
 
 - US5 adds two rows after 032's `POST /api/imaging/solve` row of the `## API` table
-  (`crates/finder/README.md:167`). The first is written without `check`, which US8
+  (`crates/finder/README.md:193`). The first is written without `check`, which US8
   adds to it when it adds the key:
 
   ```markdown
@@ -1206,7 +1221,7 @@ US8, which adds the key `check`, changes the first of the two to
   choose `Find the sharpest tile again` once focus is close, if the region was found
   while it was still well out, and after a change of telescope or collimation.
 - US7 adds `get_focus_reading` and `set_focus_aid` to the tool list in `## MCP clients`
-  (`crates/finder/README.md:57`), after 032's `solve_imaging_frame`, worded like their
+  (`crates/finder/README.md:62`), after 032's `solve_imaging_frame`, worded like their
   neighbours, and changes the sentence above the list, which counts the tools that
   reach the imaging camera (031's sentence, which 032 brings to four), to count six.
 
@@ -1247,7 +1262,7 @@ in the order `exposure_ms`, `find`, `tile`, `check`, leaving out a key that is n
 `putImagingWholeSensor` sends `PUT /api/imaging/settings` with the same headers and the
 body `{"roi":null}`; 031's `ImagingSettingsEdit` leaves `roi` out, so this is a call of
 its own. Each throws an `Error` with the answer's `error` on a refusal, as `postTrack`
-does (`crates/finder/web/src/api.ts:312`).
+does (`crates/finder/web/src/api.ts:478`).
 
 `components/FocusBlock.tsx`, `FocusBlock({ view, refresh }: { view: ImagingView;
 refresh: () => Promise<void> | void })`: nothing without `view.focus`; else
@@ -1377,7 +1392,7 @@ At the end of 031's Imaging page entry, after the sentence 032 adds:
 > After the imaging solve comes the Focus block.
 
 `.impeccable/design.json` gains one entry in `components`, after 032's `Imaging field`,
-formatted as its neighbours (`.impeccable/design.json:723`): `name` `Focus block`,
+formatted as its neighbours (`.impeccable/design.json:739`): `name` `Focus block`,
 `kind` `custom`, `refersTo` `button`, a `description` that says the entry in one
 sentence each, and `html` and `css` snippets under the class `ds-focus-block`, using
 only `var(--color-ink)` and `currentColor`.
@@ -1407,8 +1422,8 @@ struct FocusAidArguments {
 struct FocusTileArguments { col: u32, row: u32 }
 ```
 
-Two tools in the `#[tool_router]` block (`crates/finder/src/mcp/tools.rs:165`), each
-with `output_schema = object_schema()` (`crates/finder/src/mcp/tools.rs:104`):
+Two tools in the `#[tool_router]` block (`crates/finder/src/mcp/tools.rs:213`), each
+with `output_schema = object_schema()` (`crates/finder/src/mcp/tools.rs:152`):
 
 - `get_focus_reading`, read-only, description
   `Read the focus reading: the focus region, the focus record, and the reading, best, trend and verdict of the focus aid or the last focus check.`:
@@ -1426,10 +1441,10 @@ with `output_schema = object_schema()` (`crates/finder/src/mcp/tools.rs:104`):
 - `set_focus_aid`, description
   `Start or stop the focus aid, as POST and DELETE /api/imaging/focus do. With check true it takes a focus check, waits until it ends and returns its verdict against the focus record.`,
   with `input_schema = rmcp::handler::server::common::schema_for_input::<FocusAidArguments>().expect("focus aid schema")`,
-  as `set_target` declares its own (`crates/finder/src/mcp/tools.rs:355`): takes
+  as `set_target` declares its own (`crates/finder/src/mcp/tools.rs:403`): takes
   `arguments: JsonObject` and reads it itself, so that `{}` is a tool error and not a
   protocol one (`set_tracking`, whose `on` is in its parameter type, is why the
-  every-tool test names it, `crates/finder/src/mcp/tools.rs:298`):
+  every-tool test names it, `crates/finder/src/mcp/tools.rs:346`):
   - `on` absent or not a boolean: the error `on must be true or false`;
   - `on` false with any other key: `set_focus_aid with on false takes no other
     argument`; else, without imaging, `this console takes no imaging frames`; else
@@ -1472,18 +1487,20 @@ These are not changed by any story:
   bodies, and an unknown `/api/sim/*` path still answers 404 with and without a
   simulation (`crates/finder/tests/motion/simulate.rs:94`); `/api/sim/focus` is a new
   name. The README's sentence that every such path answers 404 outside simulate mode
-  (`crates/finder/README.md:379`) stays true.
+  (`crates/finder/README.md:439`) stays true.
 - **031's `take`, `set` and `abort` and their refusals.** These are pinned by 031's
   own scenarios, and no story here changes them. The aid takes frames and changes
   settings through the lease and adds no refusal, no lock and no holder of its own. A
   frame the aid takes is a saved imaging frame like any other until the aid removes
   its file. The lease itself is 031 US9's, pinned by that story's own scenarios, which
-  no story here changes; no test on `main` names it yet (§ The camera lease).
+  no story here changes (`crates/finder/tests/console/imaging_lease.rs`; § The camera
+  lease).
 - **`GET /api/imaging`, `GET /api/session` and the MCP bodies on a console with no
   imaging solver, or outside `ready`.** `focus` is skipped then, so every body 031's
   tests read is what it was. 032's tests have a solver and compare `solve` and
-  `relation` key by key; they are re-read before the flip for a comparison of a whole
-  view that a new `focus` key would break (§ Prerequisites 2).
+  `relation` key by key; read again on `main` at 670ddcf, none compares a whole view
+  that a new `focus` key would break: the only views they compare whole are
+  `{"state":"off"}` ones (§ Prerequisites 2).
 - **`set_imaging_camera`'s nine keys** (031 US8-S1). The focus exposure and the tile
   are in the request's body, not in the imaging settings, which gain no key.
 - **The MCP tool list as tests read it.** One test calls every listed tool with `{}`
@@ -1602,17 +1619,33 @@ These are not changed by any story:
 ## Prerequisites before this spec is flipped to `ready`
 
 1. **030-imaging-camera-link, 031-imaging-frames-on-console and
-   032-imaging-solve-and-aim-point have landed.** Not met: all three are reviewed
-   drafts in this worktree. Everything of theirs named here is
-   from their plan.md as reviewed.
-2. **The trio is re-anchored to `main` after all three land.** Not met. Every `path:line`
-   was read at 49bb210, the drafting worktree's HEAD, which has all of 028 and none of
-   030, 031 and 032. To do then: re-read every cited line of
-   `crates/finder/src/api.rs`, `crates/finder/src/main.rs`, `crates/finder/src/lib.rs`,
-   `crates/finder/src/mcp/tools.rs`, `crates/finder/README.md`, `DESIGN.md`,
-   `.impeccable/design.json`, `crates/simulator/src/optics.rs`,
-   `crates/simulator/src/noise.rs` and the test files 030, 031 and 032 change; give a line
-   to every file of 030, 031 and 032 named without one; and check, in their code as landed:
+   032-imaging-solve-and-aim-point have landed.** Met on `main` at 670ddcf. 030's eight
+   stories landed by 49f8dcd (US1 at 3849a0f, US2 at e867598, US3 at 209edcb, US4 at
+   2ed589c, US5 at e1cc38e, US6 at 58aff47, US7 at 4e7eef6, US8 at 49f8dcd), 031's nine
+   by e9687ce (US1 at 1baecaa, US2 at 3a2f799, US3 at 334e8eb, US4 at e0a5bf6, US5 at
+   523055b, US6 at f7b58d5, US7 at 11e9f60, US8 at def5d6e, US9 at e9687ce), and 032's
+   seven by 670ddcf (US1 at 5ccebb6, US2 at 548a43a, US3 at 6cba16a, US4 at ee3d9c4, US5
+   at 8729f31, US6 at b507edc, US7 at 670ddcf). Everything of theirs named here is from
+   their plan.md, read again in their code on `main` (§ Prerequisites 2).
+2. **The trio is re-anchored to `main` after all three land.** Met at 670ddcf on
+   2026-11-18. Every `path:line` in spec.md, plan.md and tasks.md, 49 in all, had been
+   read at 49bb210, the drafting worktree's HEAD, which has all of 028 and none of 030,
+   031 and 032; each was compared line for line at 49bb210 and at 670ddcf and then read
+   again by its content. Twenty-nine read the same. Sixteen had moved and now cite the
+   line that holds the same text, among them the `## MCP clients` and `## API`
+   headings, the `POST /api/sim/frames` row and the 404 sentence of
+   `crates/finder/README.md`, the `/api/sim` routes of `crates/finder/src/api.rs` and
+   the `--simulate` branch of `crates/finder/src/main.rs`. Four were found again by
+   their content: `SessionWrite` (`crates/finder/src/api.rs:430`) and `sim_json`
+   (`crates/finder/src/api.rs:652`), which 031 made `pub(crate)`; the doc line US5
+   writes after, now 032's `* POST /api/imaging/solve` (`crates/finder/src/lib.rs:41`);
+   and the neighbour whose format the Focus block's entry follows, now 032's
+   `Imaging field` (`.impeccable/design.json:739`). One was added, where
+   `main.rs` builds the simulated solver adapter (`crates/finder/src/main.rs:220`). No
+   line is cited in a file 030, 031 or 032 created, and every file of theirs is still
+   named without one, as the rule for every story in tasks.md has it. Every name and
+   behaviour this trio takes from 031 and 032 was read in their code on `main`, among
+   them these, each of which holds:
    - that `SettingsEdit` can be built with exactly `exposure_ms`, `binning`, `roi` and
      `save_at_node`, that its `roi` names the whole sensor with `Some(None)`, and that
      `RoiEdit` holds `x`, `y`, `width` and `height`, as 031's plan.md defines them
@@ -1625,7 +1658,7 @@ These are not changed by any story:
    - the lease of 031 US9, name for name (§ The camera lease, § Prerequisites 11):
      how it is taken and released, how its holder takes a frame and changes the
      settings, that its refusal is a 409 whose words contain the holder's name
-     (`the imaging camera is held by {holder}` as drafted), that it is checked before
+     (`the imaging camera is held by {holder}`), that it is checked before
      the frame in flight in `take` and `set`, that `abort` is not guarded by it, that a
      held lease does not keep the `Imaging` alive, and that 031's own single imaging
      frame holds none while in flight (031 US9's rule 6);
@@ -1645,15 +1678,34 @@ These are not changed by any story:
    - that `ImagingPage.tsx` renders 032's block as a region named `Imaging solve`, and
      that no test of 031 or 032 compares a whole imaging view on a console with a
      solver, or finds a field by a name that `Focus frame time` or `Focus region`
-     would also match;
-   then re-run the validator on `main`. Where a citation of 030's, 031's or 032's trio and
-   one here name the same line of the same file with different numbers, the line as it
-   reads on `main` decides, and this trio's were last checked at 49bb210.
+     would also match.
+
+   The rest were as written here but for a few in name, path or place, corrected in
+   place: `Imaging::take`, `Imaging::abort` and `Imaging::ended` are in
+   `crates/finder/src/imaging/mod.rs`, not `frames.rs` (spec.md § Clarifications); the
+   one place 031's task keeps the camera's description is `attempt`, where 032 calls
+   `relation.describe(relation::CameraId::from(&camera))`, and `Drop for Imaging` aborts
+   that task (§ The imaging state); 032's simulated solver adapter is built with
+   `SimulatedSolver::new(simulator)` and has one builder, `with_delay`, so both of this
+   trio's builders are new (§ The simulated solver adapter, § The binary); and the new
+   test modules' `mod` lines go after 031's `mod imaging_fits;` (tasks T001 and T019).
+   One differed in what the answers carry, and is written as a fact, since no story
+   builds otherwise for it: on `main`, 031's take, settings edit and abort and 032's
+   solve answer `Imaging::view` itself, called after the lock is released, as the owner
+   settled for 032 on 2026-11-18, so those answers carry `focus` too (§ The imaging
+   state). The validator reports no finding at 670ddcf. Where a citation of 030's,
+   031's or 032's trio and one here name the same line of the same file with different
+   numbers, the line as it reads on `main` decides; this trio's were last checked at
+   670ddcf.
 3. **The owner decisions are settled and the approvals given** (spec § Owner decisions,
-   § Owner approvals). Not met: all twenty-four decisions are open. Four of them are
-   chosen together, because they answer one question, whether a tile holds five
-   measurable stars at a sparse field: 2 (the tiles), 16 (the focus exposure), 21 (the
-   measure's floor) and 24 (far out at the start).
+   § Owner approvals). Met on 2026-11-17. All twenty-four decisions take their
+   recommended answers, which the owner approved that day with the imaging series'
+   other decisions ("im good with all of the info in the decisions doc"). None of the
+   three rows the owner settled separately that day is this spec's (they are 034's,
+   035's and 037's). The owner gives the approvals by flipping the spec. Four of the
+   decisions are chosen together, because they answer one question, whether a tile
+   holds five measurable stars at a sparse field: 2 (the tiles), 16 (the focus
+   exposure), 21 (the measure's floor) and 24 (far out at the start).
 4. **Constitution V is read or amended by the owner**, as 032's Prerequisites ask: the
    focus reading is measured by ASTAP through the same port. Met: constitution 1.3.0 (PR 239, merged 2026-11-17 as `cc593c7`).
 5. **The trio is probe-built.** Met on 2026-11-18, round 1, every story: each of the
@@ -1666,17 +1718,19 @@ These are not changed by any story:
    read for the time being and the frame kept for a solve, as measured on the probe's
    split branch (§ Risks). The star counts that US2-S4, US8-S2 and US8-S3 check or
    assume were read (§ Risks).
-6. **The documents this trio cites are on `main`.** Not met: the plan document,
-   ADR-0002, the changed `GLOSSARY.md` and the research note are in the drafting
-   worktree, uncommitted. Of the five things in `GLOSSARY.md` that spec owner approval
-   11 words, that worktree's glossary carries two since the series audit: the new
-   entries Focus check and Settled reading, in the approval's words, whose words the
-   page and the MCP tools show. It also carries a Lease entry, which is 031's. Three
-   are still to come: the entries reworded, Focus reading (sensor pixels until a scale
-   is known), Focus region (or a tile fixed by hand) and Focus record (two parts, and
-   which judges). The series' author writes them there once the owner has settled the
-   decisions behind them (4, 6, 7 and 8); no story of this spec writes the glossary.
-   Until then the trio would ship words that the glossary's three entries do not have.
+6. **The documents this trio cites are on `main`.** Met by the change that re-anchored
+   this trio, which ships in the pull request that flips it, as 030's flip carried its
+   glossary. The plan document, ADR-0002, the changed `GLOSSARY.md` and the research
+   note have been on `main` since 030's flip (`55e41f5`). Of the five things in
+   `GLOSSARY.md` that spec owner approval 11 words, the glossary on `main` carries two:
+   the new entries Focus check and Settled reading, in the approval's words, whose
+   words the page and the MCP tools show. It also carries a Lease entry, which is
+   031's. The other three, the entries reworded, Focus reading (sensor pixels until a
+   scale is known), Focus region (or a tile fixed by hand) and Focus record (two parts,
+   and which judges), are written in the approval's words into `GLOSSARY.md` beside
+   this trio, each entry keeping its `_Avoid_:` line, now that the owner has approved
+   the decisions behind them (4, 6, 7 and 8; § Prerequisites 3); no story of this spec
+   writes the glossary.
 7. **Outside the factory, before the first use at the telescope:** ASTAP installed and
    the console started with its flags and `--focal-length-mm` (032), so that sizes read
    in arcseconds before the first imaging solve. Not needed to flip.
@@ -1698,15 +1752,14 @@ These are not changed by any story:
    this spec. 034's draft takes 031's lease under its own name, its owner decision 23
    settled by the plan document's amendment 1, and adds no refusal built on
    `focus_running()` (its plan.md § Prerequisites 5). 035's and
-   037's drafts take the same lease as this one, 031 US9. Not met for the
-   drafts on other branches that 031's Prerequisites name (`026-mount-sky`,
-   `021-chart-orientation`, `022-altaz-guidance`): whichever of two such specs is
-   flipped second names the other in `depends_on_landed` and is re-anchored after it
-   lands.
-9. **The plan document agrees with what this trio builds.** Met in the drafting
-   worktree since the series audit, whose edits to the shared documents put the four
-   corrections below into the plan document there; it reaches `main` with the plan
-   document itself (§ Prerequisites 6). The plan document's "Settled decisions" table
+   037's drafts take the same lease as this one, 031 US9. The specs on other branches
+   that 031's Prerequisites name (`026-mount-sky`, `021-chart-orientation`,
+   `022-altaz-guidance`) have landed, and this trio was re-anchored to `main` after
+   them (§ Prerequisites 2).
+9. **The plan document agrees with what this trio builds.** Met on `main` since 030's
+   flip (`55e41f5`), which brought the plan document there with the four corrections
+   below, put in by the series audit's edits to the shared documents (§ Prerequisites
+   6). The plan document's "Settled decisions" table
    is not changed by any spec, and its row for Focus stands as written. Spec owner
    decisions 6, 7, 8 and 23 are declared as
    readings of that row, not changes to it: the reading is in arcseconds whenever a
@@ -1737,11 +1790,14 @@ These are not changed by any story:
    before the flip.
 10. **No operator-staged file is needed.** Met: no story reads a fixture, and no test
     runs ASTAP.
-11. **031's trio carries the imaging camera's lease, and defines `RoiEdit`.** Met in
-    the trios as drafted: the series audit gave 031's trio the lease as its User Story
-    9, with an owner approval for its public names and its refusal (031's owner
-    approval 12, FR-028 to FR-033), and defined `RoiEdit` in its US1, in the shape this
-    trio had written down and with nothing changed:
+11. **031's trio carries the imaging camera's lease, and defines `RoiEdit`.** Met, and
+    landed: the series audit gave 031's trio the lease as its User Story 9, with an
+    owner approval for its public names and its refusal (031's owner approval 12,
+    FR-028 to FR-033), and defined `RoiEdit` in its US1, in the shape this trio had
+    written down and with nothing changed; 031 landed the lease with its US9 at
+    e9687ce and `RoiEdit` with its US1 at 1baecaa, in
+    `crates/finder/src/imaging/mod.rs`, and the re-anchoring read both there at
+    670ddcf, name for name (§ Prerequisites 2):
     `Imaging::lease(&Arc<Self>, &'static str) -> Result<Lease, Refusal>`, whose 409 is
     `the imaging camera is held by {holder}`;
     `Imaging::holder()`; `Lease::set` and `Lease::take`; in `take` and `set`, the
@@ -1750,13 +1806,11 @@ These are not changed by any story:
     is aborted; no strong `Arc` in it; a single frame holding none; and `RoiEdit` with
     `x`, `y`, `width` and `height` (§ The camera lease). US5's code calls
     `Imaging::lease`, `Lease::set` and `Lease::take`, and its tests call
-    `Imaging::lease` and `Imaging::holder`; they compile against 031 as drafted, and no
-    story of 033, 035 or 037 adds to 031's state. What stays is the check in code:
-    § Prerequisites 2 reads the lease in 031 as landed. If 031 lands with a lease whose
-    `set` is not guarded, a settings change could reach the camera between two of the
-    aid's frames, and the first draft's ending for it comes back as a spec change
-    before the flip; if its single frame holds the lease, § The camera lease, 6, and
-    US5-S2's one case change, and nothing else. If 031's lease can be lent to a step,
+    `Imaging::lease` and `Imaging::holder`; they compile against 031 as landed, and no
+    story of 033, 035 or 037 adds to 031's state. Since 031's `set` is guarded by the
+    lease and its single frame holds none, the first draft's ending for a settings
+    change between two of the aid's frames does not come back, and § The camera lease,
+    6, and US5-S2's one case stand as written. If 031's lease can be lent to a step,
     037 may choose its alternative (§ Shapes that existing tests pin, last bullet).
 
 ## Plan traps
@@ -1796,7 +1850,7 @@ with the check that keeps it from recurring. They bind every story.
     short sections; `take`, `ended`, `set`, `read` and `find_region` are awaited with
     no lock held. The lease is not such a lock: it is 031's, and the task owns it.
 11. **A task that keeps its owner alive.** *Check:* the aid's task holds a `Weak` of
-    the `Imaging`, and is aborted where 031's own task is; § Prerequisites 2 checks
+    the `Imaging`, and is aborted where 031's own task is; § Prerequisites 2 checked
     that a held lease does not keep the `Imaging` alive either.
 12. **Removing the wrong file, or a file something is still using.** *Check:* the aid
     removes only a path it was given by `Imaging::ended` for a frame it asked for
@@ -1820,8 +1874,9 @@ with the check that keeps it from recurring. They bind every story.
     `check`, asserts that it is refused or that the aid's part has no `check` key,
     starts the aid where every tile is far out, or asks for an imaging solve while it
     runs.
-15. **A whole-view comparison in an earlier spec.** *Check:* § Prerequisites 2 re-reads
-    031's and 032's tests for one; `focus` is absent without a solver.
+15. **A whole-view comparison in an earlier spec.** *Check:* § Prerequisites 2 re-read
+    031's and 032's tests for one and found none on a console with a solver; `focus` is
+    absent without a solver.
 16. **A label that matches by substring.** Playwright's `getByLabel("Exposure")` would
     also match a field named `Focus exposure`. *Check:* the field is `Focus frame
     time`; no new name contains `Exposure`, `Gain`, `Offset`, `Binning`, `Cooler`,
@@ -1881,7 +1936,7 @@ with the check that keeps it from recurring. They bind every story.
 
 | Risk | Mitigation |
 |---|---|
-| An interface may not build as written: `impl Imaging` blocks in a grandchild module against state 031 has not fixed; `focus_start(self: &Arc<Self>)` against how 031 hands out its `Imaging`; `SettingsEdit`'s `roi` type; a `Weak` in a task spawned from a method. | Proved in round 1 (Prerequisite 5), on 031's and 032's round-1 probe code: every interface built as plan.md writes it, with private additions only. `impl Imaging` blocks in `imaging::focus::run` reach 031's private state; `focus_start(self: &Arc<Self>)` is called on the `Arc<Imaging>` that `state.imaging()` hands out; `SettingsEdit`'s `roi` is `Option<Option<RoiEdit>>`; and the task, holding a `Weak<Imaging>` and the `Lease`, is `Send + 'static`. `Imaging::view`, `Imaging::solver` and `Imaging::holder` take the imaging state's lock themselves, `view` twice, which is why the start's checks and steps 4f to 4h read the state's own fields (§ The aid on the console). Prerequisite 2: every name taken from 031 and 032 is read again on `main` after they land. |
+| An interface may not build as written: `impl Imaging` blocks in a grandchild module against state 031 has not fixed; `focus_start(self: &Arc<Self>)` against how 031 hands out its `Imaging`; `SettingsEdit`'s `roi` type; a `Weak` in a task spawned from a method. | Proved in round 1 (Prerequisite 5), on 031's and 032's round-1 probe code: every interface built as plan.md writes it, with private additions only. `impl Imaging` blocks in `imaging::focus::run` reach 031's private state; `focus_start(self: &Arc<Self>)` is called on the `Arc<Imaging>` that `state.imaging()` hands out; `SettingsEdit`'s `roi` is `Option<Option<RoiEdit>>`; and the task, holding a `Weak<Imaging>` and the `Lease`, is `Send + 'static`. `Imaging::view`, `Imaging::solver` and `Imaging::holder` take the imaging state's lock themselves, `view` twice, which is why the start's checks and steps 4f to 4h read the state's own fields (§ The aid on the console). Prerequisite 2: every name taken from 031 and 032 was read again on `main` at 670ddcf after they landed, and each of these holds there. |
 | The simulator's seeded field puts fewer stars in a tile than a scenario needs. The count is a Poisson draw of mean 13 on a fixed seed, and no story may change the seed, the density or the scenario. | Read in round 1. US2-S4's two tiles hold 26 and 14 stars against its guard of five, and no tile of the focus rig holds fewer than eight. US8-S2's middle tile holds 14 for the whole scenario, about 48 s of virtual time, and 11 to 14 for the first 600 s, against its guard of eight. US8-S3's middle tile holds 13 or 14 at the simulated console's start, against the five it assumes; the untracked sky carries stars out of it, down to 6 from about 98 s after the start, and the scenario asks for its check as soon as the console is `ready`. US2-S4 and US8-S2 still check the count first, so a shortfall would show as that guard (§ Plan traps 8). |
 | ASTAP's star measure on a tile of a raw colour mosaic is not what the design assumes: too few stars at its signal-to-noise floor, a floor under its own 2 × 2 averaged pixels, or sizes that do not fall through focus. | Field checks, named in spec.md. The floor is 032's owner decision 24 and this spec's 21; the tile is a third of the sensor and an owner decision; the port keeps another adapter possible. Not answerable in the factory. |
 | With the defaults a tile holds fewer than five measurable stars at a sparse field, and the aid ends `no_region` or reads too few stars. The research note's own figures predict it (§ 4. Star counts and limiting magnitude at this field): a field holds 30 to 36 stars to G 14 at the galactic poles and 78 to 97 at galactic latitude 30°, so a ninth of it holds 3 to 4 and 9 to 11; and the limit it estimates, G 15.6 to 15.8 in 2 s at a signal-to-noise ratio of 10, becomes about G 14 for a 1 s frame at the measure's floor of 30 (half the exposure costs 0.4 to 0.75 of a magnitude and three times the ratio about 1.2: this plan's inference, on an estimate the note itself puts at a magnitude either way and only near the field's centre). Off-axis coma spreads the stars of the outer tiles and lowers them further. So at the galactic poles the defaults are predicted to fail; at latitude 30° and at the showcase target, whose field holds about 14 such stars a tile away from the Trapezium, to work. | Put to the owner with this arithmetic, as one question in three decisions (spec owner decisions 2, 16 and 21): the default focus exposure (1000 ms recommended; 2000 or 3000 ms reach about G 14.5 to G 15, where a polar tile holds 5 to 7), the measure's floor (30 recommended; 10 reaches about G 15 at 1 s), or both as they are with the cure named. The cure is named whichever is chosen: the page says `Try a longer Focus frame time, or a field with more stars.` on a frame with too few stars and after a `no_region` ending (spec FR-033, US6-S4), and the README's `## Focus` says why (spec FR-030). 037's run can pass its check a longer `exposure_ms`. The field check "how many measurable stars a tile of a one-second exposure holds" at three galactic latitudes tests the arithmetic; nothing in the factory can. |
@@ -1892,10 +1947,10 @@ with the check that keeps it from recurring. They bind every story.
 | One reading takes much longer than a second at the telescope: the frame's forwarding, its save, the prepared copy and the solver's start. | `cadence_ms` reports it, and the field check reads it. The region is a ninth of the sensor; a smaller focus exposure and 031's forwarding settings are the levers; nothing in the arithmetic assumes a second. |
 | A story passes 64 KiB. The first draft's US5 would have: the loop, the view, two routes, the README section and seven scenarios that build some fifteen rigs, by the review's count over the budget. | Split before any probe, as the review asked. US5 keeps `run.rs` without the check, the focus state, the two routes, `lib.rs`, the two API rows and seven scenarios in one test module: an estimate of 45 to 55 KiB (about 17 of source, 8 of the rig and the scripted solver, 25 to 30 of tests). US8 takes the check, `focus_ended`, `main.rs`, the README's `## Focus` and three scenarios in a module of its own and the `cli` module: the round-1 probe measured it at 36,763 B (the check module 15.3 KiB with its 7.2 KiB copy of the rig, the README 7.9 KiB, the `cli` module 5.0 KiB, `run.rs` 6.2 KiB). Round 1 measured every story (§ Refinement Record): US1 25,627 bytes, US2 20,941, US3 19,653, US4 19,722, US8 36,763, US6 42,222 (42,919 with `dist`) and US7 17,822, each under the budget. US5 measured 70,010 bytes, over it: its tests came to 32 KiB, on the estimate, and `run.rs` alone to 28 KiB, against about 17 estimated for all its source. The cut written here before the probes, US5-S6 with step 4j (FR-037, the tile read for the time being) moved to a story between US5 and US8, was built and measured: 65,139 bytes for US5 and 16,928 for the story it moves out, which left US5 397 bytes under the budget, no margin against a builder's own style. So US5 is cut deeper, as the owner chose: US9 takes step 4j and the provisional tile (FR-037), the exception for a frame an imaging solve is running on (FR-039) and two scenarios, US9-S1 and US9-S2, in a module of its own with a trimmed copy of the rig; US5 keeps the rest, US5-S1 to US5-S5. The probe measured US5 so cut at about 63,284 bytes, 2.2 KiB under the budget, on a tree that ran no gate, and put US9 at about 17 to 19 KiB (16,928 bytes measured without US9-S2), to which round 1's two additions to US9-S2 add about 1 to 2. US9 is built after US5 and before US8, since US8-S1's check on far-out tiles runs FR-037. US1 can shed the simulate route (FR-004, US1-S5) the same way. |
 | The console exits, or the link drops, while the aid runs, and the camera is left on a region with the aid's exposure. | The Focus block offers `Use the whole sensor` whenever no aid runs and the region is not the whole sensor (US6-S4); exposure and binning are on 031's Settings form; the README says so. Nothing is persisted to undo it, by design: a stale "put back" after a restart could overwrite the observer's own change. |
-| 031 lands with a lease unlike its US9 as drafted: other names, a refusal that does not name the holder, a `set` it does not guard, a lease that keeps the `Imaging` alive. | Prerequisite 11 is met in the trios as drafted, and Prerequisite 2 checks the lease in 031's code as landed. Everything this trio takes from the lease is cited in one section, six numbered rules and `RoiEdit`, and the tests of it assert only a 409 that names the holder. The re-anchoring corrects that section, the task's "set" and "take", US5-S2's one case, US5-S4, US5-S5 and the test setup; nothing else in the trio names the lease. |
+| 031 lands with a lease unlike its US9 as drafted: other names, a refusal that does not name the holder, a `set` it does not guard, a lease that keeps the `Imaging` alive. | Met: 031 landed the lease with its US9 at e9687ce, and Prerequisite 2 read it in 031's code at 670ddcf, name for name, as written here (Prerequisite 11). Everything this trio takes from the lease is cited in one section, six numbered rules and `RoiEdit`, and the tests of it assert only a 409 that names the holder. Had it differed, the re-anchoring would have corrected that section, the task's "set" and "take", US5-S2's one case, US5-S4, US5-S5 and the test setup; nothing else in the trio names the lease. |
 | An imaging run (037) holds the camera and cannot ask for a focus check, which takes the lease itself. | Settled on 037's side: its spec owner decision 15 has the run give the lease up just before the check and take it again after, and its plan.md calls `focus_start` with `check` and `focus_ended()` and reads this trio's five verdict words (§ Shapes that existing tests pin, last bullet). In the instant of the hand-over another taker can get in; 037 names that risk and its answer. Only 037's alternative, a lease that can be lent, would change a signature here. |
 | Another taker of frames (the observer, 034's sets, 035's stack) asks for the camera while the aid runs. | The lease: 031 refuses the second taker with `the imaging camera is held by the focus aid`, and the aid runs on (US5-S4). The observer stops the aid first; the page's alert shows 031's words. |
-| `focus` appearing in the imaging view breaks a comparison in 031's or 032's tests, or the new block breaks a query in their page tests. | Prerequisite 2 re-reads them; `focus` is absent without a solver, and the idle block has no `status` or `alert`. |
+| `focus` appearing in the imaging view breaks a comparison in 031's or 032's tests, or the new block breaks a query in their page tests. | Prerequisite 2 re-read them at 670ddcf: none compares a whole view on a console with a solver, and no page test's query matches the Focus block's names; `focus` is absent without a solver, and the idle block has no `status` or `alert`. |
 | A found region goes stale after a re-collimation or a change of telescope, and readings there are larger than they could be. | `Find the sharpest tile again` is one choice on the page and one key in the request; the README says when to use it. A reading that is clearly out against the record is the prompt. |
 | The owner moves one camera between two telescopes, and each move costs the earlier nights' record. | Spec owner decision 10 names the cost and its alternative, a record and a region for each scale in `focus.json`, to be chosen before the flip because the file's format is pinned once written. |
 | The observer leaves a forwarding limit set, and one reading takes many seconds. | The aid does not touch 031's `forward_kib_per_s`; `cadence_ms` shows the time, and the README says to clear the limit while focusing. |
@@ -2015,9 +2070,11 @@ it: its tests are the scenarios the probes built and ran, each in the module the
 now names; its writes are the files their diffs changed, US9's being those of the
 probe's split branch, and are the files § Project Structure names; and its shared
 writes name the merge edge that orders two stories of this spec on one file, or the
-story of 030, 031 or 032 that last writes the file. What is still to do is
-§ Prerequisites 2, the re-anchoring. An existing test is listed only when
-its file is in the drafting worktree; 030's, 031's and 032's tests are named in § Shapes
+story of 030, 031 or 032 that last writes the file. § Prerequisites 2, the
+re-anchoring, was done on `main` at 670ddcf on 2026-11-18, after all three landed, and
+changed none of the record's tests, writes or shared writes: each shared write's last
+writer of 030, 031 or 032 is the one on `main`. An existing test is listed only when
+its file was in the drafting worktree; 030's, 031's and 032's tests are named in § Shapes
 that existing tests pin instead. The record's `open_questions` are empty because the
 validator refuses a record that holds any; what is not established is in § Risks,
 § Prerequisites and spec.md's field checks. Nothing in this record is an owner

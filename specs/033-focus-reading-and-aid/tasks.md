@@ -6,13 +6,16 @@ description: "Task list for 033-focus-reading-and-aid: Focus Reading and Focus A
 
 **Prerequisites** (plan.md § Prerequisites):
 - `030-imaging-camera-link`, `031-imaging-frames-on-console` and
-  `032-imaging-solve-and-aim-point` have landed on `main`, and this trio has been re-anchored to them: not met (plan.md § Prerequisites
-  1 and 2);
+  `032-imaging-solve-and-aim-point` have landed on `main`, and this trio has been
+  re-anchored to them: met, on `main` at 670ddcf on 2026-11-18 (plan.md
+  § Prerequisites 1 and 2);
 - 031's trio carries the imaging camera's lease of the plan document's amendment 1 as
   its User Story 9, with `RoiEdit` defined, and this trio cites both as 031 names
-  them: met in the trios as drafted, and checked in 031's code at the re-anchoring
+  them: met, and checked name for name in 031's code on `main` at the re-anchoring
   (plan.md § The camera lease, § Prerequisites 2 and 11);
-- the owner decisions in spec.md are settled and its owner approvals given: not met;
+- the owner decisions in spec.md are settled and its owner approvals given: met, the
+  owner having approved their recommended answers on 2026-11-17; flipping the spec
+  gives the approvals (plan.md § Prerequisites 3);
 - the owner has amended Constitution V or written how it reads for the imaging solver:
   met, constitution 1.3.0 (plan.md § Prerequisites 4);
 - the trio has been probe-built: met in round 1, on 2026-11-18, and its fixes are in;
@@ -21,13 +24,13 @@ description: "Task list for 033-focus-reading-and-aid: Focus Reading and Focus A
   § Prerequisites 5, § Risks);
 - the plan document, ADR-0002, the research note and the changed `GLOSSARY.md` are on
   `main`, and the glossary carries the two new entries and the three reworded ones of
-  spec.md owner approval 11: not met on `main`; the drafting worktree's glossary carries
-  the two new entries, and the three rewordings wait for the owner (plan.md
-  § Prerequisites 6);
+  spec.md owner approval 11: met by the change that re-anchored this trio, which writes
+  the three rewordings into `GLOSSARY.md` beside it; the rest has been on `main` since
+  030's flip (plan.md § Prerequisites 6);
 - the plan document's § 033, route table, storage line and module tree carry what this
   trio builds, while its "Settled decisions" row for Focus stands as written and spec.md
-  owner decisions 6, 7, 8 and 23 are readings of it: met in the drafting worktree, and
-  on `main` once the plan document is (plan.md § Prerequisites 9);
+  owner decisions 6, 7, 8 and 23 are readings of it: met on `main` since 030's flip
+  (plan.md § Prerequisites 9);
 - no operator-staged file is needed: met.
 
 **Rules for every story:**
@@ -85,9 +88,9 @@ description: "Task list for 033-focus-reading-and-aid: Focus Reading and Focus A
   "autofocus". "Measure" alone is the solver port's star measure. No string shown to
   the observer says focus is good without naming the record (plan.md § Plan traps 25).
 - Keep the story's diff under 64 KiB, measured as plan.md § Plan traps 3 says.
-- Every code citation is `path:line` as read at 49bb210 and checked there again in the
-  series audit's pass, and every file of 030, 031 and 032 is named without a line. If a
-  cited line has moved, re-read it rather than guess.
+- Every code citation is `path:line` as read on `main` at 670ddcf in the re-anchoring of
+  2026-11-18, and every file of 030, 031 and 032 is named without a line. If a cited
+  line has moved, re-read it rather than guess.
 - Do not edit `specs/033-focus-reading-and-aid/`.
 - Run no tool the gates don't run: no `astap_cli`, `cargo deny`, `cargo machete`, Rust
   1.96 or `ergane`.
@@ -98,7 +101,7 @@ description: "Task list for 033-focus-reading-and-aid: Focus Reading and Focus A
 
 - [ ] T001 [US1] Create `crates/finder/tests/console/imaging_focus_reading.rs`, the
   module `imaging_focus_reading` of finder's `console` test binary, and add
-  `mod imaging_focus_reading;` after 032's `mod imaging_astap;` in
+  `mod imaging_focus_reading;` after 031's `mod imaging_fits;` in
   `crates/finder/tests/console/main.rs`. Give it, from spec.md § User Scenarios: a
   simulator built as the focus rig's, pointed with `push_to(40.0, 0.0)`; a helper that
   describes an imaging frame (whole, at binning 1 or 2, or with a region of interest)
@@ -226,8 +229,8 @@ imaging solve: User Story 9 adds both. Until then a search with no best tile end
 ### Tests first
 
 - [ ] T019 [US5] Create `crates/finder/tests/console/imaging_focus_aid.rs`, the module
-  `imaging_focus_aid` of `console`, with `mod imaging_focus_aid;` after 032's
-  `mod imaging_astap;` in `crates/finder/tests/console/main.rs`. Give it the focus rig
+  `imaging_focus_aid` of `console`, with `mod imaging_focus_aid;` after 031's
+  `mod imaging_fits;` in `crates/finder/tests/console/main.rs`. Give it the focus rig
   and the scripted solver of spec.md § User Scenarios, with its slow measure and slow
   solve, and helpers to wait on `GET /api/imaging`, to list the frames folder and to
   parse `focus.json`. Write failing tests for a start that finds the region, runs and

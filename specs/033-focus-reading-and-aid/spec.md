@@ -21,9 +21,18 @@ depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", 
 # the budget, is cut as the owner chose: User Story 9 takes the tile read for the time
 # being and the frame kept for a solve (plan.md § Risks, § Refinement Record).
 # It builds on code that 030-imaging-camera-link, 031-imaging-frames-on-console and
-# 032-imaging-solve-and-aim-point create; every interface of theirs named here is taken
-# from that trio's plan.md, and the trio is re-anchored to `main` after all three land
+# 032-imaging-solve-and-aim-point created; every interface of theirs named here was taken
+# from that trio's plan.md, and the trio was re-anchored to `main` after all three landed
 # and before the flip (plan.md § Prerequisites).
+# Re-anchored 2026-11-18 to `main` at 670ddcf (670ddcf9d286ef415c6eba73b65a897460f4deed),
+# where 030's eight stories, 031's nine and 032's seven have landed: every citation was
+# compared line for line with 49bb210 and read again by its content, and the ones that
+# moved are corrected; every name and behaviour taken from 030, 031 and 032 was read in
+# their code, and the few that differed in name, path or place are corrected; the answers
+# of 031's take, settings edit and abort and of 032's solve are `Imaging::view`'s own on
+# `main`, so they carry `focus` too; and the three glossary rewordings of owner approval
+# 11 are written into `GLOSSARY.md` beside this trio (plan.md § Prerequisites 2 and 6).
+# The owner approved the imaging series' recommended answers on 2026-11-17.
 # It stays draft until the owner settles the owner decisions and flips it to `ready`,
 # which gives the approvals listed under "Owner approvals" and dispatches it.
 ---
@@ -136,16 +145,17 @@ focuser to turn.
 
 ### Session 2026-11-15 (review of `main`, re-read at 49bb210)
 
-- Q: What was found in the code? → A: Eight things, each checked at 49bb210:
+- Q: What was found in the code? → A: Eight things, each checked at 49bb210 and read
+  again on `main` at 670ddcf, whose line numbers are cited:
   1. The simulator's desk controls are routes registered only when the console was built
-     with a simulation (`crates/finder/src/api.rs:470`), behind the same-origin check,
-     reading their bodies through `sim_json` (`crates/finder/src/api.rs:570`). Outside
+     with a simulation (`crates/finder/src/api.rs:551`), behind the same-origin check,
+     reading their bodies through `sim_json` (`crates/finder/src/api.rs:652`). Outside
      simulate mode every `/api/sim/*` path answers 404
-     (`crates/finder/src/api.rs:464`), and the README lists them in one table
-     (`crates/finder/README.md:374`).
+     (`crates/finder/src/api.rs:545`), and the README lists them in one table
+     (`crates/finder/README.md:434`).
   2. A test builds a simulated console in process
      (`crates/finder/tests/console/live/whole_loop.rs:12`) and reaches its simulator
-     through `AppState::simulator` (`crates/finder/src/api.rs:216`). So the simulator's
+     through `AppState::simulator` (`crates/finder/src/api.rs:223`). So the simulator's
      new control is tested in the `console` binary, without the built `finder`.
   3. The simulator's random numbers are a type private to its crate
      (`crates/simulator/src/noise.rs:4`), and that file's own test asserts the published
@@ -153,11 +163,11 @@ focuser to turn.
      methods `pub`; the type stays private. The simulated solver adapter lives in
      `finder`, so its seeded noise is written there, from the same published stream.
   4. The simulator's telescope state is one value behind a mutex
-     (`crates/simulator/src/optics.rs:65`), where 030 puts the imaging optics with their
+     (`crates/simulator/src/optics.rs:66`), where 030 puts the imaging optics with their
      focus error.
   5. One MCP test calls every listed tool with `{}` and checks the result for the
      pairing token (`crates/finder/tests/mcp/motion.rs:517`). `set_tracking`, whose `on`
-     is required by its parameter type (`crates/finder/src/mcp/tools.rs:298`), is given
+     is required by its parameter type (`crates/finder/src/mcp/tools.rs:346`), is given
      `{"on":false}` there by name (`crates/finder/tests/mcp/motion.rs:537`). A new tool
      with a required key therefore parses its own arguments and answers `{}` with a tool
      error, at once.
@@ -171,18 +181,19 @@ focuser to turn.
      from `Scratch` (`crates/finder/tests/support/mod.rs:12`).
   8. The console's clock is a trait (`crates/finder/src/session.rs:24`), so every time
      this spec stores comes from outside.
-- Q: What does this spec take from 030, 031 and 032? → A: These, by name, from their plan.md
-  as reviewed; none exists on `main` yet, so each is named without a line:
+- Q: What does this spec take from 030, 031 and 032? → A: These, by name, taken from their
+  plan.md and, now that all three have landed, read in their code on `main` at 670ddcf
+  (plan.md § Prerequisites 2); each is named without a line:
   - `crates/finder/src/imaging/mod.rs` (031 US1): `Imaging`, `ImagingView`,
     `SettingsView`, `SettingsEdit` with its `RoiEdit` (`x`, `y`, `width` and `height`
     in sensor pixels, as 031's plan.md defines it; quoted in plan.md § The camera
     lease), `CameraView`, `RoiView`,
-    `Refusal`, `Imaging::view`, `Imaging::set`, and the words a request is refused with
-    while the camera is not `ready` or an exposure is in progress;
-  - `crates/finder/src/imaging/frames.rs` (031 US2 and US5): `FrameView`,
-    `Imaging::take`, `Imaging::abort` and `Imaging::ended`, the purpose label, and a
-    saved frame's `id`, `file`, `width`, `height`, `bits`, `bayer`, `binning`, `roi`,
-    `start` and `exposure_ms`;
+    `Refusal`, `Imaging::view`, `Imaging::set`, `Imaging::take`, `Imaging::abort` and
+    `Imaging::ended`, and the words a request is refused with while the camera is not
+    `ready` or an exposure is in progress;
+  - `crates/finder/src/imaging/frames.rs` (031 US2 and US5): `FrameView`, the purpose
+    label, and a saved frame's `id`, `file`, `width`, `height`, `bits`, `bayer`,
+    `binning`, `roi`, `start` and `exposure_ms`;
   - `crates/finder/src/imaging/routes.rs` (031 US1), where the two routes go, with
     `SessionWrite` and `sim_json`, which 031 makes visible to it;
   - `crates/finder/src/imaging/solver.rs` (032 US1): `Region`, `SolveFrame`,
@@ -245,11 +256,12 @@ focuser to turn.
   takes at the telescope, which the view reports as `cadence_ms` for that purpose
   (`docs/research/2026-11-15-imaging-camera.md` § 13. Not established).
 - Q: Where does this trio depart from the plan document and from `GLOSSARY.md`? → A: In
-  ten places, each an owner decision or approval below. The plan document in the
-  drafting worktree carries the first six, and the tenth's correction of its § 033,
-  since the series audit (plan.md § Prerequisites 9); the glossary's rewordings are
-  written back when the owner has settled them (plan.md § Prerequisites 6). The
-  plan document's "Settled decisions" table is not among them: its row for Focus
+  ten places, each an owner decision or approval below. The plan document on `main`
+  carries the first six, and the tenth's correction of its § 033, since 030's flip,
+  `55e41f5` (plan.md § Prerequisites 9); the glossary's rewordings are written into
+  `GLOSSARY.md` beside this trio, now that the owner has settled them (plan.md
+  § Prerequisites 6).
+  The plan document's "Settled decisions" table is not among them: its row for Focus
   stands as written. Of the last four places, three (7, 9 and 10) are this trio's
   readings of that row where it is silent, never changes to it, and one (8) is about
   the focus region, of which the row says nothing. The first six add to the plan
@@ -291,10 +303,10 @@ focuser to turn.
       verdict", names it since the series audit.
 
   Two terms are new as well, focus check and settled reading, and both reach the page
-  and the MCP tools' words. Both are in the drafting worktree's `GLOSSARY.md` since the
-  series audit, in owner approval 11's words, and neither is on `main` yet; owner
-  approval 11 words them and the three reworded entries, and plan.md § Prerequisites 6
-  is not met until the glossary on `main` carries all five.
+  and the MCP tools' words. Both are in `GLOSSARY.md` on `main` since 030's flip
+  (`55e41f5`), in owner approval 11's words; owner approval 11 words them and the three
+  reworded entries, which are written into `GLOSSARY.md` beside this trio, so plan.md
+  § Prerequisites 6 is met by the pull request that flips this spec.
 
 ### Session 2026-11-15 (the plan document's amendments, and the reviewed trios of 030, 031, 032 and 034)
 
@@ -511,8 +523,9 @@ focuser to turn.
   fields under one lock, and the aid's steps 4f to 4h are one critical section,
   because `Imaging::view`, `Imaging::solver` and `Imaging::holder` take that lock
   themselves; the measured scale is 032's kept scale, read under that lock; only
-  `Imaging::view` fills `focus`, so the answers of the settings, frame and solve routes
-  carry none; no watch is woken for a change of the focus state; both waits on the
+  `Imaging::view` fills `focus` (on `main` the answers of the settings, frame and solve
+  routes are `Imaging::view`'s own, so they carry it too: plan.md § The imaging state);
+  no watch is woken for a change of the focus state; both waits on the
   focus state's `Notify` make the `Notified` future before they read the lifecycle;
   every `Option` of the focus view is skipped while `None`; the history `svg` is 40
   high at any count; `get_focus_reading` writes 031's not-ready words again, since the
@@ -805,13 +818,16 @@ and the following. Each is named in the FR or success criterion that makes it.
     route lines in `crates/finder/src/lib.rs` (FR-004, FR-030, FR-036, FR-038).
 11. **No story writes `GLOSSARY.md` or the plan document.** The terms used here (focus
     reading, focus region, focus record, focus aid, imaging solver, solver port, solver
-    adapter) are written by the plan document's own change to `GLOSSARY.md`, which is
-    in the drafting worktree. That change must also carry the five things below, and
-    it is the series' author who writes them there, beside the other imaging terms,
-    before the flip (plan.md § Prerequisites 6, not met). The two new entries are in
-    the drafting worktree's glossary since the series audit, in these words; the three
-    rewordings wait for the owner's answers to decisions 4, 6, 7 and 8. Two are new
-    entries, for words the page and the MCP tools show:
+    adapter) are written by the plan document's own change to `GLOSSARY.md`, which
+    reached `main` with 030's flip (`55e41f5`). That change must also carry the five
+    things below, and it is the series' author who writes them there, beside the other
+    imaging terms, before the flip (plan.md § Prerequisites 6, met by the change that
+    re-anchored this trio, which ships in the pull request that flips it). The two new
+    entries are in `GLOSSARY.md` on `main` since 030's flip, in these words; the three
+    rewordings, which waited for the owner's answers to decisions 4, 6, 7 and 8, are
+    written into `GLOSSARY.md` beside this trio, in these words, and reach `main` with
+    it, as 030's flip carried its glossary.
+    Two are new entries, for words the page and the MCP tools show:
     - **Focus check**: "Up to nine imaging frames of the focus region taken without the
       observer, ended by the first settled reading and a verdict against the focus
       record. _Avoid_: autofocus (there is no motor), focus test".
@@ -878,7 +894,7 @@ Every scenario shares these definitions unless it says otherwise.
   frame interval and the token `test-token`, served over a fresh duplex for each
   connection with `memory::serve_routes_on` and `node.service().routes()` (`SimNode`
   has no `routes()` of its own; its `service()` is at
-  `crates/simulator/src/node.rs:59`), as
+  `crates/simulator/src/node.rs:76`), as
   `crates/finder/tests/support/mcp.rs:228` serves its node; a session paired to it with
   that site; then `AppState::shared` with `with_session`, `with_clock` on the
   simulator's clock, `with_link`, `with_live()`, `with_imaging(R)`,
@@ -1845,7 +1861,9 @@ development,
   focusing on a richer field nearby first and coming back. The page says so in both
   cases and the README says why.
 - **Far out of focus.** Stars more than 20 frame pixels across are beyond what ASTAP
-  measures correctly, and an obstructed telescope's stars are rings by then. A frame of
+  measures correctly on a mono frame, and are taken so on a colour mosaic too, whose
+  2 × 2 averaged copy doubles that limit (owner decision 5); an obstructed telescope's
+  stars are rings by then. A frame of
   them is "far out": the aid shows the rough size so the observer can see it shrink,
   and uses it for nothing else. When the region is to be found and every tile that has
   stars is far out, as at first light, the aid runs on the far-out tile with the
@@ -2226,9 +2244,10 @@ development,
   032-imaging-solve-and-aim-point have landed, with the interfaces Clarifications list,
   031 among them with its User Story 9, the imaging camera's lease of the plan
   document's amendment 1, and a defined `RoiEdit` (plan.md § Prerequisites 11). Every
-  `path:line` here was read at 49bb210, the drafting worktree's HEAD, and checked
-  there again in the fifth session; every file of 030, 031 and 032 is named without a line.
-  The trio is re-anchored to `main` after all three land (plan.md § Prerequisites 2).
+  `path:line` here was read at 49bb210, the drafting worktree's HEAD, checked there
+  again in the fifth session, and read again on `main` at 670ddcf on 2026-11-18, when
+  the trio was re-anchored after all three landed (plan.md § Prerequisites 2); every
+  file of 030, 031 and 032 is named without a line.
 - **Out of scope:**
   - autofocus, a focuser motor or any focuser position (the plan document defers it);
   - star detection or a half-flux measure of this project's own;
