@@ -204,6 +204,7 @@ The page uses the API types in `web/src/api.ts`, which mirror the Rust structs i
 | `POST /api/imaging/frame` | No body. Take one imaging frame with the settings' `exposure_ms` and the purpose `frame`, receiving the samples on the imaging connection while the mount keeps tracking, and save them untouched as a FITS file. Answers 200 at once with the imaging view, whose `frame` is the exposure just asked for, `exposing`; the frame moves on through `receiving` to `saved`, `failed` or `aborted`, each state read from `GET /api/imaging`. 409 with the state's words while the state is not `ready`, and 409 `an exposure is already in progress` while a frame is `exposing` or `receiving`. Same-origin writes only. |
 | `POST /api/imaging/abort` | No body. Abort the exposure in progress through the node's `AbortExposure`, or stop a frame still being received, ending it `aborted`; answers 200 with the imaging view, and with nothing in progress answers 200 and changes nothing. Same-origin writes only. |
 | `GET /api/imaging/frames/{id}/preview.jpg` | The colour JPEG preview of the saved imaging frame with this id, `image/jpeg`, while it is among the last eight saved; 404 with `the console no longer holds that preview` otherwise, and 400 for an id that is not a number. A saved frame's view carries the route as `preview`; a frame whose preview cannot be made, such as a mosaic with no whole 2 × 2 cell, is saved with no `preview`. |
+| `POST /api/imaging/solve` | No body. Solve the latest saved imaging frame with the imaging solver; answers 200 with the imaging view, whose `solve` goes from `solving` to `solved` or `failed`, or 409 with a JSON `error`. Same-origin writes only. |
 | `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
 | `POST /api/stop` | No body. Always 200, ending tracking, clearing arming and commanding both axes to stop, from any origin, without taking the motion lock. Sends `StopAll` immediately, retrying in its own task with 200 ms per attempt and 50 ms between attempts for a bounded 2 s window, even if the request goes away. Waits for the round and answers exactly `{"stopped":true}` when the scope node answers OK or there is no scope link; otherwise answers `{"stopped":true,"acknowledged":false}`. This means the node did not answer and the mount may still be moving; press Stop again. The MCP tools `stop` and `stop_all` return the same reply. |
 | `POST /api/model/second-sync` | No body. Start the second sync; 200 with `{"started":true}`, or 409 with a JSON `error` naming the refusal. Same-origin writes only. |
@@ -680,3 +681,48 @@ camera is held by` and the holder's name. `GET /api/imaging`, the previews,
 exposure can always be stopped. A single imaging frame from the page or an MCP
 client holds no lease: while it is in flight a second one is refused with `an
 exposure is already in progress`, as before.
+
+
+## Solving imaging frames
+
+An imaging solve asks an imaging solver where a saved imaging frame points: the
+place of its centre, the angle of its up axis east of north, its scale in
+arcseconds a pixel, whether it is mirrored, and the number of stars matched. The
+imaging solver is ASTAP's command-line program `astap_cli`, a free program
+(MPL-2.0) the owner installs, together with one of its star databases; the
+databases are built from ESA's Gaia mission, whose data asks for the credit
+"ESA/Gaia/DPAC". The three flags name it: `--astap PROGRAM` is its program,
+`--astap-db-name NAME` its database (required with `--astap`) and
+`--astap-db FOLDER` the database's folder when ASTAP does not find it by itself.
+`--astap` cannot be combined with `--simulate`; a desk console solves with the
+simulated solver adapter, which answers from the simulator's truth instead.
+
+`POST /api/imaging/solve` solves the latest saved imaging frame. It answers 200
+at once with the imaging view, whose `solve` carries `frame_id`, `state`
+(`solving`, then `solved` or `failed`), `requested_at`, `solver` and `hint`;
+once the solve has ended, `took_ms` and `file`, and, solved, `ra_deg`,
+`dec_deg`, `up_east_of_north_deg`, `arcsec_per_px`, `mirrored`, `cd_deg`,
+`stars` and `warning`, or, failed, `reason`, `error` and `detail`. It answers
+409 while the camera is not `ready`, when the console has no imaging solver,
+while a solve is running, before any frame has been taken, while the latest
+frame is still arriving, or when the latest frame was not saved. A failed solve
+is never tried again by the console.
+
+ASTAP is given a prepared copy of the frame, never the saved file itself: each
+call makes a work folder `solver/` under the imaging folder, writes the copy
+into it and removes the folder afterwards; leftovers from a console that exited
+mid-solve may be deleted by hand. The solve's answer is written beside the
+frame as a solve sidecar, `frames/<UTC date>/<id>.solve.json`, written whole
+under a `.part` name and renamed over any earlier one, with `format`, `frame`,
+`solver`, `requested_at`, `hint`, `solved`, `took_ms` and the solve's numbers or
+the failure's `reason`, `error` and `detail`. The imaging frame's file is never
+touched.
+
+The five reasons a solve fails, with the message the page shows for each:
+`not_solved`, `the imaging solver found no solution`; `too_few_stars`, `the
+imaging solver found too few stars in the imaging frame`; `no_database`, `the
+imaging solver has no star database it can read`; `timed_out`, `the imaging
+solver gave no answer within <N> s`; and `failed`, with the words of the fault
+itself. Each solve is limited in time: 120 s for a solve whose hint names a
+place, 600 s for a search of the whole sky — a search of the whole sky may run
+out its 600 s without an answer — and 30 s for a star measure.

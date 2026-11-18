@@ -351,6 +351,18 @@ impl AppState {
         self.imaging.clone()
     }
 
+    /// Give the console its imaging solver (032). Call after `with_live` and
+    /// `with_imaging`; without imaging it changes nothing.
+    pub fn with_imaging_solver(
+        self,
+        solver: Arc<dyn crate::imaging::solver::ImagingSolver>,
+    ) -> Self {
+        if let Some(imaging) = &self.imaging {
+            imaging.set_solver(solver, self.session.clone(), self.live.clone());
+        }
+        self
+    }
+
     /// Session motion controller, present alongside live solving.
     pub fn goto(&self) -> Option<Arc<crate::goto::GoTo>> {
         self.goto.clone()

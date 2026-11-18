@@ -7,7 +7,9 @@ pub mod fits;
 pub mod frames;
 pub mod preview;
 pub mod routes;
+pub mod simulated;
 pub mod solver;
+pub mod solving;
 
 use std::{
     future::Future,
@@ -61,6 +63,10 @@ pub struct ImagingView {
     /// The latest imaging frame, from the first one asked for on (031 US2).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub frame: Option<FrameView>,
+    /// The latest solve of an imaging frame, from the first accepted request
+    /// on (032 FR-010).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub solve: Option<solving::SolveView>,
 }
 
 impl ImagingView {
@@ -73,6 +79,7 @@ impl ImagingView {
             status: None,
             settings: None,
             frame: None,
+            solve: None,
         }
     }
 }
@@ -295,6 +302,9 @@ struct Held {
     /// The JPEG previews of the last `PREVIEWS_KEPT` saved frames, by id
     /// (FR-018).
     previews: Vec<(u64, Vec<u8>)>,
+    /// The console's imaging solver, and the latest solve (032 US2).
+    solver: Option<solving::HeldSolver>,
+    solve: Option<solving::SolveView>,
 }
 
 impl Default for Held {
@@ -317,6 +327,8 @@ impl Default for Held {
             lease: None,
             next_grant: 1,
             previews: Vec::new(),
+            solver: None,
+            solve: None,
         }
     }
 }
@@ -359,7 +371,7 @@ impl Imaging {
     }
 
     /// `GET /api/imaging`, and `imaging` in the session. Outside `ready` the view
-    /// holds none of `camera`, `status`, `settings` and `frame`.
+    /// holds none of `camera`, `status`, `settings`, `frame` and `solve`.
     pub fn view(&self) -> ImagingView {
         let held = self.state.lock().expect("imaging state");
         let ready = held.state == "ready";
@@ -384,6 +396,7 @@ impl Imaging {
             status,
             settings: ready.then(|| held.settings.clone()).flatten(),
             frame: ready.then(|| held.frame.clone()).flatten(),
+            solve: ready.then(|| held.solve.clone()).flatten(),
         }
     }
 

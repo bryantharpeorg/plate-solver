@@ -2,6 +2,7 @@
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
 
 use clap::Parser;
@@ -37,6 +38,15 @@ struct Args {
     /// Folder for imaging frames (default: imaging/ in the state folder).
     #[arg(long)]
     imaging_dir: Option<PathBuf>,
+    /// ASTAP's command-line program: the imaging solver (032).
+    #[arg(long, requires = "astap_db_name", conflicts_with = "simulate")]
+    astap: Option<PathBuf>,
+    /// Folder of ASTAP's star database (default: where ASTAP itself looks).
+    #[arg(long, requires = "astap")]
+    astap_db: Option<PathBuf>,
+    /// Name of ASTAP's star database, such as d50.
+    #[arg(long, requires = "astap")]
+    astap_db_name: Option<String>,
     /// Run a desk console with its own state and an in-process scope node.
     #[arg(long)]
     simulate: bool,
@@ -152,6 +162,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_session(session)
         .with_recordings(state_dir.join("recordings"))
         .with_allowed_hosts(args.allow_host);
+    let imaging_dir = args
+        .imaging_dir
+        .clone()
+        .unwrap_or_else(|| state_dir.join("imaging"));
     let state = if args.simulate {
         state
             .with_simulation(
@@ -169,10 +183,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         state.with_link(finder::link::Transport::Tcp)
     }
     .with_live()
-    .with_imaging(
-        args.imaging_dir
-            .unwrap_or_else(|| state_dir.join("imaging")),
-    );
+    .with_imaging(imaging_dir.clone());
+    // The imaging solver: ASTAP's program when asked for, the simulated
+    // adapter on a desk console, none otherwise.
+    let state = if let Some(program) = &args.astap {
+        state.with_imaging_solver(Arc::new(finder::imaging::astap::AstapSolver::new(
+            finder::imaging::astap::AstapConfig {
+                program: program.clone(),
+                database_name: args
+                    .astap_db_name
+                    .clone()
+                    .expect("--astap requires --astap-db-name"),
+                database_dir: args.astap_db.clone(),
+                work_dir: imaging_dir.join("solver"),
+            },
+        )))
+    } else if args.simulate {
+        let simulator = state
+            .simulator()
+            .expect("the simulated console's simulator");
+        state.with_imaging_solver(Arc::new(finder::imaging::simulated::SimulatedSolver::new(
+            simulator,
+        )))
+    } else {
+        state
+    };
 
     let listener = tokio::net::TcpListener::bind(args.listen).await?;
     let bound_addr = listener.local_addr()?;
