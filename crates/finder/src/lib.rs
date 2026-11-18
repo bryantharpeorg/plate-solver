@@ -36,6 +36,7 @@
 //! * GET /api/imaging: the imaging camera's state, description, status, settings and latest imaging frame.
 //! * PUT /api/imaging/settings: a partial edit of exposure_ms, gain, offset, binning, roi, cooler_on, set_temp_c, forward_kib_per_s and save_at_node.
 //! * POST /api/imaging/frame: no body; take one imaging frame and save it as FITS.
+//! * POST /api/imaging/abort: no body; abort the exposure or the imaging frame in flight.
 //!
 //! A fresh session has no site, target or pointing and a 15° minimum altitude. Site
 //! coordinates are `lat_deg` (±90°) and `lon_deg` (±180°, east positive); the minimum

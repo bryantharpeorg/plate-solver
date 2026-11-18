@@ -278,6 +278,9 @@ struct Held {
     /// The latest imaging frame, and the last one that ended (031 US2).
     frame: Option<FrameView>,
     ended: Option<FrameView>,
+    /// The frame in flight's task and the client to abort it with (US5),
+    /// cleared when the frame ends.
+    frame_task: Option<(JoinHandle<()>, ImagingClient)>,
     /// The console's own frame count, and the UTC date it was last read for
     /// (FR-011).
     count: u64,
@@ -298,6 +301,7 @@ impl Default for Held {
             save_at_node: false,
             frame: None,
             ended: None,
+            frame_task: None,
             count: 0,
             count_date: None,
         }
@@ -346,6 +350,16 @@ impl Imaging {
     pub fn view(&self) -> ImagingView {
         let held = self.state.lock().expect("imaging state");
         let ready = held.state == "ready";
+        // `status.exposing` is the console's own: true while its latest frame
+        // is `exposing`, whatever the camera's status, read every 2 s, last
+        // said (FR-009).
+        let mut status = ready.then(|| held.status.clone()).flatten();
+        if let Some(status) = status.as_mut() {
+            status.exposing = held
+                .frame
+                .as_ref()
+                .is_some_and(|frame| frame.state == "exposing");
+        }
         ImagingView {
             state: held.state,
             error: if held.state == "error" {
@@ -354,7 +368,7 @@ impl Imaging {
                 None
             },
             camera: ready.then(|| held.camera.clone()).flatten(),
-            status: ready.then(|| held.status.clone()).flatten(),
+            status,
             settings: ready.then(|| held.settings.clone()).flatten(),
             frame: ready.then(|| held.frame.clone()).flatten(),
         }
@@ -366,7 +380,7 @@ impl Imaging {
     pub async fn set(&self, edit: SettingsEdit) -> Result<ImagingView, Refusal> {
         let (mut client, camera, mut settings) = {
             let held = self.state.lock().expect("imaging state");
-            match held.state {
+            let (client, camera, settings) = match held.state {
                 "ready" => (
                     held.client.clone().expect("a ready imaging client"),
                     held.camera.clone().expect("a described camera"),
@@ -387,7 +401,16 @@ impl Imaging {
                         held.error.as_deref().unwrap_or_default()
                     )));
                 }
+            };
+            // A settings change during an exposure is refused (FR-008).
+            if held
+                .frame
+                .as_ref()
+                .is_some_and(|frame| matches!(frame.state, "exposing" | "receiving"))
+            {
+                return Err(Refusal::conflict("an exposure is in progress"));
             }
+            (client, camera, settings)
         };
         if let Some(exposure_ms) = edit.exposure_ms {
             if !exposure_ms.is_finite()
@@ -504,8 +527,74 @@ impl Imaging {
     /// Every frame `take` starts is saved to a file.
     pub async fn take(&self, purpose: &str) -> Result<ImagingView, Refusal> {
         let task = frames::take(self, purpose)?;
-        tokio::spawn(frames::run(task));
+        let client = task.client.clone();
+        let task = tokio::spawn(frames::run(task));
+        let mut held = self.state.lock().expect("imaging state");
+        held.frame_task = Some((task, client));
+        drop(held);
         Ok(self.view())
+    }
+
+    /// Abort the exposure or the imaging frame in flight (FR-013): the node's
+    /// exposure is stopped through `AbortExposure`, and the frame task ends
+    /// the frame `aborted` when the node's `Aborted` arrives; a frame still
+    /// being received is ended here, its task stopped and its stream dropped.
+    /// With nothing in progress nothing changes.
+    pub async fn abort(&self) -> ImagingView {
+        enum Stop {
+            /// The exposure is still running on the node.
+            Exposing(Box<ImagingClient>, JoinHandle<()>),
+            /// The samples are still arriving.
+            Receiving(JoinHandle<()>),
+        }
+        let stop = {
+            let mut held = self.state.lock().expect("imaging state");
+            let state = held.frame.as_ref().map(|frame| frame.state);
+            match state {
+                Some("exposing") => held
+                    .frame_task
+                    .take()
+                    .map(|(task, client)| Stop::Exposing(Box::new(client), task)),
+                Some("receiving") => held
+                    .frame_task
+                    .take()
+                    .map(|(task, _)| Stop::Receiving(task)),
+                _ => None,
+            }
+        };
+        let Some(stop) = stop else {
+            return self.view();
+        };
+        match stop {
+            Stop::Receiving(task) => {
+                // The task is ended, dropping its stream, and the frame ends
+                // here (FR-013).
+                task.abort();
+                self.end_aborted();
+            }
+            Stop::Exposing(mut client, task) => {
+                // The task ends the frame when the node's `Aborted` arrives;
+                // a failed call ends it here.
+                if client.abort().await.is_err() {
+                    task.abort();
+                    self.end_aborted();
+                }
+            }
+        }
+        self.view()
+    }
+
+    /// End the latest frame `aborted` if it is still in flight (FR-013).
+    fn end_aborted(&self) {
+        let mut held = self.state.lock().expect("imaging state");
+        if let Some(frame) = held.frame.as_mut() {
+            if matches!(frame.state, "exposing" | "receiving") {
+                frame.state = "aborted";
+                held.ended = Some(frame.clone());
+                drop(held);
+                self.changes.send_modify(|count| *count += 1);
+            }
+        }
     }
 
     /// The frame with this id as it ended: the last ended frame when its id is

@@ -184,8 +184,9 @@ The page uses the API types in `web/src/api.ts`, which mirror the Rust structs i
 | `POST /api/record` | JSON `{"on":true}` or `{"on":false}`. Start or stop a recording; answers 200 with the session, 409 or 500 with a JSON `error`. Same-origin writes only. |
 | `POST /api/record/raw` | JSON `{"frames":N}`, N from 1 to 10. While recording, save the next N star frames' 8-bit pixels as `raw-<id>.png`; progress is `recording.raw` in the session. Needs a scope node built with 025. Refused while the mount moves. Same-origin writes only. |
 | `GET /api/imaging` | The imaging camera the paired scope node relays: `state`, one of `off` (this console takes no imaging frames), `no_link`, `no_service` (the node was built before 030), `no_camera`, `error` and `ready`; with `error`, the node's words as `error`; with `ready`, the camera's `camera` description, its `status`, and the `settings` in force. |
-| `PUT /api/imaging/settings` | JSON partial edit of `exposure_ms`, `gain`, `offset`, `binning`, `roi` (a region or null for the whole sensor), `cooler_on`, `set_temp_c`, `forward_kib_per_s` (a whole number from 64 to 1048576 KiB/s, or null for no limit) and `save_at_node`. Answers 200 with the imaging view; 400 with a JSON `error` for a value the console or the camera refuses, 403 for a foreign origin, 415 for another content type, 409 while the state is not `ready`, and 502 with `the scope node did not apply the settings: <message>` when the node's call fails otherwise. Same-origin writes only. |
-| `POST /api/imaging/frame` | No body. Take one imaging frame with the settings' `exposure_ms` and the purpose `frame`, receiving the samples on the imaging connection while the mount keeps tracking, and save them untouched as a FITS file. Answers 200 at once with the imaging view, whose `frame` is the exposure just asked for, `exposing`; the frame moves on through `receiving` to `saved` or `failed`, each state read from `GET /api/imaging`. 409 with the state's words while the state is not `ready`. Same-origin writes only. |
+| `PUT /api/imaging/settings` | JSON partial edit of `exposure_ms`, `gain`, `offset`, `binning`, `roi` (a region or null for the whole sensor), `cooler_on`, `set_temp_c`, `forward_kib_per_s` (a whole number from 64 to 1048576 KiB/s, or null for no limit) and `save_at_node`. Answers 200 with the imaging view; 400 with a JSON `error` for a value the console or the camera refuses, 403 for a foreign origin, 415 for another content type, 409 while the state is not `ready` or an exposure is in progress, and 502 with `the scope node did not apply the settings: <message>` when the node's call fails otherwise. Same-origin writes only. |
+| `POST /api/imaging/frame` | No body. Take one imaging frame with the settings' `exposure_ms` and the purpose `frame`, receiving the samples on the imaging connection while the mount keeps tracking, and save them untouched as a FITS file. Answers 200 at once with the imaging view, whose `frame` is the exposure just asked for, `exposing`; the frame moves on through `receiving` to `saved`, `failed` or `aborted`, each state read from `GET /api/imaging`. 409 with the state's words while the state is not `ready`, and 409 `an exposure is already in progress` while a frame is `exposing` or `receiving`. Same-origin writes only. |
+| `POST /api/imaging/abort` | No body. Abort the exposure in progress through the node's `AbortExposure`, or stop a frame still being received, ending it `aborted`; answers 200 with the imaging view, and with nothing in progress answers 200 and changes nothing. Same-origin writes only. |
 | `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
 | `POST /api/stop` | No body. Always 200, ending tracking, clearing arming and commanding both axes to stop, from any origin, without taking the motion lock. Sends `StopAll` immediately, retrying in its own task with 200 ms per attempt and 50 ms between attempts for a bounded 2 s window, even if the request goes away. Waits for the round and answers exactly `{"stopped":true}` when the scope node answers OK or there is no scope link; otherwise answers `{"stopped":true,"acknowledged":false}`. This means the node did not answer and the mount may still be moving; press Stop again. The MCP tools `stop` and `stop_all` return the same reply. |
 | `POST /api/model/second-sync` | No body. Start the second sync; 200 with `{"started":true}`, or 409 with a JSON `error` naming the refusal. Same-origin writes only. |
@@ -592,15 +593,27 @@ folder `--imaging-dir` names. `POST /api/imaging/frame` takes one: the node
 exposes the camera for the settings' `exposure_ms`, the console receives the
 samples on the imaging connection while the mount keeps tracking, and the frame
 is saved untouched. The view's `frame` follows it: `id`, `state` (one of
-`exposing`, `receiving`, `saved` and `failed`), `purpose`, `exposure_ms`,
-`requested_at` and `roi`; with the cooler on, `set_temp_c`, the temperature the
-file's `SET-TEMP` card is written from; from the frame's header on, `width`,
-`height`, `bits`, `bayer`, `gain`, `offset`, `binning`, `temp_c`, `start`,
-`date_obs`, `bytes` and `received`; once the last byte is in hand,
-`received_at`, and when saved, `saved_at` and `file`. `roi` starts as the
-region the console's settings held and is replaced by the header's when the
-header carries one, so a region moved by another client is stamped as it really
-was.
+`exposing`, `receiving`, `saved`, `failed` and `aborted`), `purpose`,
+`exposure_ms`, `requested_at` and `roi`; with the cooler on, `set_temp_c`, the
+temperature the file's `SET-TEMP` card is written from; from the frame's header
+on, `width`, `height`, `bits`, `bayer`, `gain`, `offset`, `binning`, `temp_c`,
+`start`, `date_obs`, `bytes` and `received`, and with `save_at_node` the node's
+own copy as `node_file`, or the reason there is none as `node_save_error`; once
+the last byte is in hand, `received_at`, and when saved, `saved_at` and `file`.
+`roi` starts as the region the console's settings held and is replaced by the
+header's when the header carries one, so a region moved by another client is
+stamped as it really was.
+
+While a frame is `exposing` or `receiving`, a second `POST /api/imaging/frame`
+answers 409 `an exposure is already in progress` and a settings change 409
+`an exposure is in progress`, and `POST /api/imaging/abort` ends it: the node's
+exposure is stopped through `AbortExposure`, or a frame still being received is
+stopped at the console, and the frame ends `aborted`, no file written for it.
+An abort with nothing in progress changes nothing. The view's `status.exposing`
+is the console's own: true while its latest frame is `exposing`, false
+otherwise. With `save_at_node` the node also keeps a copy of each frame under
+its `[imaging] save_dir` folder, written before the frame's header leaves it,
+so a frame lost on the link is not lost there.
 
 Each whole frame is saved as `frames/<UTC date of the exposure's
 start>/<id, six digits>.fits` under the imaging folder, written under a
