@@ -145,8 +145,8 @@ by this trio, and neither is `Cargo.lock`.
 
 Every name below is created by `030-imaging-camera-link` and was taken from its plan.md
 as drafted. 030 has landed, and each was read on `main` at 49f8dcd and found as written
-here (§ Prerequisites 2); they are named without a line. A story that finds one of them different on `main`
-escalates rather than changing it.
+here (§ Prerequisites 2); they are named without a line. A story that finds one of them
+different on `main` escalates rather than changing it.
 
 **The service** (`crates/scope-link/proto/scope_node/v1/scope_node.proto`, 030 US3; 030's
 plan.md § The scope link). `ScopeNodeImaging`, under the pairing token, with five calls;
@@ -748,32 +748,13 @@ pub fn jpeg(picture: &Rgb) -> Option<Vec<u8>>;
 1. **Colour.** For a mosaic, each whole 2 × 2 cell becomes one pixel: red and blue are
    their samples, green the mean of its two; a trailing odd row or column is dropped. A
    mono frame gives one pixel a sample, the same in all three channels.
-2. **The trio is re-anchored to `main`.** Met at 49f8dcd, after 030 landed. Every
-   `path:line` in spec.md, plan.md and tasks.md, 68 in all, was compared line for line
-   at 49bb210 and at 49f8dcd. Forty-two read the same. Twenty-five had moved and are
-   corrected to the line that now holds the same text, among them the top bar in
-   `DESIGN.md:276` (was 274), `postTrack` in `crates/finder/web/src/api.ts:332` (was 312)
-   and every cited line of `crates/finder/src/api.rs`, `link.rs` and `session.rs`. One
-   no longer reads as cited: `max_concurrent_epics` is now at `ergane.yaml:196` and reads
-   4, not 2, and spec.md's Clarification says so. No line is cited in a file 030 created. Every name
-   of § What this trio takes from 030 was read on `main`: the five calls, the ten
-   messages with the fields and optionality written there, the refusals and their words,
-   `SimImagingCamera`, `SimStar`, `SyntheticImagingCamera`, `NodeService::with_imaging`
-   and `with_imaging_save_dir`, the `ImagingCamera` port and `Exposure`. Each was built
-   as written, so that section and spec.md's shared setup needed no correction beyond
-   saying so. The two places round 1 found saying more than this trio did hold on
-   `main`: `start` calls `start_with_filter`, and `run` takes eight parameters. The
-   validator reports no refusal. The same is done again if `main` moves before the flip.
-3. **The owner decisions are settled and the approvals given** (spec § Owner decisions,
-   § Owner approvals). Met on 2026-11-17. Of the sixteen decisions, 3 and 4 are settled
-   by the plan document's Amendment 3, 8 by Amendment 5 and the region of 16 by
-   Amendment 6; the other twelve, with the open part of 16 (the set temperature and
-   serial), take their recommended answers, which the owner approved that day with the
-   imaging series' other decisions ("im good with all of the info in the decisions
-   doc"). None of the three rows the owner settled separately that day is this spec's
-   (they are 034's, 035's and 037's). Decisions 2, 8, 9 and 16 each have a counterpart in 030 (its
-   owner decisions 7, 8, 9 and 12), settled the same way with it. The owner gives the
-   approvals by flipping the spec.
+2. **Size.** With k = ⌈longer side / 1280⌉, each k × k block becomes its mean; trailing
+   rows and columns that do not fill a block are dropped. k is 1 for a small frame.
+3. **Stretch.** For a channel with n values, sorted, the p-th percentile is the value at
+   index ⌊p·(n − 1)⌋. For each channel c: black_c is its 50th percentile, and noise_c is
+   that less its 16th. The span is the largest, over the three channels, of
+   (99.9th percentile − black_c) and 30·noise_c, and at least 1. A value v becomes
+   `round(255·asinh(10·t)/asinh(10))` with t = clamp((v − black_c)/span, 0, 1).
 4. **JPEG** at quality 85 with `image`'s encoder.
 
 Worked example (US6-S1): nine red values 100 × 6, 400, 700, 900 give black 100, noise 0
@@ -1258,31 +1239,32 @@ These are not changed by any story:
    all eight of its stories have landed (US1 at 3849a0f, US2 at e867598, US3 at 209edcb,
    US4 at 2ed589c, US5 at e1cc38e, US6 at 58aff47, US7 at 4e7eef6, US8 at 49f8dcd). The
    worktree is at 49f8dcd.
-2. **The trio is re-anchored to `main`.** Not met. For the files that exist today it is
-   met at 49bb210: every `path:line` in spec.md and plan.md was compared, line for line,
-   at dbc2b5b and at 49bb210. Two had moved and are corrected: the token test in
-   `crates/finder/tests/mcp/motion.rs` from 521 and 532 to 517 and 528, and the request
-   built in `crates/finder/tests/console/recording.rs` from 445 to 426. `Scratch` is
-   now cited at `crates/finder/tests/support/mod.rs:12`. For what 030 creates it cannot
-   be met yet: every name of § What this trio takes from 030 is from 030's plan.md as
-   drafted, without a line. After 030 lands, each of those names is read on `main`,
-   that section and spec.md's shared setup are corrected to what was built, the
-   citations into `crates/scope-node` and `crates/simulator` that 030's stories moved
-   are read again, and the validator is re-run. The same is done if `main` moves again
-   before the flip. Round 1's probes read every citation on a newer `main`, with 021,
-   022 and 026 landed, and found each by its content; many lines had moved, and two now
-   say more than this trio did, which § The link now states: `start` calls
-   `start_with_filter`, and `run` takes eight parameters. Those, and the two
-   `crates/finder/src/session.rs` lines § The console's imaging state now cites, are
-   re-anchored with the rest.
+2. **The trio is re-anchored to `main`.** Met at 49f8dcd, after 030 landed. Every
+   `path:line` in spec.md, plan.md and tasks.md, 68 in all, was compared line for line
+   at 49bb210 and at 49f8dcd. Forty-two read the same. Twenty-five had moved and are
+   corrected to the line that now holds the same text, among them the top bar in
+   `DESIGN.md:276` (was 274), `postTrack` in `crates/finder/web/src/api.ts:332` (was 312)
+   and every cited line of `crates/finder/src/api.rs`, `link.rs` and `session.rs`. One
+   no longer reads as cited: `max_concurrent_epics` is now at `ergane.yaml:196` and reads
+   4, not 2, and spec.md's Clarification says so. No line is cited in a file 030 created.
+   Every name of § What this trio takes from 030 was read on `main`: the five calls, the
+   ten messages with the fields and optionality written there, the refusals and their words,
+   `SimImagingCamera`, `SimStar`, `SyntheticImagingCamera`, `NodeService::with_imaging`
+   and `with_imaging_save_dir`, the `ImagingCamera` port and `Exposure`. Each was built
+   as written, so that section and spec.md's shared setup needed no correction beyond
+   saying so. The two places round 1 found saying more than this trio did hold on
+   `main`: `start` calls `start_with_filter`, and `run` takes eight parameters. The
+   validator reports no refusal there.
 3. **The owner decisions are settled and the approvals given** (spec § Owner decisions,
-   § Owner approvals). Not met. Of the sixteen decisions, 3 and 4 are settled by the
-   plan document's Amendment 3 and 8 by Amendment 5, and the region of 16 by
-   Amendment 6; the other twelve are open, with the open part of 16 (the set
-   temperature and serial). Decisions 2, 8, 9 and 16 each have a counterpart in 030
-   (its owner decisions 7, 8, 9 and 12), and each pair is settled together. Any answer
-   other than the recommended one is written into the trio and re-validated before the
-   flip.
+   § Owner approvals). Met on 2026-11-17. Of the sixteen decisions, 3 and 4 are settled
+   by the plan document's Amendment 3, 8 by Amendment 5 and the region of 16 by
+   Amendment 6; the other twelve, with the open part of 16 (the set temperature and
+   serial), take their recommended answers, which the owner approved that day with the
+   imaging series' other decisions ("im good with all of the info in the decisions
+   doc"). None of the three rows the owner settled separately that day is this spec's
+   (they are 034's, 035's and 037's). Decisions 2, 8, 9 and 16 each have a counterpart in
+   030 (its owner decisions 7, 8, 9 and 12), settled the same way with it. The owner gave
+   the approvals by flipping the spec, on 2026-11-17.
 4. **The trio is probe-built.** Met on 2026-11-17, round 1, every story: each was built
    from this trio in a throwaway worktree, on top of 030's round-1 probe builds, tests
    first, with both gates, `cargo deny check` and `cargo machete`; each diff was
@@ -1307,9 +1289,9 @@ These are not changed by any story:
    and four files), have all landed (026 at 6cc8724, 021 at 2f6a777, 022 at 20ce2fe), and
    this trio is re-anchored on top of them (Prerequisite 2). The rule stays for any later
    draft: before either of two such specs is flipped, the one flipped second adds the
-   other to its `depends_on_landed` and is re-anchored after the other lands. The owner
-   also says whether a draft numbered 023, or any other, exists outside the branches read
-   here.
+   other to its `depends_on_landed` and is re-anchored after the other lands. Whether a
+   draft numbered 023, or any other, exists outside the branches read here was still open
+   at the flip; one that does is flipped after this spec, by the same rule.
 9. **The plan document agrees with the settled decisions.** Met on this side of the
    link. The plan document's Amendment 3 settles the one departure the review found
    here (owner decisions 3 and 4), and Amendments 1 and 6 are carried here (US9, owner

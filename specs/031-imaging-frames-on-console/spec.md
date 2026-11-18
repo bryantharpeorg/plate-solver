@@ -1,6 +1,12 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["025-frame-capture", "028-finder-tests-do-less", "030-imaging-camera-link"]
+# Flipped to ready 2026-11-17 by the operator seat on the owner's answer the same day ("Yes"
+# to flipping it after the re-anchor), which gives the owner approvals listed under
+# "Owner approvals". Every owner decision takes its settled answer: 3 and 4 by the plan
+# document's Amendment 3, 8 by Amendment 5 and the region of 16 by Amendment 6, and the
+# rest the recommended one, which the owner approved on 2026-11-17 with the imaging
+# series' other decisions. Validated at 49f8dcd.
 # Drafted 2026-11-15 against `main` at dbc2b5b from
 # docs/plans/2026-11-15-specs-030-037-imaging.md, by the grilling session of that day,
 # as the console's half of one trio, 030-imaging-camera-link. Reviewed that day and the
@@ -15,14 +21,12 @@ depends_on_landed: ["025-frame-capture", "028-finder-tests-do-less", "030-imagin
 # § Refinement Record). It builds on code that 030-imaging-camera-link created; every
 # interface of 030 named here was taken from 030's plan.md and read again on `main`
 # after 030 landed.
-# Re-anchored 2026-11-18 to `main` at 49f8dcd (49f8dcd2e82de22b0335590d4fd60d286e2429dc),
+# Re-anchored 2026-11-17 to `main` at 49f8dcd (49f8dcd2e82de22b0335590d4fd60d286e2429dc),
 # where 030's eight stories have landed: every citation was compared line for line with
 # 49bb210, and the ones that moved are corrected (plan.md § Prerequisites 2).
 # Revised 2026-11-17 with a note on the owner's answer to 035's owner decision 13: a
 # stack's subs are saved in its own folder, through a folder 035 lets a lease name
 # (§ Clarifications, the last session); nothing this spec builds changes.
-# It stays draft until the owner settles the owner decisions and flips it to `ready`,
-# which gives the approvals listed under "Owner approvals" and dispatches it.
 ---
 
 # Feature Specification: Imaging Frames on the Console
@@ -125,8 +129,9 @@ and `finder --simulate`. Nothing here solves, focuses, calibrates or stacks.
   re-anchored after the other lands (plan.md § Prerequisites 8). All three have since
   landed (026 at 6cc8724, 021 at 2f6a777, 022 at 20ce2fe), and this trio is re-anchored
   on top of them at 49f8dcd, so nothing is left to order. No draft numbered 023
-  was found on any branch read here; whether one exists elsewhere is the owner's to say
-  before the flip. Specs 032 to 037 build on this one and write its files after it.
+  was found on any branch read here; whether one exists elsewhere was still open at the
+  flip, and one that does is flipped after this spec, by the same rule. Specs 032 to 037
+  build on this one and write its files after it.
 - Q: Where does this trio depart from the plan document's § Interfaces shared across the
   specs? → A: Nowhere now. The review found one departure on this side of the link, and
   the plan document's § Amendments after 030, 031, 032 and 034 were drafted and reviewed
@@ -206,10 +211,10 @@ and `finder --simulate`. Nothing here solves, focuses, calibrates or stacks.
   `030-imaging-camera-link` keeps the scope node's side and the link, seven stories,
   and this trio names it in `depends_on_landed`. (Those are the counts at the split.
   Round 1's probes split 030's fourth story in two and this trio's second in four, so
-  030 landed with eight stories and this trio holds nine.) No decision changed in the split. One
-  story straddled the link, the scope node's own copy of a frame, and was cut there:
-  what the scope node does is 030's US7, and what the console shows of it is US5-S4
-  here.
+  030 landed with eight stories and this trio holds nine.) No decision changed in the
+  split. One story straddled the link, the scope node's own copy of a frame, and was cut
+  there: what the scope node does is 030's US7, and what the console shows of it is
+  US5-S4 here.
 - Q: What does this spec take from 030? → A: These, by name, from 030's plan.md as
   drafted. 030 has landed, and each was read on `main` at 49f8dcd and found as written;
   each is named without a line:
@@ -331,8 +336,9 @@ and `finder --simulate`. Nothing here solves, focuses, calibrates or stacks.
 Each is a design or taste call the plan document leaves open. Decisions 3, 4 and 8 are
 settled by the plan document's Amendments 3, 3 and 5, as recommended here, and the
 region of decision 16 by Amendment 6; each says so, and keeps its other answer only as
-the record of what was closed. The rest are open: the owner settles each before the
-flip, and a different answer is written into the trio and re-validated, never left to a
+the record of what was closed. The rest take their recommended answers: the owner
+approved the imaging series' recommendations on 2026-11-17 ("im good with all of the
+info in the decisions doc") and flipped this spec the same day. None is left to a
 story.
 
 1. **Nine stories on this side of the link.** Recommended: nine, so that each stays
