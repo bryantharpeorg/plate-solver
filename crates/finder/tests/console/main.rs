@@ -14,6 +14,7 @@ mod imaging_checks;
 mod imaging_control;
 mod imaging_fits;
 mod imaging_frames;
+mod imaging_hints;
 mod imaging_lease;
 mod imaging_preview;
 mod imaging_solve;

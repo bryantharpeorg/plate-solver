@@ -9,6 +9,7 @@ mod backlash;
 mod flags;
 mod imaging;
 mod imaging_frames;
+mod imaging_hints;
 mod imaging_solve;
 mod mount_sky;
 mod mount_sky_night;

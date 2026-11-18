@@ -363,6 +363,16 @@ impl AppState {
         self
     }
 
+    /// The focal length, in millimetres, that sizes a solve's field until a
+    /// scale is kept (032). Call after `with_imaging`; a value that is not
+    /// above 0 is ignored.
+    pub fn with_focal_length_mm(self, mm: f64) -> Self {
+        if let Some(imaging) = &self.imaging {
+            imaging.set_focal_length_mm(mm);
+        }
+        self
+    }
+
     /// Session motion controller, present alongside live solving.
     pub fn goto(&self) -> Option<Arc<crate::goto::GoTo>> {
         self.goto.clone()

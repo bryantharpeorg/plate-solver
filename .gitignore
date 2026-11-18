@@ -52,3 +52,4 @@ lcov.info
 
 # scripts/quality.sh's pinned tools (jscpd, ESLint): npm ci installs them on first run
 scripts/quality/node_modules/
+/.cache/
