@@ -1,0 +1,11 @@
+{"astap": "CLI-2025.09.29", "database": "d50",
+ "frame": {"width": 2376, "height": 1786},
+ "cases": {
+  "solved": {"exit": 0, "ini": "solved.ini", "wcs": "solved.wcs", "stars": [
+    {"x": 243.5, "y": 444.5, "ra_deg": 250.747793, "dec_deg": 36.590747},
+    {"x": 1688.5, "y": 517.5, "ra_deg": 250.244137, "dec_deg": 36.561196},
+    {"x": 1050.5, "y": 1432.5, "ra_deg": 250.474140, "dec_deg": 36.309779}]},
+  "not_solved": {"exit": 1, "ini": "not-solved.ini"},
+  "too_few_stars": {"exit": 1, "ini": "too-few-stars.ini"},
+  "no_database": {"exit": 1, "ini": "no-database.ini"},
+  "analyse": {"exit": 0, "stdout": "analyse.stdout", "half_flux_px": 5.3, "stars": 982}}}
