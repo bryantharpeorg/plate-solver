@@ -2,10 +2,12 @@
 //! paired node for `ScopeNodeImaging` alone, the state it keeps and the routes
 //! that read and change it.
 
+pub mod astap;
 pub mod fits;
 pub mod frames;
 pub mod preview;
 pub mod routes;
+pub mod solver;
 
 use std::{
     future::Future,
