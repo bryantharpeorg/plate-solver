@@ -120,12 +120,15 @@ pub struct HintInputs<'a> {
     pub skip: usize,
 }
 
-/// The hint for a solve (FR-014, FR-015, FR-016): among the sources that
-/// exist — `pointing` when its time is within `HINT_AGE_S` of the exposure,
-/// `last_solve`, `target`, and `none`, which always exists — the one `skip`
-/// places down, never past `none`; the radius 3°, or the whole sky for
-/// `none`; and the field height, the frame's rows times its binning times the
-/// scale, over 3600, from the scale or from the focal length, or absent.
+/// The hint for a solve (FR-014, FR-015, FR-016, FR-028): among the sources
+/// that exist — `pointing` when its time is within `HINT_AGE_S` of the
+/// exposure, `last_solve`, `target`, and `none`, which always exists — the
+/// one `skip` places down, never past `none`; the radius 3°, narrowed for
+/// `pointing` to the sensor's diagonal on the sky once the session's aim
+/// point is measured and a scale sizes the field, never under 0.2° or over
+/// 3°, or the whole sky for `none`; and the field height, the frame's rows
+/// times its binning times the scale, over 3600, from the scale or from the
+/// focal length, or absent.
 pub fn hint_for(inputs: &HintInputs<'_>) -> SolveHint {
     // The sources that exist, in order (FR-014).
     let pointing = inputs.pointing.filter(|&(_, _, time)| {
@@ -153,6 +156,20 @@ pub fn hint_for(inputs: &HintInputs<'_>) -> SolveHint {
     };
     let radius_deg = if source == HintSource::None {
         WHOLE_SKY_DEG
+    } else if source == HintSource::Pointing && inputs.aim_measured {
+        // Once the session's aim point is the measured one, and while the kept
+        // scale is the field height's source, a hint from a live pointing is
+        // narrowed to the sensor's diagonal on the sky (FR-028) — the camera's
+        // whole width and height, whatever region the frame covers, since the
+        // place of such a hint is the sensor's centre, and a frame of a region
+        // may lie anywhere on the sensor — never under 0.2° or over 3°.
+        inputs
+            .scale
+            .map(|scale| {
+                (f64::from(inputs.sensor.0).hypot(f64::from(inputs.sensor.1)) * scale / 3600.0)
+                    .clamp(relation::NARROW_MIN_DEG, WIDE_RADIUS_DEG)
+            })
+            .unwrap_or(WIDE_RADIUS_DEG)
     } else {
         WIDE_RADIUS_DEG
     };

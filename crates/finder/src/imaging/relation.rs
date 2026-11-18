@@ -2,8 +2,9 @@
 //! (032): the scale a solved imaging frame measured, the focal length that
 //! sizes a solve's field until one is kept, the misses that turn the hint's
 //! place and its field height from one source to the next, the history of the
-//! finder camera's live solves, and the aim reading an imaging solve takes
-//! from it.
+//! finder camera's live solves, and the aim readings an imaging solve takes
+//! from it — the last five held, smoothed into medians, with the outliers set
+//! aside.
 
 use std::{
     collections::VecDeque,
@@ -42,6 +43,24 @@ pub const MAX_TRAVEL_ARCSEC: f64 = 60.0;
 /// the sky (FR-020).
 pub const MAX_SCATTER_ARCSEC: f64 = 90.0;
 
+/// How many aim readings the window holds (FR-024).
+pub const WINDOW: usize = 5;
+/// A reading this far on the sky from the median aim point is an outlier
+/// (FR-025).
+pub const OUTLIER_ARCSEC: f64 = 120.0;
+/// A reading this far in angle from the median imaging angle is an outlier
+/// (FR-025).
+pub const OUTLIER_ANGLE_DEG: f64 = 1.0;
+/// This many outliers in a row replace what the window holds with themselves
+/// (FR-025).
+pub const REPLACE_AFTER: usize = 3;
+/// The medians must be this far on the sky from the aim point in force before
+/// the session's aim point moves (FR-026).
+pub const AIM_STEP_ARCSEC: f64 = 10.0;
+/// The narrow radius a hint takes once the aim point is measured is never
+/// under this (FR-028).
+pub const NARROW_MIN_DEG: f64 = 0.2;
+
 /// The camera a kept scale belongs to: the file names its model, serial, size
 /// and pixel size, and a file made for another camera is ignored (FR-017).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -76,14 +95,22 @@ pub struct Scale {
     pub at: f64,
 }
 
-/// `relation.json` (FR-017). Non-exhaustive: a later story adds the aim
-/// readings.
+/// `relation.json` (FR-017, FR-027): the scale kept, the aim readings held
+/// and those set aside, each with the size of the finder frame it was made
+/// in. The two lists default to empty when their key is absent and are left
+/// out while empty.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Stored {
     pub format: String,
     pub camera: CameraId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scale: Option<Scale>,
+    /// The aim readings held, oldest first (FR-027).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub readings: Vec<AimReading>,
+    /// The aim readings set aside, oldest first (FR-027).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub set_aside: Vec<AimReading>,
 }
 
 /// `None` when the file is missing, unreadable, of another format or of
@@ -160,6 +187,8 @@ pub struct RelationView {
     pub mirrored: Option<bool>,
     /// How many aim readings are held (FR-023).
     pub readings: usize,
+    /// How many aim readings are set aside (FR-025).
+    pub set_aside: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last: Option<Last>,
     /// The sensor's size times the kept scale (FR-023).
@@ -358,10 +387,187 @@ pub fn read_aim(
     })
 }
 
+/// How `Window::take` fared with one aim reading (FR-024, FR-025).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Taken {
+    /// Held: the medians may have moved.
+    Measured,
+    /// An outlier: set aside, moving nothing.
+    SetAside,
+    /// The third outlier in a row: it and the two before it now are what is
+    /// held.
+    Replaced,
+}
+
+/// The last aim readings held and those set aside (FR-024, FR-025): the
+/// medians of what is held are the aim point and the imaging angle the
+/// console answers with.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Window {
+    /// Oldest first.
+    readings: Vec<AimReading>,
+    /// Oldest first.
+    aside: Vec<AimReading>,
+}
+
+impl Window {
+    /// Nothing held.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The readings held and those set aside, oldest first, as the file holds
+    /// them (FR-027).
+    pub fn from_parts(readings: Vec<AimReading>, set_aside: Vec<AimReading>) -> Self {
+        Self {
+            readings,
+            aside: set_aside,
+        }
+    }
+
+    /// Take one aim reading (FR-024, FR-025). A reading made in a finder
+    /// frame of another size than the newest one held or set aside drops
+    /// everything first, since its pixels mean something else; then, with
+    /// three or more held, a reading more than 120″ on the sky from the
+    /// median aim point, more than 1° from the median imaging angle or of the
+    /// other mirror sense is set aside, and the third set aside in a row
+    /// replaces what is held; a reading that is none of those clears those
+    /// set aside, is held, and pushes the oldest out beyond five.
+    pub fn take(&mut self, reading: AimReading) -> Taken {
+        // The finder frame first: pixels of another size mean something else
+        // (FR-027).
+        if self
+            .readings
+            .last()
+            .or(self.aside.last())
+            .is_some_and(|newest| {
+                newest.finder_width != reading.finder_width
+                    || newest.finder_height != reading.finder_height
+            })
+        {
+            self.readings.clear();
+            self.aside.clear();
+        }
+        // The outlier test needs three held (FR-025).
+        let outlier = self.readings.len() >= REPLACE_AFTER
+            && self
+                .aim()
+                .zip(self.angle_deg())
+                .is_some_and(|((x, y), angle)| {
+                    let distance =
+                        (reading.x - x).hypot(reading.y - y) * reading.finder_arcsec_per_px;
+                    let turned =
+                        ((reading.angle_deg - angle + 180.0).rem_euclid(360.0) - 180.0).abs();
+                    distance > OUTLIER_ARCSEC
+                        || turned > OUTLIER_ANGLE_DEG
+                        || reading.mirrored != self.mirrored().expect("a reading is held")
+                });
+        if outlier {
+            self.aside.push(reading);
+            if self.aside.len() >= REPLACE_AFTER {
+                self.readings = std::mem::take(&mut self.aside);
+                return Taken::Replaced;
+            }
+            return Taken::SetAside;
+        }
+        self.aside.clear();
+        self.readings.push(reading);
+        if self.readings.len() > WINDOW {
+            self.readings.remove(0);
+        }
+        Taken::Measured
+    }
+
+    /// How many aim readings are held.
+    pub fn len(&self) -> usize {
+        self.readings.len()
+    }
+
+    /// Whether none is held.
+    pub fn is_empty(&self) -> bool {
+        self.readings.is_empty()
+    }
+
+    /// How many aim readings are set aside.
+    pub fn set_aside(&self) -> usize {
+        self.aside.len()
+    }
+
+    /// The medians of the x and of the y of what is held (FR-024).
+    pub fn aim(&self) -> Option<(f64, f64)> {
+        Some((
+            median(self.readings.iter().map(|reading| reading.x).collect())?,
+            median(self.readings.iter().map(|reading| reading.y).collect())?,
+        ))
+    }
+
+    /// The median imaging angle, taken around the circle, 0 to 360 (FR-024).
+    pub fn angle_deg(&self) -> Option<f64> {
+        let oldest = self.readings.first()?;
+        let differences = self
+            .readings
+            .iter()
+            .map(|reading| (reading.angle_deg - oldest.angle_deg + 180.0).rem_euclid(360.0) - 180.0)
+            .collect();
+        Some((oldest.angle_deg + median(differences)?).rem_euclid(360.0))
+    }
+
+    /// The newest aim reading's mirror sense.
+    pub fn mirrored(&self) -> Option<bool> {
+        self.readings.last().map(|reading| reading.mirrored)
+    }
+
+    /// The aim readings held, oldest first.
+    pub fn readings(&self) -> &[AimReading] {
+        &self.readings
+    }
+
+    /// The aim readings set aside, oldest first.
+    pub fn aside(&self) -> &[AimReading] {
+        &self.aside
+    }
+
+    /// Drop everything held and set aside.
+    pub fn clear(&mut self) {
+        self.readings.clear();
+        self.aside.clear();
+    }
+}
+
+/// The median of the values: the middle one, or the mean of the middle two
+/// (FR-024).
+fn median(mut values: Vec<f64>) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    values.sort_by(f64::total_cmp);
+    let n = values.len();
+    Some(if n % 2 == 1 {
+        values[n / 2]
+    } else {
+        (values[n / 2 - 1] + values[n / 2]) / 2.0
+    })
+}
+
+/// Whether the session's aim point should be set from a median (FR-026):
+/// with no aim point in force, with one that is not a measured one, and when
+/// the median is more than 10″ on the sky from the one in force.
+pub fn should_apply(
+    in_force: Option<crate::session::AimView>,
+    median: (f64, f64),
+    finder_arcsec_per_px: f64,
+) -> bool {
+    let Some(aim) = in_force else {
+        return true;
+    };
+    aim.source != Some("measured")
+        || ((median.0 - aim.x).hypot(median.1 - aim.y) * finder_arcsec_per_px > AIM_STEP_ARCSEC)
+}
+
 /// What the console keeps between the two cameras while it runs: the kept
 /// scale, the focal length, the misses that turn the hint's sources, the
-/// history of the finder camera's live solves and the aim reading held. One
-/// value lives in the imaging state; its fields are private.
+/// history of the finder camera's live solves and the window of aim
+/// readings. One value lives in the imaging state; its fields are private.
 #[derive(Debug)]
 pub struct Relation {
     /// `<imaging folder>/relation.json`.
@@ -375,8 +581,8 @@ pub struct Relation {
     misses: u32,
     /// The finder camera's live solves (FR-019).
     history: FinderHistory,
-    /// The one aim reading held (FR-020, FR-023).
-    reading: Option<AimReading>,
+    /// The last aim readings held, and those set aside (FR-024, FR-025).
+    window: Window,
     /// How the last solved whole-sensor frame fared (FR-023).
     last: Option<Last>,
 }
@@ -392,7 +598,7 @@ impl Relation {
             scale: None,
             misses: 0,
             history: FinderHistory::default(),
-            reading: None,
+            window: Window::new(),
             last: None,
         }
     }
@@ -405,17 +611,21 @@ impl Relation {
         }
     }
 
-    /// The camera was described (FR-017). For the camera already held this
-    /// does nothing; otherwise the file is read for this camera, and what it
-    /// holds is taken or the kept scale and every aim reading dropped, and the
+    /// The camera was described (FR-017, FR-027). For the camera already held
+    /// this does nothing; otherwise the file is read for this camera, and
+    /// what it holds — the scale and the two lists of aim readings — is taken
+    /// or, with none, the kept scale and every aim reading dropped, and the
     /// misses zeroed.
     pub fn describe(&mut self, camera: CameraId) {
         if self.camera.as_ref() == Some(&camera) {
             return;
         }
-        self.scale = load(&self.path, &camera).and_then(|stored| stored.scale);
+        let stored = load(&self.path, &camera);
+        self.scale = stored.as_ref().and_then(|stored| stored.scale);
+        self.window = stored
+            .map(|stored| Window::from_parts(stored.readings, stored.set_aside))
+            .unwrap_or_default();
         self.misses = 0;
-        self.reading = None;
         self.last = None;
         self.camera = Some(camera);
     }
@@ -488,10 +698,11 @@ impl Relation {
         self.history.fixes()
     }
 
-    /// Record what `read_aim` answered for a frame (FR-020, FR-023).
-    /// `in_force` is the aim point in force of now, from
-    /// `solving::aim_in_force`. It answers the aim point to hand to
-    /// `Session::set_measured_aim`, when there is one to hand over.
+    /// Record what `read_aim` answered for a frame (FR-020, FR-023, FR-024
+    /// to FR-027). `in_force` is the aim point in force of now, from
+    /// `solving::aim_in_force`; while one is held it is the held one. It
+    /// answers the aim point to hand to `Session::set_measured_aim`, when
+    /// there is one to hand over.
     pub fn take(
         &mut self,
         outcome: Outcome,
@@ -499,18 +710,34 @@ impl Relation {
         in_force: Option<crate::session::AimView>,
     ) -> Option<(f64, f64)> {
         // An aim point that is not a measured one is replaced at the next
-        // reading: the one held is dropped first (FR-023).
-        if !in_force.is_some_and(|aim| aim.source == Some("measured")) {
-            self.reading = None;
+        // reading: the window is cleared first, and its readings with them
+        // (FR-023, FR-027).
+        let measured = in_force.is_some_and(|aim| aim.source == Some("measured"));
+        if !measured {
+            self.window.clear();
         }
         let outcome = match outcome {
             Outcome::Measured(reading) => {
-                self.reading = Some(reading);
+                let taken = self.window.take(reading);
                 self.last = Some(Last {
                     frame_id,
-                    outcome: LastOutcome::Measured,
+                    outcome: match taken {
+                        Taken::Measured => LastOutcome::Measured,
+                        Taken::SetAside => LastOutcome::SetAside,
+                        Taken::Replaced => LastOutcome::Replaced,
+                    },
                 });
-                return Some((reading.x, reading.y));
+                // The medians move the session's aim point only past the
+                // 10″ step (FR-026), and a reading set aside moves nothing.
+                let answer = match taken {
+                    Taken::SetAside => None,
+                    Taken::Measured | Taken::Replaced => self.window.aim().and_then(|median| {
+                        should_apply(in_force, median, reading.finder_arcsec_per_px)
+                            .then_some(median)
+                    }),
+                };
+                self.save();
+                return answer;
             }
             Outcome::NoLivePointing => LastOutcome::NoLivePointing,
             Outcome::Moving => LastOutcome::Moving,
@@ -532,28 +759,28 @@ impl Relation {
     }
 
     /// `relation` in the imaging view, measured against the aim point in
-    /// force (FR-023): `aim`, `angle_deg` and `mirrored` from the aim reading
-    /// held, and `readings` its count, only while the aim point in force is a
-    /// measured one; `held` while a measured aim point is held back by Track.
-    /// `None` while it would hold nothing.
+    /// force (FR-023, FR-025): `aim`, `angle_deg` and `mirrored` from the
+    /// window's medians, and `readings` its count, only while the aim point
+    /// in force is a measured one; `set_aside` the window's count; `held`
+    /// while a measured aim point is held back by Track. `None` while it
+    /// would hold nothing.
     pub fn view(
         &self,
         in_force: Option<crate::session::AimView>,
         held: bool,
     ) -> Option<RelationView> {
         let measured = in_force.is_some_and(|aim| aim.source == Some("measured"));
-        let (aim, angle_deg, mirrored, readings) = match (measured, self.reading) {
-            (true, Some(reading)) => (
-                Some(Xy {
-                    x: reading.x,
-                    y: reading.y,
-                }),
-                Some(reading.angle_deg),
-                Some(reading.mirrored),
-                1,
-            ),
-            _ => (None, None, None, 0),
+        let (aim, angle_deg, mirrored, readings) = if measured {
+            (
+                self.window.aim().map(|(x, y)| Xy { x, y }),
+                self.window.angle_deg(),
+                self.window.mirrored(),
+                self.window.len(),
+            )
+        } else {
+            (None, None, None, 0)
         };
+        let set_aside = self.window.set_aside();
         let field = self.field();
         let empty = self.scale.is_none()
             && self.focal_length_mm.is_none()
@@ -561,6 +788,7 @@ impl Relation {
             && self.last.is_none()
             && field.is_none()
             && readings == 0
+            && set_aside == 0
             && !held;
         (!empty).then_some(RelationView {
             scale: self.scale,
@@ -569,6 +797,7 @@ impl Relation {
             angle_deg,
             mirrored,
             readings,
+            set_aside,
             last: self.last,
             field,
             held,
@@ -576,8 +805,8 @@ impl Relation {
     }
 
     /// Write the file; a failed save is printed to standard error and the
-    /// values kept in memory (FR-017). Nothing is written before a camera is
-    /// described: the file names its camera.
+    /// values kept in memory (FR-017, FR-027). Nothing is written before a
+    /// camera is described: the file names its camera.
     fn save(&self) {
         let Some(camera) = self.camera.clone() else {
             return;
@@ -586,6 +815,8 @@ impl Relation {
             format: FORMAT.to_string(),
             camera,
             scale: self.scale,
+            readings: self.window.readings().to_vec(),
+            set_aside: self.window.aside().to_vec(),
         };
         if let Err(error) = save(&self.path, &stored) {
             eprintln!("could not save the imaging relation: {error}");
