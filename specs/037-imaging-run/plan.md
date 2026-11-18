@@ -1034,9 +1034,13 @@ from `point` on, the stop generation, the target's id and `by`; and a flag,
   point was set at once and this wait came before Track off: the tracker took the whole
   step from the old aim point as its error and closed it at a rate nothing bounds
   (`crates/finder/src/tracking.rs:304`), under Track's own guards and outside GoTo's,
-  for up to 5 s (spec § Clarifications). The owner's answer to 032's decision 25 closed
-  that in 032. The probe of US5-S4 confirms that the simulator's mount does not move
-  toward the new aim point between the imaging solve and step 2 (§ Prerequisites 5).
+  for up to 5 s (spec § Clarifications). Since 038, a step of more than 5′ is read as
+  a push by hand instead, which hands the tracker nothing but marks the pointing
+  model's slip; a smaller one is still chased. The owner's answer to 032's decision 25
+  avoids both in 032. The probe of US5-S4 confirms that the simulator's mount does not
+  move toward the new aim point between the imaging solve and step 2, and that the
+  model's slip is not marked, which since 038 is what tells the hold from no hold
+  (§ Prerequisites 5).
 
   `stop_tracking` waits for the mount's acknowledgement of its stop, not for rest. If
   an axis still reports motion when step 4's Track asks GoTo, GoTo refuses with
@@ -1729,9 +1733,11 @@ These are not changed by any story:
      whether its solved offset agrees with the truth within 30″;
    - whether US5-S4 centres within its bound on the simulator and how many tries it
      takes; that the simulator's mount does not move toward the newly measured aim
-     point between the first imaging solve and the re-centre's Track off (032's owner
-     decision 25, which spec owner decision 26 cites); and that the first live
-     pointing after that Track off comes within the 5 s of `repoint`'s step 3;
+     point between the first imaging solve and the re-centre's Track off, and that the
+     pointing model's slip is not marked then, which since 038 is what tells the hold
+     from no hold (032's owner decision 25, which spec owner decision 26 cites); and
+     that the first live pointing after that Track off comes within the 5 s of
+     `repoint`'s step 3;
    - whether the simulator's mount is at rest by the time a re-centre's Track asks
      GoTo, or GoTo refuses with `the mount is already moving` (§ Risks);
    - the timing of US6-S4 and US7-S2 against the machine's poll, and of US3-S6's two
@@ -1878,7 +1884,7 @@ story.
 | The simulator leaves the target just outside 90″, with the true aim point set or after a re-centre, or needs more than three tries. | Unprobed (§ Prerequisites 5). US4-S1 and US5-S4 assert the bounds against the truth, so a miss is seen in the probe of the story that owns the test, and owner decisions 2 and 3 are where the numbers change. |
 | A story still passes 64 KiB. | Unmeasured (§ Prerequisites 5, spec SC-007). Three stories were each cut in two on the review's estimate, and the script is in the library so that nine test modules do not each carry one. US1 is the largest: the machine, the whole script and six scenarios. If the probe shows it over, its scenario of the mount's endings (US1-S5) moves to US2 at the re-anchoring, a move of tests only. US4 is next: if it is over, its scenario of the guards (US4-S4) becomes a story of its own. |
 | A re-centre interrupts tracking for a second or two, so the next aim reading reads `moving`. | 032 takes no aim reading then and keeps the one in force; the run still solves and compares, and asks for no further re-centre from a solve that did not move the aim point. Seen in the probe of US5-S4. |
-| 015's tracker chases a newly measured aim point at a rate nothing bounds, outside GoTo's checks. | Closed in 032, where the seam between 032 and 015 lies: the owner settled 032's owner decision 25 on 2026-11-17 with the hold (032's FR-036, US4-S8), which spec owner decision 26 cites, and FR-022 and FR-025 here are written for it (§ Prerequisites 4). The probe of US5-S4 confirms that the simulator's mount does not move toward the new aim point before the re-centre's Track off (§ Prerequisites 5), and the field checklist has the observer watch the first centring (step 8). |
+| A newly measured aim point under Track: as 032 was first drafted, 015's tracker chased it at a rate nothing bounds, outside GoTo's checks; since 038, a step of more than 5′ is read as a push by hand instead and marks the pointing model's slip. | Closed in 032, where the seam between 032 and 015 lies: the owner settled 032's owner decision 25 on 2026-11-17 with the hold (032's FR-036, US4-S8), which spec owner decision 26 cites, and FR-022 and FR-025 here are written for it (§ Prerequisites 4). The probe of US5-S4 confirms that the simulator's mount does not move toward the new aim point before the re-centre's Track off and that the model's slip is not marked (§ Prerequisites 5), and the field checklist has the observer watch the first centring (step 8). |
 | The observer's exposure setting is longer than the tracker's limit, and the run's own imaging frames, which 036 does not cap, trail their corner stars. | A known limit (spec § Clarifications; § The console's camera and solver parts). The solve's centre, all the run reads, is not moved; a solve that fails for want of stars is counted (US2-S2). The README says so and step 8 of the field checklist has the observer look. The other answer is a getter in 036 for the capped exposure, an edit to 036. |
 | A re-centre asks Track again while the mount still reports motion after Track off; GoTo refuses with `the mount is already moving` and the run ends `mount_failed`. | Unprobed (§ Prerequisites 5). `stop_tracking` waits for the mount's acknowledgement of the stop, not for rest (`crates/finder/src/tracking.rs:219`). `repoint`'s step 3 now lies between Track off and Track's start, which gives the mount until the next live pointing, but it is not a wait for rest. If the probe or the telescope shows it, `repoint` waits, for a counted number of polls, until the session's mount view no longer says the mount is moving (`crates/finder/src/session.rs:508`) before it asks Track; that reads no axis, and is written in at the re-anchoring. |
 | A console dropped in the middle of a run keeps Track on through something the imaging state of 030 to 036 holds. | US1-S6 proves that the runner lets its parts go; the probe drops a rig in the middle of a run (§ Prerequisites 5). In the binary the state lives until exit, so only tests are touched. |

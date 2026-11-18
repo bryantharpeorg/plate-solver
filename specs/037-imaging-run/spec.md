@@ -204,8 +204,14 @@ the settings, starts, watches and stops; it never puts the steps in order itself
   there on 2026-11-17 with 032's recommended answer, written as its FR-036 and US4-S8:
   032 holds a measured aim point back while Track is on and applies it at the first
   live solve the session records with Track off, so the tracker is handed no such step.
-  FR-022 and FR-025 here are written for that answer. The probe of US5-S4 observes that
-  the mount does not move toward the new aim point (plan.md § Prerequisites 5).
+  Since 038 landed on 2026-11-17, such a step is no longer chased when it is more than
+  5′: it is read as a push by hand, which hands the tracker nothing but marks the
+  pointing model's slip, though nothing slipped; a smaller step is still chased. The
+  hold avoids both (032's owner decision 25, reworded on 2026-11-18; its answer
+  stands). FR-022 and FR-025 here are written for that answer. The probe of US5-S4
+  observes that the mount does not move toward the new aim point and that the model's
+  slip is not marked (plan.md § Prerequisites 5); since 038 only the second tells the
+  hold from no hold, as in 032's US4-S8.
 - Q: Could the run leave the mount moving after the observer's Stop? → A: Only in one
   window, which FR-020 closes. The run's re-centring turns Track off and on again. A
   Stop that lands between the two would be followed by the run's own start, and one
@@ -281,8 +287,9 @@ the settings, starts, watches and stops; it never puts the steps in order itself
      generation before it reads that answer (FR-020, US5-S5).
   4. **The mount-neutral rule is about code, not words.** The `too_low` message names
      the minimum altitude, as it must (SC-006).
-  5. **The tracker chases a newly measured aim point** (the question above; 032's
-     owner decision 25, which owner decision 26 cites).
+  5. **A newly measured aim point under Track**: chased by the tracker as 032 was
+     first drafted, and since 038 read as a push by hand when the step is more than 5′
+     (the question above; 032's owner decision 25, which owner decision 26 cites).
   6. **Eleven stories, not eight.** The machine, the centring and the stacking stories
      were each likely to pass 64 KiB, so each is two: the run's states and then its
      failed steps and counts (US1, US2); the console's own mount, camera and solver
@@ -493,11 +500,14 @@ flip, never left to a story.
     spec changes neither 032 nor 015. Instead: the aim point used at once, as 032 was
     first drafted, under which 015's tracker closed the whole step from the old aim
     point at a rate nothing bounds, under Track's guards and outside GoTo's, for up to
-    the 5 s a re-centre then waited with Track on (Clarifications); or one of 032's
+    the 5 s a re-centre then waited with Track on (Clarifications), and under which,
+    since 038, a step of more than 5′ is read as a push by hand that marks the pointing
+    model's slip instead; or one of 032's
     other answers (a bound on the tracker's rate in 036, Track restarting through GoTo,
     or the chase accepted and bounded by a probe), none of which changed a line here.
     The probe of US5-S4 observes that the simulator's mount does not move toward the
-    new aim point in those seconds (plan.md § Prerequisites 5).
+    new aim point in those seconds and that the model's slip is not marked (plan.md
+    § Prerequisites 5).
 27. **A push by hand during a run.** Recommended: when the session's Track view
     carries 038's `push`, the telescope moving by hand or Track following a push, the
     run ends `pushed_away`, saves the stack and asks nothing of the mount, so Track goes
@@ -1504,7 +1514,8 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_do
   gives a live pointing less often than every 5 s is already outside what 015's tracker
   is built for (`crates/finder/src/tracking.rs:248`).
 - **A newly measured aim point while Track is on.** 032 holds it back until Track is
-  off, so the tracker never chases it (032's FR-036; 032's owner decision 25, which
+  off, so the tracker never chases it and, since 038, it is never read as a push by
+  hand that marks the pointing model's slip (032's FR-036; 032's owner decision 25, which
   owner decision 26 cites, settled on 2026-11-17). The re-centre's Track off puts it in
   force, and the live pointing the re-centre then waits for is the first taken at it
   (FR-025). As 032 was first drafted, the tracker chased it for up to the 5 s of a

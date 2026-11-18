@@ -330,10 +330,11 @@ confirmed at the re-anchoring (plan.md § Prerequisites 8, 13 and 14).
   counted stacked, the stack hands its solve to 032's `Imaging::note_solve` (032 A3,
   written into 032's US4), which takes an aim reading when a live pointing shares the
   sub's moment. While Track is on, 032 holds a newly measured aim point back until
-  Track is off, so the tracker never chases it during the stack, and the readings the
-  subs gave are what it then applies. A sub's solve still changes neither the page's
-  `solve` nor the kept scale, so the radius of 032's hint stays what it was (owner
-  decision 20, FR-015, US5-S9).
+  Track is off, so during the stack the tracker never chases it and, since 038, a step
+  of more than 5′ is never read as a push by hand that marks the pointing model's slip;
+  the readings the subs gave are what it then applies. A sub's solve still changes
+  neither the page's `solve` nor the kept scale, so the radius of 032's hint stays
+  what it was (owner decision 20, FR-015, US5-S9).
 - Q: Where is the rule for a target's name in a folder written? → A: Once, as
   `stack::service::label` in this trio: every character that is not an ASCII letter or
   digit made `-`. `AppState::target_label` calls it, and so does 037's `run::label`
