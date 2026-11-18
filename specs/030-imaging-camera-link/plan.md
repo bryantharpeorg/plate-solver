@@ -724,7 +724,7 @@ in the file prints `neutral = { "CCD_CONTROLS.WB_B" = 50, "CCD_CONTROLS.WB_R" = 
 `neutral_controls()` is `[("CCD_CONTROLS", "WB_B", 50.0), ("CCD_CONTROLS", "WB_R", 50.0)]`.
 A TOML integer is read as an `f64` by serde, so `50` and `50.0` are the same.
 
-`Config::parse` (`crates/scope-node/src/config.rs:119`) keeps its error form,
+`Config::parse` (`crates/scope-node/src/config.rs:206`) keeps its error form,
 `invalid {key} at line {n}`, and gains one more missing-field note beside the two there
 (`crates/scope-node/src/config.rs:137`): `missing field `adapter`` adds
 ` (missing imaging.adapter)`; the top-level `adapter` has a default, so only the table's
@@ -1267,9 +1267,9 @@ same way, and is not needed to flip.
 
 ### The binary (`crates/scope-node/src/main.rs`, US5; US7; US8)
 
-`Args` (`crates/scope-node/src/main.rs:18`) is unchanged by US5. After the config is
+`Args` (`crates/scope-node/src/main.rs:21`) is unchanged by US5. After the config is
 loaded, `--check-config` prints, after the mount's lines
-(`crates/scope-node/src/main.rs:49`), `\n[imaging]\n` and `ImagingConfig::printed()`, or
+(`crates/scope-node/src/main.rs:68`), `\n[imaging]\n` and `ImagingConfig::printed()`, or
 `\n# no imaging camera configured`. `serve` (`crates/scope-node/src/main.rs:75`) builds
 the imaging camera the table names and gives it to the service with `with_imaging`:
 `ImagingAdapter::Indi` is `IndiCamera::tcp(address(), device.clone(),
@@ -1345,7 +1345,7 @@ decision 12; 031's owner decision 16 holds the open alternative, which would mov
 here). `write`'s signature does not change for the region: the frame carries it. This is
 a second small writer on purpose: the scope node must not depend on the console's
 crate, and the console's tests read the node's file with code of their own (031's
-US2-S12).
+US5-S4).
 
 ### The probe (`crates/scope-node/src/imaging/probe.rs`, new, US8)
 
@@ -1705,7 +1705,7 @@ record entries, moved to 031, and what stayed was renumbered from 1: the story o
 node's copy is US7 and the probe's US8, where they were the ninth and twelfth; the
 node's copy's requirements are FR-033 to FR-036 and the probe's FR-037 and FR-038. No
 interface, scenario value or decision changed. The one cut inside a story is US7's: the
-scenario that read the node's file from the console is 031's US2-S12, and US7 writes
+scenario that read the node's file from the console is 031's US5-S4, and US7 writes
 nothing under `crates/finder`.
 
 **Round 1 (probe builds), 2026-11-17.** Every story was built from this trio, tests
