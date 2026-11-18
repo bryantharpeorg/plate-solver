@@ -33,6 +33,8 @@
 //!   error in arcseconds or halt reason.
 //! * POST /api/record: {"on":true} or {"on":false}; records star frames, live reports and previews to a folder.
 //! * POST /api/record/raw: {"frames":N}, N from 1 to 10; saves the next N star frames' pixels into the recording on.
+//! * GET /api/imaging: the imaging camera's state, description, status, settings and latest imaging frame.
+//! * PUT /api/imaging/settings: a partial edit of exposure_ms, gain, offset, binning, roi, cooler_on, set_temp_c, forward_kib_per_s and save_at_node.
 //!
 //! A fresh session has no site, target or pointing and a 15° minimum altitude. Site
 //! coordinates are `lat_deg` (±90°) and `lon_deg` (±180°, east positive); the minimum
@@ -89,3 +91,6 @@ pub use api::{router, AppState};
 pub mod model;
 
 pub mod goto;
+
+/// The imaging camera as the console holds it (031).
+pub mod imaging;

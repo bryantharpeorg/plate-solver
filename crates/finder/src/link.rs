@@ -5,8 +5,10 @@ use std::{future::Future, io, pin::Pin, sync::Arc, time::Duration};
 use hyper_util::rt::TokioIo;
 use scope_link::{
     proto::{
-        self, scope_node_client::ScopeNodeClient, scope_node_mount_client::ScopeNodeMountClient,
-        scope_node_raw_client::ScopeNodeRawClient, scope_node_stop_client::ScopeNodeStopClient,
+        self, scope_node_client::ScopeNodeClient,
+        scope_node_imaging_client::ScopeNodeImagingClient,
+        scope_node_mount_client::ScopeNodeMountClient, scope_node_raw_client::ScopeNodeRawClient,
+        scope_node_stop_client::ScopeNodeStopClient,
     },
     BearerToken, ClockMap, Exchange,
 };
@@ -131,6 +133,60 @@ impl MountClient {
     }
 }
 
+/// Imaging calls on a connection of their own (031). Chunks are at most 256 KiB,
+/// so tonic's default message limit stands.
+#[derive(Clone, Debug)]
+pub struct ImagingClient {
+    client: ScopeNodeImagingClient<InterceptedService<Channel, BearerToken>>,
+}
+impl ImagingClient {
+    /// Reuse a scope link channel and the session's bearer token.
+    pub fn new(channel: Channel, token: &str) -> Result<Self, Status> {
+        let bearer = BearerToken::new(token)
+            .map_err(|_| Status::invalid_argument("invalid scope node token"))?;
+        Ok(Self {
+            client: ScopeNodeImagingClient::with_interceptor(channel, bearer),
+        })
+    }
+    /// The camera's description. A node built before 030 answers `Unimplemented`.
+    pub async fn describe(&mut self) -> Result<proto::ImagingInfo, Status> {
+        Ok(self
+            .client
+            .describe_imaging(proto::DescribeImagingRequest {})
+            .await?
+            .into_inner())
+    }
+    /// The camera's sensor status.
+    pub async fn status(&mut self) -> Result<proto::ImagingStatusReply, Status> {
+        Ok(self
+            .client
+            .imaging_status(proto::ImagingStatusRequest {})
+            .await?
+            .into_inner())
+    }
+    /// Change the settings present; answer the settings in force.
+    pub async fn configure(
+        &mut self,
+        edit: proto::ImagingSettings,
+    ) -> Result<proto::ImagingSettings, Status> {
+        Ok(self.client.configure_imaging(edit).await?.into_inner())
+    }
+    /// One exposure, as a stream of one header and then chunks.
+    pub async fn expose(
+        &mut self,
+        request: proto::ExposeRequest,
+    ) -> Result<tonic::Streaming<proto::ExposeEvent>, Status> {
+        Ok(self.client.expose(request).await?.into_inner())
+    }
+    /// Abort the exposure in progress.
+    pub async fn abort(&mut self) -> Result<(), Status> {
+        self.client
+            .abort_exposure(proto::AbortExposureRequest {})
+            .await?;
+        Ok(())
+    }
+}
+
 /// A real address, or a reusable connector (one new stream for every connection).
 #[derive(Clone, Default)]
 pub enum Transport {
@@ -162,7 +218,7 @@ impl Transport {
             })
         }))
     }
-    async fn connect(&self, address: &str) -> Result<Channel, Status> {
+    pub(crate) async fn connect(&self, address: &str) -> Result<Channel, Status> {
         let result = match self {
             Self::Tcp => {
                 Endpoint::from_shared(format!("http://{address}"))
@@ -225,6 +281,12 @@ pub struct LinkManager {
     frames: watch::Receiver<Option<proto::StarFrame>>,
     mount: watch::Receiver<Option<MountClient>>,
     raw: watch::Receiver<Option<RawClient>>,
+    /// The session this manager was started with, whose pairing the imaging
+    /// connection is opened from (031): under `--simulate` that is the private
+    /// pairing session, not the console's own.
+    session: Arc<Session>,
+    /// The transport new connections are opened over, imaging included (031).
+    transport: Transport,
 }
 impl Drop for LinkManager {
     fn drop(&mut self) {
@@ -249,7 +311,14 @@ impl LinkManager {
         let (mount_tx, mount) = watch::channel(None);
         let (raw_tx, raw) = watch::channel(None);
         let task = tokio::spawn(run(
-            session, clock, transport, status_tx, frame_tx, mount_tx, raw_tx, filter,
+            session.clone(),
+            clock,
+            transport.clone(),
+            status_tx,
+            frame_tx,
+            mount_tx,
+            raw_tx,
+            filter,
         ));
         Self {
             task,
@@ -257,6 +326,8 @@ impl LinkManager {
             frames,
             mount,
             raw,
+            session,
+            transport,
         }
     }
     /// Subscribe to link health changes.
@@ -275,6 +346,22 @@ impl LinkManager {
     /// Raw-frame calls on the current connection; absent while unpaired or disconnected.
     pub fn raw(&self) -> Option<RawClient> {
         self.raw.borrow().clone()
+    }
+
+    /// A new connection to the paired node, for the imaging service only. It
+    /// carries no heartbeat, star frame, mount call or raw frame (031).
+    /// `FailedPrecondition` (`no scope node is paired`) when unpaired.
+    pub async fn connect_imaging(&self) -> Result<ImagingClient, Status> {
+        let config = self.session.link_changes().borrow().clone();
+        let node = config
+            .node
+            .filter(|node| node.address.is_some() && node.token.is_some())
+            .ok_or_else(|| Status::failed_precondition("no scope node is paired"))?;
+        let channel = self
+            .transport
+            .connect(node.address.as_deref().expect("a paired address"))
+            .await?;
+        ImagingClient::new(channel, node.token.as_deref().expect("a paired token"))
     }
 
     /// Send StopAll until the node answers OK or `deadline` passes. The first
