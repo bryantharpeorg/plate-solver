@@ -291,6 +291,56 @@ export interface ImagingView {
   status?: ImagingStatus;
   settings?: ImagingSettings;
   frame?: ImagingFrame;
+  solve?: ImagingSolve;
+  relation?: ImagingRelation;
+}
+
+// An imaging solve and what the console keeps between the two cameras, as
+// GET /api/imaging relays them (032). Field names and shapes mirror the Rust
+// types they come from; keep the two in step.
+export interface ImagingSolveHint {
+  source: "pointing" | "last_solve" | "target" | "none";
+  ra_deg?: number;
+  dec_deg?: number;
+  radius_deg: number;
+  fov_deg?: number;
+}
+
+export interface ImagingSolve {
+  frame_id: number;
+  state: "solving" | "solved" | "failed";
+  requested_at: number;
+  solver: string;
+  hint: ImagingSolveHint;
+  ra_deg?: number;
+  dec_deg?: number;
+  up_east_of_north_deg?: number;
+  arcsec_per_px?: number;
+  mirrored?: boolean;
+  cd_deg?: number[][];
+  stars?: number;
+  warning?: string;
+  took_ms?: number;
+  file?: string;
+  reason?: string;
+  error?: string;
+  detail?: string;
+}
+
+export interface ImagingRelation {
+  scale?: { arcsec_per_px: number; frame_id: number; at?: number };
+  focal_length_mm?: number;
+  aim?: { x: number; y: number };
+  angle_deg?: number;
+  mirrored?: boolean;
+  readings?: number;
+  set_aside?: number;
+  held?: boolean;
+  last?: {
+    frame_id: number;
+    outcome: "measured" | "replaced" | "set_aside" | "no_live_pointing" | "moving" | "off_frame";
+  };
+  field?: { width_arcsec: number; height_arcsec: number };
 }
 
 export type ImagingSettingsEdit = Partial<Omit<ImagingSettings, "roi">>;
@@ -315,6 +365,10 @@ export async function postImagingFrame(): Promise<ImagingView> {
 
 export async function postImagingAbort(): Promise<ImagingView> {
   return json(await fetch("/api/imaging/abort", { method: "POST" }));
+}
+
+export async function postImagingSolve(): Promise<ImagingView> {
+  return json(await fetch("/api/imaging/solve", { method: "POST" }));
 }
 
 export interface PointingModel {
@@ -367,7 +421,9 @@ export interface ObservingSession {
   guidance?: Guidance;
   node?: SessionNode;
   camera_settings?: { exposure_ms: "auto" | number; gain: "auto" | number; sigma: number };
-  aim?: { x: number; y: number };
+  aim?: { x: number; y: number; source?: "measured" };
+  /** The imaging camera's state with its solve and relation (032). */
+  imaging?: ImagingView;
   /** How far the live views are turned, degrees counter-clockwise; omitted until set. */
   chart_rotation_deg?: number;
   field?: { fov_deg: number | null; db_min_fov_deg: number; db_max_fov_deg: number; unsolved_s: number };
