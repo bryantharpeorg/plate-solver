@@ -936,7 +936,7 @@ Four edits, with the words of spec owner approval 6: the Red Torch Rule's paragr
 (`DESIGN.md:198`), whose exception names both pictures from the imaging camera, an
 imaging frame's preview and a stack's picture, so that 035 adds no rule; the first line
 under Don't that names a white or non-red pixel
-(`DESIGN.md:402`); in the Top bar line (`DESIGN.md:276`), `the Imaging link while a
+(`DESIGN.md:405`); in the Top bar line (`DESIGN.md:276`), `the Imaging link while a
 scope node is paired,` after `the Setup link,`; and, after the Recording entry
 (`DESIGN.md:385`), a plain `###` heading and one paragraph (the `>` marks only set the
 text apart here):
@@ -1115,7 +1115,7 @@ own.
 ### The README
 
 `crates/finder/README.md`: US1 adds `## Imaging frames` at the end, the two rows after
-the `POST /api/record/raw` row (`crates/finder/README.md:184`) and `--imaging-dir`; US2
+the `POST /api/record/raw` row (`crates/finder/README.md:201`) and `--imaging-dir`; US2
 the `POST /api/imaging/frame` row, the `frame` object, the path and the cards, and how
 to read the time a frame took to reach the console (`received_at − start −
 exposure_ms/1000`, and that less the scope node's probe figure for the link alone); US5

@@ -93,7 +93,7 @@ and `finder --simulate`. Nothing here solves, focuses, calibrates or stacks.
   1. The console builds every client from clones of one channel
      (`crates/finder/src/link.rs:377`), sends a heartbeat every 250 ms and treats 1 s of
      silence as a lost link (`crates/finder/src/link.rs:29`,
-     `crates/finder/src/link.rs:30`); the node's watchdog stops the mount after 1 s
+     `crates/finder/src/link.rs:32`); the node's watchdog stops the mount after 1 s
      without a heartbeat (`crates/scope-node/src/mount/watchdog.rs:42`). 025 refused raw
      frames while anything moves for this reason. Imaging frames run while the mount
      tracks, so they need their own connection.
