@@ -15,9 +15,10 @@ description: "Task list for 033-focus-reading-and-aid: Focus Reading and Focus A
 - the owner decisions in spec.md are settled and its owner approvals given: not met;
 - the owner has amended Constitution V or written how it reads for the imaging solver:
   met, constitution 1.3.0 (plan.md § Prerequisites 4);
-- the trio has been probe-built: met in round 1, on 2026-11-18, and its fixes are in,
-  but for US5's size, measured over the budget, whose cut the owner chooses before the
-  flip (plan.md § Prerequisites 5, § Risks);
+- the trio has been probe-built: met in round 1, on 2026-11-18, and its fixes are in;
+  US5, which measured over the budget, is cut as the owner chose, and US9 takes the
+  tile read for the time being and the frame kept for a solve (plan.md
+  § Prerequisites 5, § Risks);
 - the plan document, ADR-0002, the research note and the changed `GLOSSARY.md` are on
   `main`, and the glossary carries the two new entries and the three reworded ones of
   spec.md owner approval 11: not met on `main`; the drafting worktree's glossary carries
@@ -70,13 +71,14 @@ description: "Task list for 033-focus-reading-and-aid: Focus Reading and Focus A
   simulator's constants, the published SplitMix64 stream or a worked example (plan.md
   § Plan traps 6). They compare `focus` and its parts key by key. No test of a story
   asserts something a later story changes (plan.md § Plan traps 14): above all, no
-  test of US5 sends `check`, asserts that it is refused, or asserts that the aid's
-  part of the view has no `check` key.
+  test of US5 sends `check`, asserts that it is refused or that the aid's part of the
+  view has no `check` key, starts the aid where every tile is far out, or asks for an
+  imaging solve while it runs.
 - Every scenario's Then clause is the test: assert each value it states, with the
   tolerance it states, against the oracle it names. Where a scenario says a test checks
   something first (the star counts of US2-S4 and US8-S2), that check is an assertion
   too and comes first. Where a scenario waits for an exact count of readings (US5-S1,
-  US5-S6), the test asserts on the first view in which the count is reached.
+  US9-S1), the test asserts on the first view in which the count is reached.
 - Use the words of `GLOSSARY.md`: focus reading, focus region, focus record, focus aid,
   imaging frame, imaging solver, solver port, solver adapter, scope node, console.
   Never "driver", "plugin", "provider", "light frame", "main camera", "focus score" or
@@ -217,7 +219,9 @@ description: "Task list for 033-focus-reading-and-aid: Focus Reading and Focus A
 ## Phase 5: User Story 5 — The focus aid on the console (Priority: P1)
 
 This story does not write `check`: User Story 8 adds it. Do not send, refuse or
-assert `check` here.
+assert `check` here. Nor does it read a tile for the time being or keep a frame for an
+imaging solve: User Story 9 adds both. Until then a search with no best tile ends
+`no_region`, and the aid removes its previous frame whatever 032's `solve` says.
 
 ### Tests first
 
@@ -237,12 +241,6 @@ assert `check` here.
   start refused with the test's name while the test's own frame is exposing (US5-S4);
   and for the endings: a solver error, a stop and an abort during a long exposure, no
   tile with five stars, and a lost link, each leaving the lease free (US5-S5).
-- [ ] T021 [US5] Add failing tests to
-  `crates/finder/tests/console/imaging_focus_aid.rs` for a start with every tile far
-  out: the tile read for the time being, the second search at the first settled
-  reading and the solver's calls in order (US5-S6); and for an imaging solve asked for
-  while the aid measures a saved frame, whose frame and solve sidecar stay, and go
-  when the solve has ended first (US5-S7).
 
 ### Implementation
 
@@ -254,33 +252,60 @@ assert `check` here.
   `crates/finder/src/imaging/mod.rs`, hold one `focus::run::State` made with
   `focus.json` in the imaging folder, call `describe` where the camera's description
   is kept, and add `focus` to `ImagingView`, filled only while `ready` with a solver;
-  its `region` is the provisional tile of a run that has one and is not ended, else
-  the kept region.
+  its `region` is the kept region (US9 adds the provisional tile).
 - [ ] T023 [US5] In `crates/finder/src/imaging/focus/run.rs`, add `focus_start` with
   its eight refusals in order, the fourth only while nobody holds the lease and the
   last of them 031's lease (031 US9) asked for as `HOLDER`; the task's five steps
   (remember, choose the region, set, one frame after another, end) with the search,
-  the provisional tile and step 4j; `focus_stop` and `focus_running` (plan.md § The
-  camera lease, § The aid on the console). The task owns the lease, sets and takes through
-  it, takes each frame's id from the answered view's `frame.id`, holds a `Weak` of the
+  a search with no `best` ending the run `no_region`; `focus_stop` and
+  `focus_running` (plan.md § The camera lease, § The aid on the console). The task
+  owns the lease, sets and takes through it, takes each frame's id from the answered
+  view's `frame.id`, holds a `Weak` of the
   `Imaging` and no lock across an await. It reads the reference before it notes a
   settled reading (steps 4g and 4h), and gives `Kept` the measured scale, never
   `Imaging::scale_arcsec_per_px()`. It removes only the file of its own previous
-  frame, and that frame's solve sidecar, and not a frame the view's `solve` is
-  `solving`. On every ending it puts the settings back and then drops the lease,
-  before the lifecycle becomes `ended`.
+  frame, and that frame's solve sidecar. On every ending it puts the settings back
+  and then drops the lease, before the lifecycle becomes `ended`.
 - [ ] T024 [US5] In `crates/finder/src/imaging/routes.rs`, add `POST` and `DELETE
   /api/imaging/focus` (plan.md § The routes); in `crates/finder/src/lib.rs`, add the
   two routes' lines as US5 writes them; in `crates/finder/README.md`, add the two API
   rows as US5 writes them, without `check` (plan.md § `crates/finder/src/lib.rs` and
   `crates/finder/README.md`).
 - [ ] T025 [US5] Run the `lint` and `test` gates with every existing test unchanged and
-  green. Commit the green story (US5-S1, US5-S2, US5-S3, US5-S4, US5-S5, US5-S6 and
-  US5-S7).
+  green. Commit the green story (US5-S1, US5-S2, US5-S3, US5-S4 and US5-S5).
 
-## Phase 6: User Story 8 — The focus check, and a pass through focus on the simulator (Priority: P1)
+## Phase 6: User Story 9 — The tile read for the time being, and a frame kept for a solve (Priority: P1)
 
-Built after User Story 5 and before User Stories 6 and 7 (spec.md § Work Graph).
+Built after User Story 5 and before User Story 8 (spec.md § Work Graph).
+
+### Tests first
+
+- [ ] T021 [US9] Create `crates/finder/tests/console/imaging_focus_far_out.rs`, the
+  module `imaging_focus_far_out` of `console`, with `mod imaging_focus_far_out;` after
+  US4's `mod imaging_focus_arithmetic;` in `crates/finder/tests/console/main.rs`, and
+  the focus rig and the scripted solver, with its slow measure and slow solve, written
+  out again, with helpers to wait on `GET /api/imaging`, to list the frames folder and
+  to parse `focus.json`. Do not add to `imaging_focus_aid.rs`. Write failing tests for
+  a start with every tile far out: the tile read for the time being, the second search
+  at the first settled reading and the solver's calls in order (US9-S1); and for an
+  imaging solve asked for while the aid measures a saved frame, whose frame and solve
+  sidecar stay, and go when the solve has ended first (US9-S2).
+
+### Implementation
+
+- [ ] T037 [US9] In `crates/finder/src/imaging/focus/run.rs`, add step 2's branch for a
+  `far_out` tile with no `best`, the provisional tile in the run and in the view's
+  `region` (`source` `provisional`), and step 4j, whose search goes on with the
+  provisional tile when it finds no `best` and never ends `no_region` (plan.md § The
+  aid on the console). Add the exception of § Removing the aid's previous
+  saved frame: a frame the view's `solve` is `solving` is left in place for good.
+  Change nothing a start whose search finds a `best` does.
+- [ ] T038 [US9] Run the `lint` and `test` gates with every existing test unchanged and
+  green, US5's among them. Commit the green story (US9-S1 and US9-S2).
+
+## Phase 7: User Story 8 — The focus check, and a pass through focus on the simulator (Priority: P1)
+
+Built after User Story 9 and before User Stories 6 and 7 (spec.md § Work Graph).
 
 ### Tests first
 
@@ -316,7 +341,7 @@ Built after User Story 5 and before User Stories 6 and 7 (spec.md § Work Graph)
 - [ ] T030 [US8] Run the `lint` and `test` gates with every existing test unchanged and
   green, US5's among them. Commit the green story (US8-S1, US8-S2 and US8-S3).
 
-## Phase 7: User Story 6 — The Focus block on the Imaging page (Priority: P2)
+## Phase 8: User Story 6 — The Focus block on the Imaging page (Priority: P2)
 
 ### Tests first
 
@@ -341,7 +366,7 @@ Built after User Story 5 and before User Stories 6 and 7 (spec.md § Work Graph)
   and green, commit the rebuilt `crates/finder/web/dist`, and commit the green story
   (US6-S1, US6-S2, US6-S3, US6-S4 and US6-S5).
 
-## Phase 8: User Story 7 — Two MCP tools (Priority: P2)
+## Phase 9: User Story 7 — Two MCP tools (Priority: P2)
 
 ### Tests first
 
@@ -367,8 +392,8 @@ Built after User Story 5 and before User Stories 6 and 7 (spec.md § Work Graph)
 ## Execution Order
 
 ```text
-US1 ──► US2 ──► US3 ──► US4 ──► US5 ──► US8 ──┬──► US6
-                                               └──► US7
+US1 ──► US2 ──► US3 ──► US4 ──► US5 ──► US9 ──► US8 ──┬──► US6
+                                                       └──► US7
 ```
 
 - **US1** comes first: every later story measures through `focus::read`, and the
@@ -379,11 +404,14 @@ US1 ──► US2 ──► US3 ──► US4 ──► US5 ──► US8 ──
 - **US4** is arithmetic alone; it follows US3 only because both write `focus.rs` and
   the `console` binary's `main.rs`.
 - **US5** puts US1 to US4 on the console: the routes, the loop, the lease and the view.
+- **US9** adds the tile read for the time being and the frame kept for a solve to US5's
+  loop. It has the number 9 because it was cut from US5 after the round-1 probe build;
+  it is the sixth story built.
 - **US8** adds the focus check to US5's loop, and proves the whole on the simulator and
   through the built binary. It has the number 8 because it was split from US5 in
-  review; it is the sixth story built.
-- **US6** shows US5's and US8's view and calls their routes; it touches only
-  `crates/finder/web/`, `DESIGN.md` and `.impeccable/design.json`.
+  review; it is the seventh story built.
+- **US6** shows US5's, US9's and US8's view and calls US5's and US8's routes; it
+  touches only `crates/finder/web/`, `DESIGN.md` and `.impeccable/design.json`.
 - **US7** calls US5's and US8's actions; it writes the README after US8.
 - **`[P]`**: US6 and US7 share no file and can run side by side once US8 has merged.
   Nothing else here is parallel: every other story shares a file with the one before

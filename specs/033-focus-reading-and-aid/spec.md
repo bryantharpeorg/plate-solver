@@ -17,12 +17,13 @@ depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", 
 # HEAD, on 2026-11-15 in the fifth session: every `path:line` in spec.md and plan.md
 # was read there again, and none had moved.
 # Probe-built on 2026-11-18 (round 1, every story), on top of 031's and 032's round-1
-# probe builds: the round-1 probe fixes are in, but for one, User Story 5's size,
-# measured over the budget, whose cut the owner chooses before the flip (plan.md
-# § Risks, § Refinement Record). It builds on code that 030-imaging-camera-link,
-# 031-imaging-frames-on-console and 032-imaging-solve-and-aim-point create; every
-# interface of theirs named here is taken from that trio's plan.md, and the trio is
-# re-anchored to `main` after all three land and before the flip (plan.md § Prerequisites).
+# probe builds: the round-1 probe fixes are in, and User Story 5, which measured over
+# the budget, is cut as the owner chose: User Story 9 takes the tile read for the time
+# being and the frame kept for a solve (plan.md § Risks, § Refinement Record).
+# It builds on code that 030-imaging-camera-link, 031-imaging-frames-on-console and
+# 032-imaging-solve-and-aim-point create; every interface of theirs named here is taken
+# from that trio's plan.md, and the trio is re-anchored to `main` after all three land
+# and before the flip (plan.md § Prerequisites).
 # It stays draft until the owner settles the owner decisions and flips it to `ready`,
 # which gives the approvals listed under "Owner approvals" and dispatches it.
 ---
@@ -380,7 +381,7 @@ focuser to turn.
   4. *Far out of focus at first light every tile was "unmeasurable" and the aid ended
      with the wrong words.* Fixed: the aid runs on the far-out tile with the smallest
      size for the time being, shows the size, and searches again at the first settled
-     reading (owner decision 24, FR-007, FR-037, US2-S3, US5-S6).
+     reading (owner decision 24, FR-007, FR-037, US2-S3, US9-S1).
   5. *The research predicts fewer than five stars a tile at a sparse field with the
      defaults.* The arithmetic is now in owner decisions 2, 16 and 21 and in plan.md
      § Risks, and the page and the README name the cure (FR-033, FR-030, US6-S4).
@@ -397,7 +398,7 @@ focuser to turn.
   9. *No scenario read `focus` from `GET /api/session`.* Added (US5-S2).
   10. *An imaging solve asked for during the aid could lose its frame or leave a solve
       sidecar without one.* Fixed: a frame whose imaging solve is running when its
-      turn to be removed comes is left in place (FR-024, US5-S7, owner decision 13).
+      turn to be removed comes is left in place (FR-039, US9-S2, owner decision 13).
   11. *Findings 11 to 16: wording, citations and places a builder would have had to
       guess.* Fixed where they stand; among them, the margin by which the binary's
       check finds its tile is 7.2% and not 22% (US8-S3), and 037's plan already calls
@@ -454,9 +455,20 @@ focuser to turn.
   answers 2.825784 for a whole frame at binning 2, where its star measure is in the
   frame's own pixels, as 032 specifies: 1.412892. And US5 measured 70,010 bytes
   against the 64 KiB budget, and the cut plan.md § Risks wrote in advance left it 397
-  bytes under; which cut it takes is the owner's, and is written into the trio before
-  the flip. Forty defects were reported in all. The fixes of all but US5's size are in
-  this trio, and none adds a requirement.
+  bytes under. Forty defects were reported in all. Their fixes are in this trio, and
+  none adds a requirement.
+- Q: How is US5 cut? → A: As the owner chose, in two. US5 keeps the loop, the routes,
+  the view, the lease and the endings, with US5-S1 to US5-S5. A new story, US9, takes
+  the tile read for the time being (FR-037, step 4j) and the exception for a frame an
+  imaging solve is running on, now FR-039, split out of FR-024, with the scenarios that
+  were US5-S6 and US5-S7, now US9-S1 and US9-S2, in a module of its own,
+  `imaging_focus_far_out`. US9 is built after US5 and before US8, since US8-S1's check
+  on a rig whose every tile is far out runs on the tile read for the time being. Until
+  US9 lands, a search with no best tile ends `no_region` whether or not a tile was far
+  out, and the aid removes its previous frame even while an imaging solve is running
+  on it. The round-1 probe measured US5 so cut at about 63,284 bytes, 2.2 KiB under the
+  budget, and put US9 at about 17 to 19 KiB before round 1's two additions to its
+  second scenario (plan.md § Risks).
 - Q: Which assertions did the probes add or correct? → A: Each where a build broken on
   purpose passed every test (the probes' bite checks), or where a scenario as worded
   could not pass:
@@ -477,12 +489,12 @@ focuser to turn.
     after the second `note` named;
   - US4-S1: a change keeps the trend (after samples 20 and 21);
   - US4-S3: `readings()` counts an unmeasurable sample too;
-  - US5-S6: a second view, kept at 3 readings, has no `verdict` and no `reference`,
-    because its frame could be measured and the readings held are fewer than three
-    (FR-025); the When clause keeps that view;
-  - US5-S7: on a rig of its own, a frame whose solve has ended when its turn comes goes
-    with its solve sidecar (FR-024); and `last.at` is the middle of the frame's
-    exposure;
+  - US9-S1 (US5-S6 when probed): a second view, kept at 3 readings, has no `verdict`
+    and no `reference`, because its frame could be measured and the readings held are
+    fewer than three (FR-025); the When clause keeps that view;
+  - US9-S2 (US5-S7 when probed): on a rig of its own, a frame whose solve has ended
+    when its turn comes goes with its solve sidecar (FR-024); and `last.at` is the
+    middle of the frame's exposure;
   - US8-S1: `imaging.focus_ended()` is awaited right after the `POST` and returns only
     once three exposures have passed, so that US8 proves its own wait, which US7, a
     later story that does not write `run.rs`, could not repair; the When clause awaits
@@ -509,7 +521,7 @@ focuser to turn.
 - Q: Did any requirement's words change? → A: FR-037's, with its meaning kept. A tile
   read for the time being keeps no focus region, and its settled readings are noted in
   the record as FR-025 says and owner decision 7 has it (the record is the smallest
-  settled reading of the aid); that is what the probe built, and US5-S6's oracle allows
+  settled reading of the aid); that is what the probe built, and US9-S1's oracle allows
   it. And a second search that finds no best tile, whether or not it finds a far-out
   one, goes on with the tile it had and does not end `no_region`, as plan.md's step 4j
   already said; the first probe build had ended there, by FR-022's ending beside it.
@@ -773,7 +785,7 @@ and the following. Each is named in the FR or success criterion that makes it.
 5. **Saved imaging frames are removed**: the focus aid removes the file of each of its
    own imaging frames, and that frame's solve sidecar if one was written, once the next
    is saved, but for a frame an imaging solve is running on at that moment, which
-   stays (FR-024). Nothing else is ever removed.
+   stays (FR-024, FR-039). Nothing else is ever removed.
 6. **A change under `crates/simulator`**: `Simulator::focus_error` and
    `Simulator::set_focus_error` in `crates/simulator/src/optics.rs` (FR-003). It is the
    focus error control the plan document's § Simulator names.
@@ -828,8 +840,8 @@ and the following. Each is named in the FR or success criterion that makes it.
     new finder test module, in alphabetical order, in
     `crates/finder/tests/console/main.rs` (`mod imaging_focus_aid;`,
     `mod imaging_focus_arithmetic;`, `mod imaging_focus_check;`,
-    `mod imaging_focus_reading;`, `mod imaging_focus_record;`,
-    `mod imaging_focus_region;`),
+    `mod imaging_focus_far_out;`, `mod imaging_focus_reading;`,
+    `mod imaging_focus_record;`, `mod imaging_focus_region;`),
     `crates/finder/tests/cli/main.rs` (`mod imaging_focus;`) and
     `crates/finder/tests/mcp/main.rs` (`mod imaging_focus;`), as 027's layout asks of
     every new finder test.
@@ -1272,9 +1284,7 @@ development,
 As the observer, I start the focus aid and the console takes short exposures of the
 focus region one after another, finding the region first if it has none, and shows each
 reading with the best, the trend and the verdict until I stop it; then it puts the
-camera's settings back. While it runs nothing else can expose or change the camera. If
-the stars are too far out of focus to find a region by, it still runs, on a tile for
-the time being, and shows me how large they are until I have brought them in.
+camera's settings back. While it runs nothing else can expose or change the camera.
 
 **Why this priority**: This is the loop the observer focuses with. The focus check of
 User Story 8, which the imaging run needs before its first imaging solve, is this loop
@@ -1284,6 +1294,10 @@ with one more way to end.
 `imaging_focus_aid` of finder's `console` test binary. The `test` gate's
 `cargo nextest run --workspace --all-targets --all-features --locked` runs it; during
 development, `cargo nextest run -p finder --locked --test console imaging_focus_aid::`.
+
+Until User Story 9, a search with no best tile ends `no_region` whether or not a tile
+was far out, and the aid removes its previous frame even while an imaging solve is
+running on it.
 
 **Acceptance Scenarios**:
 
@@ -1414,71 +1428,6 @@ development, `cargo nextest run -p finder --locked --test console imaging_focus_
      `ended_reason` `failed` and a `restore_error` that is not empty;
    - oracle: the stated reasons and words, compared exactly, and the plan document's
      amendment 1 with 031 US9's rules for the lease being free after every ending.
-6. **Given** the focus rig with no kept region and the scripted solver whose list is:
-   nine entries, each `(25.0, 12)` but the fifth, which is `(22.0, 12)`; then
-   `(22.0, 12)`, `(21.0, 12)`, `(12.0, 12)`, `(12.0, 12)`, `(12.0, 12)`; then nine
-   entries, each `(12.5, 12)` but the third, which is `(11.0, 12)`; then `(11.0, 12)`,
-   **When** a test sends `POST /api/imaging/focus` with `{}`, waits until
-   `focus.aid.readings` is 1 and keeps that view, waits until `focus.aid.readings` is 3
-   and keeps that view too, waits until `focus.region.source` is `found`, waits until
-   `focus.aid.readings` is at least 8 and sends `DELETE /api/imaging/focus`, **Then** a
-   committed test asserts that:
-   - in the view kept at 1 reading `focus.aid.state` is `running`; `focus.region` has
-     `col` 1, `row` 1, `x` 412, `y` 274, `width` 412, `height` 274 and `source`
-     `provisional`; `settings.roi` is 412, 274, 412, 274; `focus.aid.last.state` is
-     `far_out` and `focus.aid.last.value` 48.201793 within 1e-5; `focus.aid.verdict`
-     is `clearly_out`; `focus.aid` has no `median`; and `focus.json` does not exist
-     under R: a tile read for the time being is not kept;
-   - in the view kept at 3 readings, `focus.aid.last.state` is `reading` and
-     `focus.aid` has no `verdict` and no `reference`: that frame could be measured and
-     the readings held are 1, so the `clearly_out` of the two far-out frames before it
-     is not kept;
-   - once `focus.region.source` is `found`, `focus.region` has `col` 2 and `row` 0;
-   - the solver's calls were, in order: nine on a frame with the region of interest
-     0, 0, 1236, 822; five with the region of interest 412, 274, 412, 274; nine more
-     on a frame with the region of interest 0, 0, 1236, 822; and every later call with
-     the region of interest 824, 0, 412, 274;
-   - the view before the `DELETE` has a `history` beginning 48.201793, 46.010803,
-     26.291887, 26.291887, 26.291887, 24.100897, each within 1e-5;
-   - afterwards `focus.json` under R has `region.col` 2, `region.row` 0,
-     `region.source` `found` and `region.px` 11.0, and `record.tonight.px` 11.0; the
-     `DELETE` answered `ended_reason` `stopped`, and `focus.region.source` is then
-     `found`;
-   - oracle: a worked example. No tile of the first search can be measured, and the
-     smallest far-out tile is the centre one, at 22.0 frame pixels (22.0 × the rig's
-     scale is 48.201793″). The first settled reading there is 12.0, after the fifth
-     imaging frame, and starts the second search, whose smallest tile is the top right
-     one at 11.0. The settled readings after that are 12.0 and then 11.0 (11.0 is 8.3%
-     below 12.0, not a change), so tonight's record is 11.0 once seven imaging frames
-     have been read.
-7. **Given** the focus rig with the scripted solver `(3.0, 12)` with a slow measure of
-   300 ms and a slow solve of 2500 ms, and an aid started with
-   `{"tile":{"col":1,"row":1}}`, **When** a test waits until `frame.purpose` is `focus`
-   and `frame.state` is `saved`, at once sends `POST /api/imaging/solve`, waits until
-   `solve.state` is `failed`, waits until `focus.aid.readings` has grown by 2 and
-   sends `DELETE /api/imaging/focus`, **Then** a committed test asserts that the `POST`
-   answered 200 with `solve.state` `solving`; that once `solve.state` is `failed`,
-   with S the view's `solve.file` and F the same path ending `.fits` in place of
-   `.solve.json`, both S and F exist under R, although the aid has saved at least one
-   imaging frame since; and that after the `DELETE` the frames folder holds exactly
-   two files ending `.fits`, of which F is one, exactly one file ending `.solve.json`,
-   which is S, and none ending `.part`. **And** once `focus.aid.last.frame_id` is the
-   id of the frame the solve was asked for, `focus.aid.last.at` is that frame's
-   `start`, as the view showed it when the frame was `saved`, plus half its
-   `exposure_ms` in seconds (`start + exposure_ms/2000`), within 1e-6. **And** on a rig
-   of its own with a slow measure of 300 ms and a slow solve of 100 ms, a test that
-   asks for the solve the same way, waits until `solve.state` is `failed`, waits until
-   `focus.aid.readings` has grown by 2 and sends the `DELETE` finds exactly one file
-   ending `.fits` and none ending `.solve.json` or `.part`: the solve had ended when
-   its frame's turn came, so its sidecar went with it. Oracle: the stated rule of
-   FR-024: a frame an imaging solve is running on when its turn to be removed comes is
-   left in place, and the solve sidecar 032 writes for it, also for a solve that
-   fails, is never left without its frame, while a frame whose solve has ended by then
-   goes with its sidecar; and the middle of the exposure (FR-001). The slow measure is
-   what gives the test a moment in which the aid's latest frame is `saved`, as ASTAP's
-   own measuring time does at the telescope; 032 refuses a solve of a frame that is
-   still arriving.
-
 ---
 
 ### User Story 6 - The Focus block on the Imaging page (Priority: P2)
@@ -1687,7 +1636,7 @@ against the focus record, puts the camera's settings back and stops by itself wi
 verdict, without changing the record. And as the owner at a desk, I turn the simulated
 focuser through focus and back and see the focus aid say so.
 
-This story is built after User Story 5 and before User Stories 6 and 7 (Work Graph). It
+This story is built after User Story 9 and before User Stories 6 and 7 (Work Graph). It
 has the number 8 because it was split from User Story 5 in review, and numbering it so
 left every scenario of User Stories 6 and 7 with its number.
 
@@ -1782,6 +1731,98 @@ and `cargo nextest run -p finder --locked --test cli imaging_focus::`.
    sensor pixels, against 6.0386 in the tile above it, the next smallest: a margin of
    7.2%, where 2% of seeded noise either way can close at most 4.1%; no scale is
    known, so the unit is pixels, and no record exists.
+
+---
+
+### User Story 9 - The tile read for the time being, and a frame kept for a solve (Priority: P1)
+
+As the observer at first light, with stars too far out of focus for any tile to be
+measured, I want the aid to run anyway on the smallest far-out tile and find the region
+by itself once the stars come in; and when I ask for an imaging solve while the aid
+runs, I want the frame kept for that solve.
+
+This story is built after User Story 5 and before User Story 8 (Work Graph). It has the
+number 9 because it was cut from User Story 5 once the round-1 probe build measured that
+story over the 64 KiB budget, and numbering it so left every other story and scenario
+with its number.
+
+**Why this priority**: At first light every tile is far out, and without this story the
+aid ends `no_region` and leaves the observer no number to turn the focuser by; and a
+solve asked for while the aid runs would lose its frame, or leave a solve sidecar beside
+nothing.
+
+**Independent Test**: `crates/finder/tests/console/imaging_focus_far_out.rs`, the module
+`imaging_focus_far_out` of finder's `console` test binary. The `test` gate's
+`cargo nextest run --workspace --all-targets --all-features --locked` runs it; during
+development,
+`cargo nextest run -p finder --locked --test console imaging_focus_far_out::`.
+
+**Acceptance Scenarios**:
+
+1. **Given** the focus rig with no kept region and the scripted solver whose list is:
+   nine entries, each `(25.0, 12)` but the fifth, which is `(22.0, 12)`; then
+   `(22.0, 12)`, `(21.0, 12)`, `(12.0, 12)`, `(12.0, 12)`, `(12.0, 12)`; then nine
+   entries, each `(12.5, 12)` but the third, which is `(11.0, 12)`; then `(11.0, 12)`,
+   **When** a test sends `POST /api/imaging/focus` with `{}`, waits until
+   `focus.aid.readings` is 1 and keeps that view, waits until `focus.aid.readings` is 3
+   and keeps that view too, waits until `focus.region.source` is `found`, waits until
+   `focus.aid.readings` is at least 8 and sends `DELETE /api/imaging/focus`, **Then** a
+   committed test asserts that:
+   - in the view kept at 1 reading `focus.aid.state` is `running`; `focus.region` has
+     `col` 1, `row` 1, `x` 412, `y` 274, `width` 412, `height` 274 and `source`
+     `provisional`; `settings.roi` is 412, 274, 412, 274; `focus.aid.last.state` is
+     `far_out` and `focus.aid.last.value` 48.201793 within 1e-5; `focus.aid.verdict`
+     is `clearly_out`; `focus.aid` has no `median`; and `focus.json` does not exist
+     under R: a tile read for the time being is not kept;
+   - in the view kept at 3 readings, `focus.aid.last.state` is `reading` and
+     `focus.aid` has no `verdict` and no `reference`: that frame could be measured and
+     the readings held are 1, so the `clearly_out` of the two far-out frames before it
+     is not kept;
+   - once `focus.region.source` is `found`, `focus.region` has `col` 2 and `row` 0;
+   - the solver's calls were, in order: nine on a frame with the region of interest
+     0, 0, 1236, 822; five with the region of interest 412, 274, 412, 274; nine more
+     on a frame with the region of interest 0, 0, 1236, 822; and every later call with
+     the region of interest 824, 0, 412, 274;
+   - the view before the `DELETE` has a `history` beginning 48.201793, 46.010803,
+     26.291887, 26.291887, 26.291887, 24.100897, each within 1e-5;
+   - afterwards `focus.json` under R has `region.col` 2, `region.row` 0,
+     `region.source` `found` and `region.px` 11.0, and `record.tonight.px` 11.0; the
+     `DELETE` answered `ended_reason` `stopped`, and `focus.region.source` is then
+     `found`;
+   - oracle: a worked example. No tile of the first search can be measured, and the
+     smallest far-out tile is the centre one, at 22.0 frame pixels (22.0 × the rig's
+     scale is 48.201793″). The first settled reading there is 12.0, after the fifth
+     imaging frame, and starts the second search, whose smallest tile is the top right
+     one at 11.0. The settled readings after that are 12.0 and then 11.0 (11.0 is 8.3%
+     below 12.0, not a change), so tonight's record is 11.0 once seven imaging frames
+     have been read.
+2. **Given** the focus rig with the scripted solver `(3.0, 12)` with a slow measure of
+   300 ms and a slow solve of 2500 ms, and an aid started with
+   `{"tile":{"col":1,"row":1}}`, **When** a test waits until `frame.purpose` is `focus`
+   and `frame.state` is `saved`, at once sends `POST /api/imaging/solve`, waits until
+   `solve.state` is `failed`, waits until `focus.aid.readings` has grown by 2 and
+   sends `DELETE /api/imaging/focus`, **Then** a committed test asserts that the `POST`
+   answered 200 with `solve.state` `solving`; that once `solve.state` is `failed`,
+   with S the view's `solve.file` and F the same path ending `.fits` in place of
+   `.solve.json`, both S and F exist under R, although the aid has saved at least one
+   imaging frame since; and that after the `DELETE` the frames folder holds exactly
+   two files ending `.fits`, of which F is one, exactly one file ending `.solve.json`,
+   which is S, and none ending `.part`. **And** once `focus.aid.last.frame_id` is the
+   id of the frame the solve was asked for, `focus.aid.last.at` is that frame's
+   `start`, as the view showed it when the frame was `saved`, plus half its
+   `exposure_ms` in seconds (`start + exposure_ms/2000`), within 1e-6. **And** on a rig
+   of its own with a slow measure of 300 ms and a slow solve of 100 ms, a test that
+   asks for the solve the same way, waits until `solve.state` is `failed`, waits until
+   `focus.aid.readings` has grown by 2 and sends the `DELETE` finds exactly one file
+   ending `.fits` and none ending `.solve.json` or `.part`: the solve had ended when
+   its frame's turn came, so its sidecar went with it. Oracle: the stated rules of
+   FR-039 and FR-024: a frame an imaging solve is running on when its turn to be
+   removed comes is left in place, and the solve sidecar 032 writes for it, also for a
+   solve that fails, is never left without its frame, while a frame whose solve has
+   ended by then goes with its sidecar; and the middle of the exposure (FR-001). The
+   slow measure is what gives the test a moment in which the aid's latest frame is
+   `saved`, as ASTAP's own measuring time does at the telescope; 032 refuses a solve
+   of a frame that is still arriving.
 
 ---
 
@@ -2027,10 +2068,8 @@ and `cargo nextest run -p finder --locked --test cli imaging_focus::`.
   time between the last two as `cadence_ms`.
 - **FR-024**: The aid SHALL remove the file of each imaging frame it took, and that
   frame's solve sidecar if there is one, once the next of its frames has been saved, so
-  that the file of the last frame it saved stays. It SHALL leave in place, for good, a
-  frame on which an imaging solve (032) is running at that moment, so that a solve
-  keeps its frame and no solve sidecar is left without one. It SHALL remove no other
-  file (owner approval 5, owner decision 13).
+  that the file of the last frame it saved stays. It SHALL remove no other file (owner
+  approval 5, owner decision 13).
 - **FR-025**: While the aid runs, its verdict SHALL be `judge` of each settled reading,
   or of an unmeasurable frame, against the reference (FR-012) as it stood before that
   reading was noted; the reference SHALL be kept with the verdict; and both SHALL be
@@ -2125,6 +2164,10 @@ and `cargo nextest run -p finder --locked --test cli imaging_focus::`.
 - **FR-038**: `crates/finder/src/lib.rs` SHALL list the two routes of FR-020 and
   FR-028, and the API table of `crates/finder/README.md` SHALL gain a row for each
   (owner approval 10).
+- **FR-039**: The aid SHALL leave in place, for good, a frame on which an imaging solve
+  (032) is running when its turn to be removed comes (FR-024), so that a solve keeps its
+  frame and no solve sidecar is left without one (owner approval 5, owner decision
+  13).
 
 ### Key Entities
 
@@ -2257,7 +2300,7 @@ US4:
 US5:
   depends_on: []
   depends_on_merged: [US1, US4]
-  implements: [FR-020, FR-021, FR-022, FR-023, FR-024, FR-025, FR-027, FR-028, FR-029, FR-037, FR-038]
+  implements: [FR-020, FR-021, FR-022, FR-023, FR-024, FR-025, FR-027, FR-028, FR-029, FR-038]
 US6:
   depends_on: []
   depends_on_merged: [US8]
@@ -2268,12 +2311,16 @@ US7:
   implements: [FR-035, FR-036]
 US8:
   depends_on: []
-  depends_on_merged: [US5]
+  depends_on_merged: [US5, US9]
   implements: [FR-026, FR-030]
+US9:
+  depends_on: []
+  depends_on_merged: [US5]
+  implements: [FR-037, FR-039]
 ```
 
-Every edge is a merge edge. US1 to US5 and US8 run one after another; US6 and US7 both
-follow US8 and share no file, so they can run side by side.
+Every edge is a merge edge. US1 to US5, US9 and US8 run one after another; US6 and US7
+both follow US8 and share no file, so they can run side by side.
 
 US2 measures its tiles with US1's `read` and adds to US1's `focus.rs`. US3 adds the
 record to the file and the `Kept` US2 creates. US4 adds its module line to `focus.rs`
@@ -2290,7 +2337,15 @@ section, with the pass through focus on the simulator and the built binary's che
 its proofs. It writes `run.rs`, `lib.rs`, `main.rs` and the README after US5, and a test
 module of its own, so that no story edits another's tests.
 
-US6 shows what US5 and US8 put in the imaging view and calls US5's routes with US8's
+US9 was part of US5 until the round-1 probe build measured US5 at 70,010 bytes, over the
+budget. It adds to US5's `run.rs` the tile read for the time being (step 2's far-out
+branch, step 4j and the provisional tile in the view) and the exception that leaves a
+frame in place for an imaging solve running on it, with a test module of its own; US5
+keeps the rest. US8 follows US9 as well as US5, because US8-S1's check on a
+rig whose every tile is far out runs on the tile read for the time being, and because
+both write `run.rs` and the `console` binary's `main.rs`.
+
+US6 shows what US5, US9 and US8 put in the imaging view and calls US5's routes with US8's
 `check`; it waits for US8 so that the page never offers a `Check focus` the console
 would refuse. US7 calls US5's actions and waits on US8's `focus_ended`; its edge to US8
 is also for the README, where US8 writes the section and US7 the tool list. US7 has no

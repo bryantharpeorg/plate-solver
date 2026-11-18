@@ -26,12 +26,12 @@ the name `the focus aid`, remembers the camera's settings, finds or takes the fo
 region, exposes that region alone at the smallest binning one imaging frame after
 another, removes each frame's file once the next is saved, judges each settled reading
 and then notes it in the record. Far out of focus, where no region can be found, it
-runs on a tile for the time being and searches again at the first settled reading.
-`DELETE` stops it. US8 adds `check`, with which it stops by itself at the first settled
-reading and notes nothing. However it ends, the settings are put back and the lease is
-released; while it is held, nothing else exposes or changes the camera. The simulator
-gains a focuser to turn and the simulated solver adapter seeded noise and a sharpest
-point. The Imaging page gets a Focus block and MCP clients two tools.
+runs on a tile for the time being and searches again at the first settled reading
+(US9). `DELETE` stops it. US8 adds `check`, with which it stops by itself at the first
+settled reading and notes nothing. However it ends, the settings are put back and the
+lease is released; while it is held, nothing else exposes or changes the camera. The
+simulator gains a focuser to turn and the simulated solver adapter seeded noise and a
+sharpest point. The Imaging page gets a Focus block and MCP clients two tools.
 
 The lease is 031's User Story 9. This trio takes it and releases it, and creates no
 part of it (§ The camera lease, § Prerequisites 11).
@@ -59,6 +59,7 @@ kept in `session.json`.
 - US7: `crates/finder/tests/mcp/imaging_focus.rs` (new).
 - US8: `crates/finder/tests/console/imaging_focus_check.rs` (new) and, for US8-S3,
   `crates/finder/tests/cli/imaging_focus.rs` (new).
+- US9: `crates/finder/tests/console/imaging_focus_far_out.rs` (new).
 - Where a finder test goes is 027's rule: `console` calls the router in process and
   moves no mount (`crates/finder/tests/console/main.rs:2`), `cli` starts the built
   `finder` (`crates/finder/tests/cli/main.rs:1`), `mcp` drives the MCP door in process
@@ -74,7 +75,8 @@ kept in `session.json`.
   itself: `crates/finder/tests/support` takes no new file
   (`crates/finder/tests/layout/main.rs:126`). So the scripted solver is written out in
   each of `imaging_focus_reading`, `imaging_focus_region`, `imaging_focus_aid`,
-  `imaging_focus_check` and the `mcp` module, and the focus rig in the last three:
+  `imaging_focus_far_out`, `imaging_focus_check` and the `mcp` module, and the focus rig
+  in the last four:
   about 2 KiB and 4 KiB of the same setup, counted in each story's budget (§ Risks). No
   module imports another test module's helpers.
 - No test runs ASTAP or the ASTAP adapter: every `measure` is the simulated solver
@@ -98,7 +100,8 @@ scope node.
   fractions, the counts imaging frames; `FAR_OUT_PX` is 20 frame pixels, ASTAP's limit
   on a mono frame and half of it on a colour mosaic that the adapter averages 2 × 2
   (spec owner decision 5).
-- No story's diff passes 64 KiB. US5 and US8 are two stories for that reason (§ Risks).
+- No story's diff passes 64 KiB. US5, US9 and US8 are three stories for that reason
+  (§ Risks).
 - `web/dist` is committed and must be the build of its source (US6).
 
 **Scale/Scope**: three new module files, two routes, one simulate route, one file on
@@ -125,7 +128,7 @@ crates/finder/
 ├── src/imaging/simulated.rs            # US1: with_measure_noise, with_sharpest_at
 ├── src/imaging/focus.rs                # US1: new; the reading. US2: tiles, find_region, Kept, focus.json. US3: the record, judge. US4: pub mod aid. US5: pub mod run
 ├── src/imaging/focus/aid.rs            # US4: new; the arithmetic
-├── src/imaging/focus/run.rs            # US5: new; the aid on the console, the focus view. US8: check, focus_ended
+├── src/imaging/focus/run.rs            # US5: new; the aid on the console, the focus view. US9: the tile read for the time being, a frame kept for a solve. US8: check, focus_ended
 ├── src/imaging/mod.rs                  # US1: pub mod focus. US5: the focus state, the view's focus, describe
 ├── src/imaging/routes.rs               # US5: POST and DELETE /api/imaging/focus
 ├── src/api.rs                          # US1: GET and POST /api/sim/focus
@@ -133,12 +136,13 @@ crates/finder/
 ├── src/lib.rs                          # US5: the two routes' doc lines. US8: check in the first
 ├── src/mcp/tools.rs                    # US7: get_focus_reading, set_focus_aid
 ├── README.md                           # US1: the simulate row. US5: two API rows. US8: ## Focus. US7: two tool lines
-├── tests/console/main.rs               # US1 to US5 and US8: one mod line each
+├── tests/console/main.rs               # US1 to US5, US9 and US8: one mod line each
 ├── tests/console/imaging_focus_reading.rs     # US1: new
 ├── tests/console/imaging_focus_region.rs      # US2: new
 ├── tests/console/imaging_focus_record.rs      # US3: new
 ├── tests/console/imaging_focus_arithmetic.rs  # US4: new
-├── tests/console/imaging_focus_aid.rs         # US5: new, US5-S1 to US5-S7
+├── tests/console/imaging_focus_aid.rs         # US5: new, US5-S1 to US5-S5
+├── tests/console/imaging_focus_far_out.rs     # US9: new, US9-S1 and US9-S2
 ├── tests/console/imaging_focus_check.rs       # US8: new, US8-S1 and US8-S2
 ├── tests/cli/main.rs                   # US8: mod imaging_focus
 ├── tests/cli/imaging_focus.rs          # US8: new, US8-S3
@@ -742,7 +746,7 @@ flip, and nowhere else, since nothing else in the trio names the lease.
 `RoiEdit` is needed here because the task builds a `SettingsEdit` whose `roi` is
 `Some(Some(RoiEdit { .. }))` for a tile and `Some(None)` for the whole sensor.
 
-### The aid on the console (`crates/finder/src/imaging/focus/run.rs`, new, US5; US8 adds the check)
+### The aid on the console (`crates/finder/src/imaging/focus/run.rs`, new, US5; US9 adds the tile read for the time being and a frame kept for a solve; US8 adds the check)
 
 ```rust
 //! The focus aid and the focus check on the console (033).
@@ -792,6 +796,13 @@ US5 writes `FocusAsk` with `find`, `tile` and `exposure_ms`, and US8 adds `check
 is an unknown key and answers 400; no test of US5 sends one or asserts that (§ Plan
 traps 14). `#[non_exhaustive]` is what lets US8 add the field without breaking a
 literal in a test.
+
+US9 adds step 2's branch for a `far_out` tile with no `best`, step 4j, the provisional
+tile in the run and in the view's `region`, and the exception of **Removing the aid's
+previous saved frame** for a frame an imaging solve is running on. Until US9 a search
+with no `best` ends the run `no_region` whether or not a tile was far out, and the aid
+removes its previous frame whatever 032's `solve` says; no test of US5 starts the aid
+where every tile is far out, or asks for an imaging solve while it runs.
 
 The methods are `impl Imaging` blocks in a descendant module of the one that defines
 `Imaging` (`crates/finder/src/imaging/mod.rs`, 031 US1), so they reach its private
@@ -948,7 +959,7 @@ so a solve can start on an aid frame only in the gap while the aid measures it (
 4e), and only one solve runs at a time: when a frame's turn to be removed comes, a
 solve of it is either still running, and the frame stays, or has ended and written
 its sidecar, and both go. No solve loses its frame and no sidecar is left without one
-(spec FR-024, US5-S7). The last frame the aid saved is never removed.
+(spec FR-024, FR-039, US9-S2). The last frame the aid saved is never removed.
 
 The remembered four are put back as one set: `exposure_ms`, `binning`, `save_at_node`,
 and `roi` as `null` when the remembered region was the whole sensor. The page reads the
@@ -1060,7 +1071,7 @@ sizes are `record.*.value`, `last.value`, `median.value`, `best`, `reference.val
 every number of `history`. `record` is `kept.record(now, measured)`, absent when it has
 neither part; its `passed` is not in the view (the file has it, and the verdict's
 `reference.of` says which part judged). `region` is the tile a running aid reads for
-the time being, with the `source` `provisional`, while a run that has one is not
+the time being (US9), with the `source` `provisional`, while a run that has one is not
 `ended`; otherwise the kept focus region with its own `source`; absent with neither.
 `last.value` is the frame's own size: a reading's or a settling frame's `px`, a far-out
 frame's rough size, absent with too few stars; `last.at` is the middle of that frame's
@@ -1076,8 +1087,8 @@ exactly `{"unit":"px"}` (spec US5-S2).
   `run.rs` with private fields, so that US8 adds to it without writing `mod.rs`:
   `focus::run::State`, made with `State::new(root.join("focus.json"))` where the
   imaging state is made. It holds a `focus::Kept` made with `Kept::new` of that path,
-  the latest run (its lifecycle, its `Aid`, what step 4 keeps, whether its tile is
-  provisional, the stop mark, the task's handle; from US8 its `check`) and a
+  the latest run (its lifecycle, its `Aid`, what step 4 keeps, the stop mark, the
+  task's handle; from US9 whether its tile is provisional; from US8 its `check`) and a
   `tokio::sync::Notify` for the end, on which `focus_stop` waits (and, from US8,
   `focus_ended`). The `Lease` is not in the state: the task owns
   it. `root` is the imaging folder, where 032 keeps `relation.json` (the plan
@@ -1622,7 +1633,7 @@ These are not changed by any story:
      `relation.scale.arcsec_per_px` only once an imaging solve has solved, which the
      aid's removal rule and its `measured` scale read (§ The aid on the console);
    - that 032 refuses a solve while the latest imaging frame is `exposing` or
-     `receiving`, and writes a solve sidecar for a failed solve too, as spec US5-S7
+     `receiving`, and writes a solve sidecar for a failed solve too, as spec US9-S2
      assumes;
    - that `Imaging`'s state can take the focus state, that its task has one place
      where the camera's description is kept on reaching `ready`, and that
@@ -1645,16 +1656,16 @@ These are not changed by any story:
    measure's floor) and 24 (far out at the start).
 4. **Constitution V is read or amended by the owner**, as 032's Prerequisites ask: the
    focus reading is measured by ASTAP through the same port. Met: constitution 1.3.0 (PR 239, merged 2026-11-17 as `cc593c7`).
-5. **The trio is probe-built.** Met on 2026-11-18 but for one finding, round 1, every
-   story: each of the eight was built from this trio in a throwaway worktree, in the
-   Work Graph's order, on `main` with 030 landed and 031's and 032's round-1 probe
-   builds, tests first, with both gates, `cargo deny check` and `cargo machete`; each
-   diff was measured as plan trap 3 says; and what the probes found is folded back in
-   (§ Refinement Record, round 1). The one finding not folded is US5's size: it
-   measured 70,010 bytes, over the budget, and the cut written in § Risks left 397
-   bytes. Which cut US5 takes is the owner's, and is written into the trio before the
-   flip. The star counts that US2-S4, US8-S2 and US8-S3 check or assume were read
-   (§ Risks).
+5. **The trio is probe-built.** Met on 2026-11-18, round 1, every story: each of the
+   eight was built from this trio in a throwaway worktree, in the Work Graph's order,
+   on `main` with 030 landed and 031's and 032's round-1 probe builds, tests first,
+   with both gates, `cargo deny check` and `cargo machete`; each diff was measured as
+   plan trap 3 says; and what the probes found is folded back in (§ Refinement Record,
+   round 1). US5 measured 70,010 bytes, over the budget, and the cut written in
+   § Risks left it 397 bytes under; it is cut as the owner chose, US9 taking the tile
+   read for the time being and the frame kept for a solve, as measured on the probe's
+   split branch (§ Risks). The star counts that US2-S4, US8-S2 and US8-S3 check or
+   assume were read (§ Risks).
 6. **The documents this trio cites are on `main`.** Not met: the plan document,
    ADR-0002, the changed `GLOSSARY.md` and the research note are in the drafting
    worktree, uncommitted. Of the five things in `GLOSSARY.md` that spec owner approval
@@ -1790,7 +1801,7 @@ with the check that keeps it from recurring. They bind every story.
 12. **Removing the wrong file, or a file something is still using.** *Check:* the aid
     removes only a path it was given by `Imaging::ended` for a frame it asked for
     itself, only after a later frame of its own is saved, and never a frame 032 is
-    solving at that moment; US5-S1 asserts one file left, US5-S7 that a frame under a
+    solving at that moment; US5-S1 asserts one file left, US9-S2 that a frame under a
     solve stays with its solve sidecar and that one whose solve has ended goes with
     its sidecar, and no other story removes anything.
 13. **A lease that outlives the aid, or an aid that outlives its lease.** A lease left
@@ -1801,12 +1812,14 @@ with the check that keeps it from recurring. They bind every story.
     a lost link included, US5-S4 that an imaging frame can be taken after a stop, and
     US8-S1 that the lease is free after a check.
 14. **A test that pins what a later story changes.** US3 adds `record` to the file US2
-    writes, US5 adds `focus` to the view, and US8 adds `check` to the request and to
+    writes, US5 adds `focus` to the view, US9 adds the tile read for the time being and
+    the exception for a frame under a solve, and US8 adds `check` to the request and to
     the aid's part of the view, and `done` to the endings. *Check:* US2's tests assert
     the file's `region` and never that `record` is absent; tests compare `focus` key by
     key; no test of US1 to US4 reads the imaging view; and no test of US5 sends
-    `check`, asserts that it is refused, or asserts that the aid's part has no `check`
-    key.
+    `check`, asserts that it is refused or that the aid's part has no `check` key,
+    starts the aid where every tile is far out, or asks for an imaging solve while it
+    runs.
 15. **A whole-view comparison in an earlier spec.** *Check:* § Prerequisites 2 re-reads
     031's and 032's tests for one; `focus` is absent without a solver.
 16. **A label that matches by substring.** Playwright's `getByLabel("Exposure")` would
@@ -1832,8 +1845,9 @@ with the check that keeps it from recurring. They bind every story.
     `crate::support::Scratch`.
 24. **A dead field.** A field that is written and never read fails `clippy -D
     warnings`. *Check:* US2 gives `Kept` only the region, US3 adds the record; the
-    focus state enters `mod.rs` in US5, with its reader; and the run's `check` enters
-    in US8, with step 4i, which reads it.
+    focus state enters `mod.rs` in US5, with its reader; the run's provisional tile
+    enters in US9, with step 4j, which reads it; and the run's `check` enters in US8,
+    with step 4i, which reads it.
 25. **Words that claim too much.** *Check:* SC-006; no string in `FocusBlock.tsx`, the
     README section or a tool description says focus is good, sharp or correct without
     "of the focus record", "so far" or "before the last change".
@@ -1861,7 +1875,7 @@ with the check that keeps it from recurring. They bind every story.
 31. **A count seen between two polls.** A scenario that asserts on the view at an exact
     count of readings would be flaky if a count could be skipped. *Check:* a test polls
     every 100 ms of virtual time and an imaging frame takes at least its exposure,
-    1000 ms in every scenario that waits for an exact count (US5-S1, US5-S6).
+    1000 ms in every scenario that waits for an exact count (US5-S1, US9-S1).
 
 ## Risks
 
@@ -1871,12 +1885,12 @@ with the check that keeps it from recurring. They bind every story.
 | The simulator's seeded field puts fewer stars in a tile than a scenario needs. The count is a Poisson draw of mean 13 on a fixed seed, and no story may change the seed, the density or the scenario. | Read in round 1. US2-S4's two tiles hold 26 and 14 stars against its guard of five, and no tile of the focus rig holds fewer than eight. US8-S2's middle tile holds 14 for the whole scenario, about 48 s of virtual time, and 11 to 14 for the first 600 s, against its guard of eight. US8-S3's middle tile holds 13 or 14 at the simulated console's start, against the five it assumes; the untracked sky carries stars out of it, down to 6 from about 98 s after the start, and the scenario asks for its check as soon as the console is `ready`. US2-S4 and US8-S2 still check the count first, so a shortfall would show as that guard (§ Plan traps 8). |
 | ASTAP's star measure on a tile of a raw colour mosaic is not what the design assumes: too few stars at its signal-to-noise floor, a floor under its own 2 × 2 averaged pixels, or sizes that do not fall through focus. | Field checks, named in spec.md. The floor is 032's owner decision 24 and this spec's 21; the tile is a third of the sensor and an owner decision; the port keeps another adapter possible. Not answerable in the factory. |
 | With the defaults a tile holds fewer than five measurable stars at a sparse field, and the aid ends `no_region` or reads too few stars. The research note's own figures predict it (§ 4. Star counts and limiting magnitude at this field): a field holds 30 to 36 stars to G 14 at the galactic poles and 78 to 97 at galactic latitude 30°, so a ninth of it holds 3 to 4 and 9 to 11; and the limit it estimates, G 15.6 to 15.8 in 2 s at a signal-to-noise ratio of 10, becomes about G 14 for a 1 s frame at the measure's floor of 30 (half the exposure costs 0.4 to 0.75 of a magnitude and three times the ratio about 1.2: this plan's inference, on an estimate the note itself puts at a magnitude either way and only near the field's centre). Off-axis coma spreads the stars of the outer tiles and lowers them further. So at the galactic poles the defaults are predicted to fail; at latitude 30° and at the showcase target, whose field holds about 14 such stars a tile away from the Trapezium, to work. | Put to the owner with this arithmetic, as one question in three decisions (spec owner decisions 2, 16 and 21): the default focus exposure (1000 ms recommended; 2000 or 3000 ms reach about G 14.5 to G 15, where a polar tile holds 5 to 7), the measure's floor (30 recommended; 10 reaches about G 15 at 1 s), or both as they are with the cure named. The cure is named whichever is chosen: the page says `Try a longer Focus frame time, or a field with more stars.` on a frame with too few stars and after a `no_region` ending (spec FR-033, US6-S4), and the README's `## Focus` says why (spec FR-030). 037's run can pass its check a longer `exposure_ms`. The field check "how many measurable stars a tile of a one-second exposure holds" at three galactic latitudes tests the arithmetic; nothing in the factory can. |
-| Far out of focus at first light the aid has no tile to choose, or chooses one by noise. | Spec owner decision 24: it reads the far-out tile with the smallest size for the time being, keeps no region, and searches again at the first settled reading (spec US5-S6). The region kept then may still have been chosen with a thin margin; the README says to find it again once focus is close, and owner decision 3 names the alternative of doing that without being asked. ASTAP's sizes above 20 pixels are rough, and a far-out frame with few stars may read `too_few_stars` instead; then the start ends `no_region` and the observer fixes a tile by hand. The field check "starting the aid a millimetre or more out of focus" settles which. |
+| Far out of focus at first light the aid has no tile to choose, or chooses one by noise. | Spec owner decision 24: it reads the far-out tile with the smallest size for the time being, keeps no region, and searches again at the first settled reading (spec US9-S1). The region kept then may still have been chosen with a thin margin; the README says to find it again once focus is close, and owner decision 3 names the alternative of doing that without being asked. ASTAP's sizes above 20 pixels are rough, and a far-out frame with few stars may read `too_few_stars` instead; then the start ends `no_region` and the observer fixes a tile by hand. The field check "starting the aid a millimetre or more out of focus" settles which. |
 | The 15%, 5%, 10% and 20% are set against one reported figure for frame-to-frame scatter, about 10% of a single star's width, and a simulator with 2%. Too tight, and every frame is a change and nothing settles; too loose, and a real turn is missed. | They are five constants in `aid.rs` and one owner decision (11), proved as arithmetic on worked examples. The field check "the scatter of the reading at a fixed focus" settles them; until then the observer still has the number, the history and the picture. |
 | The smallest of many settled readings is still a little low, so readings at the same focus sit a few percent above the record. | A settled reading is a median of three, and the bands are 10% and 30%. The field check above measures it; the alternative of owner decision 7 (only a pass seen to rise on both sides sets the record) removes it. |
 | At the showcase target the bright core of the nebula fills the middle of the sensor, where the focus region usually is, and the solver measures poorly there. | The page and the README say to focus on a field of stars. Where the imaging run takes its focus check, at the target or beside it, is 037's and is named for it in § Shapes that existing tests pin; the field check "a focus check with the Orion Nebula's core in the focus region" informs it. |
 | One reading takes much longer than a second at the telescope: the frame's forwarding, its save, the prepared copy and the solver's start. | `cadence_ms` reports it, and the field check reads it. The region is a ninth of the sensor; a smaller focus exposure and 031's forwarding settings are the levers; nothing in the arithmetic assumes a second. |
-| A story passes 64 KiB. The first draft's US5 would have: the loop, the view, two routes, the README section and seven scenarios that build some fifteen rigs, by the review's count over the budget. | Split before any probe, as the review asked. US5 keeps `run.rs` without the check, the focus state, the two routes, `lib.rs`, the two API rows and seven scenarios in one test module: an estimate of 45 to 55 KiB (about 17 of source, 8 of the rig and the scripted solver, 25 to 30 of tests). US8 takes the check, `focus_ended`, `main.rs`, the README's `## Focus` and three scenarios in a module of its own and the `cli` module: the round-1 probe measured it at 36,763 B (the check module 15.3 KiB with its 7.2 KiB copy of the rig, the README 7.9 KiB, the `cli` module 5.0 KiB, `run.rs` 6.2 KiB). If US5 still passes the budget, its next cut is written here too: US5-S6 with step 4j (FR-037, the tile read for the time being) moves to a story between US5 and US8. US1 can shed the simulate route (FR-004, US1-S5) the same way. Round 1 measured every story (§ Refinement Record): US1 25,627 bytes, US2 20,941, US3 19,653, US4 19,722, US8 36,763, US6 42,222 (42,919 with `dist`) and US7 17,822, each under the budget. US5 measured 70,010 bytes, over it: its tests came to 32 KiB, on the estimate, and `run.rs` alone to 28 KiB, against about 17 estimated for all its source. The cut written here was built and measured: 65,139 bytes for US5 and 16,928 for the story it moves out, which leaves US5 397 bytes under the budget, no margin against a builder's own style. Which cut US5 takes is the owner's, and is written into the trio before the flip. |
+| A story passes 64 KiB. The first draft's US5 would have: the loop, the view, two routes, the README section and seven scenarios that build some fifteen rigs, by the review's count over the budget. | Split before any probe, as the review asked. US5 keeps `run.rs` without the check, the focus state, the two routes, `lib.rs`, the two API rows and seven scenarios in one test module: an estimate of 45 to 55 KiB (about 17 of source, 8 of the rig and the scripted solver, 25 to 30 of tests). US8 takes the check, `focus_ended`, `main.rs`, the README's `## Focus` and three scenarios in a module of its own and the `cli` module: the round-1 probe measured it at 36,763 B (the check module 15.3 KiB with its 7.2 KiB copy of the rig, the README 7.9 KiB, the `cli` module 5.0 KiB, `run.rs` 6.2 KiB). Round 1 measured every story (§ Refinement Record): US1 25,627 bytes, US2 20,941, US3 19,653, US4 19,722, US8 36,763, US6 42,222 (42,919 with `dist`) and US7 17,822, each under the budget. US5 measured 70,010 bytes, over it: its tests came to 32 KiB, on the estimate, and `run.rs` alone to 28 KiB, against about 17 estimated for all its source. The cut written here before the probes, US5-S6 with step 4j (FR-037, the tile read for the time being) moved to a story between US5 and US8, was built and measured: 65,139 bytes for US5 and 16,928 for the story it moves out, which left US5 397 bytes under the budget, no margin against a builder's own style. So US5 is cut deeper, as the owner chose: US9 takes step 4j and the provisional tile (FR-037), the exception for a frame an imaging solve is running on (FR-039) and two scenarios, US9-S1 and US9-S2, in a module of its own with a trimmed copy of the rig; US5 keeps the rest, US5-S1 to US5-S5. The probe measured US5 so cut at about 63,284 bytes, 2.2 KiB under the budget, on a tree that ran no gate, and put US9 at about 17 to 19 KiB (16,928 bytes measured without US9-S2), to which round 1's two additions to US9-S2 add about 1 to 2. US9 is built after US5 and before US8, since US8-S1's check on far-out tiles runs FR-037. US1 can shed the simulate route (FR-004, US1-S5) the same way. |
 | The console exits, or the link drops, while the aid runs, and the camera is left on a region with the aid's exposure. | The Focus block offers `Use the whole sensor` whenever no aid runs and the region is not the whole sensor (US6-S4); exposure and binning are on 031's Settings form; the README says so. Nothing is persisted to undo it, by design: a stale "put back" after a restart could overwrite the observer's own change. |
 | 031 lands with a lease unlike its US9 as drafted: other names, a refusal that does not name the holder, a `set` it does not guard, a lease that keeps the `Imaging` alive. | Prerequisite 11 is met in the trios as drafted, and Prerequisite 2 checks the lease in 031's code as landed. Everything this trio takes from the lease is cited in one section, six numbered rules and `RoiEdit`, and the tests of it assert only a 409 that names the holder. The re-anchoring corrects that section, the task's "set" and "take", US5-S2's one case, US5-S4, US5-S5 and the test setup; nothing else in the trio names the lease. |
 | An imaging run (037) holds the camera and cannot ask for a focus check, which takes the lease itself. | Settled on 037's side: its spec owner decision 15 has the run give the lease up just before the check and take it again after, and its plan.md calls `focus_start` with `check` and `focus_ended()` and reads this trio's five verdict words (§ Shapes that existing tests pin, last bullet). In the instant of the hand-over another taker can get in; 037 names that risk and its answer. Only 037's alternative, a lease that can be lent, would change a signature here. |
@@ -1889,7 +1903,7 @@ with the check that keeps it from recurring. They bind every story.
 | A second console, or two tabs, start the aid at once. | The second start is refused with `the focus aid is already running`, or, when the two arrive in the same instant on two threads, by the lease, with words that name `the focus aid`: a 409 either way, and one aid (§ The aid on the console; § Plan traps 30). |
 | The first settled reading of a night is soft, and tonight's record hides a sharper one of earlier nights. | It does not: until the aid has passed through focus tonight the smaller part judges (spec owner decision 8, US3-S2, US8-S1). On a camera's first night there is no earlier part, and a check after a short, unfinished session is judged against whatever that session saw; the page names it as tonight's record, and owner decision 8 lists the stricter alternative, no record until a pass has been seen. |
 | A record made at the nominal scale of `--focal-length-mm` is thrown away by the first imaging solve. | Only a measured scale is kept with the record or compared (spec owner decision 10, US3-S4, US5-S1). The cost is the other way round: a record made before any solve and carried to another telescope before either was solved on is not recognised as foreign; the README says to remove `focus.json` then. |
-| Somebody asks for an imaging solve while the aid runs, and the aid removes the frame under it. | 032 refuses a solve while a frame is arriving, so it can start only in the gap while the aid measures; a frame under a running solve is left in place with its sidecar (spec FR-024, US5-S7). |
+| Somebody asks for an imaging solve while the aid runs, and the aid removes the frame under it. | 032 refuses a solve while a frame is arriving, so it can start only in the gap while the aid measures; a frame under a running solve is left in place with its sidecar (spec FR-039, US9-S2). |
 
 ## Refinement Record
 
@@ -1929,9 +1943,9 @@ reads it for the time being (US2, US5); a settled reading is judged before it is
 the record takes only a measured scale, and a frame under an imaging solve is not
 removed (US5); and the first draft's US5 is two stories, US5 and US8, with US6 and US7
 both after US8 and no edge between them. The new scenarios' figures (the two parts of
-the record through US3-S2, the scale cases of US3-S4, the run of US5-S6 through the
-aid's arithmetic, and the tile sizes at a focus error of 2.0 behind US8-S3) were worked
-by a short script outside the repository, as before.
+the record through US3-S2, the scale cases of US3-S4, the run of US5-S6, now US9-S1,
+through the aid's arithmetic, and the tile sizes at a focus error of 2.0 behind US8-S3)
+were worked by a short script outside the repository, as before.
 
 What the third pass could not do is the review's one blocker: give 031's trio the
 lease. That is an edit to 031's files, which a revision of this trio may not make, so
@@ -1972,7 +1986,8 @@ no other file. By story:
 - US2: `probe/033-r1-a` at 6dc136de; 5 tests; 20,941 bytes; 3 files.
 - US3: `probe/033-r1-a` at 5cf50710; 4 tests; 19,653 bytes; 3 files.
 - US4: `probe/033-r1-b` at 855142b2; 5 tests; 19,722 bytes; 4 files.
-- US5: `probe/033-r1-b` at 2cc5c79a; 8 tests; 70,010 bytes; 8 files.
+- US5, as drafted, before the cut: `probe/033-r1-b` at 2cc5c79a; 8 tests; 70,010
+  bytes; 8 files.
 - US8: `probe/033-r1-c` at 5e989986; 5 `console` tests and 1 `cli` test; 36,763 bytes;
   8 files.
 - US6: `probe/033-r1-c` at 873fa55d; 5 Vitest tests; 42,222 bytes (42,919 with
@@ -1982,9 +1997,12 @@ no other file. By story:
 US5 passed its 8 tests but measured over the budget. The cut § Risks wrote in advance
 was then built from US4's commit, on `probe/033-r1-b-split`: US5 without US5-S6 and
 step 4j measured 65,139 bytes (725d7b1d), and the story it moves out 16,928
-(3ab40bbc). Which cut US5 takes is the owner's (§ Risks), and until it is written in,
-US5 and the record below stand as drafted. The workspace ran 900 tests after the last
-story, Vitest 364 and Playwright 31. The probes reported forty defects, two blocking:
+(3ab40bbc). Without US5-S7 and FR-024's exception for a frame under a solve as well,
+US5 measured about 63,284 bytes, on a tree that was not committed and ran no gate. As
+the owner chose, US5 is cut that deeper way: US9 takes US5-S6 and US5-S7, now US9-S1
+and US9-S2, step 4j, the provisional tile and that exception, now FR-039 (§ Risks).
+The workspace ran 900 tests after the last story, Vitest 364 and Playwright 31. The
+probes reported forty defects, two blocking:
 US5's size, and US1-S4's assertion that the plain simulated solver answers a binned
 frame's star measure in sensor pixels, where 032's is in the frame's own. The fixes of
 the other thirty-nine are in this trio: they settle choices the plan left open,
@@ -1992,9 +2010,10 @@ correct wording a builder could misread, and add the assertions that the probes'
 checks showed missing (spec.md § Clarifications, the round-1 session). Every 031 and
 032 interface this trio uses built as their trios give it, with private additions only.
 
-The record below is round 1's account but for US5's cut: its tests are the scenarios
-the probes built and ran, each in the module the trio names; its writes are the files
-their diffs changed, which are the files § Project Structure names; and its shared
+The record below is round 1's account, with the probes' US5 divided as the cut divides
+it: its tests are the scenarios the probes built and ran, each in the module the trio
+now names; its writes are the files their diffs changed, US9's being those of the
+probe's split branch, and are the files § Project Structure names; and its shared
 writes name the merge edge that orders two stories of this spec on one file, or the
 story of 030, 031 or 032 that last writes the file. What is still to do is
 § Prerequisites 2, the re-anchoring. An existing test is listed only when
@@ -2329,16 +2348,6 @@ stories:
         disposition: add
         assertion: "the aid ends failed on a solver error, stopped on a delete or an abort within 5 s of a 10 s exposure, no_region with its words when no tile has five stars and none is far out, and failed with a restore_error when the link is lost, with the settings back and the lease free after each"
         decision: "spec.md:US5-S5"
-      - path: crates/finder/tests/console/imaging_focus_aid.rs
-        status: new
-        disposition: add
-        assertion: "with every tile far out a start reads the far-out tile with the smallest size as a provisional region, shows its rough size, keeps no region, gives a measurable frame no verdict until the readings settle, searches again at the first settled reading and keeps the tile that search finds as found, with the solver's calls in that order"
-        decision: "spec.md:US5-S6"
-      - path: crates/finder/tests/console/imaging_focus_aid.rs
-        status: new
-        disposition: add
-        assertion: "a frame an imaging solve is running on when its turn to be removed comes stays in place with the solve sidecar that solve writes, and after the stop the frames folder holds that pair, the last frame and no other fits, solve sidecar or part file; a frame whose solve has ended by then goes with its sidecar; and the aid's last sample carries its frame's id and the middle of its exposure"
-        decision: "spec.md:US5-S7"
       - path: crates/finder/tests/layout/main.rs
         status: existing
         disposition: preserve
@@ -2348,7 +2357,7 @@ stories:
       - "031's take, set and abort and their refusals are unchanged, the imaging settings gain no key, and no lock on the imaging camera is added (spec.md SC-007)"
       - "031 US9's lease, its six rules and its refusal words are unchanged; the aid only takes it as the focus aid and drops it (plan.md The camera lease)"
       - "GET /api/imaging and the session's imaging object carry no focus without a solver or outside ready"
-      - "no file is removed but an imaging frame the aid itself took, and its solve sidecar, and never one an imaging solve is running on (spec.md FR-024)"
+      - "no file is removed but an imaging frame the aid itself took, and its solve sidecar (spec.md FR-024)"
       - "no file under crates/finder/src/imaging/focus imports or calls the mount, an axis, an altitude or an azimuth (spec.md SC-005)"
     checks:
       development:
@@ -2376,9 +2385,9 @@ stories:
         reason: "US8 depends_on_merged US5, and adds the Focus section and check to the route's row"
       - path: crates/finder/src/imaging/focus/run.rs
         other_spec: 033-focus-reading-and-aid
-        other_story: US8
+        other_story: US9
         disposition: merge_order
-        reason: "US8 depends_on_merged US5, and adds check, CHECK_FRAMES, step 4i and focus_ended"
+        reason: "US9 depends_on_merged US5, and adds the tile read for the time being and the frame kept for a solve"
       - path: crates/finder/src/imaging/routes.rs
         other_spec: 032-imaging-solve-and-aim-point
         other_story: US2
@@ -2396,9 +2405,9 @@ stories:
         reason: "US8 depends_on_merged US5, and adds check to the route's line"
       - path: crates/finder/tests/console/main.rs
         other_spec: 033-focus-reading-and-aid
-        other_story: US8
+        other_story: US9
         disposition: merge_order
-        reason: "US8 depends_on_merged US5, and adds mod imaging_focus_check"
+        reason: "US9 depends_on_merged US5, and adds mod imaging_focus_far_out"
     open_questions: []
   US6:
     tests:
@@ -2605,5 +2614,53 @@ stories:
         other_story: US3
         disposition: merge_order
         reason: "033 depends_on_landed 032, whose US3 last changed cli/main.rs"
+    open_questions: []
+  US9:
+    tests:
+      - path: crates/finder/tests/console/imaging_focus_far_out.rs
+        status: new
+        disposition: add
+        assertion: "with every tile far out a start reads the far-out tile with the smallest size as a provisional region, shows its rough size, keeps no region, gives a measurable frame no verdict until the readings settle, searches again at the first settled reading and keeps the tile that search finds as found, with the solver's calls in that order"
+        decision: "spec.md:US9-S1"
+      - path: crates/finder/tests/console/imaging_focus_far_out.rs
+        status: new
+        disposition: add
+        assertion: "a frame an imaging solve is running on when its turn to be removed comes stays in place with the solve sidecar that solve writes, and after the stop the frames folder holds that pair, the last frame and no other fits, solve sidecar or part file; a frame whose solve has ended by then goes with its sidecar; and the aid's last sample carries its frame's id and the middle of its exposure"
+        decision: "spec.md:US9-S2"
+      - path: crates/finder/tests/layout/main.rs
+        status: existing
+        disposition: preserve
+        assertion: "no file at the top level of crates/finder/tests or new file in its support folder, and each binary's main.rs holds only its support include and mod lines, with imaging_focus_far_out added to console's"
+        decision: "plan.md:Shapes that existing tests pin"
+    preserved_behavior:
+      - "the aid of US5, its routes, its view's other keys, its endings and its tests are unchanged; a start whose search finds a best tile behaves as before"
+      - "031 US9's lease, its six rules and its refusal words are unchanged; the aid only takes it as the focus aid and drops it (plan.md The camera lease)"
+      - "no file is removed but an imaging frame the aid itself took, and its solve sidecar, and never one an imaging solve is running on (spec.md FR-024, FR-039)"
+      - "no file under crates/finder/src/imaging/focus imports or calls the mount, an axis, an altitude or an azimuth (spec.md SC-005)"
+    checks:
+      development:
+        - "cargo nextest run -p finder --locked --test console imaging_focus_far_out::"
+        - "cargo nextest run -p finder --locked --test console imaging_focus_aid::"
+        - "cargo nextest run -p finder --locked --test layout"
+      handoff: declared_gates
+      independent: declared_pipeline
+      release:
+        - "release owner: the repository owner, through the merge queue's ci.yml jobs, and the field check of spec.md that starts the aid a millimetre or more out of focus"
+    writes:
+      - crates/finder/src/imaging/focus/run.rs
+      - crates/finder/tests/console/imaging_focus_far_out.rs
+      - crates/finder/tests/console/main.rs
+    no_write_reason: ""
+    shared_writes:
+      - path: crates/finder/src/imaging/focus/run.rs
+        other_spec: 033-focus-reading-and-aid
+        other_story: US8
+        disposition: merge_order
+        reason: "US8 depends_on_merged US9, and adds check, CHECK_FRAMES, step 4i and focus_ended"
+      - path: crates/finder/tests/console/main.rs
+        other_spec: 033-focus-reading-and-aid
+        other_story: US8
+        disposition: merge_order
+        reason: "US8 depends_on_merged US9, and adds mod imaging_focus_check"
     open_questions: []
 ```
