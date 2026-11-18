@@ -30,6 +30,7 @@ cargo run --release -p finder -- --db my_camera.npz --samples ~/frames
 | `--samples DIR` | cedar's `medium_fov` samples | Folder of frames to offer on the page. |
 | `--listen ADDR` | `127.0.0.1:8080` | Address to serve on. `0.0.0.0:8080` lets other devices connect. |
 | `--state DIR` | `$XDG_STATE_HOME/finder`, otherwise `~/.local/state/finder` | Folder holding the observing session in `session.json`. |
+| `--imaging-dir DIR` | `imaging/` in the state folder | Folder for imaging frames. |
 | `--simulate` | off | In-process simulator on a virtual clock, with an isolated session and pairing. |
 | `--sim-start UTC` | now | Start the simulated night at `YYYY-MM-DDTHH:MM:SSZ`, optionally with fractional seconds. Requires `--simulate`. |
 | `--mount-sky` | off | Draw each frame's stars from the real mount's encoders instead of the camera, for testing GoTo without a sky. Needs `--tube-alt`; not with `--simulate`. Do not push the tube by hand in this mode. |
@@ -182,6 +183,8 @@ The page uses the API types in `web/src/api.ts`, which mirror the Rust structs i
 | `POST /api/track` | JSON `{"on":true}` or `{"on":false}`. Answers 200 with the session; on refusal, 409 with a JSON `error`. Track on while it follows a push by hand sends the telescope back to the target. Same-origin writes only. |
 | `POST /api/record` | JSON `{"on":true}` or `{"on":false}`. Start or stop a recording; answers 200 with the session, 409 or 500 with a JSON `error`. Same-origin writes only. |
 | `POST /api/record/raw` | JSON `{"frames":N}`, N from 1 to 10. While recording, save the next N star frames' 8-bit pixels as `raw-<id>.png`; progress is `recording.raw` in the session. Needs a scope node built with 025. Refused while the mount moves. Same-origin writes only. |
+| `GET /api/imaging` | The imaging camera the paired scope node relays: `state`, one of `off` (this console takes no imaging frames), `no_link`, `no_service` (the node was built before 030), `no_camera`, `error` and `ready`; with `error`, the node's words as `error`; with `ready`, the camera's `camera` description, its `status`, and the `settings` in force. |
+| `PUT /api/imaging/settings` | JSON partial edit of `exposure_ms`, `gain`, `offset`, `binning`, `roi` (a region or null for the whole sensor), `cooler_on`, `set_temp_c`, `forward_kib_per_s` (a whole number from 64 to 1048576 KiB/s, or null for no limit) and `save_at_node`. Answers 200 with the imaging view; 400 with a JSON `error` for a value the console or the camera refuses, 403 for a foreign origin, 415 for another content type, 409 while the state is not `ready`, and 502 with `the scope node did not apply the settings: <message>` when the node's call fails otherwise. Same-origin writes only. |
 | `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
 | `POST /api/stop` | No body. Always 200, ending tracking, clearing arming and commanding both axes to stop, from any origin, without taking the motion lock. Sends `StopAll` immediately, retrying in its own task with 200 ms per attempt and 50 ms between attempts for a bounded 2 s window, even if the request goes away. Waits for the round and answers exactly `{"stopped":true}` when the scope node answers OK or there is no scope link; otherwise answers `{"stopped":true,"acknowledged":false}`. This means the node did not answer and the mount may still be moving; press Stop again. The MCP tools `stop` and `stop_all` return the same reply. |
 | `POST /api/model/second-sync` | No body. Start the second sync; 200 with `{"started":true}`, or 409 with a JSON `error` naming the refusal. Same-origin writes only. |
@@ -558,3 +561,30 @@ A recording holds the site, times and solves, never the node's address or token.
 Review one before committing it to this public repository (owner decision 9).
 Tests can replay frame lines through `Live::start` with their saved clock offset
 and receipt time, as `crates/finder/tests/console/live/loop_.rs` feeds frames.
+
+## Imaging frames
+
+The console follows the imaging camera the paired scope node relays (030) on a
+second connection of its own, for the imaging service alone, so imaging bytes
+never share the heartbeat's connection. The connection is opened from the link's
+own pairing, which under `--simulate` is private; no heartbeat, star frame, mount
+call or raw frame ever crosses it.
+
+`GET /api/imaging` answers the imaging view: `state`, and with `ready` the
+camera's description, its status and the settings in force. While the link is
+connected the console describes the camera, reads the settings in force and its
+status every 2 s; in the states `no_service`, `no_camera` and `error` it asks again
+every 5 s, and no sooner because a heartbeat was answered. When the link drops the
+state is `no_link` within 3 s and the camera's settings are read again on return:
+the camera keeps them, and so do the console's own three.
+
+The console keeps three settings of its own, for one run of the console and never
+in `session.json`: `exposure_ms` (1000 ms until set, kept within the camera's
+range), `forward_kib_per_s` (a whole number from 64 to 1048576 KiB a second, sent
+with each exposure as the forwarding limit, or no limit) and `save_at_node`. Every
+other setting is the camera's, changed through `PUT /api/imaging/settings` and
+read back from the camera: an edit sends only the fields it names, `roi: null`
+asks for the whole sensor, and the node's answer is what the view shows.
+
+Frames are saved under the imaging folder, `imaging/` in the state folder or the
+folder `--imaging-dir` names.

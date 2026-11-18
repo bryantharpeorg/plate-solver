@@ -110,7 +110,7 @@ fn state(
             support::START,
         )
         .unwrap();
-    let mut state = AppState::shared(support::DB.clone(), finder::samples::Samples::default())
+    let state = AppState::shared(support::DB.clone(), finder::samples::Samples::default())
         .with_session(session)
         .with_clock(console_clock(sim))
         .with_link(transport);
@@ -158,7 +158,8 @@ async fn camera_rig(root: &Path, camera: impl ImagingCamera + 'static) -> Rig {
     )
     .unwrap()
     .with_imaging(camera);
-    node.controls().set_frame_interval(Duration::from_millis(500));
+    node.controls()
+        .set_frame_interval(Duration::from_millis(500));
     let (state, link) = state(&sim, duplex_service(node), Some(root));
     Rig {
         sim,
@@ -215,7 +216,7 @@ async fn wait_until(app: &Router, check: impl Fn(&Value) -> bool) -> Value {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
     let (_, view) = get(app, "/api/imaging").await;
-    panic!("imaging never became ready: {view}");
+    panic!("imaging never reached the awaited state: {view}");
 }
 
 async fn ready(app: &Router) -> Value {
@@ -347,9 +348,9 @@ impl ImagingCamera for Describes {
         let calls = times.len();
         drop(times);
         match *self.mode.lock().unwrap() {
-            DescribeMode::NotYet if calls < 3 => Box::pin(async {
-                Err(ImagingError::Failed("not yet".into()))
-            }),
+            DescribeMode::NotYet if calls < 3 => {
+                Box::pin(async { Err(ImagingError::Failed("not yet".into())) })
+            }
             DescribeMode::Never => Box::pin(std::future::pending()),
             _ => self.inner.describe(),
         }
@@ -418,7 +419,11 @@ async fn settings_changes_reach_the_camera_and_the_console_keeps_its_own() {
     let (_, view) = put(&rig.app, json!({"roi": null})).await;
     assert_eq!(view["settings"]["roi"], roi());
 
-    let (_, view) = put(&rig.app, json!({"forward_kib_per_s":4096,"save_at_node":true})).await;
+    let (_, view) = put(
+        &rig.app,
+        json!({"forward_kib_per_s":4096,"save_at_node":true}),
+    )
+    .await;
     assert_eq!(view["settings"]["forward_kib_per_s"], json!(4096));
     assert_eq!(view["settings"]["save_at_node"], json!(true));
     let (_, view) = put(&rig.app, json!({"forward_kib_per_s":null})).await;
@@ -539,25 +544,31 @@ async fn other_pairings_show_their_state_and_refuse() {
         NodeControls::default(),
     )
     .unwrap();
-    node.controls().set_frame_interval(Duration::from_millis(500));
+    node.controls()
+        .set_frame_interval(Duration::from_millis(500));
     let old = Transport::connector(move || {
         let node = node.clone();
         async move {
             let (client, server) = tokio::io::duplex(64 * 1024);
             let server_node = node.clone();
             tokio::spawn(async move {
-                memory::serve_on(server, server_node.into_server()).await.unwrap();
+                memory::serve_on(server, server_node.into_server())
+                    .await
+                    .unwrap();
             });
             Ok::<_, std::io::Error>(client)
         }
     });
-    let (state, _link) = state(&sim, old, Some(&root));
-    let app = finder::router(state);
+    let (no_service, _link) = state(&sim, old, Some(&root));
+    let app = finder::router(no_service);
     let view = wait_until(&app, |view| view["state"] == "no_service").await;
     assert!(view.get("camera").is_none());
     let (status, answer) = put(&app, json!({"gain":150})).await;
     assert_eq!(status, StatusCode::CONFLICT);
-    assert_eq!(answer["error"], json!("this scope node has no imaging service"));
+    assert_eq!(
+        answer["error"],
+        json!("this scope node has no imaging service")
+    );
 
     // A NodeService with no imaging camera, served with routes().
     let sim = sim_rig();
@@ -569,22 +580,26 @@ async fn other_pairings_show_their_state_and_refuse() {
         NodeControls::default(),
     )
     .unwrap();
-    node.controls().set_frame_interval(Duration::from_millis(500));
-    let (state, _link) = state(&sim, duplex_service(node), Some(&root));
-    let app = finder::router(state);
+    node.controls()
+        .set_frame_interval(Duration::from_millis(500));
+    let (no_camera, _link) = state(&sim, duplex_service(node), Some(&root));
+    let app = finder::router(no_camera);
     let view = wait_until(&app, |view| view["state"] == "no_camera").await;
     assert!(view.get("camera").is_none());
     let (status, answer) = put(&app, json!({"gain":150})).await;
     assert_eq!(status, StatusCode::CONFLICT);
-    assert_eq!(answer["error"], json!("this scope node has no imaging camera"));
+    assert_eq!(
+        answer["error"],
+        json!("this scope node has no imaging camera")
+    );
 
     // A transport whose connector always answers an I/O error: no link at all.
     let sim = sim_rig();
     let broken = Transport::connector(|| async {
         Err::<tokio::io::DuplexStream, _>(std::io::Error::other("no route to the node"))
     });
-    let (state, _link) = state(&sim, broken, Some(&root));
-    let app = finder::router(state);
+    let (no_link, _link) = state(&sim, broken, Some(&root));
+    let app = finder::router(no_link);
     settle().await;
     let (_, view) = get(&app, "/api/imaging").await;
     assert_eq!(view["state"], json!("no_link"));
@@ -606,8 +621,8 @@ async fn other_pairings_show_their_state_and_refuse() {
     )
     .unwrap()
     .with_imaging(camera);
-    let (state, _link) = state(&sim, duplex_service(node), Some(&root));
-    let app = finder::router(state);
+    let (unreachable, _link) = state(&sim, duplex_service(node), Some(&root));
+    let app = finder::router(unreachable);
     let view = wait_until(&app, |view| view["state"] == "error").await;
     assert_eq!(
         view["error"],
@@ -628,8 +643,8 @@ async fn other_pairings_show_their_state_and_refuse() {
             .unwrap()
             .with_frame_interval(Duration::from_millis(500)),
     );
-    let (state, _link) = state(&sim, duplex(&node), None);
-    let app = finder::router(state);
+    let (off, _link) = state(&sim, duplex(&node), None);
+    let app = finder::router(off);
     let (_, session) = get(&app, "/api/session").await;
     assert!(session.get("imaging").is_none());
     let (status, view) = get(&app, "/api/imaging").await;
@@ -637,7 +652,10 @@ async fn other_pairings_show_their_state_and_refuse() {
     assert_eq!(view, json!({"state": "off"}));
     let (status, answer) = put(&app, json!({"gain":150})).await;
     assert_eq!(status, StatusCode::CONFLICT);
-    assert_eq!(answer["error"], json!("this console takes no imaging frames"));
+    assert_eq!(
+        answer["error"],
+        json!("this console takes no imaging frames")
+    );
 }
 
 /// The words of a camera whose INDI server cannot be reached (US1-S4).
@@ -735,15 +753,15 @@ async fn a_dropped_link_shows_no_link_and_ready_again() {
     assert!(view.get("camera").is_none());
     rig.sim.set_unresponsive(false);
     let start = tokio::time::Instant::now();
-    // Every read until ready shows no camera.
+    // Every read until ready shows no camera; ready brings it back.
     for _ in 0..150 {
         let (_, view) = get(&rig.app, "/api/imaging").await;
-        assert!(view.get("camera").is_none());
         if view["state"] == "ready" {
             assert!(start.elapsed() <= Duration::from_secs(15));
             assert_eq!(view["settings"]["gain"], json!(200.0));
             return;
         }
+        assert!(view.get("camera").is_none(), "{view}");
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
     panic!("imaging never became ready again");
@@ -841,8 +859,9 @@ async fn a_describe_that_never_answers_is_an_error_within_five_seconds() {
     let times = camera.times.clone();
     *camera.mode.lock().unwrap() = DescribeMode::Never;
     let rig = camera_rig(&scratch.0.join("imaging"), camera).await;
-    let view = wait_until(&rig.app, |view| {
-        view["state"] == "error" && view["error"] == json!("the scope node did not answer within 5 s")
+    wait_until(&rig.app, |view| {
+        view["state"] == "error"
+            && view["error"] == json!("the scope node did not answer within 5 s")
     })
     .await;
     let called = times.lock().unwrap()[0];

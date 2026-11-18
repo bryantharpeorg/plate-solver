@@ -114,6 +114,7 @@ pub struct AppState {
     link: Option<Arc<LinkManager>>,
     live: Option<Arc<Live>>,
     recordings: Option<Arc<Recorder>>,
+    imaging: Option<Arc<crate::imaging::Imaging>>,
     mount_monitor: Option<Arc<crate::live::MountMonitor>>,
     mount_sky: Option<Arc<crate::mount_sky::MountSky>>,
     /// The UTC label of `--mount-sky-night`, when the console runs on a night clock.
@@ -148,6 +149,7 @@ impl AppState {
             link: None,
             live: None,
             recordings: None,
+            imaging: None,
             mount_monitor: None,
             mount_sky: None,
             night_utc: None,
@@ -330,6 +332,25 @@ impl AppState {
         self
     }
 
+    /// Follow the paired node's imaging camera and keep frames under `root` (031).
+    /// Call after `with_link` or `with_simulation`; without a link it changes
+    /// nothing.
+    pub fn with_imaging(mut self, root: impl Into<PathBuf>) -> Self {
+        if let Some(link) = &self.link {
+            self.imaging = Some(crate::imaging::Imaging::start(
+                root.into(),
+                link.clone(),
+                self.clock.clone(),
+            ));
+        }
+        self
+    }
+
+    /// The console's imaging camera, when it takes imaging frames.
+    pub fn imaging(&self) -> Option<Arc<crate::imaging::Imaging>> {
+        self.imaging.clone()
+    }
+
     /// Session motion controller, present alongside live solving.
     pub fn goto(&self) -> Option<Arc<crate::goto::GoTo>> {
         self.goto.clone()
@@ -384,7 +405,7 @@ impl AppState {
 /// Checked before either write route extracts its body (RFC 6454 sections 5 and 7).
 /// No Origin is allowed for non-browser clients; browser writes also need a trusted Host
 /// to prevent DNS rebinding. Forwarded headers cannot override the request's origin.
-struct SessionWrite;
+pub(crate) struct SessionWrite;
 
 impl FromRequestParts<AppState> for SessionWrite {
     type Rejection = ApiError;
@@ -518,6 +539,7 @@ pub fn router(state: AppState) -> Router {
                 )),
         );
     }
+    routes = routes.merge(crate::imaging::routes::routes());
     routes.with_state(state)
 }
 
@@ -605,7 +627,7 @@ async fn sim_frames(
     }
     Ok(Json(serde_json::json!({"running":running})))
 }
-fn sim_json<T>(result: Result<Json<T>, JsonRejection>) -> Result<T, ApiError> {
+pub(crate) fn sim_json<T>(result: Result<Json<T>, JsonRejection>) -> Result<T, ApiError> {
     result.map(|Json(value)| value).map_err(|error| {
         ApiError::new(
             if error.status() == StatusCode::UNPROCESSABLE_ENTITY {
@@ -692,6 +714,10 @@ pub(crate) struct SessionResponse {
     pub(crate) session: SessionView,
     #[serde(skip_serializing_if = "Option::is_none")]
     recording: Option<crate::recording::RecordingView>,
+    /// The imaging camera's view, whenever the console was built with imaging
+    /// (031).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    imaging: Option<crate::imaging::ImagingView>,
     #[serde(skip_serializing_if = "Option::is_none")]
     goto: Option<crate::goto::Progress>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -728,6 +754,7 @@ pub(crate) async fn session_response(state: &AppState) -> SessionResponse {
     SessionResponse {
         recording: state.recordings.as_ref().and_then(|r| r.view()),
         session,
+        imaging: state.imaging.as_ref().map(|imaging| imaging.view()),
         goto,
         goto_refusal,
         motion: record.clone().filter(|_| running),

@@ -34,6 +34,9 @@ struct Args {
     /// Session state folder (default: $XDG_STATE_HOME/finder or ~/.local/state/finder).
     #[arg(long)]
     state: Option<PathBuf>,
+    /// Folder for imaging frames (default: imaging/ in the state folder).
+    #[arg(long)]
+    imaging_dir: Option<PathBuf>,
     /// Run a desk console with its own state and an in-process scope node.
     #[arg(long)]
     simulate: bool,
@@ -165,7 +168,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         state.with_link(finder::link::Transport::Tcp)
     }
-    .with_live();
+    .with_live()
+    .with_imaging(
+        args.imaging_dir
+            .unwrap_or_else(|| state_dir.join("imaging")),
+    );
 
     let listener = tokio::net::TcpListener::bind(args.listen).await?;
     let bound_addr = listener.local_addr()?;

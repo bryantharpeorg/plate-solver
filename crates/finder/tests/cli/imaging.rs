@@ -5,7 +5,7 @@
 use std::{
     io::{BufRead, BufReader, Read, Write},
     net::{SocketAddr, TcpStream},
-    path::{Path, PathBuf},
+    path::Path,
     process::{Child, Command, Stdio},
     sync::mpsc,
     time::{Duration, Instant},
@@ -28,8 +28,7 @@ fn command() -> Command {
 
 impl Server {
     fn start(mut cmd: Command, state: &Path, imaging_dir: Option<&Path>) -> Self {
-        let mut cmd = cmd
-            .args(["--simulate", "--listen", "127.0.0.1:0"])
+        cmd.args(["--simulate", "--listen", "127.0.0.1:0"])
             .arg("--state")
             .arg(state);
         if let Some(dir) = imaging_dir {
@@ -91,7 +90,10 @@ impl Server {
             if view["state"] == "ready" {
                 return view;
             }
-            assert!(Instant::now() < deadline, "imaging never became ready: {view}");
+            assert!(
+                Instant::now() < deadline,
+                "imaging never became ready: {view}"
+            );
             std::thread::sleep(Duration::from_millis(200));
         }
     }
@@ -105,10 +107,6 @@ impl Drop for Server {
     }
 }
 
-fn scratch_dir(name: &str) -> PathBuf {
-    crate::support::Scratch::new(name).0
-}
-
 /// US1-S7: the built finder under `--simulate` reaches `ready` with the simulated
 /// imaging camera, with and without `--imaging-dir`, and names the flag.
 #[test]
@@ -118,14 +116,17 @@ fn the_simulate_console_sees_the_simulated_imaging_camera() {
     let server = Server::start(command(), &state, None);
     let view = server.wait_until_ready();
     assert_eq!(view["camera"]["model"], "simulated imaging camera");
-    assert_eq!(view["settings"]["gain"], 120);
+    assert_eq!(view["settings"]["gain"], serde_json::json!(120.0));
 
     let imaging = scratch.0.join("frames");
     let server = Server::start(command(), &state, Some(&imaging));
     let view = server.wait_until_ready();
     assert_eq!(view["camera"]["model"], "simulated imaging camera");
 
-    let help = command().arg("--help").output().expect("finder --help runs");
+    let help = command()
+        .arg("--help")
+        .output()
+        .expect("finder --help runs");
     assert!(help.status.success());
     let help = String::from_utf8(help.stdout).unwrap();
     assert!(
