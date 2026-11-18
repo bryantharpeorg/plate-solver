@@ -16,11 +16,13 @@ depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", 
 # Citations checked against 49bb210fe4860dd98ba24727074e7bd3cc0d7124, the worktree's
 # HEAD, on 2026-11-15 in the fifth session: every `path:line` in spec.md and plan.md
 # was read there again, and none had moved.
-# Not yet probe-built: no story of this trio has been compiled or run (plan.md
-# § Refinement Record). It builds on code that 030-imaging-camera-link,
-# 031-imaging-frames-on-console and 032-imaging-solve-and-aim-point create and that does
-# not exist yet; every interface of theirs named here is taken from that trio's plan.md,
-# and the trio is re-anchored to `main` after all three land and before the flip (plan.md § Prerequisites).
+# Probe-built on 2026-11-18 (round 1, every story), on top of 031's and 032's round-1
+# probe builds: the round-1 probe fixes are in, but for one, User Story 5's size,
+# measured over the budget, whose cut the owner chooses before the flip (plan.md
+# § Risks, § Refinement Record). It builds on code that 030-imaging-camera-link,
+# 031-imaging-frames-on-console and 032-imaging-solve-and-aim-point create; every
+# interface of theirs named here is taken from that trio's plan.md, and the trio is
+# re-anchored to `main` after all three land and before the flip (plan.md § Prerequisites).
 # It stays draft until the owner settles the owner decisions and flips it to `ready`,
 # which gives the approvals listed under "Owner approvals" and dispatches it.
 ---
@@ -440,6 +442,83 @@ focuser to turn.
   that 028 changed after dbc2b5b among them (`crates/finder/tests/console/recording.rs`,
   `crates/finder/tests/mcp/motion.rs`, `crates/finder/tests/support/mod.rs`), and each
   still names the line it describes.
+
+### Session 2026-11-18 (round 1 probes)
+
+- Q: What did the probe builds find? → A: Every story was built from this trio in a
+  throwaway worktree, in the Work Graph's order, on top of 031's and 032's round-1
+  probe builds, tests first, with both gates, `cargo deny check` and `cargo machete`
+  (plan.md § Refinement Record, round 1). Every interface built as plan.md writes it,
+  with private additions only, and every story's tests passed. Two defects were
+  blocking. US1-S4 asserted that the simulated solver adapter without its builders
+  answers 2.825784 for a whole frame at binning 2, where its star measure is in the
+  frame's own pixels, as 032 specifies: 1.412892. And US5 measured 70,010 bytes
+  against the 64 KiB budget, and the cut plan.md § Risks wrote in advance left it 397
+  bytes under; which cut it takes is the owner's, and is written into the trio before
+  the flip. Forty defects were reported in all. The fixes of all but US5's size are in
+  this trio, and none adds a requirement.
+- Q: Which assertions did the probes add or correct? → A: Each where a build broken on
+  purpose passed every test (the probes' bite checks), or where a scenario as worded
+  could not pass:
+  - US1-S3: `(25.0, 3)` is too few stars, so the five-star rule comes before the
+    20-pixel one; and `(15.0, 9)` at binning 2 is a reading of 30.0, so the limit is
+    read in frame pixels;
+  - US1-S4: the plain adapter answers 1.412892 for the frame at binning 2, in its own
+    pixels; and the sharpest point is tried on a frame whose region of interest, 824,
+    0, 412, 274, is off the sensor's corner;
+  - US2-S5: a file of another `format` holds nothing, and `keep_region` before
+    `describe` writes no file;
+  - US3-S2: a night is counted from its start, not from its record's time, on a second
+    `Kept` whose first `note` also shows that a night's first reading carries the mark
+    it is given; and a later night whose record is larger leaves the earlier nights' as
+    they were;
+  - US3-S4: a scale 6.4% away is another telescope's; and each `Kept` is "described for
+    camera A and then given" its `note`, in place of "after", with the `record` call
+    after the second `note` named;
+  - US4-S1: a change keeps the trend (after samples 20 and 21);
+  - US4-S3: `readings()` counts an unmeasurable sample too;
+  - US5-S6: a second view, kept at 3 readings, has no `verdict` and no `reference`,
+    because its frame could be measured and the readings held are fewer than three
+    (FR-025); the When clause keeps that view;
+  - US5-S7: on a rig of its own, a frame whose solve has ended when its turn comes goes
+    with its solve sidecar (FR-024); and `last.at` is the middle of the frame's
+    exposure;
+  - US8-S1: `imaging.focus_ended()` is awaited right after the `POST` and returns only
+    once three exposures have passed, so that US8 proves its own wait, which US7, a
+    later story that does not write `run.rs`, could not repair; the When clause awaits
+    it in place of polling the view;
+  - US6-S2: no `Use the whole sensor` while the aid runs;
+  - US6-S3: the reading carries the Display size's classes; and the `clearly_out` case
+    is 7.68, 35%, so that a floor and a ceiling would each give another number;
+  - US6-S4: no turning line after a check;
+  - US6-S5: the history's `height` is 40.
+- Q: Which behaviours did the probes settle where the plan left a choice? → A: These,
+  each written where plan.md gives the behaviour: `Kept`'s save creates the imaging
+  folder when it is missing, since a tile fixed by hand is kept before the aid has
+  saved an imaging frame; the start's checks 1 to 7 read the imaging state's own
+  fields under one lock, and the aid's steps 4f to 4h are one critical section,
+  because `Imaging::view`, `Imaging::solver` and `Imaging::holder` take that lock
+  themselves; the measured scale is 032's kept scale, read under that lock; only
+  `Imaging::view` fills `focus`, so the answers of the settings, frame and solve routes
+  carry none; no watch is woken for a change of the focus state; both waits on the
+  focus state's `Notify` make the `Notified` future before they read the lifecycle;
+  every `Option` of the focus view is skipped while `None`; the history `svg` is 40
+  high at any count; `get_focus_reading` writes 031's not-ready words again, since the
+  imaging module keeps them private; and US7 makes the README's sentence above the
+  tool list count six tools.
+- Q: Did any requirement's words change? → A: FR-037's, with its meaning kept. A tile
+  read for the time being keeps no focus region, and its settled readings are noted in
+  the record as FR-025 says and owner decision 7 has it (the record is the smallest
+  settled reading of the aid); that is what the probe built, and US5-S6's oracle allows
+  it. And a second search that finds no best tile, whether or not it finds a far-out
+  one, goes on with the tile it had and does not end `no_region`, as plan.md's step 4j
+  already said; the first probe build had ended there, by FR-022's ending beside it.
+- Q: What is still caught by no test? → A: That a drop of the last outside `Arc` of the
+  `Imaging` ends the aid only once the frame in flight has ended; step 5's wait for a
+  frame in flight, which no ending of this spec reaches; a tile of a sensor whose corner
+  is not 0, 0, and a search on a frame that is not the whole sensor, which no caller in
+  this spec makes; and a focus check whose camera leaves `ready` before it ends, after
+  which `set_focus_aid` answers the not-ready words.
 
 ## Owner decisions
 
@@ -889,8 +968,12 @@ development,
    test asserts what `read` answers for each entry:
    - `(3.0, 4)`: unmeasurable, `TooFewStars` with 4 stars; `(3.0, 5)`: a reading;
    - the error `TooFewStars`: unmeasurable, `TooFewStars` with 0 stars;
+   - `(25.0, 3)`: unmeasurable, `TooFewStars` with 3 stars: the five-star rule comes
+     first;
    - `(20.0, 9)`: a reading of 20.0; `(20.5, 9)` on a frame at binning 2:
-     unmeasurable, `FarOut` with `px` 41.0 and 9 stars;
+     unmeasurable, `FarOut` with `px` 41.0 and 9 stars; `(15.0, 9)` on a frame at
+     binning 2: a reading of `px` 30.0 (the limit is 20 frame pixels, not sensor
+     pixels);
    - the errors `TimedOut { seconds: 30 }`, `NoDatabase` and `Failed("x")`: each is
      `read`'s own error, unchanged;
    - oracle: the stated rule of five stars and 20 frame pixels.
@@ -902,8 +985,13 @@ development,
    - fifty more answers each lie from 2.769268 to 2.882300, 2% either side of H(0);
    - `SimulatedSolver::new(sim).with_sharpest_at(0.8, 0.2, 3.0)` answers 5.094255
      within 1e-5 for that frame, 2.547127 within 1e-5 for the whole frame at binning 2,
-     and 4.538578 within 1e-5 for the region 0, 0, 1236, 412 of the frame at binning 1;
-   - `SimulatedSolver::new(sim)` answers 2.825784 within 1e-6 for each of the three;
+     4.538578 within 1e-5 for the region 0, 0, 1236, 412 of the frame at binning 1,
+     and 2.864762 within 1e-5 for a frame at binning 1 whose region of interest is 824,
+     0, 412, 274, with no region (its centre, 1030, 137, is 0.0667 of the
+     half-diagonal from 988.8, 164.4: `2·√(2·ln 2)·√(1.44 + 0.2²)`);
+   - `SimulatedSolver::new(sim)` answers 2.825784 within 1e-6 for the whole frame at
+     binning 1 and for its region 0, 0, 1236, 412, and 1.412892 within 1e-6 for the
+     whole frame at binning 2 (its own pixels: 2.825784 / 2), as 032 specifies;
    - oracle: the published SplitMix64 stream for the seed 0, whose first three outputs
      are `0xe220a8397b1dcdaf`, `0x6e789e6aa1b965f4` and `0x06c45d188009454f`, and the
      worked sizes: a region whose centre is 0.6 of the sensor's half-diagonal from the
@@ -1000,10 +1088,12 @@ development,
    that a second `Kept::new(path)` after `describe(A)` answers that region; that after
    `keep_region` of `KeptRegion::fixed` for column 1, row 1 the file's `region` has
    `source` `fixed`, `x` 412, `y` 274 and no `px`, `stars` or `frame_id`; that
-   `describe(B)`, B being A with the serial `SIM-0002`, answers no region; and that a
-   `Kept` whose file holds the text `not json` answers no region after `describe(A)`
-   and writes a readable file at the next `keep_region`. Oracle: the stated keys and
-   values, compared exactly.
+   `describe(B)`, B being A with the serial `SIM-0002`, answers no region; that a
+   `Kept` whose file is that file with `format` `imaging-focus/2` answers no region
+   after `describe(A)`; that a `Kept::new(path)` given `keep_region` before any
+   `describe` writes no file; and that a `Kept` whose file holds the text `not json`
+   answers no region after `describe(A)` and writes a readable file at the next
+   `keep_region`. Oracle: the stated keys and values, compared exactly.
 
 ---
 
@@ -1043,6 +1133,13 @@ development,
      `reference(T + 200, None)` is 3.10 of tonight, the only part there is;
    - `record(T + 43201, None)` has no `tonight` and `earlier` 3.10 at T + 60, and
      `reference(T + 43201, None)` is 3.10 of earlier;
+   - on a second `Kept`, described for camera A with a file of its own and given the
+     same first three `note`s but the first with `passed` true, `record(T + 1, None)`
+     has `passed` true after that first `note`: a night's first reading carries the
+     mark it is given; and `note(3.50, T + 43230, None, false)` answers true and
+     `record(T + 43231, None)` has `tonight` 3.50 at T + 43230 and `earlier` 3.10 at
+     T + 60: the night began at T, more than 12 hours before, though its record was
+     read at T + 60;
    - `note(3.60, T + 50000, None, false)` answers true; then `record(T + 50001, None)`
      has `tonight` 3.60, `earlier` 3.10 and `passed` false, and the reference is 3.10
      of earlier: tonight's part has not been passed through, so the smaller judges;
@@ -1056,10 +1153,17 @@ development,
      2.90 of tonight;
    - `record(T + 100000, None)` has no `tonight`, `earlier` 2.90 at T + 50060 and
      `passed` false, and the reference is 2.90 of earlier;
+   - `note(3.80, T + 100000, None, false)` answers true; then `record(T + 100001,
+     None)` has `tonight` 3.80 at T + 100000 and `earlier` 2.90 at T + 50060; and after
+     `note(3.90, T + 150000, None, false)`, `record(T + 150001, None)` has `earlier`
+     still 2.90 at T + 50060: the old night's 3.80 is not the smaller, so it does not
+     join;
    - oracle: a worked example of the 12-hour night and of the rule of owner decision
-     8: 43201 s after a night's first settled reading the night is over; the smaller
-     of 3.10 and 3.60 is 3.10; and the smaller of 3.10 and 2.90 is the earlier nights'
-     record once the second night is over.
+     8: 43201 s after a night's first settled reading the night is over, counted from
+     the night's start and not from its record's time; the smaller of 3.10 and 3.60 is
+     3.10; the smaller of 3.10 and 2.90 is the earlier nights' record once the second
+     night is over; and a night whose record, 3.80, is larger than the earlier nights'
+     leaves the earlier nights' as they were.
 3. **Given** the `Kept` of US3-S2 after its first three calls, with a region kept as in
    US2-S5, **Then** a committed test asserts that the file's `record` has `tonight`
    with `px` 3.10, `at` 1768528860 and `since` 1768528800 and no `passed` key, no
@@ -1070,23 +1174,24 @@ development,
    `note(3.20, T + 130, None, true)` the file's `record.tonight` has `passed` true and
    `px` 3.10 still, and a third `Kept::new(path)` after `describe(A)` answers a
    `record(T + 200, None)` whose `passed` is true. Oracle: the stated keys and values.
-4. **Given** a `Kept` described for camera A after `note(3.00, T, Some(2.19), false)`,
-   **Then** a committed test asserts that the file's `record.arcsec_per_px` is 2.19;
-   that `reference(T + 10, Some(2.28))` is 3.00 of tonight (the scale is 4.1% larger);
-   that `reference(T + 10, None)` is 3.00 of tonight; that `reference(T + 10,
-   Some(1.10))` is `None` and `record(T + 10, Some(1.10))` has neither part; and that
-   after `note(4.00, T + 20, Some(1.10), false)` the record has `tonight` 4.00, no
-   `earlier`, and `arcsec_per_px` 1.10 in the file. **And** for a second `Kept`,
-   described for camera A after `note(3.00, T, None, false)`, a record made with no
-   measured scale, the committed test asserts that the file's `record` has no
-   `arcsec_per_px`; that `reference(T + 10, Some(1.10))` is 3.00 of tonight: such a
-   record is no telescope's in particular; that `note(3.20, T + 20, Some(1.10),
+4. **Given** a `Kept` described for camera A and then given `note(3.00, T, Some(2.19),
+   false)`, **Then** a committed test asserts that the file's `record.arcsec_per_px` is
+   2.19; that `reference(T + 10, Some(2.28))` is 3.00 of tonight (the scale is 4.1%
+   larger); that `reference(T + 10, Some(2.33))` is `None` (6.4% larger); that
+   `reference(T + 10, None)` is 3.00 of tonight; that `reference(T + 10, Some(1.10))`
+   is `None` and `record(T + 10, Some(1.10))` has neither part; and that after
+   `note(4.00, T + 20, Some(1.10), false)`, `record(T + 25, Some(1.10))` has `tonight`
+   4.00 and no `earlier`, and the file's `record.arcsec_per_px` is 1.10. **And** for a
+   second `Kept`, described for camera A and then given `note(3.00, T, None, false)`, a
+   record made with no measured scale, the committed test asserts that the file's
+   `record` has no `arcsec_per_px`; that `reference(T + 10, Some(1.10))` is 3.00 of
+   tonight: such a record is no telescope's in particular; that `note(3.20, T + 20, Some(1.10),
    false)` answers false and the file's `record` still has no `arcsec_per_px`; that
    `note(2.90, T + 30, Some(1.10), false)` answers true and the file's
    `record.arcsec_per_px` is then 1.10; and that `reference(T + 40, Some(2.19))` is
    then `None`, while `reference(T + 40, Some(1.12))` is 2.90 of tonight. Oracle: a
-   worked example of the 5% rule (2.28/2.19 = 1.041; 1.10/2.19 = 0.502; 2.19/1.10 =
-   1.991; 1.12/1.10 = 1.018).
+   worked example of the 5% rule (2.28/2.19 = 1.041; 2.33/2.19 = 1.064; 1.10/2.19 =
+   0.502; 2.19/1.10 = 1.991; 1.12/1.10 = 1.018).
 
 ---
 
@@ -1120,6 +1225,8 @@ development,
      from 2 readings; after 9: settled 4.5, best 4.5, trend `better`;
    - after 15: the phase `reading` (2.8 is 12.5% from 3.2, not a change) and the
      settled reading 3.1; after 16: settled 2.8, best 2.8, trend `better`;
+   - after 20 and after 21: the phase `settling` and the trend still `better` (a change
+     drops the readings held and the level, not the trend);
    - after 24: settled 3.3 and trend `worse`; after 29: settled 4.0, trend `worse`,
      best 2.8, found false;
    - after 34: settled 3.3, trend `better`, found false; after 35: found false;
@@ -1142,8 +1249,9 @@ development,
    asserts the phase `too_few_stars` and no median after 4; the median 3.1 from 1
    reading after 5; trend `same` after 7 (3.1 against 3.0); the phase `far_out` and no
    median after 8; trend `worse` after 11 (3.6 against 3.1); best 3.0 throughout from
-   3; and that `history()` is the eleven values in order, with `None` at the fourth and
-   41.0 at the eighth. Oracle: a worked example.
+   3; that `history()` is the eleven values in order, with `None` at the fourth and
+   41.0 at the eighth; and that `readings()` is 11, since it counts every sample
+   pushed, an unmeasurable one included. Oracle: a worked example.
 4. **Given** an `Aid::new().with_best_kept(4)` and the 17 samples 5.0 four times, 3.0
    five times and 5.0 eight times, **Then** a committed test asserts best 3.0 after 9
    and after 16, and best 5.0 after 17, when the last four settled readings are all
@@ -1311,15 +1419,20 @@ development, `cargo nextest run -p finder --locked --test console imaging_focus_
    `(22.0, 12)`, `(21.0, 12)`, `(12.0, 12)`, `(12.0, 12)`, `(12.0, 12)`; then nine
    entries, each `(12.5, 12)` but the third, which is `(11.0, 12)`; then `(11.0, 12)`,
    **When** a test sends `POST /api/imaging/focus` with `{}`, waits until
-   `focus.aid.readings` is 1 and keeps that view, waits until `focus.region.source` is
-   `found`, waits until `focus.aid.readings` is at least 8 and sends `DELETE
-   /api/imaging/focus`, **Then** a committed test asserts that:
-   - in the kept view `focus.aid.state` is `running`; `focus.region` has `col` 1, `row`
-     1, `x` 412, `y` 274, `width` 412, `height` 274 and `source` `provisional`;
-     `settings.roi` is 412, 274, 412, 274; `focus.aid.last.state` is `far_out` and
-     `focus.aid.last.value` 48.201793 within 1e-5; `focus.aid.verdict` is
-     `clearly_out`; `focus.aid` has no `median`; and `focus.json` does not exist under
-     R: a tile read for the time being is not kept;
+   `focus.aid.readings` is 1 and keeps that view, waits until `focus.aid.readings` is 3
+   and keeps that view too, waits until `focus.region.source` is `found`, waits until
+   `focus.aid.readings` is at least 8 and sends `DELETE /api/imaging/focus`, **Then** a
+   committed test asserts that:
+   - in the view kept at 1 reading `focus.aid.state` is `running`; `focus.region` has
+     `col` 1, `row` 1, `x` 412, `y` 274, `width` 412, `height` 274 and `source`
+     `provisional`; `settings.roi` is 412, 274, 412, 274; `focus.aid.last.state` is
+     `far_out` and `focus.aid.last.value` 48.201793 within 1e-5; `focus.aid.verdict`
+     is `clearly_out`; `focus.aid` has no `median`; and `focus.json` does not exist
+     under R: a tile read for the time being is not kept;
+   - in the view kept at 3 readings, `focus.aid.last.state` is `reading` and
+     `focus.aid` has no `verdict` and no `reference`: that frame could be measured and
+     the readings held are 1, so the `clearly_out` of the two far-out frames before it
+     is not kept;
    - once `focus.region.source` is `found`, `focus.region` has `col` 2 and `row` 0;
    - the solver's calls were, in order: nine on a frame with the region of interest
      0, 0, 1236, 822; five with the region of interest 412, 274, 412, 274; nine more
@@ -1349,12 +1462,22 @@ development, `cargo nextest run -p finder --locked --test console imaging_focus_
    `.solve.json`, both S and F exist under R, although the aid has saved at least one
    imaging frame since; and that after the `DELETE` the frames folder holds exactly
    two files ending `.fits`, of which F is one, exactly one file ending `.solve.json`,
-   which is S, and none ending `.part`. Oracle: the stated rule of FR-024: a frame an
-   imaging solve is running on when its turn to be removed comes is left in place,
-   and the solve sidecar 032 writes for it, also for a solve that fails, is never
-   left without its frame. The slow measure is what gives the test a moment in which
-   the aid's latest frame is `saved`, as ASTAP's own measuring time does at the
-   telescope; 032 refuses a solve of a frame that is still arriving.
+   which is S, and none ending `.part`. **And** once `focus.aid.last.frame_id` is the
+   id of the frame the solve was asked for, `focus.aid.last.at` is that frame's
+   `start`, as the view showed it when the frame was `saved`, plus half its
+   `exposure_ms` in seconds (`start + exposure_ms/2000`), within 1e-6. **And** on a rig
+   of its own with a slow measure of 300 ms and a slow solve of 100 ms, a test that
+   asks for the solve the same way, waits until `solve.state` is `failed`, waits until
+   `focus.aid.readings` has grown by 2 and sends the `DELETE` finds exactly one file
+   ending `.fits` and none ending `.solve.json` or `.part`: the solve had ended when
+   its frame's turn came, so its sidecar went with it. Oracle: the stated rule of
+   FR-024: a frame an imaging solve is running on when its turn to be removed comes is
+   left in place, and the solve sidecar 032 writes for it, also for a solve that
+   fails, is never left without its frame, while a frame whose solve has ended by then
+   goes with its sidecar; and the middle of the exposure (FR-001). The slow measure is
+   what gives the test a moment in which the aid's latest frame is `saved`, as ASTAP's
+   own measuring time does at the telescope; 032 refuses a solve of a frame that is
+   still arriving.
 
 ---
 
@@ -1404,7 +1527,8 @@ arithmetic is of no use until it is in front of the observer.
      with exactly that text and calls no `refresh`;
    - with `focus.aid.state` `running` the region holds a button `Stop focus aid`, which
      calls `fetch` with `/api/imaging/focus` and `{"method":"DELETE"}` and then
-     `refresh`, and holds no select, no field and neither start button;
+     `refresh`, and holds no select, no field and neither start button, nor, with
+     `settings.roi` a region of the sensor, a button `Use the whole sensor`;
    - oracle: the stated requests, compared exactly.
 3. **Given** `FocusBlock` with `focus` `{"unit":"arcsec","arcsec_per_px":2.19,
    "region":{"col":2,"row":0,"x":824,"y":0,"width":412,"height":274,"source":"found"},
@@ -1414,7 +1538,8 @@ arithmetic is of no use until it is in front of the observer.
    "readings":3}`, `best` 5.6512, `trend` `better`, `found` false, `verdict` `good`,
    `reference` `{"value":5.70,"of":"tonight"}` and `history` `[5.70,5.74,5.65]`,
    **Then** a committed test asserts, each text exact:
-   - the text `Focus reading` and the reading `5.70″`;
+   - the text `Focus reading` and the reading `5.70″`, in an element whose classes
+     include `text-[2.35rem]` and `sm:text-[2.75rem]`;
    - a status `Median of the last 3 imaging frames · 12 stars`;
    - `Best so far 5.65″`; `Sharper than before the last change`; and `Turn the focuser
      one way until the reading has passed its lowest and risen again, then come back to
@@ -1431,7 +1556,7 @@ arithmetic is of no use until it is in front of the observer.
      stars`;
    - `verdict` `slightly_soft` with `median.value` 6.50 and `reference` 5.70 of
      `earlier`: `Slightly soft: 14% larger than the focus record of 5.70″ from earlier
-     nights.`; `clearly_out` with 7.60: `Clearly out: 33% larger than the focus record
+     nights.`; `clearly_out` with 7.68: `Clearly out: 35% larger than the focus record
      of 5.70″ from earlier nights.`; `no_record`: `No focus record for this camera yet.
      Run the focus aid through focus to make one.`;
    - `unit` `px`, with the same numbers: `5.70 px`, `Best so far 5.65 px`, and a
@@ -1444,7 +1569,8 @@ arithmetic is of no use until it is in front of the observer.
      enough to measure.`, and no text holding `set by hand` or `found from an imaging
      frame`;
    - oracle: the stated words; each number is the view's to two decimals, and the
-     percentages are (6.50/5.70 − 1) and (7.60/5.70 − 1), rounded.
+     percentages are (6.50/5.70 − 1) and (7.68/5.70 − 1), rounded: 14.04% and 34.74%,
+     which a ceiling would make 15 and a floor 34.
 4. **Given** `FocusBlock` with each `aid` below, **Then** a committed test asserts:
    - `state` `starting`: a status `Starting the focus aid`; `finding`: a status
      `Finding the focus region on a full imaging frame`; `running` with `readings` 0
@@ -1459,8 +1585,9 @@ arithmetic is of no use until it is in front of the observer.
      measure.`;
    - `state` `ended` with `ended_reason` `stopped`: a status `Focus aid stopped.` and
      the two start buttons; `done` with `verdict` `good`: a status `Focus check done.`
-     and the verdict line; `done` with `verdict` `unmeasurable` and `last.state`
-     `reading`: the line `Not measurable: the reading did not settle.`;
+     and the verdict line, and no paragraph that starts `Turn the focuser`; `done` with
+     `verdict` `unmeasurable` and `last.state` `reading`: the line `Not measurable: the
+     reading did not settle.`;
    - `ended_reason` `failed` with `error` `the imaging solver gave no answer within
      30 s`: an alert `Focus aid stopped: the imaging solver gave no answer within
      30 s.`, and no paragraph `Try a longer Focus frame time, or a field with more
@@ -1480,13 +1607,13 @@ arithmetic is of no use until it is in front of the observer.
 5. **Given** `FocusBlock` with a running `aid` whose `history` is `[2, 4, null, 3]`,
    **Then** a committed test asserts one element with the attribute
    `data-focus-history`, the role `img`, the name `Focus readings of the last 4 imaging
-   frames` and the `viewBox` `0 0 16 40`, holding exactly three `rect` elements whose
-   `x` are `0`, `4` and `12`, whose `height` are `18.0`, `36.0` and `27.0`, whose `y`
-   are `22.0`, `4.0` and `13.0`, and whose `fill` is `currentColor`; that with a
-   `history` of 70 values it holds the last 60; and that no element of the block has a
-   `style` attribute, or a `fill` or `stroke` other than `currentColor` or `none`.
-   Oracle: a worked example: a bar is 36 units tall at the largest value shown, so 2,
-   4 and 3 give 18, 36 and 27.
+   frames`, the `viewBox` `0 0 16 40` and the `height` `40`, holding exactly three
+   `rect` elements whose `x` are `0`, `4` and `12`, whose `height` are `18.0`, `36.0`
+   and `27.0`, whose `y` are `22.0`, `4.0` and `13.0`, and whose `fill` is
+   `currentColor`; that with a `history` of 70 values it holds the last 60; and that no
+   element of the block has a `style` attribute, or a `fill` or `stroke` other than
+   `currentColor` or `none`. Oracle: a worked example: a bar is 36 units tall at the
+   largest value shown, so 2, 4 and 3 give 18, 36 and 27.
 
 ---
 
@@ -1585,16 +1712,18 @@ and `cargo nextest run -p finder --locked --test cli imaging_focus::`.
    "source":"fixed","at":1768528000.0},"record":{"tonight":{"px":3.0,
    "at":1768528000.0,"since":1768528000.0}}}`, and the scripted solver `(3.20, 12)`,
    `(3.25, 12)`, `(3.15, 12)`, **When** a test sends `POST /api/imaging/focus` with
-   `{"check":true}` and waits until `focus.aid.state` is `ended`, **Then** a committed
-   test asserts `ended_reason` `done`, `check` true, `readings` 3, `median.value`
-   7.011170 within 1e-5, `verdict` `good`, `reference` with `value` 6.572972 within
-   1e-5 and `of` `tonight`; that the solver was called exactly three times, each with
-   the region of interest 412, 274, 412, 274; that `settings.roi` is back at 0, 0,
-   1236, 822 and `imaging.holder()` is `None`; that `imaging.focus_ended().await`
-   answers a view whose `aid.state` is `ended` and whose `aid.verdict` is `good`; and
-   that the file's `record.tonight.px` is still 3.0 and its `record.tonight` has no
-   `passed` key. **And** on fresh rigs, each with that file changed as stated, the
-   committed test asserts:
+   `{"check":true}`, awaits `imaging.focus_ended()` and then reads `GET /api/imaging`,
+   **Then** a committed test asserts `ended_reason` `done`, `check` true, `readings` 3,
+   `median.value` 7.011170 within 1e-5, `verdict` `good`, `reference` with `value`
+   6.572972 within 1e-5 and `of` `tonight`; that the solver was called exactly three
+   times, each with the region of interest 412, 274, 412, 274; that `settings.roi` is
+   back at 0, 0, 1236, 822 and `imaging.holder()` is `None`; that
+   `imaging.focus_ended().await`, awaited right after the `POST` answers and before any
+   read of the view, returns only once the simulator's clock has moved by at least
+   3.0 s since the `POST` answered, with a view whose `aid.state` is `ended` and whose
+   `aid.verdict` is `good`; and that the file's `record.tonight.px` is still 3.0 and
+   its `record.tonight` has no `passed` key. **And** on fresh rigs, each with that file
+   changed as stated, the committed test asserts:
    - with the file's `px` 2.8: `verdict` `slightly_soft`; with 2.4: `clearly_out`;
      with no `record` key: `no_record` and no `reference`, and the file has no `record`
      key afterwards either;
@@ -1620,7 +1749,8 @@ and `cargo nextest run -p finder --locked --test cli imaging_focus::`.
      exist under R;
    - oracle: a worked example (3.20/3.00 = 1.067; 3.20/2.80 = 1.143; 3.20/2.40 =
      1.333; 3.20/3.20 = 1.000; 2.4 and 3.2 sensor pixels times the rig's scale are
-     5.258377″ and 7.011170″) and the hand-written file.
+     5.258377″ and 7.011170″), the hand-written file, and three exposures of 1 s on the
+     virtual clock before the check can end.
 2. **Given** the focus rig with `SimulatedSolver::new(sim).with_measure_noise(7, 0.02)`
    and the simulator's focus error set to 3.0, **When** a test first measures the tile
    at column 1, row 1 itself through a `SimulatedSolver::new(sim)` and requires at
@@ -1678,7 +1808,7 @@ and `cargo nextest run -p finder --locked --test cli imaging_focus::`.
   them is "far out": the aid shows the rough size so the observer can see it shrink,
   and uses it for nothing else. When the region is to be found and every tile that has
   stars is far out, as at first light, the aid runs on the far-out tile with the
-  smallest size for the time being, keeps nothing, and searches again at its first
+  smallest size for the time being, keeps no region, and searches again at its first
   settled reading (owner decision 24). A focus check in that state takes one imaging
   frame and answers clearly out.
 - **A region found while focus was still well out.** The search that follows the first
@@ -1984,11 +2114,14 @@ and `cargo nextest run -p finder --locked --test cli imaging_focus::`.
   words. `crates/finder/README.md` SHALL list both tools (owner approvals 8 and 10).
 - **FR-037**: When a search (FR-022) finds no tile that can be measured and at least
   one that is far out, the aid SHALL run on the far-out tile `find_region` names, for
-  the time being: it SHALL keep nothing, show that tile as the view's `region` with the
-  `source` `provisional`, and read imaging frames of it as FR-023 says. At each settled
-  reading of such a run it SHALL search again as FR-022 does: with a best tile it SHALL
-  keep that tile as `found` and go on there, no longer for the time being; without one
-  it SHALL go on with the tile it had (owner decision 24).
+  the time being: it SHALL keep no focus region (its settled readings are noted in the
+  record as FR-025 says), show that tile as the view's `region` with the `source`
+  `provisional`, and read imaging frames of it as FR-023 says. At each settled reading
+  of such a run it SHALL search again, taking and measuring one whole-sensor frame as
+  FR-022 does: with a best tile it SHALL keep that tile as `found` and go on there, no
+  longer for the time being; without one, whether or not that search found a far-out
+  tile, it SHALL go on with the tile it had, and SHALL NOT end with `no_region` (owner
+  decision 24).
 - **FR-038**: `crates/finder/src/lib.rs` SHALL list the two routes of FR-020 and
   FR-028, and the API table of `crates/finder/README.md` SHALL gain a row for each
   (owner approval 10).

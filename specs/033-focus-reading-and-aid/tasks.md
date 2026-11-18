@@ -15,7 +15,9 @@ description: "Task list for 033-focus-reading-and-aid: Focus Reading and Focus A
 - the owner decisions in spec.md are settled and its owner approvals given: not met;
 - the owner has amended Constitution V or written how it reads for the imaging solver:
   met, constitution 1.3.0 (plan.md § Prerequisites 4);
-- the trio has been probe-built: not met (plan.md § Prerequisites 5);
+- the trio has been probe-built: met in round 1, on 2026-11-18, and its fixes are in,
+  but for US5's size, measured over the budget, whose cut the owner chooses before the
+  flip (plan.md § Prerequisites 5, § Risks);
 - the plan document, ADR-0002, the research note and the changed `GLOSSARY.md` are on
   `main`, and the glossary carries the two new entries and the three reworded ones of
   spec.md owner approval 11: not met on `main`; the drafting worktree's glossary carries
@@ -154,9 +156,9 @@ description: "Task list for 033-focus-reading-and-aid: Focus Reading and Focus A
   smallest far-out size with `<` for `far_out`.
 - [ ] T010 [US2] In the same file, add `FORMAT`, `Source`, `KeptRegion` with `found`,
   `fixed` and `tile`, and `Kept` with `new`, `describe`, `region` and `keep_region`,
-  writing `focus.json` whole under a `.part` name and renaming it, and reading nothing
-  from a file that is missing, unreadable, of another format or of another camera
-  (plan.md § What is kept).
+  writing `focus.json` whole under a `.part` name and renaming it, creating the imaging
+  folder first when it is missing, and reading nothing from a file that is missing,
+  unreadable, of another format or of another camera (plan.md § What is kept).
 - [ ] T011 [US2] Run the `lint` and `test` gates with every existing test unchanged and
   green. Commit the green story (US2-S1, US2-S2, US2-S3, US2-S4 and US2-S5).
 
@@ -168,11 +170,12 @@ description: "Task list for 033-focus-reading-and-aid: Focus Reading and Focus A
   module `imaging_focus_record` of `console`, with `mod imaging_focus_record;` after
   `mod imaging_focus_reading;` in `crates/finder/tests/console/main.rs`. Write failing
   tests for `judge` at 1.097, 1.103, 1.297 and 1.303 of the reference and for the
-  unmeasurable cases (US3-S1); for `note`, `record` and `reference` over two nights,
-  with the smaller part judging until a `note` marks tonight's as passed (US3-S2); for
-  the file's `record` beside its `region`, with `passed` in the file only once it is
-  true (US3-S3); and for the 5% rule on measured scales, with a record that holds no
-  scale never set aside (US3-S4).
+  unmeasurable cases (US3-S1), naming `Verdict`'s variants in full, since
+  `Verdict::Unmeasurable` and the enum `focus::Unmeasurable` share a name; for `note`,
+  `record` and `reference` over two nights, with the smaller part judging until a
+  `note` marks tonight's as passed (US3-S2); for the file's `record` beside its
+  `region`, with `passed` in the file only once it is true (US3-S3); and for the 5%
+  rule on measured scales, with a record that holds no scale never set aside (US3-S4).
 
 ### Implementation
 
@@ -238,7 +241,8 @@ assert `check` here.
   `crates/finder/tests/console/imaging_focus_aid.rs` for a start with every tile far
   out: the tile read for the time being, the second search at the first settled
   reading and the solver's calls in order (US5-S6); and for an imaging solve asked for
-  while the aid measures a saved frame, whose frame and solve sidecar stay (US5-S7).
+  while the aid measures a saved frame, whose frame and solve sidecar stay, and go
+  when the solve has ended first (US5-S7).
 
 ### Implementation
 
@@ -287,7 +291,7 @@ Built after User Story 5 and before User Stories 6 and 7 (spec.md § Work Graph)
   `focus.json` by hand. Do not add to `imaging_focus_aid.rs`. Write failing tests for
   the focus check on that file with each of its verdicts and endings, the two cases
   of which part of the record judges, the far-out start, the record left unchanged,
-  the lease free and `focus_ended` (US8-S1).
+  the lease free and `focus_ended`, awaited at once after the start (US8-S1).
 - [ ] T027 [US8] Add a failing test to
   `crates/finder/tests/console/imaging_focus_check.rs` for the simulator's focus turned
   through best and back, after the test's own count of eight stars in the middle tile,
@@ -356,7 +360,7 @@ Built after User Story 5 and before User Stories 6 and 7 (spec.md § Work Graph)
   arguments so that `{}` is a tool result, with the descriptions and words of plan.md
   § The MCP tools; after a check, a `focus_ended()` of `None` is the error
   `get_focus_reading` gives then. Add the two tools to the list in `## MCP clients` of
-  `crates/finder/README.md`.
+  `crates/finder/README.md`, and make the sentence above the list count six tools.
 - [ ] T036 [US7] Run the `lint` and `test` gates with every existing test unchanged and
   green. Commit the green story (US7-S1, US7-S2, US7-S3 and US7-S4).
 
