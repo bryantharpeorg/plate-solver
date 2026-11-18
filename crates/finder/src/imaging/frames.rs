@@ -14,7 +14,7 @@ use std::{
 use scope_link::proto;
 use tokio::sync::watch;
 
-use super::{fits, Held, Imaging, Refusal, RoiView};
+use super::{fits, preview, Held, Imaging, Refusal, RoiView};
 use crate::{link::ImagingClient, session::Clock};
 use fits::CardValue;
 
@@ -98,6 +98,10 @@ pub struct FrameView {
     /// `frames/<UTC date>/<id>.fits`, relative to the imaging folder.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
+    /// `/api/imaging/frames/<id>/preview.jpg`, set when the frame is saved
+    /// and its preview could be made (FR-018).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -187,6 +191,7 @@ pub(super) fn take(imaging: &Imaging, purpose: &str) -> Result<FrameTask, Refusa
         received_at: None,
         saved_at: None,
         file: None,
+        preview: None,
         error: None,
     };
     held.frame = Some(frame.clone());
@@ -400,7 +405,10 @@ async fn follow(task: &mut FrameTask) -> Outcome {
 }
 
 /// Save the whole frame on the blocking pool (FR-011), under the date of the
-/// exposure's start, and stamp the view. Answers the words of a failure.
+/// exposure's start, make its preview in the same step (FR-017) and keep it
+/// among the last `PREVIEWS_KEPT` (FR-018), and stamp the view. Answers the
+/// words of a failure. A preview that cannot be made does not fail the frame:
+/// `preview` is then absent.
 async fn save(
     task: &mut FrameTask,
     samples: &[u8],
@@ -423,11 +431,27 @@ async fn save(
     let bytes = fits::encode(&image);
     let root = task.root.clone();
     let target = relative.clone();
-    let saved = tokio::task::spawn_blocking(move || write(&root, &target, &bytes))
-        .await
-        .expect("the frame writer cannot be cancelled");
-    if let Err(error) = saved {
-        return Some(format!("could not save the imaging frame: {error}"));
+    let raw = image.samples;
+    let (width, height, bits) = (image.width, image.height, image.bits);
+    let bayer = task.frame.bayer.clone();
+    let saved = tokio::task::spawn_blocking(move || {
+        let picture = preview::rgb(&raw, width, height, bits, bayer.as_deref());
+        write(&root, &target, &bytes).map(|()| preview::jpeg(&picture))
+    })
+    .await
+    .expect("the frame writer cannot be cancelled");
+    let jpeg = match saved {
+        Err(error) => return Some(format!("could not save the imaging frame: {error}")),
+        Ok(jpeg) => jpeg,
+    };
+    if let Some(jpeg) = jpeg {
+        let mut held = task.held.lock().expect("imaging state");
+        held.previews.push((task.frame.id, jpeg));
+        while held.previews.len() > preview::PREVIEWS_KEPT {
+            held.previews.remove(0);
+        }
+        drop(held);
+        task.frame.preview = Some(format!("/api/imaging/frames/{}/preview.jpg", task.frame.id));
     }
     task.frame.state = "saved";
     task.frame.file = Some(relative);

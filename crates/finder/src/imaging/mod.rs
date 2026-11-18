@@ -4,6 +4,7 @@
 
 pub mod fits;
 pub mod frames;
+pub mod preview;
 pub mod routes;
 
 use std::{
@@ -285,6 +286,9 @@ struct Held {
     /// (FR-011).
     count: u64,
     count_date: Option<String>,
+    /// The JPEG previews of the last `PREVIEWS_KEPT` saved frames, by id
+    /// (FR-018).
+    previews: Vec<(u64, Vec<u8>)>,
 }
 
 impl Default for Held {
@@ -304,6 +308,7 @@ impl Default for Held {
             frame_task: None,
             count: 0,
             count_date: None,
+            previews: Vec::new(),
         }
     }
 }
@@ -628,6 +633,16 @@ impl Imaging {
                     .expect("a frame to answer with");
             }
         }
+    }
+
+    /// The JPEG preview of the frame with this id, among the last
+    /// `PREVIEWS_KEPT` saved frames, or none (FR-018).
+    pub fn preview(&self, id: u64) -> Option<Vec<u8>> {
+        let held = self.state.lock().expect("imaging state");
+        held.previews
+            .iter()
+            .find(|(kept, _)| *kept == id)
+            .map(|(_, jpeg)| jpeg.clone())
     }
 }
 
