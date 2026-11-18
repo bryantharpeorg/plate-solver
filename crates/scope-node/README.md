@@ -233,3 +233,41 @@ frames — `frame-000001.fits`, then `frame-000002.fits` — and a name already 
 disk gets `-2`, `-3` and so on, so a restart never replaces an earlier file. The copy
 is written before the frame's header leaves the node, and the header names the file
 and any failure to write it. The node never deletes these files.
+
+Before the console is involved, one command on the scope node describes the camera
+and times its downloads:
+
+```sh
+scope-node --probe-camera --probe-exposure-ms 1000
+```
+
+The probe builds the camera the `[imaging]` table names, prints its description and
+takes three exposures of `--probe-exposure-ms` (1000 ms by default), each with the
+purpose `probe`. For each it prints the frame's size and how long after the end of the
+exposure the frame was in hand on the node — the download time the later budgets
+assume. It times the camera and the scope node, and nothing past them: the hop from
+the node to the console is read at the console, as the time from the end of an exposure
+to the last byte in hand there, which less the probe's figure is the time across the
+link. A camera error ends the probe with that error. With no `[imaging]` table the
+probe exits with `no [imaging] table in the config`, and it cannot be combined with
+`--check-config` or `--probe-mount`.
+
+On the stand-in camera the output is:
+
+```text
+imaging camera: synthetic imaging camera
+serial: none
+sensor: 64 x 48 px, 4.78 um pixels, 16 bits, RGGB
+exposure: 1 to 60000 ms
+gain: 0 to 300
+offset: 0 to 100
+binnings: 1, 2
+cooler: yes
+exposure 1: 64 x 48, 6144 bytes, in hand 1 ms after the end of the exposure
+exposure 2: 64 x 48, 6144 bytes, in hand 0 ms after the end of the exposure
+exposure 3: 64 x 48, 6144 bytes, in hand 0 ms after the end of the exposure
+```
+
+The stand-in's 0 or 1 ms is the timer's step: in real time tokio's timer rounds the
+stand-in's wait up to the millisecond, so the sample does not copy the 0 ms a paused
+clock measures.

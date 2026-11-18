@@ -3,6 +3,7 @@ use std::{fmt, future::Future, pin::Pin};
 
 pub mod fits;
 pub mod indi;
+pub mod probe;
 pub mod save;
 pub mod service;
 pub mod synthetic;
