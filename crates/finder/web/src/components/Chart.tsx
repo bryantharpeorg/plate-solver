@@ -20,6 +20,7 @@ import {
   type Measure,
 } from "../labels";
 import { rotatedBox, rotationOf, rotationTransform } from "../rotation";
+import { ImagingField, imagingFieldCorners } from "./ImagingField";
 import { FamilyShape } from "./Symbol";
 import { TargetMark } from "./TargetMark";
 import type { ObservingSession } from "../useSession";
@@ -165,6 +166,20 @@ export function Chart({ report: newest, imageUrl, label, busy, layers, onLayers,
   const objects = layers.objects ? report.objects : [];
   const detected = showDetected ? report.detected : [];
   const furniture = solved ? furnitureGeometry(report, u) : null;
+  // The imaging camera's field, drawn only while the aim point is a measured
+  // one and the console holds both its angle and its size on the sky (032).
+  const aim = session?.aim;
+  const relation = session?.imaging?.relation;
+  const imagingField =
+    live && report.pointing && aim?.source === "measured" && relation?.angle_deg != null && relation.field != null
+      ? imagingFieldCorners(
+          aim,
+          relation.angle_deg,
+          relation.mirrored ?? false,
+          relation.field,
+          report.pointing.arcsec_per_px,
+        )
+      : null;
   const spots = layoutLabels({
     W,
     H,
@@ -251,6 +266,7 @@ export function Chart({ report: newest, imageUrl, label, busy, layers, onLayers,
           report.pointing_seq === session.pointing.seq && (
             <TargetMark target={session.target} placement={session.guidance.placement} W={W} H={H} u={u} />
           )}
+        {imagingField && <ImagingField corners={imagingField} u={u} />}
       </g>
     </>
   );

@@ -734,6 +734,14 @@
       "description": "Built in ImagingPage.tsx at /imaging. One ink line for the imaging camera the scope node relays and one for its sensor temperature and cooler; a Settings form of labelled 44px ruled fields for exposure, gain, offset, binning, cooler, set temperature and forwarding limit, with only the controls the camera has, saved by one primary button; and an Imaging frame section whose primary button, Take imaging frame, becomes a status of the exposure and the bytes received, with Abort exposure beside it, then the saved file's name and how long after the exposure it was in hand. The latest preview is a full-width ruled photograph under .photo, red at night by luminance, with the Hold to see colour button under it at night only: the Red Torch Rule's one exception, colour for at most 10 seconds a hold. Everything else uses existing ink, paper and red-only night tokens.",
       "html": "<main class=\"ds-imaging-page\"><h1>Imaging</h1><section><h2>Camera</h2><p>simulated imaging camera · 1236 × 822 px · 19.12 µm · 16-bit · RGGB</p><p role=\"status\">Sensor 20.0 °C · cooler off</p></section><section><h2>Settings</h2><label>Exposure <input inputmode=\"decimal\" value=\"1000\"/>ms</label><label>Gain <input inputmode=\"decimal\" value=\"120\"/></label><select aria-label=\"Binning\"><option>1 × 1</option><option>2 × 2</option></select><button>Save imaging settings</button></section><section><h2>Imaging frame</h2><button>Take imaging frame</button><img class=\"photo\" alt=\"Imaging frame 1\" src=\"/api/imaging/frames/1/preview.jpg\"/><button aria-pressed=\"false\">Hold to see colour</button></section></main>",
       "css": ".ds-imaging-page{color:var(--color-ink)}.ds-imaging-page section{border-block:1px solid var(--color-ink)}.ds-imaging-page input,.ds-imaging-page select,.ds-imaging-page button{min-height:44px;border:1px solid var(--color-ink);border-radius:0;background:transparent;color:inherit}.ds-imaging-page .photo{width:100%}"
+    },
+    {
+      "name": "Imaging field",
+      "kind": "custom",
+      "refersTo": "display",
+      "description": "Built in ImagingField.tsx on the live chart after the target mark. While the aim point is one the console measured, the chart draws the imaging camera's field as a thin ink outline centred on the aim point: a rectangle of the sensor's size on the sky, turned by the imaging angle, with a short tick on its up side. It is furniture, like the reticle and the compass: no fill, no label, not a chart layer, and red at night with the rest. A tapped aim point draws nothing.",
+      "html": "<svg class=\"ds-imaging-field\" viewBox=\"600 340 200 120\"><title>Imaging field</title><path fill=\"none\" d=\"M655.0 390.0L745.0 390.0L745.0 450.0L655.0 450.0ZM700.0 390.0L700.0 384.0\"/></svg>",
+      "css": ".ds-imaging-field{stroke:var(--color-ink);fill:none}.ds-imaging-field path{fill:none}"
     }
   ],
   "narrative": {

@@ -52,6 +52,18 @@ export function AimTap({ session, live }: { session: ObservingSession; live: Liv
         finder camera.
       </p>
       <p>{aim ? `Aim point: (${aim.x}, ${aim.y}) px` : "Aim point: frame centre"}</p>
+      {/* How the aim point was set (032): measured by the console or tapped by
+          the observer. It follows the aim state, so a tap or a reset changes it. */}
+      {aim?.source === "measured" && (
+        <p className="quiet">
+          {`Measured from the imaging camera.${
+            session.imaging?.relation?.angle_deg != null
+              ? ` Imaging angle ${session.imaging.relation.angle_deg.toFixed(1)}°.`
+              : ""
+          }`}
+        </p>
+      )}
+      {aim && aim.source !== "measured" && <p className="quiet">Set by tapping a star.</p>}
       {preview ? (
         <button
           type="button"
