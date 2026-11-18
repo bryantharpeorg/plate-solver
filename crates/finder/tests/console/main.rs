@@ -9,6 +9,7 @@ mod aim;
 mod api;
 mod freshness;
 mod imaging;
+mod imaging_astap;
 mod imaging_checks;
 mod imaging_control;
 mod imaging_fits;
