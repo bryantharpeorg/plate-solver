@@ -102,6 +102,205 @@ pub fn encode(image: &FitsImage) -> Vec<u8> {
     header
 }
 
+/// Why bytes are not an image `encode` writes. Displays as its text.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FitsError(pub String);
+
+impl std::fmt::Display for FitsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for FitsError {}
+
+/// A card's keyword: its first 8 bytes, trimmed.
+fn keyword(card: &[u8]) -> String {
+    String::from_utf8_lossy(&card[..8]).trim().to_string()
+}
+
+/// A card's value as `decode` reads it back: a text in single quotes, its
+/// doubled quotes made single and its trailing spaces dropped; `T` or `F`; a
+/// number with no `.`, `E` or `e` as an `Int`; any other number as a `Real`.
+/// `None` when the value is none of these.
+fn value(text: &str) -> Option<CardValue> {
+    let bytes = text.as_bytes();
+    if bytes.first() == Some(&b'\'') {
+        let mut inner = Vec::new();
+        let mut index = 1;
+        while index < bytes.len() {
+            if bytes[index] == b'\'' {
+                if bytes.get(index + 1) == Some(&b'\'') {
+                    inner.push(b'\'');
+                    index += 2;
+                } else {
+                    return Some(CardValue::Text(
+                        String::from_utf8_lossy(&inner).trim_end().to_string(),
+                    ));
+                }
+            } else {
+                inner.push(bytes[index]);
+                index += 1;
+            }
+        }
+        None
+    } else if text == "T" {
+        Some(CardValue::Logical(true))
+    } else if text == "F" {
+        Some(CardValue::Logical(false))
+    } else if text.contains('.') || text.contains('E') || text.contains('e') {
+        text.parse::<f64>().ok().map(CardValue::Real)
+    } else {
+        text.parse::<i64>().ok().map(CardValue::Int)
+    }
+}
+
+/// One card of a header as `decode` reads it: its keyword and, for a card
+/// with `= ` in columns 9 and 10, the trimmed text of its value.
+struct RawCard {
+    keyword: String,
+    value: Option<String>,
+}
+
+/// The header's cards up to `END`, and where the data begins: at the end of the
+/// 2880-byte block that holds the `END` card. `None` when no `END` is found.
+struct Header {
+    cards: Vec<RawCard>,
+    data_start: usize,
+}
+
+/// The header of `bytes`, `None` when no `END` card is found.
+fn header(bytes: &[u8]) -> Option<Header> {
+    let mut cards = Vec::new();
+    for (block, block_bytes) in bytes.chunks(2880).enumerate() {
+        for card in block_bytes.chunks(80) {
+            if card.len() < 80 {
+                break;
+            }
+            let keyword = keyword(card);
+            if keyword == "END" {
+                return Some(Header {
+                    cards,
+                    data_start: (block + 1) * 2880,
+                });
+            }
+            let value = if &card[8..10] == b"= " {
+                Some(String::from_utf8_lossy(&card[10..]).trim().to_string())
+            } else {
+                None
+            };
+            cards.push(RawCard { keyword, value });
+        }
+    }
+    None
+}
+
+/// A structural card's whole number, `None` when the card is absent or holds
+/// no whole number.
+fn whole(cards: &[RawCard], name: &str) -> Option<i64> {
+    let text = cards
+        .iter()
+        .find(|card| card.keyword == name)?
+        .value
+        .as_deref()?;
+    match value(text) {
+        Some(CardValue::Int(n)) => Some(n),
+        _ => None,
+    }
+}
+
+/// The raw text a structural card's value was written with, `0` when the card
+/// is absent.
+fn written<'a>(cards: &'a [RawCard], name: &str) -> &'a str {
+    cards
+        .iter()
+        .find(|card| card.keyword == name)
+        .and_then(|card| card.value.as_deref())
+        .unwrap_or("0")
+}
+
+/// Read back an image `encode` writes, 8-bit or 16-bit, with the cards after
+/// the structural ones in their order, and refuse anything else with a
+/// `FitsError` that displays the texts of US3-S1 (FR-016).
+pub fn decode(bytes: &[u8]) -> Result<FitsImage, FitsError> {
+    let header = header(bytes).ok_or(FitsError("not a FITS image".to_string()))?;
+    let simple = header.cards.first().is_some_and(|card| {
+        card.keyword == "SIMPLE"
+            && card
+                .value
+                .as_deref()
+                .and_then(value)
+                .is_some_and(|value| value == CardValue::Logical(true))
+    });
+    if !simple {
+        return Err(FitsError("not a FITS image".to_string()));
+    }
+    let naxis = whole(&header.cards, "NAXIS").unwrap_or(0);
+    if naxis != 2 {
+        return Err(FitsError(format!(
+            "a {naxis}-axis FITS file is not one image"
+        )));
+    }
+    let bits = whole(&header.cards, "BITPIX").unwrap_or(0);
+    if bits != 8 && bits != 16 {
+        return Err(FitsError(format!("unsupported FITS BITPIX {bits}")));
+    }
+    if bits == 16 && whole(&header.cards, "BZERO") != Some(32768) {
+        return Err(FitsError(format!(
+            "unsupported FITS BZERO {}",
+            written(&header.cards, "BZERO")
+        )));
+    }
+    let dimension = |name: &str| {
+        whole(&header.cards, name)
+            .and_then(|n| u32::try_from(n).ok())
+            .unwrap_or(0)
+    };
+    let (width, height) = (dimension("NAXIS1"), dimension("NAXIS2"));
+    let need = u64::from(width)
+        .saturating_mul(u64::from(height))
+        .saturating_mul(bits as u64 / 8);
+    let have = bytes.len().saturating_sub(header.data_start) as u64;
+    if have < need {
+        return Err(FitsError(format!(
+            "the FITS data is short: {have} of {need} bytes"
+        )));
+    }
+    let data = &bytes[header.data_start.min(bytes.len())..];
+    let samples = if bits == 8 {
+        data[..need as usize].to_vec()
+    } else {
+        data[..need as usize]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .flat_map(|chunk| {
+                let stored = i16::from_be_bytes([chunk[0], chunk[1]]);
+                ((i32::from(stored) + 32768) as u16).to_le_bytes()
+            })
+            .collect()
+    };
+    let structural = [
+        "SIMPLE", "BITPIX", "NAXIS", "NAXIS1", "NAXIS2", "BZERO", "BSCALE",
+    ];
+    let cards = header
+        .cards
+        .into_iter()
+        .filter(|card| !structural.contains(&card.keyword.as_str()))
+        .filter_map(|card| {
+            let value = card.value.as_deref().and_then(value)?;
+            Some((card.keyword, value))
+        })
+        .collect();
+    Ok(FitsImage {
+        width,
+        height,
+        bits: bits as u32,
+        samples,
+        cards,
+    })
+}
+
 /// `YYYY-MM-DD` and `YYYY-MM-DDTHH:MM:SS.mmm` of console Unix seconds, in UTC
 /// to the millisecond (FR-012's `DATE-OBS`).
 pub fn utc(unix_s: f64) -> (String, String) {
