@@ -2,7 +2,7 @@
 //! latest frame, the task that follows the node's stream, the console's own
 //! ids, and the file a whole frame is saved under, never replacing one there.
 //! US4 adds the checks on what the node sends; US5 the frame-in-flight
-//! refusals, abort and the node's own copy.
+//! refusals, abort and the node's own copy; US9 the lease's check in `take`.
 
 use std::{
     io::Write,
@@ -138,19 +138,26 @@ fn largest_id(root: &Path, date: &str) -> u64 {
 
 /// `Imaging::take` (FR-008): the checks, the id and everything the frame task
 /// needs, under one acquisition of the state's lock. US5 adds the
-/// frame-in-flight refusal and US9 the lease's check.
-pub(super) fn take(imaging: &Imaging, purpose: &str) -> Result<FrameTask, Refusal> {
-    let mut held = imaging.state.lock().expect("imaging state");
-    let (client, settings, camera) = match held.state {
+/// frame-in-flight refusal and US9 the lease's check, which `held` makes
+/// between the state's and the frame's.
+pub(super) fn take(
+    imaging: &Imaging,
+    purpose: &str,
+    held: impl FnOnce(&Held) -> Result<(), Refusal>,
+) -> Result<FrameTask, Refusal> {
+    let mut guard = imaging.state.lock().expect("imaging state");
+    let (client, settings, camera) = match guard.state {
         "ready" => (
-            held.client.clone().expect("a ready imaging client"),
-            held.settings.clone().expect("the settings in force"),
-            held.camera.clone().expect("a described camera"),
+            guard.client.clone().expect("a ready imaging client"),
+            guard.settings.clone().expect("the settings in force"),
+            guard.camera.clone().expect("a described camera"),
         ),
-        state => return Err(state_refusal(state, held.error.as_deref())),
+        state => return Err(state_refusal(state, guard.error.as_deref())),
     };
+    // The lease's check (FR-029), between the state's and the frame's.
+    held(&guard)?;
     // A second frame while one is exposing or receiving is refused (FR-008).
-    if held
+    if guard
         .frame
         .as_ref()
         .is_some_and(|frame| matches!(frame.state, "exposing" | "receiving"))
@@ -160,12 +167,12 @@ pub(super) fn take(imaging: &Imaging, purpose: &str) -> Result<FrameTask, Refusa
     // The id is the console's own count (FR-011): it starts after the largest
     // id in the folder of the take's UTC date, and never falls.
     let (date, _) = fits::utc(imaging.clock.now());
-    if held.count_date.as_deref() != Some(date.as_str()) {
-        held.count = held.count.max(largest_id(&imaging.root, &date));
-        held.count_date = Some(date);
+    if guard.count_date.as_deref() != Some(date.as_str()) {
+        guard.count = guard.count.max(largest_id(&imaging.root, &date));
+        guard.count_date = Some(date);
     }
-    let id = held.count + 1;
-    held.count = id;
+    let id = guard.count + 1;
+    guard.count = id;
     let frame = FrameView {
         id,
         state: "exposing",
@@ -194,8 +201,8 @@ pub(super) fn take(imaging: &Imaging, purpose: &str) -> Result<FrameTask, Refusa
         preview: None,
         error: None,
     };
-    held.frame = Some(frame.clone());
-    drop(held);
+    guard.frame = Some(frame.clone());
+    drop(guard);
     imaging.changes.send_modify(|count| *count += 1);
     Ok(FrameTask {
         held: imaging.state.clone(),
