@@ -33,6 +33,11 @@ depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", 
 # `main`, so they carry `focus` too; and the three glossary rewordings of owner approval
 # 11 are written into `GLOSSARY.md` beside this trio (plan.md § Prerequisites 2 and 6).
 # The owner approved the imaging series' recommended answers on 2026-11-17.
+# Probe-built again on 2026-11-18 (round 2) on `main` at 670ddcf: US5 as cut and US9
+# from this trio, nothing blocking; US5 measured 763 bytes under the budget, and the
+# owner kept it so. The owner's answers that day are in: a take answered with no frame
+# ends the run `failed`, and US9-S1 pins FR-037's and FR-029's two untested rules
+# (§ Clarifications, the session of the re-anchoring).
 # It stays draft until the owner settles the owner decisions and flips it to `ready`,
 # which gives the approvals listed under "Owner approvals" and dispatches it.
 ---
@@ -480,7 +485,8 @@ focuser to turn.
   out, and the aid removes its previous frame even while an imaging solve is running
   on it. The round-1 probe measured US5 so cut at about 63,284 bytes, 2.2 KiB under the
   budget, and put US9 at about 17 to 19 KiB before round 1's two additions to its
-  second scenario (plan.md § Risks).
+  second scenario (plan.md § Risks). Round 2, on `main`, measured them at 64,773 and
+  21,701 bytes.
 - Q: Which assertions did the probes add or correct? → A: Each where a build broken on
   purpose passed every test (the probes' bite checks), or where a scenario as worded
   could not pass:
@@ -553,7 +559,23 @@ focuser to turn.
   only while the camera is `ready`, so a link that drops between the take and its
   answer leaves no frame id. The owner chose this ending on 2026-11-18. The alternative,
   waiting for the camera and taking again, would need a scenario of its own. No
-  scenario reaches the case (plan.md § The aid on the console, step 4b and the search).
+  scenario reaches the case, and no test can (plan.md § The aid on the console, step 4b
+  and the search). Step 1 ends the same way when the view it remembers has no
+  `settings`.
+- Q: What did the round-2 probe build find? → A: US1 to US4 from round 1, brought across
+  to `main` at 670ddcf, then US5 as cut and US9 built from this trio, tests first, with
+  every gate: no defect was blocking. US5 measured 64,773 bytes, 763 under the budget,
+  and US9 21,701. Its clarity fixes are in: step 1's ending above, `run.rs` writing out
+  031's four not-ready texts itself, the visibility of a `run.rs` function that takes
+  the imaging state, T019 without the slow measure and solve, and plan trap 13's
+  order, which no test can observe.
+- Q: Should FR-038 move from US5 to US8 to give US5 more margin? → A: No. The owner kept
+  US5 as cut on 2026-11-18. The move stays the next cut if the factory's US5 passes the
+  budget (plan.md § Risks).
+- Q: Are FR-037's "a search with no best goes on with the tile it had" and FR-029's "no
+  provisional tile once the run has ended" pinned by a scenario? → A: They are now, by
+  the owner's answer of 2026-11-18: US9-S1 gained a case on a rig of its own, worked by
+  the round-2 probe and run on its build.
 
 ## Owner decisions
 
@@ -1821,7 +1843,23 @@ development,
      imaging frame, and starts the second search, whose smallest tile is the top right
      one at 11.0. The settled readings after that are 12.0 and then 11.0 (11.0 is 8.3%
      below 12.0, not a change), so tonight's record is 11.0 once seven imaging frames
-     have been read.
+     have been read;
+   - and, on a rig of its own whose list is the first nine entries above, then
+     `(12.0, 12)` three times, then nine entries `(25.0, 12)`, then `(9.0, 12)`, a test
+     that sends `POST /api/imaging/focus` with `{}` and waits until
+     `focus.aid.readings` is 5 finds `focus.aid.state` `running` with no
+     `ended_reason`, and `focus.region` with `col` 1, `row` 1 and `source`
+     `provisional`; the solver's calls were, in order: nine on a frame with the region
+     of interest 0, 0, 1236, 822; three with the region of interest 412, 274, 412, 274;
+     nine more on a frame with the region of interest 0, 0, 1236, 822; and two more with
+     the region of interest 412, 274, 412, 274; when the test then sends
+     `DELETE /api/imaging/focus`, the answer has `ended_reason` `stopped` and no
+     `focus.region`, and `focus.json` under R has no `region`. Oracle: the rules of
+     FR-037 and FR-029. The first settled reading, 12.0 after the third frame of the
+     centre tile, starts the second search; no tile of that search can be measured, so
+     it has no best, and the aid goes on with the tile it had instead of ending
+     `no_region`. A tile read for the time being is shown only while the aid runs, and
+     it is never kept.
 2. **Given** the focus rig with the scripted solver `(3.0, 12)` with a slow measure of
    300 ms and a slow solve of 2500 ms, and an aid started with
    `{"tile":{"col":1,"row":1}}`, **When** a test waits until `frame.purpose` is `focus`

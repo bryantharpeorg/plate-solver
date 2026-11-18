@@ -101,7 +101,7 @@ scope node.
   on a mono frame and half of it on a colour mosaic that the adapter averages 2 × 2
   (spec owner decision 5).
 - No story's diff passes 64 KiB. US5, US9 and US8 are three stories for that reason
-  (§ Risks).
+  (§ Risks); US5 measured 763 bytes under the budget in round 2, so its comments stay short.
 - `web/dist` is committed and must be the build of its source (US6).
 
 **Scale/Scope**: three new module files, two routes, one simulate route, one file on
@@ -822,7 +822,10 @@ state, as 032's `solving.rs` does. `focus.rs` gains `pub mod aid;` (US4) and
 1. the camera is not `ready`: 409 with 031's words for the state, written here as 031's
    plan gives them: `no_link`, `the scope node is not connected`; `no_service`, `this
    scope node has no imaging service`; `no_camera`, `this scope node has no imaging
-   camera`; `error`, `the imaging camera is not answering: {error}`;
+   camera`; `error`, `the imaging camera is not answering: {error}`. `run.rs` writes
+   the four out itself: 031's `frames::state_refusal` and 032's
+   `solving::state_refusal` are private to their modules, and neither file is this
+   story's to write. Step 1's and step 4b's endings use the same four;
 2. no solver (the state's `solver` is `None`): 409 `this console has no imaging
    solver`;
 3. an aid or check is running: 409 `the focus aid is already running`;
@@ -883,7 +886,10 @@ focus exposure, "set" meaning `Lease::set` with exactly the keys `exposure_ms`,
 frame's id, wherever a step below needs it, is that view's `frame.id`.
 
 1. **Remember** the view's settings: `exposure_ms`, `binning`, `save_at_node`, and
-   `roi`, as "the whole sensor" when it equals `sensor`.
+   `roi`, as "the whole sensor" when it equals `sensor`. A view with no `settings`,
+   because the camera left `ready` after the start's checks, ends the run `failed`
+   with 031's words for the camera's state, as step 4b says; nothing is remembered, so
+   nothing is put back.
 2. **Choose the region.**
    - With `ask.tile`: `keep_region(KeptRegion::fixed(sensor, b0, tile, now))`.
    - Else with `ask.find`, or with no kept region: **search** (below). With a `best`:
@@ -1096,6 +1102,10 @@ exactly `{"unit":"px"}` (spec US5-S2).
 ### The imaging state (`crates/finder/src/imaging/mod.rs`, US1; US5)
 
 - US1: `pub mod focus;`, in alphabetical order among the module lines.
+- A function of `run.rs` that `Imaging::view` calls with the imaging state is
+  `pub(in crate::imaging)`: the state's type is private to `imaging`, and a
+  `pub(crate)` function that takes it fails `clippy -D warnings`
+  (`private_interfaces`).
 - US5: `Imaging`'s state gains one value, the focus state. Its type is defined in
   `run.rs` with private fields, so that US8 adds to it without writing `mod.rs`:
   `focus::run::State`, made with `State::new(root.join("focus.json"))` where the
@@ -1721,7 +1731,10 @@ These are not changed by any story:
    § Risks left it 397 bytes under; it is cut as the owner chose, US9 taking the tile
    read for the time being and the frame kept for a solve, as measured on the probe's
    split branch (§ Risks). The star counts that US2-S4, US8-S2 and US8-S3 check or
-   assume were read (§ Risks).
+   assume were read (§ Risks). Round 2, on 2026-11-18, built US5 as cut and US9 on
+   `main` at 670ddcf with this trio re-anchored, after round 1's US1 to US4 brought
+   across: every gate passed, nothing was blocking, and US5 measured 64,773 bytes and
+   US9 21,701 (§ Risks; spec.md § Clarifications, the session of the re-anchoring).
 6. **The documents this trio cites are on `main`.** Met by the change that re-anchored
    this trio, which ships in the pull request that flips it, as 030's flip carried its
    glossary. The plan document, ADR-0002, the changed `GLOSSARY.md` and the research
@@ -1866,8 +1879,10 @@ with the check that keeps it from recurring. They bind every story.
     held refuses every later imaging frame until the console restarts; a lease dropped
     before the settings are back lets the next taker expose the aid's region. *Check:*
     the task owns the lease, puts the settings back through it and drops it before the
-    lifecycle becomes `ended`; US5-S5 asserts `holder()` is `None` after every ending,
-    a lost link included, US5-S4 that an imaging frame can be taken after a stop, and
+    lifecycle becomes `ended`, with no await between the two; US5-S5 asserts `holder()`
+    is `None` after every ending, a lost link included, which catches a lease never
+    released, while the order itself is for review, since no test task runs between
+    the two; US5-S4 that an imaging frame can be taken after a stop, and
     US8-S1 that the lease is free after a check.
 14. **A test that pins what a later story changes.** US3 adds `record` to the file US2
     writes, US5 adds `focus` to the view, US9 adds the tile read for the time being and
@@ -1949,7 +1964,7 @@ with the check that keeps it from recurring. They bind every story.
 | The smallest of many settled readings is still a little low, so readings at the same focus sit a few percent above the record. | A settled reading is a median of three, and the bands are 10% and 30%. The field check above measures it; the alternative of owner decision 7 (only a pass seen to rise on both sides sets the record) removes it. |
 | At the showcase target the bright core of the nebula fills the middle of the sensor, where the focus region usually is, and the solver measures poorly there. | The page and the README say to focus on a field of stars. Where the imaging run takes its focus check, at the target or beside it, is 037's and is named for it in § Shapes that existing tests pin; the field check "a focus check with the Orion Nebula's core in the focus region" informs it. |
 | One reading takes much longer than a second at the telescope: the frame's forwarding, its save, the prepared copy and the solver's start. | `cadence_ms` reports it, and the field check reads it. The region is a ninth of the sensor; a smaller focus exposure and 031's forwarding settings are the levers; nothing in the arithmetic assumes a second. |
-| A story passes 64 KiB. The first draft's US5 would have: the loop, the view, two routes, the README section and seven scenarios that build some fifteen rigs, by the review's count over the budget. | Split before any probe, as the review asked. US5 keeps `run.rs` without the check, the focus state, the two routes, `lib.rs`, the two API rows and seven scenarios in one test module: an estimate of 45 to 55 KiB (about 17 of source, 8 of the rig and the scripted solver, 25 to 30 of tests). US8 takes the check, `focus_ended`, `main.rs`, the README's `## Focus` and three scenarios in a module of its own and the `cli` module: the round-1 probe measured it at 36,763 B (the check module 15.3 KiB with its 7.2 KiB copy of the rig, the README 7.9 KiB, the `cli` module 5.0 KiB, `run.rs` 6.2 KiB). Round 1 measured every story (§ Refinement Record): US1 25,627 bytes, US2 20,941, US3 19,653, US4 19,722, US8 36,763, US6 42,222 (42,919 with `dist`) and US7 17,822, each under the budget. US5 measured 70,010 bytes, over it: its tests came to 32 KiB, on the estimate, and `run.rs` alone to 28 KiB, against about 17 estimated for all its source. The cut written here before the probes, US5-S6 with step 4j (FR-037, the tile read for the time being) moved to a story between US5 and US8, was built and measured: 65,139 bytes for US5 and 16,928 for the story it moves out, which left US5 397 bytes under the budget, no margin against a builder's own style. So US5 is cut deeper, as the owner chose: US9 takes step 4j and the provisional tile (FR-037), the exception for a frame an imaging solve is running on (FR-039) and two scenarios, US9-S1 and US9-S2, in a module of its own with a trimmed copy of the rig; US5 keeps the rest, US5-S1 to US5-S5. The probe measured US5 so cut at about 63,284 bytes, 2.2 KiB under the budget, on a tree that ran no gate, and put US9 at about 17 to 19 KiB (16,928 bytes measured without US9-S2), to which round 1's two additions to US9-S2 add about 1 to 2. US9 is built after US5 and before US8, since US8-S1's check on far-out tiles runs FR-037. US1 can shed the simulate route (FR-004, US1-S5) the same way. |
+| A story passes 64 KiB. The first draft's US5 would have: the loop, the view, two routes, the README section and seven scenarios that build some fifteen rigs, by the review's count over the budget. | Split before any probe, as the review asked. US5 keeps `run.rs` without the check, the focus state, the two routes, `lib.rs`, the two API rows and seven scenarios in one test module: an estimate of 45 to 55 KiB (about 17 of source, 8 of the rig and the scripted solver, 25 to 30 of tests). US8 takes the check, `focus_ended`, `main.rs`, the README's `## Focus` and three scenarios in a module of its own and the `cli` module: the round-1 probe measured it at 36,763 B (the check module 15.3 KiB with its 7.2 KiB copy of the rig, the README 7.9 KiB, the `cli` module 5.0 KiB, `run.rs` 6.2 KiB). Round 1 measured every story (§ Refinement Record): US1 25,627 bytes, US2 20,941, US3 19,653, US4 19,722, US8 36,763, US6 42,222 (42,919 with `dist`) and US7 17,822, each under the budget. US5 measured 70,010 bytes, over it: its tests came to 32 KiB, on the estimate, and `run.rs` alone to 28 KiB, against about 17 estimated for all its source. The cut written here before the probes, US5-S6 with step 4j (FR-037, the tile read for the time being) moved to a story between US5 and US8, was built and measured: 65,139 bytes for US5 and 16,928 for the story it moves out, which left US5 397 bytes under the budget, no margin against a builder's own style. So US5 is cut deeper, as the owner chose: US9 takes step 4j and the provisional tile (FR-037), the exception for a frame an imaging solve is running on (FR-039) and two scenarios, US9-S1 and US9-S2, in a module of its own with a trimmed copy of the rig; US5 keeps the rest, US5-S1 to US5-S5. The probe measured US5 so cut at about 63,284 bytes, 2.2 KiB under the budget, on a tree that ran no gate, and put US9 at about 17 to 19 KiB (16,928 bytes measured without US9-S2), to which round 1's two additions to US9-S2 add about 1 to 2. Round 2, on `main` at 670ddcf with all of the gates, measured US5 at 64,773 bytes, 763 under the budget, and US9 at 21,701 (23,447 with US9-S1's added case): US5 still fits, with little margin against a builder's longer comments or one more helper. The owner kept US5 as cut on 2026-11-18 rather than move FR-038 (its two `lib.rs` lines and two README API rows, about 3.5 KB) to US8; if the factory's US5 passes the budget, that move is the next cut, and it moves no scenario. US9 is built after US5 and before US8, since US8-S1's check on far-out tiles runs FR-037. US1 can shed the simulate route (FR-004, US1-S5) the same way. |
 | The console exits, or the link drops, while the aid runs, and the camera is left on a region with the aid's exposure. | The Focus block offers `Use the whole sensor` whenever no aid runs and the region is not the whole sensor (US6-S4); exposure and binning are on 031's Settings form; the README says so. Nothing is persisted to undo it, by design: a stale "put back" after a restart could overwrite the observer's own change. |
 | 031 lands with a lease unlike its US9 as drafted: other names, a refusal that does not name the holder, a `set` it does not guard, a lease that keeps the `Imaging` alive. | Met: 031 landed the lease with its US9 at e9687ce, and Prerequisite 2 read it in 031's code at 670ddcf, name for name, as written here (Prerequisite 11). Everything this trio takes from the lease is cited in one section, six numbered rules and `RoiEdit`, and the tests of it assert only a 409 that names the holder. Had it differed, the re-anchoring would have corrected that section, the task's "set" and "take", US5-S2's one case, US5-S4, US5-S5 and the test setup; nothing else in the trio names the lease. |
 | An imaging run (037) holds the camera and cannot ask for a focus check, which takes the lease itself. | Settled on 037's side: its spec owner decision 15 has the run give the lease up just before the check and take it again after, and its plan.md calls `focus_start` with `check` and `focus_ended()` and reads this trio's five verdict words (§ Shapes that existing tests pin, last bullet). In the instant of the hand-over another taker can get in; 037 names that risk and its answer. Only 037's alternative, a lease that can be lent, would change a signature here. |
@@ -2060,6 +2075,12 @@ step 4j measured 65,139 bytes (725d7b1d), and the story it moves out 16,928
 US5 measured about 63,284 bytes, on a tree that was not committed and ran no gate. As
 the owner chose, US5 is cut that deeper way: US9 takes US5-S6 and US5-S7, now US9-S1
 and US9-S2, step 4j, the provisional tile and that exception, now FR-039 (§ Risks).
+Round 2 (2026-11-18, on `main` at 670ddcf with the re-anchored trio) built US5 as cut
+and US9 from this trio, after round 1's US1 to US4 brought across: US5 measured
+64,773 bytes, 763 under the budget, and US9 21,701 (23,447 with the case US9-S1
+gained on the owner's answer, run on that build); every gate passed, and nothing
+was blocking. The owner kept US5 as cut rather than move FR-038 to US8 (spec.md
+§ Clarifications, the session of the re-anchoring).
 The workspace ran 900 tests after the last story, Vitest 364 and Playwright 31. The
 probes reported forty defects, two blocking:
 US5's size, and US1-S4's assertion that the plain simulated solver answers a binned

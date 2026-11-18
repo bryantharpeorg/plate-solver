@@ -231,9 +231,10 @@ imaging solve: User Story 9 adds both. Until then a search with no best tile end
 - [ ] T019 [US5] Create `crates/finder/tests/console/imaging_focus_aid.rs`, the module
   `imaging_focus_aid` of `console`, with `mod imaging_focus_aid;` after 031's
   `mod imaging_fits;` in `crates/finder/tests/console/main.rs`. Give it the focus rig
-  and the scripted solver of spec.md § User Scenarios, with its slow measure and slow
-  solve, and helpers to wait on `GET /api/imaging`, to list the frames folder and to
-  parse `focus.json`. Write failing tests for a start that finds the region, runs and
+  and the scripted solver of spec.md § User Scenarios, and helpers to wait on
+  `GET /api/imaging`, to list the frames folder and to parse `focus.json`; no
+  scenario of US5 uses the scripted solver's slow measure or slow solve, so this
+  module leaves them out (US9's module has them). Write failing tests for a start that finds the region, runs and
   is stopped, with the first settled reading judged `no_record` and the next ones
   `good` against it (US5-S1), and for the focus object's shapes in the imaging view
   and in the session and every refusal (US5-S2).
@@ -290,7 +291,9 @@ Built after User Story 5 and before User Story 8 (spec.md § Work Graph).
   out again, with helpers to wait on `GET /api/imaging`, to list the frames folder and
   to parse `focus.json`. Do not add to `imaging_focus_aid.rs`. Write failing tests for
   a start with every tile far out: the tile read for the time being, the second search
-  at the first settled reading and the solver's calls in order (US9-S1); and for an
+  at the first settled reading and the solver's calls in order, and, on a rig of its
+  own, a second search with no best that goes on with the tile it had and a tile for
+  the time being gone once the run has ended (US9-S1); and for an
   imaging solve asked for while the aid measures a saved frame, whose frame and solve
   sidecar stay, and go when the solve has ended first (US9-S2).
 
