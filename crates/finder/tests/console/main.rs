@@ -16,6 +16,7 @@ mod imaging_fits;
 mod imaging_frames;
 mod imaging_lease;
 mod imaging_preview;
+mod imaging_solve;
 mod link;
 mod live;
 mod notices;

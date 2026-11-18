@@ -21,6 +21,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/api/imaging/settings", put(put_settings))
         .route("/api/imaging/frame", post(take_frame))
         .route("/api/imaging/abort", post(abort_frame))
+        .route("/api/imaging/solve", post(post_solve))
         .route("/api/imaging/frames/{id}/preview.jpg", get(frame_preview))
 }
 
@@ -76,6 +77,22 @@ async fn abort_frame(
         ApiError::new(StatusCode::CONFLICT, "this console takes no imaging frames")
     })?;
     Ok(Json(imaging.abort().await))
+}
+
+/// `POST /api/imaging/solve` (032 FR-009): no body; solve the latest saved
+/// imaging frame and write its solve sidecar, answering the view at once.
+async fn post_solve(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+) -> Result<Json<ImagingView>, ApiError> {
+    let imaging = state.imaging().ok_or_else(|| {
+        ApiError::new(StatusCode::CONFLICT, "this console takes no imaging frames")
+    })?;
+    let view = imaging
+        .solve()
+        .await
+        .map_err(|refusal| ApiError::new(refusal.status, refusal.message))?;
+    Ok(Json(view))
 }
 
 /// `PUT /api/imaging/settings`: a partial settings change under the console's

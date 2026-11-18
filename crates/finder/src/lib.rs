@@ -38,6 +38,7 @@
 //! * POST /api/imaging/frame: no body; take one imaging frame and save it as FITS.
 //! * POST /api/imaging/abort: no body; abort the exposure or the imaging frame in flight.
 //! * GET /api/imaging/frames/{id}/preview.jpg: a colour JPEG of one of the last eight imaging frames.
+//! * POST /api/imaging/solve: no body; solve the latest imaging frame and write its solve beside it.
 //!
 //! A fresh session has no site, target or pointing and a 15° minimum altitude. Site
 //! coordinates are `lat_deg` (±90°) and `lon_deg` (±180°, east positive); the minimum
