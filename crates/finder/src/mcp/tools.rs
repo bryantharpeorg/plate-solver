@@ -32,6 +32,54 @@ struct TargetArguments {
     target: Option<String>,
 }
 
+// Only used to describe the tool. Parsing deliberately uses SettingsEdit so the
+// route and tool keep identical rejection reasons for invalid/unknown fields.
+// The seven keys that refuse null carry `with` so the schema lists them as
+// optional and not nullable; `roi` and `forward_kib_per_s`, which null clears,
+// stay plain `Option`s and nullable.
+#[derive(rmcp::schemars::JsonSchema)]
+#[expect(
+    dead_code,
+    reason = "schema only; SettingsEdit parses the actual arguments"
+)]
+struct ImagingSettingsArguments {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "f64")]
+    exposure_ms: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "f64")]
+    gain: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "f64")]
+    offset: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "u32")]
+    binning: Option<u32>,
+    roi: Option<ImagingRoiArguments>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "bool")]
+    cooler_on: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "f64")]
+    set_temp_c: Option<f64>,
+    forward_kib_per_s: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "bool")]
+    save_at_node: Option<bool>,
+}
+
+#[derive(rmcp::schemars::JsonSchema)]
+#[expect(
+    dead_code,
+    reason = "schema only; SettingsEdit parses the actual arguments"
+)]
+struct ImagingRoiArguments {
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+}
+
 #[derive(rmcp::schemars::JsonSchema)]
 #[expect(
     dead_code,
@@ -509,6 +557,89 @@ impl Console {
     async fn get_link(&self) -> CallToolResult {
         let node = api::session_response(&self.state).await.session.node;
         field_result("node", serde_json::to_value(node).expect("node JSON"))
+    }
+
+    #[tool(description = "Read the imaging camera's state, description, status, settings and latest imaging frame.",
+        output_schema = object_schema(), annotations(read_only_hint = true))]
+    async fn get_imaging_camera(&self) -> CallToolResult {
+        let view = match self.state.imaging() {
+            Some(imaging) => imaging.view(),
+            None => crate::imaging::ImagingView::off(),
+        };
+        CallToolResult::structured(serde_json::to_value(view).expect("imaging view JSON"))
+    }
+
+    #[tool(description = "Change the imaging camera's exposure, gain, offset, binning, region, cooler and forwarding settings, as PUT /api/imaging/settings does.",
+        input_schema = rmcp::handler::server::common::schema_for_input::<ImagingSettingsArguments>().expect("imaging settings schema"),
+        output_schema = object_schema())]
+    async fn set_imaging_camera(&self, arguments: JsonObject) -> CallToolResult {
+        let result = async {
+            let bytes = Value::Object(arguments).to_string();
+            let edit = api::sim_json(Json::<crate::imaging::SettingsEdit>::from_bytes(
+                bytes.as_bytes(),
+            ))
+            .map_err(|error| error.message)?;
+            let imaging = self
+                .state
+                .imaging()
+                .ok_or_else(|| "this console takes no imaging frames".to_owned())?;
+            imaging.set(edit).await.map_err(|refusal| refusal.message)
+        }
+        .await;
+        match result {
+            Ok(view) => {
+                CallToolResult::structured(serde_json::to_value(view).expect("imaging view JSON"))
+            }
+            Err(reason) => CallToolResult::error(vec![ContentBlock::text(reason)]),
+        }
+    }
+
+    #[tool(description = "Take one imaging frame, as POST /api/imaging/frame does. It waits until the imaging frame is saved and returns it with a colour JPEG preview.",
+        output_schema = object_schema())]
+    async fn take_imaging_frame(&self, arguments: JsonObject) -> CallToolResult {
+        if !arguments.is_empty() {
+            return CallToolResult::error(vec![ContentBlock::text(
+                "take_imaging_frame takes no arguments",
+            )]);
+        }
+        let Some(imaging) = self.state.imaging() else {
+            return CallToolResult::error(vec![ContentBlock::text(
+                "this console takes no imaging frames",
+            )]);
+        };
+        let result = async {
+            let view = imaging
+                .take("frame")
+                .await
+                .map_err(|refusal| refusal.message)?;
+            let id = view.frame.as_ref().expect("a frame in the view").id;
+            Ok::<_, String>(imaging.ended(id).await)
+        }
+        .await;
+        match result {
+            Err(reason) => CallToolResult::error(vec![ContentBlock::text(reason)]),
+            Ok(frame) if frame.state == "saved" => {
+                let id = frame.id;
+                let mut view = imaging.view();
+                view.frame = Some(frame);
+                let mut result = CallToolResult::structured(
+                    serde_json::to_value(view).expect("imaging view JSON"),
+                );
+                if let Some(preview) = imaging.preview(id) {
+                    result.content.push(ContentBlock::image(
+                        BASE64_STANDARD.encode(preview),
+                        "image/jpeg",
+                    ));
+                }
+                result
+            }
+            Ok(frame) if frame.state == "aborted" => {
+                CallToolResult::error(vec![ContentBlock::text("the exposure was aborted")])
+            }
+            Ok(frame) => CallToolResult::error(vec![ContentBlock::text(
+                frame.error.expect("a failed frame carries its error"),
+            )]),
+        }
     }
 }
 
