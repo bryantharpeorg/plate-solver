@@ -195,15 +195,15 @@ Where an imaging frame points: the J2000 RA and Dec of its centre, the angle of 
 _Avoid_: plate solve (alone), WCS
 
 **Focus reading**:
-The median size of the stars in an imaging frame's focus region, as a half-flux diameter in arcseconds. Smaller is sharper.
+The median size of the stars in an imaging frame's focus region, as a half-flux diameter: in arcseconds, or in sensor pixels until the console knows the scale. Smaller is sharper.
 _Avoid_: focus score, HFD (alone), FWHM
 
 **Focus region**:
-The part of the imaging camera's frame where focus readings are taken: the tile of a full frame with the smallest reading.
+The part of the imaging camera's frame where focus readings are taken: the tile of a full frame with the smallest reading, or a tile fixed by hand.
 _Avoid_: focus box, ROI (alone)
 
 **Focus record**:
-The smallest focus reading this imaging camera has given on this telescope, tonight and on earlier nights. A reading is judged against it, never against an absolute number.
+The smallest settled reading this imaging camera has given on this telescope: tonight's, and the earlier nights'. A reading is judged against the smaller of the two, or against tonight's alone once the focus aid has passed through focus tonight; never against an absolute number.
 _Avoid_: best focus, focus target
 
 **Focus aid**:
