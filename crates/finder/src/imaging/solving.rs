@@ -4,13 +4,14 @@
 use std::{path::Path, sync::Arc};
 
 use serde::Serialize;
-use tokio::sync::watch;
+use tokio::sync::{broadcast, watch};
 
 use super::{
+    relation,
     solver::{HintSource, ImagingSolve, ImagingSolver, SolveError, SolveFrame, SolveHint},
     Held, Imaging, ImagingView, Refusal,
 };
-use crate::session::Clock;
+use crate::session::{Aim, AimView, Clock, PointingSource, Session};
 
 /// The format line of a solve sidecar (FR-011).
 pub const SIDECAR_FORMAT: &str = "imaging-solve/1";
@@ -185,6 +186,7 @@ impl std::fmt::Debug for HeldSolver {
 
 /// The imaging session as the imaging state holds it (032 US3): wrapped so
 /// `Held` stays `Debug`, printed as `session`.
+#[derive(Clone)]
 pub(crate) struct HeldSession(pub Arc<crate::session::Session>);
 
 impl std::fmt::Debug for HeldSession {
@@ -327,20 +329,134 @@ fn state_refusal(state: &str, error: Option<&str>) -> Refusal {
     }
 }
 
+/// The aim point the relation is measured against (032 US4, FR-023,
+/// FR-036): the session's held one (the session holds it back while Track is
+/// on), marked `measured`, when there is one; else the session's `aim`. The
+/// `bool` is whether it is held.
+pub(crate) fn aim_in_force(session: &Session, now: f64) -> (Option<AimView>, bool) {
+    if let Some(aim) = session.held_aim() {
+        return (
+            Some(AimView {
+                x: aim.x,
+                y: aim.y,
+                source: Some("measured"),
+            }),
+            true,
+        );
+    }
+    (session.snapshot(now).aim, false)
+}
+
+/// The history of the finder camera's live solves (FR-019): one more
+/// subscriber of the live broadcast, which pairs each report that solved with
+/// the session's live pointing of that solve and pushes a finder fix, kept for
+/// the longer of `HISTORY_MIN_S` and four imaging exposures. A lagged receiver
+/// carries on; a closed one ends the task. A report whose pointing has
+/// already been replaced is skipped.
+async fn history(
+    live: Arc<crate::live::Live>,
+    session: Arc<Session>,
+    clock: Arc<dyn Clock>,
+    held: std::sync::Arc<std::sync::Mutex<Held>>,
+) {
+    let mut reports = live.subscribe();
+    loop {
+        let report = match reports.recv().await {
+            Ok(report) => report,
+            Err(broadcast::error::RecvError::Lagged(_)) => continue,
+            Err(broadcast::error::RecvError::Closed) => return,
+        };
+        let Some(seq) = report.pointing_seq else {
+            continue;
+        };
+        let fix = session
+            .snapshot(clock.now())
+            .pointing
+            .filter(|pointing| pointing.seq == seq && pointing.source == PointingSource::Live)
+            .map(|pointing| relation::FinderFix {
+                time: pointing.time,
+                frame: pointing.frame,
+                frame_id: report.frame_id,
+            });
+        let Some(fix) = fix else {
+            continue;
+        };
+        let mut held = held.lock().expect("imaging state");
+        let keep_s = relation::HISTORY_MIN_S.max(4.0 * held.exposure_ms / 1000.0);
+        held.relation.push_fix(fix, keep_s);
+    }
+}
+
+/// Take one aim reading from a solved imaging frame (FR-020 to FR-022,
+/// FR-036): the solve task's step 2 and the whole of `Imaging::note_solve`.
+/// It holds no `&Imaging`, and the imaging state's lock is never held across a
+/// call into the session.
+fn take_aim_reading(
+    held: &std::sync::Arc<std::sync::Mutex<Held>>,
+    clock: &dyn Clock,
+    session: &Session,
+    frame: &SolveFrame,
+    frame_id: u64,
+    solve: &ImagingSolve,
+) {
+    // 1. Only a whole-sensor frame takes an aim reading.
+    let (fixes, whole) = {
+        let held = held.lock().expect("imaging state");
+        let whole = held.camera.as_ref().is_some_and(|camera| {
+            frame.roi.x == 0
+                && frame.roi.y == 0
+                && frame.roi.width == camera.width
+                && frame.roi.height == camera.height
+        });
+        (held.relation.fixes(), whole)
+    };
+    if !whole {
+        return;
+    }
+    // 2. The aim reading from the history's live solves.
+    let outcome = relation::read_aim(&fixes, solve, frame.start, frame.exposure_s, frame_id);
+    // 3. The aim point in force of now.
+    let now = clock.now();
+    let (in_force, _) = aim_in_force(session, now);
+    let aim = {
+        let mut held = held.lock().expect("imaging state");
+        held.relation.take(outcome, frame_id, in_force)
+    };
+    // 4. Applied, or held back while Track is on.
+    if let Some((x, y)) = aim {
+        if let Err(error) = session.set_measured_aim(Aim { x, y }, now) {
+            eprintln!("could not set the measured aim point: {error}");
+        }
+    }
+}
+
 impl Imaging {
     /// Give the console its imaging solver (032), with the session that hints
-    /// it and the live loop whose solves it remembers. Called by
-    /// `AppState::with_imaging_solver`; the live loop is a later story's to
-    /// read, and the session is the hint's (US3).
+    /// it and the live loop whose solves it remembers: a task that follows
+    /// the live loop's reports fills the history of the finder camera's live
+    /// solves (FR-019). Called by `AppState::with_imaging_solver`.
     pub fn set_solver(
         &self,
         solver: Arc<dyn ImagingSolver>,
-        session: Arc<crate::session::Session>,
-        _live: Option<Arc<crate::live::Live>>,
+        session: Arc<Session>,
+        live: Option<Arc<crate::live::Live>>,
     ) {
+        let history = live.map(|live| {
+            tokio::spawn(history(
+                live,
+                session.clone(),
+                self.clock.clone(),
+                self.state.clone(),
+            ))
+        });
         let mut held = self.state.lock().expect("imaging state");
         held.solver = Some(HeldSolver(solver));
         held.session = Some(HeldSession(session));
+        if let Some(task) = history {
+            if let Some(old) = held.history_task.replace(task) {
+                old.abort();
+            }
+        }
     }
 
     /// The console's imaging solver, when it has one (FR-009).
@@ -351,6 +467,31 @@ impl Imaging {
             .solver
             .clone()
             .map(|held| held.0)
+    }
+
+    /// Offer a solve that `solve_frame` made outside `Imaging::solve`
+    /// (FR-037, for a later spec that solves frames itself). A whole-sensor
+    /// frame takes an aim reading exactly as the task's step 2 does; a frame
+    /// of a region does nothing. It changes neither the imaging view's
+    /// `solve`, the kept scale nor the misses.
+    pub fn note_solve(&self, frame: &SolveFrame, frame_id: u64, solve: &ImagingSolve) {
+        let session = self
+            .state
+            .lock()
+            .expect("imaging state")
+            .session
+            .clone()
+            .map(|session| session.0);
+        if let Some(session) = session {
+            take_aim_reading(
+                &self.state,
+                self.clock.as_ref(),
+                &session,
+                frame,
+                frame_id,
+                solve,
+            );
+        }
     }
 
     /// Solve the latest imaging frame (FR-009): the checks and the frame under
@@ -462,13 +603,14 @@ impl Imaging {
     }
 
     /// The hint the console would give this frame now (FR-014, FR-015,
-    /// FR-016). `Imaging::solve` uses it, and so does a later spec that calls
-    /// `solve_frame` itself. It takes the imaging state's lock and reads the
-    /// session, so it is never called with the lock held.
+    /// FR-016, FR-035). `Imaging::solve` uses it, and so does a later spec
+    /// that calls `solve_frame` itself. It takes the imaging state's lock and
+    /// reads the session, so it is never called with the lock held.
     pub fn hint(&self, frame: &SolveFrame) -> SolveHint {
         let now = self.clock.now();
-        // The session's pointing and target, read without the imaging state's
-        // lock: no lock is held across a call into the session.
+        // The session's pointing, target and aim point, read without the
+        // imaging state's lock: no lock is held across a call into the
+        // session.
         let session = self
             .state
             .lock()
@@ -476,20 +618,21 @@ impl Imaging {
             .session
             .as_ref()
             .map(|session| session.0.clone());
-        let (pointing, target) = match &session {
+        let (latest, target, aim) = match &session {
             Some(session) => {
                 let view = session.snapshot(now);
                 (
                     view.pointing
                         .as_ref()
-                        .filter(|pointing| pointing.source == crate::session::PointingSource::Live)
+                        .filter(|pointing| pointing.source == PointingSource::Live)
                         .map(|pointing| (pointing.ra_deg, pointing.dec_deg, pointing.time)),
                     view.target.map(|target| (target.ra_deg, target.dec_deg)),
+                    view.aim,
                 )
             }
-            None => (None, None),
+            None => (None, None, None),
         };
-        let (sensor, pixel_um, scale, focal_length_mm, skip, last_solve) = {
+        let (sensor, pixel_um, scale, focal_length_mm, skip, last_solve, fixes) = {
             let held = self.state.lock().expect("imaging state");
             let (scale, focal_length_mm) = held.relation.height_inputs();
             let skip = held.relation.hint_skip();
@@ -499,6 +642,7 @@ impl Imaging {
                 .last_solve
                 .filter(|(_, solved_with)| *solved_with == target)
                 .map(|(centre, _)| centre);
+            let fixes = held.relation.fixes();
             match &held.camera {
                 Some(camera) => (
                     (camera.width, camera.height),
@@ -507,6 +651,7 @@ impl Imaging {
                     focal_length_mm,
                     skip,
                     last_solve,
+                    fixes,
                 ),
                 None => (
                     (frame.roi.width, frame.roi.height),
@@ -515,9 +660,34 @@ impl Imaging {
                     focal_length_mm,
                     skip,
                     last_solve,
+                    fixes,
                 ),
             }
         };
+        // The `pointing` source is the history's live solve nearest the
+        // middle of the exposure, among those no more than `HINT_AGE_S`
+        // before its start or after its end, carried through the aim point as
+        // a live pointing is; the session's latest pointing only when the
+        // history holds none (FR-035).
+        let middle = frame.start + frame.exposure_s / 2.0;
+        let pointing = fixes
+            .iter()
+            .filter(|fix| {
+                fix.time >= frame.start - HINT_AGE_S
+                    && fix.time <= frame.start + frame.exposure_s + HINT_AGE_S
+            })
+            .min_by(|a, b| (a.time - middle).abs().total_cmp(&(b.time - middle).abs()))
+            .and_then(|fix| {
+                let direction = match aim {
+                    Some(aim) => fix.frame.unproject((aim.x, aim.y)),
+                    None => Some(fix.frame.center),
+                };
+                direction.map(|direction| {
+                    let (ra, dec) = direction.to_radec();
+                    (ra.to_degrees(), dec.to_degrees(), fix.time)
+                })
+            })
+            .or(latest);
         hint_for(&HintInputs {
             frame,
             sensor,
@@ -527,7 +697,7 @@ impl Imaging {
             scale,
             pixel_um,
             focal_length_mm,
-            aim_measured: false,
+            aim_measured: aim.is_some_and(|aim| aim.source == Some("measured")),
             skip,
         })
     }
@@ -616,6 +786,8 @@ async fn run(task: SolveTask) {
         .as_ref()
         .and_then(|session| session.snapshot(now).target)
         .map(|target| (target.ra_deg, target.dec_deg));
+    // 1. The relation: the scale a solved solve measured, the miss a failed
+    //    one counts, the centre kept with the target.
     {
         let mut held = task.held.lock().expect("imaging state");
         match &ended.outcome {
@@ -632,6 +804,22 @@ async fn run(task: SolveTask) {
             }
             Err(_) => {}
         }
+    }
+    // 2. A solved solve of a whole-sensor frame takes an aim reading
+    //    (FR-020), before the view shows the solve's end.
+    if let (Ok(solve), Some(session)) = (&ended.outcome, task.session.as_ref()) {
+        take_aim_reading(
+            &task.held,
+            task.clock.as_ref(),
+            session,
+            &task.frame,
+            task.frame_id,
+            solve,
+        );
+    }
+    // 3. The view shows the solve's end.
+    {
+        let mut held = task.held.lock().expect("imaging state");
         held.solve = Some(view);
     }
     // Wake whoever waits in `solved`, as a frame does when it ends.

@@ -256,6 +256,23 @@ impl TrackRun {
             push,
         }
     }
+
+    /// Whether Track is on: the session's `track` reads `wanted` true, the
+    /// same test `view` makes for `TrackView::wanted` (032, FR-036).
+    fn track_on(&self) -> bool {
+        self.wanted
+            && (self.armed
+                || self
+                    .tracker
+                    .as_ref()
+                    .is_some_and(|tracker| tracker.state().state != "off"))
+    }
+}
+
+/// Whether the session's `track` would read `wanted` true, and false with no
+/// `track` (FR-036).
+fn track_on(values: &Values) -> bool {
+    values.track.as_ref().is_some_and(TrackRun::track_on)
 }
 
 /// A camera control is automatic or a positive numeric value.
@@ -481,6 +498,16 @@ impl Aim {
         }
     }
 }
+/// The aim point as the session reports it (032). `source` is `measured`
+/// when the console measured it from the imaging camera, and absent when it
+/// was tapped (FR-022).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct AimView {
+    pub x: f64,
+    pub y: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<&'static str>,
+}
 /// Where the latest pointing came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -640,9 +667,10 @@ pub struct SessionView {
     /// Camera settings; omitted until a camera control has been set.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub camera_settings: Option<CameraSettings>,
-    /// Calibrated pixel, omitted until set.
+    /// Calibrated pixel, omitted until set. `source` is `measured` when the
+    /// console measured it from the imaging camera (032, FR-022).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub aim: Option<Aim>,
+    pub aim: Option<AimView>,
     /// Chart rotation in degrees counter-clockwise, within [0, 360); omitted until set.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chart_rotation_deg: Option<f64>,
@@ -670,6 +698,12 @@ struct Values {
     camera_settings: Option<CameraSettings>,
     link_status: LinkStatus,
     aim: Option<Aim>,
+    /// Whether the aim point was measured from the imaging camera (032,
+    /// FR-022).
+    aim_measured: bool,
+    /// The measured aim point held back while Track is on (032, FR-036).
+    /// Run-only: never written to the state file.
+    held_aim: Option<Aim>,
     chart_rotation_deg: Option<f64>,
     source: PointingSource,
     frame_id: Option<u64>,
@@ -696,6 +730,8 @@ impl Default for Values {
             camera_settings: None,
             link_status: LinkStatus::default(),
             aim: None,
+            aim_measured: false,
+            held_aim: None,
             chart_rotation_deg: None,
             source: PointingSource::Upload,
             frame_id: None,
@@ -732,7 +768,11 @@ impl Values {
                 source: self.source,
                 frame_id: self.frame_id,
             }),
-            aim: self.aim,
+            aim: self.aim.map(|aim| AimView {
+                x: aim.x,
+                y: aim.y,
+                source: self.aim_measured.then_some("measured"),
+            }),
             chart_rotation_deg: self.chart_rotation_deg,
             field: self.field.as_ref().map(|field| FieldView {
                 fov_deg: field.fov_deg,
@@ -1542,8 +1582,28 @@ impl Session {
     }
 
     /// Record a live solve at the current aim pixel, timed at mapped mid-exposure.
+    /// A measured aim point held back while Track was on is applied first, when
+    /// Track is off, before this pointing is taken, so the pointing is the
+    /// first at the new aim point (032, FR-036). A failed write is printed,
+    /// the held aim point dropped and the aim point left as it was: the next
+    /// aim reading measures it again.
     pub fn record_live_pointing(&self, frame: Frame, time: f64, frame_id: u64) -> Option<u64> {
         let mut values = self.values.lock().expect("observing session");
+        if values.held_aim.is_some() && !track_on(&values) {
+            let aim = values.held_aim.take().expect("held_aim just checked");
+            let mut next = values.clone();
+            next.aim = Some(aim);
+            next.aim_measured = true;
+            let written = match &self.state_file {
+                Some(path) => write_state(path, &next)
+                    .map_err(|error| eprintln!("could not persist the measured aim point: {error}"))
+                    .is_ok(),
+                None => true,
+            };
+            if written {
+                *values = next;
+            }
+        }
         let direction = match values.aim {
             Some(aim) => frame.unproject((aim.x, aim.y))?,
             None => frame.center,
@@ -1585,7 +1645,8 @@ impl Session {
 
     /// Persist the aim for subsequent solves, or reset it. A changed aim point
     /// disarms the push check until a pointing within the threshold is handed
-    /// over again.
+    /// over again. A tap or a reset clears the measured mark and drops a held
+    /// aim point (032, FR-022, FR-036).
     pub fn set_aim(&self, aim: Option<Aim>, time: f64) -> Result<SessionView, SessionError> {
         if let Some(aim) = aim {
             aim.validate()?;
@@ -1593,6 +1654,8 @@ impl Session {
         let mut values = self.values.lock().expect("observing session");
         let mut next = values.clone();
         next.aim = aim;
+        next.aim_measured = false;
+        next.held_aim = None;
         if let Some(path) = &self.state_file {
             write_state(path, &next).map_err(SessionError::Storage)?;
         }
@@ -1601,6 +1664,35 @@ impl Session {
             run.check_armed = false;
         }
         Ok(values.view(time))
+    }
+
+    /// Persist a measured aim point (032, FR-022, FR-036). Like `set_aim`, and
+    /// the read then carries `source: "measured"` until the next `set_aim`.
+    /// While Track is on it holds the aim point back instead: nothing is
+    /// persisted, the view's `aim` is unchanged, and `held_aim` answers it
+    /// until the first live solve recorded with Track off applies it.
+    pub fn set_measured_aim(&self, aim: Aim, time: f64) -> Result<SessionView, SessionError> {
+        aim.validate()?;
+        let mut values = self.values.lock().expect("observing session");
+        if track_on(&values) {
+            values.held_aim = Some(aim);
+            return Ok(values.view(time));
+        }
+        let mut next = values.clone();
+        next.aim = Some(aim);
+        next.aim_measured = true;
+        next.held_aim = None;
+        if let Some(path) = &self.state_file {
+            write_state(path, &next).map_err(SessionError::Storage)?;
+        }
+        *values = next;
+        Ok(values.view(time))
+    }
+
+    /// The measured aim point held back while Track is on, if any (032,
+    /// FR-036). Never persisted: a restart forgets it.
+    pub fn held_aim(&self) -> Option<Aim> {
+        self.values.lock().expect("observing session").held_aim
     }
 
     /// Validate the entire edit and persist it before changing any field.
@@ -1841,6 +1933,10 @@ struct StoredSession {
     camera_settings: Option<CameraSettings>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     aim: Option<Aim>,
+    /// Written only while true: the aim point was measured from the imaging
+    /// camera (032, FR-022).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    aim_measured: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     chart_rotation_deg: Option<f64>,
 }
@@ -1861,6 +1957,7 @@ fn read_state(path: &Path) -> io::Result<Values> {
         ));
     }
     let aim = stored.aim;
+    let aim_measured = stored.aim_measured;
     if let Some(aim) = aim {
         aim.validate()
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
@@ -1886,6 +1983,8 @@ fn read_state(path: &Path) -> io::Result<Values> {
         })
         .map(|mut values| {
             values.aim = aim;
+            // The mark is read as true only with an aim point (FR-022).
+            values.aim_measured = aim_measured && values.aim.is_some();
             values.backlash = stored.backlash.and_then(Backlash::present);
             values.model = stored.model.unwrap_or_default();
             values
@@ -1927,6 +2026,7 @@ fn write_state(path: &Path, values: &Values) -> io::Result<()> {
             node: values.node.clone(),
             camera_settings: values.camera_settings.clone(),
             aim: values.aim,
+            aim_measured: values.aim_measured,
             chart_rotation_deg: values.chart_rotation_deg,
         },
     )
