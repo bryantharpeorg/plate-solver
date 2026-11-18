@@ -9,7 +9,10 @@ use serde_json::{json, Value};
 
 /// The samples of the worked images as `FitsImage` keeps them: little-endian.
 fn le(samples: &[u16]) -> Vec<u8> {
-    samples.iter().flat_map(|sample| sample.to_le_bytes()).collect()
+    samples
+        .iter()
+        .flat_map(|sample| sample.to_le_bytes())
+        .collect()
 }
 
 /// The worked 4 × 2, 16-bit image of US3-S1, with the five cards after the
@@ -61,7 +64,11 @@ fn read(bytes: &[u8]) -> Read {
             offset += 80;
             break;
         }
-        assert_eq!(&card[8..10], b"= ", "the {keyword} card is not a value card");
+        assert_eq!(
+            &card[8..10],
+            b"= ",
+            "the {keyword} card is not a value card"
+        );
         let value = String::from_utf8_lossy(&card[10..]).trim().to_string();
         let value = if let Some(text) = value.strip_prefix('\'') {
             Value::String(
@@ -117,15 +124,17 @@ fn frame_of(cards: &[(&'static str, &'static str)]) -> Vec<u8> {
     bytes.extend_from_slice(&end);
     bytes.resize(2880, b' ');
     bytes.extend_from_slice(&[
-        0x80, 0x00, 0x80, 0x01, 0x80, 0x02, 0x80, 0x03, 0x00, 0x00, 0x1C, 0x40, 0x7F, 0xFE,
-        0x7F, 0xFF,
+        0x80, 0x00, 0x80, 0x01, 0x80, 0x02, 0x80, 0x03, 0x00, 0x00, 0x1C, 0x40, 0x7F, 0xFE, 0x7F,
+        0xFF,
     ]);
     bytes.resize(5760, 0);
     bytes
 }
 
 /// The worked frame's cards, with the values of `replacements` in theirs.
-fn worked_cards(replacements: &[(&'static str, &'static str)]) -> Vec<(&'static str, &'static str)> {
+fn worked_cards(
+    replacements: &[(&'static str, &'static str)],
+) -> Vec<(&'static str, &'static str)> {
     let mut cards = vec![
         ("SIMPLE", "T"),
         ("BITPIX", "16"),
