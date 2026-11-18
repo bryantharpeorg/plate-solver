@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point"]
 # Drafted 2026-11-15 against `main` at 49bb210 (the drafting worktree's HEAD,
 # 49bb210fe4860dd98ba24727074e7bd3cc0d7124) from
@@ -38,8 +38,11 @@ depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", 
 # owner kept it so. The owner's answers that day are in: a take answered with no frame
 # ends the run `failed`, and US9-S1 pins FR-037's and FR-029's two untested rules
 # (§ Clarifications, the session of the re-anchoring).
-# It stays draft until the owner settles the owner decisions and flips it to `ready`,
-# which gives the approvals listed under "Owner approvals" and dispatches it.
+# Flipped to ready 2026-11-18 by the operator seat on the owner's answer the same day ("Yes,
+# flip after the fold", once the round-2 probe and the owner's answers were folded in),
+# which gives the owner approvals listed under "Owner approvals". Every owner decision
+# takes its recommended answer, which the owner approved on 2026-11-17 with the imaging
+# series' recommendations.
 ---
 
 # Feature Specification: Focus Reading and Focus Aid
@@ -579,9 +582,10 @@ focuser to turn.
 
 ## Owner decisions
 
-Each is a design or taste call the plan document leaves open. None is settled. A
-different answer is written into the trio and re-validated before the flip, never left
-to a story.
+Each is a design or taste call the plan document leaves open. All take their recommended
+answers: the owner approved the imaging series' recommendations on 2026-11-17 ("im good
+with all of the info in the decisions doc") and flipped this spec on 2026-11-18. None is
+left to a story.
 
 1. **What the focus aid exposes.** Recommended: the focus region alone, as a region of
    interest, at the camera's smallest binning, whatever binning the settings held; the
