@@ -1916,11 +1916,10 @@ These are not changed by any story:
    after it, meet Prerequisite 5. 031 was then
    still being built, so the probes stood on its round-1 probe code; § Prerequisites 2
    reads 031's landed code again.
-7. **The documents this trio cites are on `main`.** Not met: the plan document,
-   ADR-0002, the changed `GLOSSARY.md` and the research note are in the drafting
-   worktree, uncommitted. There `GLOSSARY.md` already carries the six entries spec
-   owner approval 2 words: Finder fix, Star measure, Aim reading, Relation, Solve hint
-   and Solve sidecar.
+7. **The documents this trio cites are on `main`.** Met: the plan document, ADR-0002,
+   the changed `GLOSSARY.md` and the research note landed with 030's flip (55e41f5),
+   and `GLOSSARY.md` carries the six entries spec owner approval 2 words: Finder fix,
+   Star measure, Aim reading, Relation, Solve hint and Solve sidecar.
 8. **Outside the factory, before the first use at the telescope:** ASTAP and a star
    database installed on the console machine, the console started with the three flags,
    and one solve timed. Not needed to flip. On a Debian or Ubuntu install, the `d50`
@@ -1941,9 +1940,9 @@ These are not changed by any story:
    stays for any later draft: whichever of two such specs is flipped second names the
    other in `depends_on_landed` and is re-anchored after it lands. Within this series
    every later trio, 033 to 037, already names this one in `depends_on_landed`.
-10. **The plan document agrees with the settled decisions.** Not met on `main`, which
-    does not hold the plan document yet (§ Prerequisites 7). In the drafting worktree
-    it already agrees with the recommended answers: the eight departures spec.md's
+10. **The plan document agrees with the settled decisions.** Met: the plan document on
+    `main` (§ Prerequisites 7) agrees with the recommended answers, which the owner
+    took on 2026-11-17: the eight departures spec.md's
     Clarifications list are written into it, in its § Solver port (the optional star
     count, the hint's source, the linear part, the focal length as a flag, the
     prepared copy of the saved FITS file in a work folder), its § Console (the five

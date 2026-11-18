@@ -223,7 +223,7 @@ was set, and MCP clients get one tool.
   (the session of the owner's ASTAP captures, below).
 - Q: Where does this trio depart from the plan document? → A: Nowhere now. It first
   departed in eight places, each an owner decision or approval below, and the plan
-  document in the drafting worktree now carries all eight with the recommended
+  document, on `main` since 030's flip (55e41f5), carries all eight with the recommended
   answers; an answer the owner settles otherwise is written back into it in the same
   change (plan.md § Prerequisites 10). In its § Solver port: an imaging solve's
   matched star count is optional, because ASTAP's `.ini` carries none (owner decision
@@ -660,8 +660,8 @@ and the following. Each is named in the FR or success criterion that makes it.
 2. **No story writes `GLOSSARY.md` or the plan document.** The terms used here (aim
    point as changed, imaging angle, imaging solver, solver port, solver adapter, imaging
    solve) are written by the plan document's own change to `GLOSSARY.md`. That change
-   also carries, in the drafting worktree and not yet on `main` (plan.md
-   § Prerequisites 7), six entries for words this trio uses as terms, worded as here:
+   also carries, on `main` since 030's flip (55e41f5; plan.md § Prerequisites 7), six
+   entries for words this trio uses as terms, worded as here:
    - **Finder fix**: "One live solve of the finder camera as the console's history
      keeps it: when its star frame was taken, and how it maps the sky onto the finder
      camera's frame. _Avoid_: sample, sync (that ties the mount to the sky)".
@@ -699,7 +699,7 @@ and the following. Each is named in the FR or success criterion that makes it.
    `astap.rs` (FR-001), `simulated.rs` and `solving.rs` (FR-008, FR-009), and
    `relation.rs` (FR-017).
 8. **Two file formats on disk and one work folder**, all three now in the plan
-   document's storage layout in the drafting worktree: the solve sidecar `<frame id>.solve.json`, format
+   document's storage layout on `main`: the solve sidecar `<frame id>.solve.json`, format
    `imaging-solve/1`, beside each imaging frame a solve was ended for (FR-011);
    `relation.json`, format `imaging-relation/1`, in the imaging folder (FR-017,
    FR-027); and the ASTAP adapter's work folder, `solver/` in the imaging folder, in
