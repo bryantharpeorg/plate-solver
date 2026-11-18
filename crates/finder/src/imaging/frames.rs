@@ -1,8 +1,8 @@
 //! Receiving an imaging frame and saving it as FITS (031 US2): the view of the
 //! latest frame, the task that follows the node's stream, the console's own
 //! ids, and the file a whole frame is saved under, never replacing one there.
-//! US4 adds the checks on what the node sends; US5 the refusals, abort and the
-//! node's own copy.
+//! US4 adds the checks on what the node sends; US5 the frame-in-flight
+//! refusals, abort and the node's own copy.
 
 use std::{
     io::Write,
@@ -83,6 +83,12 @@ pub struct FrameView {
     pub bytes: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub received: Option<u64>,
+    /// The node's own copy of the frame, and the reason there is none, when
+    /// the frame was asked for with `save_at_node` (FR-009).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub node_file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub node_save_error: Option<String>,
     /// Console Unix seconds: when the last byte was in hand, and when the file
     /// was in place.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -139,6 +145,14 @@ pub(super) fn take(imaging: &Imaging, purpose: &str) -> Result<FrameTask, Refusa
         ),
         state => return Err(state_refusal(state, held.error.as_deref())),
     };
+    // A second frame while one is exposing or receiving is refused (FR-008).
+    if held
+        .frame
+        .as_ref()
+        .is_some_and(|frame| matches!(frame.state, "exposing" | "receiving"))
+    {
+        return Err(Refusal::conflict("an exposure is already in progress"));
+    }
     // The id is the console's own count (FR-011): it starts after the largest
     // id in the folder of the take's UTC date, and never falls.
     let (date, _) = fits::utc(imaging.clock.now());
@@ -168,6 +182,8 @@ pub(super) fn take(imaging: &Imaging, purpose: &str) -> Result<FrameTask, Refusa
         date_obs: None,
         bytes: None,
         received: None,
+        node_file: None,
+        node_save_error: None,
         received_at: None,
         saved_at: None,
         file: None,
@@ -187,6 +203,7 @@ pub(super) fn take(imaging: &Imaging, purpose: &str) -> Result<FrameTask, Refusa
         model: camera.model,
         serial: camera.serial,
         forward_kib_per_s: settings.forward_kib_per_s,
+        save: settings.save_at_node,
     })
 }
 
@@ -194,7 +211,8 @@ pub(super) fn take(imaging: &Imaging, purpose: &str) -> Result<FrameTask, Refusa
 pub(super) struct FrameTask {
     held: Arc<Mutex<Held>>,
     changes: watch::Sender<u64>,
-    client: ImagingClient,
+    /// The client the console aborts this frame's exposure with (US5).
+    pub(super) client: ImagingClient,
     root: PathBuf,
     clock: Arc<dyn Clock>,
     /// Node time less console time, read when the frame was asked for.
@@ -203,6 +221,8 @@ pub(super) struct FrameTask {
     model: String,
     serial: Option<String>,
     forward_kib_per_s: Option<u32>,
+    /// Whether the node also keeps a copy of this frame (FR-008).
+    save: bool,
 }
 
 impl FrameTask {
@@ -212,30 +232,47 @@ impl FrameTask {
         self.changes.send_modify(|count| *count += 1);
     }
 
-    /// The frame has ended; it is kept beside the latest as the last one.
+    /// The frame has ended; it is kept beside the latest as the last one, and
+    /// its task is no longer in flight (US5).
     fn finish(&self) {
         let mut held = self.held.lock().expect("imaging state");
         held.frame = Some(self.frame.clone());
         held.ended = Some(self.frame.clone());
+        held.frame_task = None;
         drop(held);
         self.changes.send_modify(|count| *count += 1);
     }
 }
 
+/// How one frame's task ended: saved, failed with its words, or aborted
+/// because the observer stopped it (FR-009, FR-013).
+enum Outcome {
+    Saved,
+    Failed(String),
+    Aborted,
+}
+
 /// Follow one exposure from the node and save the whole frame (031 US2): a
-/// failure ends the frame `failed` with its words.
+/// failure ends the frame `failed` with its words, an abort ends it `aborted`
+/// (US5).
 pub(super) async fn run(task: FrameTask) {
     let mut task = task;
-    if let Some(error) = follow(&mut task).await {
-        task.frame.state = "failed";
-        task.frame.error = Some(error);
-        task.finish();
+    match follow(&mut task).await {
+        Outcome::Saved => {}
+        Outcome::Failed(error) => {
+            task.frame.state = "failed";
+            task.frame.error = Some(error);
+            task.finish();
+        }
+        Outcome::Aborted => {
+            task.frame.state = "aborted";
+            task.finish();
+        }
     }
 }
 
-/// The exposure, the chunks and the save. Answers `Some` with the words of a
-/// failed frame, `None` once the frame is saved.
-async fn follow(task: &mut FrameTask) -> Option<String> {
+/// The exposure, the chunks and the save. Answers how the frame ended.
+async fn follow(task: &mut FrameTask) -> Outcome {
     let request = proto::ExposeRequest {
         exposure_ms: task.frame.exposure_ms,
         purpose: task.frame.purpose.clone(),
@@ -243,7 +280,7 @@ async fn follow(task: &mut FrameTask) -> Option<String> {
             .forward_kib_per_s
             .map(|kib| kib.saturating_mul(1024))
             .unwrap_or(0),
-        save: false, // US5 sends `save_at_node` here.
+        save: task.save,
     };
     // The call and the first message are both within twice the exposure plus
     // the node's second try (FR-010).
@@ -255,8 +292,16 @@ async fn follow(task: &mut FrameTask) -> Option<String> {
     })
     .await;
     let (mut stream, mut header) = match first {
-        Err(_) => return Some(format!("no imaging frame header arrived within {whole} s")),
-        Ok(Err(status)) => return Some(format!("the exposure failed: {}", status.message())),
+        Err(_) => {
+            return Outcome::Failed(format!("no imaging frame header arrived within {whole} s"))
+        }
+        // A status that ends the frame before the header, as the call's own
+        // answer or as the stream's first item: an abort ends the frame
+        // `aborted`, anything else fails it (FR-013).
+        Ok(Err(status)) if status.code() == tonic::Code::Aborted => return Outcome::Aborted,
+        Ok(Err(status)) => {
+            return Outcome::Failed(format!("the exposure failed: {}", status.message()))
+        }
         Ok(Ok((
             stream,
             Some(proto::ExposeEvent {
@@ -265,7 +310,7 @@ async fn follow(task: &mut FrameTask) -> Option<String> {
         ))) => (stream, header),
         // No first message, or a first message that is not a header.
         Ok(Ok((_, None))) | Ok(Ok((_, Some(_)))) => {
-            return Some("the scope node sent no imaging frame header".to_string())
+            return Outcome::Failed("the scope node sent no imaging frame header".to_string())
         }
     };
     // The header's byte count must be its width times its height times its
@@ -273,7 +318,7 @@ async fn follow(task: &mut FrameTask) -> Option<String> {
     // large to hold is one that does not add up.
     let bytes_a_sample = match header.bits {
         8 | 16 => u64::from(header.bits / 8),
-        _ => return Some("the imaging frame's header does not add up".to_string()),
+        _ => return Outcome::Failed("the imaging frame's header does not add up".to_string()),
     };
     let expected = u64::from(header.width)
         .checked_mul(u64::from(header.height))
@@ -282,7 +327,7 @@ async fn follow(task: &mut FrameTask) -> Option<String> {
         || header.byte_count > FRAME_LIMIT
         || expected != Some(header.byte_count)
     {
-        return Some("the imaging frame's header does not add up".to_string());
+        return Outcome::Failed("the imaging frame's header does not add up".to_string());
     }
     // The header fills the view, the state becomes `receiving`, and the
     // header's region, when it carries one, replaces the settings'.
@@ -303,6 +348,10 @@ async fn follow(task: &mut FrameTask) -> Option<String> {
         frame.date_obs = Some(date_obs);
         frame.bytes = Some(header.byte_count);
         frame.received = Some(0);
+        // The node's own copy, when the frame was asked for with `save` (US5).
+        frame.node_file = (!header.node_file.is_empty()).then_some(header.node_file.clone());
+        frame.node_save_error =
+            (!header.node_save_error.is_empty()).then_some(header.node_save_error.clone());
         if let Some(roi) = header.roi.take() {
             frame.roi = RoiView::from(roi);
         }
@@ -316,17 +365,22 @@ async fn follow(task: &mut FrameTask) -> Option<String> {
             task.frame.received = Some(header.byte_count);
             task.frame.received_at = Some(task.clock.now());
             drop(stream);
-            return save(task, &samples, &date, header.exposure_ms).await;
+            return match save(task, &samples, &date, header.exposure_ms).await {
+                Some(error) => Outcome::Failed(error),
+                None => Outcome::Saved,
+            };
         }
         // Each chunk is within `CHUNK_WAIT` of the last (FR-010).
         match tokio::time::timeout(CHUNK_WAIT, stream.message()).await {
-            Err(_) => return Some("the imaging frame stalled".to_string()),
+            Err(_) => return Outcome::Failed("the imaging frame stalled".to_string()),
             Ok(Ok(Some(proto::ExposeEvent {
                 event: Some(proto::expose_event::Event::Chunk(chunk)),
             }))) => {
                 // A chunk past the header's count is one too many (FR-010).
                 if received + chunk.len() as u64 > header.byte_count {
-                    return Some("the scope node sent more bytes than the header said".to_string());
+                    return Outcome::Failed(
+                        "the scope node sent more bytes than the header said".to_string(),
+                    );
                 }
                 samples.extend_from_slice(&chunk);
                 received += chunk.len() as u64;
@@ -336,7 +390,7 @@ async fn follow(task: &mut FrameTask) -> Option<String> {
             // The end of the stream, an error on it, or an event that is not a
             // chunk, before the header's count is reached.
             Ok(_) => {
-                return Some(format!(
+                return Outcome::Failed(format!(
                     "the imaging frame was incomplete: {received} of {} bytes",
                     header.byte_count
                 ))

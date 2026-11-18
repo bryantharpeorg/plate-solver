@@ -1,4 +1,5 @@
-//! The imaging routes (031): the view, a settings change and one frame.
+//! The imaging routes (031): the view, a settings change, one frame and its
+//! abort.
 
 use axum::{
     extract::{rejection::JsonRejection, State},
@@ -18,6 +19,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/api/imaging", get(get_imaging))
         .route("/api/imaging/settings", put(put_settings))
         .route("/api/imaging/frame", post(take_frame))
+        .route("/api/imaging/abort", post(abort_frame))
 }
 
 /// `GET /api/imaging`: the imaging view, or `{"state":"off"}` without imaging.
@@ -41,6 +43,18 @@ async fn take_frame(
         .await
         .map_err(|refusal| ApiError::new(refusal.status, refusal.message))?;
     Ok(Json(view))
+}
+
+/// `POST /api/imaging/abort` (FR-013): no body; abort the exposure or the
+/// frame in flight, or change nothing when there is none.
+async fn abort_frame(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+) -> Result<Json<ImagingView>, ApiError> {
+    let imaging = state.imaging().ok_or_else(|| {
+        ApiError::new(StatusCode::CONFLICT, "this console takes no imaging frames")
+    })?;
+    Ok(Json(imaging.abort().await))
 }
 
 /// `PUT /api/imaging/settings`: a partial settings change under the console's

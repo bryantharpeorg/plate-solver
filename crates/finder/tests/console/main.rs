@@ -10,6 +10,7 @@ mod api;
 mod freshness;
 mod imaging;
 mod imaging_checks;
+mod imaging_control;
 mod imaging_fits;
 mod imaging_frames;
 mod link;
