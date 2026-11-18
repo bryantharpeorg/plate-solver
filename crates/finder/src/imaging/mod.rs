@@ -2,6 +2,8 @@
 //! paired node for `ScopeNodeImaging` alone, the state it keeps and the routes
 //! that read and change it.
 
+pub mod fits;
+pub mod frames;
 pub mod routes;
 
 use std::{
@@ -20,6 +22,8 @@ use crate::{
     link::{ImagingClient, LinkManager},
     session::Clock,
 };
+
+use frames::FrameView;
 
 /// How often the camera's status is read while `ready`.
 pub const STATUS_PERIOD: Duration = Duration::from_secs(2);
@@ -51,6 +55,9 @@ pub struct ImagingView {
     pub status: Option<StatusView>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<SettingsView>,
+    /// The latest imaging frame, from the first one asked for on (031 US2).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frame: Option<FrameView>,
 }
 
 impl ImagingView {
@@ -62,6 +69,7 @@ impl ImagingView {
             camera: None,
             status: None,
             settings: None,
+            frame: None,
         }
     }
 }
@@ -267,6 +275,13 @@ struct Held {
     exposure_ms: f64,
     forward_kib_per_s: Option<u32>,
     save_at_node: bool,
+    /// The latest imaging frame, and the last one that ended (031 US2).
+    frame: Option<FrameView>,
+    ended: Option<FrameView>,
+    /// The console's own frame count, and the UTC date it was last read for
+    /// (FR-011).
+    count: u64,
+    count_date: Option<String>,
 }
 
 impl Default for Held {
@@ -281,6 +296,10 @@ impl Default for Held {
             exposure_ms: DEFAULT_EXPOSURE_MS,
             forward_kib_per_s: None,
             save_at_node: false,
+            frame: None,
+            ended: None,
+            count: 0,
+            count_date: None,
         }
     }
 }
@@ -289,11 +308,15 @@ impl Default for Held {
 /// follows the link and the state it keeps. Dropping the `Imaging` ends the task.
 pub struct Imaging {
     state: Arc<Mutex<Held>>,
+    /// A count that rises with every change of the latest frame, which
+    /// `ended` waits on.
+    changes: watch::Sender<u64>,
     task: JoinHandle<()>,
-    /// Where imaging frames are saved, and the console's clock; US2's frame
-    /// task reads both.
-    #[allow(dead_code)]
-    for_frames: (PathBuf, Arc<dyn Clock>),
+    /// Where imaging frames are saved, the console's clock, and the link whose
+    /// clock offset and client the frame tasks read.
+    root: PathBuf,
+    clock: Arc<dyn Clock>,
+    link: Arc<LinkManager>,
 }
 
 impl Drop for Imaging {
@@ -306,16 +329,20 @@ impl Imaging {
     /// Start the task that follows the link. Dropping the `Imaging` ends it.
     pub fn start(root: PathBuf, link: Arc<LinkManager>, clock: Arc<dyn Clock>) -> Arc<Self> {
         let state = Arc::new(Mutex::new(Held::default()));
-        let task = tokio::spawn(follow(link, state.clone()));
+        let task = tokio::spawn(follow(link.clone(), state.clone()));
+        let (changes, _) = watch::channel(0);
         Arc::new(Self {
             state,
+            changes,
             task,
-            for_frames: (root, clock),
+            root,
+            clock,
+            link,
         })
     }
 
     /// `GET /api/imaging`, and `imaging` in the session. Outside `ready` the view
-    /// holds none of `camera`, `status` and `settings`.
+    /// holds none of `camera`, `status`, `settings` and `frame`.
     pub fn view(&self) -> ImagingView {
         let held = self.state.lock().expect("imaging state");
         let ready = held.state == "ready";
@@ -329,6 +356,7 @@ impl Imaging {
             camera: ready.then(|| held.camera.clone()).flatten(),
             status: ready.then(|| held.status.clone()).flatten(),
             settings: ready.then(|| held.settings.clone()).flatten(),
+            frame: ready.then(|| held.frame.clone()).flatten(),
         }
     }
 
@@ -469,6 +497,48 @@ impl Imaging {
             }
         }
         Ok(self.view())
+    }
+
+    /// Take one imaging frame (FR-008): the checks and the id under one
+    /// acquisition of the state's lock, a task in flight, and the view at once.
+    /// Every frame `take` starts is saved to a file.
+    pub async fn take(&self, purpose: &str) -> Result<ImagingView, Refusal> {
+        let task = frames::take(self, purpose)?;
+        tokio::spawn(frames::run(task));
+        Ok(self.view())
+    }
+
+    /// The frame with this id as it ended: the last ended frame when its id is
+    /// `id`, otherwise the latest frame if its id is `id` and it has ended; for
+    /// an older id, the last ended frame. Waits while the frame asked for is
+    /// still in flight.
+    pub async fn ended(&self, id: u64) -> FrameView {
+        let mut changes = self.changes.subscribe();
+        loop {
+            {
+                let held = self.state.lock().expect("imaging state");
+                if held.ended.as_ref().is_some_and(|frame| frame.id == id) {
+                    return held.ended.clone().expect("the frame just found");
+                }
+                if let Some(frame) = held.frame.clone().filter(|frame| frame.id == id) {
+                    if matches!(frame.state, "saved" | "failed" | "aborted") {
+                        return frame;
+                    }
+                } else if let Some(ended) = held.ended.clone() {
+                    // An older id: the last ended frame.
+                    return ended;
+                }
+            }
+            // The frame asked for is still in flight: wait for it to move on.
+            if changes.changed().await.is_err() {
+                let held = self.state.lock().expect("imaging state");
+                return held
+                    .ended
+                    .clone()
+                    .or_else(|| held.frame.clone())
+                    .expect("a frame to answer with");
+            }
+        }
     }
 }
 
