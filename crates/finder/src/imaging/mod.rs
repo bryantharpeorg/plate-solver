@@ -10,7 +10,7 @@ pub mod routes;
 use std::{
     future::Future,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, Weak},
     time::Duration,
 };
 
@@ -286,6 +286,10 @@ struct Held {
     /// (FR-011).
     count: u64,
     count_date: Option<String>,
+    /// The lease out, its grant and its holder's name, and the grant to give
+    /// the next one (US9, FR-028).
+    lease: Option<(u64, &'static str)>,
+    next_grant: u64,
     /// The JPEG previews of the last `PREVIEWS_KEPT` saved frames, by id
     /// (FR-018).
     previews: Vec<(u64, Vec<u8>)>,
@@ -308,6 +312,8 @@ impl Default for Held {
             frame_task: None,
             count: 0,
             count_date: None,
+            lease: None,
+            next_grant: 1,
             previews: Vec::new(),
         }
     }
@@ -381,8 +387,16 @@ impl Imaging {
 
     /// Apply a settings change (FR-003): the console keeps `exposure_ms`,
     /// `forward_kib_per_s` and `save_at_node`, sends the rest to the node, and
-    /// answers the view of the settings then in force.
+    /// answers the view of the settings then in force. While a lease is out,
+    /// anyone but the holder answers its 409 (FR-029).
     pub async fn set(&self, edit: SettingsEdit) -> Result<ImagingView, Refusal> {
+        self.set_as(None, edit).await
+    }
+
+    /// `set` for one caller (US9): no grant for anyone, a lease's grant for
+    /// its holder. The lease's check is made under the state's lock, after the
+    /// state's and before the frame-in-flight check.
+    async fn set_as(&self, grant: Option<u64>, edit: SettingsEdit) -> Result<ImagingView, Refusal> {
         let (mut client, camera, mut settings) = {
             let held = self.state.lock().expect("imaging state");
             let (client, camera, settings) = match held.state {
@@ -407,6 +421,9 @@ impl Imaging {
                     )));
                 }
             };
+            // A lease out to someone else answers with its holder's name
+            // (FR-029), after the state's check and before the frame's.
+            held_by(&held, grant)?;
             // A settings change during an exposure is refused (FR-008).
             if held
                 .frame
@@ -529,15 +546,52 @@ impl Imaging {
 
     /// Take one imaging frame (FR-008): the checks and the id under one
     /// acquisition of the state's lock, a task in flight, and the view at once.
-    /// Every frame `take` starts is saved to a file.
+    /// Every frame `take` starts is saved to a file. While a lease is out,
+    /// anyone but the holder answers its 409 (FR-029).
     pub async fn take(&self, purpose: &str) -> Result<ImagingView, Refusal> {
-        let task = frames::take(self, purpose)?;
+        self.take_as(None, purpose).await
+    }
+
+    /// `take` for one caller (US9), as `set_as`: the lease's check is passed
+    /// to `frames::take`, which makes it under its one lock acquisition.
+    async fn take_as(&self, grant: Option<u64>, purpose: &str) -> Result<ImagingView, Refusal> {
+        let task = frames::take(self, purpose, |held| held_by(held, grant))?;
         let client = task.client.clone();
         let task = tokio::spawn(frames::run(task));
         let mut held = self.state.lock().expect("imaging state");
         held.frame_task = Some((task, client));
         drop(held);
         Ok(self.view())
+    }
+
+    /// Take the imaging camera for `holder`, a name that reads well after
+    /// "held by" (`"the focus aid"`, `"the stack"`), for one taker at a time
+    /// (FR-028). It never waits and looks at nothing but the lease: while
+    /// another taker holds the camera it answers a `Refusal` of 409 with
+    /// `the imaging camera is held by` and that holder's name.
+    pub fn lease(self: &Arc<Self>, holder: &'static str) -> Result<Lease, Refusal> {
+        let mut held = self.state.lock().expect("imaging state");
+        if let Some((_, who)) = held.lease {
+            return Err(Refusal::conflict(format!(
+                "the imaging camera is held by {who}"
+            )));
+        }
+        let grant = held.next_grant;
+        held.next_grant += 1;
+        held.lease = Some((grant, holder));
+        Ok(Lease {
+            imaging: Arc::downgrade(self),
+            grant,
+        })
+    }
+
+    /// The holder's name while a lease is out (FR-028).
+    pub fn holder(&self) -> Option<&'static str> {
+        self.state
+            .lock()
+            .expect("imaging state")
+            .lease
+            .map(|(_, holder)| holder)
     }
 
     /// Abort the exposure or the imaging frame in flight (FR-013): the node's
@@ -643,6 +697,70 @@ impl Imaging {
             .iter()
             .find(|(kept, _)| *kept == id)
             .map(|(_, jpeg)| jpeg.clone())
+    }
+}
+
+/// The imaging camera, held for one taker (031 US9). Dropping it releases the
+/// camera at once, also when the task that owns it is aborted. It holds no
+/// strong reference to the `Imaging` (FR-032).
+#[derive(Debug)]
+pub struct Lease {
+    /// The `Imaging` the camera belongs to, held weakly: a lease keeps no
+    /// console alive.
+    imaging: Weak<Imaging>,
+    /// Which grant this is; the `Drop` clears the holder only while it is
+    /// still this one.
+    grant: u64,
+}
+
+/// The refusal of a lease whose `Imaging` is gone (FR-032).
+fn gone() -> Refusal {
+    Refusal::conflict("this console takes no imaging frames")
+}
+
+impl Lease {
+    /// `Imaging::set` for the holder (FR-030): the same checks, refusals,
+    /// words and order, less the lease's own. With the `Imaging` gone: 409
+    /// `this console takes no imaging frames`.
+    pub async fn set(&self, edit: SettingsEdit) -> Result<ImagingView, Refusal> {
+        match self.imaging.upgrade() {
+            Some(imaging) => imaging.set_as(Some(self.grant), edit).await,
+            None => Err(gone()),
+        }
+    }
+
+    /// `Imaging::take` for the holder, as `set` (FR-030).
+    pub async fn take(&self, purpose: &str) -> Result<ImagingView, Refusal> {
+        match self.imaging.upgrade() {
+            Some(imaging) => imaging.take_as(Some(self.grant), purpose).await,
+            None => Err(gone()),
+        }
+    }
+}
+
+impl Drop for Lease {
+    /// Release the camera at once (FR-032): nothing is awaited, so a
+    /// cancelled task's drop of its lease releases the camera in the instant
+    /// the task ends. A lease whose `Imaging` is gone does nothing.
+    fn drop(&mut self) {
+        if let Some(imaging) = self.imaging.upgrade() {
+            let mut held = imaging.state.lock().expect("imaging state");
+            if held.lease.is_some_and(|(grant, _)| grant == self.grant) {
+                held.lease = None;
+            }
+        }
+    }
+}
+
+/// The lease's check (FR-029): a caller whose grant is not the one out is
+/// refused with its holder's name. Made under the state's lock, after the
+/// state's check and before the frame-in-flight check.
+fn held_by(held: &Held, grant: Option<u64>) -> Result<(), Refusal> {
+    match held.lease {
+        Some((out, holder)) if Some(out) != grant => Err(Refusal::conflict(format!(
+            "the imaging camera is held by {holder}"
+        ))),
+        _ => Ok(()),
     }
 }
 

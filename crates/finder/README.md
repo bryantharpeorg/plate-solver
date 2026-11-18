@@ -670,3 +670,13 @@ stars show. The result is encoded as a JPEG of quality 85 and served by
 among the last eight saved; a preview that cannot be made — a frame with no
 pixels, such as a mosaic with no whole 2 × 2 cell — does not fail the frame,
 whose view then carries no `preview`.
+
+**One holder.** A part of the console that takes imaging frames one after
+another holds the imaging camera while it runs. Meanwhile `PUT
+/api/imaging/settings` and `POST /api/imaging/frame` answer 409, and
+`set_imaging_camera` and `take_imaging_frame` a tool error, with `the imaging
+camera is held by` and the holder's name. `GET /api/imaging`, the previews,
+`POST /api/imaging/abort` and `get_imaging_camera` stay open to anyone, so an
+exposure can always be stopped. A single imaging frame from the page or an MCP
+client holds no lease: while it is in flight a second one is refused with `an
+exposure is already in progress`, as before.
