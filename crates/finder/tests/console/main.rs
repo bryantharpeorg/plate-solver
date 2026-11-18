@@ -8,6 +8,7 @@ mod support;
 mod aim;
 mod api;
 mod freshness;
+mod imaging;
 mod link;
 mod live;
 mod notices;
