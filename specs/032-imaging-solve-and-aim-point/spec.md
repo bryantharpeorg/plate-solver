@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", "038-track-follows-a-push"]
 # Drafted 2026-11-15 against `main` at dbc2b5b (dbc2b5bf15103e59e7166d9b7a79b421f9d96ce4)
 # from docs/plans/2026-11-15-specs-030-037-imaging.md, by the grilling session of that
@@ -20,8 +20,11 @@ depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", 
 # for line with 49bb210, and the ones that moved are corrected (plan.md § Prerequisites 2).
 # On 2026-11-18 the owner's captures of ASTAP's real output were folded in, and
 # fixtures/finder/astap/ committed with them (plan.md § Prerequisites 5).
-# It stays draft until the owner settles the owner decisions and flips it to `ready`,
-# which gives the approvals listed under "Owner approvals" and dispatches it.
+# Flipped to ready 2026-11-18 by the operator seat on the owner's answer the same day ("Yes,
+# flip 032", after the captures were folded in), which gives the owner approvals listed
+# under "Owner approvals". Every owner decision takes its recommended answer, which the
+# owner approved on 2026-11-17 with the imaging series' recommendations; 25 was settled
+# that day with its recommended answer, hold, and its reason reworded on 2026-11-18.
 ---
 
 # Feature Specification: Solving Imaging Frames and the Measured Aim Point
@@ -501,9 +504,10 @@ was set, and MCP clients get one tool.
 
 ## Owner decisions
 
-Each is a design or taste call the plan document leaves open. None is settled but 25,
-which the owner settled on 2026-11-17. A different answer is written into the trio and
-re-validated before the flip, never left to a story.
+Each is a design or taste call the plan document leaves open. All take their recommended
+answers: the owner approved the imaging series' recommendations on 2026-11-17 ("im good
+with all of the info in the decisions doc"), settled 25 the same day with its
+recommended answer, and flipped this spec on 2026-11-18. None is left to a story.
 
 1. **How the session says the aim point was set.** Recommended: `aim` keeps `x` and `y`
    and gains `source` with the value `measured` only when the console measured it; a
