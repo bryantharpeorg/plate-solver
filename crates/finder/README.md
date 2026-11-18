@@ -726,3 +726,36 @@ solver gave no answer within <N> s`; and `failed`, with the words of the fault
 itself. Each solve is limited in time: 120 s for a solve whose hint names a
 place, 600 s for a search of the whole sky — a search of the whole sky may run
 out its 600 s without an answer — and 30 s for a star measure.
+
+A solve is told where to look by a hint, which names its source. The sources,
+in the order they are taken: `pointing`, the session's latest live pointing
+when its time is no more than 30 s before the exposure's start or after its
+end; `last_solve`, the centre of the last imaging frame solved since the
+console started, which stops counting once the session's target changes;
+`target`, the session's target; and `none`, a search of the whole sky with no
+place. A solve takes the first source that exists, and its radius is 3° for
+`pointing`, `last_solve` and `target`, and 180° for `none`. A failed solve is
+not asked again: after three misses in a row — a miss is a solve that ended
+`not_solved` or `timed_out` — the next solve takes the next source that
+exists, ending at the search of the whole sky, and a solved solve starts
+again from the first.
+
+The hint's field height is the frame's rows times its binning times a scale,
+over 3600. The scale has up to three sources, in this order: the kept scale;
+`206264.806 × pixel size in mm / focal length in mm`, when a focal length is
+set; and none, which leaves the field height out for the solver to find by
+itself. Three misses in a row move from one source to the next that exists,
+and from the last back to the first, so a kept scale that has stopped being
+true is passed over and tried again later, and nothing has to be deleted by
+hand; a solved solve starts again from the first. After a change of optics
+nothing needs to be done: the next solves turn through the sources by
+themselves, or give `--focal-length-mm` its new figure when the frame is under
+0.3° high, the smallest height ASTAP searches for by itself.
+
+Every solved imaging frame stores its scale, per sensor pixel, with its frame
+id and time, in `relation.json` in the imaging folder, replacing the one
+kept, and the imaging view carries it as `relation.scale`. The file names the
+camera's model, serial, size and pixel size; a file made for another camera is
+ignored. `--focal-length-mm FOCAL_LENGTH_MM` sets the focal length in
+millimetres, shown as `relation.focal_length_mm`, and must be a number above
+0; it sizes a solve's field until a scale is measured.

@@ -6,6 +6,7 @@ pub mod astap;
 pub mod fits;
 pub mod frames;
 pub mod preview;
+pub mod relation;
 pub mod routes;
 pub mod simulated;
 pub mod solver;
@@ -67,6 +68,10 @@ pub struct ImagingView {
     /// on (032 FR-010).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub solve: Option<solving::SolveView>,
+    /// What the console keeps between the two cameras, from the first solved
+    /// imaging frame or the first focal length on (032 US3, FR-017).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relation: Option<relation::RelationView>,
 }
 
 impl ImagingView {
@@ -80,6 +85,7 @@ impl ImagingView {
             settings: None,
             frame: None,
             solve: None,
+            relation: None,
         }
     }
 }
@@ -305,6 +311,14 @@ struct Held {
     /// The console's imaging solver, and the latest solve (032 US2).
     solver: Option<solving::HeldSolver>,
     solve: Option<solving::SolveView>,
+    /// The session whose pointing and target hint a solve (032 US3).
+    session: Option<solving::HeldSession>,
+    /// The centre of the last imaging solve since the console started, with
+    /// the session's target of that moment: the `last_solve` hint's place,
+    /// which stops counting once the target changes (032 US3, FR-014).
+    last_solve: Option<LastSolve>,
+    /// What the console keeps between the two cameras (032 US3).
+    relation: relation::Relation,
 }
 
 impl Default for Held {
@@ -329,9 +343,17 @@ impl Default for Held {
             previews: Vec::new(),
             solver: None,
             solve: None,
+            session: None,
+            last_solve: None,
+            relation: relation::Relation::new(PathBuf::new()),
         }
     }
 }
+
+/// The centre of the last solved imaging frame, with the session's target of
+/// that moment: the `last_solve` hint's place and the target it was solved
+/// under (032 US3, FR-014).
+type LastSolve = ((f64, f64), Option<(f64, f64)>);
 
 /// The paired node's imaging camera as the console holds it: the task that
 /// follows the link and the state it keeps. Dropping the `Imaging` ends the task.
@@ -357,7 +379,12 @@ impl Drop for Imaging {
 impl Imaging {
     /// Start the task that follows the link. Dropping the `Imaging` ends it.
     pub fn start(root: PathBuf, link: Arc<LinkManager>, clock: Arc<dyn Clock>) -> Arc<Self> {
-        let state = Arc::new(Mutex::new(Held::default()));
+        // The relation lives in `relation.json` in the imaging folder (FR-017).
+        let relation = relation::Relation::new(root.join("relation.json"));
+        let state = Arc::new(Mutex::new(Held {
+            relation,
+            ..Held::default()
+        }));
         let task = tokio::spawn(follow(link.clone(), state.clone()));
         let (changes, _) = watch::channel(0);
         Arc::new(Self {
@@ -397,6 +424,7 @@ impl Imaging {
             settings: ready.then(|| held.settings.clone()).flatten(),
             frame: ready.then(|| held.frame.clone()).flatten(),
             solve: ready.then(|| held.solve.clone()).flatten(),
+            relation: ready.then(|| held.relation.view()).flatten(),
         }
     }
 
@@ -900,7 +928,10 @@ async fn attempt(link: &LinkManager, held: &Arc<Mutex<Held>>) -> Result<(), Fail
         held.forward_kib_per_s,
         held.save_at_node,
     ));
-    held.camera = Some(camera);
+    held.camera = Some(camera.clone());
+    // The camera was described: the relation reads `relation.json` for this
+    // camera, and a file made for another is ignored (FR-017).
+    held.relation.describe(relation::CameraId::from(&camera));
     held.status = Some(StatusView::from(status));
     held.state = "ready";
     held.error = None;

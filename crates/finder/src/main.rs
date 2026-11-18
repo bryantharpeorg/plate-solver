@@ -47,6 +47,9 @@ struct Args {
     /// Name of ASTAP's star database, such as d50.
     #[arg(long, requires = "astap")]
     astap_db_name: Option<String>,
+    /// Focal length in millimeters, used to size an imaging solve's field until a scale is measured.
+    #[arg(long, value_parser = focal_length)]
+    focal_length_mm: Option<f64>,
     /// Run a desk console with its own state and an in-process scope node.
     #[arg(long)]
     simulate: bool,
@@ -78,6 +81,18 @@ struct Args {
 
 /// The licenses of the third-party works compiled into this binary.
 const THIRD_PARTY_NOTICES: &str = include_str!("../THIRD_PARTY_NOTICES.md");
+
+/// The `--focal-length-mm` value: a number above 0 (032).
+fn focal_length(value: &str) -> Result<f64, String> {
+    let mm: f64 = value
+        .parse()
+        .map_err(|_| "must be a number above 0".to_string())?;
+    if mm.is_finite() && mm > 0.0 {
+        Ok(mm)
+    } else {
+        Err("must be a number above 0".to_string())
+    }
+}
 
 /// The tube's altitude from a level, in degrees from 0 to 90 inclusive.
 fn parse_tube_alt(value: &str) -> Result<f64, String> {
@@ -207,6 +222,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )))
     } else {
         state
+    };
+    // The focal length sizes a solve's field until a scale is measured (032).
+    let state = match args.focal_length_mm {
+        Some(mm) => state.with_focal_length_mm(mm),
+        None => state,
     };
 
     let listener = tokio::net::TcpListener::bind(args.listen).await?;
