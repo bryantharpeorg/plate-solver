@@ -885,13 +885,13 @@ that is written and never read fails `clippy -D warnings`:
   `Imaging` is dropped; and `Imaging::view` passes the aim point in force, as
   `relation.view(in_force, held)` with `(in_force, held) =
   solving::aim_in_force(&session, now)`, read before it takes its own lock, or
-  `(None, false)` before `set_solver`. The view built under the imaging state's lock,
-  which 031's `frames::take`, the settings edit (`Imaging::set`) and `Imaging::solve`
-  answer (`State::view` in round 1's probe code), fills `relation` with
-  `relation.view(None, false)`, since `aim_in_force` cannot be read under that lock
-  (§ Plan traps 30): those answers never show an aim reading, and only `Imaging::view`
-  (`GET /api/imaging`, and `imaging` in `GET /api/session`) measures it against the aim
-  point in force. `frames.rs` is not among US4's writes and does not change.
+  `(None, false)` before `set_solver`. No view is built under the imaging state's
+  lock (§ Plan traps 30): on `main`, 031's take (`frames::take`), its settings edit
+  (`Imaging::set`) and its abort answer `Imaging::view` itself, called after the lock is
+  released, and `Imaging::solve` answers it the same way. So every answer, those and
+  `GET /api/imaging` and `imaging` in `GET /api/session`, measures the relation against
+  the aim point in force and shows the aim reading (FR-023; owner, 2026-11-18).
+  `frames.rs` is not among US4's writes and does not change.
 
 That is all `mod.rs` holds of the relation. The history, the aim reading held, the
 window, the misses and everything stored are fields of `Relation`, in `relation.rs`:
@@ -1730,7 +1730,7 @@ These are not changed by any story:
 | Stillness judged from that line (travel beyond its standard error, and scatter about it), in arcseconds | Axis counts; the mount's `moving` flag | The mount-neutral rules: imaging code reads no axis and no mount. The scatter test catches a bump or a slew's tail, which a travel test alone would average away. |
 | The field height's sources taken in turn after three misses each: the kept scale, the focal length, none | A kept scale used for ever; a second try of the same solve with no height; clearing the scale when the focal length disagrees | The relation is keyed by camera, and the scale belongs to camera and telescope together: after a change of optics a scale used for ever fails every solve, with no cure but deleting a file. A second try doubles every failed sub's wait. Turning through the sources cannot lock: a true scale comes round again (spec owner decision 22). |
 | The hint's sources tried in order across solves: the first that exists, one place down after each three misses in a row, held at `none`; the last imaging solve dropped when the target changes | A ranking only; one solve per source until one succeeds; turning from `none` back to the first; an age limit on the last imaging solve | A ranking alone lets a hint that exists but is wrong (a finder camera over 3° off the main axis, a stale measured aim point) fail every solve and never reach the whole sky. A ladder within one sub multiplies the wait of every failed sub by up to four. `none` cannot lock solving out, and a solved solve starts again from the first. An age says nothing about a telescope that was sent elsewhere a moment ago; the target is what changes then (spec owner decision 23). |
-| A measured aim point held back while Track is on and applied at the first live solve after Track is off | 036's tracker bounding the rate one error may ask for; Track restarting through GoTo on a changed aim point; accepting the chase and bounding it by a probe | 015's tracker turns the whole step into a rate nothing bounds, from this spec's landing; only a hold closes that here, with no line of the tracker changed. 036 lands four specs later. A restart through GoTo needs the GoTo inside the session. A probe measures a hazard and does not remove it (spec owner decision 25). |
+| A measured aim point held back while Track is on and applied at the first live solve after Track is off | 036's tracker bounding the rate one error may ask for; Track restarting through GoTo on a changed aim point; accepting the chase and bounding it by a probe | 015's tracker would turn the whole step into a rate nothing bounds, from this spec's landing; since 038 a step of more than 5′ is read as a push by hand instead and marks the pointing model's slip, and a smaller one is still closed by the tracker; only a hold avoids both here, with no line of the tracker changed. 036 lands four specs later. A restart through GoTo needs the GoTo inside the session. A probe measures a hazard and does not remove it (spec owner decision 25). |
 | The hold kept by the session, applied inside `record_live_pointing` | The hold kept by the relation and applied by the history's task | The session already knows Track's state and the tap; applying it there, before the live pointing is taken, makes that pointing the first at the new aim point, which a re-centre of 037 reads. |
 | `Imaging::note_solve` for a solve made outside the route | Aim readings from `Imaging::solve` alone; `solve_frame` taking readings itself | The plan document has the console measure whenever an imaging solve and a live pointing share a moment; `solve_frame` promises 035 it touches neither the view nor the relation, and stays so. |
 | The history bounded by time and thinned to `keep_s / HISTORY_MAX` | A queue of 2000 fixes | A queue at two fixes a second holds 1000 s, under the three exposures the fit spans once subs pass 330 s; the plan document's rule 6 forbids a fixed queue length. |
@@ -1768,8 +1768,10 @@ These are not changed by any story:
 
 ## Prerequisites before this spec is flipped to `ready`
 
-1. **030-imaging-camera-link and 031-imaging-frames-on-console have landed.** Met on
-   `main` at e9687ce. 030's eight stories landed by 49f8dcd (US1 at 3849a0f, US2 at
+1. **030-imaging-camera-link, 031-imaging-frames-on-console and 038-track-follows-a-push
+   have landed.** Met on `main` at e9687ce. 038 landed by 1c2b427 on 2026-11-17; US4-S8
+   reads its `slip_pending`, so the owner added it to `depends_on_landed` on
+   2026-11-18. 030's eight stories landed by 49f8dcd (US1 at 3849a0f, US2 at
    e867598, US3 at 209edcb, US4 at 2ed589c, US5 at e1cc38e, US6 at 58aff47, US7 at
    4e7eef6, US8 at 49f8dcd), and 031's nine by e9687ce (US1 at 1baecaa, US2 at 3a2f799,
    US3 at 334e8eb, US4 at e0a5bf6, US5 at 523055b, US6 at f7b58d5, US7 at 11e9f60, US8
@@ -1799,11 +1801,11 @@ These are not changed by any story:
    where round 1's probe code had one `Shared` (§ The relation, the aim reading's
    use); and the README's sentence before the tool list reads `The imaging camera has
    three tools of its own` (§ `crates/finder/src/lib.rs` and `crates/finder/README.md`).
-   One differs in what US4 builds and is left for the owner: on `main`, 031's take, its
-   settings edit and its abort answer `Imaging::view` itself, called after the lock is
-   released, so there is no view built under the imaging state's lock for § The
-   imaging state to fill with `relation.view(None, false)`. The validator reports no
-   finding at e9687ce.
+   One differed in what US4 builds, and the owner settled it on 2026-11-18: on `main`,
+   031's take, its settings edit and its abort answer `Imaging::view` itself, called
+   after the lock is released, so no view is built under the imaging state's lock, and
+   those answers and `Imaging::solve`'s show the aim reading (§ The imaging state). The
+   validator reports no finding at e9687ce.
 
    Ten of the citations moved when `main` went from dbc2b5b to 49bb210 while this trio
    was being drafted, because that commit rewrote the tests they point into; the

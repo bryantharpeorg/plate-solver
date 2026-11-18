@@ -1,6 +1,6 @@
 ---
 state: draft
-depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console"]
+depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", "038-track-follows-a-push"]
 # Drafted 2026-11-15 against `main` at dbc2b5b (dbc2b5bf15103e59e7166d9b7a79b421f9d96ce4)
 # from docs/plans/2026-11-15-specs-030-037-imaging.md, by the grilling session of that
 # day. Reviewed once that day by a second agent (§ Clarifications, the third session),
@@ -393,11 +393,12 @@ was set, and MCP clients get one tool.
   by 031's watch of changes; `SolveHint`'s `Serialize` is written by hand;
   `Imaging::solve` builds the hint with the imaging state's lock released, then checks
   for a running solve again; `take_aim_reading` is a free function on the state the
-  solve's task holds; only `Imaging::view` measures the relation against the aim point
-  in force, and the views 031's take, the settings edit and `Imaging::solve` answer
-  show no aim reading; `store_scale` and `Relation::take` save through one private
-  `Relation::save`; a Bayer region's right and bottom edges go down to an even number;
-  a test module binds the live helpers only when it uses them, and writes an expected
+  solve's task holds; every view, `Imaging::view`'s and the answers of 031's take, the
+  settings edit and `Imaging::solve`, measures the relation against the aim point in
+  force, read with the imaging state's lock released (as the owner settled on
+  2026-11-18, after the re-anchor); `store_scale` and `Relation::take` save through one
+  private `Relation::save`; a Bayer region's right and bottom edges go down to an even
+  number; a test module binds the live helpers only when it uses them, and writes an expected
   number with no more digits than an `f64` needs; `ImagingField.tsx` writes its own
   path helper and its tick points away from the aim point; the README's count of
   imaging tools goes from three to four; and a word under `src` that names a Tailwind
@@ -417,6 +418,25 @@ was set, and MCP clients get one tool.
   before it; and the up axis less its part along the sight line, which no test can
   tell apart. The probes judged each of low value. US1-S5's sleeping script may be
   killed before it writes its pid on a heavily loaded machine; it was not seen.
+
+### Session 2026-11-18 (the owner's answers after the re-anchor to e9687ce)
+
+- Q: Which view do 031's take, its settings edit and `Imaging::solve` answer? → A:
+  `Imaging::view`, so each answer shows the aim reading. This trio had said those
+  answers were built under the imaging state's lock and never showed one; on `main`
+  031 builds no view under that lock, and its take, settings edit and abort already
+  answer `Imaging::view` with the lock released. The owner chose that over adding a
+  lock-held view to 031's `mod.rs`. It fits FR-023, and no scenario reads the
+  difference (plan.md § The imaging state, tasks.md T022).
+- Q: Does this spec depend on 038-track-follows-a-push? → A: Yes. US4-S8 asserts that
+  the pointing model's slip is never marked, reading 038's `slip_pending`, so the owner
+  added 038 to `depends_on_landed`. 038 landed on 2026-11-17, and this trio is
+  anchored on top of it (plan.md § Prerequisites 1).
+- Q: Does owner decision 25 still say what happens without the hold? → A: Its reason
+  is reworded and its answer stands. Since 038, an aim point applied at once with a
+  step of more than 5′ is read as a push by hand, which marks the model's slip, rather
+  than chased by 015's tracker; a smaller step is still chased. The hold avoids both.
+  The owner asked for the same rewording in 035 and 037.
 
 ## Owner decisions
 
@@ -541,15 +561,20 @@ re-validated before the flip, never left to a story.
     another figure now.
 25. **A measured aim point and a running tracker** (a seam between this spec and 015
     that a run of 037 crosses; moved here from 037's owner decision 26, which now
-    cites this one). As first drafted, an aim reading set the session's aim point at once,
-    and 015's tracker then closed the whole step from the old aim point at a rate
-    nothing bounds, from this spec's landing (Clarifications, the fourth session).
+    cites this one). As first drafted, an aim reading set the session's aim point at once.
+    When this was put, 015's tracker would then have closed the whole step from the old
+    aim point at a rate nothing bounds, from this spec's landing (Clarifications, the
+    fourth session). Since 038 landed, a step of more than 5′ is read as a push by hand
+    instead: nothing is handed to the tracker, but the pointing model's slip is marked,
+    though nothing slipped; a smaller step is still closed by the tracker (Edge Cases, a
+    measured aim point while Track is on).
     **Settled by the owner on 2026-11-17: hold it.** This spec holds a measured aim
     point back while Track is on, shows it as held, and applies it at the first live
-    solve the session records after Track is off (FR-036, US4-S8). The hazard is closed
-    where it arises, from this spec's landing, with no change to 015's tracker. 037's
-    centring step turns Track off, takes the new aim point at the first live pointing
-    after it, re-centres and turns Track on again (037's FR-022, FR-025). Instead:
+    solve the session records after Track is off (FR-036, US4-S8). The hold avoids both,
+    the chase and the false slip, where they arise, from this spec's landing, with no
+    change to 015's tracker. 037's centring step turns Track off, takes the new aim
+    point at the first live pointing after it, re-centres and turns Track on again
+    (037's FR-022, FR-025). Instead:
     036's tracker bounds the rate one tracking error may ask for (037's first
     recommendation), which leaves the hazard live from this spec's landing until 036's
     and replaces FR-036 and US4-S8 with nothing here; or Track restarts through GoTo

@@ -290,9 +290,10 @@ description: "Task list for 032-imaging-solve-and-aim-point: Solving Imaging Fra
   exposure's middle, and pass `aim_measured` (plan.md § Solving on the console, the
   hint). In `crates/finder/src/imaging/mod.rs` add only the history task's handle to
   the state and `aim_in_force`'s two values to the call of `Relation::view` in
-  `Imaging::view`; the view built under the lock passes `(None, false)` (plan.md § The
-  imaging state). Hold the imaging state's lock across no call into the session
-  (plan.md § Plan traps 30).
+  `Imaging::view`; every answer, 031's take, settings edit and abort and
+  `Imaging::solve`'s, goes through `Imaging::view`, and no view is built under the
+  lock (plan.md § The imaging state). Hold the imaging state's lock across no call
+  into the session (plan.md § Plan traps 30).
 - [ ] T023 [US4] Run the `lint` and `test` gates with every existing test, US2's and
   US3's and the `motion` binary's tracking tests included, unchanged and green. Commit
   the green story (US4-S1, US4-S2, US4-S3, US4-S4, US4-S5, US4-S6, US4-S7 and
