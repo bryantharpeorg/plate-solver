@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ObservingSession, SessionRecording } from "../api";
 import { useSession } from "../useSession";
@@ -52,7 +52,11 @@ beforeEach(() => {
     },
   );
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  // Unmount while EventSource is still stubbed: cleanup may flush pending effects.
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("Setup recording (025 US3)", () => {
   it("places one quiet Recording region immediately after Aim point and starts a recording", async () => {
