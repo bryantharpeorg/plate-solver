@@ -226,7 +226,7 @@ focuses, calibrates or stacks.
   console's side, six stories, and names this trio in its `depends_on_landed`. No
   decision changed in the split. One story straddled the link, the scope node's own
   copy, and was cut there: what the scope node does is US7 here, and what the console
-  shows of it is 031's US2-S12.
+  shows of it is 031's US5-S4.
 - Q: What does 031 take from this trio? → A: Names only, each from plan.md
   § Interfaces: the service `ScopeNodeImaging` and its messages (§ The scope link);
   `NodeService::with_imaging` and `with_imaging_save_dir` (§ The node's service, § The
@@ -360,7 +360,7 @@ answers: the owner approved the imaging series' recommendations on 2026-11-17
    node clock's start time as `NODE-T0`, since the node has no wall clock, asked for
    with each exposure as `save`. Instead: tell INDI to save (`UPLOAD_BOTH`); or raw dumps; or no copy at the
    scope node, which drops US7 and `save` and `save_dir` with it, here and in the plan
-   document, and with them 031's `save_at_node` setting and its US2-S12.
+   document, and with them 031's `save_at_node` setting and its US5-S4.
 10. **The simulated sky.** Recommended: a seeded field of the simulator's own, 320 stars
     a square degree brighter than magnitude 16, and the constants of plan.md § The
     simulated imaging camera. Instead: a real deep catalogue file.
@@ -1118,7 +1118,7 @@ key and a file writer to the node.
 **Independent Test**: `crates/scope-node/tests/imaging_save.rs`. The `test` gate's
 `cargo nextest run --workspace --all-targets --all-features --locked` runs it; during
 development, `cargo nextest run -p scope-node --locked --test imaging_save`. What the
-console shows of the copy is 031's US2-S12, tested there.
+console shows of the copy is 031's US5-S4, tested there.
 
 **Acceptance Scenarios**:
 
