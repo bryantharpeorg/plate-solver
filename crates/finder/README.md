@@ -432,6 +432,7 @@ Only simulate mode registers these controls, all behind the console's same-origi
 | `GET /api/sim/telescope` | `{camera: {alt, az, ra, dec}, eyepiece: {alt, az, ra, dec}}`, true directions in degrees, RA/Dec in J2000. |
 | `POST /api/sim/telescope` | Exactly one of `{alt_deg, az_deg}`, `{turn_deg, tilt_deg}`, or `{eyepiece_on_star: true}`; answers the true directions. |
 | `POST /api/sim/frames` | `{running: false}` stops exposures; `{running: true}` resumes them. Answers `{running}`. |
+| `GET /api/sim/focus`, `POST /api/sim/focus` | `{focus_error}`, from -100 to 100: the simulated focuser. 0 is best focus; the simulated imaging camera's stars grow with its size either way. Answers `{focus_error}`. |
 
 Turn is clockwise positive; tilt is up positive. `eyepiece_on_star` centres the brightest
 database star in the field at the current time. Stars continue to drift with the sky.

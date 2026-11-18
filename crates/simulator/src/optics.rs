@@ -162,6 +162,18 @@ impl Simulator {
         self.state.lock().unwrap().imaging = optics;
     }
 
+    /// The focus error of the imaging optics: 0 is best focus, and its sign
+    /// does not change a star's size.
+    pub fn focus_error(&self) -> f64 {
+        self.state.lock().unwrap().imaging.focus_error
+    }
+
+    /// Turn the simulated focuser. Panics on a value that is not finite.
+    pub fn set_focus_error(&self, error: f64) {
+        assert!(error.is_finite());
+        self.state.lock().unwrap().imaging.focus_error = error;
+    }
+
     /// Where the imaging frame points now, on the clock's reading.
     pub fn imaging_truth(&self) -> ImagingTruth {
         self.imaging_truth_at(self.clock.now())

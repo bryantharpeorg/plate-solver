@@ -549,7 +549,8 @@ pub fn router(state: AppState) -> Router {
     if state.simulation.is_some() {
         routes = routes
             .route("/api/sim/telescope", get(sim_telescope).post(sim_push))
-            .route("/api/sim/frames", post(sim_frames));
+            .route("/api/sim/frames", post(sim_frames))
+            .route("/api/sim/focus", get(sim_focus).post(sim_set_focus));
     }
     if state.mcp.enabled {
         routes = routes.merge(
@@ -648,6 +649,31 @@ async fn sim_frames(
         sim.stop_frames();
     }
     Ok(Json(serde_json::json!({"running":running})))
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FocusControl {
+    focus_error: f64,
+}
+async fn sim_focus(State(state): State<AppState>, _write: SessionWrite) -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "focus_error": state.simulator().expect("simulate route").focus_error()
+    }))
+}
+async fn sim_set_focus(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    control: Result<Json<FocusControl>, JsonRejection>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let focus_error = sim_json(control)?.focus_error;
+    let sim = state.simulator().expect("simulate route");
+    if !(-100.0..=100.0).contains(&focus_error) {
+        return Err(ApiError::bad_request(
+            "focus_error must be a number from -100 to 100",
+        ));
+    }
+    sim.set_focus_error(focus_error);
+    Ok(Json(serde_json::json!({"focus_error": sim.focus_error()})))
 }
 pub(crate) fn sim_json<T>(result: Result<Json<T>, JsonRejection>) -> Result<T, ApiError> {
     result.map(|Json(value)| value).map_err(|error| {
