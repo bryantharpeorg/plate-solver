@@ -9,6 +9,7 @@ mod aim;
 mod api;
 mod freshness;
 mod imaging;
+mod imaging_frames;
 mod link;
 mod live;
 mod notices;

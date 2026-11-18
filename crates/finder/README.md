@@ -185,6 +185,7 @@ The page uses the API types in `web/src/api.ts`, which mirror the Rust structs i
 | `POST /api/record/raw` | JSON `{"frames":N}`, N from 1 to 10. While recording, save the next N star frames' 8-bit pixels as `raw-<id>.png`; progress is `recording.raw` in the session. Needs a scope node built with 025. Refused while the mount moves. Same-origin writes only. |
 | `GET /api/imaging` | The imaging camera the paired scope node relays: `state`, one of `off` (this console takes no imaging frames), `no_link`, `no_service` (the node was built before 030), `no_camera`, `error` and `ready`; with `error`, the node's words as `error`; with `ready`, the camera's `camera` description, its `status`, and the `settings` in force. |
 | `PUT /api/imaging/settings` | JSON partial edit of `exposure_ms`, `gain`, `offset`, `binning`, `roi` (a region or null for the whole sensor), `cooler_on`, `set_temp_c`, `forward_kib_per_s` (a whole number from 64 to 1048576 KiB/s, or null for no limit) and `save_at_node`. Answers 200 with the imaging view; 400 with a JSON `error` for a value the console or the camera refuses, 403 for a foreign origin, 415 for another content type, 409 while the state is not `ready`, and 502 with `the scope node did not apply the settings: <message>` when the node's call fails otherwise. Same-origin writes only. |
+| `POST /api/imaging/frame` | No body. Take one imaging frame with the settings' `exposure_ms` and the purpose `frame`, receiving the samples on the imaging connection while the mount keeps tracking, and save them untouched as a FITS file. Answers 200 at once with the imaging view, whose `frame` is the exposure just asked for, `exposing`; the frame moves on through `receiving` to `saved` or `failed`, each state read from `GET /api/imaging`. 409 with the state's words while the state is not `ready`. Same-origin writes only. |
 | `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
 | `POST /api/stop` | No body. Always 200, ending tracking, clearing arming and commanding both axes to stop, from any origin, without taking the motion lock. Sends `StopAll` immediately, retrying in its own task with 200 ms per attempt and 50 ms between attempts for a bounded 2 s window, even if the request goes away. Waits for the round and answers exactly `{"stopped":true}` when the scope node answers OK or there is no scope link; otherwise answers `{"stopped":true,"acknowledged":false}`. This means the node did not answer and the mount may still be moving; press Stop again. The MCP tools `stop` and `stop_all` return the same reply. |
 | `POST /api/model/second-sync` | No body. Start the second sync; 200 with `{"started":true}`, or 409 with a JSON `error` naming the refusal. Same-origin writes only. |
@@ -587,4 +588,40 @@ read back from the camera: an edit sends only the fields it names, `roi: null`
 asks for the whole sensor, and the node's answer is what the view shows.
 
 Frames are saved under the imaging folder, `imaging/` in the state folder or the
-folder `--imaging-dir` names.
+folder `--imaging-dir` names. `POST /api/imaging/frame` takes one: the node
+exposes the camera for the settings' `exposure_ms`, the console receives the
+samples on the imaging connection while the mount keeps tracking, and the frame
+is saved untouched. The view's `frame` follows it: `id`, `state` (one of
+`exposing`, `receiving`, `saved` and `failed`), `purpose`, `exposure_ms`,
+`requested_at` and `roi`; with the cooler on, `set_temp_c`, the temperature the
+file's `SET-TEMP` card is written from; from the frame's header on, `width`,
+`height`, `bits`, `bayer`, `gain`, `offset`, `binning`, `temp_c`, `start`,
+`date_obs`, `bytes` and `received`; once the last byte is in hand,
+`received_at`, and when saved, `saved_at` and `file`. `roi` starts as the
+region the console's settings held and is replaced by the header's when the
+header carries one, so a region moved by another client is stamped as it really
+was.
+
+Each whole frame is saved as `frames/<UTC date of the exposure's
+start>/<id, six digits>.fits` under the imaging folder, written under a
+`.part` name and renamed. The id is the console's own count, which starts after
+the largest id in the date's folder and rises with every frame asked for, saved
+or not. An imaging frame is never rewritten or replaced: when the name is
+already taken the frame ends `failed` with
+`could not save the imaging frame: <file> already exists` and the file there is
+left as it is.
+
+The file is one FITS image with the samples untouched, 16-bit samples stored
+with `BZERO` 32768 and 8-bit samples as they are. Its cards, in order:
+`DATE-OBS` (the exposure's start as UTC to the millisecond), `EXPTIME`, `GAIN`,
+`OFFSET`, `XBINNING` and `YBINNING`, `XORGSUBF` and `YORGSUBF` (the frame's
+region's origin in binned pixels), `CCD-TEMP`, `SET-TEMP` (when the cooler was
+on with a set temperature), `BAYERPAT`, `INSTRUME`, `SERIALNO` (when the camera
+has a serial), `IMAGETYP` (`LIGHT`, `DARK` for the purpose `dark` or `FLAT` for
+`flat`), `ROWORDER`, `FRAMEID` and `PURPOSE`. `GAIN`, `OFFSET`, `CCD-TEMP` and
+`BAYERPAT` are left out when the frame has none.
+
+The time a frame took to reach the console is read from the view:
+`received_at − start − exposure_ms/1000`, the time from the end of the exposure
+to the last byte in hand, which is what the forwarding limit paces; that less
+the scope node's own probe figure for the link is the link alone.

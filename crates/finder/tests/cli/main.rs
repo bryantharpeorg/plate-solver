@@ -8,6 +8,7 @@ mod aim;
 mod backlash;
 mod flags;
 mod imaging;
+mod imaging_frames;
 mod mount_sky;
 mod mount_sky_night;
 mod recording;
