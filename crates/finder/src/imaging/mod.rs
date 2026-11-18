@@ -317,8 +317,12 @@ struct Held {
     /// the session's target of that moment: the `last_solve` hint's place,
     /// which stops counting once the target changes (032 US3, FR-014).
     last_solve: Option<LastSolve>,
-    /// What the console keeps between the two cameras (032 US3).
+    /// What the console keeps between the two cameras (032 US3, US4).
     relation: relation::Relation,
+    /// The task that fills the history of the finder camera's live solves,
+    /// started by `set_solver` and aborted with the console's own task
+    /// (032 US4, FR-019).
+    history_task: Option<JoinHandle<()>>,
 }
 
 impl Default for Held {
@@ -346,6 +350,7 @@ impl Default for Held {
             session: None,
             last_solve: None,
             relation: relation::Relation::new(PathBuf::new()),
+            history_task: None,
         }
     }
 }
@@ -373,6 +378,16 @@ pub struct Imaging {
 impl Drop for Imaging {
     fn drop(&mut self) {
         self.task.abort();
+        // The history's task ends with the console's own (FR-019).
+        if let Some(task) = self
+            .state
+            .lock()
+            .expect("imaging state")
+            .history_task
+            .take()
+        {
+            task.abort();
+        }
     }
 }
 
@@ -398,8 +413,19 @@ impl Imaging {
     }
 
     /// `GET /api/imaging`, and `imaging` in the session. Outside `ready` the view
-    /// holds none of `camera`, `status`, `settings`, `frame` and `solve`.
+    /// holds none of `camera`, `status`, `settings`, `frame` and `solve`. The
+    /// aim point in force is read before the lock is taken: no lock is held
+    /// across a call into the session, and every answer — this one, the take,
+    /// the settings edit, the abort and `Imaging::solve`'s — measures the
+    /// relation against it (FR-023).
     pub fn view(&self) -> ImagingView {
+        let now = self.clock.now();
+        let (in_force, aim_held) = {
+            let session = self.state.lock().expect("imaging state").session.clone();
+            session
+                .map(|session| solving::aim_in_force(&session.0, now))
+                .unwrap_or((None, false))
+        };
         let held = self.state.lock().expect("imaging state");
         let ready = held.state == "ready";
         // `status.exposing` is the console's own: true while its latest frame
@@ -424,7 +450,9 @@ impl Imaging {
             settings: ready.then(|| held.settings.clone()).flatten(),
             frame: ready.then(|| held.frame.clone()).flatten(),
             solve: ready.then(|| held.solve.clone()).flatten(),
-            relation: ready.then(|| held.relation.view()).flatten(),
+            relation: ready
+                .then(|| held.relation.view(in_force, aim_held))
+                .flatten(),
         }
     }
 

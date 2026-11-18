@@ -178,6 +178,35 @@ impl Frame {
         let (x1, y1) = self.project_pinhole(toward_pole)?;
         Some((x1 - x0).atan2(y0 - y1).to_degrees().rem_euclid(360.0))
     }
+
+    /// The angle, east of celestial north in 0 to 360, of this frame's up
+    /// axis as seen at sky direction `v`: the up axis less its part along `v`.
+    /// `None` where that is not defined: at a celestial pole, or where the up
+    /// axis lies along `v` (032, FR-021).
+    pub fn up_east_of_north_at(&self, v: UnitVector) -> Option<f64> {
+        let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        // The camera's up in J2000 is the rotation's third row.
+        let up_axis = self.rotation.rows[2];
+        let along = dot(up_axis, [v.x, v.y, v.z]);
+        let u = [
+            up_axis[0] - along * v.x,
+            up_axis[1] - along * v.y,
+            up_axis[2] - along * v.z,
+        ];
+        // The pole and the east at `v`, each flat against the sky there.
+        let north = [-v.z * v.x, -v.z * v.y, 1.0 - v.z * v.z];
+        let east = [-v.y, v.x, 0.0];
+        let length = |a: [f64; 3]| dot(a, a).sqrt();
+        if length(u) < 1e-9 || length(north) < 1e-9 || length(east) < 1e-9 {
+            return None;
+        }
+        Some(
+            (dot(u, east) / length(east))
+                .atan2(dot(u, north) / length(north))
+                .to_degrees()
+                .rem_euclid(360.0),
+        )
+    }
 }
 
 /// Precess a J2000 position, in degrees, to the mean equator and equinox of Julian date
