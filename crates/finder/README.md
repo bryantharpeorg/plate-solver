@@ -225,6 +225,7 @@ The page uses the API types in `web/src/api.ts`, which mirror the Rust structs i
 | `DELETE /api/imaging/focus` | No body. Stop the focus aid, put the imaging settings back and answer 200 with the imaging view. Same-origin writes only. |
 | `GET /api/imaging/calibration` | The calibration library: `masters`, the `set` being taken, what would `match` the latest imaging frame, and `error` when the library's index is unreadable. |
 | `DELETE /api/imaging/calibration/{id}` | Remove a master dark or master flat and its files, or stop or drop the set with that id. Answers 200 with the calibration object, 404 for an unknown id. Same-origin writes only. |
+| `POST /api/imaging/calibration/darks` | JSON `{"count":N}`, N from 3 to 64. Cover the telescope first. Takes one offset frame and N darks at the settings in force, checks that they are dark, and adds their master dark and its bad-pixel map; progress is `set`. `"anyway":true` takes them whatever the check says. Same-origin writes only. |
 | `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
 | `POST /api/stop` | No body. Always 200, ending tracking, clearing arming and commanding both axes to stop, from any origin, without taking the motion lock. Sends `StopAll` immediately, retrying in its own task with 200 ms per attempt and 50 ms between attempts for a bounded 2 s window, even if the request goes away. Waits for the round and answers exactly `{"stopped":true}` when the scope node answers OK or there is no scope link; otherwise answers `{"stopped":true,"acknowledged":false}`. This means the node did not answer and the mount may still be moving; press Stop again. The MCP tools `stop` and `stop_all` return the same reply. |
 | `POST /api/model/second-sync` | No body. Start the second sync; 200 with `{"started":true}`, or 409 with a JSON `error` naming the refusal. Same-origin writes only. |
@@ -1026,3 +1027,59 @@ files. A console without imaging answers 409 with `this console takes no
 imaging frames`. Same-origin writes apply first, so a foreign Origin answers
 403 even without imaging. Masters and their files are kept until this DELETE
 route removes them; there is no automatic expiry.
+
+
+Cover the telescope, then send `POST /api/imaging/calibration/darks` with
+`{"count":20}` to take darks at the exposure, gain, offset, binning and set
+temperature in force. The answer is immediate: `set` names the latest set's
+`id`, `kind`, `state`, `wanted`, `taken` and `exposure_ms`; as measurements
+arrive it adds `offset_level`, `level`, and on failure `error`. The set first
+reads an **offset frame**, a dark at the camera's shortest exposure. Its
+median is the **offset level**; its noise is that median less the 16th
+percentile, with a floor of one count. Then it takes the requested number
+of darks, averages their samples, saves the master dark and attaches its
+bad-pixel map. The offset frame is excluded from that mean and from the
+master's mean sensor temperature.
+
+The dark test refuses in this order:
+
+- An offset level above 20 percent of full scale:
+  `the camera is not covered: its shortest exposure reads <level> of <full scale>`.
+- Any dark's median more than twice the offset frame's noise above the offset
+  level: `the darks are not dark: one reads <level> against an offset level of <offset level>; cover the telescope`.
+- Any dark with more than eight bright samples and more than one in 10,000
+  of its samples bright, excluding hot pixels:
+  `the darks are not dark: one holds <n> bright samples that are not hot pixels; cover the telescope`.
+
+These failures add no master and put `not_dark: true` in `set`. A covered
+warm sensor, a long exposure or sensor glow can read above the line; a
+field with almost no stars can pass despite being uncovered. The test's
+constants have not been measured on the real camera. Only when the
+telescope is covered, `{"count":20,"anyway":true}` takes and averages the
+darks whatever these three tests say. The resulting master's `checked` is
+false and its FITS card `DARKTEST` is F; otherwise they are true and T.
+A sensor more than 1.0 °C from its set temperature fails even with `anyway`:
+`the sensor is at <t> °C, not yet at its set temperature <s> °C`.
+Every saved imaging frame's own settings and exposure must agree throughout
+the set; a camera changing them fails with
+`the imaging settings changed during the set`.
+
+Every dark, including the offset frame, is kept as an ordinary imaging
+frame under `frames/`, with purpose `dark` and `IMAGETYP` DARK. At the
+worked example's 4944 × 3284 size, 20 darks cost about 650 MB of saved
+imaging frames and their master about 65 MB. They are not automatically
+deleted. Stop a running set with `DELETE /api/imaging/calibration/<id>` or
+by aborting its exposure with `POST /api/imaging/abort`. The final state
+is `done`, `failed` or `stopped`; before publishing it, the console puts
+the original exposure back and releases the imaging camera. If the
+camera is no longer ready, it may refuse that restoration.
+
+A set holds the imaging camera from acceptance until its end: an imaging
+frame, a settings change, the focus aid or a stack asked for meanwhile is
+refused with `a set of darks or flats` in the words. A set asked for while
+another holds the camera is refused with that holder's name. A request
+while a single imaging frame is in flight answers `an exposure is in progress`;
+a request while another set runs answers
+`a set of darks or flats is already being taken`. A single imaging frame
+started on another thread just before the set acquires the camera can
+make the set's first settings change fail, before any dark is taken.
