@@ -9,6 +9,8 @@ use super::{
     solver::{ImagingSolver, Region, SolveError, SolveFrame},
 };
 
+pub mod aid;
+
 /// Fewer stars than this in a star measure are no reading.
 pub const MIN_STARS: u32 = 5;
 /// A star measure above this many frame pixels is "far out". 20 frame pixels is
