@@ -28,7 +28,10 @@ use finder::{
 use scope_link::memory;
 use scope_node::{
     clock::NodeClock,
-    imaging::{synthetic::SyntheticImagingCamera, ImagingCamera},
+    imaging::{
+        synthetic::SyntheticImagingCamera, Exposure, ImagingCamera, ImagingFrame, ImagingFuture,
+        ImagingInfo, ImagingSettings, ImagingStatus,
+    },
     service::{NodeControls, NodeService},
     synthetic::SyntheticCamera,
     Settings,
@@ -211,6 +214,26 @@ fn console(
     state
 }
 
+// NodeService accepts a concrete camera. Keep its boxed port local to this rig.
+struct Camera(Box<dyn ImagingCamera>);
+impl ImagingCamera for Camera {
+    fn describe(&self) -> ImagingFuture<'_, ImagingInfo> {
+        self.0.describe()
+    }
+    fn status(&self) -> ImagingFuture<'_, ImagingStatus> {
+        self.0.status()
+    }
+    fn apply<'a>(&'a self, settings: &'a ImagingSettings) -> ImagingFuture<'a, ImagingSettings> {
+        self.0.apply(settings)
+    }
+    fn expose<'a>(&'a self, exposure: &'a Exposure) -> ImagingFuture<'a, ImagingFrame> {
+        self.0.expose(exposure)
+    }
+    fn abort(&self) -> ImagingFuture<'_, ()> {
+        self.0.abort()
+    }
+}
+
 fn stand_in_node(camera: Option<Box<dyn ImagingCamera>>) -> (Simulator, Transport) {
     let sim = sim();
     let clock = Arc::new(NodeTime(sim.clock().clone()));
@@ -222,7 +245,9 @@ fn stand_in_node(camera: Option<Box<dyn ImagingCamera>>) -> (Simulator, Transpor
         NodeControls::default(),
     )
     .unwrap()
-    .with_imaging(camera.unwrap_or_else(|| Box::new(SyntheticImagingCamera::new(clock))));
+    .with_imaging(Camera(
+        camera.unwrap_or_else(|| Box::new(SyntheticImagingCamera::new(clock))),
+    ));
     node.controls()
         .set_frame_interval(Duration::from_millis(500));
     let transport = Transport::connector(move || {
@@ -290,19 +315,20 @@ pub(crate) async fn wait_stack(rig: &Rig, done: impl Fn(&Value) -> bool) -> Valu
 
 pub(crate) fn cards(bytes: &[u8]) -> Vec<(String, String)> {
     bytes
-        .chunks_exact(80)
+        .as_chunks::<80>()
+        .0
+        .iter()
         .take_while(|c| &c[..8] != b"END     ")
-        .filter_map(|c| {
-            (c[8] == b'=').then(|| {
-                (
-                    String::from_utf8_lossy(&c[..8]).trim().to_string(),
-                    String::from_utf8_lossy(&c[10..])
-                        .trim()
-                        .trim_matches('\'')
-                        .trim()
-                        .to_string(),
-                )
-            })
+        .filter(|c| c[8] == b'=')
+        .map(|c| {
+            (
+                String::from_utf8_lossy(&c[..8]).trim().to_string(),
+                String::from_utf8_lossy(&c[10..])
+                    .trim()
+                    .trim_matches('\'')
+                    .trim()
+                    .to_string(),
+            )
         })
         .collect()
 }
@@ -521,16 +547,18 @@ async fn failed_solves_and_an_antipode_are_dropped() {
 
     let rig = stand_in_rig(
         "stack-antipode",
-        ScriptedSolver::new().solve_at(
-            2,
-            Scripted::Solve {
-                ra_deg: 263.8221,
-                dec_deg: 5.3911,
-                up_deg: 30.0,
-                arcsec_per_px: 2.16,
-                mirrored: false,
-            },
-        ),
+        ScriptedSolver::new()
+            .delay(Duration::from_millis(500))
+            .solve_at(
+                2,
+                Scripted::Solve {
+                    ra_deg: 263.8221,
+                    dec_deg: 5.3911,
+                    up_deg: 30.0,
+                    arcsec_per_px: 2.16,
+                    mirrored: false,
+                },
+            ),
         None,
     )
     .await;
