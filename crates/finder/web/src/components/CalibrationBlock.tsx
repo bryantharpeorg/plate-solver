@@ -164,21 +164,25 @@ export function CalibrationBlock({ calibration, onChange }: { calibration: Imagi
       </form>
       {set && (
         <div className="space-y-3">
-          {status && <p role="status">{status}</p>}
+          {status && (
+            <div className="flex flex-wrap items-center gap-3">
+              <p role="status">{status}</p>
+              {running && (
+                <button
+                  type="button"
+                  className="button"
+                  disabled={pending}
+                  onClick={() => void send(() => deleteCalibration(set.id))}
+                >
+                  Stop
+                </button>
+              )}
+            </div>
+          )}
           {set.state === "failed" && (
             <p role="alert">{`${set.kind === "dark" ? "Darks" : "Flats"} stopped: ${set.error}.`}</p>
           )}
           {waiting && set.error && <p role="alert">{`The flats' darks stopped: ${set.error}.`}</p>}
-          {running && (
-            <button
-              type="button"
-              className="button"
-              disabled={pending}
-              onClick={() => void send(() => deleteCalibration(set.id))}
-            >
-              Stop
-            </button>
-          )}
           {waiting && (
             <div className="flex flex-wrap gap-3">
               <button
