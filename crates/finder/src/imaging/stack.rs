@@ -2,6 +2,7 @@
 //! reference grid, and the sums that make a stack. Pure functions; nothing here
 //! reads a file, a clock, the mount or the site.
 
+pub mod display;
 pub mod service;
 
 use super::{
