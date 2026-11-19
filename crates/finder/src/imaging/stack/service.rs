@@ -13,12 +13,13 @@ use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{watch, Notify};
 
-use super::{Added, Colour, Placement, Stack, SubSettings};
+use super::{display, Added, Colour, Placement, Stack, SubSettings};
 use crate::{
     imaging::{
         calibration::{library::FrameKey, service::Calibration, Mosaic},
         fits, focus,
         frames::FrameView,
+        preview,
         solver::{
             HintSource, ImagingSolve, ImagingSolver, Region, SolveError, SolveFrame, SolveHint,
         },
@@ -35,6 +36,7 @@ pub const QUEUE_SUBS: usize = 4;
 pub const FOCUS_GATE_MIN: usize = 5;
 pub const FOCUS_GATE_EXCESS: f64 = 0.3;
 pub const REHINT_AFTER: u32 = 3;
+pub const DISPLAY_EVERY: u32 = 8;
 
 /// Absent is the default, or unchanged on a running stack.
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -136,7 +138,7 @@ pub struct LastView {
     pub took_ms: f64,
 }
 
-/// The latest stack, running or ended. Later stories add display and files.
+/// The latest stack, running or ended. Later stories add files.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[non_exhaustive]
 pub struct StackView {
@@ -160,6 +162,8 @@ pub struct StackView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub focus_median_arcsec: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ended_at: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ended_reason: Option<&'static str>,
@@ -179,6 +183,19 @@ struct Run {
     stopping: watch::Sender<bool>,
     finished: watch::Sender<bool>,
     ending: Option<Ending>,
+    displayed_subs: u32,
+}
+
+struct Picture {
+    rgb: preview::Rgb,
+    jpeg: Vec<u8>,
+}
+
+#[derive(Default)]
+struct Pixels {
+    stack: Option<Stack>,
+    picture: Option<Picture>,
+    made: u64,
 }
 
 /// Counts and pixels have separate locks: a view never waits for a pixel pass.
@@ -188,7 +205,9 @@ pub struct Stacker {
     calibration: Arc<Calibration>,
     clock: Arc<dyn Clock>,
     counts: Mutex<Option<Run>>,
-    pixels: Arc<Mutex<Option<Stack>>>,
+    pixels: Arc<Mutex<Pixels>>,
+    /// Serializes picture making alone, including across blocking-pool awaits.
+    pictures: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl Stacker {
@@ -202,7 +221,8 @@ impl Stacker {
             calibration,
             clock,
             counts: Mutex::new(None),
-            pixels: Arc::new(Mutex::new(None)),
+            pixels: Arc::new(Mutex::new(Pixels::default())),
+            pictures: Arc::new(tokio::sync::Mutex::new(())),
         })
     }
 
@@ -228,7 +248,7 @@ impl Stacker {
                 "stretch must be a number from 1 to 1000",
             ));
         }
-        {
+        let running = {
             let mut counts = self.counts.lock().expect("stack counts");
             if let Some(run) = counts.as_mut().filter(|run| run.view.state == "stacking") {
                 if request.reject.is_some() || request.focus_gate.is_some() {
@@ -242,8 +262,19 @@ impl Stacker {
                 if let Some(stretch) = request.stretch {
                     run.view.options.stretch = stretch;
                 }
-                return Ok(run.view.clone());
+                let refresh = (request.gains.is_some() || request.stretch.is_some())
+                    && run.view.preview.is_some();
+                Some((run.view.clone(), refresh))
+            } else {
+                None
             }
+        };
+        if let Some((view, refresh)) = running {
+            if refresh {
+                self.make_picture(&view.id).await;
+                return Ok(self.view().expect("the latest stack"));
+            }
+            return Ok(view);
         }
         let imaging = self.imaging.view();
         if imaging.state != "ready" {
@@ -293,7 +324,7 @@ impl Stacker {
                 reject: request.reject.unwrap_or(true),
                 focus_gate: request.focus_gate.unwrap_or(true),
                 gains: request.gains.unwrap_or([1.0; 3]),
-                stretch: request.stretch.unwrap_or(10.0),
+                stretch: request.stretch.unwrap_or(display::DEFAULT_STRETCH),
             },
             taken: 0,
             stacked: 0,
@@ -304,6 +335,7 @@ impl Stacker {
             last: None,
             missing: None,
             focus_median_arcsec: None,
+            preview: None,
             ended_at: None,
             ended_reason: None,
             error: None,
@@ -312,13 +344,14 @@ impl Stacker {
         let (finished, _) = watch::channel(false);
         let taker_stop = stopping.subscribe();
         let worker_stop = stopping.subscribe();
-        *self.pixels.lock().expect("stack pixels") = None;
+        *self.pixels.lock().expect("stack pixels") = Pixels::default();
         *self.counts.lock().expect("stack counts") = Some(Run {
             view: view.clone(),
             waiting: VecDeque::with_capacity(QUEUE_SUBS),
             stopping,
             finished,
             ending: None,
+            displayed_subs: 0,
         });
         let waiting = Arc::new(Notify::new());
         let notify = waiting.clone();
@@ -347,6 +380,9 @@ impl Stacker {
         tokio::spawn(async move {
             taker.await.expect("the stack taker");
             worker.await.expect("the stack worker");
+            // An option request can also be rendering. Finish it before ending;
+            // queued requests check the run's identity and state under this lock.
+            let _pictures = stacker.pictures.lock().await;
             let ended_at = stacker.clock.now();
             let mut counts = stacker.counts.lock().expect("stack counts");
             let run = counts.as_mut().expect("the ending stack");
@@ -394,8 +430,85 @@ impl Stacker {
         self.pixels
             .lock()
             .expect("stack pixels")
+            .stack
             .as_ref()
             .map(Stack::mean)
+    }
+
+    /// A copy of the latest JPEG, retained when the stack ends.
+    pub fn preview(&self) -> Option<Vec<u8>> {
+        self.pixels
+            .lock()
+            .expect("stack pixels")
+            .picture
+            .as_ref()
+            .map(|picture| picture.jpeg.clone())
+    }
+
+    /// Copy the kept picture, then shrink and encode it with the pixels unlocked.
+    pub fn preview_within(&self, max_width: u32) -> Option<Vec<u8>> {
+        let picture = self
+            .pixels
+            .lock()
+            .expect("stack pixels")
+            .picture
+            .as_ref()?
+            .rgb
+            .clone();
+        preview::jpeg(&display::shrink(&picture, max_width))
+    }
+
+    async fn make_picture(self: &Arc<Self>, id: &str) {
+        let picture = self.pictures.clone().lock_owned().await;
+        let options = {
+            let counts = self.counts.lock().expect("stack counts");
+            let Some(run) = counts
+                .as_ref()
+                .filter(|run| run.view.id == id && run.view.state == "stacking")
+            else {
+                return;
+            };
+            run.view.options.clone()
+        };
+        let stacker = self.clone();
+        tokio::task::spawn_blocking(move || {
+            // The blocking job keeps the guard even if its caller is cancelled.
+            let _picture = picture;
+            // Hold the pixels for reduction alone, with no full-size mean.
+            let (reduced, subs) = {
+                let pixels = stacker.pixels.lock().expect("stack pixels");
+                let Some(stack) = pixels.stack.as_ref() else {
+                    return;
+                };
+                (
+                    display::reduce(
+                        stack.sum(),
+                        stack.weight(),
+                        stack.width(),
+                        stack.height(),
+                        display::DISPLAY_WIDTH,
+                    ),
+                    stack.subs(),
+                )
+            };
+            let planes = display::background(&reduced);
+            let rgb = display::tone(&reduced, &planes, options.gains, options.stretch);
+            let Some(jpeg) = preview::jpeg(&rgb) else {
+                return;
+            };
+            let count = {
+                let mut pixels = stacker.pixels.lock().expect("stack pixels");
+                pixels.picture = Some(Picture { rgb, jpeg });
+                pixels.made += 1;
+                pixels.made
+            };
+            let mut counts = stacker.counts.lock().expect("stack counts");
+            let run = counts.as_mut().expect("the displayed stack");
+            run.displayed_subs = subs;
+            run.view.preview = Some(format!("/api/imaging/stack/preview.jpg?n={count}"));
+        })
+        .await
+        .expect("the stack picture maker cannot be cancelled");
     }
 
     /// First requester chooses the reason. Both tasks observe the same mark.
@@ -562,9 +675,10 @@ impl Worker {
                 last.outcome = outcome;
                 last.took_ms = began.elapsed().as_secs_f64() * 1000.0;
             }
-            {
+            let display = {
                 let mut counts = self.stacker.counts.lock().expect("stack counts");
-                let view = &mut counts.as_mut().expect("the working stack").view;
+                let run = counts.as_mut().expect("the working stack");
+                let view = &mut run.view;
                 match &result {
                     Ok(accepted) => {
                         view.stacked += 1;
@@ -580,13 +694,20 @@ impl Worker {
                 if last.is_some() {
                     view.last = last;
                 }
-            }
+                result.is_ok()
+                    && (run.waiting.is_empty()
+                        || view.stacked - run.displayed_subs >= DISPLAY_EVERY)
+            };
             if let Ok(accepted) = result {
                 // Only an accepted sub measures the aim point; page solve and
                 // kept scale are untouched. No stack lock is held here.
                 self.stacker
                     .imaging
                     .note_solve(&accepted.frame, sub.id, &accepted.solve);
+                if display {
+                    let id = self.stacker.view().expect("the working stack").id;
+                    self.stacker.make_picture(&id).await;
+                }
             }
         }
     }
@@ -779,7 +900,7 @@ impl Worker {
                     .calibrate(&key, &mut mosaic, None, angle);
                 let colour = super::colour(&mosaic);
                 let mut pixels = pixels.lock().expect("stack pixels");
-                let stack = pixels.get_or_insert_with(|| {
+                let stack = pixels.stack.get_or_insert_with(|| {
                     let stack = Stack::new(colour.width, colour.height).with_background_match();
                     if reject {
                         stack.with_rejection()
