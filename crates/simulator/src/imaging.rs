@@ -38,6 +38,38 @@ pub const ADU_PER_E_AT_GAIN_0: f64 = 0.25;
 /// Counts a unit of offset makes.
 pub const ADU_PER_OFFSET: f64 = 16.0;
 
+/// A satellite's streak across chosen frames (035). Sensor pixels, unbinned.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SatelliteStreak {
+    /// The camera's frame numbers it crosses, counted from 0 as `frames_taken` counts.
+    pub frames: Vec<u64>,
+    pub from: (f64, f64),
+    pub to: (f64, f64),
+    /// Electrons in a sample on the streak's centre line, whatever its filter.
+    pub electrons: f64,
+}
+
+/// A faint round glow fixed on the sky (035).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ExtendedSource {
+    /// J2000 degrees of its centre.
+    pub ra_deg: f64,
+    pub dec_deg: f64,
+    /// Its Gaussian width on the sky.
+    pub sigma_arcsec: f64,
+    /// Electrons a second at its centre in a sample whose filter passes all of it.
+    pub electrons_per_s: f64,
+    /// Relative light in red, green and blue.
+    pub colour: [f64; 3],
+}
+
+/// What else is in the simulated sky (035).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Scene {
+    pub satellites: Vec<SatelliteStreak>,
+    pub sources: Vec<ExtendedSource>,
+}
+
 /// One sensor sample that gathers charge by itself (034). Sensor pixels, unbinned.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HotPixel {
@@ -260,6 +292,7 @@ struct Shot {
     settings: ImagingSettings,
     sensor_pattern: SensorPattern,
     light_path: LightPath,
+    scene: Scene,
     optics: ImagingOptics,
     rotation0: RotationMatrix,
     rotation1: RotationMatrix,
@@ -408,10 +441,10 @@ impl SimImagingCamera {
             shot.optics.fov_deg.to_radians(),
         );
         for star in stars {
-            let Some(p0) = place(&camera, &shot.rotation0, star) else {
+            let Some(p0) = place(&camera, &shot.rotation0, star.ra_deg, star.dec_deg) else {
                 continue;
             };
-            let Some(p1) = place(&camera, &shot.rotation1, star) else {
+            let Some(p1) = place(&camera, &shot.rotation1, star.ra_deg, star.dec_deg) else {
                 continue;
             };
             // The smear is drawn along the straight line from the star's
@@ -475,6 +508,7 @@ impl SimImagingCamera {
                 for sample in &mut electrons {
                     *sample += sky;
                 }
+                add_scene(&mut electrons, shot, &camera, sigma);
             }
             // Light is attenuated at sensor coordinates, before the sensor's own charge.
             if shot.light_path.corner_light != 1.0 || !shot.light_path.dust.is_empty() {
@@ -575,6 +609,99 @@ impl SimImagingCamera {
     }
 }
 
+/// Scene light joins stars and sky before vignetting, dust and shot noise.
+fn add_scene(electrons: &mut [f64], shot: &Shot, camera: &PinholeCamera, sigma: f64) {
+    if shot.scene.sources.is_empty() && shot.scene.satellites.is_empty() {
+        return;
+    }
+    let roi = shot.settings.roi.unwrap_or_default();
+    let scale = 206_264.806 * 2.0 * (shot.optics.fov_deg.to_radians() / 2.0).tan()
+        / f64::from(shot.optics.width);
+    for source in &shot.scene.sources {
+        let Some(p0) = place(camera, &shot.rotation0, source.ra_deg, source.dec_deg) else {
+            continue;
+        };
+        let Some(p1) = place(camera, &shot.rotation1, source.ra_deg, source.dec_deg) else {
+            continue;
+        };
+        let (px, py) = ((p0.0 + p1.0) / 2.0, (p0.1 + p1.1) / 2.0);
+        let s = source.sigma_arcsec / scale;
+        let reach = (4.0 * s).ceil() + 1.0;
+        add_profile(
+            electrons,
+            roi,
+            ((px - reach, py - reach), (px + reach, py + reach)),
+            |x, y, filter| {
+                let distance_squared = (x - px).powi(2) + (y - py).powi(2);
+                if distance_squared > reach * reach {
+                    return 0.0;
+                }
+                source.electrons_per_s
+                    * shot.seconds
+                    * source.colour[filter]
+                    * (-distance_squared / (2.0 * s * s)).exp()
+            },
+        );
+    }
+    let reach = (4.0 * sigma).ceil() + 1.0;
+    for satellite in &shot.scene.satellites {
+        if !satellite.frames.contains(&shot.frame_number) {
+            continue;
+        }
+        let (ax, ay) = satellite.from;
+        let (bx, by) = satellite.to;
+        let (dx, dy) = (bx - ax, by - ay);
+        let length_squared = dx * dx + dy * dy;
+        add_profile(
+            electrons,
+            roi,
+            (
+                (ax.min(bx) - reach, ay.min(by) - reach),
+                (ax.max(bx) + reach, ay.max(by) + reach),
+            ),
+            |x, y, _filter| {
+                let along = if length_squared == 0.0 {
+                    0.0
+                } else {
+                    (((x - ax) * dx + (y - ay) * dy) / length_squared).clamp(0.0, 1.0)
+                };
+                let distance_squared =
+                    (x - ax - along * dx).powi(2) + (y - ay - along * dy).powi(2);
+                if distance_squared > reach * reach {
+                    return 0.0;
+                }
+                satellite.electrons * (-distance_squared / (2.0 * sigma * sigma)).exp()
+            },
+        );
+    }
+}
+
+/// Visit sample centres in a sensor-coordinate box, clipped to the exposure's region.
+fn add_profile(
+    electrons: &mut [f64],
+    roi: Roi,
+    bounds: ((f64, f64), (f64, f64)),
+    profile: impl Fn(f64, f64, usize) -> f64,
+) {
+    let ((min_x, min_y), (max_x, max_y)) = bounds;
+    let columns = ((min_x - 0.5).ceil() as i64).max(i64::from(roi.x))
+        ..=((max_x - 0.5).floor() as i64).min(i64::from(roi.x + roi.width) - 1);
+    let rows = ((min_y - 0.5).ceil() as i64).max(i64::from(roi.y))
+        ..=((max_y - 0.5).floor() as i64).min(i64::from(roi.y + roi.height) - 1);
+    for row in rows {
+        for column in columns.clone() {
+            let filter = match (column % 2, row % 2) {
+                (0, 0) => 0,
+                (1, 1) => 2,
+                _ => 1,
+            };
+            let index = (row - i64::from(roi.y)) as usize * roi.width as usize
+                + (column - i64::from(roi.x)) as usize;
+            electrons[index] += profile(column as f64 + 0.5, row as f64 + 0.5, filter);
+        }
+    }
+}
+
 /// The cooler's rule: with the cooler off, or on with no set temperature, the
 /// sensor reads 20.0 °C at power 0.0; on with a set temperature `T`, it reads
 /// `T` at power `clamp(2.5·(20 − T), 0, 100)`.
@@ -585,9 +712,14 @@ fn cooler(settings: &ImagingSettings) -> (f64, f64) {
     }
 }
 
-/// A star's place in the frame, as (x, y), or none behind the boresight.
-fn place(camera: &PinholeCamera, rotation: &RotationMatrix, star: &SimStar) -> Option<(f64, f64)> {
-    let direction = UnitVector::from_radec(star.ra_deg.to_radians(), star.dec_deg.to_radians());
+/// A sky direction's place in the frame, as (x, y), or none behind the boresight.
+fn place(
+    camera: &PinholeCamera,
+    rotation: &RotationMatrix,
+    ra_deg: f64,
+    dec_deg: f64,
+) -> Option<(f64, f64)> {
+    let direction = UnitVector::from_radec(ra_deg.to_radians(), dec_deg.to_radians());
     let local = rotation.rotate(direction);
     if local.x <= 0.0 {
         return None;
@@ -638,7 +770,7 @@ impl ImagingCamera for SimImagingCamera {
             // The settings in force are fixed here, and their region is the
             // frame's roi; the frame number is the next one this camera
             // delivers.
-            let (settings, frame_number, aborts, (sensor_pattern, light_path)) = {
+            let (settings, frame_number, aborts, (sensor_pattern, light_path), scene) = {
                 let mut state = self.state.lock().unwrap();
                 if state.exposing {
                     return Err(ImagingError::Busy);
@@ -649,6 +781,7 @@ impl ImagingCamera for SimImagingCamera {
                     state.frames,
                     state.aborts,
                     self.simulator.imaging_bench.lock().unwrap().clone(),
+                    self.simulator.scene(),
                 )
             };
             let _clear = ExposingGuard(&self.state);
@@ -678,6 +811,7 @@ impl ImagingCamera for SimImagingCamera {
                 settings,
                 sensor_pattern,
                 light_path,
+                scene,
                 optics,
                 rotation0,
                 rotation1,

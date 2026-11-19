@@ -16,8 +16,8 @@ pub use camera::SimCamera;
 pub use clock::VirtualClock;
 pub use controls::Simulator;
 pub use imaging::{
-    DustShadow, FlatPanel, HotPixel, ImagingOptics, ImagingTruth, LightPath, SensorPattern,
-    SimImagingCamera, SimStar,
+    DustShadow, ExtendedSource, FlatPanel, HotPixel, ImagingOptics, ImagingTruth, LightPath,
+    SatelliteStreak, Scene, SensorPattern, SimImagingCamera, SimStar,
 };
 pub use node::SimNode;
 pub use optics::{Optics, TrueDirection, TrueDirections};
