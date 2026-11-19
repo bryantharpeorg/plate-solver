@@ -293,6 +293,7 @@ export interface ImagingView {
   frame?: ImagingFrame;
   solve?: ImagingSolve;
   relation?: ImagingRelation;
+  focus?: ImagingFocus;
 }
 
 // An imaging solve and what the console keeps between the two cameras, as
@@ -343,6 +344,63 @@ export interface ImagingRelation {
   field?: { width_arcsec: number; height_arcsec: number };
 }
 
+// The focus reading, the focus region, the focus record and the focus aid, as
+// GET /api/imaging relays them (033). Field names and shapes mirror the Rust
+// types they come from; keep the two in step.
+export interface ImagingFocusSized {
+  value: number;
+  at: number;
+}
+
+export interface ImagingFocusAid {
+  state: "starting" | "finding" | "running" | "ended";
+  check: boolean;
+  since: number;
+  exposure_ms: number;
+  readings: number;
+  cadence_ms?: number;
+  last?: {
+    frame_id: number;
+    at: number;
+    state: "reading" | "settling" | "too_few_stars" | "far_out";
+    value?: number;
+    stars?: number;
+  };
+  median?: { value: number; readings: number };
+  best?: number;
+  trend?: "better" | "worse" | "same";
+  found: boolean;
+  verdict?: "good" | "slightly_soft" | "clearly_out" | "unmeasurable" | "no_record";
+  reference?: { value: number; of: "tonight" | "earlier" };
+  history: (number | null)[];
+  ended_reason?: "stopped" | "done" | "failed" | "no_region";
+  error?: string;
+  restore_error?: string;
+}
+
+export interface ImagingFocus {
+  unit: "arcsec" | "px";
+  arcsec_per_px?: number;
+  region?: {
+    col: number;
+    row: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    source: "found" | "fixed" | "provisional";
+  };
+  record?: { tonight?: ImagingFocusSized; earlier?: ImagingFocusSized };
+  aid?: ImagingFocusAid;
+}
+
+export interface ImagingFocusAsk {
+  exposure_ms?: number;
+  find?: boolean;
+  tile?: { col: number; row: number };
+  check?: boolean;
+}
+
 export type ImagingSettingsEdit = Partial<Omit<ImagingSettings, "roi">>;
 
 export async function getImaging(): Promise<ImagingView> {
@@ -369,6 +427,31 @@ export async function postImagingAbort(): Promise<ImagingView> {
 
 export async function postImagingSolve(): Promise<ImagingView> {
   return json(await fetch("/api/imaging/solve", { method: "POST" }));
+}
+
+export async function postImagingFocus(ask: ImagingFocusAsk): Promise<ImagingView> {
+  return json(
+    await fetch("/api/imaging/focus", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(ask),
+    }),
+  );
+}
+
+export async function deleteImagingFocus(): Promise<ImagingView> {
+  return json(await fetch("/api/imaging/focus", { method: "DELETE" }));
+}
+
+/** The settings edit leaves `roi` out, so the whole sensor is a call of its own. */
+export async function putImagingWholeSensor(): Promise<ImagingView> {
+  return json(
+    await fetch("/api/imaging/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ roi: null }),
+    }),
+  );
 }
 
 export interface PointingModel {

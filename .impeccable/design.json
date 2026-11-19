@@ -742,6 +742,14 @@
       "description": "Built in ImagingField.tsx on the live chart after the target mark. While the aim point is one the console measured, the chart draws the imaging camera's field as a thin ink outline centred on the aim point: a rectangle of the sensor's size on the sky, turned by the imaging angle, with a short tick on its up side. It is furniture, like the reticle and the compass: no fill, no label, not a chart layer, and red at night with the rest. A tapped aim point draws nothing.",
       "html": "<svg class=\"ds-imaging-field\" viewBox=\"600 340 200 120\"><title>Imaging field</title><path fill=\"none\" d=\"M655.0 390.0L745.0 390.0L745.0 450.0L655.0 450.0ZM700.0 390.0L700.0 384.0\"/></svg>",
       "css": ".ds-imaging-field{stroke:var(--color-ink);fill:none}.ds-imaging-field path{fill:none}"
+    },
+    {
+      "name": "Focus block",
+      "kind": "custom",
+      "refersTo": "button",
+      "description": "Built in FocusBlock.tsx on the Imaging page after the imaging solve, while the console has an imaging solver: a section titled Focus. A standing quiet paragraph says what a focus reading is, that it is judged against this camera's own focus record and never a fixed number, and that seeing, collimation and a warm mirror enlarge stars too. Idle, it offers a Focus region select, a Focus frame time field, a primary button, Start focus aid, and a secondary one, Check focus. While the aid runs, the settled reading is set in the Display size over a status line, the best so far, whether the last change made the stars sharper or softer, a line that says to keep turning or that focus was passed and regained, the verdict against the record, and a history of ink bars drawn with currentColor. Stop focus aid is the only control then. An ending that was not asked for is an alert, and too few stars, in a frame or at such an ending, adds a quiet line naming the cure. Existing ink, paper and red-only night tokens; no colour of its own.",
+      "html": "<section class=\"ds-focus-block\"><h2>Focus</h2><p>A focus reading is the size of the stars in the focus region: smaller is sharper.</p><label>Focus region<select><option>Kept, or the sharpest tile</option></select></label><label>Focus frame time<input inputmode=\"decimal\" value=\"1000\"/>ms</label><button>Start focus aid</button><button>Check focus</button><p class=\"ds-focus-reading\">5.70″</p><p role=\"status\">Median of the last 3 imaging frames · 12 stars</p><svg role=\"img\" aria-label=\"Focus readings of the last 4 imaging frames\"><rect fill=\"currentColor\"/></svg><button>Stop focus aid</button></section>",
+      "css": ".ds-focus-block{color:var(--color-ink);border-block:1px solid var(--color-rule)}.ds-focus-block .ds-focus-reading{font-weight:680;font-size:2.35rem;letter-spacing:-0.02em}.ds-focus-block svg rect{fill:currentColor}"
     }
   ],
   "narrative": {
