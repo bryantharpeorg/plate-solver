@@ -1,7 +1,7 @@
 //! Known finder optics and shared telescope state. Public angles are degrees.
 use crate::{
     clock::VirtualClock,
-    imaging::{ImagingOptics, ImagingTruth, LightPath, SensorPattern},
+    imaging::{ImagingOptics, ImagingTruth, LightPath, Scene, SensorPattern},
     render::{self, RenderStar},
     sky::{self, Site},
 };
@@ -77,6 +77,7 @@ pub struct Simulator {
     pub(crate) db: Arc<PatternDatabase>,
     pub(crate) state: Arc<Mutex<Pointing>>,
     pub(crate) imaging_bench: Arc<Mutex<(SensorPattern, LightPath)>>,
+    pub(crate) imaging_scene: Arc<Mutex<Scene>>,
     clock: VirtualClock,
 }
 
@@ -93,6 +94,7 @@ impl Simulator {
                 az: 180.0,
             })),
             imaging_bench: Arc::new(Mutex::new((SensorPattern::default(), LightPath::default()))),
+            imaging_scene: Arc::new(Mutex::new(Scene::default())),
             clock,
         }
     }
@@ -155,6 +157,34 @@ impl Simulator {
     /// the focus error and the pixel size.
     pub fn imaging_optics(&self) -> ImagingOptics {
         self.state.lock().unwrap().imaging
+    }
+
+    /// What else is in the simulated sky.
+    pub fn scene(&self) -> Scene {
+        self.imaging_scene.lock().unwrap().clone()
+    }
+
+    /// Asserts every number finite, every `electrons`, `electrons_per_s` and colour not
+    /// negative, and every `sigma_arcsec` above 0.
+    pub fn set_scene(&self, scene: Scene) {
+        assert!(scene.satellites.iter().all(|satellite| {
+            satellite.from.0.is_finite()
+                && satellite.from.1.is_finite()
+                && satellite.to.0.is_finite()
+                && satellite.to.1.is_finite()
+                && satellite.electrons.is_finite()
+                && satellite.electrons >= 0.0
+        }));
+        assert!(scene.sources.iter().all(|source| {
+            source.ra_deg.is_finite()
+                && source.dec_deg.is_finite()
+                && source.sigma_arcsec.is_finite()
+                && source.sigma_arcsec > 0.0
+                && source.electrons_per_s.is_finite()
+                && source.electrons_per_s >= 0.0
+                && source.colour.iter().all(|c| c.is_finite() && *c >= 0.0)
+        }));
+        *self.imaging_scene.lock().unwrap() = scene;
     }
 
     /// The sensor's own charge and column pattern.
