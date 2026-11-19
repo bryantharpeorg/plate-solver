@@ -73,6 +73,10 @@ pub struct ImagingView {
     /// imaging frame or the first focal length on (032 US3, FR-017).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub relation: Option<relation::RelationView>,
+    /// The focus region, the focus record and the focus aid (033 US5, FR-029),
+    /// only while the camera is `ready` and the console has a solver.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub focus: Option<focus::run::FocusView>,
 }
 
 impl ImagingView {
@@ -87,6 +91,7 @@ impl ImagingView {
             frame: None,
             solve: None,
             relation: None,
+            focus: None,
         }
     }
 }
@@ -324,6 +329,9 @@ struct Held {
     /// started by `set_solver` and aborted with the console's own task
     /// (032 US4, FR-019).
     history_task: Option<JoinHandle<()>>,
+    /// The focus state: what the console keeps about focus for one camera, and
+    /// the latest run of the focus aid (033 US5, FR-029).
+    focus: focus::run::State,
 }
 
 impl Default for Held {
@@ -352,6 +360,7 @@ impl Default for Held {
             last_solve: None,
             relation: relation::Relation::new(PathBuf::new()),
             history_task: None,
+            focus: focus::run::State::new(PathBuf::new()),
         }
     }
 }
@@ -379,26 +388,26 @@ pub struct Imaging {
 impl Drop for Imaging {
     fn drop(&mut self) {
         self.task.abort();
-        // The history's task ends with the console's own (FR-019).
-        if let Some(task) = self
-            .state
-            .lock()
-            .expect("imaging state")
-            .history_task
-            .take()
-        {
+        let mut held = self.state.lock().expect("imaging state");
+        // The history's task ends with the console's own (FR-019), and so does
+        // the focus aid's (033 US5, FR-029).
+        if let Some(task) = held.history_task.take() {
             task.abort();
         }
+        held.focus.abort_task();
     }
 }
 
 impl Imaging {
     /// Start the task that follows the link. Dropping the `Imaging` ends it.
     pub fn start(root: PathBuf, link: Arc<LinkManager>, clock: Arc<dyn Clock>) -> Arc<Self> {
-        // The relation lives in `relation.json` in the imaging folder (FR-017).
+        // The relation lives in `relation.json` in the imaging folder (FR-017),
+        // and the focus state in `focus.json` beside it (033 FR-029).
         let relation = relation::Relation::new(root.join("relation.json"));
+        let focus = focus::run::State::new(root.join("focus.json"));
         let state = Arc::new(Mutex::new(Held {
             relation,
+            focus,
             ..Held::default()
         }));
         let task = tokio::spawn(follow(link.clone(), state.clone()));
@@ -454,6 +463,8 @@ impl Imaging {
             relation: ready
                 .then(|| held.relation.view(in_force, aim_held))
                 .flatten(),
+            // The focus view only while `ready` with a solver (033 FR-029).
+            focus: (ready && held.solver.is_some()).then(|| focus::run::view(&held, now)),
         }
     }
 
@@ -959,8 +970,10 @@ async fn attempt(link: &LinkManager, held: &Arc<Mutex<Held>>) -> Result<(), Fail
     ));
     held.camera = Some(camera.clone());
     // The camera was described: the relation reads `relation.json` for this
-    // camera, and a file made for another is ignored (FR-017).
+    // camera, and a file made for another is ignored (FR-017); the focus state
+    // reads `focus.json` beside it (033 FR-029).
     held.relation.describe(relation::CameraId::from(&camera));
+    held.focus.describe(relation::CameraId::from(&camera));
     held.status = Some(StatusView::from(status));
     held.state = "ready";
     held.error = None;

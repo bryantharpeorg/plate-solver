@@ -10,6 +10,7 @@ use super::{
 };
 
 pub mod aid;
+pub mod run;
 
 /// Fewer stars than this in a star measure are no reading.
 pub const MIN_STARS: u32 = 5;
