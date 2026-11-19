@@ -96,11 +96,11 @@ async fn post_solve(
     Ok(Json(view))
 }
 
-/// `POST /api/imaging/focus` (033 FR-020): a JSON body of any of `find`,
-/// `tile` and `exposure_ms`; start the focus aid on the focus region. The
-/// body is read before anything else is looked at: a content type that is not
-/// JSON answers 415, a body with an unknown key or a value of the wrong kind
-/// 400.
+/// `POST /api/imaging/focus` (033 FR-020, FR-026): a JSON body of any of
+/// `check`, `find`, `tile` and `exposure_ms`; start the focus aid on the focus
+/// region, or with `check` a focus check. The body is read before anything
+/// else is looked at: a content type that is not JSON answers 415, a body with
+/// an unknown key or a value of the wrong kind 400.
 async fn post_focus(
     State(state): State<AppState>,
     _write: SessionWrite,

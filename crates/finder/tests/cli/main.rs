@@ -8,6 +8,7 @@ mod aim;
 mod backlash;
 mod flags;
 mod imaging;
+mod imaging_focus;
 mod imaging_frames;
 mod imaging_hints;
 mod imaging_solve;

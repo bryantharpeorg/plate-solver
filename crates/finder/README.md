@@ -210,7 +210,7 @@ The page uses the API types in `web/src/api.ts`, which mirror the Rust structs i
 | `POST /api/imaging/abort` | No body. Abort the exposure in progress through the node's `AbortExposure`, or stop a frame still being received, ending it `aborted`; answers 200 with the imaging view, and with nothing in progress answers 200 and changes nothing. Same-origin writes only. |
 | `GET /api/imaging/frames/{id}/preview.jpg` | The colour JPEG preview of the saved imaging frame with this id, `image/jpeg`, while it is among the last eight saved; 404 with `the console no longer holds that preview` otherwise, and 400 for an id that is not a number. A saved frame's view carries the route as `preview`; a frame whose preview cannot be made, such as a mosaic with no whole 2 × 2 cell, is saved with no `preview`. |
 | `POST /api/imaging/solve` | No body. Solve the latest saved imaging frame with the imaging solver; answers 200 with the imaging view, whose `solve` goes from `solving` to `solved` or `failed`, or 409 with a JSON `error`. Same-origin writes only. |
-| `POST /api/imaging/focus` | JSON `{}` or any of `find`, `tile` (`{col, row}`, each 0 to 2) and `exposure_ms`. Start the focus aid on the focus region; answers 200 with the imaging view, whose `focus.aid` reports it, or 400 or 409 with a JSON `error`. Same-origin writes only. |
+| `POST /api/imaging/focus` | JSON `{}` or any of `check`, `find`, `tile` (`{col, row}`, each 0 to 2) and `exposure_ms`. Start the focus aid on the focus region, or with `check` a focus check that stops by itself with a verdict; answers 200 with the imaging view, whose `focus.aid` reports it, or 400 or 409 with a JSON `error`. Same-origin writes only. |
 | `DELETE /api/imaging/focus` | No body. Stop the focus aid, put the imaging settings back and answer 200 with the imaging view. Same-origin writes only. |
 | `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
 | `POST /api/stop` | No body. Always 200, ending tracking, clearing arming and commanding both axes to stop, from any origin, without taking the motion lock. Sends `StopAll` immediately, retrying in its own task with 200 ms per attempt and 50 ms between attempts for a bounded 2 s window, even if the request goes away. Waits for the round and answers exactly `{"stopped":true}` when the scope node answers OK or there is no scope link; otherwise answers `{"stopped":true,"acknowledged":false}`. This means the node did not answer and the mount may still be moving; press Stop again. The MCP tools `stop` and `stop_all` return the same reply. |
@@ -818,3 +818,90 @@ was made in; they are read at start, and dropped when the camera differs. The
 aim point itself is the session's, in `session.json`, marked `aim_measured`
 while it was measured; a session whose aim point is not the measured one drops
 the readings at its first solve.
+
+
+## Focus
+
+A focus reading is the size of the stars in an imaging frame, measured by the
+same imaging solver that solves the frames: the median half-flux diameter, in
+sensor pixels, of the stars in the region the console read. Once a scale is
+known — an imaging solve's, or the focal length's — the console shows the
+reading in arcseconds; until then it is in sensor pixels, which compare exactly
+for one camera on one telescope. A frame with fewer than five stars says
+nothing, and one whose stars are larger than 20 frame pixels is far out of
+focus: the imaging solver's own limit, beyond which its star sizes stop being
+trustworthy.
+
+The sensor's nine tiles — a third each way — are the candidates for the focus
+region, the part of the sensor the console reads while focusing: the optical
+axis rarely lands in the middle of the sensor, and the stars are smallest
+where it lands. `POST /api/imaging/focus` with `find`, or with no focus region
+kept, takes one whole-sensor imaging frame, measures the nine tiles and keeps
+the sharpest; `tile` (`{col, row}`, each 0 to 2) fixes one by hand, which needs
+no whole-sensor frame. The region is kept in `focus.json` and reused by the
+next start. Far out of focus, where no tile can be measured, the aid reads the
+far-out tile with the smallest size for the time being and shows its rough
+size, keeps no region, and looks for the sharpest tile again at its first
+settled reading; sizes above the limit are rough, so such a tile is only a
+place to read a number to turn the focuser by.
+
+The focus record in `focus.json` is this camera's own history: tonight's
+smallest settled reading, and the smallest of the earlier nights'. A night is
+12 hours, counted from the night's first settled reading, so it needs no site
+and no time zone. Only a settled reading of the open focus aid sets the
+record: a check's own reading sets nothing, because the smallest of many
+single frames is biased low, and a check that set the record would be judged
+against itself the next time. Until the aid has passed through focus tonight,
+the smaller of the two parts judges every reading; once it has, tonight's part
+judges alone, because a pass through focus is the evidence that tonight's
+smallest is what tonight's sky allows. The record is kept with the scale an
+imaging solve measured, and a record made at a measured scale more than 5% from
+the one in force is another telescope's and judges nothing; a record made
+before any imaging solve carries no scale, so if the camera is moved to
+another telescope before either was solved on, remove `focus.json` to start
+again.
+
+Every settled reading is judged against the record: `good` within 10% of it
+(and any reading smaller than it), `slightly_soft` within 30%, `clearly_out`
+beyond that, `unmeasurable` on a frame that measures nothing, and `no_record`
+while this camera has none. No verdict says focus is good in absolute terms:
+seeing, collimation, a mirror still cooling and tube currents enlarge stars
+just as a focus error does, which is why the reading is judged against this
+camera's own record and never against a fixed number.
+
+The aid runs under the imaging camera's lease, held as `the focus aid` from
+its start until the settings are back. It remembers the camera's exposure,
+binning, region of interest and save setting, sets its own focus exposure and
+the smallest binning and reads the focus region alone, one frame after
+another; its imaging frames are saved like any others under the purpose label
+`focus` and removed once the next is saved, but for the last one, and but for
+one an imaging solve was running on. While it runs, an imaging frame or a
+settings change asked for meanwhile is refused with `the focus aid` in the
+words, and a start is refused the same way while something else holds the
+camera. However it ends — `stopped`, by a stop; `done`, by a check; `failed`,
+by a fault; or `no_region`, when no tile had five stars to measure — it puts
+the settings back and releases the camera.
+
+From the readings alone the aid works out what to tell a hand on the
+focuser: the median of the last three readings, a reading more than 15% from
+it as a turn of the focuser, the two frames set aside after each turn while
+the telescope stops shaking, the trend of the last turn, the best of the last
+600 settled readings, and `found` once the reading has been far from the
+best, near it, far and near again. Turn the focuser one way until the reading
+has passed its lowest and risen again, then come back to the lowest. The
+focus check, `POST /api/imaging/focus` with `check`, is the aid that stops by
+itself: it ends at its first settled reading with that reading's verdict, at
+its first unmeasurable frame with that frame's, or after nine imaging frames
+with `unmeasurable`, and notes nothing in the record.
+
+All of this shows in the imaging view's `focus` object and on the Imaging
+page's Focus block, and is kept in `focus.json` in the imaging folder: the
+camera, the focus region and the focus record, removed only by hand. Track a
+field of stars first, away from any bright nebula; a sparse field, such as one
+far from the Milky Way, may leave a tile with fewer than five stars at the
+default focus exposure, and the cure is a longer one (`exposure_ms`, the
+page's Focus frame time) or focusing on a richer field nearby first and coming
+back. `cadence_ms` is how long one reading takes, and a forwarding limit makes
+it much longer, so clear the limit while focusing. Once focus is close, choose
+`Find the sharpest tile again` if the region was found while it was still
+well out of focus, and after a change of telescope or collimation.

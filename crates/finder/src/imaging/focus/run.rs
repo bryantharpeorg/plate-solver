@@ -1,7 +1,7 @@
-//! The focus aid on the console (033 US5): the focus state the imaging state
-//! holds, the task that runs the aid under 031's lease, and `focus` in the
-//! imaging view. US9 adds the tile read for the time being and a frame kept
-//! for a solve; US8 the focus check.
+//! The focus aid and the focus check on the console (033 US5, US8): the focus
+//! state the imaging state holds, the task that runs the aid under 031's
+//! lease, and `focus` in the imaging view. US9 adds the tile read for the
+//! time being and a frame kept for a solve.
 
 use std::{
     path::{Path, PathBuf},
@@ -28,15 +28,21 @@ pub const PURPOSE: &str = "focus";
 pub const HOLDER: &str = "the focus aid";
 /// The focus exposure when the request names none (FR-021).
 pub const FOCUS_EXPOSURE_MS: f64 = 1000.0;
+/// A focus check ends after this many imaging frames at the latest (FR-026).
+pub const CHECK_FRAMES: u64 = 9;
 /// The words of a search that found no tile to read (FR-022).
 const NO_REGION: &str = "no tile of the imaging frame had five stars to measure";
 
-/// The body of `POST /api/imaging/focus` (FR-020). Non-exhaustive: US8 adds
-/// `check`.
+/// The body of `POST /api/imaging/focus` (FR-020, FR-026). Non-exhaustive: US8
+/// adds `check`.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[non_exhaustive]
 pub struct FocusAsk {
+    /// With `check` the aid runs a focus check, which stops by itself with a
+    /// verdict and notes nothing in the record (FR-026).
+    #[serde(default)]
+    pub check: bool,
     #[serde(default)]
     pub find: bool,
     #[serde(default)]
@@ -109,6 +115,8 @@ pub struct SizeAt {
 pub struct AidView {
     /// `starting`, `finding`, `running` or `ended`.
     pub state: &'static str,
+    /// Whether this run is a focus check (FR-026).
+    pub check: bool,
     /// Console Unix seconds at the start.
     pub since: f64,
     pub exposure_ms: f64,
@@ -134,7 +142,7 @@ pub struct AidView {
     /// The last 120 samples, oldest first; `null` for a frame with too few
     /// stars (FR-019).
     pub history: Vec<Option<f64>>,
-    /// `stopped`, `failed` or `no_region`; US8 adds `done`.
+    /// `stopped`, `done`, `failed` or `no_region` (FR-026, FR-027).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ended_reason: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -245,6 +253,8 @@ impl State {
 struct Run {
     /// `starting`, `finding`, `running` or `ended`.
     lifecycle: &'static str,
+    /// Whether this run is a focus check (FR-026).
+    check: bool,
     /// Console Unix seconds at the start.
     since: f64,
     exposure_ms: f64,
@@ -274,9 +284,10 @@ struct Run {
 }
 
 impl Run {
-    fn new(since: f64, exposure_ms: f64) -> Self {
+    fn new(since: f64, exposure_ms: f64, check: bool) -> Self {
         Self {
             lifecycle: "starting",
+            check,
             since,
             exposure_ms,
             aid: Aid::new(),
@@ -408,6 +419,7 @@ impl Imaging {
         let config = Config {
             solver,
             camera,
+            check: ask.check,
             find: ask.find,
             tile,
             exposure_ms: ask.exposure_ms.unwrap_or(FOCUS_EXPOSURE_MS),
@@ -415,7 +427,7 @@ impl Imaging {
         {
             let mut held = self.state.lock().expect("imaging state");
             held.focus
-                .begin(Run::new(self.clock.now(), config.exposure_ms));
+                .begin(Run::new(self.clock.now(), config.exposure_ms, config.check));
         }
         let task = tokio::spawn(run(Arc::downgrade(self), lease, config, self.root.clone()));
         self.state
@@ -454,12 +466,31 @@ impl Imaging {
     pub fn focus_running(&self) -> bool {
         self.state.lock().expect("imaging state").focus.running()
     }
+
+    /// The focus view once no aid or check is running (FR-026), so the camera
+    /// is free and the settings are back; `None` when the view has no
+    /// `focus`. With nothing running: that view at once.
+    pub async fn focus_ended(&self) -> Option<FocusView> {
+        // The `Notified` is made first and the lifecycle read after, so an
+        // end between the two cannot be missed.
+        let signal = self.state.lock().expect("imaging state").focus.end_signal();
+        loop {
+            let notified = signal.notified();
+            if !self.focus_running() {
+                break;
+            }
+            notified.await;
+        }
+        self.view().focus
+    }
 }
 
 /// What the task needs beside the `Imaging` it serves and the lease it owns.
 struct Config {
     solver: Arc<dyn ImagingSolver>,
     camera: CameraView,
+    /// Whether this run is a focus check (FR-026).
+    check: bool,
     find: bool,
     tile: Option<Tile>,
     exposure_ms: f64,
@@ -501,6 +532,15 @@ impl Ended {
     fn stopped() -> Self {
         Self {
             reason: "stopped",
+            error: None,
+            restore: None,
+        }
+    }
+
+    /// A check ended by itself (FR-026).
+    fn done() -> Self {
+        Self {
+            reason: "done",
             error: None,
             restore: None,
         }
@@ -633,6 +673,13 @@ async fn steps(imaging: &Arc<Imaging>, lease: &Lease, config: &Config, root: &Pa
         // f to h: one critical section, no await inside it. `at` is the middle
         // of the exposure.
         let settled = note(imaging, &read, frame.id, start + frame.exposure_ms / 2000.0);
+        // i. A check ends by itself (FR-026): at its first settled reading,
+        //    with that reading's verdict; at its first unmeasurable frame,
+        //    with that frame's verdict; or after `CHECK_FRAMES` imaging frames
+        //    with neither, with `unmeasurable`. It never reaches step j.
+        if config.check && check_ends(imaging, settled.is_some(), read.is_err()) {
+            return with(Ended::done(), remembered);
+        }
         // j. While the run's tile is one read for the time being, each settled
         //    reading starts the search again (FR-037). A best tile is kept
         //    and the aid goes on there; without one, whether or not that
@@ -954,8 +1001,12 @@ fn note(imaging: &Arc<Imaging>, read: &Read, id: u64, at: f64) -> Option<f64> {
             let found = run.aid.found();
             run.verdict = Some(judge(Ok(m), reference.map(|(px, _)| px)));
             run.reference = reference;
-            // h. Noted with the aid's `found` of this moment (FR-025).
-            held.focus.kept.note(m, at, measured, found);
+            // h. Noted with the aid's `found` of this moment — but never by a
+            //    check, which is judged against the record and changes
+            //    nothing (FR-025, FR-026).
+            if !run.check {
+                held.focus.kept.note(m, at, measured, found);
+            }
         }
         (None, Err(unmeasurable)) => {
             run.verdict = Some(judge(Err(*unmeasurable), reference.map(|(px, _)| px)));
@@ -969,6 +1020,24 @@ fn note(imaging: &Arc<Imaging>, read: &Read, id: u64, at: f64) -> Option<f64> {
         }
     }
     settled
+}
+
+/// Step 4i (FR-026): whether a check ends at this frame — at once at its
+/// first settled reading or unmeasurable frame, whose verdict the sample
+/// already set, and at the count of imaging frames reaching `CHECK_FRAMES`,
+/// where nothing settled and nothing was unmeasurable, so the verdict becomes
+/// `unmeasurable`.
+fn check_ends(imaging: &Arc<Imaging>, settled: bool, unmeasurable: bool) -> bool {
+    let mut held = imaging.state.lock().expect("imaging state");
+    let run = held.focus.run.as_mut().expect("the run");
+    if settled || unmeasurable {
+        return true;
+    }
+    if run.aid.readings() < CHECK_FRAMES {
+        return false;
+    }
+    run.verdict = Some(Verdict::Unmeasurable);
+    true
 }
 
 /// Step 5 (FR-027): wait out a frame in flight, put the remembered settings
@@ -1075,6 +1144,7 @@ pub(in crate::imaging) fn view(held: &Held, now: f64) -> FocusView {
         }),
         aid: held.focus.run.as_ref().map(|run| AidView {
             state: run.lifecycle,
+            check: run.check,
             since: run.since,
             exposure_ms: run.exposure_ms,
             readings: run.aid.readings(),
