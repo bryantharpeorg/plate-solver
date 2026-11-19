@@ -13,6 +13,7 @@ pub mod routes;
 pub mod simulated;
 pub mod solver;
 pub mod solving;
+pub mod stack;
 
 use std::{
     future::Future,
