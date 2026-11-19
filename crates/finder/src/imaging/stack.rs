@@ -1,12 +1,14 @@
-//! Stacking arithmetic (035): colour from a mosaic and where a sub falls on the
-//! reference grid. Pure functions; nothing here reads a file, a clock, the mount
-//! or the site.
+//! Stacking arithmetic (035): colour from a mosaic, where a sub falls on the
+//! reference grid, and the sums that make a stack. Pure functions; nothing here
+//! reads a file, a clock, the mount or the site.
 
 use super::{calibration::Mosaic, solver::ImagingSolve};
 
 /// At each corner of the reference grid the placing map may lie this many of the
 /// sub's pixels from where the two imaging solves put that corner (owner decision 3).
 pub const CORNER_SLACK_PX: f64 = 0.5;
+/// A sample point this close to the edge of a sub's pixel centres counts as on it.
+pub const EDGE_SLACK: f64 = 1e-6;
 
 /// Three planes of 32-bit reals, red, green and blue, each row by row from the top.
 #[derive(Debug, Clone, PartialEq)]
@@ -181,5 +183,140 @@ impl Placement {
             (self.m[1][1] * x - self.m[0][1] * y) / determinant - f64::from(reference.0) / 2.0,
             (self.m[0][0] * y - self.m[1][0] * x) / determinant - f64::from(reference.1) / 2.0,
         ))
+    }
+}
+
+/// What one `add` did.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Added {
+    /// Pixels of the grid the sub reached.
+    pub covered: u64,
+    pub added: u64,
+    pub rejected: u64,
+    /// What was added to the sub's red, green and blue before anything else.
+    pub offsets: [f32; 3],
+}
+
+/// Three planes of sums and one per-pixel count on the reference grid.
+pub struct Stack {
+    width: u32,
+    height: u32,
+    sum: Vec<f32>,
+    weight: Vec<f32>,
+    subs: u32,
+}
+
+impl Stack {
+    /// A stack that neither matches backgrounds nor rejects finite values.
+    pub fn new(width: u32, height: u32) -> Self {
+        let size = width as usize * height as usize;
+        Self {
+            width,
+            height,
+            sum: vec![0.0; 3 * size],
+            weight: vec![0.0; size],
+            subs: 0,
+        }
+    }
+
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    /// Subs added so far, including those that reached no pixel.
+    pub fn subs(&self) -> u32 {
+        self.subs
+    }
+
+    /// Bilinearly sample the sub at each mapped pixel centre and add it in the
+    /// same pass. A nonfinite value leaves that pixel out in all three channels.
+    pub fn add(&mut self, sub: &Colour, placement: &Placement) -> Added {
+        let mut added = Added {
+            covered: 0,
+            added: 0,
+            rejected: 0,
+            offsets: [0.0; 3],
+        };
+        self.subs += 1;
+        if sub.width < 2 || sub.height < 2 {
+            return added;
+        }
+        let max_x = f64::from(sub.width - 1);
+        let max_y = f64::from(sub.height - 1);
+        let size = self.weight.len();
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let (px, py) = placement.apply((f64::from(x) + 0.5, f64::from(y) + 0.5));
+                let (u, v) = (px - 0.5, py - 0.5);
+                if !(-EDGE_SLACK..=max_x + EDGE_SLACK).contains(&u)
+                    || !(-EDGE_SLACK..=max_y + EDGE_SLACK).contains(&v)
+                {
+                    continue;
+                }
+                added.covered += 1;
+                let (u, v) = (u.clamp(0.0, max_x), v.clamp(0.0, max_y));
+                let x0 = (u.floor() as u32).min(sub.width - 2);
+                let y0 = (v.floor() as u32).min(sub.height - 2);
+                let (fx, fy) = (u - f64::from(x0), v - f64::from(y0));
+                let neighbours = [
+                    (x0, y0, (1.0 - fx) * (1.0 - fy)),
+                    (x0 + 1, y0, fx * (1.0 - fy)),
+                    (x0, y0 + 1, (1.0 - fx) * fy),
+                    (x0 + 1, y0 + 1, fx * fy),
+                ];
+                let mut values = [0.0_f32; 3];
+                for (channel, value) in values.iter_mut().enumerate() {
+                    let mut interpolated = 0.0_f64;
+                    for (nx, ny, share) in neighbours {
+                        // Zero times NaN is still NaN: an unused neighbour must
+                        // not be read, including on the last row and column.
+                        if share != 0.0 {
+                            interpolated += share * f64::from(sub.at(channel, nx, ny));
+                        }
+                    }
+                    *value = interpolated as f32;
+                }
+                if values.iter().any(|value| !value.is_finite()) {
+                    added.rejected += 1;
+                    continue;
+                }
+                let index = y as usize * self.width as usize + x as usize;
+                for (channel, value) in values.into_iter().enumerate() {
+                    self.sum[channel * size + index] += value;
+                }
+                self.weight[index] += 1.0;
+                added.added += 1;
+            }
+        }
+        added
+    }
+
+    /// How many subs were added at each pixel, row by row.
+    pub fn weight(&self) -> &[f32] {
+        &self.weight
+    }
+
+    /// Three planes of sums, laid out as a `Colour`'s.
+    pub fn sum(&self) -> &[f32] {
+        &self.sum
+    }
+
+    /// Sum over weight; 0.0 where the weight is 0.
+    pub fn mean(&self) -> Colour {
+        let mut mean = Colour::new(self.width, self.height);
+        let size = self.weight.len();
+        for channel in 0..3 {
+            for (index, &weight) in self.weight.iter().enumerate() {
+                if weight > 0.0 {
+                    let offset = channel * size + index;
+                    mean.planes[offset] = self.sum[offset] / weight;
+                }
+            }
+        }
+        mean
     }
 }
