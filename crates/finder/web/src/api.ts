@@ -294,6 +294,57 @@ export interface ImagingView {
   solve?: ImagingSolve;
   relation?: ImagingRelation;
   focus?: ImagingFocus;
+  calibration?: ImagingCalibration;
+}
+
+// The calibration library and sets of darks or flats in the imaging view (034).
+export interface CalibrationMaster {
+  id: string;
+  kind: "dark" | "flat";
+  made_at: number;
+  frames: number;
+  checked: boolean;
+  gain: number | null;
+  offset: number | null;
+  binning: number;
+  set_temp_c: number | null;
+  temp_c: number | null;
+  exposure_ms: number;
+  bad_pixels: number | null;
+  label: string | null;
+  imaging_angle_deg: number | null;
+}
+
+export interface CalibrationMatch {
+  frame?: number;
+  dark: string | null;
+  flat: string | null;
+  bad_pixels: number | null;
+  missing: string[];
+  flat_turned_deg?: number;
+}
+
+export interface CalibrationSet {
+  id: string;
+  kind: "dark" | "flat";
+  state: "offset" | "frames" | "search" | "needs_darks" | "flat_darks" | "done" | "failed" | "stopped";
+  wanted: number;
+  taken: number;
+  exposure_ms: number;
+  label?: string;
+  offset_level?: number;
+  level?: number;
+  level_share?: number;
+  darks_taken?: number;
+  not_dark?: boolean;
+  error?: string;
+}
+
+export interface ImagingCalibration {
+  masters: CalibrationMaster[];
+  error?: string;
+  match?: CalibrationMatch;
+  set?: CalibrationSet;
 }
 
 // An imaging solve and what the console keeps between the two cameras, as
@@ -405,6 +456,40 @@ export type ImagingSettingsEdit = Partial<Omit<ImagingSettings, "roi">>;
 
 export async function getImaging(): Promise<ImagingView> {
   return json(await fetch("/api/imaging"));
+}
+
+export async function postCalibrationDarks(count: number, anyway?: boolean): Promise<ImagingCalibration> {
+  return json(
+    await fetch("/api/imaging/calibration/darks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(anyway ? { count, anyway: true } : { count }),
+    }),
+  );
+}
+
+export async function postCalibrationFlats(count: number, label: string): Promise<ImagingCalibration> {
+  return json(
+    await fetch("/api/imaging/calibration/flats", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ count, label }),
+    }),
+  );
+}
+
+export async function postCalibrationFlatDarks(anyway?: boolean): Promise<ImagingCalibration> {
+  return json(
+    await fetch("/api/imaging/calibration/flats", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(anyway ? { darks: true, anyway: true } : { darks: true }),
+    }),
+  );
+}
+
+export async function deleteCalibration(id: string): Promise<ImagingCalibration> {
+  return json(await fetch(`/api/imaging/calibration/${encodeURIComponent(id)}`, { method: "DELETE" }));
 }
 
 export async function putImagingSettings(edit: ImagingSettingsEdit): Promise<ImagingView> {
