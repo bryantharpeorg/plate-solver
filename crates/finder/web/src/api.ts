@@ -295,6 +295,7 @@ export interface ImagingView {
   relation?: ImagingRelation;
   focus?: ImagingFocus;
   calibration?: ImagingCalibration;
+  stack?: StackView;
 }
 
 // The calibration library and sets of darks or flats in the imaging view (034).
@@ -345,6 +346,47 @@ export interface ImagingCalibration {
   error?: string;
   match?: CalibrationMatch;
   set?: CalibrationSet;
+}
+
+// The live stack carried by the imaging view (035).
+export interface StackDropped {
+  not_solved: number;
+  too_few_stars: number;
+  solver_failed: number;
+  soft: number;
+  off_field: number;
+  solve_differs: number;
+  settings: number;
+  frame_failed: number;
+  unreadable: number;
+  behind: number;
+  unprocessed: number;
+}
+
+export interface StackView {
+  state: "stacking" | "ended";
+  id: string;
+  started_at: number;
+  options: { reject: boolean; focus_gate: boolean; gains: [number, number, number]; stretch: number };
+  taken: number;
+  stacked: number;
+  queued: number;
+  dropped: StackDropped;
+  exposure_s: number;
+  missing?: ("dark" | "flat" | "bad_pixels")[];
+  focus_median_arcsec?: number;
+  preview?: string;
+  ended_reason?: "stopped" | "camera";
+  error?: string;
+  files?: { fits?: string; png?: string; json: string };
+  save_error?: string;
+}
+
+export interface StackStart {
+  reject?: boolean;
+  focus_gate?: boolean;
+  gains?: [number, number, number];
+  stretch?: number;
 }
 
 // An imaging solve and what the console keeps between the two cameras, as
@@ -456,6 +498,20 @@ export type ImagingSettingsEdit = Partial<Omit<ImagingSettings, "roi">>;
 
 export async function getImaging(): Promise<ImagingView> {
   return json(await fetch("/api/imaging"));
+}
+
+export async function postImagingStack(body: StackStart): Promise<ImagingView> {
+  return json(
+    await fetch("/api/imaging/stack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
+}
+
+export async function deleteImagingStack(): Promise<ImagingView> {
+  return json(await fetch("/api/imaging/stack", { method: "DELETE" }));
 }
 
 export async function postCalibrationDarks(count: number, anyway?: boolean): Promise<ImagingCalibration> {

@@ -40,6 +40,7 @@ export default defineConfig({
         "**/tracking.spec.ts",
         "**/mcp.spec.ts",
         "**/imaging.spec.ts",
+        "**/stack.spec.ts",
       ],
     },
     {
@@ -57,6 +58,7 @@ export default defineConfig({
         "**/tracking.spec.ts",
         "**/mcp.spec.ts",
         "**/imaging.spec.ts",
+        "**/stack.spec.ts",
       ],
       workers: 1,
       use: { baseURL: externalURL ?? simulateURL },
