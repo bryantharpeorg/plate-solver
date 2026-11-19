@@ -82,7 +82,7 @@ moves the telescope, the guidance block and top bar say
 “Moved by an MCP client · <tool>”. The top bar's Stop is the page's only Stop;
 it stays enabled throughout motion and ends GoTo, direct axis moves and tracking.
 
-The imaging camera has four tools of its own, which answer what the page's
+The imaging camera has six tools of its own, which answer what the page's
 Imaging page does:
 
 - `get_imaging_camera` reads the imaging view: the state, the camera's
@@ -100,6 +100,17 @@ Imaging page does:
   imaging view with the solve; a refusal or a failed solve answers a tool error
   with the route's or the solve's own words. On a console that takes no imaging
   frames it answers `this console takes no imaging frames` at once.
+- `get_focus_reading` takes no arguments and reads the focus reading: the
+  focus region, the focus record, and the reading, best, trend and verdict of
+  the focus aid or the last focus check. Without imaging, while the camera is
+  not ready or without a solver it answers the error a start would be refused
+  with.
+- `set_focus_aid` takes `on`, and with `on` true the same keys as
+  `POST /api/imaging/focus`; it starts the aid as the route does and answers
+  the focus view at once, or, with `check` true, waits until the check has
+  ended and answers its verdict. With `on` false it stops the aid as
+  `DELETE /api/imaging/focus` does. A refusal answers a tool error with the
+  route's words.
 
 ### MCP under WSL2: portproxy or mirrored mode
 
