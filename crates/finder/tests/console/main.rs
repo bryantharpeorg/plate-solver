@@ -8,6 +8,7 @@ mod support;
 mod aim;
 mod api;
 mod calibration;
+mod calibration_bad_pixels;
 mod calibration_console;
 mod calibration_library;
 mod freshness;

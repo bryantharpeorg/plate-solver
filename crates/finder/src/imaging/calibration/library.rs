@@ -16,6 +16,7 @@ use crate::imaging::{
 };
 
 pub const FORMAT: &str = "finder-calibration/1";
+pub const BAD_PIXELS_FORMAT: &str = "finder-bad-pixels/1";
 pub const SET_TEMP_TOLERANCE_C: f64 = 1.0;
 pub const SENSOR_TEMP_TOLERANCE_C: f64 = 8.0;
 pub const EXPOSURE_TOLERANCE_MS: f64 = 1.0;
@@ -263,10 +264,22 @@ struct Held {
     error: Option<String>,
 }
 
+#[derive(Serialize, Deserialize)]
+struct BadPixelFile {
+    format: String,
+    width: u32,
+    height: u32,
+    level: f32,
+    spread: f32,
+    sigmas: f32,
+    pixels: Vec<(u32, u32)>,
+}
+
 #[derive(Default)]
 struct ReadMasters {
     dark: Option<(String, RealImage)>,
     flat: Option<(String, RealImage)>,
+    bad_pixels: Option<(String, BadPixelFile)>,
 }
 
 pub struct Library {
@@ -422,6 +435,46 @@ impl Library {
         Ok(entry)
     }
 
+    /// Keep a listed dark's map beside it and record its size in the index.
+    /// An oversized map leaves the entry and files untouched.
+    pub fn attach_bad_pixels(
+        &self,
+        id: &str,
+        map: &calibration::BadPixels,
+    ) -> io::Result<MasterEntry> {
+        let mut held = self.held.lock().expect("calibration index");
+        let entry = held
+            .index
+            .masters
+            .iter_mut()
+            .find(|m| m.id == id && m.kind == Kind::Dark)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no master dark has that id"))?;
+        if map.too_many {
+            return Ok(entry.clone());
+        }
+        let file = self.root.join(&entry.file).with_extension("badpixels.json");
+        let part = file.with_extension("json.part");
+        let bytes = serde_json::to_vec(&BadPixelFile {
+            format: BAD_PIXELS_FORMAT.into(),
+            width: entry.width,
+            height: entry.height,
+            level: map.level,
+            spread: map.spread,
+            sigmas: calibration::BAD_PIXEL_SIGMAS,
+            pixels: map.pixels.clone(),
+        })?;
+        let written = fs::write(&part, bytes).and_then(|()| fs::rename(&part, &file));
+        if let Err(error) = written {
+            let _ = fs::remove_file(&part);
+            return Err(error);
+        }
+        entry.bad_pixels = Some(map.pixels.len() as u64);
+        let entry = entry.clone();
+        self.read.lock().expect("calibration masters").bad_pixels = None;
+        self.write_index(&held.index)?;
+        Ok(entry)
+    }
+
     fn write_index(&self, index: &Index) -> io::Result<()> {
         let part = self.root.join("index.json.part");
         fs::write(&part, serde_json::to_vec_pretty(index)?)?;
@@ -503,7 +556,7 @@ impl Library {
     }
 
     /// Reads files on the caller's thread: runtime callers use the blocking pool.
-    /// Only the last successfully read master of each kind is retained.
+    /// Only the last successfully read dark, flat and map are retained.
     pub fn calibrate(
         &self,
         key: &FrameKey,
@@ -517,6 +570,7 @@ impl Library {
         let ReadMasters {
             dark: dark_cache,
             flat: flat_cache,
+            bad_pixels: map_cache,
         } = &mut *read;
         let mut problems = Vec::new();
         let dark = self.read_master(
@@ -533,12 +587,19 @@ impl Library {
             sub,
             &mut problems,
         );
+        let bad_pixels = self.read_bad_pixels(
+            selection.dark.as_deref(),
+            &entries,
+            map_cache,
+            sub,
+            &mut problems,
+        );
         let report = calibration::calibrate(
             sub,
             &Masters {
                 dark,
                 flat,
-                bad_pixels: None,
+                bad_pixels,
             },
         )
         .expect("the library checked the masters' sizes");
@@ -547,6 +608,51 @@ impl Library {
             report,
             problems,
         }
+    }
+
+    fn read_bad_pixels<'a>(
+        &self,
+        id: Option<&str>,
+        entries: &[MasterEntry],
+        cache: &'a mut Option<(String, BadPixelFile)>,
+        sub: &Mosaic,
+        problems: &mut Vec<String>,
+    ) -> Option<&'a [(u32, u32)]> {
+        let entry = entries
+            .iter()
+            .find(|m| Some(m.id.as_str()) == id && m.bad_pixels.is_some())?;
+        let result = (|| {
+            if cache.as_ref().is_none_or(|(id, _)| id != &entry.id) {
+                *cache = None;
+                let bytes = fs::read(self.root.join(&entry.file).with_extension("badpixels.json"))
+                    .map_err(|e| e.to_string())?;
+                let value: serde_json::Value =
+                    serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+                if let Some(format) = value.get("format").and_then(|v| v.as_str()) {
+                    if format != BAD_PIXELS_FORMAT {
+                        return Err(format!("its format is {format}"));
+                    }
+                }
+                let map: BadPixelFile = serde_json::from_value(value).map_err(|e| e.to_string())?;
+                *cache = Some((entry.id.clone(), map));
+            }
+            let map = &cache.as_ref().expect("bad-pixel map was read").1;
+            if map.width != sub.width || map.height != sub.height {
+                return Err(format!(
+                    "it is {} × {} and the sub {} × {}",
+                    map.width, map.height, sub.width, sub.height
+                ));
+            }
+            Ok(())
+        })();
+        if let Err(why) = result {
+            problems.push(format!(
+                "the bad-pixel map of {} could not be used: {why}",
+                entry.id
+            ));
+            return None;
+        }
+        Some(&cache.as_ref().expect("bad-pixel map was read").1.pixels)
     }
 
     fn read_master<'a>(

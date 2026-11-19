@@ -22,6 +22,45 @@ pub const ADJACENT_SHARE: f32 = 0.1;
 pub const FLAT_FLOOR: f32 = 0.1;
 /// The least a noise or a spread may be: one count, the samples' own step.
 pub const NOISE_FLOOR: f32 = 1.0;
+/// A master dark's bad samples stand this many spreads above its median.
+pub const BAD_PIXEL_SIGMAS: f32 = 3.5;
+/// A map of more than this share of the frame is no map.
+pub const BAD_PIXEL_MAX_SHARE: f64 = 0.01;
+
+/// Bad samples in a master dark, using its own spread, fixed pattern included.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BadPixels {
+    /// (x, y), by y then x. Empty when `too_many`.
+    pub pixels: Vec<(u32, u32)>,
+    pub level: f32,
+    pub spread: f32,
+    pub too_many: bool,
+}
+
+/// Map non-finite samples and those strictly above median + 3.5 spreads.
+/// Spread is median less the 16th percentile, floored at one count.
+pub fn bad_pixel_map(master_dark: &[f32], width: u32, height: u32) -> BadPixels {
+    let level = percentile(master_dark, 0.5).unwrap_or(0.0);
+    let spread = (level - percentile(master_dark, 0.16).unwrap_or(0.0)).max(NOISE_FLOOR);
+    let line = level + BAD_PIXEL_SIGMAS * spread;
+    let mut pixels: Vec<_> = master_dark
+        .iter()
+        .enumerate()
+        .filter(|(_, value)| !value.is_finite() || **value > line)
+        .map(|(i, _)| ((i % width as usize) as u32, (i / width as usize) as u32))
+        .collect();
+    let too_many =
+        pixels.len() as f64 > BAD_PIXEL_MAX_SHARE * (u64::from(width) * u64::from(height)) as f64;
+    if too_many {
+        pixels.clear();
+    }
+    BadPixels {
+        pixels,
+        level,
+        spread,
+        too_many,
+    }
+}
 
 /// One frame's samples as real numbers, row by row from the top-left.
 #[derive(Debug, Clone, PartialEq)]

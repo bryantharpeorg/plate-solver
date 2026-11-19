@@ -932,6 +932,32 @@ and `flat`, and `map` or `sub` for `bad_pixels`: without a map, hot pixels are
 found in the sub itself. It also counts `repaired`, `not_repaired` and `low_flat`
 samples; a flat sample below 0.1 is repaired instead of divided by.
 
+A master dark's bad-pixel map lists, row by row from the top, every sample
+that is not finite or reads more than 3.5 spreads above its median. The spread
+is the median less the 16th percentile, at least one count; a fixed column
+pattern therefore widens the spread instead of being mapped. The map is kept
+beside the dark as `darks/<id>.badpixels.json`, format `finder-bad-pixels/1`,
+with `width`, `height`, `level`, `spread`, `sigmas` (3.5) and `pixels` (x, y
+pairs); its size is the master's `bad_pixels`. More than 1 percent of the
+samples is too many: no map is written and the search in the sub stands in
+for it. A master only added to the library has no map until one is attached.
+An unreadable map, an unknown format or a size that differs from the sub also
+falls back to that search, with the reason in `problems`.
+
+Without a map, a hot sample must pass three tests: it stands more than eight
+of its colour's noises above its largest same-colour neighbour along the row
+or column; its height above its colour's median exceeds five times that
+neighbour's height; and at most one touching sample is lit. A touching sample
+is lit only above both three of its own colour's noises and a tenth of the
+candidate's height above its median. Noise is the colour's median less its
+16th percentile, at least one count. Same-colour neighbours are two samples
+away on a Bayer mosaic, one on mono. Repairs take the median of the good
+neighbours, leaving other bad samples out. This search can take the cores of
+stars under 1.4 samples across at half height, or whose peaks stand under
+about 30 noises above their median. Three hot pixels that touch can be left
+unrepaired; in nebulosity a hot pixel must stand more than ten times the
+nebulosity's height above the median to be found.
+
 The library lives in `calibration/` under the imaging folder (`imaging/` in
 the state folder, or `--imaging-dir`). Its files are `index.json`, format
 `finder-calibration/1`; `darks/<id>.fits`; `darks/<id>.badpixels.json` for a
