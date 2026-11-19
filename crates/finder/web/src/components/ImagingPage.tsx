@@ -10,6 +10,7 @@ import {
 } from "../api";
 import { useColourHold } from "../useColourHold";
 import { useImaging } from "../useImaging";
+import { FocusBlock } from "./FocusBlock";
 import { ImagingSolveBlock } from "./ImagingSolveBlock";
 
 // The words of each state that is not ready (031 US7-S2).
@@ -285,7 +286,12 @@ export function ImagingPage({ night, onBack }: { night: boolean; onBack: () => v
           </section>
         </>
       )}
-      {view?.state === "ready" && <ImagingSolveBlock view={view} refresh={refresh} />}
+      {view?.state === "ready" && (
+        <>
+          <ImagingSolveBlock view={view} refresh={refresh} />
+          <FocusBlock view={view} refresh={refresh} />
+        </>
+      )}
     </main>
   );
 }
