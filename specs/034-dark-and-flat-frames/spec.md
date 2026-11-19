@@ -19,10 +19,21 @@ depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", 
 # the simulated camera and the imaging angle kept with the flats (§ Clarifications, the
 # session of 2026-11-18; plan.md § Risks, § Refinement Record).
 # It builds on 030, 031, 032 and 033, in the plan document's settled
-# order, and all four are drafts: every interface of theirs named here is taken from
-# that draft's plan.md, 031's lease and its frame's set temperature included; and this
-# trio is re-anchored against `main` after the four land and before it is flipped
-# (plan.md § Prerequisites).
+# order, all four drafts when it was written: every interface of theirs named here was
+# taken from that draft's plan.md, 031's lease and its frame's set temperature included;
+# and this trio was re-anchored against `main` after the four landed and before it is
+# flipped (plan.md § Prerequisites).
+# Re-anchored 2026-11-19 to `main` at 80f414f (80f414ff9b369cfb8d5a2d51a0924c1bab3fdf1b),
+# where 030's eight stories, 031's nine, 032's seven and 033's nine have landed: every
+# citation was compared line for line with 49bb210 and read again by its content, and
+# the ones that moved are corrected, the glossary's among them; every name and behaviour
+# taken from 030 to 033 was read in their code, and the few that differed in name, path
+# or place are corrected; a saved file's `EXPTIME` is the frame's own exposure and an
+# exposure-only `Lease::set` waits on nothing, both now written as facts; the imaging
+# routes' shared write names 033 US8, their last writer; and the Constitution Check says
+# why the calibration arithmetic is this project's own (plan.md § Prerequisites 2 and 5,
+# § Constitution Check).
+# The owner approved the imaging series' recommended answers on 2026-11-17.
 # It stays draft until the owner settles the owner decisions and flips it to `ready`,
 # which gives the approvals listed under "Owner approvals" and dispatches it.
 ---
@@ -97,14 +108,16 @@ shadow, hot pixels and a column pattern, and its known patterns are the oracles.
   and `crates/simulator/src/imaging.rs` is created by 031 or 030 and is named here as a plain
   path with the story that creates it. Seven things were read in the code at
   dbc2b5b, and read again at 49bb210 in the fourth session, where item 5's line and,
-  in the uncommitted glossary, item 6's last line had moved:
+  in the uncommitted glossary, item 6's last line had moved, and read again on `main`
+  at 80f414f, whose line numbers are cited:
   1. The simulator's shared state is a `Copy` struct
-     (`crates/simulator/src/optics.rs:64`, `crates/simulator/src/optics.rs:65`), where
+     (`crates/simulator/src/optics.rs:65`, `crates/simulator/src/optics.rs:66`), where
      030 puts the imaging optics. A list of hot pixels or dust shadows cannot go in a
      `Copy` struct, so this spec's sensor pattern and light path live in a second shared
-     cell beside it (`crates/simulator/src/optics.rs:74`).
-  2. The console's router has one `DELETE` today (`crates/finder/src/api.rs:461`), and
-     its catch-all answers only `GET` (`crates/finder/src/api.rs:466`). This spec's
+     cell beside it (`crates/simulator/src/optics.rs:76`).
+  2. The console's router has one `DELETE` of its own (`crates/finder/src/api.rs:542`),
+     and its catch-all answers only `GET` (`crates/finder/src/api.rs:547`); on `main`
+     031's route table holds a second, 033's `DELETE /api/imaging/focus`. This spec's
      `DELETE /api/imaging/calibration/{id}` is added to 031's route table in
      `crates/finder/src/imaging/routes.rs` (031 US1).
   3. `finder` already depends on the simulator (`crates/finder/Cargo.toml:14`), on
@@ -121,22 +134,23 @@ shadow, hot pixels and a column pattern, and its known patterns are the oracles.
      result for the token (`crates/finder/tests/mcp/motion.rs:517`), on a console that
      takes no imaging frames. The three new tools answer such a call at once (US8-S4).
   6. `GLOSSARY.md` defines dark, flat, master dark, master flat and calibration library
-     (`GLOSSARY.md:159`, `GLOSSARY.md:163`, `GLOSSARY.md:167`) and hot pixel
-     (`GLOSSARY.md:331`). These four lines are not of a commit: they are lines of the
-     glossary as the plan document and the series audit rewrite it, a file changed in
-     the drafting worktree and not yet committed, which also defines the **Lease** (on
-     the imaging camera) and the **Purpose label** this trio uses. At dbc2b5b and at
-     49bb210 the Dark, Flat and Calibration library entries do not exist, line 159 is
-     the Camera port entry and hot pixel is at line 231. The
-     rewrite lands with or before this trio (plan.md § Prerequisites 6). Neither version
-     has an entry for a bad-pixel map, the offset level or a flat label (owner
-     approval 6).
+     (`GLOSSARY.md:169`, `GLOSSARY.md:173`, `GLOSSARY.md:177`) and hot pixel
+     (`GLOSSARY.md:341`). These entries were first read in the glossary as the plan
+     document and the series audit rewrote it, a file then changed in the drafting
+     worktree and not yet committed, which also defines the **Lease** (on the imaging
+     camera) and the **Purpose label** this trio uses. At dbc2b5b and at 49bb210 the
+     Dark, Flat and Calibration library entries did not exist, line 159 was the Camera
+     port entry and hot pixel was at line 231. The rewrite reached `main` with 030's
+     flip (`55e41f5`), and the four lines cited are of `main` at 80f414f (plan.md
+     § Prerequisites 6). Neither version has an entry for a bad-pixel map, the offset
+     level or a flat label (owner approval 6).
   7. The constitution's "detection input is 8-bit grayscale"
-     (`.specify/memory/constitution.md:84`) does not bind here: no imaging frame is
+     (`.specify/memory/constitution.md:106`) does not bind here: no imaging frame is
      detection input in this spec, and star detection is untouched.
 - Q: Which of 030's and 031's interfaces does this spec build on? → A: These, each from
   `specs/031-imaging-frames-on-console/plan.md` § Interfaces as drafted, but for the
-  last, which is from `specs/030-imaging-camera-link/plan.md`: `Imaging::take`,
+  last, which is from `specs/030-imaging-camera-link/plan.md`, and each read again in
+  their code on `main` at 80f414f, now that both have landed: `Imaging::take`,
   `Imaging::ended`, `Imaging::set`, `Imaging::abort` and `Imaging::view`, with
   `ImagingView`, `FrameView`, `SettingsEdit` and `Refusal`
   (`crates/finder/src/imaging/mod.rs`, and `crates/finder/src/imaging/frames.rs` for
@@ -152,23 +166,27 @@ shadow, hot pixels and a column pattern, and its known patterns are the oracles.
   (`crates/finder/src/imaging/fits.rs`, 031 US2 and US3); the route table
   (`crates/finder/src/imaging/routes.rs`, 031 US1); the Imaging page
   (`crates/finder/web/src/components/ImagingPage.tsx`, 031 US7); the MCP tools' place
-  (`crates/finder/src/mcp/tools.rs:165`); and `SimImagingCamera` with its numbered steps
-  for making a frame (`crates/simulator/src/imaging.rs`, 030 US2). If 030 or 031 lands with any
-  of them changed, this trio is corrected before the flip (plan.md § Prerequisites 2).
+  (`crates/finder/src/mcp/tools.rs:264`); and `SimImagingCamera` with its numbered steps
+  for making a frame (`crates/simulator/src/imaging.rs`, 030 US2). 030 and 031 landed
+  with these as named here but for a few in name, path or place, which are corrected
+  (plan.md § Prerequisites 2).
 - Q: Which of 032's and 033's interfaces does this spec build on? → A: Of 032, from
-  `specs/032-imaging-solve-and-aim-point/plan.md` § Interfaces as drafted: the imaging
+  `specs/032-imaging-solve-and-aim-point/plan.md` § Interfaces as drafted, and read
+  again in its code on `main` at 80f414f: the imaging
   view's `relation` and its `angle_deg`, the imaging angle the console last measured,
   present only while the session's aim point is the measured one
   (`crates/finder/src/imaging/relation.rs`, 032 US3 to US5); and, in one scenario
   (US10-S2, which was US7-S6 until round 1's cut), 032's solving rig,
   `SimulatedSolver`, `AppState::with_imaging_solver` and
   `POST /api/imaging/solve` (032 US2). Of 033, from
-  `specs/033-focus-reading-and-aid/plan.md` § The aid on the console: the purpose label
-  `focus` (`PURPOSE`) of every imaging frame its focus aid takes, which `match` passes
-  over (owner decision 22), and the aid's holder name `the focus aid`, which a set
-  meets only as the lease's refusal. 033 is in `depends_on_landed` because the plan
-  document settles the order 030, 031, 032, 033, 034, and because it writes files this spec
-  writes; what was read in its draft is plan.md § Prerequisites 5.
+  `specs/033-focus-reading-and-aid/plan.md` § The aid on the console, and read again in
+  its code on `main` at 80f414f: the purpose label `focus`
+  (`crate::imaging::focus::run::PURPOSE`) of every imaging frame its focus aid takes,
+  which `match` passes over (owner decision 22), and the aid's holder name
+  `the focus aid` (`crate::imaging::focus::run::HOLDER`), which a set meets only as the
+  lease's refusal. 033 is in `depends_on_landed` because the plan document settles the
+  order 030, 031, 032, 033, 034, and because it writes files this spec writes; what was
+  read in its draft, and again in its code, is plan.md § Prerequisites 5.
 - Q: What does 031 leave to this spec? → A: One thing. 031's `Imaging::take` always
   saves a file, so every dark and flat of a set is kept as an ordinary imaging frame
   (owner decision 2). Before 030 was split in two, the one trio's owner decision 24 also
@@ -212,9 +230,9 @@ shadow, hot pixels and a column pattern, and its known patterns are the oracles.
   8 °C. Every other number is a design value of this spec, named as a constant in
   plan.md § Interfaces and listed for the owner in owner decisions 4 to 15 and 24. None
   was measured on a camera.
-- Q: Which other drafts write the same files? → A: All of them. 032 and 033 land before
-  this spec and are in its `depends_on_landed`, so the factory, which runs two epics at
-  once (`ergane.yaml:193`), cannot dispatch this one beside either. 035 to 037 land
+- Q: Which other drafts write the same files? → A: All of them. 032 and 033 landed before
+  this spec and are in its `depends_on_landed`, so the factory, which runs up to four
+  epics at once (`ergane.yaml:196`), could not dispatch this one beside either. 035 to 037 land
   after it and name it in theirs. The files are `crates/finder/src/imaging/mod.rs`,
   `crates/finder/src/imaging/routes.rs`, `crates/finder/src/mcp/tools.rs`,
   `crates/finder/README.md`, the Imaging page and the simulator's imaging camera
@@ -291,10 +309,13 @@ shadow, hot pixels and a column pattern, and its known patterns are the oracles.
   HEAD, which 028's US5 moved past dbc2b5b in test files only. Every `path:line`
   of spec.md and plan.md was read there. One had moved: the MCP token test is now at
   `crates/finder/tests/mcp/motion.rs:517`. One was wrong at both commits: the `## API`
-  table's last row is `crates/finder/README.md:184`, line 167 being its heading. And the
-  uncommitted glossary, to which the audit added entries, holds hot pixel at
-  `GLOSSARY.md:331` now. The scratch-folder helper 028's US5 added is cited at
-  `crates/finder/tests/support/mod.rs:12`.
+  table's last row was line 184 of `crates/finder/README.md`, line 167 being its
+  heading. And the uncommitted glossary, to which the audit added entries, held hot
+  pixel at line 331. The scratch-folder helper 028's US5 added is cited at
+  `crates/finder/tests/support/mod.rs:12`. All were read again on `main` at 80f414f, at
+  the re-anchoring, whose line numbers are cited: the `## API` heading is now
+  `crates/finder/README.md:204` and its last row `crates/finder/README.md:229`, and hot
+  pixel is at `GLOSSARY.md:341`.
 
 ### Session 2026-11-17 (the owner's answers)
 
@@ -401,9 +422,9 @@ shadow, hot pixels and a column pattern, and its known patterns are the oracles.
   `its samples do not fit its size`; `solve` is among the answers `Imaging` builds its
   view for; the MCP tools work out the route's answer again and parse their arguments
   as 031's `set_imaging_camera` does; US8 makes the README count nine tools; the page's
-  two count fields are `type="number"`, as 033's Focus frame time is, and it lists the
-  masters in the view's order; and US4's console rig is built over a `Simulator` its
-  caller keeps.
+  two count fields are `type="number"`, as 033's Focus frame time was on the probe base,
+  and it lists the masters in the view's order; and US4's console rig is built over a
+  `Simulator` its caller keeps.
 - Q: What did the probes find that 031, 032 and 033 do otherwise? → A: On the probe base
   `Imaging` built its view in two places: `set`, `take`, `solve` and the focus run
   answered the imaging state's own view, and only `Imaging::view` the calibration's. On
@@ -411,14 +432,19 @@ shadow, hot pixels and a column pattern, and its known patterns are the oracles.
   `abort` and `solve` do, which is what plan.md § 031's imaging state asks. `main`'s
   `Refusal` has `bad_request` and `conflict` and public fields; 031's not-ready words are
   private to its imaging module; 031's `set_imaging_camera` parses its arguments with the
-  route's own `sim_json`; and 033's Focus frame time is a `type="number"` field. 032's
+  route's own `sim_json`; and the probe base's Focus frame time of 033 was a
+  `type="number"` field. 032's
   aim window gave US10-S2's three points on the probe code and on `main` alike. Every
-  other seam built as written.
+  other seam built as written. Read again on `main` at 80f414f, where 033 has landed
+  too: its `focus_start` and `focus_stop` answer `Imaging::view` as well, and its Focus
+  frame time is a text field with `inputMode="decimal"`, no longer `type="number"`; the
+  page's two count fields stay `type="number"` (plan.md § Prerequisites 2).
 - Q: What is not folded? → A: One defect: the two `GLOSSARY.md` lines that plan.md
   § `crates/finder/README.md` and `GLOSSARY.md` cites for the **Flat** and
   **Calibration library** entries, which the probe base's glossary holds at other lines.
-  In this worktree they read as cited, and every citation is read again at the
-  re-anchoring (plan.md § Prerequisites 2). The probes' notes on memory are in plan.md
+  In the drafting worktree they read as cited; the re-anchoring on `main` at 80f414f
+  cites them at the lines that hold them there, `GLOSSARY.md:173` and
+  `GLOSSARY.md:177` (plan.md § Prerequisites 2). The probes' notes on memory are in plan.md
   § Risks as measured and add no requirement.
 
 ## Owner decisions
@@ -737,7 +763,9 @@ Every scenario shares these definitions unless it says otherwise.
 - **The console rig** is 031's console rig: the sim rig's `Simulator` with a
   `SimMount::new` connected first and `push_to(50.0, 120.0)` after; a `SimNode` over it
   with a 500 ms frame interval and the token `test-token`, served over a fresh duplex for
-  each connection with `memory::serve_routes_on` and its `routes()`, as
+  each connection with `memory::serve_routes_on` and `node.service().routes()`
+  (`SimNode` has no `routes()` of its own; its `service()` is at
+  `crates/simulator/src/node.rs:76`), as
   `crates/finder/tests/support/mcp.rs:228` serves its node; a session paired to it with
   the site 40° N 75° W; then `AppState::shared` with `with_session`, `with_clock` on the
   simulator's clock, `with_link`, `with_live()` and `with_imaging(R)`. **R** is the child
@@ -2301,16 +2329,16 @@ development,
 ## Assumptions
 
 - **030, 031, 032 and 033 have landed.** `030-imaging-camera-link`, `031-imaging-frames-on-console`,
-  `032-imaging-solve-and-aim-point` and `033-focus-reading-and-aid` are on `main`, with
-  the interfaces their drafts give, and 031 with the lease and the frame's set
-  temperature that the series audit's findings on 031 add. They are not yet: all four
-  are drafts, and this trio is re-anchored to their code before the flip (plan.md
-  § Prerequisites 1, 2, 5 and 11). Every `path:line` here was checked at 49bb210, the
-  drafting worktree's HEAD, and names code that exists there, but for the four lines of
-  `GLOSSARY.md`, which are of the plan document's rewrite of that file
-  (Clarifications); every file 030, 031, 032 or 033 creates is named without a line.
-- **The plan document's `GLOSSARY.md` rewrite is on `main`** before this spec is
-  dispatched: two stories insert their entries after entries only the rewrite has
+  `032-imaging-solve-and-aim-point` and `033-focus-reading-and-aid` are on `main` at
+  80f414f, with the interfaces their drafts gave, and 031 with the lease and the frame's
+  set temperature that the series audit's findings on 031 added; this trio was
+  re-anchored to their code on 2026-11-19 (plan.md § Prerequisites 1, 2, 5 and 11).
+  Every `path:line` here was checked at 49bb210, the drafting worktree's HEAD, and read
+  again by its content on `main` at 80f414f, whose line numbers are cited, the four lines
+  of `GLOSSARY.md` among them (Clarifications); every file 030, 031, 032 or 033 created
+  is named without a line.
+- **The plan document's `GLOSSARY.md` rewrite is on `main`**, since 030's flip
+  (`55e41f5`): two stories insert their entries after entries only the rewrite has
   (plan.md § Prerequisites 6).
 - **Out of scope:**
   - turning a sub into colour, registering it and stacking it (035);

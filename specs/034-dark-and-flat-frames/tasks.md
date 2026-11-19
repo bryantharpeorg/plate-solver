@@ -7,21 +7,24 @@ description: "Task list for 034-dark-and-flat-frames: Dark and Flat Frames"
 **Prerequisites** (plan.md § Prerequisites):
 - `030-imaging-camera-link`, `031-imaging-frames-on-console`,
   `032-imaging-solve-and-aim-point` and `033-focus-reading-and-aid` have landed on
-  `main`: not met, all four are drafts;
+  `main`: met, on `main` at 80f414f (plan.md § Prerequisites 1);
 - 031's trio carries the imaging camera's lease (031 US9: `Imaging::lease`,
   `Imaging::holder`, `Lease::set`, `Lease::take`) and `FrameView::set_temp_c` in its
-  plan.md as well as its spec.md (plan.md § Prerequisites 11): not met on `main`, where
-  no trio of this series is committed yet; met in this worktree, whose 031 plan.md now
-  carries both;
-- this trio has been re-anchored against `main` after they landed, every plain path of a
-  file they create given its line (plan.md § Prerequisites 2): not met;
-- 033's draft has been read for the four points of plan.md § Prerequisites 5: met;
-- the owner decisions in spec.md are settled and its owner approvals given: not met,
-  but for decisions 17 and 23, which the plan document's amendments 2 and 1 settle, and
-  7, which the owner settled on 2026-11-17 and which is written in;
+  plan.md as well as its spec.md (plan.md § Prerequisites 11): met, and both landed
+  with 031; the re-anchoring read them on `main` name for name;
+- this trio has been re-anchored against `main` after they landed (plan.md
+  § Prerequisites 2): met, on `main` at 80f414f on 2026-11-19; no line is cited in a
+  file they created, which are named without one;
+- 033 has been read for the four points of plan.md § Prerequisites 5: met, in its draft
+  and again in its code on `main`;
+- the owner decisions in spec.md are settled and its owner approvals given: met, the
+  owner having approved their recommended answers on 2026-11-17, with decision 7
+  settled by the owner that day and 17 and 23 by the plan document's amendments 2 and
+  1; flipping the spec gives the approvals (plan.md § Prerequisites 3);
 - every story has been probe-built: met, by round 1 on 2026-11-18 (plan.md
   § Prerequisites 4), whose fixes are in the trio and which cut US7 into US7 and US10;
-- the plan document's rewrite of `GLOSSARY.md` is on `main`: not met;
+- the plan document's rewrite of `GLOSSARY.md` is on `main`: met, since 030's flip
+  (plan.md § Prerequisites 6);
 - the scratch-folder helper `crate::support::Scratch` is on `main`: met, at
   `crates/finder/tests/support/mod.rs:12`;
 - no operator-staged file is needed: met.
@@ -52,9 +55,9 @@ description: "Task list for 034-dark-and-flat-frames: Dark and Flat Frames"
 - Keep the story's diff under 64 KiB, measured as plan.md § Plan traps 3 says. Round 1
   measured US6 and US7 nearest it, at about 96 and 92 percent with their cases (plan.md
   § Risks).
-- Every `path:line` was checked at 49bb210 and names code that exists there, but for
-  the `GLOSSARY.md` lines, which are of the plan document's rewrite; a file named
-  without a line is created by 030, 031, 032 or 033, or by an earlier story of this spec. If
+- Every `path:line` was read on `main` at 80f414f in the re-anchoring of 2026-11-19,
+  the `GLOSSARY.md` lines included, and names what it says there; a file named
+  without a line was created by 030, 031, 032 or 033, or is created by an earlier story of this spec. If
   a cited line has moved, re-read it rather than guess.
 - Add no dependency and change no `Cargo.toml` or `Cargo.lock`. Change nothing under
   `crates/scope-node` or `crates/scope-link`, and outside US1 nothing under
@@ -349,7 +352,7 @@ scenarios runs on the simulated camera or the solving rig.
   parsing its arguments with the route's request type so that the words are the same,
   and each answering at once on a console without a calibration (plan.md § The MCP
   tools). Add one line a tool to `## MCP clients` in `crates/finder/README.md`, and
-  change `Six tools` to `Nine tools` in the sentence before the list.
+  change `six tools` to `nine tools` in the sentence before the imaging tools.
 - [ ] T036 [US8] Run the `lint` and `test` gates with every existing test unchanged and
   green, `crates/finder/tests/mcp/motion.rs` included. Commit the green story (US8-S1,
   US8-S2, US8-S3 and US8-S4).
