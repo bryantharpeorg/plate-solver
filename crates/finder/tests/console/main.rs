@@ -48,5 +48,6 @@ mod session;
 mod stack_accumulate;
 mod stack_colour;
 mod stack_placement;
+mod stack_reject;
 mod star_detected;
 mod targets;

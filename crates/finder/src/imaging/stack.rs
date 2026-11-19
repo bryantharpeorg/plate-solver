@@ -2,13 +2,23 @@
 //! reference grid, and the sums that make a stack. Pure functions; nothing here
 //! reads a file, a clock, the mount or the site.
 
-use super::{calibration::Mosaic, solver::ImagingSolve};
+use super::{
+    calibration::{percentile, Mosaic},
+    solver::ImagingSolve,
+};
 
 /// At each corner of the reference grid the placing map may lie this many of the
 /// sub's pixels from where the two imaging solves put that corner (owner decision 3).
 pub const CORNER_SLACK_PX: f64 = 0.5;
 /// A sample point this close to the edge of a sub's pixel centres counts as on it.
 pub const EDGE_SLACK: f64 = 1e-6;
+/// A pixel is tested once it holds this many subs.
+pub const LEARNING_SUBS: u32 = 8;
+pub const REJECT_SIGMAS: f32 = 3.0;
+/// The least a deviation may be: one count.
+pub const SIGMA_FLOOR: f32 = 1.0;
+/// A level is read on a grid of about this many pixels a side.
+pub const LEVEL_GRID: u32 = 512;
 
 /// Three planes of 32-bit reals, red, green and blue, each row by row from the top.
 #[derive(Debug, Clone, PartialEq)]
@@ -92,6 +102,25 @@ pub fn colour(mosaic: &Mosaic) -> Colour {
         }
     }
     picture
+}
+
+/// Each plane's lower median on the grid whose x and y are multiples of
+/// ceil(longer side / `LEVEL_GRID`), at least one. Empty planes have level zero.
+pub fn levels(picture: &Colour) -> [f32; 3] {
+    let step = picture
+        .width
+        .max(picture.height)
+        .div_ceil(LEVEL_GRID)
+        .max(1) as usize;
+    std::array::from_fn(|channel| {
+        let mut samples = Vec::new();
+        for y in (0..picture.height).step_by(step) {
+            for x in (0..picture.width).step_by(step) {
+                samples.push(picture.at(channel, x, y));
+            }
+        }
+        percentile(&samples, 0.5).unwrap_or(0.0)
+    })
 }
 
 /// The reference grid's position p falls at `m·p + t` in the sub.
@@ -204,6 +233,10 @@ pub struct Stack {
     sum: Vec<f32>,
     weight: Vec<f32>,
     subs: u32,
+    /// Running sums of squared deviations, allocated only for rejection.
+    squares: Option<Vec<f32>>,
+    /// Absent without background matching; the first sub's levels once read.
+    levels: Option<Option<[f32; 3]>>,
 }
 
 impl Stack {
@@ -216,7 +249,22 @@ impl Stack {
             sum: vec![0.0; 3 * size],
             weight: vec![0.0; size],
             subs: 0,
+            squares: None,
+            levels: None,
         }
+    }
+
+    /// Test each pixel against its running mean and sample deviation after
+    /// `LEARNING_SUBS` samples. Any channel's outlier leaves the whole pixel out.
+    pub fn with_rejection(mut self) -> Self {
+        self.squares = Some(vec![0.0; self.sum.len()]);
+        self
+    }
+
+    /// Shift each later sub to the first sub's levels, independently per channel.
+    pub fn with_background_match(mut self) -> Self {
+        self.levels = Some(None);
+        self
     }
 
     pub fn width(&self) -> u32 {
@@ -235,11 +283,23 @@ impl Stack {
     /// Bilinearly sample the sub at each mapped pixel centre and add it in the
     /// same pass. A nonfinite value leaves that pixel out in all three channels.
     pub fn add(&mut self, sub: &Colour, placement: &Placement) -> Added {
+        let offsets = if let Some(reference) = &mut self.levels {
+            let current = levels(sub);
+            match reference {
+                Some(first) => std::array::from_fn(|channel| first[channel] - current[channel]),
+                None => {
+                    *reference = Some(current);
+                    [0.0; 3]
+                }
+            }
+        } else {
+            [0.0; 3]
+        };
         let mut added = Added {
             covered: 0,
             added: 0,
             rejected: 0,
-            offsets: [0.0; 3],
+            offsets,
         };
         self.subs += 1;
         if sub.width < 2 || sub.height < 2 {
@@ -278,17 +338,45 @@ impl Stack {
                             interpolated += share * f64::from(sub.at(channel, nx, ny));
                         }
                     }
-                    *value = interpolated as f32;
+                    *value = interpolated as f32 + offsets[channel];
                 }
                 if values.iter().any(|value| !value.is_finite()) {
                     added.rejected += 1;
                     continue;
                 }
                 let index = y as usize * self.width as usize + x as usize;
-                for (channel, value) in values.into_iter().enumerate() {
-                    self.sum[channel * size + index] += value;
+                let weight = self.weight[index];
+                if let Some(squares) = &self.squares {
+                    if weight >= LEARNING_SUBS as f32
+                        && values.iter().enumerate().any(|(channel, value)| {
+                            let offset = channel * size + index;
+                            let deviation = value - self.sum[offset] / weight;
+                            let variance = squares[offset] / (weight - 1.0);
+                            deviation * deviation
+                                > REJECT_SIGMAS
+                                    * REJECT_SIGMAS
+                                    * variance.max(SIGMA_FLOOR * SIGMA_FLOOR)
+                        })
+                    {
+                        added.rejected += 1;
+                        continue;
+                    }
                 }
-                self.weight[index] += 1.0;
+                for (channel, value) in values.into_iter().enumerate() {
+                    let offset = channel * size + index;
+                    let sum = &mut self.sum[offset];
+                    if let Some(squares) = &mut self.squares {
+                        // Welford's update avoids subtracting large squared
+                        // sums in f32. Rejected pixels never reach this update.
+                        let d1 = value - if weight > 0.0 { *sum / weight } else { 0.0 };
+                        *sum += value;
+                        let d2 = value - *sum / (weight + 1.0);
+                        squares[offset] += d1 * d2;
+                    } else {
+                        *sum += value;
+                    }
+                }
+                self.weight[index] = weight + 1.0;
                 added.added += 1;
             }
         }
