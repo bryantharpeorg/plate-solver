@@ -11,6 +11,7 @@ mod calibration;
 mod calibration_bad_pixels;
 mod calibration_console;
 mod calibration_darks;
+mod calibration_flats;
 mod calibration_library;
 mod freshness;
 mod imaging;

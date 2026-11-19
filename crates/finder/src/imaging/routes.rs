@@ -12,7 +12,7 @@ use axum::{
 use crate::{
     api::{sim_json, ApiError, AppState, SessionWrite},
     imaging::{
-        calibration::service::{CalibrationView, DarksRequest},
+        calibration::service::{CalibrationView, DarksRequest, FlatsRequest},
         focus::run::FocusAsk,
         ImagingView, SettingsEdit,
     },
@@ -29,6 +29,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/api/imaging/focus", post(post_focus).delete(delete_focus))
         .route("/api/imaging/calibration", get(get_calibration))
         .route("/api/imaging/calibration/darks", post(take_darks))
+        .route("/api/imaging/calibration/flats", post(take_flats))
         .route("/api/imaging/calibration/{id}", delete(delete_calibration))
         .route("/api/imaging/frames/{id}/preview.jpg", get(frame_preview))
 }
@@ -65,6 +66,23 @@ async fn take_darks(
     })?;
     let view = calibration
         .take_darks(request)
+        .await
+        .map_err(|refusal| ApiError::new(refusal.status, refusal.message))?;
+    Ok(Json(view))
+}
+
+/// Find and take flats, or take their darks, under the same check order.
+async fn take_flats(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    request: Result<Json<FlatsRequest>, JsonRejection>,
+) -> Result<Json<CalibrationView>, ApiError> {
+    let request = sim_json(request)?;
+    let calibration = state.calibration().ok_or_else(|| {
+        ApiError::new(StatusCode::CONFLICT, "this console takes no imaging frames")
+    })?;
+    let view = calibration
+        .take_flats(request)
         .await
         .map_err(|refusal| ApiError::new(refusal.status, refusal.message))?;
     Ok(Json(view))
