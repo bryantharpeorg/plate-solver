@@ -494,6 +494,18 @@ new number.
   the state (needs a link that drops), and `stack.png` at the stack's full size (needs
   a camera wider than 1920).
 
+### Session 2026-11-19 (the re-anchoring onto `main`)
+
+- Q: What does the stack do when the answer to its take carries no frame? → A: It ends,
+  with `ended_reason` `camera` and 031's words for the camera's state as its `error`,
+  the words `start` refuses with when the camera is not `ready`. On `main` the view that
+  `Lease::take` answers is built once the lock is released, and it carries `frame` only
+  while the camera is `ready`, so a link that drops between the take and its answer
+  leaves no frame id. The owner chose this ending on 2026-11-19, as for 034's set's frame
+  and 033's focus aid. The alternative, waiting for the camera and taking again, would
+  need a scenario of its own. No scenario reaches the case (plan.md § The stack on the
+  console, **The taker**).
+
 ## Owner decisions
 
 Each is a design or taste call the plan document leaves open, or, where its heading says

@@ -878,8 +878,9 @@ loop:
     if the stack is stopping: return
     (the gap before an exposure: this spec does nothing here; 036 adds its wait)
     match lease.take("sub").await:
-        Ok(view)     → id = the id of view.frame
-        Err(refusal) → end the stack: camera, error = refusal.message;  return
+        Ok(view) with a frame → id = the id of view.frame
+        Ok(view) with none    → end the stack: camera, error = 031's words for view's state;  return
+        Err(refusal)          → end the stack: camera, error = refusal.message;  return
     if the stack is stopping: imaging.abort().await
     frame = imaging.ended(id).await
     match frame.state:
@@ -895,8 +896,15 @@ second look at the stopping mark, right after `take` answers, is for a stop whos
 `abort` ran before this frame existed: without it a stop would wait out a whole
 exposure, which on another telescope may be minutes. In US5 the hand-over is an
 unbounded queue; US6 bounds it (below). The taker owns the run's `Lease`: it is dropped
-when the task returns, on each of the four returns above, and nothing else holds it.
+when the task returns, on each of the five returns above, and nothing else holds it.
 A failed exposure is not asked for again, so every pass of the loop is a new sub.
+On `main`, `Lease::take` answers the view 031's `Imaging::view` builds once the lock is
+released, and that view carries `frame` only while the camera is `ready`. A take
+answered `Ok` with no `frame`, because the camera left `ready` between the take and its
+answer, ends the stack as `camera`, its `error` 031's words for the view's `state` and
+`error`, mapped as `start`'s step 3 maps them; the frame id is never unwrapped. The
+owner chose this on 2026-11-19, as for 034's set's frame and 033's focus aid. No
+scenario reaches the case.
 
 **The worker**, one task, takes waiting subs oldest first. For a sub's `FrameView` F, in
 this order, the first failure deciding its outcome and no later step being run (spec
