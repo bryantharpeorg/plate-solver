@@ -7,6 +7,7 @@ mod support;
 
 mod aim;
 mod api;
+mod calibration;
 mod freshness;
 mod imaging;
 mod imaging_astap;
