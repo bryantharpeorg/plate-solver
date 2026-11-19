@@ -14,6 +14,7 @@ mod imaging_checks;
 mod imaging_control;
 mod imaging_fits;
 mod imaging_focus_reading;
+mod imaging_focus_record;
 mod imaging_focus_region;
 mod imaging_frames;
 mod imaging_hints;
