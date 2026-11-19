@@ -45,5 +45,7 @@ mod rates;
 mod recording;
 mod recording_raw;
 mod session;
+mod stack_colour;
+mod stack_placement;
 mod star_detected;
 mod targets;
