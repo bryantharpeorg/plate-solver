@@ -174,6 +174,10 @@ _Avoid_: dark frame (in code and specs; fine in prose to the observer)
 An imaging frame of an evenly lit field, to record vignetting and dust shadows. A **master flat** is the average of a set, less its own dark.
 _Avoid_: flat field
 
+**Offset level**:
+What a sample reads with no light and no time to gather any: the median of the **offset frame**, a dark of the camera's shortest exposure that the console takes before the darks it means to average. Those darks are checked against it.
+_Avoid_: bias (alone), bias frame, pedestal, black level
+
 **Calibration library**:
 The console's master darks and master flats, each kept with a record of how it was made: the camera, gain, offset, binning and set temperature, and for a master dark its exposure.
 _Avoid_: calibration set, dark library

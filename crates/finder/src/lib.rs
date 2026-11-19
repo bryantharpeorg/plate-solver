@@ -43,6 +43,7 @@
 //! * DELETE /api/imaging/focus: no body; stop the focus aid and put the imaging settings back.
 //! * GET /api/imaging/calibration: the calibration library's masters, the set being taken and what matches the latest imaging frame.
 //! * DELETE /api/imaging/calibration/{id}: remove a master dark or master flat, or stop or drop the set with that id.
+//! * POST /api/imaging/calibration/darks: {"count":N}, N from 3 to 64, and "anyway":true to pass the dark test; take darks at the settings in force and add their master dark.
 //!
 //! A fresh session has no site, target or pointing and a 15° minimum altitude. Site
 //! coordinates are `lat_deg` (±90°) and `lon_deg` (±180°, east positive); the minimum

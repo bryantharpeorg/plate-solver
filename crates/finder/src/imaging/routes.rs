@@ -12,7 +12,9 @@ use axum::{
 use crate::{
     api::{sim_json, ApiError, AppState, SessionWrite},
     imaging::{
-        calibration::service::CalibrationView, focus::run::FocusAsk, ImagingView, SettingsEdit,
+        calibration::service::{CalibrationView, DarksRequest},
+        focus::run::FocusAsk,
+        ImagingView, SettingsEdit,
     },
 };
 
@@ -26,6 +28,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/api/imaging/solve", post(post_solve))
         .route("/api/imaging/focus", post(post_focus).delete(delete_focus))
         .route("/api/imaging/calibration", get(get_calibration))
+        .route("/api/imaging/calibration/darks", post(take_darks))
         .route("/api/imaging/calibration/{id}", delete(delete_calibration))
         .route("/api/imaging/frames/{id}/preview.jpg", get(frame_preview))
 }
@@ -47,6 +50,24 @@ async fn get_calibration(State(state): State<AppState>) -> Json<CalibrationView>
             .and_then(|imaging| imaging.view().calibration)
             .unwrap_or_else(|| calibration.view(None)),
     })
+}
+
+/// Take darks: origin, body shape and imaging availability precede the
+/// service's count, camera-state, running-set, exposure and lease checks.
+async fn take_darks(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    request: Result<Json<DarksRequest>, JsonRejection>,
+) -> Result<Json<CalibrationView>, ApiError> {
+    let request = sim_json(request)?;
+    let calibration = state.calibration().ok_or_else(|| {
+        ApiError::new(StatusCode::CONFLICT, "this console takes no imaging frames")
+    })?;
+    let view = calibration
+        .take_darks(request)
+        .await
+        .map_err(|refusal| ApiError::new(refusal.status, refusal.message))?;
+    Ok(Json(view))
 }
 
 /// Remove a master under the same-origin rule, judged before imaging or the id.
