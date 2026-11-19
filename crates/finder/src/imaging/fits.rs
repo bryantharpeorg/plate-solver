@@ -22,6 +22,101 @@ pub struct FitsImage {
     pub cards: Vec<(String, CardValue)>,
 }
 
+/// One FITS image of 32-bit reals (034): a master frame.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RealImage {
+    pub width: u32,
+    pub height: u32,
+    /// Row by row from the top.
+    pub samples: Vec<f32>,
+    /// The cards after the structural ones, in order.
+    pub cards: Vec<(String, CardValue)>,
+}
+
+/// A master as BITPIX -32, without scaling, using the ordinary card formatter.
+pub fn encode_real(image: &RealImage) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    for (name, value) in [
+        ("SIMPLE", CardValue::Logical(true)),
+        ("BITPIX", CardValue::Int(-32)),
+        ("NAXIS", CardValue::Int(2)),
+        ("NAXIS1", CardValue::Int(i64::from(image.width))),
+        ("NAXIS2", CardValue::Int(i64::from(image.height))),
+    ] {
+        bytes.extend_from_slice(&card(name, &value));
+    }
+    for (name, value) in &image.cards {
+        bytes.extend_from_slice(&card(name, value));
+    }
+    let mut end = [b' '; 80];
+    end[..3].copy_from_slice(b"END");
+    bytes.extend_from_slice(&end);
+    bytes.resize(bytes.len().div_ceil(2880) * 2880, b' ');
+    for sample in &image.samples {
+        bytes.extend_from_slice(&sample.to_be_bytes());
+    }
+    bytes.resize(bytes.len().div_ceil(2880) * 2880, 0);
+    bytes
+}
+
+/// Read a real master, validating the FITS marker, axes, type and data length
+/// in that order. Integer imaging frames continue to use `decode`.
+pub fn decode_real(bytes: &[u8]) -> Result<RealImage, FitsError> {
+    let header = header(bytes).ok_or_else(|| FitsError("not a FITS image".into()))?;
+    if !header.cards.first().is_some_and(|card| {
+        card.keyword == "SIMPLE"
+            && card.value.as_deref().and_then(value) == Some(CardValue::Logical(true))
+    }) {
+        return Err(FitsError("not a FITS image".into()));
+    }
+    let naxis = whole(&header.cards, "NAXIS").unwrap_or(0);
+    if naxis != 2 {
+        return Err(FitsError(format!(
+            "a {naxis}-axis FITS file is not one image"
+        )));
+    }
+    let bits = whole(&header.cards, "BITPIX").unwrap_or(0);
+    if bits != -32 {
+        return Err(FitsError(format!(
+            "not a 32-bit real FITS image: BITPIX {bits}"
+        )));
+    }
+    let dimension = |name| {
+        whole(&header.cards, name)
+            .and_then(|n| u32::try_from(n).ok())
+            .unwrap_or(0)
+    };
+    let (width, height) = (dimension("NAXIS1"), dimension("NAXIS2"));
+    let need = u64::from(width)
+        .saturating_mul(u64::from(height))
+        .saturating_mul(4);
+    let have = bytes.len().saturating_sub(header.data_start) as u64;
+    if have < need {
+        return Err(FitsError(format!(
+            "the FITS data is short: {have} of {need} bytes"
+        )));
+    }
+    let samples = bytes[header.data_start.min(bytes.len())..][..need as usize]
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|v| f32::from_be_bytes(*v))
+        .collect();
+    let cards = header
+        .cards
+        .into_iter()
+        .skip_while(|card| card.keyword != "NAXIS2")
+        .skip(1)
+        .filter_map(|card| Some((card.keyword, card.value.as_deref().and_then(value)?)))
+        .collect();
+    Ok(RealImage {
+        width,
+        height,
+        samples,
+        cards,
+    })
+}
+
 /// One 80-byte card: the keyword padded to 8, `= ` in columns 9 and 10, then
 /// a logical or a number right-justified to column 30, or a text in single
 /// quotes from column 11, padded inside the quotes to 8 characters, quotes
