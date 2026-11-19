@@ -3,6 +3,7 @@
 //! that read and change it.
 
 pub mod astap;
+pub mod calibration;
 pub mod fits;
 pub mod focus;
 pub mod frames;
