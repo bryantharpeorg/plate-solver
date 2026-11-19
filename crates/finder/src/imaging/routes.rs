@@ -5,13 +5,15 @@ use axum::{
     extract::{rejection::JsonRejection, Path, State},
     http::{header, StatusCode},
     response::IntoResponse,
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 
 use crate::{
     api::{sim_json, ApiError, AppState, SessionWrite},
-    imaging::{focus::run::FocusAsk, ImagingView, SettingsEdit},
+    imaging::{
+        calibration::service::CalibrationView, focus::run::FocusAsk, ImagingView, SettingsEdit,
+    },
 };
 
 /// The imaging routes, merged into the console's router.
@@ -23,6 +25,8 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/api/imaging/abort", post(abort_frame))
         .route("/api/imaging/solve", post(post_solve))
         .route("/api/imaging/focus", post(post_focus).delete(delete_focus))
+        .route("/api/imaging/calibration", get(get_calibration))
+        .route("/api/imaging/calibration/{id}", delete(delete_calibration))
         .route("/api/imaging/frames/{id}/preview.jpg", get(frame_preview))
 }
 
@@ -32,6 +36,33 @@ async fn get_imaging(State(state): State<AppState>) -> Json<ImagingView> {
         Some(imaging) => imaging.view(),
         None => ImagingView::off(),
     })
+}
+
+/// The calibration library in every imaging state, even without imaging.
+async fn get_calibration(State(state): State<AppState>) -> Json<CalibrationView> {
+    Json(match state.calibration() {
+        None => CalibrationView::empty(),
+        Some(calibration) => state
+            .imaging()
+            .and_then(|imaging| imaging.view().calibration)
+            .unwrap_or_else(|| calibration.view(None)),
+    })
+}
+
+/// Remove a master under the same-origin rule, judged before imaging or the id.
+async fn delete_calibration(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    Path(id): Path<String>,
+) -> Result<Json<CalibrationView>, ApiError> {
+    let calibration = state.calibration().ok_or_else(|| {
+        ApiError::new(StatusCode::CONFLICT, "this console takes no imaging frames")
+    })?;
+    let view = calibration
+        .remove(&id)
+        .await
+        .map_err(|refusal| ApiError::new(refusal.status, refusal.message))?;
+    Ok(Json(view))
 }
 
 /// `POST /api/imaging/frame` (FR-008): no body; one frame, saved as FITS.

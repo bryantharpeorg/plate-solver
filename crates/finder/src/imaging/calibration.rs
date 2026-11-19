@@ -6,6 +6,7 @@ use std::{collections::HashSet, fmt};
 use serde::Serialize;
 
 pub mod library;
+pub mod service;
 
 /// A hot sample stands this many noises above its largest same-colour neighbour.
 pub const HOT_SIGMAS: f32 = 8.0;

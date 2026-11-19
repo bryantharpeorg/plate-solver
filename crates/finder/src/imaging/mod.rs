@@ -16,8 +16,8 @@ pub mod solving;
 
 use std::{
     future::Future,
-    path::PathBuf,
-    sync::{Arc, Mutex, Weak},
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, OnceLock, Weak},
     time::Duration,
 };
 
@@ -31,6 +31,7 @@ use crate::{
     session::Clock,
 };
 
+use calibration::service::Calibration;
 use frames::FrameView;
 
 /// How often the camera's status is read while `ready`.
@@ -78,6 +79,9 @@ pub struct ImagingView {
     /// only while the camera is `ready` and the console has a solver.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub focus: Option<focus::run::FocusView>,
+    /// The calibration library and what matches the latest saved imaging frame (034).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub calibration: Option<calibration::service::CalibrationView>,
 }
 
 impl ImagingView {
@@ -93,6 +97,7 @@ impl ImagingView {
             solve: None,
             relation: None,
             focus: None,
+            calibration: None,
         }
     }
 }
@@ -384,6 +389,8 @@ pub struct Imaging {
     root: PathBuf,
     clock: Arc<dyn Clock>,
     link: Arc<LinkManager>,
+    /// Weak because calibration owns this imaging state (034).
+    calibration: OnceLock<Weak<Calibration>>,
 }
 
 impl Drop for Imaging {
@@ -420,7 +427,18 @@ impl Imaging {
             root,
             clock,
             link,
+            calibration: OnceLock::new(),
         })
+    }
+
+    /// The imaging folder this state saves under (031).
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    /// Let every ready view carry the calibration object (034). The first call wins.
+    pub(crate) fn attach_calibration(&self, calibration: &Arc<Calibration>) {
+        let _ = self.calibration.set(Arc::downgrade(calibration));
     }
 
     /// `GET /api/imaging`, and `imaging` in the session. Outside `ready` the view
@@ -449,7 +467,7 @@ impl Imaging {
                 .as_ref()
                 .is_some_and(|frame| frame.state == "exposing");
         }
-        ImagingView {
+        let mut view = ImagingView {
             state: held.state,
             error: if held.state == "error" {
                 held.error.clone()
@@ -466,7 +484,17 @@ impl Imaging {
                 .flatten(),
             // The focus view only while `ready` with a solver (033 FR-029).
             focus: (ready && held.solver.is_some()).then(|| focus::run::view(&held, now)),
+            calibration: None,
+        };
+        drop(held);
+        // The finished view includes the relation's angle; no imaging lock is
+        // held when calibration is called, since it also calls into Imaging.
+        if ready {
+            if let Some(calibration) = self.calibration.get().and_then(Weak::upgrade) {
+                view.calibration = Some(calibration.view(Some(&view)));
+            }
         }
+        view
     }
 
     /// Apply a settings change (FR-003): the console keeps `exposure_ms`,
