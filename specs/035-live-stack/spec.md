@@ -37,6 +37,15 @@ depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", 
 # US5-S2, S7 and S9 moved to US6 as US6-S7 to S9, US5's others were renumbered, and
 # US8's README section moved to US10 (§ Clarifications, the fifth session; plan.md
 # § Prerequisites 9 and § Refinement Record, "What probe round 1 changed").
+# Re-anchored 2026-11-19 to `main` at 002dbef8 (002dbef8bda98d533a59911986f63416ff238b5e),
+# where 030's eight stories, 031's nine, 032's seven, 033's nine and 034's ten have
+# landed: every citation was compared line for line with 49bb210 and read again by its
+# content, and the ones that moved are corrected, the glossary's among them; every name
+# and behaviour taken from 030 to 034 was read in their code, and the few that differed
+# in name, path or place are corrected, § A lease's folder now being written on 031's
+# landed `frames::take`, `save` and `write`; no shared write's story changed; and the
+# Constitution Check names the other stackers looked at and why each was turned down
+# (plan.md § Prerequisites 1, 2, 5, 8, 13 and 14, § Constitution Check).
 # It stays draft until the owner settles the owner decisions and flips it to `ready`,
 # which gives the approvals listed under "Owner approvals" and dispatches it.
 ---
@@ -173,21 +182,21 @@ stack.
      `serde_json` (`crates/finder/Cargo.toml:32`) and the simulator
      (`crates/finder/Cargo.toml:14`). The stack needs no dependency and changes no
      `Cargo.toml`.
-  3. The console's router has one `DELETE` today (`crates/finder/src/api.rs:461`) and
-     its catch-all answers only `GET` (`crates/finder/src/api.rs:466`); this spec's
+  3. The console's router has one `DELETE` today (`crates/finder/src/api.rs:555`) and
+     its catch-all answers only `GET` (`crates/finder/src/api.rs:560`); this spec's
      three routes join 031's table in `crates/finder/src/imaging/routes.rs` (031 US1).
   4. A finder test is a module of a test binary; a file at the top level of
      `crates/finder/tests` fails the layout test
      (`crates/finder/tests/layout/main.rs:102`), and a module's name may hold only
      lower-case letters and `_` (`crates/finder/tests/layout/main.rs:155`). The new
-     modules go after `mod session;` in `console` (`crates/finder/tests/console/main.rs:19`),
-     after `mod simulate;` in `cli` (`crates/finder/tests/cli/main.rs:12`) and after
-     `mod session_tools;` in `mcp` (`crates/finder/tests/mcp/main.rs:11`).
+     modules go after `mod session;` in `console` (`crates/finder/tests/console/main.rs:47`),
+     after `mod simulate;` in `cli` (`crates/finder/tests/cli/main.rs:20`) and after
+     `mod session_tools;` in `mcp` (`crates/finder/tests/mcp/main.rs:17`).
   5. An existing test calls every listed MCP tool with empty arguments on a console that
      takes no imaging frames (`crates/finder/tests/mcp/motion.rs:517`); the two new
      tools answer such a call at once (US10-S4).
   6. The night edition turns every `.photo` red by luminance
-     (`crates/finder/web/src/index.css:118`), and 031 writes the Red Torch Rule's one
+     (`crates/finder/web/src/index.css:118`), and 031 wrote the Red Torch Rule's one
      exception for "a picture from the imaging camera" (`DESIGN.md:198`). The stack's
      picture is such a picture; no rule of `DESIGN.md` changes here.
   7. The `test` gate ends a test after five minutes (`.config/nextest.toml:23`) on a
@@ -218,6 +227,9 @@ stack.
   `the imaging camera is held by {holder}`, and the hook that holds colour under an
   imaging picture at night, `useColourHold(night)` of
   `crates/finder/web/src/useColourHold.ts` (031 US7, from the audit's finding A6).
+  Each was read again in their code on `main` at 002dbef8, now that both have landed,
+  and holds as named here but for a few in shape or place, which are corrected
+  (plan.md § Prerequisites 2).
 - Q: Which of 032's and 034's? → A: Of 032, from
   `specs/032-imaging-solve-and-aim-point/plan.md` § Interfaces as reviewed:
   `ImagingSolver`, `SolveFrame`, `Region`, `SolveHint`, `HintSource`, `ImagingSolve`
@@ -236,16 +248,19 @@ stack.
   `Library::calibrate`, `FrameKey::from_image`, `Applied` and `Selection`
   (`crates/finder/src/imaging/calibration/library.rs`, 034 US3); `Calibration::library`
   and `AppState::calibration` (034 US4); `Imaging::root` (034 US4); and the simulator's
-  light path, into which this spec's two additions fit (034 US1). If any lands changed,
-  this trio is corrected before the flip (plan.md § Prerequisites 2).
+  light path, into which this spec's two additions fit (034 US1). Each was read again
+  in their code on `main` at 002dbef8, now that both have landed, and holds as named
+  here (plan.md § Prerequisites 2, 13 and 14).
 - Q: What of 033, the focus reading and the focus aid? → A: 033 lands before this spec
   (034 names it, and so does this spec now). Its trio is in the worktree and was
-  revised the evening this one was finished; it is read here as it then stood. Its plan
+  revised the evening this one was finished; it is read here as it then stood, and
+  again in its code on `main` at 002dbef8 since it landed (plan.md § Prerequisites 5).
+  Its plan
   writes `focus::read` for this spec to call on each sub
   (`crates/finder/src/imaging/focus.rs`, 033 US1), and its focus view names the focus
   region the console keeps (`crates/finder/src/imaging/focus/run.rs`, 033 US5). The
   gate of US6 uses both, so that a sub's focus reading is the glossary's: the stars'
-  median size in the focus region, in arcseconds (`GLOSSARY.md:187`, `GLOSSARY.md:191`).
+  median size in the focus region, in arcseconds (`GLOSSARY.md:209`, `GLOSSARY.md:213`).
   The gate judges a sub against the other subs of its own stack, not against 033's
   focus record: the record's verdict is the run's focus check, which 037 owns. A stack
   cannot start while the focus aid runs, because the aid then holds the camera's lease,
@@ -1441,7 +1456,7 @@ development, `cargo nextest run -p finder --locked --test console stack_gate::`.
    its `imaging.relation` has no `scale` key and no `held` key; that its `imaging` has
    no `solve` key, as before the stack; and that the solve sidecar of `last`'s sub has
    `hint.source` `pointing` and `hint.radius_deg` 3.0 (oracle: the simulator's true
-   aim point, 700 and 420 at `crates/simulator/src/optics.rs:26`, read through
+   aim point, 700 and 420 at `crates/simulator/src/optics.rs:27`, read through
    `sim.optics()`; 1.5 finder pixels is 032 US4-S1's bound; 032's window of five aim
    readings, filled by the first five stacked subs through `note_solve`, and applied at
    once because Track is off; and 032's hint, which is narrow only with an aim point
@@ -2232,14 +2247,14 @@ development, `cargo nextest run -p finder --locked --test mcp stack::`.
 
 ### Key Entities
 
-- **Sub**: an imaging frame taken for a stack (`GLOSSARY.md:155`), kept in its stack's
+- **Sub**: an imaging frame taken for a stack (`GLOSSARY.md:165`), kept in its stack's
   `subs` folder.
 - **Reference sub**: the first sub a stack accepts; its grid is the stack's.
 - **Colour picture**: three planes of 32-bit reals the size of a sub.
 - **Placement**: the linear map and shift from the reference grid into a sub, read from
   two imaging solves at five points and checked against them at the grid's corners.
 - **Stack**: sums, weights and squared deviations for every pixel of the reference grid
-  (`GLOSSARY.md:171`).
+  (`GLOSSARY.md:193`).
 - **Dropped sub**: a sub the stack did not add, counted under one of eleven reasons.
 - **Display picture**: the stack reduced, flattened, balanced and stretched to 8 bits.
 - **Scene**: the simulator's satellites and glows, for tests.
@@ -2272,19 +2287,21 @@ development, `cargo nextest run -p finder --locked --test mcp stack::`.
 
 ## Assumptions
 
-- **030, 031, 032, 033 and 034 have landed**, each with the interfaces its draft gives, 031
-  with the camera's lease of the plan document's amendment 1 (031 US9) and
-  `useColourHold` (031 A6), 032 with `Imaging::note_solve` (032 A3), and 034 taking that
-  lease for a set of darks or flats (034 A1). They have not: all five are drafts, the
-  four things above come from the series audit's findings on those trios, and this
-  trio is re-anchored to their code before the flip (plan.md § Prerequisites 1, 2, 5, 8,
-  13 and 14). Every `path:line` here was read at 49bb210, the drafting worktree's HEAD,
-  and read there again after the audit, and names code that exists there, but for the
-  lines of `GLOSSARY.md`, which are of the plan document's rewrite of that file; every
-  file 030, 031, 032, 033 or 034 creates is named without a line.
-- **The plan document's `GLOSSARY.md` rewrite is on `main`** before this spec is
-  dispatched: US5 inserts its entry after one only the rewrite has (plan.md
-  § Prerequisites 7).
+- **030, 031, 032, 033 and 034 have landed**: `030-imaging-camera-link`,
+  `031-imaging-frames-on-console`, `032-imaging-solve-and-aim-point`,
+  `033-focus-reading-and-aid` and `034-dark-and-flat-frames` are on `main` at 002dbef8,
+  with the interfaces their trios gave, 031 with the camera's lease of the plan
+  document's amendment 1 (031 US9) and `useColourHold` (031 A6), 032 with
+  `Imaging::note_solve` (032 A3), and 034 taking that lease for a set of darks or flats
+  (034 A1), the four things the series audit's findings on those trios added; this trio
+  was re-anchored to their code on 2026-11-19 (plan.md § Prerequisites 1, 2, 5, 8, 13
+  and 14). Every `path:line` here was checked at 49bb210, the drafting worktree's HEAD,
+  and read again by its content on `main` at 002dbef8, whose line numbers are cited,
+  the lines of `GLOSSARY.md` among them; every file 030, 031, 032, 033 or 034 created is
+  named without a line.
+- **The plan document's `GLOSSARY.md` rewrite is on `main`**, since 030's flip
+  (`55e41f5`): US5 inserts its entry after one only the rewrite has, the **Stack** entry
+  (plan.md § Prerequisites 7).
 - **Out of scope:**
   - a refinement of a sub's place on star positions, and any registration that does not
     come from the imaging solves;

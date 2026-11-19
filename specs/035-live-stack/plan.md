@@ -123,7 +123,7 @@ three routes, two MCP tools, one page block, ten stories.
 | II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. The only edits to existing test and gate files are the `mod` lines and the two list entries in `playwright.config.ts` that spec owner approval 9 names. Every test 030 to 034 land must pass unchanged; § Shapes that existing tests pin says what that requires. |
 | III. Tests first, independent expectations | Oracles: worked examples by hand; the simulator's truth and its declared scene (itself pinned by worked examples in US1); the stand-in camera's sample rule; a scripted solver and a scripted camera of the tests' own; a by-hand tangent-plane projection that calls nothing under `finder::imaging`; and files the test reads with its own FITS reader. Clocks are injected, and virtual time is used only in tests. One reading is not: `took_ms` is taken with `std::time::Instant`, because it measures real work; no behaviour depends on it and no test asserts its size. |
 | IV. Critical paths | No `unsafe`, no dependency or `Cargo.toml` change, nothing under `proto/`, no scope-link change, no database-format change, no `build.rs` change. |
-| V. Proven open source first, honest licensing | The stacker is this project's own code. `seiza-stacking` and AstraLite's stacking modules were read about and not adopted (§ Decisions); none of their source is copied. The imaging solve the stack registers by is ASTAP's, by the owner's decision in ADR-0002, which needs the owner's reading of V before 032 is flipped (§ Prerequisites 4). |
+| V. Proven open source first, honest licensing | The stacker is this project's own code, as principle V of constitution 1.3.0 asks a plan to say why. The live stackers surveyed were turned down (research note §§ 8 and 12): Siril's live stack (`start_ls`, `livestack`, `stop_ls`), OpenLiveStacker, Astro Live Stacker and KStars' live stacker are GPL, so under V each could only run as a separate program, and each would still need its own registration on a rotating alt-az field and its own rejection; ASTAP's own stacker watches a folder, starts a new stack when a frame is 0.2° away, and does no rejection. The owner chose this project's own stacker on 2026-11-15, registered by ASTAP's solve of every sub. `seiza-stacking` and AstraLite's stacking modules were read about and not adopted (§ Decisions); none of their source is copied. The imaging solve the stack registers by is ASTAP's, by the owner's decision in ADR-0002, which principle V of constitution 1.3.0 allows as a separate program behind 032's port (§ Prerequisites 4). |
 
 ## Project Structure
 
@@ -174,19 +174,21 @@ DESIGN.md                               # US9
 ## Interfaces
 
 Every file under `crates/finder/src/imaging/`, `crates/simulator/src/imaging.rs`, the
-Imaging page and the tests of 030, 031, 032, 033 and 034 is created by those specs and is
-named here without a line; the story that, by their drafts, last writes each is in
-§ Refinement Record's shared writes. Types of 031 (`Imaging`, `ImagingView`,
-`FrameView`, `RoiView`, `Refusal`, `FitsImage`, `CardValue`, `preview::Rgb`), of 032
+Imaging page and the tests of 030, 031, 032, 033 and 034 was created by those specs and
+is named here without a line; the story that last wrote each on `main`, read with
+`git log` at 002dbef8, is in § Refinement Record's shared writes. Types of 031
+(`Imaging`, `ImagingView`, `FrameView`, `RoiView`, `Refusal`, `FitsImage`, `CardValue`,
+`preview::Rgb`), of 032
 (`ImagingSolver`, `SolveFrame`, `Region`, `SolveHint`, `HintSource`, `ImagingSolve`,
 `SolveError`, `StarMeasure`, `Ask`, `Ended`), of 033 (`focus::read`, `FocusReading`,
 `Unmeasurable`, `FocusView`, `RegionOut`) and of 034 (`Mosaic`, `percentile`,
-`Library`, `FrameKey`, `Selection`, `Applied`, `Calibration`) are as those drafts'
-plan.md § Interfaces give them, name for name: 030's, 031's, 032's and 034's after their
-review, 033's as it was revised the evening this trio was finished. Four things used
-here come from the series audit's findings on 031, 032 and 034, which were being
-written into those trios while this one was revised; each is written below as this
-trio uses it, to be read in those trios and then their code at the re-anchoring
+`Library`, `FrameKey`, `Selection`, `Applied`, `Calibration`) are as their code on
+`main` at 002dbef8 has them, name for name. They were first taken from those trios'
+plan.md § Interfaces (030's, 031's, 032's and 034's after their review, 033's as it was
+revised the evening this trio was finished), and all five specs have since landed. Four
+things used here came from the series audit's findings on 031, 032 and 034, which were
+being written into those trios while this one was revised; each is written below as
+this trio uses it, and was read in their code at the re-anchoring
 (§ Prerequisites 8, 13 and 14): the camera's lease (031 US9; § The camera's lease);
 `useColourHold` (031 US7, from the finding A6; § The page); `Imaging::note_solve`
 (032 US4, from the finding A3; § The stack on the console, the worker's step 8); and a
@@ -231,9 +233,9 @@ pub struct Scene {
 ```
 
 In `crates/simulator/src/optics.rs`, `optics::Simulator`
-(`crates/simulator/src/optics.rs:74`) gains one field, `imaging_scene:
+(`crates/simulator/src/optics.rs:76`) gains one field, `imaging_scene:
 Arc<Mutex<Scene>>`, built with the default in `new`
-(`crates/simulator/src/optics.rs:81`), beside `imaging_bench`, the cell 034 adds for
+(`crates/simulator/src/optics.rs:84`), beside `imaging_bench`, the cell 034 added for
 the sensor pattern and the light path, whose types this spec does not touch: 034's
 tests build them. Two methods, reached through `controls::Simulator`'s `Deref` like the
 rest:
@@ -248,11 +250,14 @@ pub fn set_scene(&self, scene: Scene);
 `crates/simulator/src/lib.rs` adds
 `pub use imaging::{ExtendedSource, SatelliteStreak, Scene};`.
 
-**Their part in a frame.** 030's `SimImagingCamera::expose` makes a frame in ten numbered
-steps, and 034 changes steps 5 and 6 (`specs/034-dark-and-flat-frames/plan.md` § The
-sensor pattern and the light path). This spec adds to them as follows and in no other
-way. The scene is read once, at step 1, with the settings, together with N, the number
-`frames_taken()` reports before this exposure.
+**Their part in a frame.** 030's `SimImagingCamera` makes a frame in ten numbered
+steps, which its code on `main` splits between `expose` (steps 1 to 3), `stars_for`
+(step 4) and a private `render` (steps 5 to 10), and 034 changed steps 5 and 6 (034 US1;
+`specs/034-dark-and-flat-frames/plan.md` § The sensor pattern and the light path). This
+spec adds to them as follows and in no other way. The scene is read once, at step 1, in
+the one lock `expose` takes of the camera's state, with the settings and 034's
+`imaging_bench`, together with N, the number `frames_taken()` reports before this
+exposure, and it reaches `render` in the exposure's `Shot`.
 
 - **Steps 5 and 6, light.** With 034's `cover` true, or with a `flat_panel`, the scene
   adds nothing. Otherwise, after the stars and the sky and before 034's multiplication
@@ -547,10 +552,10 @@ series audit's finding on 031 adds to that trio, builds it "name for name as tho
 trios assume it", in the shape `specs/033-focus-reading-and-aid/plan.md` § The camera
 lease writes down, and 033's, 034's and 037's trios use the same names. This section
 cites it. No story of this spec writes any of it but US5, which adds one method,
-`Lease::save_in`, and nothing else (§ A lease's folder). 031's plan.md
-§ The camera lease gives it with these names, and also has `Lease::set` and
+`Lease::save_in`, and nothing else (§ A lease's folder). 031's code on `main` (031 US9,
+`e9687ce`) has it with these names, and also has `Lease::set` and
 `Lease::take` answer 409 `this console takes no imaging frames` once the `Imaging` is
-gone; the re-anchoring reads each name and each point below in 031's code
+gone; the re-anchoring read each name and each point below in that code
 (§ Prerequisites 8).
 Only US5 uses it, in `Stacker::start` and in the taker, which owns the `Lease` and drops
 it by returning, and one test of US5 takes a lease of its own and a frame with it.
@@ -638,21 +643,30 @@ impl Lease {
 }
 ```
 
-1. **Where it is kept.** 031's state, which holds the grant and the holder out, also
-   holds that grant's folder, `None` until `save_in` and cleared with the grant when
-   the `Lease` is dropped. So the folder goes with the lease: a frame taken under no
+1. **Where it is kept.** 031's state, whose `lease` holds the grant and the holder out
+   (`Option<(u64, &'static str)>` in 031's `Held` on `main`), also holds that grant's
+   folder, `None` until `save_in` and cleared with the grant when the `Lease` is
+   dropped. So the folder goes with the lease: a frame taken under no
    lease, under a lease that named none, or under the next lease, is saved under
    `frames/<UTC date>/` as 031 has it.
-2. **Read when the frame is asked for.** `take_as` reads the folder of the caller's
-   grant in the same lock acquisition as its checks, and the frame keeps it, as it
-   keeps `roi`, `set_temp_c` and the camera's serial. Its checks, refusals and words
-   are 031's, unchanged.
-3. **The file.** 031's step 5 writes such a frame as `<folder>/<id>.fits` by 031's own
-   rule: whole, as `<name>.part` with `create_new`, then, if the final name exists, the
-   `.part` file removed and the frame ended `failed` with
+2. **Read when the frame is asked for.** On `main`, `take_as` hands `frames::take` a
+   `held` closure, `|held| held_by(held, grant)`, which `frames::take` calls under its
+   one lock acquisition, after the state's check and before the frame-in-flight check.
+   The folder of the caller's grant is read in that same acquisition: the closure
+   answers it beside the lease's check, and the frame task keeps it, as it keeps the
+   frame's `roi` and `set_temp_c` and the camera's serial. Its checks, refusals and
+   words are 031's, unchanged.
+3. **The file.** On `main`, 031's `save` builds the frame's relative name itself,
+   `frames/{date}/{id:06}.fits`, and its `write` makes the parent folder
+   (`create_dir_all`) before it writes. For a frame that carries a folder, `save`
+   builds `<folder>/<id as six digits>.fits` instead, and `write` writes it by 031's
+   own rule: whole, as `<name>.part` with `create_new`, then, if the final name exists,
+   the `.part` file removed and the frame ended `failed` with
    `could not save the imaging frame: <folder>/<id>.fits already exists`, otherwise
-   renamed. It does not make the folder: a folder that is gone fails the frame with
-   `could not save the imaging frame: {error}`. `FrameView::file` is that path, so
+   renamed. It does not make a lease's folder: for such a frame `write` skips its
+   `create_dir_all`, so a folder that is gone fails the frame with
+   `could not save the imaging frame: {error}`. A frame under `frames/` is written
+   exactly as before. `FrameView::file` is that path, so
    032's solve sidecar, named from it, lies beside the sub, and the worker's step 1
    finds the file as before. The cards and the preview are 031's, unchanged.
 4. **The id is 031's.** The count is the same one for every imaging frame, subs
@@ -945,7 +959,8 @@ FR-015):
 
 `note_solve` as this trio calls it is 032's, written into 032's US4 by the series
 audit's finding on 032 (A3) and given in `specs/032-imaging-solve-and-aim-point/plan.md`
-§ Solving on the console; it is read again in 032's code at the re-anchoring
+§ Solving on the console; it landed so in 032's US4 (`ee3d9c4`), in
+`crates/finder/src/imaging/solving.rs`, where the re-anchoring read it
 (§ Prerequisites 14):
 
 ```rust
@@ -1234,8 +1249,8 @@ pixel down) is the file's own matrix, and the centre (W/2, H/2) is the FITS pixe
 
 ### 031's imaging state (`crates/finder/src/imaging/mod.rs`, US2; US8)
 
-US2 adds `pub mod stack;`. US8: `ImagingView` gains, after its last part (`calibration`
-in 034's draft, and whatever 033 adds),
+US2 adds `pub mod stack;`. US8: `ImagingView` gains, after its last part (034's
+`calibration`, which follows 033's `focus` on `main`),
 
 ```rust
 #[serde(skip_serializing_if = "Option::is_none")]
@@ -1250,8 +1265,9 @@ pub stack: Option<stack::service::StackView>,
 pub(crate) fn attach_stack(&self, stacker: &Arc<Stacker>);
 ```
 
-Wherever `Imaging` builds the `ImagingView` it answers, after its own lock is released
-and where 034 sets `calibration`, it sets `stack` to `attached.view()` when a stacker is
+In `Imaging::view`, the one place `Imaging` builds the `ImagingView` it answers, after
+its own lock is released and beside where 034 sets `calibration` (which 034 does only
+while the view is `ready`), it sets `stack` to `attached.view()` when a stacker is
 attached and still alive, whatever the view's `state`. The reference is weak because
 the `Stacker` holds the `Arc<Imaging>`.
 
@@ -1275,14 +1291,14 @@ No builder is added and no signature changes. US8 adds, in the same place,
 pub(crate) fn target_label(&self) -> Option<String>;
 ```
 
-read from the session's snapshot (`crates/finder/src/session.rs:553`,
+read from the session's snapshot (`crates/finder/src/session.rs:656`,
 `crates/finder/src/targets.rs:41`, `crates/finder/src/targets.rs:43`). The rule itself
 is `label` alone (§ The stack on the console), so `target_label` writes no character
 test of its own: `label` maps each `char` of the name, an ASCII letter or digit to
 itself and anything else to one `-`, and 037's `run::label` is the one line
 `crate::imaging::stack::service::label(name)` (037 A2). For the session's target `M42`,
 NGC 1976 with the Messier name `M42`, `target_label` is `Some("M42")` (spec US8-S3).
-`SessionResponse` (`crates/finder/src/api.rs:652`) does not change: its `imaging` is
+`SessionResponse` (`crates/finder/src/api.rs:773`) does not change: its `imaging` is
 the view, which now carries the stack.
 
 ### The routes (`crates/finder/src/imaging/routes.rs`, US8)
@@ -1296,7 +1312,7 @@ Added to 031's `routes()`:
 ```
 
 - `start_stack` takes `SessionWrite` and `Result<Json<StartRequest>, JsonRejection>`
-  through `sim_json` (`crates/finder/src/api.rs:570`), in that order, as 034's
+  through `sim_json` (`crates/finder/src/api.rs:691`), in that order, as 034's
   `take_darks` does; without a stacker it answers 409
   `this console takes no imaging frames`; it calls `Stacker::start(request,
   state.target_label().as_deref())`; a `Refusal` becomes `ApiError::new(status,
@@ -1306,13 +1322,13 @@ Added to 031's `routes()`:
 - `stack_preview` takes no extractor but the state and ignores the query; it answers
   `([(CONTENT_TYPE, "image/jpeg")], bytes)` from `Stacker::preview()`, or 404
   `the console holds no stack picture`, as `live_preview` does
-  (`crates/finder/src/api.rs:514`).
+  (`crates/finder/src/api.rs:610`).
 
 **The order a request is judged in**, the first that applies:
 
 1. the origin (`SessionWrite`): 403
    `writes require the console's own origin and an allowed host`, the words of
-   `check_origin` (`crates/finder/src/api.rs:361`);
+   `check_origin` (`crates/finder/src/api.rs:455`);
 2. on the `POST`, the body's shape (`sim_json`): 415 for a content type that is not
    JSON; 400 for a body that is not a JSON object, that has a key other than `reject`,
    `focus_gate`, `gains` and `stretch`, or in which `reject` or `focus_gate` is not
@@ -1330,7 +1346,8 @@ nothing and answers 200 with the view; on a console without a stacker it answers
 409 of step 3 (spec US8-S1, US8-S2, US6-S7).
 
 `crates/finder/src/lib.rs` gains, after the last `/api/imaging` route line already
-there and written as they stand here, with no backticks:
+there (034's `* POST /api/imaging/calibration/flats`) and written as they stand here,
+with no backticks:
 `* POST /api/imaging/stack: a JSON object with optional reject, focus_gate, gains and stretch; start the live stack, or change the gains and stretch of the one running.`,
 `* DELETE /api/imaging/stack: no body; stop the live stack and save it as stack.json, and with a sub stacked stack.fits and stack.png.`
 and
@@ -1339,8 +1356,8 @@ and
 ### `crates/finder/README.md` (US8; US10)
 
 US8 adds, after the last `/api/imaging` row already in the `## API` table
-(`crates/finder/README.md:167`; the table's last row at 49bb210 is at
-`crates/finder/README.md:184`, and 031 to 034 add theirs), three rows worded like their
+(`crates/finder/README.md:212`; that row is 034's `POST /api/imaging/calibration/flats`,
+at `crates/finder/README.md:237`), three rows worded like their
 neighbours:
 
 ```markdown
@@ -1375,14 +1392,15 @@ reduction and a mean of the full size made only when the stack is saved; that a
 trailed sub which solves is stacked unless the focus gate finds it soft; and `took_ms`
 as the figure to read against the sub length at bring-up, and that the picture the
 worker makes after a sub is not in it. US10 also adds two lines under `## MCP clients`
-(`crates/finder/README.md:57`), after the calibration tools' lines that 034 adds:
-`set_stacking` and `get_stack`, each with one sentence, and makes the count in the
-sentence before the list two higher (eleven after 034's nine), in the words that
-sentence has on `main`.
+(`crates/finder/README.md:62`), after the calibration tools' lines that 034 added, the
+last of them `take_flats`'s (`crates/finder/README.md:116`): `set_stacking` and
+`get_stack`, each with one sentence, and makes the count in the sentence before the
+list two higher (eleven after 034's nine), in the words that sentence has on `main`,
+`The imaging camera has nine tools of its own` (`crates/finder/README.md:85`).
 
 ### `GLOSSARY.md` (US5)
 
-After the **Stack** entry (`GLOSSARY.md:171`), with the words of spec owner approval 6:
+After the **Stack** entry (`GLOSSARY.md:193`), with the words of spec owner approval 6:
 
 ```markdown
 **Reference sub**:
@@ -1392,7 +1410,7 @@ _Avoid_: reference frame, key frame, master
 
 ### The page (`crates/finder/web/src/`, US9)
 
-`api.ts`, after the calibration types 034 adds:
+`api.ts`, after the calibration types 034 added:
 
 ```ts
 export interface StackDropped {
@@ -1414,7 +1432,7 @@ export async function deleteImagingStack(): Promise<ImagingView>;   // fetch(url
 ```
 
 `ImagingView` gains `stack?: StackView;`. Each call throws an `Error` with the answer's
-`error` on a refusal, as `postTrack` does (`crates/finder/web/src/api.ts:312`).
+`error` on a refusal, as `postTrack` does (`crates/finder/web/src/api.ts:646`).
 `postImagingStack` sends `{ method: "POST", headers: { "Content-Type":
 "application/json" }, body: JSON.stringify(body) }`.
 
@@ -1470,10 +1488,11 @@ Write each phrase a test asserts on one line of JSX, so `textContent` keeps it w
 Only existing classes and tokens are used; `index.css` does not change.
 
 `useColourHold` is 031's: the series audit's finding on 031 (A6) makes the hold one
-hook, which 031's US7 creates as `crates/finder/web/src/useColourHold.ts` beside its
+hook, which 031's US7 created as `crates/finder/web/src/useColourHold.ts` beside its
 `useImaging.ts` and uses for its own picture
 (`specs/031-imaging-frames-on-console/plan.md` § The page, and 031 spec.md US7-S5, which
-renders it with `renderHook`). As 031's plan.md gives it, and as this trio uses it:
+renders it with `renderHook`). As 031's code on `main` has it (031 US7, `11e9f60`),
+and as this trio uses it:
 
 ```ts
 // 031's (031 US7, from the audit's finding A6), crates/finder/web/src/useColourHold.ts:
@@ -1500,27 +1519,28 @@ export function useColourHold(night: boolean): { held: boolean; bind: ColourHold
 `<button type="button" className="button" aria-pressed={held} {...bind}>Hold to see
 colour</button>` at night, as 031's picture does, and gives the picture the class
 `photo` unless `held`. The hook ends a hold when `night` turns false, so the block
-needs nothing for that. The re-anchoring reads the hook in 031's code
-(§ Prerequisites 8); if 031 lands it with another return shape, 031's is written here
-and in `StackBlock`'s task, and the behaviour spec US9-S3 asserts does not change,
-because it is 031's.
+needs nothing for that. The re-anchoring read the hook in 031's code on `main`, and
+its file, name, exports and return shape are as written here (§ Prerequisites 8); the
+behaviour spec US9-S3 asserts is 031's.
 
 `ImagingPage.tsx`: for a ready view, `<StackBlock view={view} night={night}
-onChange={refresh} />` after the Calibration block 034 places. `useImaging` and
+onChange={refresh} />`, inside the fragment the page renders under
+`view?.state === "ready"`, after 034's `{view.calibration && <CalibrationBlock … />}`,
+which is that fragment's last element, and the page's, on `main`. `useImaging` and
 `useSession` do not change: the block reads the view the page already polls.
 
 `e2e/stack.spec.ts` runs in the simulate project. It defines its own off-red counter,
 written as `crates/finder/web/e2e/session.spec.ts:45` writes it, and turns Night on as
 that file does. `playwright.config.ts` gains `"**/stack.spec.ts"` at the end of the
 default project's `testIgnore` (`crates/finder/web/playwright.config.ts:36`) and of the
-simulate project's `testMatch` (`crates/finder/web/playwright.config.ts:53`), which
+simulate project's `testMatch` (`crates/finder/web/playwright.config.ts:54`), which
 031's edit has already put one entry a line. The screenshot taken during a hold masks
 the stack's picture with `mask` and `maskColor: "#000000"`.
 
 ### `DESIGN.md` and `.impeccable/design.json` (US9)
 
-After the Calibration block entry 034 adds (the Recording entry is at `DESIGN.md:350`
-at 49bb210, and 031, 032, 033 and 034 add theirs after it), a plain `###` heading and one
+After the Calibration block entry 034 added (`DESIGN.md:396`), before the entry that
+follows it on `main`, a plain `###` heading and one
 paragraph (the `>` marks only set the text apart here):
 
 > ### Stack block — built
@@ -1535,7 +1555,8 @@ paragraph (the `>` marks only set the text apart here):
 > and files. Existing ink, paper and red-only night tokens; no new class.
 
 `.impeccable/design.json` gains one entry in `components`, after the Calibration block's,
-formatted as its neighbours (`.impeccable/design.json:723` is Recording's at 49bb210):
+formatted as its neighbours (`.impeccable/design.json:755` is the Calibration block's,
+and `.impeccable/design.json:723` Recording's):
 `name` `Stack block`, `kind` `custom`, `refersTo` `button`, a `description` that says
 the same in one sentence each, and `html` and `css` snippets under the class
 `ds-stack-block`, using only `var(--color-ink)`.
@@ -1543,7 +1564,7 @@ the same in one sentence each, and `html` and `css` snippets under the class
 ### The MCP tools (`crates/finder/src/mcp/tools.rs`, US10)
 
 One struct that only describes a tool's input, beside `TargetArguments`
-(`crates/finder/src/mcp/tools.rs:31`) and written as it is, with
+(`crates/finder/src/mcp/tools.rs:32`) and written as it is, with
 `#[expect(dead_code, reason = "schema only; StartRequest parses the actual arguments")]`:
 
 ```rust
@@ -1557,14 +1578,14 @@ struct StackingArguments {
 }
 ```
 
-Two tools in the `#[tool_router]` block (`crates/finder/src/mcp/tools.rs:165`), after the
-calibration tools 034 adds, each `output_schema = object_schema()`
-(`crates/finder/src/mcp/tools.rs:104`):
+Two tools in the `#[tool_router]` block (`crates/finder/src/mcp/tools.rs:287`), after the
+calibration tools 034 added, each `output_schema = object_schema()`
+(`crates/finder/src/mcp/tools.rs:200`):
 
 - `set_stacking`, description
   `Start or stop the live stack of subs, as POST and DELETE /api/imaging/stack do. With on true it also takes reject, focus_gate, gains and stretch; on a running stack it changes gains and stretch.`,
   with `input_schema` from `StackingArguments` as `set_target` declares its own
-  (`crates/finder/src/mcp/tools.rs:355`). It takes `arguments: JsonObject` and judges
+  (`crates/finder/src/mcp/tools.rs:477`). It takes `arguments: JsonObject` and judges
   them in this order, each failure a `CallToolResult::error` with the words given:
   1. `on` absent or not a boolean: `on must be true or false`. This is its answer to
      `{}`, on every console, with or without imaging;
@@ -1594,7 +1615,7 @@ calibration tools 034 adds, each `output_schema = object_schema()`
 
 Neither is a moving tool: no rate limit and no call-log line. The MCP session tools
 carry `imaging.stack` because they serialize `session_response`
-(`crates/finder/src/mcp/tools.rs:347`); no other MCP code changes.
+(`crates/finder/src/mcp/tools.rs:469`); no other MCP code changes.
 
 ### Test rigs (`crates/finder/tests/console/stack_loop.rs`, US5)
 
@@ -1756,11 +1777,14 @@ These are not changed by any story:
 - **The Imaging page without a stack.** The component tests of 031 to 034 render views
   with no `stack`; the block then shows one more region with a button and four fields,
   no `status`, no `alert` and no picture, so a test that reads the page's only status,
-  alert or picture finds what it found. A test that reads every button or every spin
-  button of the whole page would see five more: none of the four drafts describes one,
-  and the re-anchoring checks (§ Prerequisites 2). 034's `CalibrationBlock.test.tsx`
-  places its region after `Imaging frame` and `Focus`; nothing of 031 to 034 asserts
-  that a region is the page's last.
+  alert or picture finds what it found. A test that read every button or every spin
+  button of the whole page would see five more; none of 031's to 034's landed tests
+  does. Those tests read the page's order in three places, each that one region comes
+  after another in document order: 032's `ImagingSolveBlock.test.tsx` (`Imaging solve`
+  after `Imaging frame`), 033's `FocusBlock.test.tsx` (`Focus` after `Imaging solve`)
+  and 034's `CalibrationBlock.test.tsx` (`Calibration` after `Imaging frame` and
+  `Focus`, and one region named `Calibration`). None reads the page's last region, so a
+  Stack block after the Calibration block breaks none of them (§ Prerequisites 2).
 - **031's Playwright check of the Imaging page at night.** It never starts a stack, so
   the page it screenshots gains only ink the night edition already turns red.
 - **Shapes this spec pins for its own later stories.** `StackView` is
@@ -1811,7 +1835,8 @@ These are not changed by any story:
 
 | Decision | Rejected | Why |
 |---|---|---|
-| The stacker is this project's own code | `seiza-stacking`; vendoring AstraLite's stacking modules | The owner chose to build it (the plan document's Stacker row). `seiza-stacking` is Apache-2.0, first published in July 2026 with 72 releases since, and depends on the `seiza` crate, whose licence expression includes CC-BY-4.0, which `deny.toml` does not allow (`deny.toml:61`); its default feature pulls in a GPU stack, and it was not built or run. AstraLite is MIT; its stacker modules depend only on `rayon` and `itertools`, but the crate as a whole brings a windowing toolkit, so reuse means vendoring one maintainer's young code, and it registers by star triangles with shift and angle only, where the owner's decision is registration from the imaging solves. Both are in `docs/research/2026-11-15-imaging-camera.md` § 12. Prior art and what was not adopted. A trial of either on real subs before the flip stays the owner's option (§ Prerequisites 6). |
+| The stacker is this project's own code | `seiza-stacking`; vendoring AstraLite's stacking modules | The owner chose to build it (the plan document's Stacker row). `seiza-stacking` is Apache-2.0, first published in July 2026 with 72 releases since, and depends on the `seiza` crate, whose licence expression includes CC-BY-4.0, which `deny.toml` does not allow (`deny.toml:75`); its default feature pulls in a GPU stack, and it was not built or run. AstraLite is MIT; its stacker modules depend only on `rayon` and `itertools`, but the crate as a whole brings a windowing toolkit, so reuse means vendoring one maintainer's young code, and it registers by star triangles with shift and angle only, where the owner's decision is registration from the imaging solves. Both are in `docs/research/2026-11-15-imaging-camera.md` § 12. Prior art and what was not adopted. A trial of either on real subs before the flip stays the owner's option (§ Prerequisites 6). |
+| The stacker is this project's own code, not a live stacker run beside the console | Siril's live stack (`start_ls`, `livestack`, `stop_ls`), OpenLiveStacker, Astro Live Stacker or KStars' live stacker; ASTAP's own stacker | The four are GPL, so under principle V of constitution 1.3.0 each could only run as a separate program, and each would still need its own registration on a rotating alt-az field and its own rejection. ASTAP's own stacker watches a folder, starts a new stack when a frame is 0.2° away, and does no rejection. The owner chose this project's own stacker on 2026-11-15, registered by ASTAP's solve of every sub (`docs/research/2026-11-15-imaging-camera.md` § 8. Live stacking and § 12. Prior art and what was not adopted). |
 | Registration from each sub's imaging solve | Star matching against the reference sub; rotation computed from site, time and target | The owner's decision: ASTAP solves every sub. It needs no star detection of ours on 16-bit data, works through a half turn and on any mount, and reads no clock or site (the plan document, § Mount-neutral by design). |
 | The whole transform between two solves, as a linear map and a shift | Shift and angle; a similarity; the exact projective mapping for each pixel | Shift and angle leave 0.5 to 0.7 px over an hour that starts 90 minutes past transit; a similarity leaves about 0.2 px at the corner over one hour and 0.3 to 0.5 px over two, and a linear map 0.01 px or less (`docs/research/2026-11-15-imaging-camera.md` § 8. Live stacking). The solves' `cd_deg` already hold the linear part, so carrying it costs nothing. The exact mapping differs by about 0.1 px at most inside what `judge` allows at the worked example's size (inferred, § The arithmetic, **`between`**) and costs a division a pixel. |
 | The linear map is checked at the reference grid's four corners, and a sub it misses by more than 0.5 px there is `off_field` | No check; the exact mapping for every pixel; a check at every pixel | The map's error grows as the shift times the square of the field's half-size: 0.10 px at most at the worked example's size, 1.17 px at the corners of a 3° × 2° field of 3600 × 2400 pixels inside `judge`'s limit (spec US2-S7). Four more projections a sub keep the cheap map honest on any field; the error is largest at the corners, so they bound it. The exact mapping is spec owner decision 3's other answer. |
@@ -1853,7 +1878,7 @@ These are not changed by any story:
 
 ## Verification (every story, before proposing)
 
-- **The factory gates** (`ergane.yaml` at 49bb210):
+- **The factory gates** (`ergane.yaml` on `main` at 002dbef8, as at 49bb210):
   - `lint` = `cargo fmt --all --check`,
     `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`,
     `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked`
@@ -1874,70 +1899,140 @@ These are not changed by any story:
 
 ## Prerequisites before this spec is flipped to `ready`
 
-1. **The earlier specs have landed.** Not met. `030-imaging-camera-link`, `031-imaging-frames-on-console`,
-   `032-imaging-solve-and-aim-point`, `033-focus-reading-and-aid` and
-   `034-dark-and-flat-frames` are drafts in the drafting worktree, and no story of any
-   of them is on `main`. All five are in this spec's `depends_on_landed`.
-2. **The trio is re-anchored against `main`.** Not met. Every `path:line` was read at
-   49bb210, the drafting worktree's HEAD, and the validator resolved them there. After
-   030 to 034 land: every interface of theirs named in § Interfaces is read in their
-   code and corrected here where it differs (the list is spec.md's second and third
-   Clarifications sessions); every file they create is cited with a line; the story
-   that last wrote each shared file is put right in § Refinement Record; § Shapes that
-   existing tests pin is checked against their test files, the ones that read the
-   Imaging page among them, and that no landed Imaging-page test reads the page's last
-   region; and the validator is re-run on `main`.
+1. **The earlier specs have landed.** Met on `main` at 002dbef8.
+   `030-imaging-camera-link` landed its eight stories by `49f8dcd`,
+   `031-imaging-frames-on-console` its nine by `e9687ce`,
+   `032-imaging-solve-and-aim-point` its seven by `670ddcf`, `033-focus-reading-and-aid`
+   its nine by `80f414f`, and `034-dark-and-flat-frames` its ten by `002dbef8` (#300 to
+   #309). All five are in this spec's `depends_on_landed`. Everything of theirs named
+   here was read in their code on `main` (§ Prerequisites 2).
+2. **The trio is re-anchored against `main`.** Met at 002dbef8 on 2026-11-19. Every
+   `path:line` in spec.md, plan.md and tasks.md, 59 in all, had been read at 49bb210,
+   the drafting worktree's HEAD, which has none of 030 to 034 (the glossary's four in
+   the plan document's then uncommitted rewrite of it); each was compared line for line
+   at 49bb210 and at 002dbef8 and then read again by its content. Twenty-nine read the
+   same. Twenty-three had moved and now cite the line that holds the same text, among
+   them the router's `DELETE` and catch-all, `live_preview`, `check_origin` and
+   `SessionResponse` in `crates/finder/src/api.rs`, `TargetArguments`, `object_schema`,
+   the `#[tool_router]` block, `set_target`'s schema and the session tool in
+   `crates/finder/src/mcp/tools.rs`, the three test binaries' `mod` lines, `postTrack`,
+   the session's target, the three lines of `crates/simulator/src/optics.rs`,
+   `deny.toml`'s allowed licences, and the `## MCP clients` and `## API` headings of
+   `crates/finder/README.md`; two of them, the `## API` table's last row and
+   `DESIGN.md`'s Recording entry, which only marked where 031 to 034 would add theirs,
+   now cite what 034 added: its last `/api/imaging` row (`crates/finder/README.md:237`)
+   and its Calibration block entry (`DESIGN.md:396`). Seven were found again by their
+   content: the glossary's **Sub**, **Stack**, **Focus reading** and **Focus region**
+   (`GLOSSARY.md:165`, `GLOSSARY.md:193`, `GLOSSARY.md:209`, `GLOSSARY.md:213`), which a
+   comparison line for line sends to other entries or to a blank line; the Red Torch
+   Rule (`DESIGN.md:198`), on its line with 031's exception now written into it;
+   `sim_json` (`crates/finder/src/api.rs:691`), which 031 made `pub(crate)`; and the
+   simulate project's `testMatch` (`crates/finder/web/playwright.config.ts:54`), which
+   031 wrote one entry a line. Three were added: the README's sentence that counts the
+   imaging tools and its `take_flats` line (`crates/finder/README.md:85`,
+   `crates/finder/README.md:116`), and the Calibration block's entry in
+   `.impeccable/design.json` (`.impeccable/design.json:755`). None was lost. No line is
+   cited in a file 030 to 034 created: every file of theirs is still named without one,
+   as the rule for every story in tasks.md has it.
+
+   Every interface of theirs named in § Interfaces (the list is spec.md's second and
+   third Clarifications sessions) was read in their code on `main`. Of 030 and 031:
+   `SimImagingCamera` and its ten steps and `SyntheticImagingCamera`; `Imaging::take`,
+   `ended`, `abort` and `view`, with `ImagingView`, `FrameView`, `RoiView`,
+   `CameraView` and `Refusal`; `frames::take`, `save` and `write`; `fits::decode`,
+   `fits::utc` and the card formatting; `preview::Rgb` and `preview::jpeg`; `routes()`
+   and its extractors; the Imaging page and `useColourHold`; and the lease, name for
+   name (§ Prerequisites 8). Of 032, 033 and 034: what § Prerequisites 14, 5 and 13
+   list. Each holds as written here but for a few in shape or place, corrected in
+   place:
+   - 031's `frames::take` makes the lease's check through a `held` closure, its `save`
+     builds the frame's path and its `write` makes the parent folder, so § A lease's
+     folder's three edits are now written on those shapes: the folder kept beside the
+     grant in 031's `Held`, read through the `held` closure, and saved by `save` as
+     `<folder>/<id>.fits` with `write` leaving a lease's folder unmade;
+   - 030's ten steps are split between `expose` (steps 1 to 3), `stars_for` (step 4)
+     and a private `render` (steps 5 to 10), so the scene is read in `expose` and
+     reaches `render` in the exposure's `Shot` (§ The scene; tasks T004);
+   - `Imaging::view` is the one place the view is built, 034 setting `calibration`
+     there only while `ready`, and `ImagingView`'s last part is 034's `calibration`,
+     after 033's `focus` (§ 031's imaging state; tasks T040);
+   - the Imaging page's ready blocks sit in one fragment under
+     `view?.state === "ready"`, 034's Calibration block last in it, and the Stack block
+     goes there, after it (§ The page; tasks T045);
+   - the README's last imaging row is 034's `POST /api/imaging/calibration/flats`, its
+     MCP list ends with `take_flats`, and its count reads `nine tools`, in lower case;
+     the last imaging route line of `crates/finder/src/lib.rs` is 034's
+     `* POST /api/imaging/calibration/flats` (§ The routes, § `crates/finder/README.md`;
+     tasks T049);
+   - 031's hook landed in its US7, as § Interfaces has it, not in the US4 its trio
+     named when this one was revised (§ Prerequisites 8).
+
+   § Shapes that existing tests pin was read against their test files. No landed
+   Imaging-page test reads the page's last region: the three that read its order each
+   assert that one region follows another (§ Shapes that existing tests pin, **The
+   Imaging page without a stack**). The shared writes of § Refinement Record were
+   checked against the stories that really wrote each file, with `git log` at
+   002dbef8: all twenty-one that name 030 to 034 name the story that last wrote the
+   file, and none changed. The validator reports no finding at 002dbef8. Where a
+   citation of 030's to 034's trios and one here name the same line of the same file
+   with different numbers, the line as it reads on `main` decides; this trio's were
+   last checked at 002dbef8.
 3. **The owner decisions are settled and the approvals given** (spec § Owner decisions,
-   § Owner approvals). Not met. Decision 13 was settled by the owner on 2026-11-17 with
-   its other answer, a folder per run, which is written into the trio; the other
-   twenty-five are written with their recommended answers. Any answer other than the
-   recommended one is written into the trio and re-validated before the flip.
+   § Owner approvals). Met on 2026-11-17. Decision 13 the owner settled that day with
+   its other answer, a folder per run, which is written into the trio. The other
+   twenty-five take their recommended answers, which the owner approved that day with
+   the imaging series' other decisions ("im good with all of the info in the decisions
+   doc"). The owner gives the approvals by flipping the spec.
 4. **The constitution covers an imaging solve that is not our own Rust.** Met: the
    stack registers every sub by ASTAP's solve, and principle V of constitution 1.3.0 (PR 239, merged 2026-11-17 as `cc593c7`)
    lets a separate program behind 032's port do that. This spec changes nothing there.
-5. **033 has settled, and this trio is read against what it becomes.** Met in the
-   drafts; not met on `main`. 033's trio was being revised the evening this one was
-   finished, and was read here as it stood then; it changed under this trio once
-   already. Its review and the series audit have been applied to it in the drafting
-   worktree, and the three things of it used here were read again there and agree:
-   `focus::read` with its `FocusReading` and
-   `Unmeasurable` (§ The focus gate); the `region` of its `FocusView`, in sensor
-   pixels; and, in spec US6-S6 alone, its `POST` and `DELETE /api/imaging/focus` with a
-   `tile` and its `focus.aid.readings`, on a console whose solver is the tests' own.
-   They are read again after it lands. If
-   any differs, the gate, FR-022 and US6-S2 and US6-S6 are corrected before the flip.
+5. **033 has settled, and this trio is read against what it becomes.** Met on `main`
+   at 002dbef8. 033's trio was being revised the evening this one was finished, and was
+   read here as it stood then; it changed under this trio once. It landed its nine
+   stories by `80f414f`, and the three things of it used here were read in its code
+   and agree: `focus::read(solver, frame, frame_id, region, scale)`, which is `async`
+   and answers `Result<Read, SolveError>`, `Read` being
+   `Result<FocusReading, Unmeasurable>` (§ The focus gate); the `region` of its
+   `FocusView`, a `RegionOut` in sensor pixels whose `source` is `found` or `fixed`,
+   or `provisional` while the aid runs, which a stack never meets because the aid then
+   holds the lease; and, in spec US6-S6 alone, its `POST` and
+   `DELETE /api/imaging/focus` with a `tile` and its `focus.aid.readings`, on a console
+   whose solver is the tests' own. The gate, FR-022, US6-S2 and US6-S6 needed no
+   correction.
 6. **A trial of another stacking engine, if the owner wants one.** The owner's option,
    not a condition: the plan document's § Before any flip lists it. `seiza-stacking`
    and AstraLite's stacking modules exist (§ Decisions); this spec is written as our
    own code. If the owner asks for a trial of either on real subs and prefers the
    result, this trio is redrafted before the flip, and for `seiza-stacking` the
    CC-BY-4.0 in its dependency's licence expression is a `deny.toml` decision first.
-7. **The documents this trio cites are on `main`.** Not met: the plan document,
-   ADR-0002, the changed `GLOSSARY.md` and
-   `docs/research/2026-11-15-imaging-camera.md` are in the drafting worktree,
-   uncommitted. US5 inserts its entry after the **Stack** entry, which only the rewrite
-   has.
+7. **The documents this trio cites are on `main`.** Met: the plan document
+   (`docs/plans/2026-11-15-specs-030-037-imaging.md`), ADR-0002
+   (`docs/adr/0002-imaging-cameras-through-indi-frames-relayed-console-stacks.md`), the
+   plan document's rewrite of `GLOSSARY.md` and
+   `docs/research/2026-11-15-imaging-camera.md` are on `main` since 030's flip
+   (`55e41f5`). US5 inserts its entry after the **Stack** entry, which only the rewrite
+   has, and which `main` has (`GLOSSARY.md:193`).
 8. **031 carries the camera's lease and the colour hold, and the series is re-anchored
-   to them.** Met in the drafts by the series audit's findings on 031; not met on
-   `main`. The plan document's amendment 1 gives 031 one lease naming its holder; the
-   audit's finding on 031 gives it to 031's trio as US9, in the shape
-   `specs/033-focus-reading-and-aid/plan.md` § The camera lease writes down, which
-   § The camera's lease cites name for name; and its finding A6 takes the hold under an
-   imaging picture out of 031's page as `useColourHold`, which § The page writes down as
-   this trio uses it. When this trio was revised after the audit, 031's trio in the
-   drafting worktree carried both: US9 and its plan.md § The camera lease, whose
-   refusal reads `the imaging camera is held by {holder}`, and the hook in US4,
-   `crates/finder/web/src/useColourHold.ts`, in its plan.md § The page. 031's revision
-   is done, and both were read again in its trio and agree with § The camera's lease
-   and § The page; they are read again in 031's code after it lands: every name; the
-   six points
-   of § The camera's lease, above all that the lease is checked before the frame in
-   flight, that a single imaging frame holds no lease, that `Imaging::abort` still ends
-   the holder's frame, and what the refusal's words are; and the hook's file, name and
-   return shape. 034's part is prerequisite 13. If 031 lands without a lease, spec owner
-   decision 21's other answer is written into this trio instead; if it lands without
-   the hook, `StackBlock` is written against whatever 031's page then holds colour
-   with, and FR-042's last clause is corrected with it.
+   to them.** Met on `main` at 002dbef8. The plan document's amendment 1 gives 031 one
+   lease naming its holder; the audit's finding on 031 gave it to 031's trio as US9, in
+   the shape `specs/033-focus-reading-and-aid/plan.md` § The camera lease writes down,
+   which § The camera's lease cites name for name; and its finding A6 took the hold
+   under an imaging picture out of 031's page as `useColourHold`, which § The page
+   writes down as this trio uses it. When this trio was revised after the audit, 031's
+   trio carried both, the hook then in its US4. Both landed with 031: the lease in its
+   US9 (`e9687ce`), in `crates/finder/src/imaging/mod.rs`, and the hook in its US7
+   (`11e9f60`), as `crates/finder/web/src/useColourHold.ts`. Both were read in 031's
+   code and agree with § The camera's lease and § The page: every name,
+   `Imaging::lease`, `Imaging::holder`, and `Lease::set` and `Lease::take`, both
+   `async`, which answer 409 `this console takes no imaging frames` once the `Imaging`
+   is gone; the six points of § The camera's lease, above all that the lease is checked
+   under the state's lock after the state's check and before the frame in flight, that
+   a single imaging frame holds no lease (`Imaging::take` asks with no grant), that
+   `Imaging::abort` still ends the holder's frame, and that the refusal reads
+   `the imaging camera is held by {holder}`; and the hook's file, name and return
+   shape, `useColourHold(night: boolean): { held: boolean; bind: ColourHoldBind }`.
+   034's part is prerequisite 13. Spec owner decision 21's other answer, and a
+   `StackBlock` written against another hold, are not needed.
 9. **The trio is probe-built.** Met. Probe round 1, on 2026-11-18 and 19, built all ten
    stories from this trio in throwaway worktrees, on a base of probe builds of 030 to
    034, tests first, with both gates: four agents in turn, US1 to US3 (US3 first), US4
@@ -1972,22 +2067,23 @@ These are not changed by any story:
      console, **`start`**, steps 3 and 7). On landed 031, `frames::take` takes a `held`
      closure, `save` builds the path itself, `write` makes the parent folder, and
      `Imaging::take_as` and `Lease::take` are async, so § A lease's folder's three
-     edits are made on those shapes at the re-anchoring. Landed 031's `fits::card`
+     edits are now written on those shapes (§ Prerequisites 2). Landed 031's `fits::card`
      answers `[u8; 80]` and has no `BLOCK`; landed 032's `Imaging::solve` answers the
      whole view; landed 031's `useColourHold` has `onPointerDown: () => void` and
      refuses a hold by day (§ The page, now written so); `main`'s README counts the
      imaging tools in other words (§ `crates/finder/README.md`). And 034's
-     `CalibrationBlock.test.tsx`, as 034's round 1 folded it, asserts that its region
-     is the page's last, which US9 breaks; 034's side of that waits on the owner, with
-     034's flip (§ Shapes that existing tests pin, **The Imaging page without a
-     stack**).
+     `CalibrationBlock.test.tsx`, as 034's round 1 folded it, asserted that its region
+     was the page's last, which US9 would break. The owner settled 034's side of that
+     on 2026-11-19, with 034's flip, and as it landed the test asserts the region after
+     the regions `Imaging frame` and `Focus` in document order and reads no last region
+     (§ Shapes that existing tests pin, **The Imaging page without a stack**).
    Not run in the round: ASTAP, a real camera, a link that drops mid-stack, a camera
    wider than 1920 or with a serial, the files opened in another program, and memory
    read from the process.
 10. **The plan document agrees with the settled decisions, and 036 and 037 with this
     trio.** Three parts.
-    - *The plan document.* Met in the drafts for the answers written here; not met on
-      `main`, where the plan document is not yet (prerequisite 7). This trio departed
+    - *The plan document.* Met for the answers written here, on `main` since 030's flip
+      (prerequisite 7). This trio departed
       from its § Interfaces shared across the specs in three places (spec owner
       decisions 13, 18 and 19), and that section now gives the answer written here for
       each: `stack.rs` with `stack/service.rs` and `stack/display.rs`;
@@ -2024,24 +2120,32 @@ These are not changed by any story:
     from `main` after US10; GoTo and Track proven on the real mount (the plan
     document's § Before any flip, 4); and the field checks of spec.md § Assumptions.
     Not needed to flip.
-13. **034 takes the lease for a set of darks or flats.** Met in the drafts by the series
-    audit's finding on 034 (A1), which 034's plan.md now carries (its `HOLDER`, and
-    `Calibration::busy` and `restore_exposure` gone); not met on `main`. A set of darks,
+13. **034 takes the lease for a set of darks or flats.** Met on `main` at 002dbef8. The
+    series audit's finding on 034 (A1) put it in 034's plan.md, and 034 landed so: its
+    `HOLDER` is `a set of darks or flats`
+    (`crates/finder/src/imaging/calibration/service.rs`), and neither
+    `Calibration::busy` nor `restore_exposure` is in its code. A set of darks,
     and each step of a set of flats, holds 031's lease under the name
     `a set of darks or flats`, so a set
     asked for while a stack runs is refused at its start with `the stack`, and a stack
     asked for while a set runs is refused with the set's name; and 034's
-    `Calibration::restore_exposure` is gone. Spec § Edge Cases rests on both. They are
-    read again in 034's code after it lands (prerequisite 2).
-14. **032 offers `Imaging::note_solve`.** Met in the drafts: the series audit's finding
-    on 032 (A3) put it in 032's US4, and 032's plan.md § Solving on the console gives it
-    with the signature the worker's step 8 calls (032's spec FR-037, US4-S7); not met on
-    `main`. It is read again in 032's code after it lands: its name and arguments, that
-    it is not `async`, that it takes an aim reading for a whole-sensor frame only and
-    only when a live pointing shares the frame's moment, and that it touches neither the
-    page's `solve`, the kept scale nor the misses. Spec US6-S9 rests on it. If 032 lands without it, spec owner decision 20's first
-    other answer is written into this trio instead: FR-015's last sentence, the
-    worker's call and US6-S9 go.
+    `Calibration::restore_exposure` is gone. Spec § Edge Cases rests on both. The rest of
+    034 used here was read in its code too, and holds as named: `Mosaic::from_samples`,
+    `percentile`, `Library::calibrate` with the `Applied` it answers and its
+    `Selection`'s `missing`, `FrameKey::from_image`, `Calibration::library`,
+    `AppState::calibration` and `Imaging::root` (034 US4).
+14. **032 offers `Imaging::note_solve`.** Met on `main` at 002dbef8: the series audit's
+    finding on 032 (A3) put it in 032's US4, which landed it (`ee3d9c4`) in
+    `crates/finder/src/imaging/solving.rs` with the signature the worker's step 8 calls,
+    `note_solve(&self, frame: &SolveFrame, frame_id: u64, solve: &ImagingSolve)` (032's
+    spec FR-037, US4-S7). It was read in 032's code: its name and arguments; that it is
+    not `async` and answers nothing; that it takes an aim reading for a whole-sensor
+    frame only, as 032's own task does, and only when a live pointing shares the frame's
+    moment; and that it touches neither the page's `solve`, the kept scale nor the
+    misses. Spec US6-S9 rests on it. The rest of 032 used here was read in its code too,
+    and holds as named: `ImagingSolve`, `SolveError`, `Region::from` of a `RoiView`,
+    `HintSource`, `Imaging::hint`, `Imaging::solver`, `solve_frame` with its `Ask` and
+    `Ended`, and `Imaging::solve`, which answers the whole view.
 
 ## Plan traps
 
@@ -2206,14 +2310,14 @@ with the check that keeps it from recurring. They bind every story.
 | Stars' cores vary with seeing and are rejected too often, dimming stars. | The deviation is learned at each pixel, so a core's own spread widens its own limit; the field check compares a stack with `reject` false. |
 | The background's plane is pulled by a nebula that fills most tiles. | Only the darker half of the tiles is fitted; what is saved is untouched; the look is for the design review (spec owner decision 16). |
 | The picture looks green before the observer sets gains. | Expected without a colour matrix (the plan document's Colour row); the gains are on the page; measured gains are spec owner decision 17's alternative. |
-| 031 lands the lease under other names or with other rules: the frame in flight checked before the lease, a single imaging frame that holds the lease, a foreign `abort` refused, a refusal that does not name the holder. | § The camera's lease cites 031 US9 and lists the six points and where each is used, and 033's, 034's and 037's trios use the same shape; § Prerequisites 8 reads each in 031's plan.md and code before the flip. Only `Stacker::start`, the taker and three scenarios (spec US6-S7, US5-S3, US5-S6) touch it, and US6-S7 asserts `holder()` `None` during a single frame, so point 6 shows up there if it changes. |
-| 031 lands with no lease at all. | Spec owner decision 21's other answer, which is the first draft's design: ask the two busy checks and wait out a foreign frame, three times at most. |
+| 031 lands the lease under other names or with other rules: the frame in flight checked before the lease, a single imaging frame that holds the lease, a foreign `abort` refused, a refusal that does not name the holder. | § The camera's lease cites 031 US9 and lists the six points and where each is used, and 033's, 034's and 037's trios use the same shape; § Prerequisites 8 read each in 031's code on `main`, where 031 landed the lease under these names and with these rules. Only `Stacker::start`, the taker and three scenarios (spec US6-S7, US5-S3, US5-S6) touch it, and US6-S7 asserts `holder()` `None` during a single frame, so point 6 shows up there if it changes. |
+| 031 lands with no lease at all. | Spec owner decision 21's other answer, which is the first draft's design: ask the two busy checks and wait out a foreign frame, three times at most. 031 landed the lease (§ Prerequisites 8), so it is not needed. |
 | US5's diff is over 64 KiB (73,780 B in probe round 1), and moving US5-S7 and US5-S9 alone leaves 67,826 B. | US5-S2, US5-S7 and US5-S9 move to US6, in `stack_gate.rs`, which copies the sim stacking rig and the private helpers they need (`sim`, `console`, `stand_in_node`, `wait_get`, `get`, `close`, `sidecar`, `refusal`, `files_under`). The call of `note_solve`, the folder and `save_in` stay in US5. Measured: US5 about 61,300 B; US6 about 50,000 B. The moved scenarios are now US6-S7, US6-S8 and US6-S9, and US5's others US5-S1 to US5-S6 (spec.md § Clarifications, the session of 2026-11-19). **With the round's cases folded in, US5 is about 67,200 B, over 65,536 B again**: D16's cases and `ScriptedCamera::add_at` add about 5,850 B. The next cut the round names is US5-S5 and US5-S6 (was US5-S6 and US5-S8), 2,447 B as built and about 500 B more with US5-S6's new case, which leaves about 64,300 to 64,750 B (98% to 99%), judged too thin to stand alone; US5's further cut is settled before the flip. US6, with its own cases (about 5,700 B), the measure's delay (about 1,100 B) and the moved scenarios' cases (about 600 B), is about 57,400 B (88%); the round names no next cut for it. |
 | US8's diff nears 64 KiB: three routes, the view, the cube, three files, the README's three rows and seven tests. | Probe round 1 measured it at 65,294 B whole (99.6%), so the README's `## Live stack` moved to US10 (7,966 B), leaving 57,483 B (87.7%). With the round's cases folded in (about 5,400 to 6,400 B for US8-S1, S3, S5 and S6, and about 450 B for the ending's changes) it is about 63,000 to 64,300 B, 96% to 98%. The next cut is US8-S7, `crates/finder/tests/cli/stack.rs` (5,636 B), which leaves about 57,500 to 58,700 B; the round names no story to take it. |
 | The other stories' diffs grow with the round's cases. | Each stays far from 64 KiB. Measured in probe round 1, then with the cases folded in: US1 21,319 B, about 24,000; US2 22,143, about 23,300; US3 22,556, about 23,000; US4 17,364, about 19,200; US7 31,291, about 34,600; US9 33,513, about 36,200; US10 18,134, 25,945 with `## Live stack`, and about 30,000 with its cases. |
 | Rejection after eight subs leaves out about 5% of good pixels a sub at first (probe round 1, sim camera), falling as subs are added. | The field check reads it; `reject` false turns rejection off. |
 | A scenario's numbers rest on the simulator's noise, its seeded field or its star shapes (US3-S4, US3-S5, US4-S4, US6-S8, US6-S9). | Probe round 1 ran each three times on the simulated camera, with the same result each time, and every tolerance held, with the margins of § Prerequisites 9; US3-S4's was tightened to 0.02 px. A tolerance that proves wrong later is corrected in the trio, never by a story. |
-| 033 changes `focus::read`, its focus view or its aid before it lands. | § Prerequisites 5. The gate touches 033 in two places, `read` and `focus.region`, and one scenario (spec US6-S6) drives its routes. |
+| 033 changes `focus::read`, its focus view or its aid before it lands. | § Prerequisites 5. The gate touches 033 in two places, `read` and `focus.region`, and one scenario (spec US6-S6) drives its routes. 033 landed with both, and its routes, as this trio has them (§ Prerequisites 5). |
 | The focus region holds too few stars on a sparse field, so every sub is dropped as `too_few_stars`. | `focus_gate: false` turns the measure off, and the count says why the stack is empty; the field check reads what the gate drops on a real night. |
 | 036 and 037 need more from the loop than this spec offers. | § Shapes that existing tests pin, **The seam for 036 and 037**, names the gap before an exposure, the stopping mark, the lease as the only way to a setting, what the settings test compares, and the worker's two places; `StackView` is non-exhaustive. Both trios are re-anchored to this one (§ Prerequisites 10). |
 
@@ -2234,9 +2338,9 @@ were then applied to the three files (below). **No probe build had been run** wh
 trio was drafted, reviewed and audited: no story had been compiled, linted or tested,
 no interface above built, and no diff measured. Probe round 1 has since built all ten
 (§ Prerequisites 9, and "What probe round 1 changed", below). This spec builds on code
-that 030 to 034 create: every type and function of theirs named here is its draft's,
-built in the round on probe builds of those drafts, and is read in their code at the
-re-anchoring.
+that 030 to 034 created: every type and function of theirs named here is its draft's,
+built in the round on probe builds of those drafts, and was read in their code on
+`main` at 002dbef8 by the re-anchoring of 2026-11-19.
 
 What the second pass changed, so that a reader of an earlier copy knows: the stack takes
 031's lease for its whole length, as `the stack`, and asks no busy check, so the wait
@@ -2330,8 +2434,8 @@ The corner figures of US2-S7, and the 0.10 px and 1.17 px of § The arithmetic, 
 worked with a short script that projects the corners through the five-point map and
 through the two solves, written for the purpose from the shared setup's by-hand
 projection. Every `path:line` in spec.md and plan.md was read again at 49bb210 in this
-pass, the worktree's HEAD, and none had moved; the one added,
-`crates/simulator/src/optics.rs:26`, was read there too.
+pass, the worktree's HEAD, and none had moved; the one added, the simulator's true aim
+point, was read there too (`crates/simulator/src/optics.rs:27` on `main`).
 
 What the owner's answer changed. On 2026-11-17 the owner settled spec owner decision 13
 with its other answer, a folder per run, and it was written into the three files: a
@@ -2372,10 +2476,11 @@ hook as it landed (D41). Below, US5's record lost the three moved tests to US6's
 US10's gained US10-S5, and the shared write of the README that US8 hands to US10 names
 the section.
 
-Every `path:line` names a file that exists at 49bb210 and was read there, but for the
-lines of `GLOSSARY.md`, which are lines of the plan document's uncommitted rewrite of
-that file (§ Prerequisites 7). Every number in a scenario was worked by hand or with a
-short script, and is shown as a worked example where it is not obvious; the placements
+Every `path:line` names a file that exists at 49bb210 and was read there, the lines of
+`GLOSSARY.md` being then lines of the plan document's uncommitted rewrite of that file;
+the re-anchoring read every one again by its content on `main` at 002dbef8, whose
+lines are cited (§ Prerequisites 2 and 7). Every number in a scenario was worked by
+hand or with a short script, and is shown as a worked example where it is not obvious; the placements
 of US2-S3 to US2-S5 and the two centres of US6-S3 were worked again by the second pass
 with a projection written for the purpose, and agreed. The numbers that rest on the
 simulator's rendering (the star centroids and coverage of US3-S4, the signal and noise
@@ -2384,31 +2489,43 @@ worked from 030's constants; probe round 1 ran them on the simulated camera, and
 tolerance held (§ Prerequisites 9). One fact about the tests' runtime was checked in
 tokio's own documentation: while a blocking task runs, a paused clock does not advance.
 
-Some things here rest on less than a reviewed plan.md, and each is named where it is
-used. Four come from the series audit's findings on other trios, which were being
-written into those trios while this one was revised: the camera's lease (031 US9),
-cited in § The camera's lease with the six points relied on, and `useColourHold` (031
-US7, from the finding A6), quoted in § The page, both as 031's plan.md gives them when
-this trio was checked; `Imaging::note_solve` (032 US4, from the
+Some things here rested on less than a reviewed plan.md when this trio was written,
+and each is named where it is used. Four came from the series audit's findings on
+other trios, which were being written into those trios while this one was revised:
+the camera's lease (031 US9), cited in § The camera's lease with the six points relied
+on, and `useColourHold` (031 US7, from the finding A6), quoted in § The page, both as
+031's plan.md gave them when this trio was checked; `Imaging::note_solve` (032 US4, from the
 finding A3), whose signature 032's plan.md gives as § The stack on the console writes
 it; and a set of darks or flats under the lease (034 A1), which 034's plan.md carries.
-§ Prerequisites 8, 13 and 14 say what must happen before the flip.
-033's trio was being revised while this one was finished, and its plan.md changed once
-under it: § Prerequisites 5 lists the three things of it that are used.
+All four landed so, and were read in their code on `main` (§ Prerequisites 8, 13 and
+14). 033's trio was being revised while this one was finished, and its plan.md changed
+once under it: § Prerequisites 5 lists the three things of it that are used, read in
+its code on `main`.
 
-What a first refinement round must do is § Prerequisites 2, 5, 8 and 14 (prerequisite 9,
-the probe build, is met), and its findings replace these paragraphs. Until then the
-record below is the draft's own account: its tests are the scenarios, its writes are
+What the re-anchoring of 2026-11-19 changed (§ Prerequisites 2): every citation read
+again on `main` at 002dbef8, and the moved ones corrected, the glossary's among them;
+the few names and shapes of 030 to 034 that differed in shape or place corrected,
+§ A lease's folder's three edits among them, now written on 031's landed
+`frames::take`, `save` and `write`; § Prerequisites 1, 2, 3, 5, 7, 8, 13 and 14 written
+as met; and the Constitution Check's row for principle V, with its line in
+§ Decisions. Every shared write below that names 030 to 034 was checked with `git log`
+at 002dbef8 and names the story that last wrote its file; none changed, and no test,
+write or Work Graph edge of the record changed.
+
+§ Prerequisites 2, 5, 8, 13 and 14 were done by that re-anchoring, prerequisite 9 being
+met by probe round 1. The record below is the draft's own account, with round 1's
+findings and the re-anchoring's in it: its tests are the scenarios, its writes are
 the files § Project Structure names, and its shared writes name the next story of
 this spec to write the same file, or, for the
-first story of this spec to write it, the story that, by the drafts of 030 to 034,
-last writes the file before this spec does. A test file that 030 to 034 or an earlier
-story of this spec creates cannot be listed under `tests` as existing, because the
-validator resolves every such path in the drafting worktree; each is named under
-`preserved_behavior` with what it must still assert, and moves to `tests` at the
-re-anchoring. The record's `open_questions` are empty because the validator refuses a
-record that holds any; what is not established is in § Risks and § Prerequisites, and
-in spec.md's owner decisions 8, 20, 21 and 26. Nothing in this record is an owner
+first story of this spec to write it, the story that last wrote the file on `main`
+before this spec does, read with `git log` at 002dbef8. A test file that 030 to 034 or
+an earlier story of this spec created is not listed under `tests` as existing, because
+the validator resolved every such path in the drafting worktree, where none of them
+existed; each is named under `preserved_behavior` with what it must still assert, and
+the re-anchoring left them there, as 034's re-anchoring left its own. The record's
+`open_questions` are empty because the validator refuses a record that holds any;
+what is not established is in § Risks and § Prerequisites, and in spec.md's owner
+decisions 8, 20, 21 and 26. Nothing in this record is an owner
 approval: those are in spec.md, and flipping to `ready` gives them.
 
 ```yaml

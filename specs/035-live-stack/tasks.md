@@ -6,32 +6,33 @@ description: "Task list for 035-live-stack: Live Stack"
 
 **Prerequisites** (plan.md § Prerequisites):
 - `030-imaging-camera-link`, `031-imaging-frames-on-console`, `032-imaging-solve-and-aim-point`,
-  `033-focus-reading-and-aid` and `034-dark-and-flat-frames` have landed on `main`: not
-  met, all five are drafts;
-- this trio has been re-anchored against `main` after they landed, every plain path of a
-  file they create given its line: not met;
+  `033-focus-reading-and-aid` and `034-dark-and-flat-frames` have landed on `main`: met,
+  on `main` at 002dbef8 (plan.md § Prerequisites 1);
+- this trio has been re-anchored against `main` after they landed (plan.md
+  § Prerequisites 2): met, on `main` at 002dbef8 on 2026-11-19; no line is cited in a
+  file they created, which are named without one;
 - 031 carries the camera's lease of the plan document's amendment 1 (031 US9) and the
   colour hold `useColourHold` (031 US7, from the audit's finding A6), and plan.md § The
-  camera's lease and § The page have been read against 031's plan.md and code (plan.md
-  § Prerequisites 8): met in the drafts by the series audit's findings on 031, not met
-  on `main`;
+  camera's lease and § The page have been read against 031's code (plan.md
+  § Prerequisites 8): met, both having landed with 031;
 - 032 offers `Imaging::note_solve` (032 US4, from the audit's finding A3), read against
-  032's code (plan.md § Prerequisites 14): met in the drafts, not met on `main`;
+  032's code (plan.md § Prerequisites 14): met;
 - 033's revision has settled and this trio has been read against what it became
-  (plan.md § Prerequisites 5): met in the drafts, not met on `main`;
+  (plan.md § Prerequisites 5): met, in its code on `main`;
 - 036 sets a stack's exposure through the stack's lease, as plan.md § Shapes that
   existing tests pin, **The seam for 036 and 037**, asks, and 037 has been read
   against this trio, its `run::label` calling this trio's `label` (plan.md
   § Prerequisites 10): met for both as drafted;
 - 034 takes the camera's lease for a set of darks or flats and has no
-  `restore_exposure` (034 A1; plan.md § Prerequisites 13): met in the drafts, not met
-  on `main`;
-- the owner decisions in spec.md are settled and its owner approvals given: not met
-  (decision 13 was settled on 2026-11-17, a folder per run, and is written in);
+  `restore_exposure` (034 A1; plan.md § Prerequisites 13): met, in its code on `main`;
+- the owner decisions in spec.md are settled and its owner approvals given: met, the
+  owner having settled decision 13 on 2026-11-17, a folder per run, which is written
+  in, and approved the other twenty-five's recommended answers that day; flipping the
+  spec gives the approvals (plan.md § Prerequisites 3);
 - every story has been probe-built: met, by probe round 1, whose findings are folded in
   (plan.md § Prerequisites 9);
 - the plan document, ADR-0002, the research note and the plan document's rewrite of
-  `GLOSSARY.md` are on `main`: not met;
+  `GLOSSARY.md` are on `main`: met, since 030's flip (plan.md § Prerequisites 7);
 - no operator-staged file is needed: met.
 
 **Rules for every story:**
@@ -63,11 +64,10 @@ description: "Task list for 035-live-stack: Live Stack"
   anything under `display` to make an expected value. Real numbers are compared within
   0.001 unless the scenario gives another tolerance.
 - Keep the story's diff under 64 KiB, measured as plan.md § Plan traps 3 says.
-- Every `path:line` was read at 49bb210, and read there again after the series audit,
-  and names code that existed there, but for the `GLOSSARY.md` lines, which are of the
-  plan document's rewrite; a file named without a line is created by 030, 031, 032, 033 or
-  034, or by an earlier story of this spec. If a cited line has moved, re-read it
-  rather than guess.
+- Every `path:line` was read on `main` at 002dbef8 in the re-anchoring of 2026-11-19,
+  the `GLOSSARY.md` lines included, and names what it says there; a file named without
+  a line was created by 030, 031, 032, 033 or 034, or is created by an earlier story of
+  this spec. If a cited line has moved, re-read it rather than guess.
 - Add no dependency and change no `Cargo.toml` or `Cargo.lock`. Change nothing under
   `crates/scope-node` or `crates/scope-link`, and outside US1 nothing under
   `crates/simulator`. Add no `unsafe`.
@@ -120,11 +120,11 @@ description: "Task list for 035-live-stack: Live Stack"
   `crates/simulator/src/optics.rs`, add the `imaging_scene` cell beside 034's
   `imaging_bench` and the methods `scene` and `set_scene` with their asserts. Export
   the three names from `crates/simulator/src/lib.rs`.
-- [ ] T004 [US1] In `SimImagingCamera::expose` in `crates/simulator/src/imaging.rs`, read
-  the scene and the frame number at step 1 and add each source and each satellite's
-  streak as light in steps 5 and 6, before 034's V·D step, skipping both with an empty
-  scene and under 034's cover or flat panel (plan.md § The scene, **Their part in a
-  frame**).
+- [ ] T004 [US1] In `SimImagingCamera` in `crates/simulator/src/imaging.rs`, read the
+  scene with the frame number at step 1, in `expose`, carry it to `render` in the
+  exposure's `Shot`, and in `render` add each source and each satellite's streak as
+  light in steps 5 and 6, before 034's V·D step, skipping both with an empty scene and
+  under 034's cover or flat panel (plan.md § The scene, **Their part in a frame**).
 - [ ] T005 [US1] Run the `lint` and `test` gates with every existing test unchanged and
   green, `crates/simulator/tests/imaging.rs` and
   `crates/simulator/tests/imaging_calibration.rs` included. Commit the green story
@@ -243,8 +243,10 @@ description: "Task list for 035-live-stack: Live Stack"
   `crates/finder/src/imaging/stack.rs`. In 031's `crates/finder/src/imaging/mod.rs` and
   `crates/finder/src/imaging/frames.rs`, add `Lease::save_in` and the save of a frame
   taken under a lease that names a folder in that folder, exactly as plan.md § A
-  lease's folder gives them, the folder kept with the lease's grant and cleared with
-  it, changing nothing else of 031's take, save, cards or id rule.
+  lease's folder gives them on 031's landed shapes: the folder kept with the lease's
+  grant and cleared with it, read through `frames::take`'s `held` closure, and saved by
+  `save` with `write` leaving the folder unmade, changing nothing else of 031's take,
+  save, write, cards or id rule.
 - [ ] T022 [US5] In `crates/finder/src/imaging/stack/service.rs`, write `start` in its
   order, looking for an imaging frame in flight in step 5 only while
   `imaging.holder()` is `None`, taking 031's lease as `HOLDER` in step 6 and asking no
@@ -399,7 +401,8 @@ description: "Task list for 035-live-stack: Live Stack"
   `files` or `save_error` in the view (plan.md § The stack on the console, **The folder
   and the files**).
 - [ ] T040 [US8] In `crates/finder/src/imaging/mod.rs`, add `ImagingView.stack` and
-  `attach_stack`, filling `stack` wherever the view is built, whatever its state. In
+  `attach_stack`, filling `stack` in `Imaging::view`, the one place the view is built,
+  whatever its state. In
   `crates/finder/src/api.rs`, call `attach_stack` in `with_imaging` and add
   `target_label`, which hands the session target's Messier name, or its id, to
   `stack::service::label` and tests no character itself. In
@@ -439,7 +442,8 @@ description: "Task list for 035-live-stack: Live Stack"
   audit's finding A6): the picture's class `photo` unless `held`, and `{...bind}` with
   `aria-pressed={held}` on `Hold to see colour`, writing no timer, listener or key test
   of its own, and place it in
-  `crates/finder/web/src/components/ImagingPage.tsx` after the Calibration block.
+  `crates/finder/web/src/components/ImagingPage.tsx` inside the fragment under
+  `view?.state === "ready"`, after the Calibration block (plan.md § The page).
 - [ ] T046 [US9] Add the Stack block entry to `DESIGN.md` and the Stack block component
   to `.impeccable/design.json` (plan.md § `DESIGN.md` and `.impeccable/design.json`).
   Run the `lint` and `test` gates with every existing Vitest and Playwright test
@@ -469,8 +473,9 @@ description: "Task list for 035-live-stack: Live Stack"
   section's six steps and removing `on` before the rest is parsed as `StartRequest`
   (plan.md § Plan traps 22).
 - [ ] T049 [US10] Add the two tools' lines under `## MCP clients` in
-  `crates/finder/README.md`, and make the count in the sentence before the list two
-  higher (eleven after 034's nine), in the words that sentence has on `main`.
+  `crates/finder/README.md`, after `take_flats`'s line, and make the count in the
+  sentence before the list two higher (eleven after 034's nine), in the words that
+  sentence has on `main`: `The imaging camera has nine tools of its own`.
 - [ ] T050 [US10] Add `## Live stack` at the end of `crates/finder/README.md`, saying
   what plan.md § `crates/finder/README.md` lists (moved from US8 by probe round 1's
   cut).
