@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "034-dark-and-flat-frames"]
 # Drafted 2026-11-15 against `main` at 49bb210 (the drafting worktree's HEAD,
 # 49bb210fe4860dd98ba24727074e7bd3cc0d7124) from
@@ -50,8 +50,14 @@ depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", 
 # over the budget again with round 1's cases, gave US5-S3, US5-S5 and US5-S6 to a new
 # User Story 11, run between US5 and US6, so the trio has eleven stories
 # (§ Clarifications, the session of the owner's split of US5; plan.md § Risks).
-# It stays draft until the owner settles the owner decisions and flips it to `ready`,
-# which gives the approvals listed under "Owner approvals" and dispatches it.
+# The owner approved the imaging series' recommended answers on 2026-11-17.
+# Flipped to ready 2026-11-19 by the operator seat on the owner's answers that day ("split
+# if needed" for US5's size, and "yes your rec" for a take answered with no frame; both in
+# § Clarifications) and under his standing permission for the imaging specs ("You have my
+# permission to move them to ready when needed for these imaging stories"), which gives
+# the owner approvals listed under "Owner approvals". Decision 13 takes the answer the
+# owner chose on 2026-11-17; every other owner decision takes its recommended answer,
+# which the owner approved that day with the imaging series' recommendations.
 ---
 
 # Feature Specification: Live Stack
@@ -570,9 +576,10 @@ an old one the new one stands beside it in brackets.
 ## Owner decisions
 
 Each is a design or taste call the plan document leaves open, or, where its heading says
-so, a departure from the plan document. Decision 13 is settled, and says so; the owner
-settles each other before the flip, and a different answer is written into the trio and
-re-validated, never left to a story.
+so, a departure from the plan document. Decision 13 is settled, and says so. All the
+others take their recommended answers: the owner approved the imaging series'
+recommendations on 2026-11-17 ("im good with all of the info in the decisions doc") and
+this spec was flipped on 2026-11-19. None is left to a story.
 
 1. **Ten stories, where the drafting brief suggested seven.** Recommended: ten, so that
    each stays under 64 KiB: the simulator's additions are a story of their own, the loop on
