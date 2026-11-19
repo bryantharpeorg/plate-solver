@@ -41,6 +41,8 @@
 //! * POST /api/imaging/solve: no body; solve the latest imaging frame and write its solve beside it.
 //! * POST /api/imaging/focus: {} or any of check, find, tile and exposure_ms; start the focus aid, or with check a focus check.
 //! * DELETE /api/imaging/focus: no body; stop the focus aid and put the imaging settings back.
+//! * GET /api/imaging/calibration: the calibration library's masters, the set being taken and what matches the latest imaging frame.
+//! * DELETE /api/imaging/calibration/{id}: remove a master dark or master flat, or stop or drop the set with that id.
 //!
 //! A fresh session has no site, target or pointing and a 15° minimum altitude. Site
 //! coordinates are `lat_deg` (±90°) and `lon_deg` (±180°, east positive); the minimum

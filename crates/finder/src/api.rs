@@ -115,6 +115,7 @@ pub struct AppState {
     live: Option<Arc<Live>>,
     recordings: Option<Arc<Recorder>>,
     imaging: Option<Arc<crate::imaging::Imaging>>,
+    calibration: Option<Arc<crate::imaging::calibration::service::Calibration>>,
     mount_monitor: Option<Arc<crate::live::MountMonitor>>,
     mount_sky: Option<Arc<crate::mount_sky::MountSky>>,
     /// The UTC label of `--mount-sky-night`, when the console runs on a night clock.
@@ -150,6 +151,7 @@ impl AppState {
             live: None,
             recordings: None,
             imaging: None,
+            calibration: None,
             mount_monitor: None,
             mount_sky: None,
             night_utc: None,
@@ -337,11 +339,17 @@ impl AppState {
     /// nothing.
     pub fn with_imaging(mut self, root: impl Into<PathBuf>) -> Self {
         if let Some(link) = &self.link {
-            self.imaging = Some(crate::imaging::Imaging::start(
-                root.into(),
-                link.clone(),
+            let root = root.into();
+            let imaging =
+                crate::imaging::Imaging::start(root.clone(), link.clone(), self.clock.clone());
+            let calibration = crate::imaging::calibration::service::Calibration::new(
+                imaging.clone(),
+                root.join("calibration"),
                 self.clock.clone(),
-            ));
+            );
+            imaging.attach_calibration(&calibration);
+            self.imaging = Some(imaging);
+            self.calibration = Some(calibration);
         }
         self
     }
@@ -349,6 +357,11 @@ impl AppState {
     /// The console's imaging camera, when it takes imaging frames.
     pub fn imaging(&self) -> Option<Arc<crate::imaging::Imaging>> {
         self.imaging.clone()
+    }
+
+    /// The calibration library and its sets (034); present whenever `imaging()` is.
+    pub fn calibration(&self) -> Option<Arc<crate::imaging::calibration::service::Calibration>> {
+        self.calibration.clone()
     }
 
     /// Give the console its imaging solver (032). Call after `with_live` and

@@ -223,6 +223,8 @@ The page uses the API types in `web/src/api.ts`, which mirror the Rust structs i
 | `POST /api/imaging/solve` | No body. Solve the latest saved imaging frame with the imaging solver; answers 200 with the imaging view, whose `solve` goes from `solving` to `solved` or `failed`, or 409 with a JSON `error`. Same-origin writes only. |
 | `POST /api/imaging/focus` | JSON `{}` or any of `check`, `find`, `tile` (`{col, row}`, each 0 to 2) and `exposure_ms`. Start the focus aid on the focus region, or with `check` a focus check that stops by itself with a verdict; answers 200 with the imaging view, whose `focus.aid` reports it, or 400 or 409 with a JSON `error`. Same-origin writes only. |
 | `DELETE /api/imaging/focus` | No body. Stop the focus aid, put the imaging settings back and answer 200 with the imaging view. Same-origin writes only. |
+| `GET /api/imaging/calibration` | The calibration library: `masters`, the `set` being taken, what would `match` the latest imaging frame, and `error` when the library's index is unreadable. |
+| `DELETE /api/imaging/calibration/{id}` | Remove a master dark or master flat and its files, or stop or drop the set with that id. Answers 200 with the calibration object, 404 for an unknown id. Same-origin writes only. |
 | `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
 | `POST /api/stop` | No body. Always 200, ending tracking, clearing arming and commanding both axes to stop, from any origin, without taking the motion lock. Sends `StopAll` immediately, retrying in its own task with 200 ms per attempt and 50 ms between attempts for a bounded 2 s window, even if the request goes away. Waits for the round and answers exactly `{"stopped":true}` when the scope node answers OK or there is no scope link; otherwise answers `{"stopped":true,"acknowledged":false}`. This means the node did not answer and the mount may still be moving; press Stop again. The MCP tools `stop` and `stop_all` return the same reply. |
 | `POST /api/model/second-sync` | No body. Start the second sync; 200 with `{"started":true}`, or 409 with a JSON `error` naming the refusal. Same-origin writes only. |
@@ -916,3 +918,85 @@ back. `cadence_ms` is how long one reading takes, and a forwarding limit makes
 it much longer, so clear the limit while focusing. Once focus is close, choose
 `Find the sharpest tile again` if the region was found while it was still
 well out of focus, and after a change of telescope or collimation.
+
+## Calibration frames
+
+A master dark records the sensor's own signal, including its offset and fixed
+pattern. A master flat, with its own dark subtracted and each colour normalised
+by its median, removes vignetting and dust shadows. A bad-pixel map names sensor
+samples to repair from good neighbours of the same colour. The calibration
+function works on the sub's mosaic: subtract the master dark first, divide by
+the master flat next, then repair bad pixels, all before any colour processing.
+It keeps values below zero. Its report says `applied` or `missing` for `dark`
+and `flat`, and `map` or `sub` for `bad_pixels`: without a map, hot pixels are
+found in the sub itself. It also counts `repaired`, `not_repaired` and `low_flat`
+samples; a flat sample below 0.1 is repaired instead of divided by.
+
+The library lives in `calibration/` under the imaging folder (`imaging/` in
+the state folder, or `--imaging-dir`). Its files are `index.json`, format
+`finder-calibration/1`; `darks/<id>.fits`; `darks/<id>.badpixels.json` for a
+dark's map; and `flats/<id>.fits`. Masters are 32-bit real FITS images, so a
+mean finer than one count is retained. An id is `dark-` or `flat-` followed by
+the UTC second as `YYYYMMDDTHHMMSSZ`, with `-2`, `-3` and so on for collisions.
+Writes use a `.part` file and rename it, and never replace a master. An
+unreadable index yields an empty list and `error`; the next addition moves it
+to `index.json.unreadable` before writing a new index. The library is separate
+from `session.json`.
+
+Each master's entry lists all these keys, with absent values written as null:
+
+- `id`, `kind`, `made_at` (console Unix seconds), `frames` and `checked`
+  (whether the dark test judged the contributing darks).
+- `model`, `serial`, `width`, `height`, `origin_x`, `origin_y` (origin in binned
+  pixels), `bits`, `bayer`, `gain`, `offset` and `binning`.
+- `set_temp_c`, `temp_c` (mean sensor temperature) and `exposure_ms`.
+- `level` (a dark's median), `bad_pixels` (its map's size), `label` (a flat's
+  label), `imaging_angle_deg`, `level_share` and `dark_frames` (the flat's darks).
+- `file`, relative to `calibration/`.
+
+The FITS structural cards are `SIMPLE`, `BITPIX` (-32), `NAXIS`, `NAXIS1` and
+`NAXIS2`. After them come `IMAGETYP` (`MASTER DARK` or `MASTER FLAT`), `CALID`,
+`NFRAMES`, `NDARKS` (flats only), `DARKTEST`, `EXPTIME` (seconds), `GAIN`,
+`OFFSET`, `XBINNING`, `YBINNING`, `XORGSUBF`, `YORGSUBF`, `CCD-TEMP`,
+`SET-TEMP`, `BAYERPAT`, `INSTRUME`, `SERIALNO`, `ROWORDER` (`TOP-DOWN`) and
+`DATE`; flats also carry `FLATLBL` and, when known, `IMGANGLE`. Optional
+camera settings and temperatures are omitted when unknown. `DARKTEST` is
+false when the dark test was skipped.
+
+Every matching master must have the same camera model and serial, delivered
+width and height, binned origin, bit depth, Bayer pattern and binning as the
+imaging frame. A dark also needs gain and offset both absent or equal within
+0.001, and exposure within 1 ms. With set temperatures, both must have one
+and differ by at most 1.0 °C. With neither set, sensor temperatures must be
+within 8.0 °C, or one may be unknown. The nearest temperature wins, then the
+newest `made_at`, then the greatest id. A flat needs only the camera, size,
+origin, bits, pattern and binning: its gain, offset, set temperature, exposure
+and sensor temperature do not restrict its match. A requested flat label
+restricts it to that label; otherwise the newest flat wins, then the greatest
+id. Masters are listed oldest first, by `made_at` then id.
+
+A camera turn of more than 1.0° since the selected flat produces
+`flat_turned_deg`; the flat is still selected. The imaging angle is known only
+while the aim point is the measured one. Take new flats after turning the
+camera. These five tolerances — 0.001 for settings, 1 ms for exposure, 1.0 °C
+for set temperature, 8.0 °C for sensor temperature and 1.0° for the turn
+warning — are independent of any camera model.
+
+`GET /api/imaging/calibration` always answers 200 with the library object,
+exactly `{"masters":[]}` on a console that takes no imaging frames. While the
+camera is ready, that same object is `calibration` in the imaging view and in
+the session's `imaging`, including those returned by MCP. `match` describes
+the latest imaging frame seen saved whose purpose is neither `dark`, `flat`
+nor the focus aid's `focus`, using that imaging frame's own set temperature.
+It is absent until such an imaging frame is seen and stays through later
+exposures, darks, flats and focus frames. It names the imaging frame's id as
+`frame`, the selected `dark` and `flat`, the dark's `bad_pixels`, and lists
+what is `missing` in dark, flat, bad-pixels order.
+
+`DELETE /api/imaging/calibration/{id}` removes a master and its files and
+answers 200 with the updated calibration object. An unknown or malformed id
+answers 404 with `no master or set has the id <id>`; malformed ids touch no
+files. A console without imaging answers 409 with `this console takes no
+imaging frames`. Same-origin writes apply first, so a foreign Origin answers
+403 even without imaging. Masters and their files are kept until this DELETE
+route removes them; there is no automatic expiry.
