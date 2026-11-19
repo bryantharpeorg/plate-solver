@@ -110,6 +110,7 @@ struct FlatFrames {
     exposure_ms: f64,
     level_share: f64,
     label: String,
+    imaging_angle_deg: Option<f64>,
 }
 
 /// Failures from the camera/read path have a dark's prefix. Set-wide checks
@@ -650,6 +651,11 @@ impl Calibration {
             exposure_ms: exposure,
             level_share,
             label,
+            imaging_angle_deg: self
+                .imaging
+                .view()
+                .relation
+                .and_then(|relation| relation.angle_deg),
         })
     }
 
@@ -667,6 +673,7 @@ impl Calibration {
             label: Some(flats.label.clone()),
             dark_frames: Some(run.count),
             level_share: Some(flats.level_share),
+            imaging_angle_deg: flats.imaging_angle_deg,
             ..self.master_entry(run, &flats.frames)
         };
         let calibration = self.clone();
