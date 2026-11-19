@@ -28,7 +28,8 @@ description: "Task list for 035-live-stack: Live Stack"
   on `main`;
 - the owner decisions in spec.md are settled and its owner approvals given: not met
   (decision 13 was settled on 2026-11-17, a folder per run, and is written in);
-- every story has been probe-built: not met;
+- every story has been probe-built: met, by probe round 1, whose findings are folded in
+  (plan.md § Prerequisites 9);
 - the plan document, ADR-0002, the research note and the plan document's rewrite of
   `GLOSSARY.md` are on `main`: not met;
 - no operator-staged file is needed: met.
@@ -48,7 +49,9 @@ description: "Task list for 035-live-stack: Live Stack"
   `layout` test. It takes its scratch folder from `crate::support::Scratch`.
 - Rigs are written once (spec.md § User Scenarios, **Rigs are written once**; plan.md
   § Test rigs). US5's module `stack_loop` holds them, `pub(crate)`; later `console`
-  modules import them with `use crate::stack_loop::…`. Declare only what your own tests
+  modules import them with `use crate::stack_loop::…`. The private builders and helpers
+  that § Test rigs names are copied, not imported, and US6's `stack_gate` writes the sim
+  stacking rig. Declare only what your own tests
   use, since an unused helper fails `clippy -D warnings`, and never edit an earlier
   story's test module to add one: if a helper you need is missing there, escalate.
 - Write only the files your story's tasks name; they are its `writes` in plan.md
@@ -211,29 +214,24 @@ description: "Task list for 035-live-stack: Live Stack"
 - [ ] T018 [US5] Create `crates/finder/tests/console/stack_loop.rs`, the module
   `stack_loop`, with `mod stack_loop;` after `mod stack_colour;`. Write, `pub(crate)`
   and with the names of plan.md § Test rigs, `Scripted`, `ScriptedSolver` with its
-  `measure_script` and `measure_log` fields, `ScriptedCamera` with its `gain_script`
-  field, `Rig`, `stand_in_rig`, `wait_stack` and `cards`, and no method that US5's own
-  tests do not call. Write failing tests for a stack started, run and stopped, with
-  the first hint 032's and the later ones the stack's own (US5-S1), and for the
-  refusals of `start` in their order (US5-S2): among them the lease held by the test as
-  `probe`, that lease held while a frame the test took with it is exposing, which must
-  still name `probe`, a single imaging frame in flight with `holder()` `None`, a
-  console without imaging, a regular file named `runs` that keeps the folder from
-  being made, with `holder()` `None` afterwards, and a second stack in the same second,
-  whose `id` ends `-2`. US5-S1 reads every sub in `runs/<id>/subs/` and no file under
-  `frames/`.
+  `measure_script`, `measure_log` and `measure_wait` fields, `ScriptedCamera` with its
+  `gain_script` field and `add_at`, `Rig`, `stand_in_rig`, `wait_stack` and `cards`;
+  privately, `sim`, `console`, `stand_in_node`, `wait_get` and `const STANDING`; and no
+  method that US5's own tests do not call. Write failing tests for a stack started, run
+  and stopped, with the first hint 032's and the later ones the stack's own, a 1st sub
+  overwritten while its solve waits, and the 3rd hint at the 2nd solve's place
+  (US5-S1). US5-S1 reads every sub in `runs/<id>/subs/` and no file under `frames/`.
+  The refusals of `start` (US6-S7, was US5-S2) are US6's (T026).
 - [ ] T019 [US5] Add failing tests to `crates/finder/tests/console/stack_loop.rs` for
-  subs that do not solve (US5-S3), a failed exposure and three in a row, with the frame
-  taken afterwards (US5-S4), a stop against a slow solver (US5-S5) and an aborted
-  exposure (US5-S6).
-- [ ] T020 [US5] Add failing tests to `crates/finder/tests/console/stack_loop.rs` for a
-  stack on the sim stacking rig, started once the session's pointing is live, with a
-  by-hand projection of the module's own and the hint's source read from two solve
-  sidecars (US5-S7), for a single imaging frame refused while the stack holds the
-  camera and taken after the stop (US5-S8), and for the aim point that five stacked
-  subs keep measured through `note_solve`, read from `GET /api/session` against
-  `sim.optics().eyepiece_px`, with no `solve` in the imaging view and the last sub's
-  hint radius still 3.0 (US5-S9).
+  subs that do not solve and a sub solved at the antipode (US5-S2), a failed exposure,
+  three in a row and three apart, the frame taken afterwards, a background raised by
+  `add_at` and `subs` removed mid-stack (US5-S3), a stop against a slow solver and
+  against a 10 000 ms exposure (US5-S4) and an aborted exposure (US5-S5).
+- [ ] T020 [US5] Add a failing test to `crates/finder/tests/console/stack_loop.rs` for a
+  single imaging frame refused while the stack holds the camera and taken after the
+  stop, and a frame of the test's own lease saved under `frames/` (US5-S6). The two
+  scenarios on the sim stacking rig (US6-S8 and US6-S9, was US5-S7 and US5-S9) are
+  US6's (T026).
 
 ### Implementation
 
@@ -252,16 +250,19 @@ description: "Task list for 035-live-stack: Live Stack"
   `imaging.holder()` is `None`, taking 031's lease as `HOLDER` in step 6 and asking no
   other part whether it is taking imaging frames, and in step 7 making `runs/<id>/`,
   `-2` and on for a name that is taken, and `subs` in it, then calling
-  `lease.save_in`, with the lease dropped and a 500 when the folder cannot be made
-  (plan.md § The stack on the console, **The folder and the files**); the
+  `lease.save_in`, with the lease dropped and a 500, built field by field, when the
+  folder cannot be made, and 031's words for a state mapped in `service.rs` (plan.md
+  § The stack on the console, **`start`** and **The folder and the files**); the
   stopping mark, a `tokio::sync::watch` channel of `bool`; the taker, which owns the
   lease, takes every sub through it, looks at the stopping mark again right after each
   `take` and never waits for the worker; the worker's steps 1, 3, 4, 6 (`between`
-  alone), 7 and 8, step 3 asking `imaging.hint` first and using the stack's own hint
+  alone), 7, letting the file's bytes and the decoded image go once used, and 8, step 3
+  asking `imaging.hint` first and using the stack's own hint
   only when that answer does not come from a live pointing and the stack has a
   reference sub, and step 8 calling `imaging.note_solve(&frame, F.id, &solve)` after
-  the counts, with the counts' lock let go; and the ending, done once, in which the
-  lease is dropped when the taker returns, before `state` becomes `ended` (plan.md
+  the counts, with the counts' lock let go; and the ending, done once, by a third task
+  that awaits the taker and then the worker, in which the lease is dropped when the
+  taker returns, before `state` becomes `ended` (plan.md
   § The stack on the console, § The camera's lease, § Plan traps 13, 14, 16, 17, 26,
   27, 30, 34 and 35).
 - [ ] T023 [US5] In `crates/finder/src/api.rs`, add the `stack` field and
@@ -270,8 +271,8 @@ description: "Task list for 035-live-stack: Live Stack"
   entry, with the three lines of spec owner approval 6.
 - [ ] T024 [US5] Run the `lint` and `test` gates with every existing test unchanged and
   green, 031's `imaging_frames` and `imaging_lease` and 032's `imaging_relation`
-  included. Commit the green story (US5-S1, US5-S2,
-  US5-S3, US5-S4, US5-S5, US5-S6, US5-S7, US5-S8 and US5-S9).
+  included. Commit the green story (US5-S1, US5-S2, US5-S3, US5-S4, US5-S5 and
+  US5-S6).
 
 ## Phase 6: User Story 6 — The gate, and a queue the camera never waits on (Priority: P1)
 
@@ -280,18 +281,33 @@ description: "Task list for 035-live-stack: Live Stack"
 - [ ] T025 [US6] Create `crates/finder/tests/console/stack_gate.rs`, the module
   `stack_gate`, with `mod stack_gate;` after `mod stack_colour;` and before
   `mod stack_loop;`. Import the rigs with `use crate::stack_loop::…` and write the
-  traits `GateScripts` and `CameraScripts` of plan.md § Test rigs over the fields US5
-  left. Write failing tests for `same_settings`, as a plain `#[test]` over
+  traits `GateScripts`, with `measure_delay`, and `CameraScripts` of plan.md § Test
+  rigs over the fields US5 left. Copy into it the private builders and helpers § Test
+  rigs lists (`sim`, `console`, `stand_in_node`, `wait_get`, `get`, `close`, `sidecar`
+  and `files_under`), and write `refusal` and the sim stacking rig, `sim_rig` and
+  `stack_on`, there. Write failing tests for `same_settings`, as a plain `#[test]` over
   `SubSettings` literals, and for a sub at another gain on the rig (US6-S1), and for
   the focus gate: a soft sub, too few stars, a failed measure, a far-out sub and
-  `focus_gate` false (US6-S2).
+  `focus_gate` false, and a stop while the measure waits (US6-S2).
 - [ ] T026 [US6] Add failing tests to `crates/finder/tests/console/stack_gate.rs` for
   `judge` and its two counts on the rig (US6-S3), the queue of four against a slow
   solver (US6-S4), 032's hint after three solves in a row that miss, kept until a sub
   solves, and a focus gate's too few stars counting as no miss (US6-S5), and the kept
   focus region
   handed to every sub's star measure, set through 033's `POST` and
-  `DELETE /api/imaging/focus` (US6-S6).
+  `DELETE /api/imaging/focus` (US6-S6). Then, for US5's loop: the refusals of `start`
+  in their order (US6-S7, was US5-S2), among them the lease held by the test as
+  `probe`, that lease held while a frame the test took with it is exposing, which must
+  still name `probe`, a single imaging frame in flight with `holder()` `None`, a
+  console without imaging, a regular file named `runs` written in R after the rig is
+  built and before the start, which keeps the folder from being made, with `holder()`
+  `None` afterwards, and a second stack in the same second, whose `id` ends `-2`; a
+  stack on the sim stacking rig, started once the session's pointing is live, with a
+  by-hand projection of the module's own and the hint's source read from two solve
+  sidecars (US6-S8, was US5-S7); and the aim point that five stacked subs keep
+  measured through `note_solve`, read from `GET /api/session` against
+  `sim.optics().eyepiece_px`, with no `solve` in the imaging view and the last sub's
+  hint radius still 3.0 (US6-S9, was US5-S9).
 
 ### Implementation
 
@@ -310,8 +326,8 @@ description: "Task list for 035-live-stack: Live Stack"
   (plan.md § Plan traps 31); `focus_arcsec` in `LastView` and `focus_median_arcsec` in
   `StackView`.
 - [ ] T029 [US6] Run the `lint` and `test` gates with every existing test unchanged and
-  green, US5's `stack_loop` included. Commit the green story (US6-S1, US6-S2, US6-S3,
-  US6-S4, US6-S5 and US6-S6).
+  green, US5's `stack_loop` and 032's `imaging_relation` included. Commit the green
+  story (US6-S1, US6-S2, US6-S3, US6-S4, US6-S5, US6-S6, US6-S7, US6-S8 and US6-S9).
 
 ## Phase 7: User Story 7 — The display picture (Priority: P2)
 
@@ -374,9 +390,11 @@ description: "Task list for 035-live-stack: Live Stack"
 - [ ] T039 [US8] In `crates/finder/src/imaging/stack/service.rs`, add `FORMAT`, the
   public `label`, which maps each `char` of a name that is not an ASCII letter or digit
   to one `-`, `FilesView`, `stack.json` at the start in the folder US5 makes, with the
-  lease dropped when it cannot be written, and at the end `stack.fits` with the cards
-  of plan.md § FITS, `stack.png` from `display::render` of the stack at its own width,
-  and `stack.json`, which names each sub and the reference sub by its path inside the
+  lease dropped when it cannot be written, the list of every sub taken, kept from US8
+  on, and at the end `stack.fits` with the cards of plan.md § FITS, `stack.png` from
+  `display::reduce` of the stack's sums and weights at its own width under the pixels'
+  lock and then `background`, `tone` and the PNG with the lock let go, and
+  `stack.json`, which names each sub and the reference sub by its path inside the
   folder, `subs/<frame id>.fits`, each under its name plus `.part` and renamed, with
   `files` or `save_error` in the view (plan.md § The stack on the console, **The folder
   and the files**).
@@ -389,8 +407,8 @@ description: "Task list for 035-live-stack: Live Stack"
   order a request is judged in. Add their three lines to the route list in
   `crates/finder/src/lib.rs` (plan.md § 031's imaging state, § The console, § The
   routes).
-- [ ] T041 [US8] Add the three rows and the `## Live stack` section to
-  `crates/finder/README.md` (plan.md § `crates/finder/README.md`).
+- [ ] T041 [US8] Add the three rows to `crates/finder/README.md` (plan.md
+  § `crates/finder/README.md`).
 - [ ] T042 [US8] Run the `lint` and `test` gates with every existing test unchanged and
   green. Commit the green story (US8-S1, US8-S2, US8-S3, US8-S4, US8-S5, US8-S6 and
   US8-S7).
@@ -434,11 +452,14 @@ description: "Task list for 035-live-stack: Live Stack"
 
 - [ ] T047 [US10] Create `crates/finder/tests/mcp/stack.rs`, the module `stack` of
   finder's `mcp` test binary, with `mod stack;` after `mod session_tools;` in
-  `crates/finder/tests/mcp/main.rs`, and a scripted solver of the module's own with
-  `new`, `solve` and `measure` alone. Write failing tests for the tools' listing
-  (US10-S1), a stack started, read with its picture and through `get_session`, changed
-  and stopped (US10-S2), the refusals (US10-S3), and a console without imaging, the
-  order its arguments are judged in there, and the token check (US10-S4).
+  `crates/finder/tests/mcp/main.rs`, a scripted solver of the module's own with
+  `new`, `solve` and `measure` alone, and the sim stacking rig written again from
+  `SimNode` and `SimulatedSolver` with `with_live` (plan.md § Test rigs). Write failing
+  tests for the tools' listing (US10-S1), a stack started, read with its picture and
+  through `get_session`, changed and stopped, with the target's label and no call-log
+  line (US10-S2), the refusals and a stop before any stack (US10-S3), a console without
+  imaging, the order its arguments are judged in there, and the token check (US10-S4),
+  and `get_stack`'s picture at most 1024 wide on the sim stacking rig (US10-S5).
 
 ### Implementation
 
@@ -448,9 +469,13 @@ description: "Task list for 035-live-stack: Live Stack"
   section's six steps and removing `on` before the rest is parsed as `StartRequest`
   (plan.md § Plan traps 22).
 - [ ] T049 [US10] Add the two tools' lines under `## MCP clients` in
-  `crates/finder/README.md`.
-- [ ] T050 [US10] Run the `lint` and `test` gates with every existing test unchanged and
-  green. Commit the green story (US10-S1, US10-S2, US10-S3 and US10-S4).
+  `crates/finder/README.md`, and make the count in the sentence before the list two
+  higher (eleven after 034's nine), in the words that sentence has on `main`.
+- [ ] T050 [US10] Add `## Live stack` at the end of `crates/finder/README.md`, saying
+  what plan.md § `crates/finder/README.md` lists (moved from US8 by probe round 1's
+  cut).
+- [ ] T051 [US10] Run the `lint` and `test` gates with every existing test unchanged and
+  green. Commit the green story (US10-S1, US10-S2, US10-S3, US10-S4 and US10-S5).
 
 ## Execution Order
 
@@ -467,12 +492,13 @@ US1 ──► US2 ──► US3 ──► US4 ──► US5 ──► US6 ──
   the stack's own `subs/` through the lease, and writes the rigs every later `console`
   module imports. It follows US2 by a direct edge too, as the next story to write
   `crates/finder/src/imaging/mod.rs`.
-- **US6** adds the gate to US5's worker and bounds its queue; **US7** gives the loop a
-  picture to keep.
+- **US6** adds the gate to US5's worker and bounds its queue, and since probe round 1's
+  cut holds three scenarios of US5's loop on the sim stacking rig it writes; **US7**
+  gives the loop a picture to keep.
 - **US8** puts the routes, the view and the files over the loop and reads US7's picture.
 - **US9** calls US8's routes and shows its view; it touches only
   `crates/finder/web/`, `DESIGN.md` and `.impeccable/design.json`.
 - **US10** comes last: it follows US9 only because both it and US8 write
-  `crates/finder/README.md`.
+  `crates/finder/README.md`, where it adds `## Live stack`.
 - **`[P]`** marks nothing here: every story adds a line to a `main.rs` or a file another
   story writes, and the chain is one line.

@@ -1296,7 +1296,7 @@ These are not changed by any story:
   plan.md § The camera's lease). US7 takes no lease and changes no refusal: it calls
   `Lease::set` on the lease the run already holds, twice at most in a stack's life,
   and only when a tracker is running and its limit is under the observer's exposure.
-  035's US5-S8, which reads a refusal by the stack's name, is not disturbed.
+  035's US5-S6, which reads a refusal by the stack's name, is not disturbed.
 - **035's `StackBlock` tests.** Their views carry eleven counts; `not_steady` is
   optional in the type and adds nothing to the line when absent or 0 (spec US8-S6).
 - **Finder's test layout.** `crates/finder/tests/layout/main.rs` fails a file at the top

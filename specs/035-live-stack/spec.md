@@ -16,9 +16,9 @@ depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", 
 # Citations checked against 49bb210fe4860dd98ba24727074e7bd3cc0d7124, the worktree's
 # HEAD, on 2026-11-15 in that audit pass: every `path:line` in spec.md and plan.md was
 # read there again, and none had moved.
-# Not yet probe-built: no story of this trio has been compiled or run (plan.md
-# § Refinement Record). It builds on code that 030, 031, 032, 033 and 034 create and that
-# does not exist yet: every interface of theirs named here is taken from that draft's
+# When drafted it was not probe-built: no story had been compiled or run. It builds on
+# code that 030, 031, 032, 033 and 034 create, which did not exist yet: every interface
+# of theirs named here is taken from that draft's
 # plan.md as it stood in the drafting worktree (030, 031, 032 and 034 after their review,
 # 033 as it was revised the same evening), or, for the four things the audit's findings
 # on 031, 032 and 034 add, from those trios as they were being revised that night: the
@@ -31,6 +31,12 @@ depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", 
 # Revised 2026-11-17 with the owner's answer to owner decision 13, a folder per run:
 # a stack's subs are saved in `subs/` inside its own folder (§ Clarifications, the
 # fourth session; plan.md § Refinement Record, "What the owner's answer changed").
+# Probe-built 2026-11-18 and 19 (round 1): all ten stories were built from this trio on
+# probe builds of 030 to 034, tests first, with both gates, and its 3 blocking and 38
+# clarity defects were folded in on 2026-11-19 with the owner's answers of that day:
+# US5-S2, S7 and S9 moved to US6 as US6-S7 to S9, US5's others were renumbered, and
+# US8's README section moved to US10 (§ Clarifications, the fifth session; plan.md
+# § Prerequisites 9 and § Refinement Record, "What probe round 1 changed").
 # It stays draft until the owner settles the owner decisions and flips it to `ready`,
 # which gives the approvals listed under "Owner approvals" and dispatches it.
 ---
@@ -91,7 +97,8 @@ stack.
   (`docs/research/2026-11-15-imaging-camera.md` § 8. Live stacking and § 13. Not
   established): it is a field check. In the tests the simulated solver adapter answers
   the simulator's truth, so the tolerance there is the arithmetic's own: a star's
-  centroid in the stack within 0.2 px of its centroid in the reference sub (US3-S4).
+  centroid in the stack within 0.02 px of its centroid in the reference sub (US3-S4;
+  round 1 measured 0.002 px).
 - Q: Why is rejection not a switch that starts off? → A: From 31° to 35° N the belt of
   geostationary satellites crosses a field centred on the Orion Nebula, and from 30° to
   40° N it passes within a degree. Those satellites cross a tracked field at the
@@ -120,7 +127,7 @@ stack.
   one case the lease cannot answer: like 033's aid, a stack looks for an imaging frame
   in flight only while nobody holds the lease, and otherwise lets the lease answer,
   with the holder's name, even while the holder's own frame is exposing (FR-013,
-  US5-S2).
+  US6-S7).
 - Q: What about colour? → A: Whether a UV/IR-cut filter sits in front of the camera is
   not known, and the camera's window passes infrared, so no fixed colour matrix is
   used. The display makes the background neutral in each channel by measurement and
@@ -320,7 +327,7 @@ confirmed at the re-anchoring (plan.md § Prerequisites 8, 13 and 14).
   against the plan document's amendment 1 and this trio's own edge case. `start` now
   looks for a frame in flight only while `Imaging::holder()` is `None`, as 033's
   `focus_start` does in its check 4; while somebody holds the lease that look is passed
-  over and the lease answers (FR-013, US5-S2).
+  over and the lease answers (FR-013, US6-S7).
 - Q: Does a sub's imaging solve measure the aim point? → A: Yes, for a stacked sub. The
   plan document's Two cameras row has the console measure the aim point whenever an
   imaging solve and a live pointing share a moment, and a stack is most of a night's
@@ -334,7 +341,7 @@ confirmed at the re-anchoring (plan.md § Prerequisites 8, 13 and 14).
   of more than 5′ is never read as a push by hand that marks the pointing model's slip;
   the readings the subs gave are what it then applies. A sub's solve still changes
   neither the page's `solve` nor the kept scale, so the radius of 032's hint stays
-  what it was (owner decision 20, FR-015, US5-S9).
+  what it was (owner decision 20, FR-015, US6-S9).
 - Q: Where is the rule for a target's name in a folder written? → A: Once, as
   `stack::service::label` in this trio: every character that is not an ASCII letter or
   digit made `-`. `AppState::target_label` calls it, and so does 037's `run::label`
@@ -363,13 +370,114 @@ confirmed at the re-anchoring (plan.md § Prerequisites 8, 13 and 14).
   at the start, with `-2` on a clash, and has 031's lease save the stack's subs there
   through `Lease::save_in`, the one edit to 031's code this answer needs; US8 writes
   `stack.json` into that folder. Every other imaging frame, and 031's id rule, are as
-  before. What changed: FR-013, FR-014, FR-031 and FR-035; US5-S1, US5-S2, US5-S3,
-  US5-S8, US8-S1, US8-S3 and US8-S7; owner approvals 3 and 5; the Edge Cases; the Work
+  before. What changed: FR-013, FR-014, FR-031 and FR-035; US5-S1, US6-S7, US5-S2,
+  US5-S6, US8-S1, US8-S3 and US8-S7; owner approvals 3 and 5; the Edge Cases; the Work
   Graph, in which US5 now follows US2 by a direct edge and US8 no longer names US2;
   plan.md § Storage, § The camera's lease, § A lease's folder, § The stack on the
   console, § Shapes that existing tests pin, § Decisions, § Prerequisites 3 and 10,
   § Plan traps 21, 26 and 35, § Risks and § Refinement Record; tasks T018, T021, T022,
   T024, T036 and T039. 031's plan, 037's trio and the plan document were brought to it.
+
+### Session 2026-11-19 (round 1 probes)
+
+Probe round 1 built all ten stories from this trio on 2026-11-18 and 19, on probe builds
+of 030 to 034, tests first and with both gates, in four agents: US1 to US3, US4 to US6,
+US7 and US8, and US9 and US10. Every story built as written, and every one but US9
+passed its full gates. The round found 3 blocking and 38 clarity defects,
+D1 to D41, and all were folded into the three files on 2026-11-19 but for the points
+the last answer below lists (plan.md § Prerequisites 9 says what the round settled, and
+§ Refinement Record, "What probe round 1 changed", what it changed). Every case the
+round proposed where a mutation survived a story's committed tests is now in its
+scenario, in the probe's words; each was run on the probe's build, passed on the code
+and failed under the mutation. Where two fixes touched one sentence they were merged.
+
+The scenarios of User Story 5 after the owner's first answer below. Each moved or
+renumbered scenario says in its text what it was; every reference in the trio uses the
+new number.
+
+| Was | Now | Module |
+|---|---|---|
+| US5-S1 | US5-S1 | `stack_loop` |
+| US5-S2 | US6-S7 | `stack_gate` |
+| US5-S3 | US5-S2 | `stack_loop` |
+| US5-S4 | US5-S3 | `stack_loop` |
+| US5-S5 | US5-S4 | `stack_loop` |
+| US5-S6 | US5-S5 | `stack_loop` |
+| US5-S7 | US6-S8 | `stack_gate` |
+| US5-S8 | US5-S6 | `stack_loop` |
+| US5-S9 | US6-S9 | `stack_gate` |
+
+- Q: User Story 5 measured 73,780 B, over 64 KiB, and the cut plan.md § Risks named
+  left 67,826 B (D9). How is it cut? → A: As D9 says, by the owner's answer of
+  2026-11-19: three of its scenarios move to User Story 6, in
+  `crates/finder/tests/console/stack_gate.rs`, which copies the sim stacking rig and
+  the private helpers they need. The call of `note_solve`, the folder and
+  `Lease::save_in` stay in User Story 5, whose code the moved scenarios still test.
+  The refusals' rigs go with US6-S7: its consoles with no imaging solver, with a node
+  with no imaging camera, and without `with_imaging` are built in `stack_gate` from its
+  copies of `console` and `stand_in_node`, and the helper `refusal` is written there
+  alone (plan.md § Test rigs). Measured on the probe's trees: User Story 5 about
+  61,300 B, and User Story 6 about 50,000 B, estimated and not built. With the round's
+  cases User Story 5 comes to about 67,200 B, over 65,536 B again (plan.md § Risks).
+  036 cites US5-S6 where it cited US5-S8; 037 cites no renumbered scenario.
+- Q: User Story 8 measured 65,294 B, 242 B under the budget (D26). Is it cut? → A: Yes,
+  by the owner's answer of the same day: the README's `## Live stack` moves to User
+  Story 10, which already writes that file (FR-039; plan.md § `crates/finder/README.md`;
+  tasks T041 and T050). So cut, User Story 8 measured 57,483 B.
+- Q: Are User Story 9 or 10 cut? → A: No, by the owner's answer: User Story 9 measured
+  33,513 B, and User Story 10 18,134 B, or 25,945 B with `## Live stack`.
+- Q: 034's trio pins its Calibration block as the Imaging page's last region, and
+  User Story 9 puts the Stack block after it, so 034's test fails (D33). Who fixes it?
+  → A: 034's trio, before 034 is flipped: there the block comes after 033's Focus
+  block, not last. That edit waits on the owner, with 034's flip, and is not made
+  here. This trio states only what its own tests may rely on: 034's test places its
+  region after `Imaging frame` and `Focus`, and nothing of 031 to 034 asserts that a
+  region is the page's last (plan.md § Shapes that existing tests pin, **The Imaging
+  page without a stack**); the re-anchoring checks that no landed test reads the
+  page's last region (plan.md § Prerequisites 2).
+- Q: Where a report offered two fixes, which was taken? → A: For `took_ms`, which leaves
+  out the picture the worker makes after a sub (D29): the definition is kept, and the
+  README says the picture is not in it, so FR-017 and owner decision 25 stand. For
+  `get_stack`'s picture (D39): it is made on tokio's blocking pool, as plan.md's
+  Constraints and plan trap 14 have every pixel pass. For US3-S4 (D6): its tolerance
+  is 0.02 px, so it fails a quarter-pixel error in the convention on its own (the
+  first session's answer on accuracy, SC-003). D16's stop against a 10 000 ms
+  exposure is a second case of US5-S4, beside the 1000 ms one, and the low proposal of
+  D38, files with `fits` and `json` alone, is in US9-S4.
+- Q: What did the round measure that the trio now relies on? → A: On three runs each,
+  with the same numbers each time: each star of US3-S4 lands within 0.002 px of its
+  place in the first sub; noise alone rejects about 8% of the pixels at US4-S4's ninth
+  sub and 5% of good pixels a sub on the sim stacking rig, falling as subs are added;
+  `took_ms` is about 8% of a 1 s exposure at the simulated size, and the picture the
+  worker then makes about 22% more; with a solver ten times slower than the camera,
+  `taken` reaches 30 at 30.1 s, 23 subs are `behind` and exactly 2 are stacked; and the
+  aim point the stacked subs measure lies within 1.5 px of the simulator's. Memory
+  needs the worker to let a sub's file bytes go once decoded (about 65 MB more at the
+  worked example's size otherwise), and the full-size picture at the end costs about
+  400 MB beyond the stack (plan.md § Risks).
+- Q: Where do 031 to 034 differ from what this trio says? → A: 031's lease matches on
+  all six points. Its refusal for a state is private to `imaging` and its `Refusal`
+  has no 500 constructor, so the stack maps the words and builds the 500 itself
+  (plan.md § The stack on the console, **`start`**). On landed 031, `frames::take`
+  takes a `held` closure, `save` builds the frame's path, `write` makes the parent
+  folder and the lease's `take` is async: § A lease's folder's three edits are made on
+  those shapes at the re-anchoring. Landed 031's hook has `onPointerDown: () => void`
+  and refuses a hold by day, and plan.md now quotes it so; its `fits::card` answers
+  80 bytes, not a text. Landed 032's `Imaging::solve` answers the whole view, and its
+  `note_solve`, `hint` and `solve_frame` are as the trio has them. 033's `focus::read`
+  is as the trio has it. 034's interfaces built as its folded trio has them; on `main`
+  the README counts the imaging tools in other words than 034's draft, so User Story
+  10 raises the count in the words `main` has.
+- Q: What was not folded? → A: Three things, each for a stated reason. The moved line
+  of a citation of the simulator's true aim point (D20) is the re-anchoring's, which
+  corrects every line number. Two rules of User Story 5 that no rig can reach (D16): a
+  refused take ending the stack as `camera` needs a node link that drops mid-stack
+  (its words were proposed and not run), and the taker's second look at the stopping
+  mark cannot be reached on the tests' one-thread runtime (no case was proposed).
+  Three rules of User Story 8
+  (D32): the camera's `serial` (the stand-in has none), `stack` in the view whatever
+  the state (needs a link that drops), and `stack.png` at the stack's full size (needs
+  a camera wider than 1920).
 
 ## Owner decisions
 
@@ -636,15 +744,17 @@ Every scenario shares these definitions unless it says otherwise.
   solve**: the form (83.8221°, −5.3911°, 30°, 2.16″) for the imaging frame's own width
   and height, with `stars` 50. Its nth `measure` answers the scripted star size or
   error, and otherwise 2.0 px with 50 stars. With a delay it waits that long on tokio
-  time before each `solve`. It keeps every hint it was given and, for every `measure`,
+  time before each `solve`, and with a measure delay that long before each `measure`.
+  It keeps every hint it was given and, for every `measure`,
   the width of the imaging frame and the region it was given. Its `name()` is `simulated`. A
   scenario writes `NotSolved` and `TooFewStars` for `SolveError::NotSolved { detail:
   None }` and `SolveError::TooFewStars { detail: None }`.
 - **The scripted camera** is an `ImagingCamera` of the tests' own that wraps 030's
   stand-in camera and stands in its place on the node: every call passes through, but
   an `expose` the scenario scripts to fail waits the exposure on tokio time and then
-  answers `Failed` with the scripted text, and an `expose` scripted to carry a gain
-  answers its imaging frame with that `gain`.
+  answers `Failed` with the scripted text, an `expose` scripted to carry a gain
+  answers its imaging frame with that `gain`, and an `expose` scripted to add counts
+  answers its imaging frame with that many counts added to every sample.
 - **The sim stacking rig** is 032's solving rig: the sim rig's `Simulator` with a
   `SimMount::new` connected first and `push_to(50.0, 120.0)` after, behind an in-process
   console built with `with_live()`, `with_imaging(R)` and
@@ -665,8 +775,10 @@ Every scenario shares these definitions unless it says otherwise.
 - **Rigs are written once.** The scripted solver, the scripted camera, the stand-in
   stacking rig, the wait and a FITS reader of the tests' own are written in the module
   `stack_loop` (US5), declared `pub(crate)`, and imported by the later `console`
-  modules with `use crate::stack_loop::…` (plan.md § Test rigs gives their names). A
-  module declares only what its own tests use; a later story adds nothing to an earlier
+  modules with `use crate::stack_loop::…` (plan.md § Test rigs gives their names). The
+  sim stacking rig is written in `stack_gate` (US6), the one `console` module whose
+  scenarios use it since round 1's cut, with the private helpers it needs copied from
+  `stack_loop`. A module declares only what its own tests use; a later story adds nothing to an earlier
   story's module. The `mcp` and `cli` binaries cannot import from `console`, so
   `crates/finder/tests/mcp/stack.rs` writes the part it needs again.
 - **Scratch folders.** A finder test module takes its folder from
@@ -707,7 +819,8 @@ development, `cargo nextest run -p simulator --locked --test imaging_scene`.
 **Acceptance Scenarios**:
 
 1. **Given** the sim rig, **Then** a committed test asserts that `sim.scene()` is
-   `Scene::default()`, with no satellite and no source. **When** two cameras built alike
+   `Scene::default()`, with no satellite and no source, and that `sim.set_scene` with
+   a source whose `sigma_arcsec` is 0.0 panics. **When** two cameras built alike
    with noise off, no stars (`with_stars(vec![])`) and gain 0 each take a 1000 ms
    imaging frame, the second after `sim.set_scene(Scene::default())`, **Then** the
    committed test asserts that every sample of both is exactly 165 and that the two
@@ -719,25 +832,37 @@ development, `cargo nextest run -p simulator --locked --test imaging_scene`.
    **Then** a committed test asserts that every sample of the first and of the third is
    exactly
    165; and that the second reads, each within 1 count, 1165 at (150, 200), 872 at
-   (150, 201) and at (150, 199), 209 at (150, 203), 165 at (150, 207), 1082 at
-   (99, 200), 165 at (50, 200), and the same value at (151, 200) as at (150, 200)
-   whatever their filters (worked example: 160 + 5 + 0.25·4000·exp(−d²/(2·1.2²)) for a
-   sample whose centre is d from the segment, with d of 0, 1, 3 and, past the end,
-   0.5; nothing beyond ⌈4·1.2⌉ + 1 = 6).
+   (150, 201) and at (150, 199), 209 at (150, 203), 169 at (150, 204), 165 at
+   (150, 207), 1082 at (99, 200), 165 at (50, 200), and the same value at (151, 200)
+   as at (150, 200) whatever their filters (worked example: 160 + 5 +
+   0.25·4000·exp(−d²/(2·1.2²)) for a sample whose centre is d from the segment, with d
+   of 0, 1, 3, 4 and, past the end, 0.5, the 4 being 165 + 1000·exp(−16/2.88) = 168.9;
+   nothing beyond ⌈4·1.2⌉ + 1 = 6). With `sim.set_focus_error(2.0)` set before the
+   three imaging frames, the second reads 1077 at (150, 201), within 1 count (worked
+   example: σ² = 1.2² + 2.0² = 5.44, and 165 + 1000·exp(−1/10.88) = 1077.2).
 3. **Given** the sim rig, a camera with noise off, no stars and gain 0, and the scene's
    one source `ExtendedSource { ra_deg, dec_deg, sigma_arcsec: 20.0·k, electrons_per_s:
    800.0, colour: [0.5, 1.0, 0.25] }`, with (`ra_deg`, `dec_deg`) the truth's centre for
    the middle of the exposure and k the truth's arcseconds a pixel, **When** a test
    takes a 1000 ms imaging frame, **Then** a committed test asserts, each within 2
-   counts, that it reads 365 at (618, 411), 265 at (618, 410), 215 at (619, 411) and
-   283 at (638, 411), and exactly 165 at (0, 0); and that a 500 ms imaging frame taken
-   the same way reads 262 at (618, 411) (worked example:
+   counts, that it reads 365 at (618, 411), 265 at (618, 410), 215 at (619, 411),
+   283 at (638, 411) and 173 at (668, 411), and exactly 165 at (0, 0); and that a
+   500 ms imaging frame taken next, with the source's place set again to the truth's
+   centre for the middle of that exposure, reads 262 at (618, 411) (worked example:
    165 + 0.25·800·colour·exp(−d²/(2·20²)), d from the sample's centre to the grid's
    centre; green at (618, 411), red at
-   (618, 410), blue at (619, 411); for 500 ms, 160 + 2.5 + 99.9).
-4. **Given** the scenes of US1-S2 and US1-S3 together, noise off and gain 0, **Then** a
-   committed test asserts that with 034's `cover` true every sample of the second
-   imaging frame is exactly 160; that with 034's flat panel lit the second imaging
+   (618, 410), blue at (619, 411); at (668, 411), 165 + 200·exp(−(50.5² + 0.5²)/800)
+   = 173.3; for 500 ms, 160 + 2.5 + 99.9). With noise on, a source of
+   `electrons_per_s` 40000.0 and `colour` `[1.0, 1.0, 1.0]` at the truth's centre for
+   the middle of each exposure, the 11 × 11 samples about (618, 411) of a 1000 ms
+   imaging frame differ from those of one taken the same way with noise off by a
+   standard deviation of at least 20 counts (worked example: 0.25·√(40000 + 20 + 9) =
+   50 counts; the sky and the read noise alone give 1.35).
+4. **Given** the scenes of US1-S2 and US1-S3 together, the glow of US1-S3 placed at
+   the truth's centre for the middle of the first imaging frame, noise off and gain 0,
+   **Then** a committed test asserts that with 034's `cover` true every sample of the
+   second imaging frame is exactly 160; that with 034's flat panel
+   `FlatPanel { electrons_per_s: 2000.0, colour: [0.6, 1.0, 0.8] }` the second imaging
    frame equals, byte for byte, one taken the same way with `Scene::default()`; and
    that with `corner_light` 0.5 and neither cover nor panel the second imaging frame
    reads at (150, 200),
@@ -785,12 +910,15 @@ development, `cargo nextest run -p finder --locked --test console stack_colour::
    0.000001:
    - with the sub the same solve: `m` is `[[1, 0], [0, 1]]` and `t` is `[0, 0]`;
    - with the sub (83.8221°, −5.3911°, 90°, 2.0″): `m` is `[[0, −1], [1, 0]]`, `t` is
-     `[1029, −207]`, `apply((718.0, 411.0))` is (618.0, 511.0) and `turn_deg()` is 90.0;
+     `[1029, −207]`, `apply((718.0, 411.0))` is (618.0, 511.0), `turn_deg()` is 90.0,
+     its `area_scale()` is 1.0 and its `centre_shift((1236, 822), (1236, 822))` is
+     (0.0, 0.0);
    - with the sub (83.8221°, −5.3911°, 180°, 2.0″): `m` is `[[−1, 0], [0, −1]]`, `t` is
      `[1236, 822]`, `apply((0.0, 0.0))` is (1236.0, 822.0) and `turn_deg()` is 180.0 or
      −180.0;
    - with the sub (83.8221°, −5.3911°, 0°, 4.0″) for 618 × 411: `m` is
-     `[[0.5, 0], [0, 0.5]]`, `t` is `[0, 0]` and `area_scale()` is 0.25;
+     `[[0.5, 0], [0, 0.5]]`, `t` is `[0, 0]`, `area_scale()` is 0.25 and its
+     `centre_shift((1236, 822), (618, 411))` is (0.0, 0.0);
    - with the sub `ImagingSolve::from_cd(83.8221, −5.3911, [[k, 0.0], [0.0, −k]], 1236,
      822)`, k = 2.0/3600, a mirrored sub: `m` is `[[−1, 0], [0, 1]]`, `t` is
      `[1236, 0]` and `area_scale()` is −1.0
@@ -822,6 +950,11 @@ development, `cargo nextest run -p finder --locked --test console stack_colour::
      0.2 and 0.3 px from the place the test finds by projecting by hand: the corner to
      the sky with the reference, and the sky to the near sub;
    - `between(reference, far)` is `None`;
+   - `between` is `None` for each of the subs (84.4606°, −4.7544°, 0°, 3.0″) and
+     (83.1836°, −4.7544°, 0°, 3.0″), each for 3600 × 2400, 0.9° from the reference
+     toward the north-east and the north-west (worked example: each map strays 1.05 px
+     at two opposite corners and 0.21 px at the other two, and its centre lies 1080 px
+     from the reference's, inside `judge`'s 1200);
    - `stack::CORNER_SLACK_PX` is 0.5
    - (worked example: the near sub's centre is 0.249° east of the reference's on the
      sky, and its map strays 0.246 px at every corner; the far sub's is 0.747° east, 896
@@ -861,6 +994,7 @@ development, `cargo nextest run -p finder --locked --test console stack_accumula
      107 + 2·x + 3·y; and the mean is 0.0 in every channel where the weight is 0.0;
    - with `t` `[0.5, 0]`: `covered` 42; the mean's red is 101 + 2·x + 3·y where x ≤ 6
      and the weight is 0.0 at x = 7;
+   - with `t` `[100, 0]`: `covered` 0, every weight 0.0 and `subs()` 1;
    - on one stack, the identity and then `t` `[2, 1]`: the weight is 2.0 where x ≤ 5 and
      y ≤ 4 and 1.0 elsewhere, the mean's red is 103.5 at (0, 0) and 129.0 at (7, 5)
    - (worked example: a bilinear rule returns a linear ramp exactly, and a pixel is
@@ -878,26 +1012,31 @@ development, `cargo nextest run -p finder --locked --test console stack_accumula
    - (worked example: reference pixel (x, y) takes the sub's pixel (7 − x, 5 − y) in the
      half turn and (5 − y, x) in the quarter turn).
 4. **Given** the sim rig with the imaging optics' `focus_error` 2.0, gain 0 applied,
-   noise off and five white stars of magnitude 7.0 at the first truth's centre and at
-   (±0.15° east, ±0.10° north) of it, **When** a test takes three 10 ms subs, the
-   first with the optics' angle 17° and the centre re-pointed at the first truth's
-   centre, the second with the angle 22° and the centre re-pointed 0.02° east and 0.01°
-   south of it, the third with the angle 197° and the first pointing again, turns each
+   noise off and five white stars of magnitude 7.0 at (ξ, η) of (0, 0) and
+   (±0.15°, ±0.10°) about the first truth's centre, by the inverse of the shared
+   setup's projection, **When** a test takes three 10 ms subs, the first with the
+   optics' angle 17° and the centre re-pointed at the first truth's centre, the second
+   with the angle 22° and the centre re-pointed at (ξ, η) of (0.02°, −0.01°) about the
+   first truth's centre, by the same inverse, the third with the angle 197° and the
+   first pointing again, turns each
    into colour and adds each to `Stack::new(1236, 822)` through `between` of the first
    sub's truth solve and its own, **Then** a committed test asserts that each
    placement's `turn_deg()` is within 0.02 of that sub's truth angle less the first
    sub's, the second's between 4.9 and 5.1 in size and the third's within 0.02 of 180
    in size; that for each of the five stars the centroid in the green plane of the
-   stack's mean is within 0.2 px, in x and in y, of its centroid in the green plane of
-   the first sub's own colour picture, and its brightest value there is at least 0.85
-   of the first sub's; and that `covered` is at least 0.99 of 1,015,992 for the third
+   stack's mean is within 0.02 px, in x and in y, of its centroid in the green plane of
+   the first sub's own colour picture, each centroid taken about the brightest pixel
+   within 6 px of the star's place in the first sub, found by projecting by hand, and
+   its brightest value there, less the plane's median, is at least 0.85 of the first
+   sub's, less its median; and that `covered` is at least 0.99 of 1,015,992 for the third
    sub and between 0.85 and 0.97 of it for the second (oracle: the simulator's truth
    and its rendering of the first sub; a sign error in the turn moves a star by 26 px,
    and a half-pixel error in the convention moves the half-turned sub by 1 px).
-5. **Given** the sim rig with noise on, no stars, and the scene's one source at the
-   first truth's centre with `sigma_arcsec` 30 times the truth's arcseconds a pixel,
-   `electrons_per_s` 40.0 and `colour` `[1.0, 1.0, 1.0]`, **When** a test takes sixteen
-   100 ms subs, each after re-pointing at that centre, and adds each through
+5. **Given** the sim rig with noise on, no stars, at the rig's own gain of 120, 0.995
+   counts an electron, and the scene's one source at the first truth's centre with
+   `sigma_arcsec` 30 times the truth's arcseconds a pixel, `electrons_per_s` 40.0 and
+   `colour` `[1.0, 1.0, 1.0]`, **When** a test takes sixteen 100 ms subs, each after
+   re-pointing at that centre, and adds each through
    `between` of the first sub's truth solve and its own to one stack, and the first
    four also to a second stack, **Then** a committed test asserts, with S the mean of
    the mean's green plane within 30 px of the grid's centre less its mean between 150
@@ -928,14 +1067,18 @@ development, `cargo nextest run -p finder --locked --test console stack_reject::
 
 1. **Given** `finder::imaging::stack::levels`, **Then** a committed test asserts that an
    8 × 6 picture whose planes are 5.0, 9.0 and 2.0 has the levels `[5.0, 9.0, 2.0]`;
-   and that a 1030 × 4 picture whose red is 1.0 where x is a multiple of 3 and 100.0
-   elsewhere has the red level 1.0 (worked example: with the longer side over 512 the
-   level is the median of every third pixel of every third row, ⌈1030/512⌉ = 3).
+   that a 1030 × 4 picture whose red is 1.0 where x is a multiple of 3 and 100.0
+   elsewhere has the red level 1.0; and that a 4 × 1030 picture whose red is 1.0 where
+   y is a multiple of 3 and 100.0 elsewhere has the red level 1.0 (worked example:
+   with the longer side over 512 the level is the median of every third pixel of every
+   third row, ⌈1030/512⌉ = 3).
 2. **Given** `Stack::new(4, 4).with_background_match()`, **When** a test adds a picture
    of (100.0, 200.0, 300.0) and then one of (110.0, 195.0, 300.0), both with the
    identity, **Then** a committed test asserts that the second answer's `offsets` are
    `[−10.0, 5.0, 0.0]`, that the mean is (100.0, 200.0, 300.0) everywhere, and that
-   without `with_background_match` the mean is (105.0, 197.5, 300.0).
+   without `with_background_match` the mean is (105.0, 197.5, 300.0); and that, on the
+   stack made `with_background_match()`, a third picture of (120.0, 190.0, 300.0)
+   answers `offsets` `[−20.0, 10.0, 0.0]`.
 3. **Given** `Stack::new(2, 2).with_rejection()` and pictures the same in all three
    channels and all four pixels unless said, added with the identity, **Then** a
    committed test asserts, each case on a fresh stack:
@@ -943,6 +1086,11 @@ development, `cargo nextest run -p finder --locked --test console stack_reject::
      answers `covered` 4, `added` 3 and `rejected` 1; the weight is 8.0 at (0, 0) and
      9.0 elsewhere; the mean is 100.0 at (0, 0) and 100.667 elsewhere (worked example:
      the eight have mean 100 and deviation √(32/7) = 2.138, so 3 deviations are 6.41);
+   - after the same eight, a ninth of 106.3 everywhere answers `added` 4 and
+     `rejected` 0 (worked example: 3 × 2.138 = 6.41; over w it would be 6.0);
+   - after eight of 100 added with `t` `[1.0, 0.0]`, which reach column 0 alone, a
+     ninth of 100 and then a tenth of 200 with the identity: the tenth answers `added` 2
+     and `rejected` 2 (worked example: column 1 holds one sub and is still learning);
    - after eight of 100, a ninth of 103 is added everywhere and a ninth of 104 nowhere
      (worked example: the deviation's floor is 1.0);
    - after eight of 100, a ninth of 100 whose blue alone is 130 at (1, 1) leaves the
@@ -959,10 +1107,10 @@ development, `cargo nextest run -p finder --locked --test console stack_reject::
    test asserts, with L the pixels whose centres lie within 1.0 px of the segment and
    at least 12 px from both its ends, and each mean taken of the mean's green plane
    over L: that Y's exceeds C's by at least 8.0; that X's is within 0.5 of C's; that
-   the tenth answer for X has `rejected` at least the number of pixels in L and at most
-   0.2 of 1,015,992; that the first eight answers for X have `rejected` 0; and that
-   every `offsets` value for X is within 0.5 of 0.0 (oracle: the simulator's declared
-   streak and a control stack with the same noise; the streak adds 140 to 200 counts
+   the tenth answer for X has `rejected` at most 0.2 of 1,015,992 (noise alone rejects
+   about 8% at the ninth sub); that the first eight answers for X have `rejected` 0;
+   and that every `offsets` value for X is within 0.5 of 0.0 (oracle: the simulator's
+   declared streak and a control stack with the same noise; the streak adds 140 to 200 counts
    to one sub in twelve where a pixel's deviation is about 5).
 
 ---
@@ -974,6 +1122,13 @@ takes subs one after another, solves each, calibrates it and adds it to the stac
 the first sub that solves as the reference sub, until I stop it. A sub that does not
 solve is dropped and counted with the reason, and while the finder camera solves too,
 every stacked sub keeps the aim point measured.
+
+Round 1's probe build measured this story over the 64 KiB budget, so three of its
+scenarios are User Story 6's: the refusals of `start` (US6-S7), a sub placed by two
+simulated solves (US6-S8) and the aim point the stacked subs keep measured (US6-S9).
+What they test is still this story's code: `start` and its refusals, the folder and
+`Lease::save_in`, and the call of `note_solve`. Its other scenarios were renumbered
+(§ Clarifications, the session of 2026-11-19).
 
 **Why this priority**: It is the first time a picture grows on the console from subs
 the camera takes.
@@ -1002,6 +1157,7 @@ development, `cargo nextest run -p finder --locked --test console stack_loop::`.
      `["dark","flat","bad_pixels"]`;
    - `state.stack().unwrap().mean()` is a 64 × 48 picture whose three planes each read
      `416 + x + 3·y` at every pixel with 1 ≤ x ≤ 62 and 1 ≤ y ≤ 46;
+   - the view read when `stacked` first reaches 2 has `queued` 0;
    - for every frame id from 1 to `taken`,
      `runs/<stack id>/subs/<frame id as six digits>.fits` under R, `<stack id>` being
      the view's `id`, has the card `PURPOSE` `sub`, and for every stacked one the solve
@@ -1014,7 +1170,208 @@ development, `cargo nextest run -p finder --locked --test console stack_loop::`.
      diagonal is 80 px, 172.8″ at 2.16″ a pixel, and its height 48 px, 103.68″; the
      rig has no live pointing, so 032's hint never has the source `pointing` there,
      and the stack's own hint stands in its place once there is a reference sub).
-2. **Given** the rigs named, **Then** a committed test asserts of `start`:
+   **Given** a fresh stand-in stacking rig whose scripted solver waits 5 s, with the
+   1st sub's file overwritten by the test while its solve waits, **Then** the committed
+   test asserts that `dropped.unreadable` is 1 and the 2nd hint has `source` `none`
+   (worked example: a sub that solves but is not stacked is no reference sub); and, on
+   a fresh rig with the 2nd `solve` scripted at (83.811662°, −5.385100°), that the 3rd
+   hint's place is (83.811662, −5.385100) within 0.000001.
+2. **Given** the stand-in stacking rig whose scripted solver answers its 1st and 2nd
+   `solve` with `NotSolved`, its 5th with `TooFewStars`, its 7th with `Failed("boom")`
+   and its 9th with `TimedOut { seconds: 120 }`, **When** a test starts a stack, waits
+   until `taken` is at least 10 and stops it, **Then** a committed test asserts
+   `reference.frame_id` 3, `dropped.not_solved` 2, `dropped.too_few_stars` 1,
+   `dropped.solver_failed` 2, `stacked` equal to `taken` less 5 less
+   `dropped.unprocessed`, and that the files of all `taken` subs exist in the stack's
+   `subs` folder, the five dropped ones among them. **Given** a fresh stand-in stacking
+   rig with the 2nd `solve` scripted at (263.8221°, +5.3911°), **Then** the committed
+   test asserts that once `last.frame_id` is 2 the view has
+   `last.outcome` `off_field` and `dropped.off_field` 1, and `GET /api/session` has
+   `imaging.relation.last.frame_id` 1 (worked example: no point of the reference grid
+   has a place in a sub solved at the antipode). This scenario was US5-S3 until round
+   1's cut.
+3. **Given** the stand-in stacking rig whose node holds a scripted camera, **Then** a
+   committed test asserts that:
+   - with its 2nd `expose` scripted to fail with `the camera fell over`, a stack run
+     until `taken` is at least 4 has `dropped.frame_failed` 1 and `state` `stacking`;
+   - with every `expose` from its 2nd on scripted so, the stack ends by itself with
+     `state` `ended`, `ended_reason` `camera`, `error`
+     `the exposure failed: the camera fell over`, `taken` 4, `dropped.frame_failed` 3
+     and `stacked` plus `dropped.unprocessed` equal to 1; and `POST /api/imaging/frame`
+     sent after that answers 200, the stack having released the camera;
+   - with its 2nd, 4th and 6th `expose` scripted to fail, a stack run until `taken` is
+     at least 8 has `state` `stacking` and `dropped.frame_failed` 3;
+   - with its 2nd `expose` adding 100 counts to every sample, `mean()` read when
+     `stacked` is 2 equals the one read when it was 1, within 0.001;
+   - once `stacked` is 1 the test removes `runs/<id>/subs`, and the view reaches
+     `dropped.frame_failed` 1.
+   This scenario was US5-S4 until round 1's cut.
+4. **Given** the stand-in stacking rig whose scripted solver waits 30 s, **When** a test
+   starts a stack, waits until `taken` is at least 3, calls `stop()` and then lets 60 s
+   pass, **Then** a committed test asserts that `stop()` returned within 1 s of virtual
+   time with `state` `ended`, `ended_reason` `stopped`, `stacked` 0 and
+   `dropped.unprocessed` equal to `taken`, and that the view 60 s later equals it key
+   for key. **Given** a fresh stand-in stacking rig, **Then** the committed test asserts
+   that with the exposure set to 10 000 ms through `Imaging::set` before the start, a
+   test that calls `stop()` once `taken` is at least 1 finds it returned within 1 s of
+   virtual time. This scenario was US5-S5 until round 1's cut.
+5. **Given** the stand-in stacking rig with a stack whose `stacked` has reached 2,
+   **When** a test sends `POST /api/imaging/abort`, **Then** a committed test asserts
+   that within 5 s the view has `state` `ended` and `ended_reason` `stopped`, and that
+   `taken` equals `stacked` plus Σ dropped. This scenario was US5-S6 until round 1's
+   cut.
+6. **Given** the stand-in stacking rig with a stack whose `stacked` has reached 1,
+   **When** a test sends `POST /api/imaging/frame`, **Then** a committed test asserts
+   that the answer is 409 with a JSON `error` that contains `the stack`; that 5 s later the
+   stack's `taken` is larger than it was at the request, its `state` is still
+   `stacking` and `dropped.frame_failed` is 0; and that once `stop()` has answered, the
+   same request answers 200 and the imaging frame it starts ends `saved` with the
+   `purpose` `frame` and a `file` that begins `frames/2026-01-16/`, and that once
+   `stop()` has answered, a frame the test takes with
+   `state.imaging().unwrap().lease("the test")` and its `take("frame")` has a `file`
+   beginning `frames/` (oracle: the plan
+   document's amendment 1: one holder of the camera at a time, and a second taker
+   refused with the holder's name; owner decision 13: the stack's folder goes with its
+   lease). This scenario was US5-S8 until round 1's cut.
+
+---
+
+### User Story 6 - The gate, and a queue the camera never waits on (Priority: P1)
+
+As the observer, I get a stack that leaves out a sub that is clearly softer than the
+others, has drifted off the field, was solved to another scale or was taken at other
+settings, each counted with its reason; and when the console cannot keep up, the camera
+goes on taking subs and the oldest waiting ones are dropped.
+
+Since round 1's cut this story also holds three scenarios of User Story 5's loop,
+US6-S7 to US6-S9, moved here so that User Story 5 stays under the 64 KiB budget: the
+refusals of `start`, a sub placed by two simulated solves, and the aim point the
+stacked subs keep measured. They test User Story 5's code, and its module holds the sim
+stacking rig they run on (§ Clarifications, the session of 2026-11-19).
+
+**Why this priority**: One bad sub in fifty spoils a picture, and a stack that makes the
+camera wait throws away clear sky.
+
+**Independent Test**: `crates/finder/tests/console/stack_gate.rs`, the module
+`stack_gate` of `console`. The `test` gate's
+`cargo nextest run --workspace --all-targets --all-features --locked` runs it; during
+development, `cargo nextest run -p finder --locked --test console stack_gate::`.
+
+**Acceptance Scenarios**:
+
+1. **Given** `finder::imaging::stack::same_settings` and the reference settings
+   `SubSettings { width: 64, height: 48, bits: 16, bayer: Some("RGGB".into()),
+   binning: 1, roi: Region { x: 0, y: 0, width: 64, height: 48 }, gain: Some(120.0),
+   offset: Some(10.0), exposure_ms: 1000.0 }`, **Then** a committed test asserts that
+   it is true for a sub with the same settings, with `gain` `Some(120.0005)` and with
+   `exposure_ms` 1000.5; true when `gain` and `offset` are `None` in both; and false
+   for a sub that differs from the reference in one thing alone, for each of: `width`
+   32, `height` 24, `bits` 8, `bayer` `Some("GRBG".into())`, `bayer` `None`, `binning`
+   2, `roi` with `x` 2, `gain` `Some(120.002)`, `gain` `None`, `offset`
+   `Some(10.002)`, `offset` `None`, `exposure_ms` 1001.5 and `exposure_ms` 998.5
+   (worked example: size, depth, pattern, binning and region equal; gain and offset
+   each absent in both or within 0.001; the exposure within 1 ms). **Given** the
+   stand-in stacking rig whose node holds a scripted camera whose 4th `expose` carries
+   the gain 50.0, **When** a test runs a stack until `taken` is at least 6 and stops
+   it, **Then** the committed test asserts `dropped.settings` 1 and `stacked` equal to
+   `taken` less 1 less `dropped.unprocessed` (oracle: the scripted camera; every other
+   sub has the stand-in's own gain, and each is compared with the reference sub).
+2. **Given** the stand-in stacking rig, **Then** a committed test asserts, each on a
+   fresh rig run until `taken` is at least 10 and stopped unless it says otherwise:
+   - with the scripted star sizes 5.0 px for the 2nd `measure`, 2.7 px for the 7th and
+     2.5 px for the 8th: `dropped.soft` is 1, `focus_median_arcsec` is 4.32, and
+     `stacked` is `taken` less 1 less `dropped.unprocessed` (worked example: 2.0 px at
+     2.16″ is 4.32″; 2.7 is 35% above the median of the six before it and 2.5 is 25%;
+     the 2nd is not judged, because fewer than 5 are known);
+   - with the 3rd `measure` answering `TooFewStars` and the 4th `Failed("x")`:
+     `dropped.too_few_stars` 1 and `dropped.solver_failed` 1;
+   - with the scripted star size 25.0 px for the 3rd `measure`: `dropped.soft` is 1 and
+     `stacked` is `taken` less 1 less `dropped.unprocessed` (worked example: 033 calls
+     a star measure above 20 px far out, and such a sub is dropped however few
+     readings are known);
+   - started with `focus_gate` `Some(false)`: the scripted solver's `measure` was never
+     called, `dropped.soft` is 0 and the view has no `focus_median_arcsec`;
+   - with 2.7 px for the 6th `measure` alone, `dropped.soft` is 1; with 3.0 px for the
+     2nd `measure`, the view read when `stacked` first reaches 2 has
+     `focus_median_arcsec` 4.32 (worked example: of 4.32 and 6.48 the value at index
+     ⌊0.5·(2 − 1)⌋ is 4.32);
+   - with 3.0 px for the 6th to the 12th `measure`, a stack run until `taken` is at
+     least 13 has `dropped.soft` 7 (worked example: R stays five of 4.32; were soft
+     readings to join, the 12th would be judged against 6.48);
+   - with 2.7 px for the 7th `measure`, the view whose `last.frame_id` is 7 has
+     `last.outcome` `soft` and `last.focus_arcsec` 5.832, and the one for 8 has
+     `last.focus_arcsec` 4.32;
+   - with each `measure` waiting 30 s, a stop asked once `taken` is 2 returns within
+     1 s with `stacked` 0 and `dropped.unprocessed` equal to `taken`.
+3. **Given** `finder::imaging::stack::judge` and the stand-in stacking rig, **Then** a
+   committed test asserts that:
+   - `judge` of the identity for (64, 48) and (64, 48) is `Ok`; of `t` `[−20, 0]`,
+     `Ok`; of `t` `[−30, 0]`, `Err("off_field")`; of `m` `[[0.94, 0], [0, 0.94]]`,
+     `Err("solve_differs")`; of `m` `[[−1, 0], [0, 1]]` with `t` `[64, 0]`,
+     `Err("solve_differs")`; of `m` `[[−1, 0], [0, −1]]` with `t` `[64, 48]`, `Ok`;
+     of `t` `[−17, −17]`, `Err("off_field")`; of `m` `[[−1, 0], [0, 1]]` with `t`
+     `[94, 0]`, `Err("solve_differs")`; and of `m` `[[NaN, 0], [0, 1]]`,
+     `Err("solve_differs")` (worked example: half the shorter side is 24 px; 0.94² is
+     0.884; 17·√2 is 24.04, over 24; the mirror is refused before its 30 px shift is
+     read);
+   - on the rig, with the scripted solves the standing solve but centred on
+     (83.811662°, −5.385100°) for the 3rd sub and on (83.806442°, −5.382100°) for the
+     4th, at 2.30″ a pixel for the 5th and up at 210° for the 6th, a stack run until
+     `taken` is at least 7 has `dropped.off_field` 1 and `dropped.solve_differs` 1; and
+     of the views the test read every 100 ms, the one whose `last.frame_id` is 3 has
+     `last.outcome` `stacked` and `last.shift_px` within 0.01 of `[20.0, 0.0]`, the one
+     for 4 has `last.outcome` `off_field`, the one for 5 `solve_differs`, and the one
+     for 6 `stacked` with `last.turn_deg` within 0.000001 of 180.0 or −180.0
+   - (worked example: the two centres are where the reference grid's positions (52, 24)
+     and (62, 24) fall on the sky).
+4. **Given** the stand-in stacking rig whose scripted solver waits 10 s, **When** a test
+   starts a stack, reads the view every 100 ms until `taken` is at least 30 and stops
+   it, **Then** a committed test asserts that every read had `queued` at most 4; that
+   `taken` reached 30 within 35 s of virtual time; that `dropped.behind` is at least
+   15 and `stacked` at least 2; that `taken` equals `stacked` plus Σ dropped; and that
+   the view read when `stacked` first reaches 2 has `last.frame_id` at least 7
+   (measured 8: when the first solve ends at 11 s the four waiting are the newest;
+   oracle: one sub a second against one solve in ten).
+5. **Given** the stand-in stacking rig, **Then** a committed test asserts, each on a
+   fresh rig:
+   - with the scripted solver answering its 4th, 5th, 6th and 7th `solve` with
+     `NotSolved`, and a stack run until `stacked` is at least 5: the hints of the 2nd
+     to the 6th `solve` have `source` `last_solve` and `radius_deg` 0.048 within
+     0.000001; the 7th's and the 8th's have a `source` other than `last_solve` and a
+     `radius_deg` of at least 3.0; and the 9th's has `source` `last_solve` and
+     `radius_deg` 0.048 again (worked example: the third miss in a row is the 6th
+     `solve`, so the 7th is given 032's hint; the 7th misses too, so the 8th is as
+     well; the 8th solves, and the stack's own hint is back for the 9th);
+   - with the scripted solver answering its 4th and 5th `solve` with `NotSolved` and
+     its 3rd `measure` with `TooFewStars`, and a stack run until `taken` is at least
+     7: `dropped.too_few_stars` is 1, `dropped.not_solved` is 2, and the hint of the
+     6th `solve` has `source` `last_solve` and `radius_deg` 0.048 within 0.000001
+     (worked example: the 3rd sub solved, so its too few stars in the focus gate count
+     as no miss, and two misses in a row leave the stack's own hint in place);
+   - with the 4th and 5th `solve` `NotSolved` and the 6th `Failed("x")`, the 7th hint
+     has `source` `last_solve`; with the 4th, 5th and 6th `TooFewStars`, the 7th hint's
+     `source` is not `last_solve`
+   - (oracle: the standing solve, and 032's hint, which on this rig has the source
+     `none` and a radius of 180°).
+6. **Given** the stand-in stacking rig, **When** a test sends `POST /api/imaging/focus`
+   with `{"tile":{"col":1,"row":1}}`, waits until `focus.aid.readings` is at least 1,
+   sends `DELETE /api/imaging/focus`, starts a stack, waits until `stacked` is at least
+   3 and stops it, **Then** a committed test asserts that the imaging view's
+   `focus.region` has `x` 20, `y` 16, `width` 20 and `height` 16; that every `measure`
+   the scripted solver was given for an imaging frame 64 wide carried the region
+   `Some(Region { x: 20, y: 16, width: 20, height: 16 })`; that there were at least 3
+   of them; and that `dropped.soft` is 0 (worked example: 033's tile (1, 1) of a
+   64 × 48 sensor at binning 1 is 20 × 16 pixels at (20, 16), and a sub of the whole
+   sensor has the sensor's own pixels; the aid's own imaging frames are 20 wide). The
+   committed test also asserts that after the `DELETE`, with
+   `PUT /api/imaging/settings` `{"binning":2}` before the start, the subs' measures
+   carry `Region { x: 10, y: 8, width: 10, height: 8 }` and `focus_median_arcsec` is
+   4.32; with `{"roi":{"x":16,"y":8,"width":32,"height":32}}`,
+   `Region { x: 4, y: 8, width: 20, height: 16 }`; with
+   `{"roi":{"x":0,"y":0,"width":32,"height":24}}`, `None` (worked example: (region −
+   roi)/b, and a region not inside the sub's roi is the whole sub; 033 multiplies the
+   measure by b, the stack divides the scale by b).
+7. **Given** the rigs named, **Then** a committed test asserts of `start`:
    - on the stand-in stacking rig, `gains` `[0.0, 1.0, 1.0]` answers a `Refusal` of 400
      `gains must be three numbers from 0.1 to 10`, `stretch` 0.5 one of 400
      `stretch must be a number from 1 to 1000`, and the two together the gains' words,
@@ -1046,43 +1403,18 @@ development, `cargo nextest run -p finder --locked --test console stack_loop::`.
      `the stack is running: stop it to change reject or focus_gate`; and `gains`
      `Some([2.0, 1.0, 1.0])` answers `options.gains` `[2.0, 1.0, 1.0]` and the same
      `id`;
-   - on a stand-in stacking rig for which the test made R and wrote a regular file
-     named `runs` in it before the console was built: a `Refusal` of 500 whose message
+   - on a stand-in stacking rig on which, after it is built and before the start, the
+     test wrote a regular file named `runs` in R: a `Refusal` of 500 whose message
      begins `cannot make the stack folder:`, no stack, and
      `state.imaging().unwrap().holder()` `None` (worked example: the lease taken in
      step 6 is let go when the folder cannot be made);
    - on a fresh rig, a stack started and stopped and a second started in the same
-     second: the second's `id` is the first's followed by `-2`, and R holds
-     `runs/<id>/subs/` for each of the two `id`s;
+     second: the second's `id` is the first's followed by `-2`, R holds
+     `runs/<id>/subs/` for each of the two `id`s, and right after the second `start`
+     answers, `mean()` is `None`;
    - `stop()` before any start answers `None`, and `view()` is `None`.
-3. **Given** the stand-in stacking rig whose scripted solver answers its 1st and 2nd
-   `solve` with `NotSolved`, its 5th with `TooFewStars`, its 7th with `Failed("boom")`
-   and its 9th with `TimedOut { seconds: 120 }`, **When** a test starts a stack, waits
-   until `taken` is at least 10 and stops it, **Then** a committed test asserts
-   `reference.frame_id` 3, `dropped.not_solved` 2, `dropped.too_few_stars` 1,
-   `dropped.solver_failed` 2, `stacked` equal to `taken` less 5 less
-   `dropped.unprocessed`, and that the files of all `taken` subs exist in the stack's
-   `subs` folder, the five dropped ones among them.
-4. **Given** the stand-in stacking rig whose node holds a scripted camera, **Then** a
-   committed test asserts that:
-   - with its 2nd `expose` scripted to fail with `the camera fell over`, a stack run
-     until `taken` is at least 4 has `dropped.frame_failed` 1 and `state` `stacking`;
-   - with every `expose` from its 2nd on scripted so, the stack ends by itself with
-     `state` `ended`, `ended_reason` `camera`, `error`
-     `the exposure failed: the camera fell over`, `taken` 4, `dropped.frame_failed` 3
-     and `stacked` plus `dropped.unprocessed` equal to 1; and `POST /api/imaging/frame`
-     sent after that answers 200, the stack having released the camera.
-5. **Given** the stand-in stacking rig whose scripted solver waits 30 s, **When** a test
-   starts a stack, waits until `taken` is at least 3, calls `stop()` and then lets 60 s
-   pass, **Then** a committed test asserts that `stop()` returned within 1 s of virtual
-   time with `state` `ended`, `ended_reason` `stopped`, `stacked` 0 and
-   `dropped.unprocessed` equal to `taken`, and that the view 60 s later equals it key
-   for key.
-6. **Given** the stand-in stacking rig with a stack whose `stacked` has reached 2,
-   **When** a test sends `POST /api/imaging/abort`, **Then** a committed test asserts
-   that within 5 s the view has `state` `ended` and `ended_reason` `stopped`, and that
-   `taken` equals `stacked` plus Σ dropped.
-7. **Given** the sim stacking rig, **When** a test waits until the session's `pointing`
+   This scenario was US5-S2 until round 1's cut.
+8. **Given** the sim stacking rig, **When** a test waits until the session's `pointing`
    has the `source` `live`, starts a stack, waits until `stacked` is at least 4 and
    stops it, **Then** a committed test asserts that `reference`
    agrees with the solve sidecar of its `frame_id` (`ra_deg`, `dec_deg`,
@@ -1096,17 +1428,10 @@ development, `cargo nextest run -p finder --locked --test console stack_loop::`.
    `hint.source` `pointing` and `hint.radius_deg` 3.0 (oracle: the simulated
    solver's answers, which are the simulator's truth, written to the sidecars; a
    telescope that does not track; and the plan document's order of a hint's sources,
-   in which a live pointing comes before the stack's own last solve).
-8. **Given** the stand-in stacking rig with a stack whose `stacked` has reached 1,
-   **When** a test sends `POST /api/imaging/frame`, **Then** a committed test asserts
-   that the answer is 409 with a JSON `error` that contains `the stack`; that 5 s later the
-   stack's `taken` is larger than it was at the request, its `state` is still
-   `stacking` and `dropped.frame_failed` is 0; and that once `stop()` has answered, the
-   same request answers 200 and the imaging frame it starts ends `saved` with the
-   `purpose` `frame` and a `file` that begins `frames/2026-01-16/` (oracle: the plan
-   document's amendment 1: one holder of the camera at a time, and a second taker
-   refused with the holder's name; owner decision 13: the stack's folder goes with its
-   lease).
+   in which a live pointing comes before the stack's own last solve). The committed
+   test also asserts that a stack run until `stacked` is 9 has `last.rejected_px` above
+   0 (measured 52,746 at the 9th, from the simulated camera's noise). This scenario was
+   US5-S7 until round 1's cut.
 9. **Given** the sim stacking rig, whose Track is off, **When** a test waits until the
    session's `pointing` has the `source` `live` and then 5 s more, starts a stack,
    waits until `stacked` is at least 5 and stops it, **Then** a committed test asserts
@@ -1121,110 +1446,7 @@ development, `cargo nextest run -p finder --locked --test console stack_loop::`.
    readings, filled by the first five stacked subs through `note_solve`, and applied at
    once because Track is off; and 032's hint, which is narrow only with an aim point
    measured and a scale kept, while a sub's solve keeps no scale, as 032's US4-S7
-   asserts of `note_solve`).
-
----
-
-### User Story 6 - The gate, and a queue the camera never waits on (Priority: P1)
-
-As the observer, I get a stack that leaves out a sub that is clearly softer than the
-others, has drifted off the field, was solved to another scale or was taken at other
-settings, each counted with its reason; and when the console cannot keep up, the camera
-goes on taking subs and the oldest waiting ones are dropped.
-
-**Why this priority**: One bad sub in fifty spoils a picture, and a stack that makes the
-camera wait throws away clear sky.
-
-**Independent Test**: `crates/finder/tests/console/stack_gate.rs`, the module
-`stack_gate` of `console`. The `test` gate's
-`cargo nextest run --workspace --all-targets --all-features --locked` runs it; during
-development, `cargo nextest run -p finder --locked --test console stack_gate::`.
-
-**Acceptance Scenarios**:
-
-1. **Given** `finder::imaging::stack::same_settings` and the reference settings
-   `SubSettings { width: 64, height: 48, bits: 16, bayer: Some("RGGB".into()),
-   binning: 1, roi: Region { x: 0, y: 0, width: 64, height: 48 }, gain: Some(120.0),
-   offset: Some(10.0), exposure_ms: 1000.0 }`, **Then** a committed test asserts that
-   it is true for a sub with the same settings, with `gain` `Some(120.0005)` and with
-   `exposure_ms` 1000.5; true when `gain` and `offset` are `None` in both; and false
-   for a sub that differs from the reference in one thing alone, for each of: `width`
-   32, `height` 24, `bits` 8, `bayer` `Some("GRBG".into())`, `bayer` `None`, `binning`
-   2, `roi` with `x` 2, `gain` `Some(120.002)`, `gain` `None`, `offset`
-   `Some(10.002)`, `offset` `None`, `exposure_ms` 1001.5 and `exposure_ms` 998.5
-   (worked example: size, depth, pattern, binning and region equal; gain and offset
-   each absent in both or within 0.001; the exposure within 1 ms). **Given** the
-   stand-in stacking rig whose node holds a scripted camera whose 4th `expose` carries
-   the gain 50.0, **When** a test runs a stack until `taken` is at least 6 and stops
-   it, **Then** the committed test asserts `dropped.settings` 1 and `stacked` equal to
-   `taken` less 1 less `dropped.unprocessed` (oracle: the scripted camera; every other
-   sub has the stand-in's own gain, and each is compared with the reference sub).
-2. **Given** the stand-in stacking rig, **Then** a committed test asserts, each on a
-   fresh rig run until `taken` is at least 10 and stopped:
-   - with the scripted star sizes 5.0 px for the 2nd `measure`, 2.7 px for the 7th and
-     2.5 px for the 8th: `dropped.soft` is 1, `focus_median_arcsec` is 4.32, and
-     `stacked` is `taken` less 1 less `dropped.unprocessed` (worked example: 2.0 px at
-     2.16″ is 4.32″; 2.7 is 35% above the median of the six before it and 2.5 is 25%;
-     the 2nd is not judged, because fewer than 5 are known);
-   - with the 3rd `measure` answering `TooFewStars` and the 4th `Failed("x")`:
-     `dropped.too_few_stars` 1 and `dropped.solver_failed` 1;
-   - with the scripted star size 25.0 px for the 3rd `measure`: `dropped.soft` is 1 and
-     `stacked` is `taken` less 1 less `dropped.unprocessed` (worked example: 033 calls
-     a star measure above 20 px far out, and such a sub is dropped however few
-     readings are known);
-   - started with `focus_gate` `Some(false)`: the scripted solver's `measure` was never
-     called, `dropped.soft` is 0 and the view has no `focus_median_arcsec`.
-3. **Given** `finder::imaging::stack::judge` and the stand-in stacking rig, **Then** a
-   committed test asserts that:
-   - `judge` of the identity for (64, 48) and (64, 48) is `Ok`; of `t` `[−20, 0]`,
-     `Ok`; of `t` `[−30, 0]`, `Err("off_field")`; of `m` `[[0.94, 0], [0, 0.94]]`,
-     `Err("solve_differs")`; of `m` `[[−1, 0], [0, 1]]` with `t` `[64, 0]`,
-     `Err("solve_differs")`; and of `m` `[[−1, 0], [0, −1]]` with `t` `[64, 48]`, `Ok`
-     (worked example: half the shorter side is 24 px; 0.94² is 0.884);
-   - on the rig, with the scripted solves the standing solve but centred on
-     (83.811662°, −5.385100°) for the 3rd sub and on (83.806442°, −5.382100°) for the
-     4th, at 2.30″ a pixel for the 5th and up at 210° for the 6th, a stack run until
-     `taken` is at least 7 has `dropped.off_field` 1 and `dropped.solve_differs` 1; and
-     of the views the test read every 100 ms, the one whose `last.frame_id` is 3 has
-     `last.outcome` `stacked` and `last.shift_px` within 0.01 of `[20.0, 0.0]`, the one
-     for 4 has `last.outcome` `off_field`, the one for 5 `solve_differs`, and the one
-     for 6 `stacked` with `last.turn_deg` within 0.000001 of 180.0 or −180.0
-   - (worked example: the two centres are where the reference grid's positions (52, 24)
-     and (62, 24) fall on the sky).
-4. **Given** the stand-in stacking rig whose scripted solver waits 10 s, **When** a test
-   starts a stack, reads the view every 100 ms until `taken` is at least 30 and stops
-   it, **Then** a committed test asserts that every read had `queued` at most 4; that
-   `taken` reached 30 within 35 s of virtual time; that `dropped.behind` is at least
-   15 and `stacked` at least 2; and that `taken` equals `stacked` plus Σ dropped
-   (oracle: one sub a second against one solve in ten).
-5. **Given** the stand-in stacking rig, **Then** a committed test asserts, each on a
-   fresh rig:
-   - with the scripted solver answering its 4th, 5th, 6th and 7th `solve` with
-     `NotSolved`, and a stack run until `stacked` is at least 5: the hints of the 2nd
-     to the 6th `solve` have `source` `last_solve` and `radius_deg` 0.048 within
-     0.000001; the 7th's and the 8th's have a `source` other than `last_solve` and a
-     `radius_deg` of at least 3.0; and the 9th's has `source` `last_solve` and
-     `radius_deg` 0.048 again (worked example: the third miss in a row is the 6th
-     `solve`, so the 7th is given 032's hint; the 7th misses too, so the 8th is as
-     well; the 8th solves, and the stack's own hint is back for the 9th);
-   - with the scripted solver answering its 4th and 5th `solve` with `NotSolved` and
-     its 3rd `measure` with `TooFewStars`, and a stack run until `taken` is at least
-     7: `dropped.too_few_stars` is 1, `dropped.not_solved` is 2, and the hint of the
-     6th `solve` has `source` `last_solve` and `radius_deg` 0.048 within 0.000001
-     (worked example: the 3rd sub solved, so its too few stars in the focus gate count
-     as no miss, and two misses in a row leave the stack's own hint in place)
-   - (oracle: the standing solve, and 032's hint, which on this rig has the source
-     `none` and a radius of 180°).
-6. **Given** the stand-in stacking rig, **When** a test sends `POST /api/imaging/focus`
-   with `{"tile":{"col":1,"row":1}}`, waits until `focus.aid.readings` is at least 1,
-   sends `DELETE /api/imaging/focus`, starts a stack, waits until `stacked` is at least
-   3 and stops it, **Then** a committed test asserts that the imaging view's
-   `focus.region` has `x` 20, `y` 16, `width` 20 and `height` 16; that every `measure`
-   the scripted solver was given for an imaging frame 64 wide carried the region
-   `Some(Region { x: 20, y: 16, width: 20, height: 16 })`; that there were at least 3
-   of them; and that `dropped.soft` is 0 (worked example: 033's tile (1, 1) of a
-   64 × 48 sensor at binning 1 is 20 × 16 pixels at (20, 16), and a sub of the whole
-   sensor has the sensor's own pixels; the aid's own imaging frames are 20 wide).
+   asserts of `note_solve`). This scenario was US5-S9 until round 1's cut.
 
 ---
 
@@ -1260,7 +1482,7 @@ development, `cargo nextest run -p finder --locked --test console stack_display:
    committed test asserts:
    - with red 100 + 0.1·(x + 0.5) + 0.05·(y + 0.5), green 200 − 0.02·(x + 0.5) and blue
      50.0: the red plane has `a` 0.1 and `b` 0.05 within 0.0005 and `c` 100 within 0.1;
-     the green `a` −0.02 and `b` 0.0 within 0.0005 and `c` 200 within 0.02; the blue
+     the green `a` −0.02 and `b` 0.0 within 0.0005 and `c` 199.99 within 0.002; the blue
      0.0, 0.0 and 50.0 (worked example: a tile's level is 034's `percentile` at 0.5,
      which for an even count is the lower of the two middle values; down a ramp of 0.02
      a pixel across a tile 100 wide that is the value half a pixel past the tile's
@@ -1270,6 +1492,9 @@ development, `cargo nextest run -p finder --locked --test console stack_display:
      fills are among the brighter half and are left out);
    - with the first picture and only its pixels of y < 75 covered: every plane is
      flat, `a` and `b` 0.0 (worked example: the tiles that count lie on one line);
+   - with the first picture and only its pixels of y < 37 covered: no tile is half
+     covered, and every plane is flat at that channel's median over its covered pixels,
+     red 140.925, green 191.99 and blue 50.0, within 0.01;
    - for a 4 × 4 picture of 7.0: every plane is 0.0, 0.0 and 7.0.
 3. **Given** `tone` of a 3 × 3 reduced picture, all covered, with flat planes of 0.0,
    whose red is six of 0.0 and 300.0, 600.0 and 800.0, whose green is 0.0 and whose
@@ -1277,25 +1502,36 @@ development, `cargo nextest run -p finder --locked --test console stack_display:
    gains of 1.0 and a stretch of 10.0, that the reds of 0, 300, 600 and 800 become 0,
    197, 255 and 255, every green 0, and the blues of 150 and 300 become 140 and 197;
    that with the gains `[1.0, 1.0, 2.0]` the blues become 197 and 255; that with a
-   stretch of 1.0 the red of 300 becomes 139; and that a pixel not covered is (0, 0, 0)
+   stretch of 1.0 the red of 300 becomes 139; that a pixel not covered is (0, 0, 0)
    (worked example: the span is 600, the largest 99.9th percentile; 300 is t = 0.5 and
-   255·asinh(5)/asinh(10) is 196.7).
+   255·asinh(5)/asinh(10) is 196.7); that with every red raised by 100, the reds of
+   100, 400 and 700 become 0, 197 and 255; that with red 0, 10, 20, 20, 20, 20, 20, 20,
+   300 and green and blue 0, the red of 300 becomes 249 (worked example: median 20,
+   p16 10, span 30 × 10 = 300); that with 10·(x + 0.5) added to the red and a red plane
+   of `a` 10, the reds are as with flat planes; and that with the uncovered pixel at
+   5000.0 in every channel, it is (0, 0, 0) and the reds of 300, 600 and 800 are still
+   197, 255 and 255.
 4. **Given** `Stack::new(2400, 100)` to which a test has added once, with the identity,
    a picture of 1000.0 in every channel but 9000.0 where 1000 ≤ x < 1400, so that
    every weight is 1.0, **Then** a committed test asserts that `render` of that stack
    with gains of 1.0, a stretch of 10.0 and `max_width` 1920 is 1200 × 50; that its pixel at
    (100, 25) is (0, 0, 0) and its pixel at (600, 25) is (255, 255, 255); that
    `preview::jpeg` of it decodes to 1200 × 50 with every channel at most 6 at (100, 25)
-   and at least 249 at (600, 25); and that `shrink` of it to 1024 is 600 × 25 with the
-   same two colours at (50, 12) and (300, 12).
+   and at least 249 at (600, 25); that `shrink` of it to 1024 is 600 × 25 with the
+   same two colours at (50, 12) and (300, 12); and that `shrink` of a 2 × 2 picture
+   whose rows are (0, 0, 0), (1, 2, 255) to 1 is (1, 1, 128).
 5. **Given** the stand-in stacking rig, **Then** a committed test asserts that before a
    stack starts, and while `stacked` is 0, the view has no `preview` and `preview()` is
    `None`; that once `stacked` is at least 1 the view's `preview` is
    `/api/imaging/stack/preview.jpg?n=` followed by a whole number of at least 1, and
    `preview()` decodes to a 64 × 48 JPEG; that `preview_within(32)` decodes to 32 × 24;
    that the answer to a `start` with `gains` `Some([2.0, 1.0, 1.0])` on the running
-   stack has a `preview` whose number is larger than the one read just before it; and
-   that after `stop()` the view keeps its `preview` and `preview()` still answers.
+   stack has a `preview` whose number is larger than the one read just before it; that
+   after `stop()` the view keeps its `preview` and `preview()` still answers; that with
+   a solver that takes 3 s a sub, `preview` is absent while `stacked` is below 8 and is
+   `/api/imaging/stack/preview.jpg?n=1` at `stacked` 9; that a start after `stop()`
+   answers no `preview` and `preview()` is `None`; and that `gains`
+   `[1.0, 1.0, 0.5]`, then `stretch` 1.0, each change `preview()`'s bytes.
 
 ---
 
@@ -1325,12 +1561,18 @@ development, `cargo nextest run -p finder --locked --test console stack_console:
      `stacking`; the second has `stack.state` `ended`, `stack.ended_reason` `stopped`
      and `stack.files` `{"fits":"runs/<id>/stack.fits","png":"runs/<id>/stack.png",
      "json":"runs/<id>/stack.json"}` with `<id>` the stack's `id`;
+   - right after the `POST` answers, `runs/<id>/stack.json` has `format`
+     `finder-stack/1`, `finder` the crate's version (`CARGO_PKG_VERSION`), `id` the
+     stack's `id`, a `started_utc` of 23 characters whose 5th is `-` and whose 11th is
+     `T`, `camera` `{"model":"synthetic imaging camera","serial":null}` and no
+     `ended_at` key;
    - those three files exist under R, no name in `runs/<id>/` or in its `subs/` ends
      `.part`, and no file there contains `test-token`;
    - `stack.fits` is 40320 bytes; its cards are, in order, `SIMPLE` T, `BITPIX` −32,
      `NAXIS` 3, `NAXIS1` 64, `NAXIS2` 48, `NAXIS3` 3, `IMAGETYP` `STACK`, `STACKID` the
      id, `NSUBS` and `EXPTIME` both `stack.stacked`, `SUBEXP` 1.0, `DATE-OBS` (a text of
-     23 characters), `INSTRUME` `synthetic imaging camera`, `XBINNING` 1, `YBINNING` 1,
+     23 characters, equal to the `DATE-OBS` card of `subs/000001.fits`), `INSTRUME`
+     `synthetic imaging camera`, `XBINNING` 1, `YBINNING` 1,
      `ROWORDER` `TOP-DOWN`, `CTYPE1` `RA---TAN`, `CTYPE2` `DEC--TAN`, `CRPIX1` 32.5,
      `CRPIX2` 24.5, `CRVAL1` 83.8221, `CRVAL2` −5.3911, `CD1_1` −0.0005196152423,
      `CD1_2` −0.0003, `CD2_1` 0.0003, `CD2_2` −0.0005196152423, `END`, the last eight
@@ -1347,6 +1589,29 @@ development, `cargo nextest run -p finder --locked --test console stack_console:
      under R; those whose `outcome` is `stacked` number `stacked`
    - (oracle: the stand-in camera's sample rule and the standing solve: 2.16″ is 0.0006°
      a pixel, up at 30°).
+   **Given** a fresh rig whose scripted solver waits 3 s, **When** a test runs a stack
+   until `taken` is at least 12 and sends the `DELETE`, **Then** the committed test
+   asserts that `dropped.behind` and `dropped.unprocessed` are each at least 1 and
+   `taken` is above `stacked`; that `stack.json`'s `subs` has `taken` entries, as many
+   whose `outcome` is a reason of `dropped` as that reason's count, and `stacked` whose
+   `outcome` is `stacked`; and that `stack.fits`'s `NSUBS` is `stacked`. **Given** a
+   fresh rig whose scripted camera fails its 3rd `expose` with `the camera fell over`
+   and answers its 5th with the gain 50.0, and whose scripted solver answers its 3rd
+   `solve` with `NotSolved` and its 7th `measure` with 9.0 px, **When** a test runs a
+   stack until `taken` is at least 12 and `queued` is 0 and sends the `DELETE`,
+   **Then** the committed test asserts that `dropped.frame_failed`, `dropped.settings`
+   and `dropped.not_solved` are each 1 and `dropped.soft` at least 1; that
+   `stack.json`'s `subs` holds as many entries of each `outcome` as the counts say;
+   that each `stacked` entry has a number `turn_deg`, a `shift_px` of two numbers and a
+   whole number `rejected_px`; and that each `stacked` or `soft` entry has a number
+   `focus_arcsec`. **Given** a fresh rig whose scripted solver answers its 1st `solve`
+   with the standing solve centred on (83.822123456789°, −5.391123456789°), **When** a
+   test runs a stack as the first case does, **Then** the committed test asserts that
+   its `stack.fits` has `CRVAL1` 83.822123457 and `CRVAL2` −5.391123457, each within
+   0.000000000001. And it asserts that of three
+   stacks started on one rig with `{}`, with `{"gains":[1,1,0.1]}` and with
+   `{"stretch":1}`, the second's `stack.png` differs from the first's in its blue, and
+   the third's differs from the first's.
 2. **Given** the stand-in stacking rig, **Then** a committed test asserts that
    `POST /api/imaging/stack` answers 403 for `{}` with a foreign `Origin`; 400 for
    `{"reject":"yes"}`, for `{"colour":true}` and for `{"gains":[1,2]}`; 415 for a body
@@ -1363,12 +1628,15 @@ development, `cargo nextest run -p finder --locked --test console stack_console:
    that can stack it starts a stack with the defaults, as US8-S1 shows).
 3. **Given** the stand-in stacking rig, **Then** a committed test asserts that with the
    session's target set to `M42` a stack's `id` ends `Z-M42` and `stack.json`'s `target`
-   is `M42`; that a stack started and stopped before any sub is taken has `stacked` 0, a
+   is `M42`; that with the session's target set to `NGC 7000`, which has no Messier
+   name, a stack's `id` ends `Z-NGC-7000`; that a stack started and stopped before any
+   sub is taken has `stacked` 0, a
    `files` object with `json` alone, no `stack.fits` or `stack.png` in its folder and
    an empty `subs` there; and that `finder::imaging::stack::service::label` gives
-   `NGC-1976` for `NGC 1976`, `M42` for `M42` and `Barnard-s-Loop` for
-   `Barnard’s Loop` (worked example: every character that is not an ASCII letter or
-   digit, the space and the right single quotation mark among them, becomes one `-`;
+   `NGC-1976` for `NGC 1976`, `M42` for `M42`, `Barnard-s-Loop` for
+   `Barnard’s Loop` and `N-buleuse` for `Nébuleuse` (worked example: every character
+   that is not an ASCII letter or digit, the space, the right single quotation mark and
+   the `é` among them, becomes one `-`;
    the session's target `M42` is NGC 1976, whose Messier name `M42` is the one
    `target_label` hands to `label`).
 4. **Given** the stand-in stacking rig, **Then** a committed test asserts that
@@ -1378,24 +1646,29 @@ development, `cargo nextest run -p finder --locked --test console stack_console:
    it with another `id`; and that on a console built without `with_imaging` the body
    of `GET /api/imaging` has no `stack` key, and that of `GET /api/session` has no
    `imaging` key or an `imaging` without a `stack` key.
-5. **Given** the stand-in stacking rig for which the test made R and wrote a regular
-   file named `runs` in it before the console was built, **Then** a committed test
+5. **Given** a stand-in stacking rig on which, after it is built and before the start,
+   the test wrote a regular file named `runs` in R, **Then** a committed test
    asserts that `POST /api/imaging/stack` answers 500 with an
    `error` beginning `cannot make the stack folder:` and that no `stack` appears.
    **Given** a stack whose `stacked` has reached 2 and whose folder the test then
    removes, **Then** the committed test asserts that the `DELETE` answers 200 with
    `stack.state` `ended`, `stack.ended_reason` `stopped`, no `stack.files` and a
-   `stack.save_error` beginning `could not save the stack:`.
+   `stack.save_error` beginning `could not save the stack:`. **Given** a stack in whose
+   folder the test makes, mid-stack, a folder named `stack.fits.part`, **Then** the
+   committed test asserts that the `DELETE` answers 200 with no `stack.files`, a
+   `stack.save_error` beginning `could not save the stack:` and no `stack.png` in the
+   folder.
 6. **Given** `finder::imaging::fits::encode_cube`, **Then** a committed test asserts that
    a `RealCube` 2 wide, 2 high, of 3 planes, whose samples are 1.0 to 12.0 and whose one
    card is `NSUBS` integer 4, encodes to 5760 bytes; that, read as the shared setup
    says, its cards are `SIMPLE` T, `BITPIX` −32, `NAXIS` 3, `NAXIS1` 2, `NAXIS2` 2,
    `NAXIS3` 3, `NSUBS` 4, `END`; that its data begins `3F 80 00 00 40 00 00 00 40 40 00
-   00 40 80 00 00 40 A0 00 00` and its twelfth number is `41 40 00 00`; and that the
-   rest of the file is zero (worked example: big-endian IEEE 754 singles, plane after
-   plane).
+   00 40 80 00 00 40 A0 00 00` and its twelfth number is `41 40 00 00`; that the bytes
+   after its eighth card, the `END`, up to byte 2880 are spaces; and that the rest of
+   the file is zero (worked example: big-endian IEEE 754 singles, plane after plane).
 7. **Given** the built `finder` run with `--simulate`, `--state S` and `--listen` on
-   port 0 of `127.0.0.1`, **When** a test sends `POST /api/imaging/stack` with `{}`,
+   port 0 of `127.0.0.1`, **When** a test reads `GET /api/imaging` until `state` is
+   `ready`, for at most 20 s, sends `POST /api/imaging/stack` with `{}`,
    reads `GET /api/imaging` every 200 ms until `stack.stacked` is at least 1, for at
    most 60 s, and sends the `DELETE`, **Then** a committed test asserts that
    `S/imaging/runs/` holds exactly one folder, named as `stack.id`, that it holds
@@ -1427,7 +1700,8 @@ simulate project (owner approval 9). Both are commands of the `test` gate.
    the text
    `Takes subs one after another and stacks them into one picture. Turn Track on first.`,
    fields `Red gain`, `Green gain` and `Blue gain` each with the value 1 and `Stretch`
-   with the value 10, and no `status`, `alert` or picture. **When** the test clicks
+   with the value 10, no `status`, `alert` or picture, and no button `Stop stacking` or
+   `Apply colour`. **When** the test clicks
    `Start stacking`, with `fetch` answering 200 and a view, **Then** the committed test
    asserts that `fetch` was called with `/api/imaging/stack` and
    `{"method":"POST","headers":{"Content-Type":"application/json"},"body":"{\"gains\":[1,1,1],\"stretch\":10}"}`,
@@ -1440,6 +1714,8 @@ simulate project (owner approval 9). Both are commands of the `test` gate.
    a button `Stop stacking`, which calls `fetch` with `/api/imaging/stack` and
    `{"method":"DELETE"}` and then `onChange`, a button `Apply colour`, and no button
    `Start stacking`. With `exposure_s` 45.0 the status ends `45 s of exposure`. With
+   `exposure_s` 119.9 the status ends `1 min 59 s of exposure`, and with 60.0
+   `1 min 0 s of exposure`. With
    `dropped` `{"not_solved":2,"too_few_stars":1,"solver_failed":1,"soft":3,"off_field":1,
    "solve_differs":1,"settings":1,"frame_failed":1,"unreadable":1,"behind":4,
    "unprocessed":0}` the region also holds exactly
@@ -1458,24 +1734,31 @@ simulate project (owner approval 9). Both are commands of the `test` gate.
    `blur` each restore both; and that, with fake timers, 10 s after a `pointerdown`
    with no release both are restored. With `night` false there is no such button.
 4. **Given** `StackBlock` with a `stack` of `state` `ended`, `id`
-   `2026-01-16T02-00-05Z-M42`, `stacked` 9, `taken` 14 and `dropped` summing to 5,
+   `2026-01-16T02-00-05Z-M42`, `stacked` 9, `taken` 14 and `dropped` with `not_solved`
+   2, `behind` 2 and `unprocessed` 1,
    **Then** a committed test asserts, for `ended_reason` `stopped` with `files`
    `{"fits":"runs/2026-01-16T02-00-05Z-M42/stack.fits","png":"runs/2026-01-16T02-00-05Z-M42/stack.png","json":"runs/2026-01-16T02-00-05Z-M42/stack.json"}`,
    a status reading exactly
    `Stack 2026-01-16T02-00-05Z-M42: 9 subs stacked, 5 dropped. Saved runs/2026-01-16T02-00-05Z-M42/stack.fits and stack.png.`,
-   a button `Start stacking`, no button `Stop stacking` and no alert; for
+   a button `Start stacking`, no button `Stop stacking` or `Apply colour`, no text
+   `Takes subs one after another and stacks them into one picture. Turn Track on first.`,
+   no text beginning `Dropped` and no alert; for
    `ended_reason` `camera` with `error` `the scope node is not connected`, also an
    alert `Stacking stopped: the scope node is not connected.`; with `save_error`
    `could not save the stack: disk full` and no `files`, the status ends at `dropped.`
    and an alert reads `The stack was not saved: could not save the stack: disk full.`;
-   and with `files` holding `json` alone, the status ends at `dropped.`.
+   and with `files` holding `json` alone, or `fits` and `json` alone, the status ends
+   at `dropped.`.
 5. **Given** `StackBlock` with a stacking `stack` whose `options` are
    `{"reject":true,"focus_gate":true,"gains":[1,1,1],"stretch":10}`, **When** a test
    sets `Red gain` to 1.5 and `Stretch` to 25 and clicks `Apply colour`, **Then** a
    committed test asserts that `fetch` was called with `/api/imaging/stack` and the
    body `{"gains":[1.5,1,1],"stretch":25}`, then `onChange`; and that a 400 answer with
    `{"error":"gains must be three numbers from 0.1 to 10"}` shows an alert with exactly
-   that text.
+   that text; that with `options` gains `[2, 1, 0.5]` and stretch 20 the four fields
+   read `2`, `1`, `0.5` and `20`; and that after `Red gain` is set to 1.5, a new view
+   with the same options and `taken` 15 leaves it at `1.5`, and a view whose gains are
+   `[3, 1, 1]` sets it to `3`.
 6. **Given** `ImagingPage` rendered with 031's ready view, to which the test adds the
    `calibration` `{"masters":[]}` so that 034's block is on the page, and with each of
    031's not-ready views, **Then** a committed test asserts one region named `Stack`
@@ -1531,19 +1814,26 @@ development, `cargo nextest run -p finder --locked --test mcp stack::`.
    is that stack's `id`; that `set_stacking` with
    `{"on":true,"gains":[2,1,1]}` answers `options.gains` `[2.0, 1.0, 1.0]`; and that
    `set_stacking` with `{"on":false}` answers `state` `ended` and `ended_reason`
-   `stopped`, with `files.fits` naming a file that exists under R.
+   `stopped`, with `files.fits` naming a file that exists under R; that with the
+   session's target `M42` a stack started by `set_stacking` has an `id` ending `Z-M42`;
+   and that on such a rig with a call log, `set_stacking` with `{"on":true}`,
+   `get_stack` with `{}` and `set_stacking` with `{"on":false}` leave the log empty
+   (neither tool writes a call-log line).
 3. **Given** the same rig, **Then** a committed test asserts that `set_stacking` with
    `{}` and with `{"on":"yes"}` answers `isError` true and `on must be true or false`;
    with `{"on":false,"reject":true}`, `isError` true and
    `on false takes no other argument`; with `{"on":true,"gains":[0,1,1]}`, `isError`
    true and `gains must be three numbers from 0.1 to 10`; with
    `{"on":true,"colour":1}`, `isError` true; that `get_stack` with `{"x":1}` answers
-   `isError` true and `get_stack takes no arguments`; and that `get_stack` before any
-   stack answers `structuredContent` `{"state":"none"}` with no image.
+   `isError` true and `get_stack takes no arguments`; that `get_stack` before any
+   stack answers `structuredContent` `{"state":"none"}` with no image; and that
+   `set_stacking` with `{"on":false}` before any stack answers `structuredContent`
+   `{"state":"none"}`.
 4. **Given** a console with MCP on and no `with_imaging`, as
    `crates/finder/tests/support/mcp.rs:24` builds its state, **Then** a committed test
    asserts that `get_stack` with `{}` answers `structuredContent` `{"state":"none"}`;
-   that `set_stacking` with `{}` answers at once with `isError` true and
+   that `set_stacking` with `{}` answers at once (with no virtual time passing) with
+   `isError` true and
    `on must be true or false`; that with `{"on":false,"reject":true}` it answers
    `isError` true and `on false takes no other argument`; that with
    `{"on":true,"colour":1}` it answers `isError` true and a text that is not
@@ -1552,6 +1842,11 @@ development, `cargo nextest run -p finder --locked --test mcp stack::`.
    (worked example: the arguments' shape is judged before the console is asked what
    it has). **Given** the stand-in stacking rig with MCP on, **Then** no result of the
    two tools, called with `{}`, contains `test-token`.
+5. **Given** the sim stacking rig with MCP on, written again in
+   `crates/finder/tests/mcp/stack.rs` from `SimNode` and `SimulatedSolver` with
+   `with_live`, as `crates/finder/tests/mcp/imaging_solve.rs` builds 032's solving rig,
+   **When** a stack has a `preview`, **Then** a committed test asserts that
+   `get_stack`'s image decodes to 618 × 411 (worked example: 1236 over k = 2).
 
 ---
 
@@ -1602,10 +1897,10 @@ development, `cargo nextest run -p finder --locked --test mcp stack::`.
   dropped as `settings`, and so is every later one that differs.
 - **Something else wants the camera during a stack.** A single imaging frame, the focus
   aid or a set of darks or flats asked for while a stack runs is refused by 031 with
-  the holder's name, `the stack`, and the stack is not disturbed (US5-S8). A stack asked
+  the holder's name, `the stack`, and the stack is not disturbed (US5-S6). A stack asked
   for while one of those holds the camera is refused the same way, with that holder's
   name, `the focus aid` or `a set of darks or flats`, even while that holder's own
-  frame is exposing, which is almost always (US5-S2). A set of darks, and each step of a
+  frame is exposing, which is almost always (US6-S7). A set of darks, and each step of a
   set of flats, holds the lease under the name `a set of darks or flats` (034 A1), so
   such a set or step is refused at its start while a stack runs, and a stack cannot
   start between two of its frames.
@@ -1892,9 +2187,10 @@ development, `cargo nextest run -p finder --locked --test mcp stack::`.
   failure SHALL leave the stack `ended` with its reason, no `files`, and `save_error`
   `could not save the stack: {error}`. The view's `files` SHALL name the files written.
   No sub and no solve sidecar SHALL be moved, copied or rewritten.
-- **FR-039**: `crates/finder/README.md` SHALL gain `## Live stack` and three rows of its
-  API table, and the route list of `crates/finder/src/lib.rs` three lines, as plan.md
-  § Interfaces words them (owner approval 8).
+- **FR-039**: `crates/finder/README.md` SHALL gain three rows of its API table, and the
+  route list of `crates/finder/src/lib.rs` three lines, as plan.md § Interfaces words
+  them; and US10 SHALL add `## Live stack` at the end of the README, as plan.md
+  § Interfaces words it (owner approval 8).
 - **FR-040**: The `finder` binary SHALL offer the stack wherever it offers imaging
   frames and an imaging solver, `--simulate` included, with no new flag.
 - **FR-041**: The Imaging page SHALL show a region named Stack with, by the stack's
@@ -1959,7 +2255,7 @@ development, `cargo nextest run -p finder --locked --test mcp stack::`.
   and gate files are the `mod` lines and the two list entries of
   `playwright.config.ts` that owner approval 9 names.
 - **SC-003**: Against the simulator's truth, a star's centroid in a stack of three subs
-  at three attitudes, a half turn among them, is within 0.2 px of its centroid in the
+  at three attitudes, a half turn among them, is within 0.02 px of its centroid in the
   reference sub (US3-S4).
 - **SC-004**: With four times the subs a faint source's signal over noise doubles,
   within 15% (US3-S5).
@@ -1972,7 +2268,7 @@ development, `cargo nextest run -p finder --locked --test mcp stack::`.
 - **SC-007**: During a stack with a live pointing, the subs keep the aim point measured:
   after five stacked subs it is within 1.5 finder pixels of the simulator's truth,
   from five aim readings, while the page's `solve` and the hint's radius are what they
-  were before the stack (US5-S9).
+  were before the stack (US6-S9).
 
 ## Assumptions
 

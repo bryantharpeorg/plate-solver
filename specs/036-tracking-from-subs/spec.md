@@ -1514,7 +1514,7 @@ tracking error is (e, n) within 10⁻⁴″.
   halving at the camera's shortest and is then both `limited` and `over_limit`.
 - **The observer edits the exposure during a stack.** The edit is refused: while the
   stack holds the camera's lease, `PUT /api/imaging/settings` answers 409 with the
-  stack's name (035 plan.md § The camera's lease; 035 US5-S8). So the exposure a stack
+  stack's name (035 plan.md § The camera's lease; 035 US5-S6). So the exposure a stack
   holds cannot change under it. The observer stops the stack, edits and starts again;
   the setting they then see is their own, put back when the stack ended.
 - **The exposure cannot be shortened.** If the camera refuses the stack's change of the
