@@ -1,8 +1,9 @@
 //! The live stack as the console runs it (035): subs taken back to back,
-//! solved, calibrated and added until stopped. Registration comes only from
+//! solved, gated, calibrated and added until stopped. Registration comes only from
 //! imaging solves; this service knows nothing of the mount or the site.
 
 use std::{
+    collections::VecDeque,
     path::Path,
     sync::{Arc, Mutex},
     time::Instant,
@@ -10,15 +11,17 @@ use std::{
 
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, watch};
+use tokio::sync::{watch, Notify};
 
-use super::{Added, Colour, Placement, Stack};
+use super::{Added, Colour, Placement, Stack, SubSettings};
 use crate::{
     imaging::{
         calibration::{library::FrameKey, service::Calibration, Mosaic},
-        fits,
+        fits, focus,
         frames::FrameView,
-        solver::{HintSource, ImagingSolve, ImagingSolver, SolveError, SolveFrame, SolveHint},
+        solver::{
+            HintSource, ImagingSolve, ImagingSolver, Region, SolveError, SolveFrame, SolveHint,
+        },
         solving::{self, Ask},
         Imaging, ImagingView, Lease, Refusal,
     },
@@ -28,6 +31,10 @@ use crate::{
 /// The name a stack holds the imaging camera's lease under.
 pub const HOLDER: &str = "the stack";
 pub const FAILED_IN_A_ROW: u32 = 3;
+pub const QUEUE_SUBS: usize = 4;
+pub const FOCUS_GATE_MIN: usize = 5;
+pub const FOCUS_GATE_EXCESS: f64 = 0.3;
+pub const REHINT_AFTER: u32 = 3;
 
 /// Absent is the default, or unchanged on a running stack.
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -87,7 +94,10 @@ impl Dropped {
             "not_solved" => &mut self.not_solved,
             "too_few_stars" => &mut self.too_few_stars,
             "solver_failed" => &mut self.solver_failed,
+            "soft" => &mut self.soft,
             "off_field" => &mut self.off_field,
+            "solve_differs" => &mut self.solve_differs,
+            "settings" => &mut self.settings,
             "unreadable" => &mut self.unreadable,
             "unprocessed" => &mut self.unprocessed,
             _ => unreachable!("an outcome supplied by the worker"),
@@ -120,6 +130,8 @@ pub struct LastView {
     pub shift_px: Option<[f64; 2]>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rejected_px: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub focus_arcsec: Option<f64>,
     /// Real milliseconds from taking the sub off the queue to its outcome.
     pub took_ms: f64,
 }
@@ -146,6 +158,8 @@ pub struct StackView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub missing: Option<Vec<&'static str>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub focus_median_arcsec: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ended_at: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ended_reason: Option<&'static str>,
@@ -160,6 +174,8 @@ struct Ending {
 
 struct Run {
     view: StackView,
+    /// Saved subs, oldest first. Kept with the counts so queued is exact.
+    waiting: VecDeque<FrameView>,
     stopping: watch::Sender<bool>,
     finished: watch::Sender<bool>,
     ending: Option<Ending>,
@@ -287,6 +303,7 @@ impl Stacker {
             reference: None,
             last: None,
             missing: None,
+            focus_median_arcsec: None,
             ended_at: None,
             ended_reason: None,
             error: None,
@@ -298,14 +315,16 @@ impl Stacker {
         *self.pixels.lock().expect("stack pixels") = None;
         *self.counts.lock().expect("stack counts") = Some(Run {
             view: view.clone(),
+            waiting: VecDeque::with_capacity(QUEUE_SUBS),
             stopping,
             finished,
             ending: None,
         });
-        let (send, receive) = mpsc::unbounded_channel();
+        let waiting = Arc::new(Notify::new());
+        let notify = waiting.clone();
         let stacker = self.clone();
         let taker = tokio::spawn(async move {
-            stacker.take_subs(lease, send, taker_stop).await;
+            stacker.take_subs(lease, notify, taker_stop).await;
         });
         let stacker = self.clone();
         let worker = tokio::spawn(async move {
@@ -314,9 +333,12 @@ impl Stacker {
                 solver,
                 stopping: worker_stop,
                 reference: None,
+                reference_settings: None,
                 last_solve: None,
+                misses: 0,
+                focus_readings: Vec::new(),
             }
-            .run(receive)
+            .run(waiting)
             .await
         });
         let stacker = self.clone();
@@ -324,15 +346,12 @@ impl Stacker {
         // camera before the worker's last work and before the ended view.
         tokio::spawn(async move {
             taker.await.expect("the stack taker");
-            let mut waiting = worker.await.expect("the stack worker");
-            let mut unprocessed = 0;
-            while waiting.try_recv().is_ok() {
-                unprocessed += 1;
-            }
+            worker.await.expect("the stack worker");
             let ended_at = stacker.clock.now();
             let mut counts = stacker.counts.lock().expect("stack counts");
             let run = counts.as_mut().expect("the ending stack");
-            run.view.dropped.unprocessed += unprocessed;
+            run.view.dropped.unprocessed += run.waiting.len() as u32;
+            run.waiting.clear();
             run.view.queued = 0;
             let ending = run.ending.take().expect("a requested ending");
             run.view.ended_at = Some(ended_at);
@@ -391,12 +410,7 @@ impl Stacker {
         true
     }
 
-    async fn take_subs(
-        &self,
-        lease: Lease,
-        send: mpsc::UnboundedSender<FrameView>,
-        stopping: watch::Receiver<bool>,
-    ) {
+    async fn take_subs(&self, lease: Lease, waiting: Arc<Notify>, stopping: watch::Receiver<bool>) {
         let mut failed = 0;
         loop {
             if *stopping.borrow() {
@@ -424,12 +438,16 @@ impl Stacker {
                     failed = 0;
                     {
                         let mut counts = self.counts.lock().expect("stack counts");
-                        let view = &mut counts.as_mut().expect("the taking stack").view;
-                        view.taken += 1;
-                        view.queued += 1;
+                        let run = counts.as_mut().expect("the taking stack");
+                        run.view.taken += 1;
+                        if run.waiting.len() == QUEUE_SUBS {
+                            run.waiting.pop_front();
+                            run.view.dropped.behind += 1;
+                        }
+                        run.waiting.push_back(frame);
+                        run.view.queued = run.waiting.len() as u32;
                     }
-                    send.send(frame)
-                        .expect("the worker's queue stays until the taker returns");
+                    waiting.notify_one();
                 }
                 "failed" => {
                     {
@@ -450,6 +468,23 @@ impl Stacker {
                 }
                 _ => unreachable!("Imaging::ended answers an ended frame"),
             }
+        }
+    }
+
+    async fn next_sub(&self, waiting: &Notify) -> FrameView {
+        loop {
+            let sub = {
+                let mut counts = self.counts.lock().expect("stack counts");
+                let run = counts.as_mut().expect("the working stack");
+                let sub = run.waiting.pop_front();
+                run.view.queued = run.waiting.len() as u32;
+                sub
+            };
+            if let Some(sub) = sub {
+                return sub;
+            }
+            // notify_one retains a permit if a save arrives before this await.
+            waiting.notified().await;
         }
     }
 }
@@ -494,7 +529,11 @@ struct Worker {
     solver: Arc<dyn ImagingSolver>,
     stopping: watch::Receiver<bool>,
     reference: Option<ImagingSolve>,
+    reference_settings: Option<SubSettings>,
     last_solve: Option<ImagingSolve>,
+    misses: u32,
+    /// Only accepted subs join this history.
+    focus_readings: Vec<f64>,
 }
 
 struct Accepted {
@@ -505,21 +544,14 @@ struct Accepted {
 }
 
 impl Worker {
-    async fn run(
-        mut self,
-        mut receive: mpsc::UnboundedReceiver<FrameView>,
-    ) -> mpsc::UnboundedReceiver<FrameView> {
+    async fn run(mut self, waiting: Arc<Notify>) {
         loop {
             let sub = tokio::select! {
                 biased;
                 _ = self.stopping.wait_for(|stopping| *stopping) => break,
-                sub = receive.recv() => match sub { Some(sub) => sub, None => break },
+                sub = self.stacker.next_sub(&waiting) => sub,
             };
             let began = Instant::now();
-            {
-                let mut counts = self.stacker.counts.lock().expect("stack counts");
-                counts.as_mut().expect("the working stack").view.queued -= 1;
-            }
             let mut last = None;
             let result = self.process(&sub, &mut last).await;
             let outcome = match &result {
@@ -538,6 +570,7 @@ impl Worker {
                         view.stacked += 1;
                         view.exposure_s += sub.exposure_ms / 1000.0;
                         view.missing = Some(accepted.missing.clone());
+                        view.focus_median_arcsec = median(&self.focus_readings);
                         if let Some(reference) = &accepted.reference {
                             view.reference = Some(reference.clone());
                         }
@@ -556,7 +589,6 @@ impl Worker {
                     .note_solve(&accepted.frame, sub.id, &accepted.solve);
             }
         }
-        receive
     }
 
     async fn process(
@@ -585,16 +617,38 @@ impl Worker {
             start,
             exposure_s: sub.exposure_ms / 1000.0,
         };
+        let settings = SubSettings {
+            width,
+            height,
+            bits,
+            bayer: sub.bayer.clone(),
+            binning,
+            roi: sub.roi.into(),
+            gain: sub.gain,
+            offset: sub.offset,
+            exposure_ms: sub.exposure_ms,
+        };
+        if self
+            .reference_settings
+            .as_ref()
+            .is_some_and(|reference| !super::same_settings(reference, &settings))
+        {
+            return Err("settings");
+        }
         *last = Some(LastView {
             frame_id: sub.id,
             outcome: "unprocessed",
             turn_deg: None,
             shift_px: None,
             rejected_px: None,
+            focus_arcsec: None,
             took_ms: 0.0,
         });
         let mut hint = self.stacker.imaging.hint(&frame);
-        if hint.source != HintSource::Pointing && self.reference.is_some() {
+        if hint.source != HintSource::Pointing
+            && self.reference.is_some()
+            && self.misses < REHINT_AFTER
+        {
             if let Some(solve) = &self.last_solve {
                 let scale = solve.arcsec_per_px / 3600.0;
                 hint = SolveHint {
@@ -618,17 +672,84 @@ impl Worker {
             _ = self.stopping.wait_for(|stopping| *stopping) => return Err("unprocessed"),
             ended = solving::solve_frame(self.solver.as_ref(), self.stacker.clock.as_ref(), ask) => ended,
         };
-        let solve = ended.outcome.map_err(|error| match error {
-            SolveError::NotSolved { .. } => "not_solved",
-            SolveError::TooFewStars { .. } => "too_few_stars",
-            _ => "solver_failed",
-        })?;
+        // Misses change only here: a focus failure after a solve is no miss.
+        let solve = match ended.outcome {
+            Ok(solve) => {
+                self.misses = 0;
+                solve
+            }
+            Err(SolveError::NotSolved { .. }) => {
+                self.misses += 1;
+                return Err("not_solved");
+            }
+            Err(SolveError::TooFewStars { .. }) => {
+                self.misses += 1;
+                return Err("too_few_stars");
+            }
+            Err(_) => return Err("solver_failed"),
+        };
         self.last_solve = Some(solve.clone());
+        let options = self.stacker.view().expect("a working stack").options;
+        let focus_arcsec = if options.focus_gate {
+            let region = self
+                .stacker
+                .imaging
+                .view()
+                .focus
+                .and_then(|focus| focus.region)
+                .and_then(|region| {
+                    let roi = frame.roi;
+                    (region.x >= roi.x
+                        && region.y >= roi.y
+                        && u64::from(region.x) + u64::from(region.width)
+                            <= u64::from(roi.x) + u64::from(roi.width)
+                        && u64::from(region.y) + u64::from(region.height)
+                            <= u64::from(roi.y) + u64::from(roi.height))
+                    .then(|| Region {
+                        x: (region.x - roi.x) / binning,
+                        y: (region.y - roi.y) / binning,
+                        width: region.width / binning,
+                        height: region.height / binning,
+                    })
+                });
+            let read = tokio::select! {
+                biased;
+                _ = self.stopping.wait_for(|stopping| *stopping) => return Err("unprocessed"),
+                read = focus::read(self.solver.as_ref(), frame.clone(), sub.id, region, Some(solve.arcsec_per_px / f64::from(binning))) => read,
+            };
+            let reading = match read {
+                Err(_) => return Err("solver_failed"),
+                Ok(Err(focus::Unmeasurable::TooFewStars { .. })) => return Err("too_few_stars"),
+                Ok(Err(focus::Unmeasurable::FarOut { .. })) => return Err("soft"),
+                Ok(Ok(reading)) => reading.arcsec.expect("the sub's solve supplies a scale"),
+            };
+            last.as_mut()
+                .expect("this sub reached the solve")
+                .focus_arcsec = Some(reading);
+            if self.focus_readings.len() >= FOCUS_GATE_MIN
+                && reading
+                    > (1.0 + FOCUS_GATE_EXCESS)
+                        * median(&self.focus_readings).expect("five readings")
+            {
+                return Err("soft");
+            }
+            Some(reading)
+        } else {
+            None
+        };
         let placement = match &self.reference {
-            Some(reference) => Placement::between(reference, &solve).ok_or("off_field")?,
+            Some(reference) => {
+                let placement = Placement::between(reference, &solve).ok_or("off_field")?;
+                super::judge(
+                    &placement,
+                    (reference.width, reference.height),
+                    (width, height),
+                )?;
+                placement
+            }
             None => Placement::identity(),
         };
-        let reject = self.stacker.view().expect("a working stack").options.reject;
+        let reject = options.reject;
         let angle = self
             .stacker
             .imaging
@@ -673,6 +794,7 @@ impl Worker {
         .expect("the stack pixel pass cannot be cancelled")?;
         let reference = if self.reference.is_none() {
             self.reference = Some(solve.clone());
+            self.reference_settings = Some(settings);
             Some(ReferenceView {
                 frame_id: sub.id,
                 width,
@@ -697,6 +819,9 @@ impl Worker {
             .centre_shift(reference_size, (width, height))
             .map(|(x, y)| [x, y]);
         last.rejected_px = Some(added.rejected);
+        if let Some(reading) = focus_arcsec {
+            self.focus_readings.push(reading);
+        }
         Ok(Accepted {
             frame,
             solve,
@@ -704,4 +829,13 @@ impl Worker {
             reference,
         })
     }
+}
+
+fn median(readings: &[f64]) -> Option<f64> {
+    if readings.is_empty() {
+        return None;
+    }
+    let mut sorted = readings.to_vec();
+    sorted.sort_by(f64::total_cmp);
+    Some(sorted[(sorted.len() - 1) / 2])
 }

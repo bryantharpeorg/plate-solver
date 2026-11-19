@@ -6,7 +6,7 @@ pub mod service;
 
 use super::{
     calibration::{percentile, Mosaic},
-    solver::ImagingSolve,
+    solver::{ImagingSolve, Region},
 };
 
 /// At each corner of the reference grid the placing map may lie this many of the
@@ -21,6 +21,71 @@ pub const REJECT_SIGMAS: f32 = 3.0;
 pub const SIGMA_FLOOR: f32 = 1.0;
 /// A level is read on a grid of about this many pixels a side.
 pub const LEVEL_GRID: u32 = 512;
+/// A sub's centre may move this share of the reference's shorter side.
+pub const OFF_FIELD_SHARE: f64 = 0.5;
+/// The placing map's area scale may differ from one by this much.
+pub const AREA_TOLERANCE: f64 = 0.02;
+/// Tolerance for equality of two gain or offset settings.
+pub const GAIN_TOLERANCE: f64 = 0.001;
+/// Tolerance for equality of two exposure settings, in milliseconds.
+pub const EXPOSURE_TOLERANCE_MS: f64 = 1.0;
+
+/// Whether a sub so placed belongs in a stack. Check the solve before drift,
+/// so a mirror is always `solve_differs`, whatever its shift.
+pub fn judge(
+    placement: &Placement,
+    reference: (u32, u32),
+    sub: (u32, u32),
+) -> Result<(), &'static str> {
+    let area = placement.area_scale();
+    if !area.is_finite() || (area - 1.0).abs() > AREA_TOLERANCE {
+        return Err("solve_differs");
+    }
+    let (x, y) = placement
+        .centre_shift(reference, sub)
+        .ok_or("solve_differs")?;
+    if x.hypot(y) > OFF_FIELD_SHARE * f64::from(reference.0.min(reference.1)) {
+        return Err("off_field");
+    }
+    Ok(())
+}
+
+/// What a sub must share with the reference sub to be stacked with it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SubSettings {
+    pub width: u32,
+    pub height: u32,
+    pub bits: u32,
+    /// The Bayer pattern, or None for mono.
+    pub bayer: Option<String>,
+    pub binning: u32,
+    /// The sub's region in sensor pixels.
+    pub roi: Region,
+    pub gain: Option<f64>,
+    pub offset: Option<f64>,
+    /// The console's exposure setting when the sub was asked for.
+    pub exposure_ms: f64,
+}
+
+/// Compare each sub with the reference sub, including absent gain and offset.
+pub fn same_settings(reference: &SubSettings, sub: &SubSettings) -> bool {
+    fn same_number(a: Option<f64>, b: Option<f64>) -> bool {
+        match (a, b) {
+            (None, None) => true,
+            (Some(a), Some(b)) => (a - b).abs() <= GAIN_TOLERANCE,
+            _ => false,
+        }
+    }
+    reference.width == sub.width
+        && reference.height == sub.height
+        && reference.bits == sub.bits
+        && reference.bayer == sub.bayer
+        && reference.binning == sub.binning
+        && reference.roi == sub.roi
+        && same_number(reference.gain, sub.gain)
+        && same_number(reference.offset, sub.offset)
+        && (reference.exposure_ms - sub.exposure_ms).abs() <= EXPOSURE_TOLERANCE_MS
+}
 
 /// Three planes of 32-bit reals, red, green and blue, each row by row from the top.
 #[derive(Debug, Clone, PartialEq)]

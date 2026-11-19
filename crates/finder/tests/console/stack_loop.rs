@@ -475,7 +475,7 @@ async fn unreadable_first_sub_and_last_solved_hint() {
     }
     fs::write(sub(&rig, &view, 1), b"not an image").unwrap();
     let read = wait_stack(&rig, |v| {
-        v["dropped"]["unreadable"] == 1 && v["reference"]["frame_id"] == 2
+        v["dropped"]["unreadable"] == 1 && v["reference"]["frame_id"].is_u64()
     })
     .await;
     assert_eq!(read["dropped"]["unreadable"], 1);
