@@ -214,6 +214,97 @@ pub async fn find_region(
     })
 }
 
+/// A night for the focus record (FR-011): 12 hours, counted from the night's
+/// first settled reading and not from its record's time.
+pub const NIGHT_S: f64 = 43_200.0;
+/// At most this fraction above the reference is `good` (FR-010).
+pub const GOOD_FRACTION: f64 = 0.10;
+/// At most this fraction above the reference is `slightly_soft`; beyond that
+/// `clearly_out` (FR-010).
+pub const SOFT_FRACTION: f64 = 0.30;
+/// A record made at a measured scale farther than this from the scale in
+/// force is another telescope's (FR-013).
+pub const SCALE_TOLERANCE: f64 = 0.05;
+
+/// How a reading compares with the sharpest this camera has been on this
+/// telescope (FR-010). Focus is never said to be good in absolute terms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Verdict {
+    Good,
+    SlightlySoft,
+    ClearlyOut,
+    Unmeasurable,
+    NoRecord,
+}
+
+impl Verdict {
+    /// `good`, `slightly_soft`, `clearly_out`, `unmeasurable` or `no_record`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Verdict::Good => "good",
+            Verdict::SlightlySoft => "slightly_soft",
+            Verdict::ClearlyOut => "clearly_out",
+            Verdict::Unmeasurable => "unmeasurable",
+            Verdict::NoRecord => "no_record",
+        }
+    }
+}
+
+/// Judge a reading against the reference, in this order (FR-010): too few
+/// stars is `unmeasurable` and far out `clearly_out`, whatever the record;
+/// without a reference there is `no_record`; at most a `GOOD_FRACTION` above
+/// it is `good`, at most a `SOFT_FRACTION` above it `slightly_soft`, and
+/// beyond that `clearly_out`. A reading below the reference is `good`.
+pub fn judge(px: Result<f64, Unmeasurable>, reference: Option<f64>) -> Verdict {
+    match px {
+        Err(Unmeasurable::TooFewStars { .. }) => Verdict::Unmeasurable,
+        Err(Unmeasurable::FarOut { .. }) => Verdict::ClearlyOut,
+        Ok(px) => match reference {
+            None => Verdict::NoRecord,
+            Some(reference) => {
+                if px <= reference * (1.0 + GOOD_FRACTION) {
+                    Verdict::Good
+                } else if px <= reference * (1.0 + SOFT_FRACTION) {
+                    Verdict::SlightlySoft
+                } else {
+                    Verdict::ClearlyOut
+                }
+            }
+        },
+    }
+}
+
+/// One part of the focus record: a size in sensor pixels and when it was read.
+/// The sizes are sensor pixels and never arcseconds, so a record does not move
+/// when the kept scale is refined by a later imaging solve.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Mark {
+    pub px: f64,
+    /// Console Unix seconds.
+    pub at: f64,
+}
+
+/// The record as it reads at one moment (FR-011, FR-012): tonight's part,
+/// while its night began at most `NIGHT_S` ago, and the earlier nights';
+/// a night past that counts with the earlier nights', of which the smaller is
+/// shown. Empty — with `passed` false — while the record is another
+/// telescope's (FR-013).
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct RecordView {
+    pub tonight: Option<Mark>,
+    pub earlier: Option<Mark>,
+    /// Whether the focus aid has passed through focus tonight. False without a
+    /// `tonight`.
+    pub passed: bool,
+}
+
+/// Which part of the record a reading was judged against.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Of {
+    Tonight,
+    Earlier,
+}
+
 /// The format line of `focus.json` (FR-008).
 pub const FORMAT: &str = "imaging-focus/1";
 
@@ -296,19 +387,52 @@ impl KeptRegion {
     }
 }
 
-/// `focus.json`: the camera and the focus region, each left out while there is
-/// none, and so is every `None` inside the region (FR-008). US3 adds the
-/// record beside the region.
+/// Tonight's part of the record as it is kept in the file (FR-011): `passed`
+/// is left out while false, and read as false when absent, so a file written
+/// by hand without it is a record that has not been passed through.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+struct StoredNight {
+    px: f64,
+    /// Console Unix seconds.
+    at: f64,
+    /// When this night began, console Unix seconds.
+    since: f64,
+    #[serde(default, skip_serializing_if = "is_false")]
+    passed: bool,
+}
+
+fn is_false(passed: &bool) -> bool {
+    !*passed
+}
+
+/// The record as it is kept in `focus.json` (FR-011, FR-013): the measured
+/// scale it was made at, tonight's part and the earlier nights', each left out
+/// while there is none.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+struct StoredRecord {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    arcsec_per_px: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    tonight: Option<StoredNight>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    earlier: Option<Mark>,
+}
+
+/// `focus.json`: the camera, the focus region and the focus record, each left
+/// out while there is none, and so is every `None` inside them (FR-008).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Stored {
     format: String,
     camera: CameraId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     region: Option<KeptRegion>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    record: Option<StoredRecord>,
 }
 
-/// What the console keeps about focus for one camera (FR-008): its private
-/// fields are the file's path, the camera and the region; US3 adds the record.
+/// What the console keeps about focus for one camera (FR-008, FR-011): the
+/// file's path, the camera, the focus region and the focus record — the
+/// measured scale it was made at, tonight's part and the earlier nights'.
 #[derive(Debug)]
 pub struct Kept {
     /// `<imaging folder>/focus.json`.
@@ -316,6 +440,13 @@ pub struct Kept {
     /// The camera the region belongs to; `None` before the camera is described.
     camera: Option<CameraId>,
     region: Option<KeptRegion>,
+    /// The measured scale the record was made at (FR-013).
+    scale: Option<f64>,
+    /// Tonight's record: its size, when it was read, when its night began and
+    /// whether the focus aid has passed through focus tonight (FR-011).
+    tonight: Option<(f64, f64, f64, bool)>,
+    /// The smaller record of the earlier nights (FR-011).
+    earlier: Option<Mark>,
 }
 
 impl Kept {
@@ -326,22 +457,35 @@ impl Kept {
             path,
             camera: None,
             region: None,
+            scale: None,
+            tonight: None,
+            earlier: None,
         }
     }
 
-    /// The camera was described (FR-008). For the camera already held this
-    /// does nothing. Otherwise the file is read and what it holds for this
-    /// camera is taken — a file that is missing, unreadable, of another
-    /// format or of another camera answers nothing.
+    /// The camera was described (FR-008, FR-014). For the camera already held
+    /// this does nothing. Otherwise the file is read and what it holds for this
+    /// camera is taken — the region and the record; a file that is missing,
+    /// unreadable, of another format or of another camera answers nothing.
     pub fn describe(&mut self, camera: CameraId) {
         if self.camera.as_ref() == Some(&camera) {
             return;
         }
-        self.region = std::fs::read(&self.path)
+        let stored = std::fs::read(&self.path)
             .ok()
             .and_then(|bytes| serde_json::from_slice::<Stored>(&bytes).ok())
-            .filter(|stored| stored.format == FORMAT && stored.camera == camera)
-            .and_then(|stored| stored.region);
+            .filter(|stored| stored.format == FORMAT && stored.camera == camera);
+        let (region, record) = match stored {
+            Some(stored) => (stored.region, stored.record),
+            None => (None, None),
+        };
+        self.region = region;
+        self.scale = record.as_ref().and_then(|record| record.arcsec_per_px);
+        self.tonight = record
+            .as_ref()
+            .and_then(|record| record.tonight)
+            .map(|night| (night.px, night.at, night.since, night.passed));
+        self.earlier = record.and_then(|record| record.earlier);
         self.camera = Some(camera);
     }
 
@@ -361,14 +505,144 @@ impl Kept {
         self.save();
     }
 
-    /// Write everything held to the file (FR-008): whole under a `.part`
-    /// name and renamed, creating the imaging folder first when it is
-    /// missing.
+    /// A settled reading of the focus aid (FR-011, FR-013). `passed` is the
+    /// aid's `found()` after that reading. `scale` is the measured scale, an
+    /// imaging solve's, or `None` while none has solved. True when the record
+    /// changed; before the camera is described this does nothing.
+    pub fn note(&mut self, px: f64, at: f64, scale: Option<f64>, passed: bool) -> bool {
+        if self.camera.is_none() {
+            return false;
+        }
+        // Another telescope's record is dropped; the next note replaces it.
+        if self.foreign(scale) {
+            self.tonight = None;
+            self.earlier = None;
+        }
+        // When a scale is given it is held; a note that then changes nothing
+        // writes it at the next change only.
+        if scale.is_some() {
+            self.scale = scale;
+        }
+        let mut changed = false;
+        match self.tonight {
+            // No record of tonight: a night begins with this reading, and its
+            // first reading carries the mark it is given.
+            None => {
+                self.tonight = Some((px, at, at, passed));
+                changed = true;
+            }
+            // A night that began more than 12 hours before this reading is
+            // over: its record joins the earlier nights' if it is the smaller,
+            // and a new night begins.
+            Some((kept_px, kept_at, since, _)) if at - since > NIGHT_S => {
+                if self.earlier.is_none_or(|earlier| kept_px < earlier.px) {
+                    self.earlier = Some(Mark {
+                        px: kept_px,
+                        at: kept_at,
+                    });
+                }
+                self.tonight = Some((px, at, at, passed));
+                changed = true;
+            }
+            // Otherwise tonight's record is replaced only when smaller, and the
+            // mark is set by a `passed` note and never set back within a night.
+            Some((mut kept_px, mut kept_at, since, mut kept_passed)) => {
+                if px < kept_px {
+                    kept_px = px;
+                    kept_at = at;
+                    changed = true;
+                }
+                if passed && !kept_passed {
+                    kept_passed = true;
+                    changed = true;
+                }
+                self.tonight = Some((kept_px, kept_at, since, kept_passed));
+            }
+        }
+        if changed {
+            self.save();
+        }
+        changed
+    }
+
+    /// The record as it reads at `now`, for the measured scale in force
+    /// (FR-012, FR-013). Tonight's part is shown while its night began at most
+    /// 12 hours ago, and carries its mark; a night past that counts with the
+    /// earlier nights', of which the smaller is shown, and the mark is then
+    /// false. Reading never writes.
+    pub fn record(&self, now: f64, scale: Option<f64>) -> RecordView {
+        if self.foreign(scale) {
+            return RecordView::default();
+        }
+        match self.tonight {
+            Some((px, at, since, passed)) if now - since <= NIGHT_S => RecordView {
+                tonight: Some(Mark { px, at }),
+                earlier: self.earlier,
+                passed,
+            },
+            tonight => RecordView {
+                // A night past counts with the earlier nights': the smaller of
+                // the two is shown, and tonight's part is not.
+                tonight: None,
+                earlier: match tonight {
+                    Some((px, at, ..)) => match self.earlier {
+                        Some(kept) if kept.px <= px => Some(kept),
+                        _ => Some(Mark { px, at }),
+                    },
+                    None => self.earlier,
+                },
+                passed: false,
+            },
+        }
+    }
+
+    /// What a reading is judged against at `now` (FR-012): tonight's record
+    /// alone while its night began at most 12 hours ago and it is marked as
+    /// passed; otherwise the smaller of tonight's record — while its night
+    /// began at most 12 hours ago — and the earlier nights'; and none when
+    /// there is neither.
+    pub fn reference(&self, now: f64, scale: Option<f64>) -> Option<(f64, Of)> {
+        let record = self.record(now, scale);
+        match record.tonight {
+            Some(tonight) if record.passed => Some((tonight.px, Of::Tonight)),
+            Some(tonight) => match record.earlier {
+                Some(earlier) if earlier.px < tonight.px => Some((earlier.px, Of::Earlier)),
+                _ => Some((tonight.px, Of::Tonight)),
+            },
+            None => record.earlier.map(|earlier| (earlier.px, Of::Earlier)),
+        }
+    }
+
+    /// Whether the record was made at another measured scale than the one in
+    /// force (FR-013): both known and more than `SCALE_TOLERANCE` apart. A
+    /// record that holds no scale is never foreign.
+    fn foreign(&self, scale: Option<f64>) -> bool {
+        match (self.scale, scale) {
+            (Some(held), Some(given)) => (given / held - 1.0).abs() > SCALE_TOLERANCE,
+            _ => false,
+        }
+    }
+
+    /// Write everything held to the file (FR-008, FR-014): the region and the
+    /// record, so that a change of the one never loses the other. Whole under
+    /// a `.part` name and renamed, creating the imaging folder first when it
+    /// is missing.
     fn save(&self) {
+        let record = self.tonight.map(|(px, at, since, passed)| StoredRecord {
+            arcsec_per_px: self.scale,
+            tonight: Some(StoredNight {
+                px,
+                at,
+                since,
+                passed,
+            }),
+            earlier: self.earlier,
+        });
         let stored = Stored {
             format: FORMAT.to_string(),
             camera: self.camera.clone().expect("the camera is described"),
             region: self.region,
+            record,
         };
         let bytes = serde_json::to_vec(&stored).expect("the focus region's numbers are finite");
         let part = self.path.with_extension("json.part");
