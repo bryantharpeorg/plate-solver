@@ -82,7 +82,7 @@ moves the telescope, the guidance block and top bar say
 “Moved by an MCP client · <tool>”. The top bar's Stop is the page's only Stop;
 it stays enabled throughout motion and ends GoTo, direct axis moves and tracking.
 
-The imaging camera has six tools of its own, which answer what the page's
+The imaging camera has nine tools of its own, which answer what the page's
 Imaging page does:
 
 - `get_imaging_camera` reads the imaging view: the state, the camera's
@@ -111,6 +111,14 @@ Imaging page does:
   ended and answers its verdict. With `on` false it stops the aid as
   `DELETE /api/imaging/focus` does. A refusal answers a tool error with the
   route's words.
+- `list_calibration` reads the calibration library's master darks and master flats, the set being taken and what matches the latest imaging frame, as `GET /api/imaging/calibration` does.
+- `take_darks` takes the body of `POST /api/imaging/calibration/darks`, including `anyway`, and answers once the set has started; read its progress with `list_calibration`.
+- `take_flats` takes the body of `POST /api/imaging/calibration/flats`, including `darks` and `anyway`, and answers once the step has started; read its progress with `list_calibration`.
+
+Both taking tools answer a refusal as a tool error with the route's words. On a
+console that takes no imaging frames they answer `this console takes no imaging
+frames` at once, before reading their arguments; `list_calibration` answers
+`{"masters":[]}` there.
 
 ### MCP under WSL2: portproxy or mirrored mode
 

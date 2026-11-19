@@ -5,6 +5,7 @@
 mod support;
 
 mod axis_moves;
+mod calibration;
 mod endpoint;
 mod frames;
 mod imaging;

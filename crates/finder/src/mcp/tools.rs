@@ -12,6 +12,7 @@ use rmcp::{schemars, tool, tool_handler, tool_router, ServerHandler};
 use serde_json::{json, Value};
 
 use crate::api;
+use crate::imaging::calibration::service::{CalibrationView, DarksRequest, FlatsRequest};
 use crate::session::SessionEdit;
 use crate::AppState;
 
@@ -30,6 +31,28 @@ pub(crate) struct Console {
 )]
 struct TargetArguments {
     target: Option<String>,
+}
+
+#[derive(rmcp::schemars::JsonSchema)]
+#[expect(
+    dead_code,
+    reason = "schema only; DarksRequest parses the actual arguments"
+)]
+struct DarksArguments {
+    count: u32,
+    anyway: Option<bool>,
+}
+
+#[derive(rmcp::schemars::JsonSchema)]
+#[expect(
+    dead_code,
+    reason = "schema only; FlatsRequest parses the actual arguments"
+)]
+struct FlatsArguments {
+    count: Option<u32>,
+    label: Option<String>,
+    darks: Option<bool>,
+    anyway: Option<bool>,
 }
 
 // Only used to describe the tool. Parsing deliberately uses SettingsEdit so the
@@ -782,6 +805,62 @@ impl Console {
                 Some(focus) => Ok(serde_json::to_value(focus).expect("focus view JSON")),
                 None => focus_answer(imaging.view()),
             }
+        };
+        tool_result(result.await)
+    }
+
+    #[tool(description = "List the calibration library's master darks and master flats, the set being taken, and what matches the latest imaging frame.",
+        output_schema = object_schema(), annotations(read_only_hint = true))]
+    async fn list_calibration(&self) -> CallToolResult {
+        let view = match self.state.calibration() {
+            None => CalibrationView::empty(),
+            Some(calibration) => self
+                .state
+                .imaging()
+                .and_then(|imaging| imaging.view().calibration)
+                .unwrap_or_else(|| calibration.view(None)),
+        };
+        CallToolResult::structured(serde_json::to_value(view).expect("calibration view JSON"))
+    }
+
+    #[tool(description = "Take a set of darks with the telescope covered and add their master dark to the calibration library, as POST /api/imaging/calibration/darks does; anyway: true passes the dark test. It answers once the set has started; read its progress with list_calibration.",
+        input_schema = rmcp::handler::server::common::schema_for_input::<DarksArguments>().expect("darks schema"),
+        output_schema = object_schema())]
+    async fn take_darks(&self, arguments: JsonObject) -> CallToolResult {
+        let result = async {
+            let calibration = self
+                .state
+                .calibration()
+                .ok_or_else(|| "this console takes no imaging frames".to_owned())?;
+            let bytes = Value::Object(arguments).to_string();
+            let request = api::sim_json(Json::<DarksRequest>::from_bytes(bytes.as_bytes()))
+                .map_err(|error| error.message)?;
+            let view = calibration
+                .take_darks(request)
+                .await
+                .map_err(|refusal| refusal.message)?;
+            Ok(serde_json::to_value(view).expect("calibration view JSON"))
+        };
+        tool_result(result.await)
+    }
+
+    #[tool(description = "Take a set of flats of a lit flat panel, or with darks: true the darks that finish them, as POST /api/imaging/calibration/flats does; anyway: true passes the dark test of those darks. It answers once the step has started; read its progress with list_calibration.",
+        input_schema = rmcp::handler::server::common::schema_for_input::<FlatsArguments>().expect("flats schema"),
+        output_schema = object_schema())]
+    async fn take_flats(&self, arguments: JsonObject) -> CallToolResult {
+        let result = async {
+            let calibration = self
+                .state
+                .calibration()
+                .ok_or_else(|| "this console takes no imaging frames".to_owned())?;
+            let bytes = Value::Object(arguments).to_string();
+            let request = api::sim_json(Json::<FlatsRequest>::from_bytes(bytes.as_bytes()))
+                .map_err(|error| error.message)?;
+            let view = calibration
+                .take_flats(request)
+                .await
+                .map_err(|refusal| refusal.message)?;
+            Ok(serde_json::to_value(view).expect("calibration view JSON"))
         };
         tool_result(result.await)
     }
