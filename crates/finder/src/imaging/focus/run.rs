@@ -1,6 +1,7 @@
 //! The focus aid on the console (033 US5): the focus state the imaging state
 //! holds, the task that runs the aid under 031's lease, and `focus` in the
-//! imaging view. US8 adds the focus check, US9 the tile read for the time being.
+//! imaging view. US9 adds the tile read for the time being and a frame kept
+//! for a solve; US8 the focus check.
 
 use std::{
     path::{Path, PathBuf},
@@ -265,6 +266,11 @@ struct Run {
     restore_error: Option<String>,
     /// The last frame saved, whose file goes when the next is saved (FR-024).
     previous: Option<(u64, Option<String>)>,
+    /// The tile the run reads for the time being, while no tile could be
+    /// measured and the far-out one with the smallest size stands in, kept as
+    /// no region (FR-037); `None` once a region is kept. The view shows it as
+    /// the region while the run is not `ended`.
+    provisional: Option<Tile>,
 }
 
 impl Run {
@@ -285,6 +291,7 @@ impl Run {
             error: None,
             restore_error: None,
             previous: None,
+            provisional: None,
         }
     }
 
@@ -528,7 +535,10 @@ async fn steps(imaging: &Arc<Imaging>, lease: &Lease, config: &Config, root: &Pa
     };
     let b0 = *config.camera.binnings.iter().min().unwrap_or(&1);
     // 2. Choose the region (FR-021): the tile asked for, kept as `fixed`; else
-    //    a search, with `find` or with nothing kept; else the kept one.
+    //    a search, with `find` or with nothing kept; else the kept one. A
+    //    search that no tile could be measured leaves the aid on the far-out
+    //    tile with the smallest size, read for the time being and kept as no
+    //    region (FR-037).
     let kept = imaging
         .state
         .lock()
@@ -537,22 +547,23 @@ async fn steps(imaging: &Arc<Imaging>, lease: &Lease, config: &Config, root: &Pa
         .kept
         .region()
         .map(|region| region.tile());
-    let tile = match config.tile {
+    let (mut tile, mut provisional) = match config.tile {
         Some(tile) => {
             keep_tile(
                 imaging,
                 KeptRegion::fixed(sensor, b0, tile, imaging.clock.now()),
             );
-            tile
+            (tile, false)
         }
         None => match (!config.find, kept) {
-            (true, Some(tile)) => tile,
+            (true, Some(tile)) => (tile, false),
             _ => match search(imaging, lease, config, root, b0).await {
-                Ok(Some((tile, reading))) => {
-                    keep_tile(imaging, KeptRegion::found(sensor, b0, tile, &reading));
-                    tile
+                Ok(Found::Best(best, reading)) => {
+                    keep_tile(imaging, KeptRegion::found(sensor, b0, best, &reading));
+                    (best, false)
                 }
-                Ok(None) => {
+                Ok(Found::FarOut(far_out)) => (far_out, true),
+                Ok(Found::None) => {
                     return Ended {
                         reason: "no_region",
                         error: Some(NO_REGION.to_string()),
@@ -563,23 +574,10 @@ async fn steps(imaging: &Arc<Imaging>, lease: &Lease, config: &Config, root: &Pa
             },
         },
     };
+    set_provisional(imaging, provisional.then_some(tile));
     // 3. Set the focus exposure, the smallest binning, that region and no node
     //    copy (FR-021). A failed set ends the run with the refusal's words.
-    let region = super::tile_region(sensor, b0, tile);
-    if let Err(refusal) = lease
-        .set(edit(
-            config.exposure_ms,
-            b0,
-            Some(RoiEdit {
-                x: region.x,
-                y: region.y,
-                width: region.width,
-                height: region.height,
-            }),
-            false,
-        ))
-        .await
-    {
+    if let Err(refusal) = set_region(lease, config.exposure_ms, sensor, b0, tile).await {
         return with(Ended::failed(refusal.message), remembered);
     }
     set_lifecycle(imaging, "running");
@@ -634,7 +632,30 @@ async fn steps(imaging: &Arc<Imaging>, lease: &Lease, config: &Config, root: &Pa
         };
         // f to h: one critical section, no await inside it. `at` is the middle
         // of the exposure.
-        note(imaging, &read, frame.id, start + frame.exposure_ms / 2000.0);
+        let settled = note(imaging, &read, frame.id, start + frame.exposure_ms / 2000.0);
+        // j. While the run's tile is one read for the time being, each settled
+        //    reading starts the search again (FR-037). A best tile is kept
+        //    and the aid goes on there; without one, whether or not that
+        //    search found a far-out tile, the aid goes on with the tile it had
+        //    and never ends `no_region`. The `Aid` is not reset: the readings
+        //    held carry over, and a reading on the new tile that differs by
+        //    more than 15% is a change like any other.
+        if provisional && settled.is_some() {
+            match search(imaging, lease, config, root, b0).await {
+                Ok(Found::Best(best, reading)) => {
+                    keep_tile(imaging, KeptRegion::found(sensor, b0, best, &reading));
+                    tile = best;
+                    provisional = false;
+                    set_provisional(imaging, None);
+                }
+                Ok(_) => {}
+                Err(end) => return with(end, remembered),
+            }
+            if let Err(refusal) = set_region(lease, config.exposure_ms, sensor, b0, tile).await {
+                return with(Ended::failed(refusal.message), remembered);
+            }
+            set_lifecycle(imaging, "running");
+        }
     }
 }
 
@@ -707,16 +728,25 @@ fn set_lifecycle(imaging: &Arc<Imaging>, lifecycle: &'static str) {
     }
 }
 
+/// What a search found (FR-022, FR-037): the sharpest tile with its reading;
+/// or, with no tile measurable, the far-out tile with the smallest size,
+/// which the aid reads for the time being; or no tile and none far out.
+enum Found {
+    Best(Tile, FocusReading),
+    FarOut(Tile),
+    None,
+}
+
 /// The search (FR-022): one whole-sensor frame, whose nine tiles are measured,
-/// and the sharpest tile with its reading. `Ok(None)`: no tile could be
-/// measured and none was far out.
+/// and the sharpest tile with its reading — or, with no tile measurable, the
+/// far-out tile with the smallest size, to read for the time being (FR-037).
 async fn search(
     imaging: &Arc<Imaging>,
     lease: &Lease,
     config: &Config,
     root: &Path,
     b0: u32,
-) -> Result<Option<(Tile, FocusReading)>, Ended> {
+) -> Result<Found, Ended> {
     set_lifecycle(imaging, "finding");
     // The whole sensor for the search's own frame (FR-022).
     if let Err(refusal) = lease.set(edit(config.exposure_ms, b0, None, false)).await {
@@ -755,14 +785,58 @@ async fn search(
         Ok(found) => found,
         Err(error) => return Err(Ended::failed(error.message())),
     };
-    Ok(found.best.and_then(|best| {
-        found
-            .tiles
-            .into_iter()
-            .find(|tile| tile.tile == best)
-            .and_then(|tile| tile.read.ok())
-            .map(|reading| (best, reading))
-    }))
+    Ok(
+        match found.best.and_then(|best| {
+            found
+                .tiles
+                .iter()
+                .find(|tile| tile.tile == best)
+                .and_then(|tile| tile.read.ok())
+                .map(|reading| (best, reading))
+        }) {
+            Some((best, reading)) => Found::Best(best, reading),
+            None => match found.far_out {
+                Some(tile) => Found::FarOut(tile),
+                None => Found::None,
+            },
+        },
+    )
+}
+
+/// Set the focus exposure, the smallest binning, `tile`'s region and no node
+/// copy (FR-021), the region worked out again from the tile so a region kept
+/// for another binning cannot be refused.
+async fn set_region(
+    lease: &Lease,
+    exposure_ms: f64,
+    sensor: Region,
+    b0: u32,
+    tile: Tile,
+) -> Result<(), Refusal> {
+    let region = super::tile_region(sensor, b0, tile);
+    lease
+        .set(edit(
+            exposure_ms,
+            b0,
+            Some(RoiEdit {
+                x: region.x,
+                y: region.y,
+                width: region.width,
+                height: region.height,
+            }),
+            false,
+        ))
+        .await
+        .map(|_| ())
+}
+
+/// Note in the run whether its tile is one read for the time being (FR-037),
+/// which the view shows as the region while the run is not `ended`.
+fn set_provisional(imaging: &Arc<Imaging>, tile: Option<Tile>) {
+    let mut held = imaging.state.lock().expect("imaging state");
+    if let Some(run) = held.focus.run.as_mut() {
+        run.provisional = tile;
+    }
 }
 
 /// Steps 4a to 4d: one frame through the lease, awaited until it ended, the
@@ -788,17 +862,28 @@ async fn one_frame(imaging: &Arc<Imaging>, lease: &Lease, root: &Path) -> Result
     if frame.state == "failed" {
         return Err(Ended::failed(frame.error.unwrap_or_default()));
     }
-    // The previous saved frame goes now that this one is saved (FR-024).
-    let previous = {
-        let mut held = imaging.state.lock().expect("imaging state");
-        held.focus
-            .run
-            .as_mut()
-            .expect("the run")
-            .previous
-            .replace((id, frame.file.clone()))
+    // The previous saved frame goes now that this one is saved (FR-024), unless
+    // an imaging solve is running on it: then it stays in place for good, and
+    // so does the solve sidecar its solve will write; the aid forgets it and
+    // never comes back to it (FR-039).
+    let (previous, solving) = {
+        let mut guard = imaging.state.lock().expect("imaging state");
+        let held: &mut Held = &mut guard;
+        let solving = held
+            .solve
+            .as_ref()
+            .filter(|solve| solve.state == "solving")
+            .map(|solve| solve.frame_id);
+        let run = held.focus.run.as_mut().expect("the run");
+        let previous = run.previous.replace((id, frame.file.clone()));
+        let solving = previous
+            .as_ref()
+            .is_some_and(|(previous, _)| Some(*previous) == solving);
+        (previous, solving)
     };
-    remove(root, previous);
+    if !solving {
+        remove(root, previous);
+    }
     Ok(frame)
 }
 
@@ -827,14 +912,15 @@ fn remove(root: &Path, previous: Option<(u64, Option<String>)>) {
 /// Steps 4f to 4h (FR-023, FR-025): the sample pushed, the cadence and the
 /// last sample set, the reference read before the verdict is set, the verdict
 /// kept with it, and a settled reading noted. One critical section; no await
-/// falls inside it.
-fn note(imaging: &Arc<Imaging>, read: &Read, id: u64, at: f64) {
+/// falls inside it. Answers the settled reading, if this sample made one.
+fn note(imaging: &Arc<Imaging>, read: &Read, id: u64, at: f64) -> Option<f64> {
     let mut guard = imaging.state.lock().expect("imaging state");
     let held: &mut Held = &mut guard;
     let now = imaging.clock.now();
     let run = held.focus.run.as_mut().expect("the run");
     // f. The sample, the cadence and the last sample.
     let step = run.aid.push(Sample::from(read));
+    let settled = step.settled;
     run.cadence_ms = run.sampled_at.map(|at| (now - at) * 1000.0);
     run.sampled_at = Some(now);
     let state = run
@@ -863,7 +949,7 @@ fn note(imaging: &Arc<Imaging>, read: &Read, id: u64, at: f64) {
         .and_then(|view| view.scale)
         .map(|scale| scale.arcsec_per_px);
     let reference = held.focus.kept.reference(now, measured);
-    match (step.settled, read) {
+    match (settled, read) {
         (Some(m), _) => {
             let found = run.aid.found();
             run.verdict = Some(judge(Ok(m), reference.map(|(px, _)| px)));
@@ -882,6 +968,7 @@ fn note(imaging: &Arc<Imaging>, read: &Read, id: u64, at: f64) {
             run.reference = None;
         }
     }
+    settled
 }
 
 /// Step 5 (FR-027): wait out a frame in flight, put the remembered settings
@@ -935,10 +1022,37 @@ pub(in crate::imaging) fn view(held: &Held, now: f64) -> FocusView {
         value: mark.px * s,
         at: mark.at,
     };
-    FocusView {
-        unit: if shown.is_some() { "arcsec" } else { "px" },
-        arcsec_per_px: shown,
-        region: held.focus.kept.region().map(|region| RegionOut {
+    // The region is the tile a running aid reads for the time being, shown as
+    // `provisional`, in place of the kept one; without one, the kept region
+    // with its own source; with neither, nothing (FR-029, FR-037).
+    let region = match (
+        held.focus
+            .run
+            .as_ref()
+            .filter(|run| run.running())
+            .and_then(|run| run.provisional),
+        held.camera.as_ref(),
+    ) {
+        (Some(tile), Some(camera)) => {
+            let sensor = Region {
+                x: 0,
+                y: 0,
+                width: camera.width,
+                height: camera.height,
+            };
+            let b0 = *camera.binnings.iter().min().unwrap_or(&1);
+            let rect = super::tile_region(sensor, b0, tile);
+            Some(RegionOut {
+                col: tile.col,
+                row: tile.row,
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: rect.height,
+                source: "provisional",
+            })
+        }
+        _ => held.focus.kept.region().map(|region| RegionOut {
             col: region.col,
             row: region.row,
             x: region.x,
@@ -950,6 +1064,11 @@ pub(in crate::imaging) fn view(held: &Held, now: f64) -> FocusView {
                 Source::Fixed => "fixed",
             },
         }),
+    };
+    FocusView {
+        unit: if shown.is_some() { "arcsec" } else { "px" },
+        arcsec_per_px: shown,
+        region,
         record: (record.tonight.is_some() || record.earlier.is_some()).then_some(RecordOut {
             tonight: record.tonight.map(sized),
             earlier: record.earlier.map(sized),
