@@ -48,6 +48,7 @@ mod session;
 mod stack_accumulate;
 mod stack_camera;
 mod stack_colour;
+mod stack_console;
 mod stack_display;
 mod stack_gate;
 mod stack_loop;

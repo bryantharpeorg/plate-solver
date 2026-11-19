@@ -14,6 +14,7 @@ use crate::{
     imaging::{
         calibration::service::{CalibrationView, DarksRequest, FlatsRequest},
         focus::run::FocusAsk,
+        stack::service::StartRequest,
         ImagingView, SettingsEdit,
     },
 };
@@ -32,6 +33,8 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/api/imaging/calibration/flats", post(take_flats))
         .route("/api/imaging/calibration/{id}", delete(delete_calibration))
         .route("/api/imaging/frames/{id}/preview.jpg", get(frame_preview))
+        .route("/api/imaging/stack", post(start_stack).delete(stop_stack))
+        .route("/api/imaging/stack/preview.jpg", get(stack_preview))
 }
 
 /// `GET /api/imaging`: the imaging view, or `{"state":"off"}` without imaging.
@@ -216,4 +219,48 @@ async fn put_settings(
         .await
         .map_err(|refusal| ApiError::new(refusal.status, refusal.message))?;
     Ok(Json(view))
+}
+
+/// Origin and body shape precede imaging availability and the stack's checks.
+async fn start_stack(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    request: Result<Json<StartRequest>, JsonRejection>,
+) -> Result<Json<ImagingView>, ApiError> {
+    let request = sim_json(request)?;
+    let stacker = state.stack().ok_or_else(|| {
+        ApiError::new(StatusCode::CONFLICT, "this console takes no imaging frames")
+    })?;
+    stacker
+        .start(request, state.target_label().as_deref())
+        .await
+        .map_err(|refusal| ApiError::new(refusal.status, refusal.message))?;
+    Ok(Json(
+        state.imaging().expect("the stack's imaging state").view(),
+    ))
+}
+
+/// Wait for the stack to end and save its files before answering the view.
+async fn stop_stack(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+) -> Result<Json<ImagingView>, ApiError> {
+    let stacker = state.stack().ok_or_else(|| {
+        ApiError::new(StatusCode::CONFLICT, "this console takes no imaging frames")
+    })?;
+    stacker.stop().await;
+    Ok(Json(
+        state.imaging().expect("the stack's imaging state").view(),
+    ))
+}
+
+/// The latest kept stack picture; the query does not select a picture.
+async fn stack_preview(State(state): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    let bytes = state
+        .stack()
+        .and_then(|stacker| stacker.preview())
+        .ok_or_else(|| {
+            ApiError::new(StatusCode::NOT_FOUND, "the console holds no stack picture")
+        })?;
+    Ok(([(header::CONTENT_TYPE, "image/jpeg")], bytes))
 }
