@@ -15,7 +15,10 @@ pub mod sky;
 pub use camera::SimCamera;
 pub use clock::VirtualClock;
 pub use controls::Simulator;
-pub use imaging::{ImagingOptics, ImagingTruth, SimImagingCamera, SimStar};
+pub use imaging::{
+    DustShadow, FlatPanel, HotPixel, ImagingOptics, ImagingTruth, LightPath, SensorPattern,
+    SimImagingCamera, SimStar,
+};
 pub use node::SimNode;
 pub use optics::{Optics, TrueDirection, TrueDirections};
 pub use sky::Site;

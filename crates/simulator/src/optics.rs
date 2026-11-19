@@ -1,7 +1,7 @@
 //! Known finder optics and shared telescope state. Public angles are degrees.
 use crate::{
     clock::VirtualClock,
-    imaging::{ImagingOptics, ImagingTruth},
+    imaging::{ImagingOptics, ImagingTruth, LightPath, SensorPattern},
     render::{self, RenderStar},
     sky::{self, Site},
 };
@@ -76,6 +76,7 @@ pub(crate) struct Pointing {
 pub struct Simulator {
     pub(crate) db: Arc<PatternDatabase>,
     pub(crate) state: Arc<Mutex<Pointing>>,
+    pub(crate) imaging_bench: Arc<Mutex<(SensorPattern, LightPath)>>,
     clock: VirtualClock,
 }
 
@@ -91,6 +92,7 @@ impl Simulator {
                 alt: 45.0,
                 az: 180.0,
             })),
+            imaging_bench: Arc::new(Mutex::new((SensorPattern::default(), LightPath::default()))),
             clock,
         }
     }
@@ -153,6 +155,42 @@ impl Simulator {
     /// the focus error and the pixel size.
     pub fn imaging_optics(&self) -> ImagingOptics {
         self.state.lock().unwrap().imaging
+    }
+
+    /// The sensor's own charge and column pattern.
+    pub fn sensor_pattern(&self) -> SensorPattern {
+        self.imaging_bench.lock().unwrap().0.clone()
+    }
+
+    /// Set the sensor pattern. Every rate and the amplitude must be finite and not negative.
+    pub fn set_sensor_pattern(&self, pattern: SensorPattern) {
+        assert!(pattern.column_amplitude.is_finite() && pattern.column_amplitude >= 0.0);
+        assert!(pattern
+            .hot_pixels
+            .iter()
+            .all(|hot| hot.electrons_per_s.is_finite() && hot.electrons_per_s >= 0.0));
+        self.imaging_bench.lock().unwrap().0 = pattern;
+    }
+
+    /// The cover, panel and light lost on the way to the sensor.
+    pub fn light_path(&self) -> LightPath {
+        self.imaging_bench.lock().unwrap().1.clone()
+    }
+
+    /// Set the light path. Panics unless 0 < corner light ≤ 1, depths are from 0 to 1,
+    /// radii are positive, and panel rates and colours are finite and not negative.
+    pub fn set_light_path(&self, path: LightPath) {
+        assert!(path.corner_light > 0.0 && path.corner_light <= 1.0);
+        assert!(path.dust.iter().all(|shadow| {
+            shadow.radius_px.is_finite()
+                && shadow.radius_px > 0.0
+                && (0.0..=1.0).contains(&shadow.depth)
+        }));
+        if let Some(panel) = path.flat_panel {
+            assert!(panel.electrons_per_s.is_finite() && panel.electrons_per_s >= 0.0);
+            assert!(panel.colour.iter().all(|c| c.is_finite() && *c >= 0.0));
+        }
+        self.imaging_bench.lock().unwrap().1 = path;
     }
 
     /// Set the imaging optics. The sensor must have pixels and a field.

@@ -38,6 +38,62 @@ pub const ADU_PER_E_AT_GAIN_0: f64 = 0.25;
 /// Counts a unit of offset makes.
 pub const ADU_PER_OFFSET: f64 = 16.0;
 
+/// One sensor sample that gathers charge by itself (034). Sensor pixels, unbinned.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct HotPixel {
+    pub x: u32,
+    pub y: u32,
+    pub electrons_per_s: f64,
+}
+
+/// The sensor's own signal, there with or without light (034).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SensorPattern {
+    pub hot_pixels: Vec<HotPixel>,
+    /// Counts from the pattern's lowest column to its highest; 0.0 is no pattern.
+    pub column_amplitude: f64,
+}
+
+/// An evenly lit panel in front of the telescope (034).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FlatPanel {
+    /// Electrons a second in a sample whose filter passes all of it, before vignetting.
+    pub electrons_per_s: f64,
+    /// Relative light in red, green and blue.
+    pub colour: [f64; 3],
+}
+
+/// A disc on the sensor that passes less light (034). Sensor pixels, unbinned.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DustShadow {
+    pub x: f64,
+    pub y: f64,
+    pub radius_px: f64,
+    pub depth: f64,
+}
+
+/// What light meets on its way to the sensor (034).
+#[derive(Clone, Debug, PartialEq)]
+pub struct LightPath {
+    /// A cover on the telescope: no light at all.
+    pub cover: bool,
+    pub flat_panel: Option<FlatPanel>,
+    /// Light at the sensor's corner as a share of the light at its centre; 1.0 is none lost.
+    pub corner_light: f64,
+    pub dust: Vec<DustShadow>,
+}
+
+impl Default for LightPath {
+    fn default() -> Self {
+        Self {
+            cover: false,
+            flat_panel: None,
+            corner_light: 1.0,
+            dust: Vec::new(),
+        }
+    }
+}
+
 /// The imaging optics. Pixels are (x, y); the field is horizontal, in degrees.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ImagingOptics {
@@ -202,6 +258,8 @@ impl Drop for ExposingGuard<'_> {
 /// it began, its length and the frame number its noise comes from.
 struct Shot {
     settings: ImagingSettings,
+    sensor_pattern: SensorPattern,
+    light_path: LightPath,
     optics: ImagingOptics,
     rotation0: RotationMatrix,
     rotation1: RotationMatrix,
@@ -399,10 +457,58 @@ impl SimImagingCamera {
                 }
             }
         }
-        // The sky falls on every sample of the region.
-        let sky = SKY_E_PER_S * shot.seconds;
-        for sample in &mut electrons {
-            *sample += sky;
+        if !shot.light_path.cover {
+            if let Some(panel) = shot.light_path.flat_panel {
+                for (index, sample) in electrons.iter_mut().enumerate() {
+                    let x = roi.x + (index % width) as u32;
+                    let y = roi.y + (index / width) as u32;
+                    let filter = match (x % 2, y % 2) {
+                        (0, 0) => 0,
+                        (1, 1) => 2,
+                        _ => 1,
+                    };
+                    *sample = panel.electrons_per_s * shot.seconds * panel.colour[filter];
+                }
+            } else {
+                // The sky falls on every sample of the region.
+                let sky = SKY_E_PER_S * shot.seconds;
+                for sample in &mut electrons {
+                    *sample += sky;
+                }
+            }
+            // Light is attenuated at sensor coordinates, before the sensor's own charge.
+            if shot.light_path.corner_light != 1.0 || !shot.light_path.dust.is_empty() {
+                let half_w = f64::from(shot.optics.width) / 2.0;
+                let half_h = f64::from(shot.optics.height) / 2.0;
+                let radius_squared = half_w * half_w + half_h * half_h;
+                for (index, sample) in electrons.iter_mut().enumerate() {
+                    let x = f64::from(roi.x) + (index % width) as f64 + 0.5;
+                    let y = f64::from(roi.y) + (index / width) as f64 + 0.5;
+                    let vignette = 1.0
+                        - (1.0 - shot.light_path.corner_light)
+                            * ((x - half_w).powi(2) + (y - half_h).powi(2))
+                            / radius_squared;
+                    let mut dust = 1.0;
+                    for shadow in &shot.light_path.dust {
+                        if (x - shadow.x).powi(2) + (y - shadow.y).powi(2)
+                            <= shadow.radius_px.powi(2)
+                        {
+                            dust *= 1.0 - shadow.depth;
+                        }
+                    }
+                    *sample *= vignette * dust;
+                }
+            }
+        }
+        // Hot pixels gather charge even under the cover, before shot and read noise.
+        for hot in &shot.sensor_pattern.hot_pixels {
+            if hot.x >= roi.x && hot.y >= roi.y {
+                let (x, y) = (hot.x - roi.x, hot.y - roi.y);
+                if x < roi.width && y < roi.height {
+                    electrons[y as usize * width + x as usize] +=
+                        hot.electrons_per_s * shot.seconds;
+                }
+            }
         }
         if self.noise {
             let mut random = SplitMix64::new(self.seed, shot.frame_number);
@@ -415,11 +521,20 @@ impl SimImagingCamera {
         // colour, keeping the mosaic; rounding is half away from zero.
         let counts = ADU_PER_OFFSET * shot.settings.offset.unwrap_or(0.0);
         let scale = ADU_PER_E_AT_GAIN_0 * 10f64.powf(shot.settings.gain.unwrap_or(0.0) / 200.0);
+        let sensor_counts = |index: usize| {
+            let value = counts + electrons[index] * scale;
+            if shot.sensor_pattern.column_amplitude == 0.0 {
+                value
+            } else {
+                let x = roi.x + (index % width) as u32;
+                value + shot.sensor_pattern.column_amplitude * (f64::from(x % 8) / 7.0 - 0.5)
+            }
+        };
         let delivered = |value: f64| (value.round().clamp(0.0, 65535.0) as u16).to_le_bytes();
         let mut samples = Vec::with_capacity(width * height * 2);
         if binning == 1 {
-            for sample in &electrons {
-                samples.extend_from_slice(&delivered(counts + sample * scale));
+            for index in 0..electrons.len() {
+                samples.extend_from_slice(&delivered(sensor_counts(index)));
             }
         } else {
             for row in 0..height / 2 {
@@ -433,7 +548,7 @@ impl SimImagingCamera {
                     for (dx, dy) in [(0, 0), (2, 0), (0, 2), (2, 2)] {
                         let (x, y) = (x0 + dx, y0 + dy);
                         if x < width && y < height {
-                            sum += counts + electrons[y * width + x] * scale;
+                            sum += sensor_counts(y * width + x);
                             inside += 1.0;
                         }
                     }
@@ -523,13 +638,18 @@ impl ImagingCamera for SimImagingCamera {
             // The settings in force are fixed here, and their region is the
             // frame's roi; the frame number is the next one this camera
             // delivers.
-            let (settings, frame_number, aborts) = {
+            let (settings, frame_number, aborts, (sensor_pattern, light_path)) = {
                 let mut state = self.state.lock().unwrap();
                 if state.exposing {
                     return Err(ImagingError::Busy);
                 }
                 state.exposing = true;
-                (state.settings.clone(), state.frames, state.aborts)
+                (
+                    state.settings.clone(),
+                    state.frames,
+                    state.aborts,
+                    self.simulator.imaging_bench.lock().unwrap().clone(),
+                )
             };
             let _clear = ExposingGuard(&self.state);
             let start_s = self.simulator.clock().node_now();
@@ -556,6 +676,8 @@ impl ImagingCamera for SimImagingCamera {
                 .0;
             let shot = Shot {
                 settings,
+                sensor_pattern,
+                light_path,
                 optics,
                 rotation0,
                 rotation1,
@@ -564,7 +686,12 @@ impl ImagingCamera for SimImagingCamera {
                 start_s,
                 frame_number,
             };
-            let frame = self.render(&shot, &self.stars_for(&shot));
+            let stars = if shot.light_path.cover || shot.light_path.flat_panel.is_some() {
+                Cow::Borrowed(&[][..])
+            } else {
+                self.stars_for(&shot)
+            };
+            let frame = self.render(&shot, &stars);
             self.state.lock().unwrap().frames += 1;
             Ok(frame)
         })
