@@ -178,6 +178,10 @@ _Avoid_: flat field
 The console's master darks and master flats, each kept with a record of how it was made: the camera, gain, offset, binning and set temperature, and for a master dark its exposure.
 _Avoid_: calibration set, dark library
 
+**Bad-pixel map**:
+The samples of an imaging camera's sensor that read high whatever the light, found in a master dark and kept with it. A sub's bad pixels are replaced from neighbours of their own colour before the sub is turned into colour.
+_Avoid_: defect map, hot-pixel list, cosmetic correction
+
 **Stack**:
 The picture built from a run's subs: each calibrated, turned into colour, rotated and shifted into place by its imaging solve, and averaged with outliers rejected.
 _Avoid_: live view, integration, master light
