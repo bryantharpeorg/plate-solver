@@ -226,6 +226,7 @@ The page uses the API types in `web/src/api.ts`, which mirror the Rust structs i
 | `GET /api/imaging/calibration` | The calibration library: `masters`, the `set` being taken, what would `match` the latest imaging frame, and `error` when the library's index is unreadable. |
 | `DELETE /api/imaging/calibration/{id}` | Remove a master dark or master flat and its files, or stop or drop the set with that id. Answers 200 with the calibration object, 404 for an unknown id. Same-origin writes only. |
 | `POST /api/imaging/calibration/darks` | JSON `{"count":N}`, N from 3 to 64. Cover the telescope first. Takes one offset frame and N darks at the settings in force, checks that they are dark, and adds their master dark and its bad-pixel map; progress is `set`. `"anyway":true` takes them whatever the check says. Same-origin writes only. |
+| `POST /api/imaging/calibration/flats` | JSON `{"count":N,"label":"..."}` with a flat panel lit: finds the exposure and takes N flats. Then, with the telescope covered, `{"darks":true}`, with `"anyway":true` to pass the dark test: takes their darks and adds the master flat. Same-origin writes only. |
 | `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
 | `POST /api/stop` | No body. Always 200, ending tracking, clearing arming and commanding both axes to stop, from any origin, without taking the motion lock. Sends `StopAll` immediately, retrying in its own task with 200 ms per attempt and 50 ms between attempts for a bounded 2 s window, even if the request goes away. Waits for the round and answers exactly `{"stopped":true}` when the scope node answers OK or there is no scope link; otherwise answers `{"stopped":true,"acknowledged":false}`. This means the node did not answer and the mount may still be moving; press Stop again. The MCP tools `stop` and `stop_all` return the same reply. |
 | `POST /api/model/second-sync` | No body. Start the second sync; 200 with `{"started":true}`, or 409 with a JSON `error` naming the refusal. Same-origin writes only. |
@@ -1083,3 +1084,57 @@ a request while another set runs answers
 `a set of darks or flats is already being taken`. A single imaging frame
 started on another thread just before the set acquires the camera can
 make the set's first settings change fail, before any dark is taken.
+
+
+With a flat panel lit, send `POST /api/imaging/calibration/flats` with
+`{"count":20,"label":"desk"}`. The count is from 3 to 64. A **flat label**
+is the short name for flats taken through one optical train, kept with their
+master flat: 1 to 32 characters of `a` to `z`, `0` to `9` and `-`, starting
+with a letter or digit. Use a label to distinguish optical trains; take new
+flats when the camera is turned.
+
+The first step starts in `search`: it finds an exposure whose largest colour
+median is 40 to 50 percent of full scale (2^bits − 1). It starts at the
+exposure in force, within the camera's range and at most 30 seconds. A level
+at least 90 percent sends the search to one eighth of that exposure;
+otherwise it doubles a dim first exposure or halves a bright one. Once two
+unsaturated readings are available, their straight line predicts the exposure
+for 45 percent. Each exposure is rounded to 0.001 ms, with at most eight
+search frames. The failures describe what to fix:
+
+- `the flat's level does not rise with the exposure: <a> ms and <b> ms read <A> and <B>`.
+- `the flat is too dim: <e> ms reads <p>% of full scale; is the panel lit?`.
+- `the flat is too bright: <e> ms reads <p>% of full scale; dim the panel`.
+- `no exposure put the flat between 40 and 50% of full scale in 8 tries; the last, <e> ms, read <p>%`.
+- After the search, a flat outside the window fails with
+  `a flat reads <p>% of full scale, outside 40 to 50; is the panel steady?`.
+
+The console then takes the requested flats in `frames`, excluding the search
+frames, and holds their sum in `needs_darks`. The view adds `label` and the
+flats' mean `level_share` of full scale. Cover the telescope and send
+`{"darks":true}` to the same route. This second step is `flat_darks`, with
+`darks_taken` counting its darks while `taken` still counts the flats. It
+reads one offset frame and then the same number of darks at the flats'
+exposure, using the three dark tests above. `{"darks":true,"anyway":true}`
+passes those tests and records `checked` false and `DARKTEST` F. Settings
+and set-temperature checks still apply. Failure returns to `needs_darks`
+with `error` and, when the dark test refused it, `not_dark`, so it can be
+retried with the flats still in hand.
+
+The master flat is the mean of the flats less the mean of their darks,
+normalised by each colour's median, with samples not above zero set to zero.
+Its entry and FITS cards keep the flat label, counts of flats and darks,
+exposure and the flats' sensor temperature. Each search exposure, flat and
+dark is kept under `frames/` as an ordinary imaging frame, with purpose
+`flat` or `dark`. The master is saved under `calibration/flats/`.
+
+Each step holds the imaging camera while it runs, restores the exposure that
+was in force before that step, and releases the camera before publishing
+`needs_darks`, `done`, `failed` or `stopped`. Waiting flats hold no lease:
+the camera is free for imaging frames and settings changes between the two
+steps, but the settings must agree again when their darks are taken.
+While flats wait, requests for new darks or flats answer
+`flats are waiting for their darks: take those or drop them first`.
+`DELETE /api/imaging/calibration/<id>` drops waiting flats at once, or stops
+a running step. Flats in hand live only in memory and are lost when the
+console restarts.
