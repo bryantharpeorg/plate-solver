@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid"]
 # Drafted 2026-11-15 from docs/plans/2026-11-15-specs-030-037-imaging.md, by the
 # grilling session of that day, first against `main` at dbc2b5b
@@ -34,8 +34,12 @@ depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", 
 # why the calibration arithmetic is this project's own (plan.md § Prerequisites 2 and 5,
 # § Constitution Check).
 # The owner approved the imaging series' recommended answers on 2026-11-17.
-# It stays draft until the owner settles the owner decisions and flips it to `ready`,
-# which gives the approvals listed under "Owner approvals" and dispatches it.
+# Flipped to ready 2026-11-19 by the operator seat on the owner's answer that day ("Yes flip
+# both", for the two answers of § Clarifications' session of 2026-11-19) and under his standing
+# permission for the imaging specs ("You have my permission to move them to ready when needed
+# for these imaging stories"), which gives the owner approvals listed under "Owner approvals".
+# Every owner decision takes its recommended answer, which the owner approved on 2026-11-17
+# with the imaging series' recommendations.
 ---
 
 # Feature Specification: Dark and Flat Frames
@@ -474,9 +478,10 @@ been settled by the plan document's amendments and are kept, under their numbers
 that every reference
 to them still reads; they ask nothing of the owner. One, 7, has since been settled by the
 owner, against this trio's recommendation, and its answer is written into the trio
-(§ Clarifications, the session of 2026-11-17). None of the others is settled yet:
-the owner settles each before the flip, and a different answer is written into the trio
-and re-validated, never left to a story.
+(§ Clarifications, the session of 2026-11-17). All the others take their
+recommended answers: the owner approved the imaging series' recommendations on 2026-11-17
+("im good with all of the info in the decisions doc") and flipped this spec on
+2026-11-19. None is left to a story.
 
 1. **Nine stories, where the brief suggested six.** Recommended: nine, so that each
    stays under 64 KiB: the simulator's additions are a story of their own, the library
