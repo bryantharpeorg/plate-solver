@@ -13,6 +13,7 @@ mod imaging_astap;
 mod imaging_checks;
 mod imaging_control;
 mod imaging_fits;
+mod imaging_focus_aid;
 mod imaging_focus_arithmetic;
 mod imaging_focus_reading;
 mod imaging_focus_record;

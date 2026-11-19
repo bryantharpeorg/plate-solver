@@ -11,7 +11,7 @@ use axum::{
 
 use crate::{
     api::{sim_json, ApiError, AppState, SessionWrite},
-    imaging::{ImagingView, SettingsEdit},
+    imaging::{focus::run::FocusAsk, ImagingView, SettingsEdit},
 };
 
 /// The imaging routes, merged into the console's router.
@@ -22,6 +22,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/api/imaging/frame", post(take_frame))
         .route("/api/imaging/abort", post(abort_frame))
         .route("/api/imaging/solve", post(post_solve))
+        .route("/api/imaging/focus", post(post_focus).delete(delete_focus))
         .route("/api/imaging/frames/{id}/preview.jpg", get(frame_preview))
 }
 
@@ -93,6 +94,40 @@ async fn post_solve(
         .await
         .map_err(|refusal| ApiError::new(refusal.status, refusal.message))?;
     Ok(Json(view))
+}
+
+/// `POST /api/imaging/focus` (033 FR-020): a JSON body of any of `find`,
+/// `tile` and `exposure_ms`; start the focus aid on the focus region. The
+/// body is read before anything else is looked at: a content type that is not
+/// JSON answers 415, a body with an unknown key or a value of the wrong kind
+/// 400.
+async fn post_focus(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    ask: Result<Json<FocusAsk>, JsonRejection>,
+) -> Result<Json<ImagingView>, ApiError> {
+    let ask = sim_json(ask)?;
+    let imaging = state.imaging().ok_or_else(|| {
+        ApiError::new(StatusCode::CONFLICT, "this console takes no imaging frames")
+    })?;
+    let view = imaging
+        .focus_start(ask)
+        .await
+        .map_err(|refusal| ApiError::new(refusal.status, refusal.message))?;
+    Ok(Json(view))
+}
+
+/// `DELETE /api/imaging/focus` (033 FR-028): no body; stop the focus aid, wait
+/// until it has put the imaging settings back, and answer the view. With
+/// nothing running it answers the view and changes nothing.
+async fn delete_focus(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+) -> Result<Json<ImagingView>, ApiError> {
+    let imaging = state.imaging().ok_or_else(|| {
+        ApiError::new(StatusCode::CONFLICT, "this console takes no imaging frames")
+    })?;
+    Ok(Json(imaging.focus_stop().await))
 }
 
 /// `PUT /api/imaging/settings`: a partial settings change under the console's

@@ -1,0 +1,993 @@
+//! The focus aid on the console (033 US5): the focus state the imaging state
+//! holds, the task that runs the aid under 031's lease, and `focus` in the
+//! imaging view. US8 adds the focus check, US9 the tile read for the time being.
+
+use std::{
+    path::{Path, PathBuf},
+    sync::{Arc, Weak},
+};
+
+use serde::{Deserialize, Serialize};
+use tokio::{sync::Notify, task::JoinHandle};
+
+use super::{
+    aid::{Aid, Sample},
+    judge, FocusReading, Kept, KeptRegion, Mark, Of, Read, Source, Tile, Unmeasurable, Verdict,
+};
+use crate::imaging::{
+    frames::FrameView,
+    relation::CameraId,
+    solver::{ImagingSolver, Region, SolveFrame},
+    CameraView, Held, Imaging, ImagingView, Lease, Refusal, RoiEdit, SettingsEdit,
+};
+
+/// The purpose label of every imaging frame the aid takes (FR-020).
+pub const PURPOSE: &str = "focus";
+/// The name the aid holds the imaging camera's lease under (FR-021).
+pub const HOLDER: &str = "the focus aid";
+/// The focus exposure when the request names none (FR-021).
+pub const FOCUS_EXPOSURE_MS: f64 = 1000.0;
+/// The words of a search that found no tile to read (FR-022).
+const NO_REGION: &str = "no tile of the imaging frame had five stars to measure";
+
+/// The body of `POST /api/imaging/focus` (FR-020). Non-exhaustive: US8 adds
+/// `check`.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[non_exhaustive]
+pub struct FocusAsk {
+    #[serde(default)]
+    pub find: bool,
+    #[serde(default)]
+    pub tile: Option<TileAsk>,
+    #[serde(default)]
+    pub exposure_ms: Option<f64>,
+}
+
+/// A tile fixed by hand in the body of `POST /api/imaging/focus` (FR-020).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TileAsk {
+    pub col: u32,
+    pub row: u32,
+}
+
+/// `focus` in the imaging view (FR-029). Every size is in `unit`. Every
+/// `Option` is skipped while `None`. Non-exhaustive: US8 adds `check`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[non_exhaustive]
+pub struct FocusView {
+    /// `arcsec` when the console knows the scale, else `px`: sensor pixels.
+    pub unit: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arcsec_per_px: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub region: Option<RegionOut>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub record: Option<RecordOut>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aid: Option<AidView>,
+}
+
+/// The focus region in the view (FR-029): a tile's rectangle in sensor pixels.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct RegionOut {
+    pub col: u32,
+    pub row: u32,
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+    /// `found` or `fixed` for the kept focus region; `provisional` for a tile
+    /// a running aid reads for the time being (US9).
+    pub source: &'static str,
+}
+
+/// The focus record in the view (FR-029).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct RecordOut {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tonight: Option<SizeAt>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub earlier: Option<SizeAt>,
+}
+
+/// A size and when it was read (FR-029).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct SizeAt {
+    pub value: f64,
+    /// Console Unix seconds.
+    pub at: f64,
+}
+
+/// The aid's part of the focus view (FR-029): the latest run, running or ended,
+/// absent before the first start of this console's run. Non-exhaustive: US8
+/// adds `check`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[non_exhaustive]
+pub struct AidView {
+    /// `starting`, `finding`, `running` or `ended`.
+    pub state: &'static str,
+    /// Console Unix seconds at the start.
+    pub since: f64,
+    pub exposure_ms: f64,
+    /// Samples so far.
+    pub readings: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cadence_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last: Option<LastView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub median: Option<MedianView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub best: Option<f64>,
+    /// `better`, `worse` or `same`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trend: Option<&'static str>,
+    pub found: bool,
+    /// `good`, `slightly_soft`, `clearly_out`, `unmeasurable` or `no_record`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verdict: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reference: Option<ReferenceView>,
+    /// The last 120 samples, oldest first; `null` for a frame with too few
+    /// stars (FR-019).
+    pub history: Vec<Option<f64>>,
+    /// `stopped`, `failed` or `no_region`; US8 adds `done`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ended_reason: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub restore_error: Option<String>,
+}
+
+/// The last sample in the view (FR-025): whatever the frame was.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct LastView {
+    pub frame_id: u64,
+    /// The middle of the exposure, console Unix seconds.
+    pub at: f64,
+    /// `reading`, `settling`, `too_few_stars` or `far_out`.
+    pub state: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stars: Option<u32>,
+}
+
+/// The median of the readings held in the view (FR-025).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct MedianView {
+    pub value: f64,
+    pub readings: usize,
+}
+
+/// What a reading was judged against (FR-025).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct ReferenceView {
+    pub value: f64,
+    /// `tonight` or `earlier`.
+    pub of: &'static str,
+}
+
+/// The focus state the imaging state holds: what the console keeps about focus
+/// for one camera — the `Kept` of `focus.json` — the latest run and the signal
+/// its end wakes. Its fields are private; `Imaging::view` reads them through
+/// [`view`].
+#[derive(Debug)]
+pub(in crate::imaging) struct State {
+    kept: Kept,
+    run: Option<Run>,
+    /// Woken once the run's lifecycle is `ended`, after the lease is dropped.
+    ended: Arc<Notify>,
+}
+
+impl State {
+    /// Nothing known yet; the `Kept` of `path`, nothing read.
+    pub(in crate::imaging) fn new(path: PathBuf) -> Self {
+        Self {
+            kept: Kept::new(path),
+            run: None,
+            ended: Arc::new(Notify::new()),
+        }
+    }
+
+    /// The camera was described: the `Kept` reads `focus.json` for it (FR-029).
+    pub(in crate::imaging) fn describe(&mut self, camera: CameraId) {
+        self.kept.describe(camera);
+    }
+
+    /// End the run's task, for `Drop` (the run's lifecycle stays as it is).
+    pub(in crate::imaging) fn abort_task(&mut self) {
+        if let Some(task) = self.run.as_mut().and_then(|run| run.task.take()) {
+            task.abort();
+        }
+    }
+
+    /// Whether an aid or a check is running (FR-029).
+    fn running(&self) -> bool {
+        self.run.as_ref().is_some_and(Run::running)
+    }
+
+    /// The signal the run's end wakes, to make a `Notified` of before the
+    /// lifecycle is read.
+    fn end_signal(&self) -> Arc<Notify> {
+        self.ended.clone()
+    }
+
+    fn begin(&mut self, run: Run) {
+        self.run = Some(run);
+    }
+
+    fn set_task(&mut self, task: JoinHandle<()>) {
+        if let Some(run) = self.run.as_mut() {
+            run.task = Some(task);
+        }
+    }
+
+    /// Mark the stop; answers whether a run was running to be stopped.
+    fn mark_stop(&mut self) -> bool {
+        match self.run.as_mut().filter(|run| run.running()) {
+            Some(run) => {
+                run.stop = true;
+                true
+            }
+            None => false,
+        }
+    }
+}
+
+/// One run of the aid, starting until ended. Everything the task reports lives
+/// here, under the imaging state's lock; nothing is awaited while it is held.
+#[derive(Debug)]
+struct Run {
+    /// `starting`, `finding`, `running` or `ended`.
+    lifecycle: &'static str,
+    /// Console Unix seconds at the start.
+    since: f64,
+    exposure_ms: f64,
+    aid: Aid,
+    /// A stop was asked for (FR-027).
+    stop: bool,
+    /// The run's task; taken by `abort_task`.
+    task: Option<JoinHandle<()>>,
+    /// When the last sample was pushed, console Unix seconds.
+    sampled_at: Option<f64>,
+    cadence_ms: Option<f64>,
+    last: Option<LastView>,
+    verdict: Option<Verdict>,
+    /// The reference the verdict was judged against, as it stood before the
+    /// reading was noted (FR-025).
+    reference: Option<(f64, Of)>,
+    ended_reason: Option<&'static str>,
+    error: Option<String>,
+    restore_error: Option<String>,
+    /// The last frame saved, whose file goes when the next is saved (FR-024).
+    previous: Option<(u64, Option<String>)>,
+}
+
+impl Run {
+    fn new(since: f64, exposure_ms: f64) -> Self {
+        Self {
+            lifecycle: "starting",
+            since,
+            exposure_ms,
+            aid: Aid::new(),
+            stop: false,
+            task: None,
+            sampled_at: None,
+            cadence_ms: None,
+            last: None,
+            verdict: None,
+            reference: None,
+            ended_reason: None,
+            error: None,
+            restore_error: None,
+            previous: None,
+        }
+    }
+
+    fn running(&self) -> bool {
+        matches!(self.lifecycle, "starting" | "finding" | "running")
+    }
+}
+
+/// The words of each state that is not `ready`, as 031's own `set` refuses
+/// them (FR-020); written out here because 031's are private to its modules.
+fn state_refusal(state: &str, error: Option<&str>) -> Refusal {
+    match state {
+        "no_link" => Refusal::conflict("the scope node is not connected"),
+        "no_service" => Refusal::conflict("this scope node has no imaging service"),
+        "no_camera" => Refusal::conflict("this scope node has no imaging camera"),
+        _ => Refusal::conflict(format!(
+            "the imaging camera is not answering: {}",
+            error.unwrap_or_default()
+        )),
+    }
+}
+
+/// The settings of one turn of the aid, or of the settings put back: exactly
+/// the four keys the aid owns (FR-021).
+fn edit(exposure_ms: f64, binning: u32, roi: Option<RoiEdit>, save_at_node: bool) -> SettingsEdit {
+    SettingsEdit {
+        exposure_ms: Some(exposure_ms),
+        binning: Some(binning),
+        roi: Some(roi),
+        save_at_node: Some(save_at_node),
+        ..SettingsEdit::default()
+    }
+}
+
+/// A file's place under the imaging folder, split for the platform's
+/// separators.
+fn place(root: &Path, relative: &str) -> PathBuf {
+    let mut path = root.to_path_buf();
+    for part in relative.split('/') {
+        path.push(part);
+    }
+    path
+}
+
+impl Imaging {
+    /// Start the focus aid (FR-020, FR-021): the eight refusals in order, then
+    /// the lease asked for as [`HOLDER`], a new run in the focus state and the
+    /// task that runs it. A refused start has changed nothing.
+    pub async fn focus_start(self: &Arc<Self>, ask: FocusAsk) -> Result<ImagingView, Refusal> {
+        // Checks 1 to 7 under one acquisition of the state's lock, from its own
+        // fields: `Imaging::solver`, `holder` and the view take the lock
+        // themselves and are not called while it is held.
+        let tile;
+        let (solver, camera) = {
+            let held = self.state.lock().expect("imaging state");
+            // 1. The camera's state, with 031's words (FR-020).
+            if held.state != "ready" {
+                return Err(state_refusal(held.state, held.error.as_deref()));
+            }
+            // 2. No solver (FR-020).
+            let Some(solver) = held.solver.clone().map(|held| held.0) else {
+                return Err(Refusal::conflict("this console has no imaging solver"));
+            };
+            // 3. An aid is running (FR-020).
+            if held.focus.running() {
+                return Err(Refusal::conflict("the focus aid is already running"));
+            }
+            // 4. A frame in flight that no lease guards (FR-020): while a
+            //    lease is out this is passed over, whatever the frame's state,
+            //    and check 8 answers with the holder's name.
+            if held.lease.is_none()
+                && held
+                    .frame
+                    .as_ref()
+                    .is_some_and(|frame| matches!(frame.state, "exposing" | "receiving"))
+            {
+                return Err(Refusal::conflict("an exposure is in progress"));
+            }
+            // 5. Both (FR-020).
+            if ask.find && ask.tile.is_some() {
+                return Err(Refusal::bad_request("give find or tile, not both"));
+            }
+            // 6. A tile the grid does not hold (FR-020).
+            tile = match ask.tile {
+                Some(tile) => match Tile::new(tile.col, tile.row) {
+                    Some(tile) => Some(tile),
+                    None => {
+                        return Err(Refusal::bad_request(
+                            "tile col and row must each be 0, 1 or 2",
+                        ))
+                    }
+                },
+                None => None,
+            };
+            // 7. The exposure against the camera's range, with 031's words
+            //    (FR-020).
+            if let Some(exposure_ms) = ask.exposure_ms {
+                let camera = held.camera.as_ref().expect("a ready camera");
+                if !exposure_ms.is_finite()
+                    || exposure_ms < camera.exposure_ms.min
+                    || exposure_ms > camera.exposure_ms.max
+                {
+                    return Err(Refusal::bad_request(format!(
+                        "exposure_ms {exposure_ms} is outside the camera's range {}–{} ms",
+                        camera.exposure_ms.min, camera.exposure_ms.max
+                    )));
+                }
+            }
+            (solver, held.camera.clone().expect("a described camera"))
+        };
+        // 8. The lease, asked for last so a refused start never held the
+        //    camera (FR-021); it also keeps two starts apart.
+        let lease = self.lease(HOLDER)?;
+        let config = Config {
+            solver,
+            camera,
+            find: ask.find,
+            tile,
+            exposure_ms: ask.exposure_ms.unwrap_or(FOCUS_EXPOSURE_MS),
+        };
+        {
+            let mut held = self.state.lock().expect("imaging state");
+            held.focus
+                .begin(Run::new(self.clock.now(), config.exposure_ms));
+        }
+        let task = tokio::spawn(run(Arc::downgrade(self), lease, config, self.root.clone()));
+        self.state
+            .lock()
+            .expect("imaging state")
+            .focus
+            .set_task(task);
+        Ok(self.view())
+    }
+
+    /// Stop the aid and wait until it has ended, so the camera is free and the
+    /// settings are back (FR-028). With nothing running: the view, changed
+    /// nothing.
+    pub async fn focus_stop(&self) -> ImagingView {
+        let running = self.state.lock().expect("imaging state").focus.mark_stop();
+        if running {
+            // The exposure in flight is the aid's own; ending it lets the task
+            // see the stop within one frame.
+            self.abort().await;
+            // The `Notified` is made first and the lifecycle read after, so an
+            // end between the two cannot be missed.
+            let signal = self.state.lock().expect("imaging state").focus.end_signal();
+            loop {
+                let notified = signal.notified();
+                if !self.focus_running() {
+                    break;
+                }
+                notified.await;
+            }
+        }
+        self.view()
+    }
+
+    /// Whether an aid or a check is running, whatever the camera's state
+    /// (FR-029). It keeps nobody out: the lease does that.
+    pub fn focus_running(&self) -> bool {
+        self.state.lock().expect("imaging state").focus.running()
+    }
+}
+
+/// What the task needs beside the `Imaging` it serves and the lease it owns.
+struct Config {
+    solver: Arc<dyn ImagingSolver>,
+    camera: CameraView,
+    find: bool,
+    tile: Option<Tile>,
+    exposure_ms: f64,
+}
+
+/// The settings the aid remembered and puts back (FR-021, FR-027). `roi: None`
+/// is the whole sensor.
+#[derive(Debug, Clone)]
+struct Remembered {
+    exposure_ms: f64,
+    binning: u32,
+    save_at_node: bool,
+    roi: Option<RoiEdit>,
+}
+
+impl Remembered {
+    fn edit(&self) -> SettingsEdit {
+        edit(self.exposure_ms, self.binning, self.roi, self.save_at_node)
+    }
+}
+
+/// How the run ended (FR-027), and what is put back first.
+struct Ended {
+    reason: &'static str,
+    /// The words, for every reason but `stopped`.
+    error: Option<String>,
+    restore: Option<Remembered>,
+}
+
+impl Ended {
+    fn failed(error: String) -> Self {
+        Self {
+            reason: "failed",
+            error: Some(error),
+            restore: None,
+        }
+    }
+
+    fn stopped() -> Self {
+        Self {
+            reason: "stopped",
+            error: None,
+            restore: None,
+        }
+    }
+}
+
+/// The task that runs the aid (FR-021 to FR-027): it owns the lease from its
+/// first line to its last, and holds the `Imaging` weakly, so dropping the last
+/// `Arc` ends it.
+async fn run(imaging: Weak<Imaging>, lease: Lease, config: Config, root: PathBuf) {
+    let Some(imaging) = imaging.upgrade() else {
+        return;
+    };
+    let end = steps(&imaging, &lease, &config, &root).await;
+    finish(&imaging, lease, end).await;
+}
+
+/// The task's five steps: remember, choose the region, set, one frame after
+/// another, end (FR-021 to FR-027).
+async fn steps(imaging: &Arc<Imaging>, lease: &Lease, config: &Config, root: &Path) -> Ended {
+    // 1. Remember the settings in force (FR-021). A camera that left `ready`
+    //    after the start's checks ends the run at once: nothing is remembered,
+    //    so nothing is put back.
+    let Some(remembered) = remember(imaging) else {
+        return state_ended(imaging);
+    };
+    let sensor = Region {
+        x: 0,
+        y: 0,
+        width: config.camera.width,
+        height: config.camera.height,
+    };
+    let b0 = *config.camera.binnings.iter().min().unwrap_or(&1);
+    // 2. Choose the region (FR-021): the tile asked for, kept as `fixed`; else
+    //    a search, with `find` or with nothing kept; else the kept one.
+    let kept = imaging
+        .state
+        .lock()
+        .expect("imaging state")
+        .focus
+        .kept
+        .region()
+        .map(|region| region.tile());
+    let tile = match config.tile {
+        Some(tile) => {
+            keep_tile(
+                imaging,
+                KeptRegion::fixed(sensor, b0, tile, imaging.clock.now()),
+            );
+            tile
+        }
+        None => match (!config.find, kept) {
+            (true, Some(tile)) => tile,
+            _ => match search(imaging, lease, config, root, b0).await {
+                Ok(Some((tile, reading))) => {
+                    keep_tile(imaging, KeptRegion::found(sensor, b0, tile, &reading));
+                    tile
+                }
+                Ok(None) => {
+                    return Ended {
+                        reason: "no_region",
+                        error: Some(NO_REGION.to_string()),
+                        restore: Some(remembered),
+                    }
+                }
+                Err(end) => return with(end, remembered),
+            },
+        },
+    };
+    // 3. Set the focus exposure, the smallest binning, that region and no node
+    //    copy (FR-021). A failed set ends the run with the refusal's words.
+    let region = super::tile_region(sensor, b0, tile);
+    if let Err(refusal) = lease
+        .set(edit(
+            config.exposure_ms,
+            b0,
+            Some(RoiEdit {
+                x: region.x,
+                y: region.y,
+                width: region.width,
+                height: region.height,
+            }),
+            false,
+        ))
+        .await
+    {
+        return with(Ended::failed(refusal.message), remembered);
+    }
+    set_lifecycle(imaging, "running");
+    // 4. One frame, repeated (FR-023 to FR-025).
+    loop {
+        // a. A stop asked for ends the run (FR-027).
+        if stop_asked(imaging) {
+            return with(Ended::stopped(), remembered);
+        }
+        let frame = match one_frame(imaging, lease, root).await {
+            Ok(frame) => frame,
+            Err(end) => return with(end, remembered),
+        };
+        // e. The saved frame as the solver needs it, and the reading of the
+        //    whole of it (FR-023). The scale is read again at each use, since a
+        //    solve can end while the aid runs.
+        let (Some(width), Some(height), Some(bits), Some(binning), Some(start), Some(file)) = (
+            frame.width,
+            frame.height,
+            frame.bits,
+            frame.binning,
+            frame.start,
+            frame.file.clone(),
+        ) else {
+            return with(
+                Ended::failed("the imaging frame was not saved".into()),
+                remembered,
+            );
+        };
+        let solve_frame = SolveFrame {
+            path: place(root, &file),
+            width,
+            height,
+            bits,
+            bayer: frame.bayer.clone(),
+            binning,
+            roi: Region::from(frame.roi),
+            start,
+            exposure_s: frame.exposure_ms / 1000.0,
+        };
+        let read = match super::read(
+            config.solver.as_ref(),
+            solve_frame,
+            frame.id,
+            None,
+            imaging.scale_arcsec_per_px(),
+        )
+        .await
+        {
+            Ok(read) => read,
+            Err(error) => return with(Ended::failed(error.message()), remembered),
+        };
+        // f to h: one critical section, no await inside it. `at` is the middle
+        // of the exposure.
+        note(imaging, &read, frame.id, start + frame.exposure_ms / 2000.0);
+    }
+}
+
+/// Give the ending its remembered settings (step 1's), whatever made it.
+fn with(mut end: Ended, remembered: Remembered) -> Ended {
+    if end.restore.is_none() {
+        end.restore = Some(remembered);
+    }
+    end
+}
+
+/// The settings in force, remembered for the end (FR-021); `None` when the
+/// camera left `ready`.
+fn remember(imaging: &Arc<Imaging>) -> Option<Remembered> {
+    let held = imaging.state.lock().expect("imaging state");
+    let settings = held.settings.clone()?;
+    let whole = held.camera.as_ref().is_some_and(|camera| {
+        settings.roi.x == 0
+            && settings.roi.y == 0
+            && settings.roi.width == camera.width
+            && settings.roi.height == camera.height
+    });
+    Some(Remembered {
+        exposure_ms: settings.exposure_ms,
+        binning: settings.binning,
+        save_at_node: settings.save_at_node,
+        roi: (!whole).then_some(RoiEdit {
+            x: settings.roi.x,
+            y: settings.roi.y,
+            width: settings.roi.width,
+            height: settings.roi.height,
+        }),
+    })
+}
+
+/// The ending for a camera that is not `ready` (FR-027): 031's words, nothing
+/// put back.
+fn state_ended(imaging: &Arc<Imaging>) -> Ended {
+    let held = imaging.state.lock().expect("imaging state");
+    Ended::failed(state_refusal(held.state, held.error.as_deref()).message)
+}
+
+/// Keep a region and write `focus.json` (FR-021).
+fn keep_tile(imaging: &Arc<Imaging>, region: KeptRegion) {
+    imaging
+        .state
+        .lock()
+        .expect("imaging state")
+        .focus
+        .kept
+        .keep_region(region);
+}
+
+/// The stop mark, read by the task at each step's turn.
+fn stop_asked(imaging: &Arc<Imaging>) -> bool {
+    imaging
+        .state
+        .lock()
+        .expect("imaging state")
+        .focus
+        .run
+        .as_ref()
+        .is_some_and(|run| run.stop)
+}
+
+fn set_lifecycle(imaging: &Arc<Imaging>, lifecycle: &'static str) {
+    let mut held = imaging.state.lock().expect("imaging state");
+    if let Some(run) = held.focus.run.as_mut() {
+        run.lifecycle = lifecycle;
+    }
+}
+
+/// The search (FR-022): one whole-sensor frame, whose nine tiles are measured,
+/// and the sharpest tile with its reading. `Ok(None)`: no tile could be
+/// measured and none was far out.
+async fn search(
+    imaging: &Arc<Imaging>,
+    lease: &Lease,
+    config: &Config,
+    root: &Path,
+    b0: u32,
+) -> Result<Option<(Tile, FocusReading)>, Ended> {
+    set_lifecycle(imaging, "finding");
+    // The whole sensor for the search's own frame (FR-022).
+    if let Err(refusal) = lease.set(edit(config.exposure_ms, b0, None, false)).await {
+        return Err(Ended::failed(refusal.message));
+    }
+    let frame = one_frame(imaging, lease, root).await?;
+    let (Some(width), Some(height), Some(bits), Some(binning), Some(start), Some(file)) = (
+        frame.width,
+        frame.height,
+        frame.bits,
+        frame.binning,
+        frame.start,
+        frame.file.clone(),
+    ) else {
+        return Err(Ended::failed("the imaging frame was not saved".into()));
+    };
+    let solve_frame = SolveFrame {
+        path: place(root, &file),
+        width,
+        height,
+        bits,
+        bayer: frame.bayer.clone(),
+        binning,
+        roi: Region::from(frame.roi),
+        start,
+        exposure_s: frame.exposure_ms / 1000.0,
+    };
+    let found = match super::find_region(
+        config.solver.as_ref(),
+        solve_frame,
+        frame.id,
+        imaging.scale_arcsec_per_px(),
+    )
+    .await
+    {
+        Ok(found) => found,
+        Err(error) => return Err(Ended::failed(error.message())),
+    };
+    Ok(found.best.and_then(|best| {
+        found
+            .tiles
+            .into_iter()
+            .find(|tile| tile.tile == best)
+            .and_then(|tile| tile.read.ok())
+            .map(|reading| (best, reading))
+    }))
+}
+
+/// Steps 4a to 4d: one frame through the lease, awaited until it ended, the
+/// previous saved frame's file and sidecar removed (FR-024) and this one kept
+/// as the previous. Answers the saved frame.
+async fn one_frame(imaging: &Arc<Imaging>, lease: &Lease, root: &Path) -> Result<FrameView, Ended> {
+    // b. Take (FR-023). The frame's id is the answered view's `frame.id`.
+    let view = match lease.take(PURPOSE).await {
+        Ok(view) => view,
+        Err(refusal) => return Err(Ended::failed(refusal.message)),
+    };
+    let Some(frame) = view.frame else {
+        // The camera left `ready` between the take and its answer.
+        return Err(state_ended(imaging));
+    };
+    let id = frame.id;
+    let frame = imaging.ended(id).await;
+    // c. A stop or an abort ends the run `stopped`; a failed frame ends it
+    //    `failed` with the frame's error (FR-027).
+    if stop_asked(imaging) || frame.state == "aborted" {
+        return Err(Ended::stopped());
+    }
+    if frame.state == "failed" {
+        return Err(Ended::failed(frame.error.unwrap_or_default()));
+    }
+    // The previous saved frame goes now that this one is saved (FR-024).
+    let previous = {
+        let mut held = imaging.state.lock().expect("imaging state");
+        held.focus
+            .run
+            .as_mut()
+            .expect("the run")
+            .previous
+            .replace((id, frame.file.clone()))
+    };
+    remove(root, previous);
+    Ok(frame)
+}
+
+/// Remove a frame's file and its solve sidecar (FR-024), ignoring a missing one
+/// and printing any other failure to standard error.
+fn remove(root: &Path, previous: Option<(u64, Option<String>)>) {
+    let Some((_, Some(file))) = previous else {
+        return;
+    };
+    if let Err(error) = std::fs::remove_file(place(root, &file)) {
+        if error.kind() != std::io::ErrorKind::NotFound {
+            eprintln!("focus: could not remove {}: {error}", file);
+        }
+    }
+    let Some(base) = file.strip_suffix(".fits") else {
+        return;
+    };
+    let sidecar = format!("{base}.solve.json");
+    if let Err(error) = std::fs::remove_file(place(root, &sidecar)) {
+        if error.kind() != std::io::ErrorKind::NotFound {
+            eprintln!("focus: could not remove {}: {error}", sidecar);
+        }
+    }
+}
+
+/// Steps 4f to 4h (FR-023, FR-025): the sample pushed, the cadence and the
+/// last sample set, the reference read before the verdict is set, the verdict
+/// kept with it, and a settled reading noted. One critical section; no await
+/// falls inside it.
+fn note(imaging: &Arc<Imaging>, read: &Read, id: u64, at: f64) {
+    let mut guard = imaging.state.lock().expect("imaging state");
+    let held: &mut Held = &mut guard;
+    let now = imaging.clock.now();
+    let run = held.focus.run.as_mut().expect("the run");
+    // f. The sample, the cadence and the last sample.
+    let step = run.aid.push(Sample::from(read));
+    run.cadence_ms = run.sampled_at.map(|at| (now - at) * 1000.0);
+    run.sampled_at = Some(now);
+    let state = run
+        .aid
+        .phase()
+        .map(|phase| phase.as_str())
+        .unwrap_or("reading");
+    let (value, stars) = match read {
+        Ok(reading) => (Some(reading.px), Some(reading.stars)),
+        Err(Unmeasurable::TooFewStars { stars }) => (None, Some(*stars)),
+        Err(Unmeasurable::FarOut { px, stars }) => (Some(*px), Some(*stars)),
+    };
+    run.last = Some(LastView {
+        frame_id: id,
+        at,
+        state,
+        value,
+        stars,
+    });
+    // g. The reference as it stood before the reading is noted, so a settled
+    //    reading is never judged against itself. Only a measured scale reaches
+    //    the record (FR-025).
+    let measured = held
+        .relation
+        .view(None, false)
+        .and_then(|view| view.scale)
+        .map(|scale| scale.arcsec_per_px);
+    let reference = held.focus.kept.reference(now, measured);
+    match (step.settled, read) {
+        (Some(m), _) => {
+            let found = run.aid.found();
+            run.verdict = Some(judge(Ok(m), reference.map(|(px, _)| px)));
+            run.reference = reference;
+            // h. Noted with the aid's `found` of this moment (FR-025).
+            held.focus.kept.note(m, at, measured, found);
+        }
+        (None, Err(unmeasurable)) => {
+            run.verdict = Some(judge(Err(*unmeasurable), reference.map(|(px, _)| px)));
+            run.reference = reference;
+        }
+        // A measurable frame that did not settle: no verdict and no reference
+        // (FR-025).
+        _ => {
+            run.verdict = None;
+            run.reference = None;
+        }
+    }
+}
+
+/// Step 5 (FR-027): wait out a frame in flight, put the remembered settings
+/// back through the lease, drop the lease and only then let the lifecycle say
+/// `ended`, so a reader who sees it finds the camera free and the settings as
+/// they will stay.
+async fn finish(imaging: &Arc<Imaging>, lease: Lease, end: Ended) {
+    if let Some(id) = {
+        let held = imaging.state.lock().expect("imaging state");
+        held.frame
+            .as_ref()
+            .filter(|frame| matches!(frame.state, "exposing" | "receiving"))
+            .map(|frame| frame.id)
+    } {
+        imaging.ended(id).await;
+    }
+    let restore_error = match end.restore {
+        Some(remembered) => match lease.set(remembered.edit()).await {
+            Ok(_) => None,
+            Err(refusal) => Some(refusal.message),
+        },
+        None => None,
+    };
+    drop(lease);
+    {
+        let mut guard = imaging.state.lock().expect("imaging state");
+        let held: &mut Held = &mut guard;
+        let run = held.focus.run.as_mut().expect("the run");
+        run.lifecycle = "ended";
+        run.ended_reason = Some(end.reason);
+        run.error = end.error;
+        run.restore_error = restore_error;
+        held.focus.ended.notify_waiters();
+    }
+}
+
+/// The focus view of one moment (FR-029), from the focus state and the two
+/// scales: `shown`, which sizes what the view shows, and `measured`, which the
+/// record keeps. Only `Imaging::view` calls it, while it holds the state's
+/// lock.
+pub(in crate::imaging) fn view(held: &Held, now: f64) -> FocusView {
+    let shown = held.relation.scale_arcsec_per_px();
+    let s = shown.unwrap_or(1.0);
+    let measured = held
+        .relation
+        .view(None, false)
+        .and_then(|view| view.scale)
+        .map(|scale| scale.arcsec_per_px);
+    let record = held.focus.kept.record(now, measured);
+    let sized = |mark: Mark| SizeAt {
+        value: mark.px * s,
+        at: mark.at,
+    };
+    FocusView {
+        unit: if shown.is_some() { "arcsec" } else { "px" },
+        arcsec_per_px: shown,
+        region: held.focus.kept.region().map(|region| RegionOut {
+            col: region.col,
+            row: region.row,
+            x: region.x,
+            y: region.y,
+            width: region.width,
+            height: region.height,
+            source: match region.source {
+                Source::Found => "found",
+                Source::Fixed => "fixed",
+            },
+        }),
+        record: (record.tonight.is_some() || record.earlier.is_some()).then_some(RecordOut {
+            tonight: record.tonight.map(sized),
+            earlier: record.earlier.map(sized),
+        }),
+        aid: held.focus.run.as_ref().map(|run| AidView {
+            state: run.lifecycle,
+            since: run.since,
+            exposure_ms: run.exposure_ms,
+            readings: run.aid.readings(),
+            cadence_ms: run.cadence_ms,
+            last: run.last.map(|last| LastView {
+                value: last.value.map(|value| value * s),
+                ..last
+            }),
+            median: run.aid.median().map(|median| MedianView {
+                value: median.px * s,
+                readings: median.readings,
+            }),
+            best: run.aid.best().map(|best| best * s),
+            trend: run.aid.trend().map(|trend| trend.as_str()),
+            found: run.aid.found(),
+            verdict: run.verdict.map(|verdict| verdict.as_str()),
+            reference: run.reference.map(|(px, of)| ReferenceView {
+                value: px * s,
+                of: match of {
+                    Of::Tonight => "tonight",
+                    Of::Earlier => "earlier",
+                },
+            }),
+            history: run
+                .aid
+                .history()
+                .into_iter()
+                .map(|value| value.map(|value| value * s))
+                .collect(),
+            ended_reason: run.ended_reason,
+            error: run.error.clone(),
+            restore_error: run.restore_error.clone(),
+        }),
+    }
+}
