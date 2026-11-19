@@ -5,7 +5,7 @@ description: "Task list for 036-tracking-from-subs: Tracking Steered by the Subs
 # Tasks: Tracking Steered by the Subs
 
 **Prerequisites** (plan.md § Prerequisites):
-- `015-tracking` has landed on `main`: met;
+- `015-tracking` and `038-track-follows-a-push` have landed on `main`: met;
 - `030-imaging-camera-link`, `031-imaging-frames-on-console`, `032-imaging-solve-and-aim-point`,
   `033-focus-reading-and-aid`, `034-dark-and-flat-frames` and `035-live-stack` have
   landed, 031 with the camera's lease: not met;
@@ -15,13 +15,16 @@ description: "Task list for 036-tracking-from-subs: Tracking Steered by the Subs
 - the owner decisions in spec.md are settled and its owner approvals given, and the
   plan document agrees with them (plan.md § Prerequisites 9; in this worktree it
   carries the recommended answers, and it is not on `main`): not met;
-- a probe build has confirmed the bounds of US3-S1, US3-S2, US4-S5, US6-S5 and
-  US7-S1, and that US3's test file passes unedited once US6 has landed: not met;
+- a probe build has confirmed the bounds of US3-S1, US3-S2, US4-S5, US6-S5 and US7-S1,
+  and that US3's test file passes unedited once US6 has landed: met on 2026-11-19 by
+  probe round 1 (plan.md § Prerequisites 5);
 - the documents this trio cites are on `main`: not met;
 - 032's owner decision on a newly measured aim point while Track is on is settled,
   and, if its answer is that the tracker bounds the rate one tracking error may ask
   for, US3 carries that bound with one scenario (plan.md § Prerequisites 11): met on
   2026-11-17; the owner chose to hold the aim point, so no bound is added;
+- 038's `follow` ends any claim the subs hold and forgets what was pending or held, with
+  one scenario in US3 (plan.md § Prerequisites 12): met on 2026-11-19, as US3-S12;
 - no operator-staged file is needed.
 
 **Rules for every story:**
@@ -79,12 +82,15 @@ description: "Task list for 036-tracking-from-subs: Tracking Steered by the Subs
 - [ ] T001 [US1] Create `crates/simulator/tests/imaging_history.rs` with a simulator at
   40° N 75° W on a `VirtualClock` from 1768528800 and a `SimMount::with_config` with no
   backlash and no base tilt, `set_rate_error(0.25)` called before the azimuth rate is
-  commanded, and failing tests for the truth of three instants of an exposure asked
-  30 s later, the azimuth's rise and the star's trail, measured over the window
-  US1-S1 gives round the midpoint of the star's two places (US1-S1), and for the
-  instant between two samples against a twin read live (US1-S2).
+  commanded, and failing tests for the truth of three instants of an exposure asked 30 s
+  later, against `sim.telescope().eyepiece` read live, the azimuth's rise and the star's
+  trail, measured over the window US1-S1 gives round the midpoint of the star's two
+  places (US1-S1), and for the instant between two samples against a twin read live,
+  with both axes turning and across 0° of azimuth (US1-S2).
 - [ ] T002 [US1] Add failing tests to `crates/simulator/tests/imaging_history.rs` for a
-  push by hand (US1-S3), a simulator with no mount (US1-S4) and count steps (US1-S5).
+  push by hand and the other three ways the memory begins again (US1-S3), a simulator
+  with no mount (US1-S4), count steps on both axes (US1-S5) and the memory's hour
+  (US1-S6).
 
 ### Implementation
 
@@ -98,7 +104,7 @@ description: "Task list for 036-tracking-from-subs: Tracking Steered by the Subs
   `count_steps` and the stepped clamp in `Motor::travel` (plan.md § Count steps).
   Add no field to `MountConfig`.
 - [ ] T005 [US1] Run the `lint` and `test` gates with every existing test unchanged and
-  green. Commit the green story (US1-S1, US1-S2, US1-S3, US1-S4 and US1-S5).
+  green. Commit the green story (US1-S1, US1-S2, US1-S3, US1-S4, US1-S5 and US1-S6).
 
 ## Phase 2: User Story 2 — The tracking error from a sub (Priority: P1)
 
@@ -132,9 +138,9 @@ description: "Task list for 036-tracking-from-subs: Tracking Steered by the Subs
   of finder's `motion` test binary, with `mod steering;` in its alphabetical place,
   before `mod stop;`, in `crates/finder/tests/motion/main.rs`. Give it the tracker rig
   of spec.md § User Scenarios (the rig of
-  `crates/finder/tests/motion/tracking/pi_loop.rs:104` with no base tilt, keeping its
-  `Simulator`, and waiting for the tracker's first rates unless a test asks it not
-  to), the truth error, the feed-forward rate, playing a sub, playing a sub late, the
+  `crates/finder/tests/motion/tracking/pi_loop.rs:104` with no base tilt and its tracker
+  in an `Arc`, and waiting for the tracker's first rates unless a test asks it not to),
+  the truth error, the feed-forward rate, playing a sub, playing a sub late, the
   axis displacement and a seeded noise generator of its own. Write failing
   tests for the drift with feedback, with feedback a sub late and without (US3-S1) and
   beside noisy finder pointings (US3-S2).
@@ -154,7 +160,8 @@ description: "Task list for 036-tracking-from-subs: Tracking Steered by the Subs
   error measured before the last gap's step (US3-S9), one measured before the last
   gap's rate change (US3-S10), and, after the claim has lapsed, the finder camera's
   correction held for the next gap and applied there, with the rate log between gaps
-  under noisy finder pointings (US3-S11).
+  under noisy finder pointings (US3-S11), and a followed push that ends the claim
+  (US3-S12).
 
 ### Implementation
 
@@ -163,13 +170,16 @@ description: "Task list for 036-tracking-from-subs: Tracking Steered by the Subs
   `held`, `corrections`, `gaps`), `Subs`, `Held`, `Correction`, `Shared::wake`, and
   `Tracker::target`, `steer` with its three cases, `gap`, `release` (which also
   forgets `held`) and `steered_by_subs` with `impl Steered for Tracker` (plan.md § The
-  tracker). Put `counts` and `settling: true` into the `Control` that
+  tracker). In 038's `Tracker::follow`, after it clears the samples, end the claim and
+  forget what was pending or held, as `release` does (plan.md § The tracker,
+  **`follow`**). Put `counts` and `settling: true` into the `Control` that
   `start_with_resets` builds, and make `end` clear the claim, the pending error,
   `lapsed`, `held`, the remembered corrections and the waiting gaps.
 - [ ] T015 [US3] In `crates/finder/src/tracking.rs`, make the top of `run`'s loop the
   `select!` of plan.md § The tracker, store `direction` in `Control` before the rates
   are sent and set `settling` false after them at the end of every turn, move the
-  rate rule into `commanded`, and add `serve_gaps` with its six steps: the senders
+  rate rule into `commanded`, and add `serve_gaps(&mut movement)` with its six steps,
+  reading the target and the counts under the lock in step 1: the senders
   whose receiver has gone dropped first; a gap turned away while `settling` is true;
   the claim, which a lapsed tracker makes only with an error pending and which sets
   `previous_pointing` to `None` and forgets `held`; for a lapsed claim, the held
@@ -185,7 +195,7 @@ description: "Task list for 036-tracking-from-subs: Tracking Steered by the Subs
   it.
 - [ ] T016 [US3] Run the `lint` and `test` gates with every existing test unchanged and
   green, 015's tracking tests among them. Commit the green story (US3-S1, US3-S2,
-  US3-S3, US3-S4, US3-S5, US3-S6, US3-S7, US3-S8, US3-S9, US3-S10 and US3-S11).
+  US3-S3, US3-S4, US3-S5, US3-S6, US3-S7, US3-S8, US3-S9, US3-S10, US3-S11 and US3-S12).
 
 ## Phase 4: User Story 4 — Corrections only in the gap (Priority: P1)
 
@@ -196,15 +206,16 @@ description: "Task list for 036-tracking-from-subs: Tracking Steered by the Subs
   `crates/finder/tests/console/main.rs`, and in it the scripted tracker of spec.md
   § User Scenarios. Write failing tests for the order of the calls and the view
   (US4-S1), no tracker and no target (US4-S2), a frame from before the stack, the
-  `Hold` and nothing handed over after a release (US4-S3), and a named set point and a
-  binned region (US4-S4).
+  `Hold` and nothing handed over after a release (US4-S3), a named set point and a
+  binned region (US4-S4), and the imaging view's `steering` part on a console built with
+  `with_imaging` (US4-S7).
 - [ ] T018 [US4] Create `crates/finder/tests/motion/steering_gap.rs`, the module
   `steering_gap` of `motion`, with `mod steering_gap;` after `mod steering;` in
   `crates/finder/tests/motion/main.rs`, holding the tracker rig with its mount started
-  on M42's catalogue place and its wait for the first rates. Write failing tests for
-  thirty subs played late through `Steering` with the worked ask and solves from the
-  simulator's truth (US4-S5) and, on `crate::support::goto::Rig`, for
-  `Session::steered` (US4-S6).
+  on M42's catalogue place, its `Simulator`, which US4-S5 reads, and its wait for the
+  first rates. Write failing tests for thirty subs played late through `Steering` with
+  the worked ask and solves from the simulator's truth (US4-S5) and, on
+  `crate::support::goto::Rig`, for `Session::steered` (US4-S6).
 
 ### Implementation
 
@@ -219,7 +230,8 @@ description: "Task list for 036-tracking-from-subs: Tracking Steered by the Subs
   `Imaging::steering`, and the `steering` part of `ImagingView` (plan.md § The session,
   § The imaging state).
 - [ ] T021 [US4] Run the `lint` and `test` gates with every existing test unchanged and
-  green. Commit the green story (US4-S1, US4-S2, US4-S3, US4-S4, US4-S5 and US4-S6).
+  green. Commit the green story (US4-S1, US4-S2, US4-S3, US4-S4, US4-S5, US4-S6 and
+  US4-S7).
 
 ## Phase 5: User Story 5 — The exposure cap (Priority: P2)
 
@@ -266,18 +278,21 @@ description: "Task list for 036-tracking-from-subs: Tracking Steered by the Subs
   `crates/finder/tests/motion/main.rs`, on the backlash rig
   (`crate::support::tracker`, with a scratch folder from `crate::support::Scratch`).
   Write failing tests for a take-up at transit, with the follower, the reader and the
-  asker joined on the test's own task (US6-S1), for a first reversal, a start
-  with a gap asked before the first rates, a window before the start and a stop
-  (US6-S2), and for a first reversal's measurement under a claim that lapsed before
-  it, with gaps asked every 6 s (US6-S5).
+  asker joined on the test's own task, and the rate in force when a lapsed gap after it
+  answers (US6-S1), for a first reversal and its close, a start with a gap asked before
+  the first rates, a window before the start, a stop, what a take-up forgets, the
+  trait's answers and the keyhole pass (US6-S2), and for a first reversal's measurement
+  under a claim that lapsed before it, with gaps asked every 6 s (US6-S5).
 - [ ] T029 [US6] Create `crates/finder/tests/console/steering_steady.rs`, the module
   `steering_steady` of `console`, with its `mod` line in
   `crates/finder/tests/console/main.rs` and a scripted tracker whose `steady` and
   `steady_between` the test sets and whose last window it keeps. Write failing tests
   for the wait, a tracker that stops being steady during its gap, the view before any
-  wait and a wait abandoned with its `Hold` (US6-S3), and for `check`: a sub the
-  tracker was not steady for, one it was, a tracker that has gone and a sub taken with
-  no tracker (US6-S4).
+  wait, a wait abandoned with its `Hold`, the switch off and a source that no longer
+  answers a tracker (US6-S3), and for `check`: a sub the
+  tracker was not steady for, one it was, a tracker that has gone, a sub taken with no
+  tracker, the count after a `release` and a frame started just before its record
+  (US6-S4).
 
 ### Implementation
 
@@ -288,7 +303,9 @@ description: "Task list for 036-tracking-from-subs: Tracking Steered by the Subs
   Tracker`, `mark` forgetting `held` as the tracker stops being steady, the test in
   `serve_gaps` step 1 changed from `settling` to `!steady`, and the held mode's test in
   `Shared::pointing` changed from `lapsed` to `lapsed && steady` (plan.md § The
-  tracker's two answers). Do not edit `crates/finder/tests/motion/steering.rs`: US3's
+  tracker's two answers), and in `serve_gaps` step 2 the note of a proportional rate
+  still in force, for which step 4 sends `base` (plan.md § The tracker, **`serve_gaps`**
+  steps 2 and 4). Do not edit `crates/finder/tests/motion/steering.rs`: US3's
   tests pass as they stand.
 - [ ] T031 [US6] In `crates/finder/src/imaging/steering.rs`, add `POLL`, the wait before
   the gap and the check after it in `before_exposure`, `steady` and `waiting` in the
@@ -304,31 +321,36 @@ description: "Task list for 036-tracking-from-subs: Tracking Steered by the Subs
 ### Tests first
 
 - [ ] T033 [US7] Create `crates/finder/tests/motion/steering_stack.rs`, the module
-  `steering_stack` of `motion`, with `mod steering_stack;` after `mod steering_gap;` in
-  `crates/finder/tests/motion/main.rs`, and the stacking rig of spec.md § User Story 7.
-  Write failing tests for a stack on a mount 1% fast with the switch on, and with the
+  `steering_stack` of `motion`, with `mod steering_stack;` after `mod steering_gap;` and
+  before `mod steering_steady;` in `crates/finder/tests/motion/main.rs`, and the
+  stacking rig of spec.md § User Story 7, with its 1 s more before a stack starts. Write
+  failing tests, reading each saved sub from its FITS file (spec.md § User Story 7), for
+  a stack on a mount 1% fast with the switch on, and with the
   switch off and the finder camera's frames stopped (US7-S1), an exposure cut under
   the limit and the setting put back (US7-S2), a sub during which Track was turned off
   and on (US7-S3), a stack with no tracker (US7-S4), with a scripted tracker of
-  the module's own given to the console's steering, a stack whose change of the
-  exposure is refused (US7-S5), and the guard on the text of
+  the module's own given to the console's steering, a stack whose change of the exposure
+  is refused, a stop while the first gap waits and a link lost while the second waits
+  (US7-S5), and the guard on the text of
   `crates/finder/src/imaging/stack/service.rs`, read from `CARGO_MANIFEST_DIR`
   (US7-S6).
 
 ### Implementation
 
 - [ ] T034 [US7] In `crates/finder/src/imaging/stack/service.rs`, add `not_steady` to
-  `Dropped` and its `total()`; in the taker, the `Hold`, the `ExposureAsk` built
-  without unwrapping the view, the local `restore_ms`, the loop run inside one `async`
-  block, `before_exposure` before each take raced in a `biased` `tokio::select!`
-  against the stopping mark's `stopping.wait_for(|stopping| *stopping)`, and before the
+  `Dropped` and its `total()`; in the taker, its parameter made `mut stopping`, the
+  `Hold`, the `ExposureAsk` built without unwrapping the view, the local `restore_ms`,
+  the loop run inside one `async` block, `before_exposure` before each take raced in a
+  `biased` `tokio::select!` against the stopping mark's
+  `stopping.wait_for(|stopping| *stopping)`, and before the
   first take the console's exposure set through the run's lease with `Lease::set`, a
   refusal ending the stack with `camera` and the words of plan.md § The stack; after
   that block, on every return, the observer's exposure put back through the lease
   before the task ends and the lease drops with it; in the worker, `check` before the
-  settings test and `accepted` where a sub is counted as stacked (plan.md § The stack,
-  § What 035 must provide). Add nothing to 035's ending, name none of the six names
-  of US2-S6, and change nothing else in the file.
+  settings test, its drop counted inline as the settings test counts its own and not
+  through `Dropped::count`, and `accepted` where a sub is counted as stacked (plan.md
+  § The stack, § What 035 must provide). Add nothing to 035's ending, name none of the
+  six names of US2-S6, and change nothing else in the file.
 - [ ] T035 [US7] In `crates/finder/src/imaging/solving.rs`, give the steering its source
   in `set_solver` (plan.md § `set_solver`). Add the section
   `## Tracking steered by the subs` to `crates/finder/README.md` (plan.md
@@ -353,13 +375,18 @@ description: "Task list for 036-tracking-from-subs: Tracking Steered by the Subs
 
 - [ ] T039 [US8] In `crates/finder/src/imaging/steering.rs`, add `stepped` to the
   exposure record, the window of ten errors, the records' steps in the drift, and the
-  four keys of the view (plan.md § The steering, **The readout**).
+  four keys of the view (plan.md § The steering, **The readout**). Add the four keys to
+  the list of the `steering` part's keys in `crates/finder/README.md`, in US7's section:
+  the root mean square of the last ten tracking errors and of the drifts between them,
+  in arcseconds and pixels, once two errors have been handed over since the tracker was
+  last let go.
 - [ ] T040 [US8] Add `ImagingSteering`, `putImagingSteering` and the optional
   `not_steady` of `StackDropped` to `crates/finder/web/src/api.ts`, create
   `crates/finder/web/src/components/SteeringBlock.tsx` with the words of plan.md § The
   page, place it in `crates/finder/web/src/components/ImagingPage.tsx` after the stack
   block, and add the words `not steady` to the `Dropped` line of
-  `crates/finder/web/src/components/StackBlock.tsx`.
+  `crates/finder/web/src/components/StackBlock.tsx`, its filter of the counts above 0
+  reading `(stack.dropped[key] ?? 0) > 0` (plan.md § The page).
 - [ ] T041 [US8] Add the block's entry to `DESIGN.md` and its component to
   `.impeccable/design.json`. Run the `lint` and `test` gates with every existing Vitest
   and Playwright test unchanged and green, commit the rebuilt `crates/finder/web/dist`,
@@ -384,6 +411,6 @@ US2 ──► US3 ───────┘
   that changes a camera setting, through the stack's own lease. It also follows US5,
   whose README row it writes after.
 - **US8** adds the readout's figures after US6's keys and shows them; it touches
-  `steering.rs`, the page, one line of 035's `StackBlock.tsx`, `DESIGN.md` and
-  `.impeccable/design.json`.
+  `steering.rs`, the page, one line of 035's `StackBlock.tsx`, the README section US7
+  writes, `DESIGN.md` and `.impeccable/design.json`.
 - **`[P]`** marks nothing here: every task shares a file with another in its story.

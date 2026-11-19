@@ -1,6 +1,6 @@
 ---
 state: draft
-depends_on_landed: ["015-tracking", "030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "034-dark-and-flat-frames", "035-live-stack"]
+depends_on_landed: ["015-tracking", "030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "034-dark-and-flat-frames", "035-live-stack", "038-track-follows-a-push"]
 # Drafted 2026-11-15 against `main` at 49bb210 (the drafting worktree's HEAD,
 # 49bb210fe4860dd98ba24727074e7bd3cc0d7124) from
 # docs/plans/2026-11-15-specs-030-037-imaging.md, by the grilling session of that day.
@@ -14,15 +14,22 @@ depends_on_landed: ["015-tracking", "030-imaging-camera-link", "031-imaging-fram
 # (§ Clarifications, the audit's session), and every `path:line` in spec.md and plan.md
 # was checked again against 49bb210fe4860dd98ba24727074e7bd3cc0d7124, the worktree's
 # HEAD: none had moved.
-# Not yet probe-built: no story of this trio has been compiled or run. The bounds of
-# US3-S1, US3-S2, US4-S5, US6-S5 and US7-S1 come from arithmetic on a model of the
-# loop, not from the code.
+# When drafted it was not probe-built: no story had been compiled or run, and the
+# bounds of US3-S1, US3-S2, US4-S5, US6-S5 and US7-S1 came from arithmetic on a model of
+# the loop, not from the code.
 # It builds on code that 030, 031, 032, 033, 034 and 035 create and that does not exist yet.
 # Every interface of theirs named here is taken from that draft's plan.md. The trio is
 # re-anchored against `main` after they land and before it is flipped (plan.md
 # § Prerequisites).
 # It stays draft until the owner settles the owner decisions and flips it to `ready`,
 # which gives the approvals listed under "Owner approvals" and dispatches it.
+# Probe-built 2026-11-18 and 19 (round 1): all eight stories were built from this trio,
+# tests first and with both gates, on probe builds of 030 to 035, and every bound held.
+# Its 3 blocking and 44 clarity defects were folded in on 2026-11-19 with the owner's
+# answers of that day ("Yes, all four"): 038 has landed, so `follow` ends the claim and
+# 038 joins `depends_on_landed`; a gap after a lapse sends the zeroed rate; and US1-S6,
+# US3-S12 and US4-S7 are new (§ Clarifications, the session of round 1 probes; plan.md
+# § Prerequisites 5 and § Refinement Record, "What probe round 1 changed").
 ---
 
 # Feature Specification: Tracking Steered by the Subs
@@ -313,6 +320,95 @@ work.
   error may ask for (A5 above), so no story, scenario or requirement changes here;
   plan.md § Prerequisites 11 is met, and its Refinement Record and tasks.md say so.
 
+### Session 2026-11-19 (round 1 probes)
+
+Probe round 1 built all eight stories from this trio on 2026-11-18 and 19, tests first
+and with both gates, in four agents, each starting where the one before stopped: US1 and
+US2, US3 and US4, US5 and US6, and US7 and US8. The base held 030 to 034 as landed or as
+their probes built them and 035's ten stories as its own round 1 built them. Every story
+built as written and passed its gates under 64 KiB, and every one but US8 wrote only its
+declared files (US8 needed one probe-only edit of a 034 test as that base carried it:
+plan.md § Prerequisites 3). Every bound held, on three runs each. The round found 3
+blocking and 44 clarity defects, D1 to D47, and all were folded into the three files on
+2026-11-19 but for the points the last answer below lists (plan.md § Prerequisites 5
+says what the round settled, and § Refinement Record, "What probe round 1 changed", what
+it changed). Every case the round proposed where a mutation survived a story's committed
+tests is now in its scenario, in the probe's words; each was run on the probe's build,
+passed on the code and failed under the mutation. Where two fixes touched one sentence
+they were merged.
+
+- Q: What did the owner answer before the fold? → A: "Yes, all four", on 2026-11-19:
+  1. Fold all 47 defects with their fix text, and every proposed case in its scenario in
+     the reports' words.
+  2. D25, a design gap. From US6 a pointing while the tracker is not steady runs 015's
+     whole block even after a lapse and sets its proportional rate, and the first gap
+     once the tracker is steady again zeroed that rate in the tracker's state but sent
+     nothing, so the first exposure after a time not steady began on the stale rate:
+     +0.632″/s on the azimuth axis for 0.15 s measured, up to 1 s and 0.6″ in general,
+     against a sub's bound of 0.15″. That gap now sends the zeroed rate when 015's
+     proportional term is still in force (FR-010; plan.md § The tracker, `serve_gaps`
+     steps 2 and 4), with a case of US6-S1.
+  3. D6, 038 has landed (`ad09efeb`), so plan.md § Prerequisites 12 is met as it said:
+     FR-011 gains "`follow`, as `release` does, ends the claim and forgets what was
+     pending or held", US3 gains US3-S12, and `038-track-follows-a-push` joins
+     `depends_on_landed` and US3's shared write of the tracker.
+  4. D8, the trio's own owner trigger in plan.md § Prerequisites 3 now reads "compares
+     the whole object with a literal or a fixed list of keys": a comparison of two
+     serializations of the same `Dropped`, as 035's `stack_console.rs` makes between
+     `stack.json` and the view, is not one.
+- Q: What could not pass as written? → A: Three things, now fixed. US6-S1's "the asker's
+  `gap` answered after L": the turn that ends the take-up and the gap it then serves
+  share L's instant in paused time, so it reads "at L or after it" (D24). US7's drift
+  oracle read 031's `frame` part every 100 ms, but 035's taker takes the next sub at the
+  instant one is saved, so the reads saw 3 subs of 18; a saved sub is now one whose FITS
+  file is in the stack's folder, and its drift is read from that file's `DATE-OBS` and
+  `EXPTIME` (D37). And a stack started at the instant of the tracker's first rates
+  dropped its first sub as `not_steady`, since `steady_between`'s bounds are inclusive;
+  the stacking rig now waits 1 s more before a stack starts (D38).
+- Q: What did the round measure that the trio now relies on? → A: On three runs each,
+  with the same numbers each time: US3-S1's drift from the 12th sub at most 0.0220″ with
+  each error handed over at once and 0.0340″ played late, against 0.15″ (4.4×; the
+  model's 0.030″ was 13% under the late figure); US3-S2's median drift without feedback
+  17.19″, against "above 3.0″" (5.7×); US4-S5's drift from the 14th sub at most 0.01552″
+  (9.7×); US6-S5's worst true error 41.414″ against 015's 60″ (1.45×), with the play
+  measured at 0.299879°, while with the held mode testing `lapsed` alone 015's bound
+  broke at transit + 319.7 s, as plan.md § Plan traps 28 says; and US7-S1's drift from
+  the 14th sub at most 0.01558″ (9.6×), and 0.746″ on every sub with the switch off.
+  US5-S6's limit is 37.28 s on the rig, not the worked 37.15 s, which is corrected
+  (D32). US3's test file passed unedited before and after US6. US7's stacking rig tracks
+  and stacks, 18 subs in about 97 s of virtual time, and US7-S5's rig saw its link
+  dropped within 1 s, well inside its gap. A first reversal's measurement held the
+  tracker not steady for about 312 s of the simulator's time with 0.3° of play, and a
+  take-up for 0.85 s. Each story's diff is under 64 KiB, US3 the largest at 50,893 B
+  (77.7%), about 57,000 B (87%) with its folded cases and US3-S12 (plan.md § Risks).
+- Q: Where do 015 and 030 to 035 differ from what this trio says? → A: 015's tracker on
+  `main` carries 038's `follow`, which moved most of this trio's citations of it from
+  line 83 on; the re-anchoring corrects them (plan.md § Prerequisites 2). The nine
+  points of plan.md § What 035 must provide are all provided by 035's probe code, with
+  three words the plan now gives: the taker's receiver of the stopping mark is made
+  `mut` (D39); the `not_steady` drop is counted inline, as the settings drop is, since
+  `Dropped::count` sends a key it does not name to `unprocessed` (D40); and the Stack
+  block's filter reads an optional count with `?? 0` (D41). Since round 1, 035 has been
+  split: its US5-S6, which this trio cited, is now US11-S3, in `stack_camera.rs` with
+  the scripted camera, and this trio cites it so (plan.md § Technical Context names the
+  module each of 035's rigs lives in).
+- Q: Which scenarios are new, and which alternatives were taken? → A: Three scenarios
+  are new: US1-S6, the memory's hour (D2), placed last so that US1-S5 keeps its number;
+  US3-S12, a followed push (D6); and US4-S7, the view's `steering` part and
+  `Imaging::steering` (D20). Of the reports' alternatives: the gap at which the claim
+  lapses still sends nothing, and FR-010 now says so (D11); FR-021 keeps the list of 64
+  and says what it means for a window before the start (D33); `Dropped::total()` keeps
+  its line in the plan and gets a case of US7-S3 (D46); and D25 takes agent c's fix.
+- Q: What was not folded? → A: Nothing of D1 to D47 was left out, and four points stay
+  as they were, each for a stated reason. The citations' line numbers (D7, D36 and the
+  stale anchors the reports list) are the re-anchoring's; D36's two insertion places are
+  now also named by their content. Three mutations are equivalent at every instant a
+  test can choose and have no case: the same-instant sample of US1's memory, the `mark`
+  where a measurement opens (noted in plan.md § The tracker's two answers), and the
+  `biased` race in US7's taker. And D26's note that US6-S3's second window, 6.4 s to
+  7.0 s, also admits a one-second poll was proposed and not run, so that window is
+  unchanged.
+
 ## Owner decisions
 
 Each is a design or taste call the plan document leaves open. None is settled. A
@@ -542,10 +638,11 @@ Every scenario shares these definitions unless it says otherwise.
   is the whole sensor (0, 0, 1236, 822), with the `start` and `exposure_s` its scenario
   gives and any path.
 - **The tracker rig** is the rig `crates/finder/tests/motion/tracking/pi_loop.rs:104`
-  builds, written out again in the module that uses it, with three changes: the base
-  tilt is 0° in the mount and in the model; the rig keeps its `Simulator`; and it keeps
-  its `Tracker` in an `Arc`, so that a second task or a `Steering`'s source can share
-  it. So: a
+  builds, written out again in the module that uses it, with two changes: the base tilt
+  is 0° in the mount and in the model, and it keeps its `Tracker` in an `Arc`, so that a
+  second task or a `Steering`'s source can share it. A module keeps the rig's
+  `Simulator` as a field only where it reads it (US4-S5's does; US3's does not, and a
+  field nothing reads fails the `lint` gate). So: a
   `VirtualClock` from Unix 1768528800 (`2026-01-16T02:00:00Z`); the target M42; a
   `SimMount` with no backlash whose zero points put its axes on M42's apparent place at
   the start, and whose truth is loaded into the model with `load_known_terms`
@@ -600,7 +697,8 @@ Every scenario shares these definitions unless it says otherwise.
   `Steering` whose source answers that tracker from a cell the test can empty, so that
   the test's own `Arc` is the last one; it runs on the console's `FixedClock`
   (`crates/finder/src/session.rs:41`) at 1768528800.0, or on the rig's clock where a
-  scenario moves a mount. **The worked ask** is `ExposureAsk { wanted_s: 5.0,
+  scenario moves a mount, or on a clock that follows tokio's where a scenario says so.
+  **The worked ask** is `ExposureAsk { wanted_s: 5.0,
   shortest_s: 0.001, sensor: (1236, 822), roi: the whole sensor (0, 0, 1236, 822),
   binning: 1 }`, with the `wanted_s` its scenario gives where that is not 5 s.
 - **A star's centroid** in a simulated imaging frame taken with noise off is the mean
@@ -644,21 +742,22 @@ development, `cargo nextest run -p simulator --locked --test imaging_history`.
    `SimImagingCamera` with noise off, gain 0 and one white star of magnitude 8 at the
    centre of `sim.imaging_truth()` as read then, **When** a test starts a 2 s exposure
    in a task with no wait in between, reads `sim.imaging_truth()` and
-   `sim.telescope().eyepiece.az` at its start, 1 s later and 2 s later, waits 30 s more
-   with the axis still turning, and asks `sim.imaging_truth_at` for those three
-   instants, **Then** a committed test asserts that:
-   - each answer's centre is within 0.02″ of the reading taken at that instant, and its
-     angle within 0.001° (oracle: the simulator's own truth, read live);
+   `sim.telescope().eyepiece` (its RA, Dec and azimuth) at its start, 1 s later and 2 s
+   later, waits 30 s more with the axis still turning, and asks `sim.imaging_truth_at`
+   for those three instants, **Then** a committed test asserts that:
+   - each answer's centre is within 0.02″ of `sim.telescope().eyepiece`'s RA and Dec
+     read at that instant, and its angle within 0.001° of the `imaging_truth()` reading
+     taken then (oracle: the simulator's own truth, read live);
    - the eyepiece's azimuth rose by 0.0500° ± 0.0005° over the 2 s (worked example:
      0.02°/s × 1.25 × 2 s);
-   - the first and third truths' centres are more than 60″ apart, so the solve's centre
+   - the first and third answers' centres are more than 60″ apart, so the solve's centre
      moves with the drift;
    - the star's trail in the frame is as long as the truth says. The star sits on the
      first truth's centre, so it starts at the frame's centre, (618.0, 411.0). With d
-     the separation of the first and third truths' centres in arcseconds over the
-     truth's scale, A the position angle from the third truth's centre to the first's
+     the separation of the first and third answers' centres in arcseconds over the
+     truth's scale, A the position angle from the third answer's centre to the first's
      (`atan2(sin Δα·cos δ1, cos δ3·sin δ1 − sin δ3·cos δ1·cos Δα)`, Δα the first's RA
-     less the third's, east of north) and θ the third truth's angle, it ends at
+     less the third's, east of north) and θ the third answer's angle, it ends at
      P = (618.0 − d·sin(A − θ), 411.0 − d·cos(A − θ)). The test asserts that d is above
      20; and, with background 170 (160 counts of offset and 2 s of sky at 5 counts a
      second, by 030's constants) and over the samples whose centres lie within
@@ -670,17 +769,29 @@ development, `cargo nextest run -p simulator --locked --test imaging_history`.
      to the trail, since 41 × 41 samples do not hold one of 40 px or more; the test
      computes the separation and the angle itself, from the truths' RA and Dec).
 2. **Given** two simulators built as in US1-S1, the same instant apart from nothing,
+   each with its altitude axis also commanded at 0.01°/s after its azimuth axis,
    **When** a test reads the first's `imaging_truth()` at t and t + 2 s only, and the
-   second's at t, t + 1 s and t + 2 s, **Then** a committed test asserts that the
-   first's `imaging_truth_at(t + 1.0)`, asked at t + 2 s, is within 0.02″ and 0.001° of
-   the second's reading at t + 1 s (oracle: a twin read live; a constant rate makes a
-   straight line between samples exact).
+   second's `imaging_truth()` and `telescope().eyepiece` at t, t + 1 s and t + 2 s,
+   **Then** a committed test asserts that the first's `imaging_truth_at(t + 1.0)`, asked
+   at t + 2 s, has its centre within 0.02″ of the second's `telescope().eyepiece` RA and
+   Dec read at t + 1 s, and its angle within 0.001° of the second's `imaging_truth()`
+   read then (oracle: a twin read live, its centre through 030's `directions_at`, which
+   FR-001 leaves alone, since `imaging_truth()` itself is answered from the memory; a
+   constant rate makes a straight line between samples exact to well under 0.02″).
+   **And** for twins pushed to (50.0, 359.85) in place of (50.0, 120.0), whose camera
+   azimuth crosses 0° between t and t + 2 s, the same holds.
 3. **Given** the simulator of US1-S1 after 10 s of turning, **When** a test reads the
    truth at t, waits 1 s, calls `push_to(40.0, 200.0)`, and asks `imaging_truth_at(t)`,
    **Then** a committed test asserts the answer's centre equals
    `sim.directions_at(t).eyepiece`'s RA and Dec within 10⁻⁹ degrees: a push by hand
    starts the memory again, and the answer is the one 030 gives (oracle:
-   `crates/simulator/src/optics.rs:120`).
+   `crates/simulator/src/optics.rs:120`); and that 2 s after the push, after one read of
+   `imaging_truth()` 1 s after it, `imaging_truth_at(t)` still equals
+   `sim.directions_at(t).eyepiece`'s RA and Dec within 10⁻⁹ degrees. The same holds,
+   each on a fresh simulator of US1-S1, when in place of the push the test calls
+   `sim.set_optics` with `Optics { eyepiece_px: (600.0, 500.0), ..Optics::default() }`,
+   `sim.connect_mount` with a second mount built as US1-S1's, or
+   `sim.point_eyepiece_at(83.81867, -5.38967)`.
 4. **Given** a simulator with no mount, pointed with `push_to(50.0, 120.0)`, **When** a
    test waits 20 s, reading `imaging_truth()` every second, and asks
    `imaging_truth_at(t)` for t 7.5 s back, **Then** a committed test asserts the answer
@@ -692,7 +803,17 @@ development, `cargo nextest run -p simulator --locked --test imaging_history`.
    and that after `set_count_steps(true)` on a mount built the same way, the same 200
    readings take between 8 and 11 distinct values, each a whole multiple of
    360/1,620,000° from the first within 10⁻⁹ degrees (worked example: 0.36″/s for 20 s
-   is 7.2″, nine counts of 0.8″).
+   is 7.2″, nine counts of 0.8″); and that, with count steps on, the reading 2.0 s after
+   the rate command still equals the first: 0.72″ of drive is under one count of 0.8″,
+   and the tube follows its drive rounded down; and that on a third mount built the same
+   way, with count steps on and the altitude axis at 0.0001°/s, `true_direction().alt`
+   read every 100 ms for 20 s takes between 8 and 11 distinct values.
+6. **Given** the simulator of US1-S1, **When** a test reads `imaging_truth()` at t and
+   then every 100 s for 3000 s with the axis still turning, **Then** a committed test
+   asserts that `imaging_truth_at(t)` is within 0.02″ of the reading at t (oracle: the
+   simulator's own truth, read live; owner decision 16's hour). This scenario was
+   proposed by probe round 1 to follow US1-S4, and is numbered last so that US1-S5 keeps
+   its number.
 
 ---
 
@@ -726,7 +847,8 @@ development, `cargo nextest run -p finder --locked --test console steering_error
    `set_point_in_frame` answers (618.0, 411.0) for no set point, the whole sensor and
    binning 1; (109.0, 105.5) for no set point, the region (400, 200, 400, 400) and
    binning 2; and (718.0, 361.0) for the set point (718.0, 361.0), the whole sensor and
-   binning 1.
+   binning 1; and (618.5, 411.5) for no set point on a sensor 1237 × 823, its whole
+   region and binning 1 (the centre is half the size, not half rounded down).
 4. **Given** a `Simulator` as `crates/finder/tests/support/live.rs:41` builds it, its
    truth at t, an `ImagingSolve::from_cd` the test builds from that truth with the
    matrix `[[−s·cos θ, −s·sin θ], [s·sin θ, −s·cos θ]]` (s the truth's scale in degrees,
@@ -742,10 +864,13 @@ development, `cargo nextest run -p finder --locked --test console steering_error
    far side of the sky from the solve's centre, (263.8221, 5.3911), answers `None` (032's
    `pixel_of` answers none only where the cosine of the distance from the centre is
    zero or less; a target exactly a quarter turn away sits on that edge and is not
-   used here), and so does the worked target with a time that is not finite.
-   **Given** a type of the test's own that implements the five required methods of
-   `Steered` and no other, **Then** `longest_exposure_s(0.001)` is `None`, `steady()` is
-   true and `steady_between(0.0, 1.0)` is true.
+   used here), and so does the worked target with a time that is not finite, and so does
+   the worked target with the set point (NaN, 411.0), and the target (NaN, −5.38967)
+   with the set point (618.0, 411.0); and so does the worked target on
+   `ImagingSolve::from_cd(83.8221, -5.3911, [[0.0, 0.0], [0.0, 0.0]], 1236, 822)`, whose
+   results are not finite. **Given** a type of the test's own that implements the five
+   required methods of `Steered` and no other, **Then** `longest_exposure_s(0.001)` is
+   `None`, `steady()` is true and `steady_between(0.0, 1.0)` is true.
 6. **Given** the text of `crates/finder/src/imaging/steering.rs`, read by the test from
    `CARGO_MANIFEST_DIR`, **Then** a committed test asserts it holds none of
    `ephemeris`, `alt_az`, `parallactic`, `counts_per_revolution`, `AxisInfo` and
@@ -849,9 +974,14 @@ development, `cargo nextest run -p finder --locked --test motion steering::`.
    - `tracker.pointing(30.0, 0.0)` called every 2 s for 20 s changes no rate: every
      rate in the log over those 20 s equals its axis's feed-forward rate within
      0.001″/s, and the tracking offset stays `[0.0, 0.0]`; and `state().samples` holds
-     at least 9 samples of 30″;
+     at least 9 samples of 30″; and on another rig, `tracker.pointing(30.0, 0.0)` called
+     just before the first gap leaves every rate the log gains in the 2 s after that
+     gap's answer equal to its axis's feed-forward rate within 0.001″/s: the claim ends
+     the finder camera's proportional rate;
    - three more gaps with no `steer` between them make `steered_by_subs()` false after
-     the third, and a fourth leaves it false and answers exactly (0.0, 0.0): a claim
+     the third (the third called 0.2 s after the second answers), that the rate log
+     gains no rate from the third gap's call to its answer, and a fourth leaves it false
+     and answers exactly (0.0, 0.0): a claim
      that lapsed stays lapsed while no tracking error comes. Then
      `tracker.pointing(30.0, 0.0)`, called twice 2 s apart, changes no rate: every
      rate the log gains from the first call until the next gap's call equals its
@@ -861,30 +991,42 @@ development, `cargo nextest run -p finder --locked --test motion steering::`.
      `steered_by_subs()` true again; that gap answers exactly (0.0, 0.0), and the
      tracking offset read after it is the one read just before it, exactly: the error
      that takes the tracker back sets no rate, and the correction held from the two
-     pointings is forgotten;
+     pointings is forgotten. **And** three more gaps with no `steer` make
+     `steered_by_subs()` false again, and the gap after them answers exactly (0.0, 0.0)
+     and leaves the tracking offset exactly as it was read before it: nothing held
+     before the claim was taken back survives it;
    - on another rig, `release()` after a first gap makes `steered_by_subs()` false at
      once; a `steer` of (12.0, −16.0) after it is dropped, so the next gap answers
      exactly (0.0, 0.0), and that gap makes `steered_by_subs()` true again, as a new
-     stack's first gap does;
-   - on another rig, `tracker.steer` with a value that is not finite after the first
-     gap, and on yet another a `steer` of (12.0, −16.0) made before any gap, each
-     leave the next gap answering exactly (0.0, 0.0) with a tracking offset of exactly
-     `[0.0, 0.0]`.
+     stack's first gap does; on another rig, after a first gap, a `steer` of (12.0,
+     −16.0) and then `release()` leave the next gap answering exactly (0.0, 0.0):
+     `release` forgets an error not yet applied; and on another rig whose claim has
+     lapsed as in the second bullet, `release()` and one more gap make
+     `steered_by_subs()` true: a released tracker is claimed by the next gap, lapsed or
+     not;
+   - on another rig, three gaps after the first, each preceded by a `steer` whose east
+     is NaN, make `steered_by_subs()` false after the third: an error that is not finite
+     is ignored and keeps no claim; and on yet another a `steer` of (12.0, −16.0) made
+     before any gap leaves the next gap answering exactly (0.0, 0.0) with a tracking
+     offset of exactly `[0.0, 0.0]`.
 7. **Given** the tracker rig with a rate error of 0.01 and ten subs of 5 s played,
    **Then** a committed test asserts of the rate log that between each gap's answer and
    the next gap's call every rate equals its axis's feed-forward rate plus the tracking
    offset read just after that answer, within 0.001″/s; that every gap put at least one
    rate for each axis into the log between its call and its answer; and that after
-   `tracker.stop("stopped")`, a `gap` answers (0.0, 0.0) at once and the log gains no
-   rate (oracle: 015's own rule that nothing follows a stop,
-   `specs/015-tracking/spec.md:229`). **Given** a tracker rig with no rate error, built
-   without the wait for its first rates, **When** a test awaits `gap` as the first
+   `tracker.stop("stopped")`, `steered_by_subs()` is false, a `gap` answers (0.0, 0.0)
+   at once and the log gains no rate (oracle: 015's own rule that nothing follows a
+   stop, `specs/015-tracking/spec.md:229`). **Given** a tracker rig with no rate error,
+   built without the wait for its first rates, **When** a test awaits `gap` as the first
    thing after `start` answers, **Then** a committed test asserts that it answers
    exactly (0.0, 0.0), that `steered_by_subs()` is false after it, and that, 0.1 s
    later, the first rate the log holds for each axis equals that axis's feed-forward
    rate at its time within 0.001″/s: a gap that comes before a tracker's first rates
    claims nothing and sends nothing, so no axis is sent a zero before it has started
-   (oracle: the rig's rate log and the test's own feed-forward rate).
+   (oracle: the rig's rate log and the test's own feed-forward rate). **Given** the
+   tracker rig with no rate error, **When** a test drops a `gap` future after one poll
+   (a timeout of zero) and waits 0.1 s, **Then** `steered_by_subs()` is false: a gap
+   nobody waits for claims nothing.
 8. **Given** the console `crate::support::goto::Rig` builds
    (`crates/finder/tests/support/goto.rs:113`) at altitude 50°, azimuth 120°, pointed at
    M42 with `point_eyepiece_at`, synced, and tracking M42 through `POST /api/track` with
@@ -908,7 +1050,14 @@ development, `cargo nextest run -p finder --locked --test motion steering::`.
    halved it; and that the tracking offset is exactly `[0.0, 0.0]` after the second gap
    and within 0.002″/s of it after the third (worked example: (12, −16) + (−6, 8) =
    (6, −8), and half of that is taken out; no step lies between the two errors' times,
-   so no drift rate was measured but the turn of the sky's axes in 2 s).
+   so no drift rate was measured but the turn of the sky's axes in 2 s). **And** on
+   another rig, after a first gap, the test reads the console time t, hands (12.0,
+   −16.0) with the time t − 2.0 and then (6.0, −8.0) with the time t − 1.0, and awaits a
+   gap: its `Stepped` is within 0.1″ of (−3.0, 4.0): of two errors handed over between
+   two gaps the later is used. **And** on another rig, after a first gap, the test hands
+   (12.0, −16.0) with the time t and awaits a gap, then hands (12.0, −16.0) with the
+   time t − 1.0 and awaits another: that gap answers exactly (0.0, 0.0): an error no
+   later than the last applied is ignored.
 10. **Given** the tracker rig with no rate error and a first gap, **When** a test reads
     the console time t, hands the tracking error (0.0, 0.0) with the time t − 20.0 and
     awaits a gap; hands (0.5, 0.0) with the time t − 14.0 and awaits a gap, reading the
@@ -926,7 +1075,8 @@ development, `cargo nextest run -p finder --locked --test motion steering::`.
     is about +0.033″/s, 1.7 × o1 +0.056″/s and 2 × o1 +0.066″/s. Both errors are under
     the deadband of two counts, 1.6″: 1.0″ east is about 1.33″ in azimuth and 0.24″ in
     altitude, in size, at M42's place then).
-11. **Given** the tracker rig with no rate error, a first `gap`, and three more gaps,
+11. **Given** the tracker rig with no rate error, `tracker.pointing(0.0, 0.0)` called
+    2 s before a first `gap`, and three more gaps,
     each after 6 s of waiting and with no `steer` between them, so that
     `steered_by_subs()` is false after the fourth, **When** a test reads the tracking
     offset o and the truth error e0, calls `tracker.pointing(30.0, 0.0)`, waits 2 s,
@@ -947,11 +1097,17 @@ development, `cargo nextest run -p finder --locked --test motion steering::`.
       `crates/finder/tests/motion/tracking/pi_loop.rs:481` (worked example: 015's
       integral adds 0.6 of a pointing's axis error over 60 s for every pointing that
       has an earlier one, `crates/finder/src/tracking.rs:305`; the first pointing after
-      the claim has none, so only the second adds, about +0.40″/s in azimuth and
+      the claim has none, the claim having forgotten the one 2 s before the first gap,
+      so only the second adds, about +0.40″/s in azimuth and
       +0.07″/s in altitude);
     - `steered_by_subs()` is still false after that gap (oracle: the simulator's truth
       and its horizon transform, differentiated by the test, and 015's constants).
-
+      **When** on another rig built and lapsed the same way the two pointings are
+      (100.0, 0.0), **Then** the gap's `Stepped` has a length within 3% of that of the
+      axis displacement (30.0, −0.6 × d₁), d₁ being the altitude part of a sky offset of
+      (100.0, 0.0) by the differencing of
+      `crates/finder/tests/motion/tracking/pi_loop.rs:481`: a held step moves an axis
+      30″ at most.
     **Given** the tracker rig with a rate error of 0.01 and the second task of US3-S2,
     which calls `tracker.pointing` every 2 s with the truth error plus Gaussian noise
     of σ 15″ on each of east and north, **When** a test awaits a first gap, three more
@@ -968,6 +1124,12 @@ development, `cargo nextest run -p finder --locked --test motion steering::`.
     in five, 1 − e^(−100/450), so the chance that the 29 or so pointings with an
     earlier one in those ten gaps all leave the offset alone is under 10⁻¹⁸, whatever
     the seed).
+12. **Given** the tracker rig with no rate error, **Then** a committed test asserts that
+    after a first gap and a `steer` of (12.0, −16.0), `follow` to a place 10′ east (of
+    M42's catalogue place) answers Ok, `steered_by_subs()` is false at once, and the
+    next gap answers exactly (0.0, 0.0) and claims again (oracle: 038's
+    `Tracker::follow` and FR-011: an error measured from the old place is forgotten, as
+    `release` forgets one).
 
 ---
 
@@ -1006,7 +1168,13 @@ development, `cargo nextest run -p finder --locked --test console steering_gap::
    - `view()` was `None` before the first call; after `before_exposure` its `source` is
      `subs` and `subs` 0; after `accepted`, `subs` is 1 and `last` is
      `{"time":1768528802.5,"east_arcsec":…,"north_arcsec":…}` with those numbers; after
-     `release`, `source` is `tracker`, `subs` 0 and `last` absent.
+     `release`, `source` is `tracker`, `subs` 0 and `last` absent. **Given** a
+     `Steering` on a clock that follows tokio's time from 1768528800.0, whose source
+     answers a scripted tracker whose `gap` waits 0.7 s, **Then** after one
+     `before_exposure` with the worked ask, `accepted` with a frame whose `start` is
+     1768528800.1 and `exposure_s` 0.4 puts no `steer` in the log, and one with the
+     worked frame at `start` 1768528800.7 puts one: an exposure is remembered from when
+     `before_exposure` answered.
 2. **Given** a `Steering` whose source answers no tracker, **Then** a committed test
    asserts that `before_exposure` with the worked ask answers with no tokio time passed,
    `exposure_s` 5.0 and `limited` false; and that after `accepted` with the worked
@@ -1014,18 +1182,27 @@ development, `cargo nextest run -p finder --locked --test console steering_gap::
    `source` is `none`, its `subs` 0 and its `last` absent. **Given** a scripted
    steering whose tracker has no target, **Then** `accepted` with the same frame and
    solve after a `before_exposure` puts no `steer` in the log and leaves `subs` 0.
+   **Given** a scripted steering after one `before_exposure`, **When** the test empties
+   the source's cell and drops its own `Arc` of the tracker, **Then** a `Weak` of it
+   taken before the drop no longer upgrades, and `accepted` with the worked frame and
+   solve leaves `subs` 0.
 3. **Given** a scripted steering after one `before_exposure`, **Then** a committed test
    asserts that `accepted` with a frame whose `start` is 1768528700.0, a hundred seconds
    before that call, puts no `steer` in the log and leaves `subs` 0: no exposure of this
    stack holds its middle; that dropping the `Hold` that `Steering::hold` answered puts
    one `release` in the log; and that `accepted` with the worked frame after it puts no
-   `steer` in the log.
+   `steer` in the log. **And** on another scripted steering whose `gap` waits 0.7 s, a
+   `before_exposure` dropped after 0.1 s, then the drop of the `Hold`, leave the log
+   holding `gap` and then `release`: the tracker found is released even when no exposure
+   was recorded. **And** on another, after one `before_exposure`, `accepted` with the
+   worked frame at `start` 1768528799.99, 10 ms before the answer, puts one `steer` in
+   the log: an exposure is found by its middle, not its start.
 4. **Given** a scripted steering with `set_set_point(Some((718.0, 361.0)))`, **Then** a
    committed test asserts that the `steer` after a `before_exposure` and `accepted` with
    the worked frame and solve carries US2-S2's east and north within 0.001″; and that
-   with no set point, a `before_exposure` and a frame 200 × 200 whose `roi` is
-   (400, 200, 400, 400) at binning 2, solved by a solve 200 × 200 with the worked
-   solve's centre and twice its matrix, it carries −33.2577 ± 0.001 east and
+   with no set point, a `before_exposure` with the worked ask and a frame 200 × 200
+   whose `roi` is (400, 200, 400, 400) at binning 2, solved by a solve 200 × 200 with
+   the worked solve's centre and twice its matrix, it carries −33.2577 ± 0.001 east and
    −6.2848 ± 0.001 north (worked example: that frame's centre is the sensor's point
    (600, 400), so the sensor's centre, the set point, is (109.0, 105.5) in the frame,
    18 sensor pixels right of and 11 below the frame's centre; 3600 × the worked matrix
@@ -1059,6 +1236,11 @@ development, `cargo nextest run -p finder --locked --test console steering_gap::
    answers a tracker whose `target()` is M42's catalogue place, (83.81867, −5.38967),
    exactly; and that after `POST /api/track` with `{"on":false}` it is `None` again
    (oracle: the session's own Track state).
+7. **Given** a console built with `with_imaging`, **Then** a committed test asserts that
+   its imaging view has no `steering` key; and that after
+   `state.imaging().unwrap().steering()` is given a source that answers no tracker and
+   awaits one `before_exposure` with the worked ask, the view's `steering.source` is
+   `none` and `steering.subs` 0 (oracle: FR-016).
 
 ---
 
@@ -1099,8 +1281,9 @@ development, `cargo nextest run -p finder --locked --test console steering_cap::
      853.256 px from the set point; the figures here are rounded and are not what the
      test compares with);
    - with a longest exposure of 6.0 s, a wanted 60 s answers 3.75; with that and a
-     shortest exposure of 10 s it answers 15.0, `limited` true; with no longest
-     exposure it answers 60.0, `limited` false.
+     shortest exposure of 10 s it answers 15.0, `limited` true; with no longest exposure
+     it answers 60.0, `limited` false; with a longest exposure of 30.0 s, a wanted 60 s
+     answers 30.0, `limited` true: an exposure equal to the limit is not halved again.
 2. **Given** the same steering and a first `before_exposure` that answered 30.0 for a
    wanted 60 s, **When** the tracker's longest exposure becomes 25.0 s and a test awaits
    `before_exposure` again without a `release`, for a wanted 60 s and then for a wanted
@@ -1109,7 +1292,9 @@ development, `cargo nextest run -p finder --locked --test console steering_cap::
    whatever is asked for meanwhile; that `view()` has `exposure_s` 30.0, `limited`
    true, `longest_exposure_s` 25.0 and `over_limit` true; and that after `release` a
    `before_exposure` for a wanted 60 s answers 15.0 with `limited` true, and `view()`
-   has `over_limit` false.
+   has `over_limit` false; and, on another such steering after its first
+   `before_exposure` and one more, that with the limit then exactly 30.0 s, `view()` has
+   `over_limit` false.
 3. **Given** the same after `set_smear_px(1.0)`, **Then** a committed test asserts the
    turn asked about equals `1.0 / 618f64.hypot(411.0)` within 10⁻¹², and that
    `set_smear_px` refuses 0.05, 20.5 and a value that is not finite with
@@ -1117,14 +1302,16 @@ development, `cargo nextest run -p finder --locked --test console steering_cap::
 4. **Given** a scripted steering whose tracker answers a longest exposure of 37.15 s,
    after a first `before_exposure` with the worked ask and a wanted exposure of 60 s,
    **Then** a committed test asserts `view()` has `smear_px` 2.0, `on` true,
-   `exposure_s` 30.0, `limited` true, `over_limit` false and `longest_exposure_s` 37.15;
-   and on another, whose tracker names no longest exposure, after the same call,
-   `longest_exposure_s` is the string `no limit`, `exposure_s` 60.0 and `limited`
-   false. **Given** a scripted steering whose tracker answers 37.15 s, with
-   `set_on(false)`, **Then** `before_exposure` with the worked ask and a wanted 60 s
-   puts no `gap` in the log and answers 30.0 with `limited` true, `accepted` with the
-   worked frame and solve puts no `steer` in the log, and `view()`'s `source` is
-   `tracker`.
+   `exposure_s` 30.0, `limited` true, `over_limit` false and `longest_exposure_s` 37.15,
+   and after a further `before_exposure` whose source answers no tracker,
+   `longest_exposure_s` is still 37.15; and on another, whose tracker names no longest
+   exposure, after the same call, `longest_exposure_s` is the string `no limit`,
+   `exposure_s` 60.0 and `limited` false. **Given** a scripted steering whose tracker
+   answers 37.15 s, with `set_on(false)`, **Then** `before_exposure` with the worked ask
+   and a wanted 60 s puts no `gap` in the log and answers 30.0 with `limited` true,
+   `accepted` with the worked frame and solve puts no `steer` in the log, and `view()`'s
+   `source` is `tracker`. On a steering never used, `set_on(false)` alone makes `view()`
+   answer, with `on` false.
 5. **Given** 032's solving rig (032 spec.md § User Scenarios), **Then** a committed test
    asserts that:
    - `PUT /api/imaging/steering` with `{"smear_px":1.5}` answers 200 with the imaging
@@ -1133,8 +1320,9 @@ development, `cargo nextest run -p finder --locked --test console steering_cap::
    - `{"on":false}` answers 200 with `steering.on` false and `smear_px` still 1.5, and
      `{}` answers 200 and changes nothing;
    - `{"smear_px":0}`, `{"smear_px":"2"}`, `{"on":1}` and `{"smear":2}` each answer 400
-     with a JSON `error`, the first exactly
-     `smear_px must be a number from 0.1 to 20`, and change nothing;
+     with a JSON `error`, the first exactly `smear_px must be a number from 0.1 to 20`,
+     and change nothing; after `{"on":false}`, `{"on":true,"smear_px":0}` answers 400
+     and `on` is still false; and `{"on":null}` and `{"smear_px":null}` each answer 400;
    - `{"on":true}` with a foreign `Origin` answers 403; the same body sent with
      `Content-Type: text/plain` answers 415; the body `not json` sent as
      `application/json` answers 400; and none of the three changes anything: `on` is
@@ -1149,24 +1337,27 @@ development, `cargo nextest run -p finder --locked --test console steering_cap::
    `crates/finder/tests/motion/tracking/routes.rs:312` does, in radians a second, at
    the console time it reads immediately before the call with no await between the
    two; and that it is between 30 s and 45 s (worked example: 1236 × 822 pixels of
-   19.12 µm are 23.63232 × 15.71664 mm; at 14.96°/h the answer is 37.15 s).
-   **Given** a tracker rig whose target is due east at an instant the test chooses,
-   t* = 1768528830.0, 30 s after the rig's clock starts: with Dec fixed at +18.75° the
-   test steps RA through 0°, 1°, … 359°, takes the first two neighbours whose azimuths
-   at t* by `sky::alt_az` for 40° N 75° W lie either side of 90° with both altitudes
-   above 0°, and bisects RA between them 60 times, so that the azimuth at t* is 90°
-   within 10⁻⁹ degrees (the altitude is then near 30°); the rig's target is a clone of
-   M42's `Target` with that `ra_deg` and `dec_deg`, and its mount's zero points put
-   its axes on that place's apparent direction at the start, as the tracker rig does
-   for M42; **When** the test sleeps until the rig's clock reads t* to within 2 ms
-   (tokio's timer counts in milliseconds) and calls `longest_exposure_s(0.0027)` with
-   no await after the sleep, **Then** a committed test asserts it is `None`; and that
-   after 10 s more it is `Some` of more than 3600 s (oracle: 015's own function and
-   its 10⁻⁹ rad/s rule. Worked example: due east at this place the azimuth moves 9.7″
-   a second, and the field rotation passes 10⁻⁹ rad/s 3.2″ of azimuth from due east,
-   a third of a second either side of t*, so the instant matters and 2 ms is 0.02″;
-   10 s later the azimuth is 97″ past east, the rotation 3 × 10⁻⁸ rad/s and the answer
-   about 89,000 s).
+   19.12 µm are 23.63232 × 15.71664 mm; at 14.91°/h the answer is 37.28 s). The same
+   holds, with the same oracle, for M81 (`targets::find("M81")`), whose field rotation
+   at the rig's start is negative; through `&dyn Steered` the answer is the same;
+   `longest_exposure_s` answers `None` for a turn of 0.0, −1.0 and NaN; and after
+   `stop("stopped")` it answers `None`. **Given** a tracker rig whose target is due east
+   at an instant the test chooses, t* = 1768528830.0, 30 s after the rig's clock starts:
+   with Dec fixed at +18.75° the test steps RA through 0°, 1°, … 359°, takes the first
+   two neighbours whose azimuths at t* by `sky::alt_az` for 40° N 75° W lie either side
+   of 90° with both altitudes above 0°, and bisects RA between them 60 times, so that
+   the azimuth at t* is 90° within 10⁻⁹ degrees (the altitude is then near 30°); the
+   rig's target is a clone of M42's `Target` with that `ra_deg` and `dec_deg`, and its
+   mount's zero points put its axes on that place's apparent direction at the start, as
+   the tracker rig does for M42; **When** the test sleeps until the rig's clock reads t*
+   to within 2 ms (tokio's timer counts in milliseconds) and calls
+   `longest_exposure_s(0.0027)` with no await after the sleep, **Then** a committed test
+   asserts it is `None`; and that after 10 s more it is `Some` of more than 3600 s
+   (oracle: 015's own function and its 10⁻⁹ rad/s rule. Worked example: due east at this
+   place the azimuth moves 9.7″ a second, and the field rotation passes 10⁻⁹ rad/s 3.2″
+   of azimuth from due east, a third of a second either side of t*, so the instant
+   matters and 2 ms is 0.02″; 10 s later the azimuth is 97″ past east, the rotation 3 ×
+   10⁻⁸ rad/s and the answer about 89,000 s).
 
 ---
 
@@ -1212,15 +1403,29 @@ development, `cargo nextest run -p finder --locked --test motion steering_steady
      futures have ended;
    - the reader's `steered_by_subs()` is true at its reading 1 s before F and false at
      L;
-   - the asker's `gap` answered after L.
+   - the asker's `gap` answered at L or after it: the turn that ends the take-up and the
+     gap it then serves can share L's instant in paused time. **Given** the backlash rig
+     with its claim lapsed (a first `gap` at transit − 60 s and three more 6 s apart
+     with no `steer`), **When** a `pointing(30.0, 0.0)` arrives once the take-up at
+     transit has made `steady()` false and a `gap` is awaited then, **Then** the azimuth
+     rate in force when the gap answers, the last in the rate log at or before its
+     answer, is the feed-forward (differenced as
+     `crates/finder/tests/motion/tracking/pi_loop.rs:481` does) plus the tracking offset
+     within 0.01″/s, and so is the first rate after it.
 2. **Given** `crate::support::tracker::Rig` for M42 from 120 s before its transit on a
    fresh session, so that no backlash is measured, **When** a test joins
    `rig.follow(transit + 120.0, 60.0)` with a reader as in US6-S1, **Then** a committed
    test asserts, with Z the time of the altitude axis's first zero rate in the rate
    log, that every reading of `steady()` from 1 s after the rig's start to Z − 0.1 s
    is true, that the reading nearest Z + 5 s is false, and that
-   `steady_between(Z + 0.1, Z + 10.0)`, asked at the end, is false. **Given** the
-   backlash rig as `Rig::new` leaves it, with the console time s read as soon as it
+   `steady_between(Z + 0.1, Z + 10.0)`, asked at the end, is false. **Given** the same
+   fresh-session rig followed to transit + 30 s, while the first reversal is measured,
+   **Then** `steady()` is false and a `gap` awaited then answers exactly (0.0, 0.0) and
+   leaves `steered_by_subs()` false. **When** it is followed on to transit + 600 s with
+   a reader that, every 50 ms, notes whether `GET /api/session`'s `backlash.alt_deg` is
+   present and `steady()`, **Then** some reading has the backlash measured, and every
+   reading that has it has `steady()` true. **Given** the backlash rig as `Rig::new`
+   leaves it, with the console time s read as soon as it
    answers and no wait, **Then** the rate log holds no rate and `steady()` is false; a
    `gap` awaited then answers exactly (0.0, 0.0) and leaves `steered_by_subs()` false;
    0.1 s later the log holds a rate for each axis and `steady()` is true;
@@ -1228,13 +1433,33 @@ development, `cargo nextest run -p finder --locked --test motion steering_steady
    `rig.follow(s + 10.0, 60.0)` and `stop("stopped")`, with e the console time read
    just before the stop, `steady()` is false, `steady_between(e - 3.0, e + 0.1)` and
    `steady_between(e + 1.0, e + 2.0)` are false, and `steady_between(e - 3.0, e - 1.0)`
-   is still true (oracle: the rig's rate log and clock).
+   is still true (oracle: the rig's rate log and clock). **Given** the backlash rig with
+   its claim lapsed before the transit, and 30 s later a `pointing(30.0, 0.0)` (held,
+   since the tracker is steady and lapsed), **When** the take-up at transit makes
+   `steady()` false and a `gap` is awaited then, **Then** it answers exactly (0.0, 0.0):
+   what was held when the tracker stopped being steady was forgotten. **Given** the
+   backlash rig with a claim taken at transit − 60 s and, 50 s later, a `steer` of
+   (12.0, −16.0) at the time then, **When** the take-up makes `steady()` false and a
+   `gap` is awaited then, **Then** it answers exactly (0.0, 0.0) and `steered_by_subs()`
+   is true: the take-up dropped the claim and the error not yet applied, and that gap
+   took the claim back. **Given** the backlash rig at transit − 120 s with s read at
+   once, and `let steered: &dyn Steered = &rig.tracker`, **Then** `steered.steady()` is
+   false; after `rig.follow(transit + 10.0, 60.0)`, which crosses the take-up,
+   `steered.steady()` is true, `steered.steady_between(s - 20.0, s - 10.0)` is still
+   false, `steady_between(transit - 5.0, transit + 5.0)` is false and
+   `steady_between(s + 5.0, s + 20.0)` is true. **Given** the backlash session and a
+   clone of M42 at Dec +39°, as `crates/finder/tests/motion/tracking/keyhole.rs` uses,
+   from 300 s before the first whole minute at which its altitude reaches 88°, with the
+   rig's true error given as a pointing every 2 s, **When** the test reads
+   `state().state` and `steady()` every 50 ms until the tracker is `tracking` and steady
+   after a `keyhole_wait`, **Then** a `keyhole_wait` was seen, every reading in it has
+   `steady()` false, and the tracker is steady at the end.
 3. **Given** a scripted steering whose tracker says it is not steady and whose `gap`
-   waits 0 s, **When** a test awaits `before_exposure` with the worked ask in a task,
-   waits 10 s, sets the tracker steady and waits 1 s, **Then** a committed test asserts
-   that the call had not answered after the 10 s, with `view()`'s `steady` false,
-   `waiting` true, `Steering::waiting()` true and no `gap` in the log; and that it
-   answered within 0.5 s of the change, after exactly one `gap`, with `steady` true,
+   waits 0.1 s, **When** a test awaits `before_exposure` with the worked ask in a task,
+   waits 10.1 s, sets the tracker steady and waits 1 s, **Then** a committed test
+   asserts that the call had not answered after the 10.1 s, with `view()`'s `steady`
+   false, `waiting` true, `Steering::waiting()` true and no `gap` in the log; and that
+   it answered within 0.5 s of the change, after exactly one `gap`, with `steady` true,
    `waiting` false and `Steering::waiting()` false. **Given** a scripted steering whose
    tracker's `gap` waits 1 s, **When** a test awaits `before_exposure` in a task, sets
    the tracker not steady 0.5 s later and steady again 5 s after that, **Then** the
@@ -1247,19 +1472,29 @@ development, `cargo nextest run -p finder --locked --test motion steering_steady
    whose tracker is not steady, a `Hold` taken from it and a `before_exposure` awaited
    in a task for 2 s, **When** the test aborts that task and drops the `Hold`, **Then**
    `Steering::waiting()` is false and `view()` has `waiting` false and `steady` true: a
-   wait abandoned with its stack does not go on showing.
+   wait abandoned with its stack does not go on showing. **Given** a scripted steering
+   whose tracker is not steady, after `set_on(false)`, **Then** `before_exposure` has
+   not answered 1 s after it was called, with `steady` false and `waiting` true, and
+   once the tracker is steady it answers with no `gap` in the log: the switch turns off
+   the steering, not the wait. **Given** a scripted steering whose tracker is not steady
+   and a `before_exposure` waiting in a task for 1 s, **When** the test makes the source
+   answer no tracker, **Then** the call answers within 0.25 s, and `view()` has `steady`
+   true and `waiting` false.
 4. **Given** a scripted steering after a `before_exposure` with the worked ask, whose
    tracker answers `steady_between` false, **Then** a committed test asserts that
    `check` with the
    worked frame (`start` 1768528800.0, `exposure_s` 5.0) answers
-   `Verdict::Drop("not_steady")`, and that `view()`'s `dropped_not_steady` is 1; that
-   with `steady_between` true it answers `Verdict::Keep` and the count stays 1; that the
-   tracker's log shows the window it was asked about as (1768528800.0, 1768528805.0);
-   that after the test has made the source answer no tracker and dropped its last
-   `Arc` of the scripted one, `check` with the same frame answers
+   `Verdict::Drop("not_steady")`, and that `view()`'s `dropped_not_steady` is 1, and, on
+   another such steering after the same two calls, that after `release` it is still 1;
+   that with `steady_between` true it answers `Verdict::Keep` and the count stays 1;
+   that the tracker's log shows the window it was asked about as (1768528800.0,
+   1768528805.0); that after the test has made the source answer no tracker and dropped
+   its last `Arc` of the scripted one, `check` with the same frame answers
    `Drop("not_steady")`: a tracker that has gone was not steady; and that on a
    `Steering` whose source answers no tracker, `check` after a `before_exposure` answers
-   `Keep`.
+   `Keep`; and, on another scripted steering as in the first case, that `check` with the
+   worked frame started 0.01 s earlier (`start` 1768528799.99) also answers
+   `Drop("not_steady")`: the record is found by the frame's mid-exposure, not its start.
 5. **Given** `crate::support::tracker::Rig` for M42 from 600 s before its transit on a
    fresh session, as `crates/finder/tests/support/tracker.rs:326` builds one, so that
    no backlash is measured; a first `gap` awaited once the rate log holds a rate for
@@ -1306,15 +1541,22 @@ target M42 and the aim point (700.0, 420.0), the true aim point; the telescope i
 pointed with `sim.point_eyepiece_at` at M42's catalogue place; the test waits until the
 pointing model has a sync and the session's pointing is within 1′ of M42, as
 `crates/finder/tests/motion/tracking/routes.rs:96` does, and turns Track on with
-`POST /api/track`; then it waits until the session's `track.state` is `tracking` and
-the imaging view's `state` is `ready`. **Waiting until** a condition means reading
-`GET /api/imaging`, or `GET /api/session` for the session's parts, every 100 ms until
-it holds, for at most 300 s of virtual time, and failing otherwise. **A sub's drift**
-is the separation between `sim.imaging_truth_at` at the sub's `start` and at `start`
-plus its exposure, both from 031's `frame` part of the imaging view, which the test
-reads every 100 ms and keeps for every imaging frame id it sees `saved`; subs are
-numbered in the order their ids rise. **The stack's counts** are the `stack` part of
-the imaging view (035); **Σ dropped** is the sum of the twelve counts of its `dropped`.
+`POST /api/track`; then it waits until the session's `track.state` is `tracking` and the
+imaging view's `state` is `ready`, and then 1 s more of virtual time, so that the
+stack's first sub does not start at the instant of the tracker's first rates:
+`steady_between`'s bounds are inclusive (plan.md § The tracker's two answers), and a sub
+that starts there would be dropped as `not_steady`. **Waiting until** a condition means
+reading `GET /api/imaging`, or `GET /api/session` for the session's parts, every 100 ms
+until it holds, for at most 300 s of virtual time, and failing otherwise. **A saved
+sub** is one whose FITS file is in the stack's folder `runs/<id>/subs/`, `<id>` being
+the `stack.id` that `POST /api/imaging/stack` answers; subs are numbered in the order of
+their file names, which are their imaging frame ids. **A sub's drift** is the separation
+between `sim.imaging_truth_at` at the sub's start and at its start plus its exposure,
+both read from that file: its `DATE-OBS`, UTC to the millisecond, and its `EXPTIME`, in
+seconds. (031's `frame` part is not used: the taker takes the next sub at the instant
+one is saved, so a read every 100 ms sees few of them `saved`.) **The stack's counts**
+are the `stack` part of the imaging view (035); **Σ dropped** is the sum of the twelve
+counts of its `dropped`.
 
 **Acceptance Scenarios**:
 
@@ -1336,8 +1578,8 @@ the imaging view (035); **Σ dropped** is the sum of the twelve counts of its `d
    correct once the error passed its 10″ deadband, about 67 s after Track began, and
    the bound would then rest on how long the rig's waits took).
 2. **Given** the stacking rig and `{"exposure_ms":60000}`, **When** a stack is started
-   and its first sub is saved, **Then** a committed test asserts that sub's
-   `exposure_ms` is 30000.0; that `settings.exposure_ms` is 30000.0 while the stack
+   and its first sub is saved, **Then** a committed test asserts that sub's `EXPTIME` is
+   30.0; that `settings.exposure_ms` is 30000.0 while the stack
    runs; that `steering.limited` is true, `steering.exposure_s` 30.0,
    `steering.over_limit` false and `steering.longest_exposure_s` within 2% of the
    figure the test computes as US5-S6's first half does for the console time of its
@@ -1350,12 +1592,14 @@ the imaging view (035); **Σ dropped** is the sum of the twelve counts of its `d
    waits until `stack.taken` has risen by 3 more and stops the stack, **Then** a
    committed test asserts `stack.dropped.not_steady` is at least 1,
    `steering.dropped_not_steady` equals it, and `stack.taken` equals `stack.stacked`
-   plus Σ dropped.
+   plus Σ dropped; and that `stack.json`'s `subs` lists as many subs with `outcome`
+   `not_steady` as `stack.dropped.not_steady`, and that
+   `Dropped { not_steady: 2, ..Default::default() }.total()` is 2.
 4. **Given** 032's solving rig as it stands, with no target and Track off, and
    `{"exposure_ms":2000}`, **When** a test starts a stack, waits until `stack.taken` is
    at least 3 and stops it, **Then** a committed test asserts that `steering.source` is
-   `none` and `steering.subs` 0 throughout, that every saved sub's `exposure_ms` is
-   2000.0, and that `stack.dropped.not_steady` is 0: with no tracker the stack is
+   `none` and `steering.subs` 0 throughout, that every saved sub's `EXPTIME` is 2.0, and
+   that `stack.dropped.not_steady` is 0: with no tracker the stack is
    neither capped nor paused, and nothing is dropped for the tracker's sake.
 5. **Given** 032's solving rig as it stands, `{"exposure_ms":60000}`, and the console's
    steering given a source of the test's own with
@@ -1371,8 +1615,15 @@ the imaging view (035); **Σ dropped** is the sum of the twelve counts of its `d
    after it, one `release`; and that, after `set_unresponsive(false)` and a wait until
    the imaging view's `state` is `ready`, `settings.exposure_ms` is 60000.0 (oracle:
    031's own words for a camera that is not ready, which the stack's lease passes on;
-   the link is lost within 3 s by 031 US1-S6, well inside the gap's 10 s. A stack
-   that cannot shorten its exposure takes no sub at the observer's).
+   the link is lost within 3 s by 031 US1-S6, well inside the gap's 10 s. A stack that
+   cannot shorten its exposure takes no sub at the observer's). **And** with US7-S5's
+   scripted tracker and `{"exposure_ms":60000}`, a `DELETE /api/imaging/stack` sent 1 s
+   into the first gap answers within 0.5 s of virtual time, the stack ends `stopped`
+   with `taken` 0, and the tracker's log holds exactly `gap` then `release`. **And**
+   with the same tracker, the link dropped once `stack.taken` is 1, while the second gap
+   waits, ends the stack `camera` with `taken` 1 and the error
+   `the scope node is not connected`, the take's own refusal: the exposure is set once,
+   before the first sub.
 6. **Given** the text of `crates/finder/src/imaging/stack/service.rs`, 035's file as
    this story leaves it, read by the test from `CARGO_MANIFEST_DIR`, **Then** a
    committed test asserts it holds none of `ephemeris`, `alt_az`, `parallactic`,
@@ -1414,13 +1665,17 @@ tracking error is (e, n) within 10⁻⁴″.
    calls `accepted` with the worked frame (`start` that time, `exposure_s` 5.0) and a
    solve for the tracking
    error (0.0, 0.0), (0.6, 0.8) and (0.1, 1.2), **Then** a committed test asserts that
-   after the second sub `drift_arcsec` is 0.76923 ± 10⁻⁴ and `error_rms_arcsec`
-   0.70711 ± 10⁻⁴; and after the third `drift_arcsec` is 0.58583 ± 10⁻⁴, `drift_px`
-   0.27122 ± 10⁻⁴, `error_rms_arcsec` 0.90370 ± 10⁻⁴ and `error_rms_px`
-   0.41838 ± 10⁻⁴ (worked example: the drifts are 1.0″ × 5/6.5 and 0.4″ × 5/6.5, the
-   second after the step of (−0.5, 0.0) is taken out; the readout is their root mean
-   square, and the errors'; the scale is 2.16″ a pixel). After one sub, none of the
-   four keys is present.
+   after the second sub `drift_arcsec` is 0.76923 ± 10⁻⁴ and `error_rms_arcsec` 0.70711
+   ± 10⁻⁴ (1/√2, written `std::f64::consts::FRAC_1_SQRT_2` in the test: clippy's
+   `approx_constant` refuses the literal); and after the third `drift_arcsec` is 0.58583
+   ± 10⁻⁴, `drift_px` 0.27122 ± 10⁻⁴, `error_rms_arcsec` 0.90370 ± 10⁻⁴ and
+   `error_rms_px` 0.41838 ± 10⁻⁴ (worked example: the drifts are 1.0″ × 5/6.5 and 0.4″ ×
+   5/6.5, the second after the step of (−0.5, 0.0) is taken out; the readout is their
+   root mean square, and the errors'; the scale is 2.16″ a pixel). After one sub, none
+   of the four keys is present. **And** on another such steering, with a second solve at
+   half the worked scale, `error_rms_px` is `error_rms_arcsec` / 1.08; and on another,
+   with the first gap answering `Stepped` (0.3, 0.0), before the first error, the second
+   sub's `drift_arcsec` is still 0.76923 ± 10⁻⁴.
 2. **Given** the same steering after 12 subs 6.5 s apart whose errors are (1.0, 0.0) for
    the first two and (0.0, 0.0) for the last ten, **Then** a committed test asserts
    `error_rms_arcsec` is 0.0: the window is the last ten. **And** after `release` and a
@@ -1430,8 +1685,9 @@ tracking error is (e, n) within 10⁻⁴″.
    **Then** a committed test asserts one region named `Tracking from the subs` whose
    status reads exactly `Steered by the subs · 12 subs`, and terms reading
    `Tracking error (RMS, last 10 subs)` with `0.9″ · 0.4 px`, `Drift per sub` with
-   `0.6″ · 0.3 px`, `Exposure` with `5.0 s` and `Tracker's limit` with `9.3 s`; and no
-   alert.
+   `0.6″ · 0.3 px`, `Exposure` with `5.0 s` and `Tracker's limit` with `9.3 s`; that the
+   readout's terms are exactly `Tracking error (RMS, last 10 subs)`, `Drift per sub`,
+   `Exposure` and `Tracker's limit`; and no alert.
 4. **Given** the same with `limited` true, `exposure_s` 30 and `longest_exposure_s`
    37.2, **Then** `Exposure` reads exactly `30.0 s, cut to fit the tracker's limit`
    and `Tracker's limit` reads exactly `37.2 s` (37.2 and not the worked limit of
@@ -1443,9 +1699,12 @@ tracking error is (e, n) within 10⁻⁴″.
    `The exposure is longer than the tracker's limit of 25.1 s. Stop the stack and start it again to shorten it.`
    With `source` `tracker` the status reads `Steered by the tracker's own corrections`;
    with `source` `none`, `Track is off: nothing steers`; with `steady` false and
-   `waiting` true it reads `Exposures paused: the tracker is not steady`; with
-   `dropped_not_steady` 2 a term `Dropped while not steady` reads `2`. With no
-   `steering` in the view the region shows the form and no status.
+   `waiting` true it reads `Exposures paused: the tracker is not steady`; with `steady`
+   true and `waiting` true the status reads `Steered by the subs · 12 subs`; with
+   `dropped_not_steady` 2 a term `Dropped while not steady` reads `2`; with
+   `error_rms_px` absent there is no term `Tracking error (RMS, last 10 subs)`. With no
+   `steering` in the view the region shows the form and no status: the field reads `2`
+   and the box is ticked.
 5. **Given** `SteeringBlock` with the view of US8-S3, **When** a test sets the field
    `Corner smear (px)` to 1.5, unticks `Steer the tracker from the subs` and clicks
    `Save tracking settings`, with `fetch` answering 200 and a view, **Then** a
@@ -1473,6 +1732,9 @@ tracking error is (e, n) within 10⁻⁴″.
   subs find no tracker. Stopping the stack is 035's and 037's.
 - **Stop.** Stop ends tracking as before. A gap that is waiting answers at once with no
   step, and no rate follows the Stop (US3-S7).
+- **A followed push.** 038's `follow`, as `release` does, ends the claim and forgets
+  what was pending or held: an error measured from the old place steers nothing, and the
+  stack's next gap claims again (US3-S12).
 - **Subs that are not accepted.** Each is a gap with no tracking error. After three
   gaps in a row with none, the tracker's own corrections steer again, with the tracking
   offset as it stood, and go on steering through every later gap until a sub is
@@ -1514,7 +1776,7 @@ tracking error is (e, n) within 10⁻⁴″.
   halving at the camera's shortest and is then both `limited` and `over_limit`.
 - **The observer edits the exposure during a stack.** The edit is refused: while the
   stack holds the camera's lease, `PUT /api/imaging/settings` answers 409 with the
-  stack's name (035 plan.md § The camera's lease; 035 US5-S6). So the exposure a stack
+  stack's name (035 plan.md § The camera's lease; 035 US11-S3). So the exposure a stack
   holds cannot change under it. The observer stops the stack, edits and starts again;
   the setting they then see is their own, put back when the stack ended.
 - **The exposure cannot be shortened.** If the camera refuses the stack's change of the
@@ -1539,11 +1801,11 @@ tracking error is (e, n) within 10⁻⁴″.
 
 - **FR-001**: The simulator SHALL remember the direction of its telescope for the last
   3600 s of its clock, one sample for every read of it, and begin again when the
-  telescope is pushed by hand, a mount is connected or its optics are set. 030's
-  `imaging_truth_at` and the imaging camera's own rotation SHALL take the direction for
-  an instant between two remembered samples by a straight line between them, azimuth
-  the short way round, and otherwise the direction now, as before (owner approval 5).
-  `directions_at` SHALL not change.
+  telescope is pushed by hand, a mount is connected or the finder's optics are set
+  (`set_optics`). 030's `imaging_truth_at` and the imaging camera's own rotation SHALL
+  take the direction for an instant between two remembered samples by a straight line
+  between them, azimuth the short way round, and otherwise the direction now, as before
+  (owner approval 5). `directions_at` SHALL not change.
 - **FR-002**: The simulated mount SHALL take `set_count_steps`, false when built, under
   which each axis's tube follows its drive rounded down to a whole count. With it false
   nothing SHALL change.
@@ -1592,9 +1854,11 @@ tracking error is (e, n) within 10⁻⁴″.
   for the first error after a claim, nor when that drift rate is more than twice the
   offset's limit, and SHALL keep the offset within 015's limit. It SHALL remember what
   its last 16 gaps did.
-- **FR-010**: At every gap while steered, and at every gap that applies a held
-  correction (FR-011), the tracker SHALL send each axis its rate and answer only when
-  both are acknowledged. Between a gap's answer and the next gap, while it stays
+- **FR-010**: At every gap while steered, except the gap at which the claim lapses
+  (FR-011), and at every gap that applies a held correction or zeroes a proportional
+  rate still in force, the tracker SHALL send each axis its rate and answer only when
+  both are acknowledged; the gap at which the claim lapses sends nothing. Between a
+  gap's answer and the next gap, while it stays
   steered or its claim stays lapsed, each once-a-second rate SHALL be the axis's
   feed-forward rate plus the tracking offset as that gap left it, or zero where 015 sends zero in
   place of a rate against the axis's direction; a take-up and the keyhole pass send
@@ -1616,7 +1880,8 @@ tracking error is (e, n) within 10⁻⁴″.
   commanding a rate against the axis's direction. The gap after a tracking error is
   handed over SHALL take the tracker back, forget what was held and treat that error
   as the first after a claim; `release` and the end of tracking SHALL also forget what
-  was held. A tracking error that is not finite, that is handed over before
+  was held. `follow`, as `release` does, ends the claim and forgets what was pending or
+  held. A tracking error that is not finite, that is handed over before
   a stack's first gap or after a `release`, or that is no later than the last applied
   SHALL be ignored; of two handed over between two gaps the later SHALL be used.
 - **FR-012**: `gap` SHALL answer the step it made, as east and north arcseconds on the
@@ -1676,7 +1941,8 @@ tracking error is (e, n) within 10⁻⁴″.
   are sent; from the start of a take-up or of the keyhole pass until the rates that
   follow it are sent; while an axis's backlash is being measured; and after tracking
   ends (owner decision 17). `steady_between` SHALL be false for a window that touches
-  any such time among the last 64, or that begins before the tracker was started. A
+  any such time among the last 64, or that begins before the tracker was started, while
+  that time is still among the last 64 (the list's first entry). A
   tracker that stops being steady SHALL stop being steered by the subs and forget any
   tracking error not yet applied and any correction held for a gap; a gap served while
   the tracker is not steady SHALL answer no step and claim nothing, and one asked for
@@ -1773,11 +2039,11 @@ tracking error is (e, n) within 10⁻⁴″.
 
 ## Assumptions
 
-- **Earlier features are in place.** 015 has landed. 030, 031, 032, 033, 034 and 035 are
-  drafts (plan.md § Prerequisites). 031's draft carries the camera's lease of the plan
-  document's amendment 1 as its US9, in the names 033 and 035 use; this trio reaches it
-  through 035 (plan.md § What 035 must provide). Every `path:line` here was read
-  at 49bb210, and read again there after the audit.
+- **Earlier features are in place.** 015 and 038 have landed. 030, 031, 032, 033, 034
+  and 035 are drafts (plan.md § Prerequisites). 031's draft carries the camera's lease
+  of the plan document's amendment 1 as its US9, in the names 033 and 035 use; this trio
+  reaches it through 035 (plan.md § What 035 must provide). Every `path:line` here was
+  read at 49bb210, and read again there after the audit.
 - **Out of scope:**
   - an equatorial mount, a tracker that corrects in small steps, meridian flips,
     dithering and guiding with a second camera (the plan document, § Deferred);
@@ -1846,7 +2112,8 @@ US2's file over the tracker US3 made steerable, and its US4-S5 reads US1's memor
 adds to US4's `steering.rs` and to US3's `tracking.rs`; US6 adds to both again, after
 US5. US7 wires the finished steering into 035's stack and writes the README after US5.
 US8 adds the readout's figures to `steering.rs` after US6 and shows them after US7's
-block of the stack exists. Where a story names two predecessors and one already
+block of the stack exists, and names them in the README section US7 writes. Where a
+story names two predecessors and one already
 follows the other, the second edge is there because both wrote a file the story
 writes. US1 touches no file in common with US2 or US3 (`crates/simulator` against
 `crates/finder` and `GLOSSARY.md`) and may run beside them.

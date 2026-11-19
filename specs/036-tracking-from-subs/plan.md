@@ -67,8 +67,11 @@ memory needs in `std`.
   (`crates/finder/tests/support/mod.rs:14`). The tracker rig, with its wait for the first
   rates, and the scripted tracker of spec.md are written out in each module that uses
   them, only the parts its own tests use, because an unused helper fails `clippy -D
-  warnings` and a story may not edit an earlier story's test file. 035's rigs live in its `console` module `stack_loop`, which
-  the `motion` binary cannot import; US7 writes the stacking rig of spec.md itself.
+  warnings` and a story may not edit an earlier story's test file. 035's rigs live in
+  its `console` binary, which the `motion` binary cannot import: the stand-in stacking
+  rig, `ScriptedSolver`, `wait_stack` and `cards` in `stack_loop`, the scripted camera
+  in `stack_camera` and the sim stacking rig in `stack_gate` (035 plan.md § Test rigs,
+  since its split of US5). US7 writes the stacking rig of spec.md itself.
 - No Playwright test (spec owner decision 12).
 
 **Target Platform**: the `finder` console on the console machine. Nothing changes on the
@@ -98,8 +101,11 @@ scope node or the scope link.
   the switch turned off is the one declared exception (spec owner decision 8).
 - `web/dist` is committed and must be the build of its source (US8).
 
-**Scale/Scope**: one new module, one route, one page block, about 340 lines added to the
-tracker, 60 to the simulator and 40 to 035's stack.
+**Scale/Scope**: one new module, one route, one page block, about 450 lines added to the
+tracker by US3, and more by US5 and US6, about 100 to the simulator and about 90 to
+035's stack (probe round 1 measured US3's at +454 −38 lines of `tracking.rs`, US1's
+simulator source at +97 −3 and US7's change to 035's stack at +88 −5, ignoring
+whitespace).
 
 ## Constitution Check
 
@@ -130,7 +136,7 @@ crates/finder/
 ├── src/tracking.rs                      # US3: Steered for Tracker; US5: longest_exposure_s; US6: steady
 ├── src/session.rs                       # US4: Session::steered
 ├── src/lib.rs                           # US5: the route's doc line
-├── README.md                            # US5: the route's row; US7: the section
+├── README.md                            # US5: the route's row; US7: the section; US8: the readout's keys
 ├── tests/console/main.rs                # US2, US4, US5, US6, US8: one mod line each
 ├── tests/console/steering_error.rs      # US2: new
 ├── tests/console/steering_gap.rs        # US4: new
@@ -419,6 +425,13 @@ at once. Otherwise push a new sender onto `gaps`, release the lock, call
 **`release`.** `subs = None`, `pending = None`, `lapsed = false` and `held =
 Held::default()`. The tracking offset and the remembered corrections are kept.
 
+**`follow`.** 038's `Tracker::follow`, after it clears the samples, also sets
+`subs = None`, `pending = None`, `lapsed = false` and `held = Held::default()`, as
+`release` does, under a two-line comment: a tracking error measured from the old place,
+or a correction held for it, would otherwise steer the tracker back toward that place at
+up to 30″ a gap (spec FR-011, US3-S12). `lapsed` is cleared as `release` clears it, so
+the stack's next gap claims again. The rest of `follow` is 038's.
+
 **`steered_by_subs`.** `subs.is_some()`.
 
 **The rate task.** In `run` (`crates/finder/src/tracking.rs:736`), the wait at the top of
@@ -428,7 +441,7 @@ the loop (`crates/finder/src/tracking.rs:755`) becomes
 tokio::select! {
     biased;
     _ = self.wake.notified() => {
-        if let Err(reason) = self.serve_gaps(&target, &mut movement, counts).await {
+        if let Err(reason) = self.serve_gaps(&mut movement).await {
             return reason;
         }
         continue;
@@ -440,14 +453,17 @@ tokio::select! {
 so a gap is served between two turns, never inside a take-up or the keyhole pass, and
 by the task the guard ends before Stop is sent
 (`crates/finder/src/tracking.rs:885`). With no gap ever asked for, the loop is as it
-was. `select!` is biased toward the wake, and `start` answers before the task's first
-turn (`crates/finder/src/tracking.rs:207`), so a gap asked for the moment `start`
-answers is served before any rate has been sent, with `direction` still `[0.0, 0.0]`:
-`serve_gaps` step 1 turns that gap away (§ Plan traps 22). Just before the loop that
-sends the rates (`crates/finder/src/tracking.rs:868`), the task stores its `direction`
-in `control.direction`; right after that loop, at the end of every turn, it sets
-`control.settling = false`. The body of that loop, the rule that turns a requested rate
-into the one sent (`crates/finder/src/tracking.rs:871`), moves into
+was. `serve_gaps` reads the target and the counts from `Control` under the lock in its
+step 1: at the top of the loop the turn has not read the target, and 038's `follow` may
+have changed it since the last turn. `select!` is biased toward the wake, and `start`
+answers before the task's first turn (`crates/finder/src/tracking.rs:207`), so a gap
+asked for the moment `start` answers is served before any rate has been sent, with
+`direction` still `[0.0, 0.0]`: `serve_gaps` step 1 turns that gap away (§ Plan traps
+22). Just before the loop that sends the rates (`crates/finder/src/tracking.rs:868`),
+the task stores its `direction` in `control.direction`; right after that loop, at the
+end of every turn, it sets `control.settling = false`. The body of that loop, the rule
+that turns a requested rate into the one sent (`crates/finder/src/tracking.rs:871`),
+moves into
 
 ```rust
 /// The rate to send an axis: its feed-forward rate plus `extra`, in degrees a second,
@@ -480,7 +496,10 @@ once for them all:
    (tracking_offset[i] + held.offset[i]).clamp(-OFFSET_LIMIT, OFFSET_LIMIT)`,
    `changed[i] = new - tracking_offset[i]`, `tracking_offset[i] = new` and `want[i] =
    held.step[i].clamp(-SUB_STEP_LIMIT_ARCSEC, SUB_STEP_LIMIT_ARCSEC)`; set
-   `proportional = [0.0; 2]` and `proportional_until = 0.0`, as the claim does. No
+   `proportional = [0.0; 2]` and `proportional_until = 0.0`, as the claim does; before
+   that, note whether a proportional rate was still in force
+   (`clock.now() < proportional_until` with either axis's `proportional` not zero),
+   which from US6 it can be (§ The tracker's two answers). No
    deadband is applied: 015's own 10″ was applied when the pointing came. Then step 3.
    Otherwise take `pending`. With none, and when this gap did not claim, `idle += 1`;
    at `STALE_GAPS` set `subs = None` and `lapsed = true` (`held` is empty then: the
@@ -509,10 +528,11 @@ once for them all:
    error as it now stands, and 0.3 of it is taken. The corrections are the tracker's,
    not the claim's, so the error that takes a lapsed claim back is judged against the
    steps the held corrections made after its time too.
-3. Outside the lock: `rates = self.rates(target, counts)?`
-   (`crates/finder/src/tracking.rs:401`). For each axis, `base[i] = commanded(rates[i],
-   direction[i], tracking_offset[i]/3600.0)` and `pulsed[i] = commanded(rates[i],
-   direction[i], (tracking_offset[i] + want[i]/0.5)/3600.0)`; the step made is `step[i]
+3. Outside the lock: `rates = self.rates(&target, counts)?`, with the target and counts
+   step 1 read (`crates/finder/src/tracking.rs:401`). For each axis, `base[i] =
+   commanded(rates[i], direction[i], tracking_offset[i]/3600.0)` and `pulsed[i] =
+   commanded(rates[i], direction[i], (tracking_offset[i] +
+   want[i]/0.5)/3600.0)`; the step made is `step[i]
    = (pulsed[i] - base[i])·3600.0·0.5`, which is `want[i]` unless the axis may not turn
    that way: a step against the axis's motion is at most the axis held still for the
    half second.
@@ -521,7 +541,17 @@ once for them all:
    both axes `base`. A failed send returns `link_lost`, as in the loop. While `subs` is
    `Some`, both axes are sent `base` even when nothing changed; when `subs` is `None`
    (the claim has lapsed, at this gap or before), `base` is sent when either axis's
-   `changed` is not zero, and nothing is sent otherwise.
+   `changed` is not zero or step 2 found a proportional rate still in force, and nothing
+   is sent otherwise: a rate 015 set while the tracker was not steady must not run on
+   into the exposure the gap lets start. This test is US6's. From US6 a pointing while
+   the tracker is not steady runs 015's block whole even after a lapse, and the next
+   turn sends its proportional rate. The first gap once the tracker is steady again
+   zeroes that rate in `Control`, but `mark` has emptied `held` and nothing changed, so
+   without the second test the gap sent nothing and the rate ran on into the exposure
+   until the next once-a-second turn: probe round 1 measured +0.632″/s on the azimuth
+   axis for 0.15 s at that gap's answer, and in general it can last up to 1 s, up to
+   0.6″ in a sub whose bound is 0.15″. US6-S1's last case asserts the rate in force at
+   the answer.
 5. Under the lock, when an error was applied and `subs` is still `Some`: `previous =
    Some((t1, a))`. Whenever this gap applied an error or a held correction,
    `Correction { time: clock.now(), step, rate: changed }` is pushed onto
@@ -604,7 +634,9 @@ on becoming steady sets the last entry's end to `clock.now()`. It is called:
 - at the start of `take_up` and of `keyhole`
   (`crates/finder/src/tracking.rs:697`, `crates/finder/src/tracking.rs:551`), after
   setting `settling = true`;
-- where the rate task opens a measurement (`crates/finder/src/tracking.rs:829`) and
+- where the rate task opens a measurement (`crates/finder/src/tracking.rs:829`: on the
+  simulated link the end-of-turn `mark` comes at the same instant; this one matters
+  where the link's round trips take time) and
   where `settle` closes one (`crates/finder/src/tracking.rs:668`);
 - at the end of every turn of the rate task, after its rates are sent and US3's
   `settling = false`;
@@ -615,7 +647,10 @@ on becoming steady sets the last entry's end to `clock.now()`. It is called:
 when the list is empty, or when any entry `(from, to)` has `from <= end` and
 `to.is_none_or(|to| to >= start)`; after tracking ends the last entry is open, so every
 window that reaches past the end is false and one wholly before it is judged on the
-entries alone. US6 changes the test in `serve_gaps` step 1 from `settling` to
+entries alone. Both bounds are inclusive: a window that begins at the instant a time not
+steady ends touches it, so a sub that starts at the instant of the tracker's first rates
+is dropped as `not_steady` (the stacking rig of spec.md US7 waits 1 s more for that
+reason). US6 changes the test in `serve_gaps` step 1 from `settling` to
 `!control.steady`, which is the same before the first rates and also turns away a gap
 served while a measurement is open: it answers no step and claims nothing. US3's
 scenarios pass under either test, because the tracker rig waits for the first rates
@@ -628,7 +663,8 @@ a first reversal's measurement from its own corrections, so held corrections wou
 it open for good (§ Plan traps 28). Not steady, a pointing therefore runs 015's block
 whole even after a lapse; `mark` has forgotten what was held as the tracker stopped
 being steady, and once it is steady again the next pointing zeroes `proportional`
-before it holds anything, and the next gap zeroes it too (step 2). No exposure is
+before it holds anything, and the next gap zeroes it too (step 2) and, when it was still
+in force, sends the zeroed rate (step 4). No exposure is
 started while the tracker is not steady, and the sub it crossed is dropped (US6-S4).
 US3's scenarios pass under either test, because none of them has a time the tracker
 is not steady after its first rates.
@@ -748,7 +784,7 @@ struct Taken {
     /// The tracker found, if any. Weak: the steering never keeps a tracker alive.
     tracker: Option<Weak<dyn Steered>>,
     sensor: (u32, u32),
-    // US8: what that tracker's gap answered.
+    // US8: the sum of what the gaps served in this call answered.
     stepped: Stepped,
 }
 ```
@@ -772,7 +808,7 @@ the next.
 
 US5 changes step 3 and the answers: with `on` false no `gap` is called; and the answer
 is the exposure held (below). US6 puts a wait before step 3 and a check after it
-(below). US8 keeps the gap's answer in the record.
+(below). US8 keeps in the record the sum of what the gaps served in this call answered.
 
 **`accepted`** (US4): the record of the frame; with none, nothing. Its tracker, upgraded;
 with none, nothing. `target = tracker.target()`; with none, nothing. `set =
@@ -796,7 +832,8 @@ made.
 
 **The cap** (US5). The settings are `smear_px` 2.0 and `on` true when built.
 `set_smear_px` refuses a value that is not finite, under 0.1 or over 20.0 with exactly
-`smear_px must be a number from 0.1 to 20`; both setters mark the steering used. The
+`smear_px must be a number from 0.1 to 20`; `set_on` and an accepted `set_smear_px` mark
+the steering used; a refused one changes nothing, the mark included. The
 state gains `held: Option<(f64, bool)>`: the exposure a stack holds, in seconds, and
 whether it was cut when it was decided. In `before_exposure`, after the gap (or at
 once, with `on` false or no tracker):
@@ -864,6 +901,9 @@ north_{k-1} - step_north)·exposure_k/(time_k - time_{k-1})`, the step being the
 the `stepped` of the records whose `go_time` lies after `time_{k-1}` and not after
 `time_k`; `drift_arcsec = sqrt(sum(drift_k²)/(n - 1))`; and the two `_px` keys are those
 divided by the newest error's `arcsec_per_px`. With fewer than 2, all four are `None`.
+US8 adds the four keys to the README's list of the `steering` part's keys: the root mean
+square of the last ten tracking errors and of the drifts between them, in arcseconds and
+pixels, once two errors have been handed over since the tracker was last let go.
 
 ### The session (`crates/finder/src/session.rs`, US4)
 
@@ -916,12 +956,14 @@ changes nothing, `on` included. Then `on`. It answers `Json(imaging.view())` wit
 It is not refused while the camera is not `ready`: the two settings are the console's
 own, and the view carries `steering` whatever its `state`.
 
-`crates/finder/src/lib.rs` gains, after the last route line earlier specs left
-(`crates/finder/src/lib.rs:35` today), written as it stands here:
+`crates/finder/src/lib.rs` gains, after the last route line earlier specs left, the
+`GET /api/imaging/stack/preview.jpg` line (`crates/finder/src/lib.rs:35` today),
+written as it stands here:
 `* PUT /api/imaging/steering: {"on":true|false,"smear_px":N}, either or both; whether the subs steer the tracker, and the corner smear that caps the exposure.`
 
 `crates/finder/README.md` gains a row in the `## API` table
-(`crates/finder/README.md:167`), after the last `/api/imaging` row earlier specs left:
+(`crates/finder/README.md:167`), after the last `/api/imaging` row earlier specs left,
+the `GET /api/imaging/stack/preview.jpg` row:
 
 ```markdown
 | `PUT /api/imaging/steering` | JSON with either or both of `on` (true or false) and `smear_px` (0.1 to 20). Whether the subs steer the tracker during a stack, and how many pixels the field may turn at the corner of a sub in one exposure. Answers 200 with the imaging view. Run-only: 2 px and on at every start. Same-origin writes only. |
@@ -941,7 +983,9 @@ against 035's code by name and line when the trio is re-anchored (§ Prerequisit
 **The stopping mark** is 035's (035 plan.md § The stack on the console, **The stopping
 mark**): one `tokio::sync::watch` channel of `bool`, made with the run, `false` until
 the stack is ending and `true` from then on; the taker holds a receiver of it,
-`stopping` below. "The stack is stopping" is `*stopping.borrow()`, and the taker's
+`stopping` below, as a `mut` binding: `wait_for` takes `&mut self`, so US7 makes the
+taker's parameter `mut stopping`, the one change to its signature. "The stack is
+stopping" is `*stopping.borrow()`, and the taker's
 wait races `stopping.wait_for(|stopping| *stopping)` in a `tokio::select!` that is
 `biased` toward it, as 035's seam for 036 says (035 plan.md § Shapes that existing
 tests pin, **The seam for 036 and 037**, 1). `wait_for` also completes, with an error,
@@ -1047,14 +1091,16 @@ that point, because 035's ending waits for the taker to return. US7 adds nothing
 **The worker**, for each sub:
 
 - in step 2, before 035's settings test: `if let Verdict::Drop(reason) =
-  steering.check(&frame) { … }`, the outcome being `reason`, `not_steady`, counted in
-  `dropped.not_steady` and listed like any other outcome. It comes before the solve so
+  steering.check(&frame) { self.counts(|run| { run.view.dropped.not_steady += 1;
+  run.decided(view.id, reason); }); continue; }`, counted as 035's settings test counts
+  its own drop and not through `Dropped::count`, whose match sends a key it does not
+  name to `unprocessed`. It comes before the solve so
   that a sub smeared by a take-up costs no solve and leaves the stack's own hint alone;
 - in step 8, where the sub is counted as stacked: `steering.accepted(&frame, &solve)`,
   with the `SolveFrame` of step 1 and the `ImagingSolve` of step 4.
 
-`LastView::outcome` and `stack.json`'s `subs` carry `not_steady` with no further change:
-both write the key of `Dropped` a sub was counted under.
+`stack.json`'s `subs` carries `not_steady` with no further change; `LastView`, which the
+settings drop also leaves alone, does not.
 
 **The guard** (spec US7-S6). The file, as US7 leaves it, holds none of `ephemeris`,
 `alt_az`, `parallactic`, `counts_per_revolution`, `AxisInfo` and `MountClient`, the six
@@ -1081,7 +1127,8 @@ What US7 and US8 rely on:
 2. **The stopping mark** (035 plan.md § The stack on the console, **The stopping
    mark**): one `tokio::sync::watch` channel of `bool`, made with the run, `false`
    until the stack is ending and `true` from then on, set once by whoever ends the
-   stack; the taker and the worker each hold a receiver. The taker's wait races it as
+   stack; the taker and the worker each hold a receiver (the taker's by value: US7 makes
+   it `mut`, § The stack). The taker's wait races it as
    `stopping.wait_for(|stopping| *stopping)` in a `tokio::select!` that is `biased`
    toward it, and returns when it wins (035 plan.md § Shapes that existing tests pin,
    **The seam for 036 and 037**, 1).
@@ -1106,12 +1153,17 @@ What US7 and US8 rely on:
    which drops a sub whose `exposure_ms` differs from the reference sub's by more than
    1 ms; the `ImagingSolve` of step 4; and step 8, "the one place a sub is accepted".
 7. **`Dropped`** derives `Default`, writes every key always and in order, and has
-   `total()`; `LastView::outcome` and `stack.json`'s `subs` write the key a sub was
-   counted under. No test of 035 counts the keys, compares a whole `dropped` object,
-   or builds `Dropped { .. }` without `..Default::default()` (035 spec.md § User
+   `total()`; `stack.json`'s `subs` writes the key a sub was counted under, and
+   `LastView::outcome` that of a sub dropped through `Dropped::count`, whose match sends
+   a key it does not name to `unprocessed` (so US7 counts `not_steady` inline, § The
+   stack). No test of 035 counts the keys, compares a whole `dropped` object with a
+   literal or a fixed list of keys (a comparison of two serializations of the same
+   `Dropped`, as `stack_console.rs` makes between `stack.json` and the view, is not
+   one), or builds `Dropped { .. }` without `..Default::default()` (035 spec.md § User
    Scenarios: "a test never asserts how many there are").
 8. **`StackBlock.tsx`** builds its `Dropped {sum}: {parts}` line from the counts above
-   0, in `StackDropped`'s order, each with its words.
+   0, in `StackDropped`'s order, each with its words. Its filter of the counts above 0
+   reads an optional count with `?? 0` once `not_steady` is optional (§ The page).
 9. **`Stacker::start`** refuses a camera that is not `ready`, so the taker's first read
    of the view finds `camera` and `settings`.
 
@@ -1160,7 +1212,8 @@ when the tracker is not steady (before its first rates, during a take-up, a firs
 reversal's backlash measurement and the keyhole pass, and after tracking ends) and
 the `not_steady` drop; that an axis is never reversed by a correction; the `steering`
 part's keys; that both settings are run-only; and that 015's "guiding from the imaging
-camera" is no longer out of scope.
+camera" is no longer out of scope. US8 adds the readout's four keys to that list of the
+`steering` part's keys (§ The steering, **The readout**).
 
 ### The page (`crates/finder/web/src/`, US8)
 
@@ -1224,7 +1277,9 @@ Write each phrase a test asserts on one line of JSX. `ImagingPage.tsx` places
 
 `components/StackBlock.tsx` (035 plan.md § The page): the parts of its `Dropped {sum}:
 {parts}` line gain a twelfth, last, `{count} not steady`, from `dropped.not_steady ?? 0`,
-which also joins the sum. Nothing else of the block changes.
+which also joins the sum; the filter of counts above 0 reads
+`(stack.dropped[key] ?? 0) > 0`, since the key is optional. Nothing else of the block
+changes.
 
 ### `DESIGN.md` and `.impeccable/design.json` (US8)
 
@@ -1289,14 +1344,16 @@ These are not changed by any story:
   `dropped.not_steady` 0. 035 says `dropped` has eleven keys, each always written, that
   its tests sum whatever keys `dropped` holds, and that "a test never asserts how many
   there are, since a later spec adds reasons" (035 spec.md § User Scenarios); a
-  twelfth key at 0 disturbs neither. § Prerequisites 3 checks the landed tests for a comparison of
-  the whole object and for a `Dropped` built by a literal without
+  twelfth key at 0 disturbs neither. § Prerequisites 3 checks the landed tests for a
+  comparison of the whole object with a literal or a fixed list of keys (a comparison of
+  two serializations of the same `Dropped`, as `stack_console.rs` makes between
+  `stack.json` and the view, is not one) and for a `Dropped` built by a literal without
   `..Default::default()`.
 - **The camera's lease and its refusals.** They are 031's, as 035 assumes them (035
   plan.md § The camera's lease). US7 takes no lease and changes no refusal: it calls
   `Lease::set` on the lease the run already holds, twice at most in a stack's life,
   and only when a tracker is running and its limit is under the observer's exposure.
-  035's US5-S6, which reads a refusal by the stack's name, is not disturbed.
+  035's US11-S3, which reads a refusal by the stack's name, is not disturbed.
 - **035's `StackBlock` tests.** Their views carry eleven counts; `not_steady` is
   optional in the type and adds nothing to the line when absent or 0 (spec US8-S6).
 - **Finder's test layout.** `crates/finder/tests/layout/main.rs` fails a file at the top
@@ -1373,11 +1430,11 @@ These are not changed by any story:
 
 1. **The earlier specs have landed:** `015-tracking`, `030-imaging-camera-link`, `031-imaging-frames-on-console`,
    `032-imaging-solve-and-aim-point`, `033-focus-reading-and-aid`,
-   `034-dark-and-flat-frames` and `035-live-stack`, all in this spec's
-   `depends_on_landed`. Not met: 015 has landed; the six others are drafts. 033 is
-   named because it writes `imaging/mod.rs`, `imaging/routes.rs`, `lib.rs`, the README
-   and the Imaging page before this spec does, and 035 depends on it; nothing of
-   033's is called here.
+   `034-dark-and-flat-frames`, `035-live-stack` and `038-track-follows-a-push`, all in
+   this spec's `depends_on_landed`. Not met: 015 and 038 have landed; the six others are
+   drafts. 033 is named because it writes `imaging/mod.rs`, `imaging/routes.rs`,
+   `lib.rs`, the README and the Imaging page before this spec does, and 035 depends on
+   it; nothing of 033's is called here.
 2. **The trio is re-anchored against `main` after they land.** Not met. Every
    `path:line` here was read at 49bb210, in files that exist there. After the six
    land, every name taken from their plan.md is re-read as landed and corrected here
@@ -1392,12 +1449,24 @@ These are not changed by any story:
    `solve_frame`, `SimulatedSolver`, the solving rig; 034: that a master dark matches
    a sub's exposure within 1 ms; 035: § What 035 must provide); every file they create
    is cited with a line; the story that last wrote each shared file is put right in
-   § Refinement Record; and the validator is re-run on `main`.
+   § Refinement Record; and the validator is re-run on `main`. Probe round 1 found that
+   038, on `main`, moved most of this trio's citations of
+   `crates/finder/src/tracking.rs` from line 83 on (D7): the lines still hold content,
+   so the validator passes every one but the citation of `impl Drop for Tracker`, and
+   each is read again then. The same holds for the last route line of
+   `crates/finder/src/lib.rs` and the last
+   `/api/imaging` row of the README, after which US5 inserts its own and which § The
+   route now also names by content (D36), and for the `dl` of `TrackControl.tsx`, at
+   line 69 on round 1's base.
 3. **035 is read as landed, against § What 035 must provide.** Not met. 035's trio was
    read whole when the review of this one was applied: its plan.md with the camera's
-   lease, its tasks.md and its Refinement Record. It is still a draft and it is not
-   probe-built, and the lease it uses is 031's US9, which 031's draft carries and
-   `main` does not yet (035 plan.md § Prerequisites 8). Before the flip each of the
+   lease, its tasks.md and its Refinement Record. It was then still a draft and not
+   probe-built, and the lease it uses is 031's US9, which 031's draft carries and `main`
+   does not yet (035 plan.md § Prerequisites 8). Since then 035's own probe round 1 has
+   built it, and its trio has been re-anchored and flipped with its US5 split in two
+   (its US5-S6 is now US11-S3); this trio's probe round 1 built US7 and US8 on 035's
+   probe code and found the nine points provided, with the three words § The stack and
+   § The page now give (§ Prerequisites 5). Before the flip each of the
    nine points of § What 035 must provide is read in the landed code, and these are
    settled:
    - the taker's loop, its returns and the worker's eight steps are where § The stack
@@ -1413,11 +1482,17 @@ These are not changed by any story:
    - 035's landed `crates/finder/src/imaging/stack/service.rs` holds none of the six
      names US2-S6 lists, so that US7-S6 rests on US7's own diff. If it holds one, the
      trio goes back to the owner before any story is dispatched;
-   - no test of 035 counts `dropped`'s keys, compares the whole object, or builds
+   - no test of 035 counts `dropped`'s keys, compares the whole object with a literal or
+     a fixed list of keys (a comparison of two serializations of the same `Dropped`, as
+     `stack_console.rs` makes between `stack.json` and the view, is not one), or builds
      `Dropped { .. }` by a struct literal without `..Default::default()`. If one does,
      the trio goes back to the owner for an approval that names that test, before any
      story is dispatched: no approval here covers an unnamed test;
    - 035's `StackBlock` builds its `Dropped` line as § The page assumes;
+   - no landed test of 031 to 035 reads a region of the Imaging page by its place from
+     the page's end (`getAllByRole("region").at(-1)` or `.at(-2)`): 036's block becomes
+     the page's last region. 034's US9-S1 places its block after `Imaging frame` and
+     `Focus`, and 035's US9-S6 its region after Calibration;
    - the worker still drops a sub whose exposure differs from the reference sub's. If
      035 comes to weight subs by exposure instead, spec owner decision 2's last
      alternative becomes possible and is put to the owner;
@@ -1425,16 +1500,38 @@ These are not changed by any story:
      written into § The stack and into spec.md's edge cases.
 4. **The owner decisions are settled and the approvals given** (spec § Owner decisions,
    § Owner approvals). Not met: all seventeen decisions are open.
-5. **A probe build.** Not met. No story has been compiled. The bounds of US3-S1,
-   US3-S2, US4-S5 and US7-S1 come from arithmetic on a model of the loop (§ Refinement
-   Record), and US6-S5's rests on 015's own follow staying within 60″ with the finder
-   camera's corrections held for gaps 6 s apart before and after the measurement; a
-   probe build of US1 to US4 on the simulator confirms or corrects them before the
-   flip, one of US6 confirms US6-S5, and one of US7 on top of 035 confirms that the
-   stacking rig tracks and stacks at all. US3 and US6 are probe-built together: US6
-   changes the test `serve_gaps` step 1 makes and the held mode's test in
-   `Shared::pointing`, and US3's test file must pass before and after it, unedited
-   (§ Plan traps 22).
+5. **A probe build.** Met on 2026-11-19. Probe round 1 built all eight stories on
+   2026-11-18 and 19, tests first and with both gates, on probe builds of 030 to 035
+   (spec.md § Clarifications, the session of round 1 probes). Before it, the bounds of
+   US3-S1, US3-S2, US4-S5 and US7-S1 came from arithmetic on a model of the loop
+   (§ Refinement Record), and US6-S5's rested on 015's own follow staying within 60″
+   with the finder camera's corrections held for gaps 6 s apart before and after the
+   measurement. US3 and US6 were probe-built together, since US6 changes the test
+   `serve_gaps` step 1 makes and the held mode's test in `Shared::pointing`. What the
+   round settled:
+   - US3's test file passed before and after US6, unedited (§ Plan traps 22).
+   - Both rigs of US7 ran. The stacking rig tracks and stacks on top of 035, 18 subs in
+     about 97 s of virtual time, once its drift oracle reads each saved sub from its
+     FITS file and it waits 1 s more before the stack starts (D37 and D38; spec.md
+     § Clarifications, the session of round 1 probes); US7-S5's scripted tracker, given
+     with `set_source`, saw its link dropped within 1 s, well inside its 10 s gap.
+   - The nine points of § What 035 must provide hold in 035's probe code, with the three
+     words § The stack and § The page now give: the taker's receiver of the stopping
+     mark is made `mut` (point 2); the `not_steady` drop is counted inline, as the
+     settings drop is, and `LastView` does not carry it (point 7); and the Stack block's
+     filter reads an optional count with `?? 0` (point 8).
+   - Every story's diff is under 64 KiB (§ Risks).
+   - Every bound held on three runs each, with the same numbers each time. US3-S1: at
+     most 0.0220″ from the 12th sub with each error handed over at once, and 0.0340″
+     played late, against 0.15″ (4.4× at the late sub; the model's 0.030″ was 13% under
+     it).
+   - US3-S2: a median drift of 17.19″ without feedback, against "above 3.0″" (5.7×).
+   - US4-S5: at most 0.01552″ from the 14th sub, against 0.15″ (9.7×).
+   - US6-S5: a worst true error of 41.414″, against 015's 60″ (1.45×), with the play
+     measured at 0.299879°. With the held mode's test left at `lapsed` alone, 015's
+     bound broke at transit + 319.7 s, as § Plan traps 28 says it would.
+   - US7-S1: at most 0.01558″ from the 14th sub, against 0.15″ (9.6×; 0.0317″ at the
+     12th), and 0.746″ on every sub with the switch off.
 6. **Outside the factory, before this spec is used at the telescope:** GoTo and Track
    proven on the real mount (the plan document, § Before any flip, 4), and its altitude
    backlash measured. Not met.
@@ -1473,15 +1570,16 @@ These are not changed by any story:
     chose the other answer: 032 holds a newly measured aim point back while Track is on
     and uses it once Track is off (032's FR-036). So no bound is written, and nothing in
     this trio changes.
-12. **038's followed push.** Added 2026-11-16. Draft `038-track-follows-a-push` makes
-    Track follow a push by hand of more than 5′ through `Tracker::follow`, which changes
-    the place the tracker holds. If 038 lands first, this trio is re-anchored to it:
-    `follow` ends any claim the subs hold on the tracker and forgets any tracking error
-    or held correction not yet applied, as a tracker that stops being steady does
-    (spec FR-011), with one scenario in US3; `038-track-follows-a-push` joins
-    `depends_on_landed`; and the validator is re-run. Without that, a sub's error,
-    measured from the old place, would steer the tracker back toward it at up to 30″ a
-    gap. Not met: 038 is a draft.
+12. **038's followed push.** Added 2026-11-16; met on 2026-11-19.
+    `038-track-follows-a-push` makes Track follow a push by hand of more than 5′ through
+    `Tracker::follow`, which changes the place the tracker holds. 038 has landed
+    (`ad09efeb`), so this trio is re-anchored to it: `follow` ends any claim the subs
+    hold on the tracker and forgets any tracking error or held correction not yet
+    applied, as `release` does (spec FR-011; § The tracker, **`follow`**), with one
+    scenario in US3, US3-S12; `038-track-follows-a-push` joins `depends_on_landed` and
+    US3's shared write of the tracker; and the validator is re-run. Without that, a
+    sub's error, measured from the old place, would steer the tracker back toward it at
+    up to 30″ a gap.
 
 ## Plan traps
 
@@ -1605,22 +1703,22 @@ Each binds every story.
 
 | Risk | Mitigation |
 |---|---|
-| The bounds were worked from a model, not run. | § Prerequisites 5: a probe build before the flip. The model leaves a factor of five on the drift bound (0.030″ against 0.15″ at the 12th sub played late). |
-| 035 changes before it lands, or 031's lease lands in another shape or not at all. | § What 035 must provide lists the nine points this spec leans on and § Prerequisites 3 reads each as landed; only US7 and one line of US8 touch 035's files, and US1 to US6 are tested without a stack. |
-| US7-S5's rig has never run: a scripted tracker given to a console's steering, and the link dropped while its gap waits. | The probe build of US7. The scenario's only timing is 031's 3 s for a lost link against a gap of 10 s. |
+| The bounds were worked from a model, and probe round 1 ran them on the simulator alone. | § Prerequisites 5: met. Every bound held on three runs each; the narrowest is US6-S5's, 41.414″ against 015's 60″ (1.45×), and the drift bound's is 4.4× at the 12th sub played late (0.0340″ against 0.15″, where the model gave 0.030″). The real mount is a field check. |
+| 035 changes before it lands, or 031's lease lands in another shape or not at all. | § What 035 must provide lists the nine points this spec leans on, which probe round 1 found in 035's probe code with D39 to D41's words, and § Prerequisites 3 reads each as landed; only US7 and one line of US8 touch 035's files, and US1 to US6 are tested without a stack. |
+| US7-S5's rig: a scripted tracker given to a console's steering, and the link dropped while its gap waits. | It ran in probe round 1: the link dropped 1 s into the 10 s gap was seen within 1 s, against 031's 3 s, and its words, its `taken` 0, its `gap`-then-`release` log and the restored setting held. The scenario's only timing is 031's 3 s for a lost link against a gap of 10 s. |
 | The owner prefers arcseconds for the corner smear (spec owner decision 1). | The steering then needs a scale before a stack's first solve, 032's measured one or the one from the focal length setting; FR-018, US5 and the page's field are redrafted before the flip. |
-| The stacking rig of US7 has never run: a tracked simulated mount, live finder solves, a pointing model fitted from syncs, the simulated solver and 035's stack together. | The probe build of US7; US3-S1 and US4-S5 carry the claim of SC-003 on rigs of this spec's own, so a correction to US7-S1's bound does not touch it. |
+| The stacking rig of US7: a tracked simulated mount, live finder solves, a pointing model fitted from syncs, the simulated solver and 035's stack together. | It ran in probe round 1, 18 subs in about 97 s of virtual time, once its drift oracle read each saved sub from its FITS file and it waited 1 s more before the stack started (D37, D38); US3-S1 and US4-S5 carry the claim of SC-003 on rigs of this spec's own, so a correction to US7-S1's bound does not touch it. |
 | A sub dropped as soft carries a good tracking error that is not used, and a drift that makes subs soft is then taken out by the tracker's own corrections only. | Spec owner decision 15; a field check. |
-| The limit falls under a long stack's exposure near the meridian. | The readout says so; halving usually leaves margin (30 s held against a limit of 34 s to 39 s in the worked rig). Ending the stack is spec owner decision 2's alternative. |
+| The limit falls under a long stack's exposure near the meridian. | The readout says so; halving usually leaves margin (30 s held against a limit of 34 s to 39 s in the worked rig; 37.28 s at the rig's start, measured in probe round 1). Ending the stack is spec owner decision 2's alternative. |
 | A half-second pulse of one count does not move the real tube (stiction, backlash). | The rate then takes it up: an undelivered step reads as a drift, and 0.3 of it goes into the rate. A field check (spec § Assumptions). |
 | The real mount's rate commands are coarser than the model. | Field check; the constants are in one place. |
 | An error that needs a slow axis to back up leaves slowly. | 015's rule that no correction reverses an axis stands; near a reversal the take-up crosses it. A field check through the meridian. |
 | The real solver is slower than a sub, so errors arrive several gaps late. | The tracker's memory of 16 gaps covers 035's queue of four; after three gaps with no error the tracker's own corrections steer. `took_ms` in 035's view is the figure to read. |
 | An imaging solve is wrong and 035 accepts it. | One gap moves an axis 30″ at most; a jump changes no rate. |
-| Rate updates once a second during an exposure. | They are 015's feed-forward and change by thousandths of an arcsecond a second; unchanged here. A field check. |
-| The first reversal on a mount pauses the stack for minutes. | Once per mount: the backlash is kept with the fixed terms. The page says exposures are paused. |
+| Rate updates once a second during an exposure. | They are 015's feed-forward and change by thousandths of an arcsecond a second; unchanged here. The first sub after a time not steady would have begun on 015's proportional rate, +0.632″/s for 0.15 s measured and up to 1 s and 0.6″ in general, had the gap that zeroes it not sent the zeroed rate (§ The tracker, `serve_gaps` step 4; US6-S1). A field check. |
+| The first reversal on a mount pauses the stack for minutes. | Once per mount: the backlash is kept with the fixed terms. The page says exposures are paused. Probe round 1 measured about 312 s of the simulator's time with 0.3° of play, and 0.85 s for a take-up. |
 | After a lapse the finder camera corrects once a gap, not once a solve. | The integral's gain per second is 015's, and each gap takes 0.6 of the newest error out. A lapse means subs are being dropped (cloud, a lost field), which the readout shows. A field check with subs dropped. |
-| A story's diff nears 64 KiB. | US3 is the largest: about 16 KiB of tracker and 38 KiB of test with its rig. If the probe build measures it over, US3-S9, US3-S10 and the remembered corrections move to a story of their own between US3 and US4, and US3-S11 with the held correction to another. |
+| A story's diff nears 64 KiB. | US3 is the largest: the probe build measured 50,893 B, 24,984 B of tracker and 25,583 B of test (77.7% of 64 KiB); with the cases the probe added and § Prerequisites 12's `follow` scenario, about 57,000 B (87%). Round 1's other measures, with their folded cases: US1 19,045 B (about 23,700 B, 36%), US2 14,094 B (about 15,000 B, 23%), US4 31,946 B (about 35,200 B, 54%), US5 38,804 B (about 42,900 B, 65%), US6 32,913 B (about 43,100 B with D25's fix, 66%), US7 35,434 B (about 39,500 B, 60%) and US8 34,698 B (about 38,000 B, 58%), the folded figures of US1, US2, US7 and US8 estimated from the cases' length; only US3 is near the budget. If a build measures it over, US3-S9, US3-S10 and the remembered corrections move to a story of their own between US3 and US4, and US3-S11 with the held correction to another. |
 | 030 to 035 and 037 write `mod.rs`, `routes.rs`, the page and the README too. | The six land first; 037 names this spec. § Prerequisites 2 re-anchors. |
 
 ## Refinement Record
@@ -1655,11 +1753,11 @@ edited (§ Prerequisites 9); US7-S6 guards 035's `stack/service.rs`, and owner
 decision 1's widening is worked; and a bound on the rate one tracking error may ask
 for waited on 032's owner decision, which the owner settled on 2026-11-17 with no bound
 (§ Prerequisites 11). Every `path:line` in spec.md
-and plan.md was then read again at 49bb210, the worktree's HEAD; none had moved. **No
-probe build has been run:** no story has been compiled, and no scenario has been seen
-to pass or fail, before the review, after it, or after the audit.
+and plan.md was then read again at 49bb210, the worktree's HEAD; none had moved. **Until
+probe round 1 no probe build had been run:** no story had been compiled, and no scenario
+had been seen to pass or fail, before the review, after it, or after the audit.
 
-What stands in for a probe, and what it does not show:
+What stood in for a probe until round 1, and what it did not show:
 - **A model of the loop**, worked by hand for this draft: two axes at M42's rates for
   2026-01-16T02:00Z at 40° N (azimuth 19.9″/s, altitude 3.6″/s), a 1% rate error, 5 s
   subs, errors read at mid-exposure. With each error judged against the gaps since its
@@ -1676,9 +1774,10 @@ What stands in for a probe, and what it does not show:
   azimuth 161.8°, an hour angle of −13.3°): 30″ east is −39.8″ of azimuth and −7.2″ of
   altitude, so the step is about +23.9″ and +4.3″ and runs with both axes. US6-S5's
   measurement under a lapsed claim mirrors 015's own `measured` helper
-  (`crates/finder/tests/support/tracker.rs:323`) and has not been run.
+  (`crates/finder/tests/support/tracker.rs:323`) and had not been run.
 - **The worked numbers** of US2, US4-S4, US5 and US8 were recomputed with a short
-  script; the limit of 37.15 s and the 65″ of refraction at the rig's start likewise.
+  script; the limit of 37.15 s and the 65″ of refraction at the rig's start likewise
+  (probe round 1 measured the limit on the rig as 37.28 s, at 14.91°/h, 0.36% off: D32).
   The review recomputed them independently, and its corrections are in: the turns of
   US5 are now the test's own `hypot` expressions, US3-S10's signs are right, US5-S6's
   due-east instant is worked out (9.7″ of azimuth a second against a 3.2″ window), and
@@ -1686,17 +1785,43 @@ What stands in for a probe, and what it does not show:
 - **Anchors** were read at 49bb210, read again there after the audit, and checked by
   the validator.
 
-For the probe build and the re-anchoring: every bound named in § Prerequisites 5;
-whether `serve_gaps` can be woven into `run` as described without disturbing the
-keyhole's `second.reset()`; whether a gap that takes 0.5 s lets the next once-a-second
-turn slip past 015 US3-S1's "at least once a second" in any existing test (no existing
-test calls `gap`); US3's test file under US6's test in `serve_gaps` step 1 (the tracker
-rig waits for the first rates, and US3-S7 pins what a gap before them does, so the two
-stories should agree, but only a build of both shows it); whether the wait for the
-first rates ever takes more than a few milliseconds of virtual time; US3's test file
-under US6's held-mode test, `lapsed && control.steady`; whether US6-S5's follow keeps
-015's 60″ bound with the finder camera's corrections held for gaps 6 s apart; US7-S5's
-rig; and all of § Prerequisites 3.
+Before round 1, for the probe build and the re-anchoring: every bound named in
+§ Prerequisites 5; whether `serve_gaps` can be woven into `run` as described without
+disturbing the keyhole's `second.reset()`; whether a gap that takes 0.5 s lets the next
+once-a-second turn slip past 015 US3-S1's "at least once a second" in any existing test
+(no existing test calls `gap`); US3's test file under US6's test in `serve_gaps` step 1
+(the tracker rig waits for the first rates, and US3-S7 pins what a gap before them does,
+so the two stories should agree, but only a build of both shows it); whether the wait
+for the first rates ever takes more than a few milliseconds of virtual time; US3's test
+file under US6's held-mode test, `lapsed && control.steady`; whether US6-S5's follow
+keeps 015's 60″ bound with the finder camera's corrections held for gaps 6 s apart;
+US7-S5's rig; and all of § Prerequisites 3.
+
+**What probe round 1 changed** (2026-11-18 and 19; spec.md § Clarifications, the session
+of round 1 probes). Four agents built the eight stories from this trio, in order, on
+probe builds of 030 to 035, tests first and with both gates, and found 3 blocking and 44
+clarity defects, D1 to D47, all folded on 2026-11-19 with the owner's answers of that
+day. Of the questions above, all but § Prerequisites 3, which waits for 035 to land,
+were answered: every bound held (§ Prerequisites 5); `serve_gaps` was woven into `run`
+as described, with the target and counts read in its step 1 (D9); 015's tests, and every
+other existing test but the one 034 test of D43, passed under both gates on every story;
+US3's test file passed unedited before and after US6; US6-S5's follow kept 015's 60″
+bound; and US7-S5's rig ran. The changes that reach across stories: US6-S1's gap answers
+at L or after it (D24), US7's drift oracle reads each saved sub from its FITS file
+(D37), and the stacking rig waits 1 s more before a stack starts (D38), the three
+blocking defects; a lapsed gap that zeroes a proportional rate still in force sends the
+zeroed rate (D25: `serve_gaps` steps 2 and 4, FR-010, US6-S1); 038's `follow` ends the
+claim as `release` does (D6: FR-011, US3-S12, § Prerequisites 12), and 038 joins
+`depends_on_landed`; the owner trigger of § Prerequisites 3 is narrowed to a comparison
+with a literal or a fixed list of keys (D8), and that prerequisite gains a check of the
+regions read from the page's end (D43); three scenarios are new, US1-S6, US3-S12 and
+US4-S7; every case the round proposed where a mutation survived is in its scenario, in
+the round's words; and § What 035 must provide and § The stack gain three words (D39 to
+D41). The records below change with them: new tests for US1-S6, US3-S12 and US4-S7 and
+widened assertions where cases were added; US3's shared write of the tracker names 038's
+US1, and its preserved behaviour 038's tests; US7's preserved tests name 035's
+`stack_camera.rs`; and US8 writes the README, after US7's section. No story was over
+64 KiB, and none is on the folded figures (§ Risks).
 
 Writes come from § Project Structure. Shared writes name the merge edge that orders two
 stories of this spec on one file, under the earlier story, or the story that, by the
@@ -1705,12 +1830,14 @@ file that an earlier spec's draft or an earlier story of this spec creates canno
 listed under `tests` as existing, because the validator resolves every such path in the
 drafting worktree; each is named under `preserved_behavior` with what it must still
 assert, and moves to `tests` at the re-anchoring. A file last written on `main` by a
-spec outside this spec's `depends_on_landed` (`crates/finder/src/tracking.rs`, by 024;
-`crates/simulator/src/controls.rs`) has no entry for that spec, because the validator
-refuses one. `crates/finder/tests/motion/main.rs`, last written on `main` by 025, is
+spec outside this spec's `depends_on_landed` (`crates/simulator/src/controls.rs`) has no
+entry for that spec, because the validator refuses one. `crates/finder/src/tracking.rs`
+was such a file, last written by 024, until 038's US1 wrote `Tracker::follow` into it;
+038 is now in `depends_on_landed`, and US3 names that story.
+`crates/finder/tests/motion/main.rs`, last written on `main` by 025, is
 written after it by 032's US4 (`mod imaging_track`), and US3 names that story. The
 record's `open_questions` are empty because the validator refuses a record that holds any; what
-is not established is in § Risks and § Prerequisites 2, 3, 5 and 11, and in spec.md's
+is not established is in § Risks and § Prerequisites 2 and 3, and in spec.md's
 owner decisions 2 and 15. Nothing in this record is an owner approval: those are in spec.md,
 and flipping to `ready` gives them.
 
@@ -1723,17 +1850,17 @@ stories:
       - path: crates/simulator/tests/imaging_history.rs
         status: new
         disposition: add
-        assertion: "on a mount turning at a commanded 0.02 deg/s with a 0.25 rate error, the imaging truth asked 30 s later for three instants of an exposure equals the truth read at each, the azimuth rose 0.05 deg in 2 s, the centre moved, and the star is elongated by the distance between its true places"
+        assertion: "on a mount turning at a commanded 0.02 deg/s with a 0.25 rate error, the imaging truth asked 30 s later for three instants of an exposure has the centre of the eyepiece read live at each and the angle of the truth read then, the azimuth rose 0.05 deg in 2 s, the centre moved, and the star is elongated by the distance between its true places"
         decision: "spec.md:US1-S1"
       - path: crates/simulator/tests/imaging_history.rs
         status: new
         disposition: add
-        assertion: "the truth for an instant between two samples equals a twin simulator's reading at that instant"
+        assertion: "the truth for an instant between two samples has the centre of a twin's eyepiece and the angle of its truth read live at that instant, with both axes turning, and across 0 deg of azimuth"
         decision: "spec.md:US1-S2"
       - path: crates/simulator/tests/imaging_history.rs
         status: new
         disposition: add
-        assertion: "after a push by hand the truth for an earlier instant is the one directions_at gives"
+        assertion: "after a push by hand, a mount connected, the optics set or the eyepiece pointed, the truth for an earlier instant is the one directions_at gives, and stays so after a later read"
         decision: "spec.md:US1-S3"
       - path: crates/simulator/tests/imaging_history.rs
         status: new
@@ -1743,8 +1870,13 @@ stories:
       - path: crates/simulator/tests/imaging_history.rs
         status: new
         disposition: add
-        assertion: "count steps are off when built, and when on the true azimuth takes 8 to 11 values, each a whole count from the first"
+        assertion: "count steps are off when built, and when on the true azimuth and altitude each take 8 to 11 values, each a whole count from the first, with a drive under one count moving nothing"
         decision: "spec.md:US1-S5"
+      - path: crates/simulator/tests/imaging_history.rs
+        status: new
+        disposition: add
+        assertion: "the truth read at t is answered again after 3000 s of reads every 100 s"
+        decision: "spec.md:US1-S6"
       - path: crates/simulator/tests/rate_and_backlash.rs
         status: existing
         disposition: preserve
@@ -1800,7 +1932,7 @@ stories:
       - path: crates/finder/tests/console/steering_error.rs
         status: new
         disposition: add
-        assertion: "the set point in a frame's pixels for the whole sensor, a binned region and a named set point"
+        assertion: "the set point in a frame's pixels for the whole sensor, a binned region, a named set point and a sensor of odd size"
         decision: "spec.md:US2-S3"
       - path: crates/finder/tests/console/steering_error.rs
         status: new
@@ -1810,7 +1942,7 @@ stories:
       - path: crates/finder/tests/console/steering_error.rs
         status: new
         disposition: add
-        assertion: "a target at the far side of the sky or a time that is not finite gives none, and a tracker that says nothing limits nothing"
+        assertion: "a target at the far side of the sky, a time, a set point or a target that is not finite, or a solve whose matrix is zero gives none, and a tracker that says nothing limits nothing"
         decision: "spec.md:US2-S5"
       - path: crates/finder/tests/console/steering_error.rs
         status: new
@@ -1902,12 +2034,12 @@ stories:
       - path: crates/finder/tests/motion/steering.rs
         status: new
         disposition: add
-        assertion: "finder pointings change no rate while the subs steer and still fill the samples; three idle gaps hand the tracker back and it stays handed back until a tracking error comes; finder pointings after the lapse change no rate when they come; the error that takes it back sets no rate and forgets what was held; a release hands it back at once; a steer that is not finite or comes before any gap changes nothing"
+        assertion: "finder pointings change no rate while the subs steer and still fill the samples, and a claim ends the finder camera's proportional rate; three idle gaps hand the tracker back, the third sending nothing, and it stays handed back until a tracking error comes; finder pointings after the lapse change no rate when they come; the error that takes it back sets no rate and forgets what was held, also at the next lapse; a release hands it back at once, forgets an error not yet applied and lets the next gap claim even after a lapse; a steer that is not finite keeps no claim, and one before any gap changes nothing"
         decision: "spec.md:US3-S6"
       - path: crates/finder/tests/motion/steering.rs
         status: new
         disposition: add
-        assertion: "between gaps every rate is the feed-forward plus the offset the gap left, every gap sends both axes a rate, after a stop a gap answers no step and sends nothing, and a gap before a tracker's first rates answers no step, claims nothing and sends no zero"
+        assertion: "between gaps every rate is the feed-forward plus the offset the gap left, every gap sends both axes a rate, after a stop the subs no longer steer and a gap answers no step and sends nothing, a gap before a tracker's first rates answers no step, claims nothing and sends no zero, and a gap nobody waits for claims nothing"
         decision: "spec.md:US3-S7"
       - path: crates/finder/tests/motion/steering.rs
         status: new
@@ -1917,7 +2049,7 @@ stories:
       - path: crates/finder/tests/motion/steering.rs
         status: new
         disposition: add
-        assertion: "an error measured before the last gap's step is stepped by half of what that step left, not by half of itself, and sets no rate"
+        assertion: "an error measured before the last gap's step is stepped by half of what that step left, not by half of itself, and sets no rate; of two errors handed over between two gaps the later is used, and one no later than the last applied is ignored"
         decision: "spec.md:US3-S9"
       - path: crates/finder/tests/motion/steering.rs
         status: new
@@ -1927,8 +2059,13 @@ stories:
       - path: crates/finder/tests/motion/steering.rs
         status: new
         disposition: add
-        assertion: "after the claim lapses, two finder pointings of 30 arcsec east change no rate when they come, and the next gap steps -0.6 of the newest and adds 015's integral of the second to the offset; with noisy finder pointings no rate between two gaps differs from the feed-forward plus the offset the last gap left"
+        assertion: "after the claim lapses, two finder pointings of 30 arcsec east change no rate when they come, and the next gap steps -0.6 of the newest and adds 015's integral of the second to the offset, the claim having forgotten a pointing before it; a held step moves an axis 30 arcsec at most; with noisy finder pointings no rate between two gaps differs from the feed-forward plus the offset the last gap left"
         decision: "spec.md:US3-S11"
+      - path: crates/finder/tests/motion/steering.rs
+        status: new
+        disposition: add
+        assertion: "a followed push ends the claim at once and forgets the error measured from the old place, and the next gap claims again"
+        decision: "spec.md:US3-S12"
       - path: crates/finder/tests/motion/tracking/pi_loop.rs
         status: existing
         disposition: preserve
@@ -1963,6 +2100,7 @@ stories:
       - "a tracker no stack has claimed behaves in every way as 015 has it (spec.md FR-007)"
       - "no rate is sent after tracking ends (spec.md FR-010)"
       - "the live loop's syncs for the pointing model are unchanged"
+      - "crates/finder/tests/motion/tracking/push.rs and push_back.rs, 038's test files, pass unchanged: follow still follows a push as 038 has it, and with no stack holding the tracker it has nothing more to end (plan.md The tracker, follow)"
     checks:
       development:
         - "cargo nextest run -p finder --locked --test motion steering::"
@@ -1983,6 +2121,11 @@ stories:
         other_story: US5
         disposition: merge_order
         reason: "US5 depends_on_merged US3, and adds longest_exposure_s"
+      - path: crates/finder/src/tracking.rs
+        other_spec: 038-track-follows-a-push
+        other_story: US1
+        disposition: merge_order
+        reason: "036 depends_on_landed 038, whose US1 last writes tracking.rs, with Tracker::follow"
       - path: crates/finder/tests/motion/main.rs
         other_spec: 036-tracking-from-subs
         other_story: US4
@@ -1999,17 +2142,17 @@ stories:
       - path: crates/finder/tests/console/steering_gap.rs
         status: new
         disposition: add
-        assertion: "before_exposure answers only after the tracker's gap, accepted hands over the worked tracking error at mid-exposure, release lets go, and the view's source, subs and last follow"
+        assertion: "before_exposure answers only after the tracker's gap, an exposure is remembered from when it answered, accepted hands over the worked tracking error at mid-exposure, release lets go, and the view's source, subs and last follow"
         decision: "spec.md:US4-S1"
       - path: crates/finder/tests/console/steering_gap.rs
         status: new
         disposition: add
-        assertion: "with no tracker, or a tracker with no target, nothing waits and nothing is handed over"
+        assertion: "with no tracker, or a tracker with no target, nothing waits and nothing is handed over, and the steering keeps no tracker alive"
         decision: "spec.md:US4-S2"
       - path: crates/finder/tests/console/steering_gap.rs
         status: new
         disposition: add
-        assertion: "a frame from before the stack's exposures steers nothing, dropping the Hold releases, and nothing is handed over after a release"
+        assertion: "a frame from before the stack's exposures steers nothing, dropping the Hold releases the tracker found even when no exposure was recorded, nothing is handed over after a release, and a frame is matched by its middle, not its start"
         decision: "spec.md:US4-S3"
       - path: crates/finder/tests/console/steering_gap.rs
         status: new
@@ -2026,6 +2169,11 @@ stories:
         disposition: add
         assertion: "Session::steered answers the running tracker with M42's place, and none before Track and after it is turned off"
         decision: "spec.md:US4-S6"
+      - path: crates/finder/tests/console/steering_gap.rs
+        status: new
+        disposition: add
+        assertion: "the imaging view has no steering part until the console's steering is first used through Imaging::steering, and then carries its source and its count"
+        decision: "spec.md:US4-S7"
       - path: crates/finder/tests/layout/main.rs
         status: existing
         disposition: preserve
@@ -2081,12 +2229,12 @@ stories:
       - path: crates/finder/tests/console/steering_cap.rs
         status: new
         disposition: add
-        assertion: "the turn asked about is the smear over the farthest corner's distance as the test computes it, for the whole sensor, binning, a region and a named set point, and the exposure is halved to fit the limit but not past the camera's shortest"
+        assertion: "the turn asked about is the smear over the farthest corner's distance as the test computes it, for the whole sensor, binning, a region and a named set point, and the exposure is halved to fit the limit but not past the camera's shortest, and not again when it equals the limit"
         decision: "spec.md:US5-S1"
       - path: crates/finder/tests/console/steering_cap.rs
         status: new
         disposition: add
-        assertion: "the exposure first answered, and whether it was cut, are held whatever the limit and the exposure asked for become, over_limit says when the limit is under it, and a release lets the next call decide again"
+        assertion: "the exposure first answered, and whether it was cut, are held whatever the limit and the exposure asked for become, over_limit says when the limit is under it and not when it equals it, and a release lets the next call decide again"
         decision: "spec.md:US5-S2"
       - path: crates/finder/tests/console/steering_cap.rs
         status: new
@@ -2096,17 +2244,17 @@ stories:
       - path: crates/finder/tests/console/steering_cap.rs
         status: new
         disposition: add
-        assertion: "the view carries the smear, the switch, the exposure, whether it was limited or is over the limit, and the limit as seconds or no limit; with the switch off nothing is claimed or handed over while the cap still applies"
+        assertion: "the view carries the smear, the switch, the exposure, whether it was limited or is over the limit, and the limit as seconds or no limit, kept from the latest call that found a tracker; with the switch off nothing is claimed or handed over while the cap still applies, and the switch alone marks the steering used"
         decision: "spec.md:US5-S4"
       - path: crates/finder/tests/console/steering_cap.rs
         status: new
         disposition: add
-        assertion: "PUT /api/imaging/steering sets either setting, refuses bad bodies with 400, a foreign origin with 403, another content type with 415 and a console without imaging with 409"
+        assertion: "PUT /api/imaging/steering sets either setting, refuses bad bodies, nulls among them, with 400 and changes nothing then, the switch included, refuses a foreign origin with 403, another content type with 415 and a console without imaging with 409"
         decision: "spec.md:US5-S5"
       - path: crates/finder/tests/motion/steering_cap.rs
         status: new
         disposition: add
-        assertion: "the tracker's longest exposure equals 015's longest_exposure for the equivalent sensor at the same instant, is none at the instant its target is due east, and is a number again 10 s later"
+        assertion: "the tracker's longest exposure equals 015's longest_exposure for the equivalent sensor at the same instant, for a field turning either way and through the trait, is none for a turn that is not a positive number and after a stop, is none at the instant its target is due east, and is a number again 10 s later"
         decision: "spec.md:US5-S6"
       - path: crates/finder/tests/console/rates.rs
         status: existing
@@ -2189,22 +2337,22 @@ stories:
       - path: crates/finder/tests/motion/steering_steady.rs
         status: new
         disposition: add
-        assertion: "through a take-up at transit the tracker is not steady for one unbroken time that holds the take-up's commands, steady_between is false for windows that touch it and true for those that do not, the claim is dropped and a gap asked during it answers after"
+        assertion: "through a take-up at transit the tracker is not steady for one unbroken time that holds the take-up's commands, steady_between is false for windows that touch it and true for those that do not, the claim is dropped and a gap asked during it answers at the end of that time or after it, and a lapsed gap after it leaves no proportional rate in force at its answer"
         decision: "spec.md:US6-S1"
       - path: crates/finder/tests/motion/steering_steady.rs
         status: new
         disposition: add
-        assertion: "the tracker is not steady while a first reversal is measured and before its first rates, where a gap claims nothing, nor for any window before it started or any window that reaches past its stop"
+        assertion: "the tracker is not steady while a first reversal is measured, where a gap claims nothing, and steady from its close; nor before its first rates, nor for any window before it started or any window that reaches past its stop; a take-up forgets what was held and the error not yet applied; the trait answers as the tracker does; and the keyhole pass is a time not steady"
         decision: "spec.md:US6-S2"
       - path: crates/finder/tests/console/steering_steady.rs
         status: new
         disposition: add
-        assertion: "before_exposure waits with no gap while the tracker is not steady, shows steady false and waiting true, answers within half a second of it being steady after one gap, waits again for a tracker that stops being steady during its gap, and a wait abandoned with its stack no longer shows"
+        assertion: "before_exposure waits with no gap while the tracker is not steady, shows steady false and waiting true, answers within half a second of it being steady after one gap, waits again for a tracker that stops being steady during its gap, and a wait abandoned with its stack no longer shows; the switch off still waits, and a source that no longer answers a tracker ends the wait"
         decision: "spec.md:US6-S3"
       - path: crates/finder/tests/console/steering_steady.rs
         status: new
         disposition: add
-        assertion: "check drops a sub the tracker was not steady for, or whose tracker no longer exists, as not_steady and counts it, asks about the sub's own exposure window, and keeps a sub taken with no tracker"
+        assertion: "check drops a sub the tracker was not steady for, or whose tracker no longer exists, as not_steady and counts it, in a count a release does not clear, asks about the sub's own exposure window, finds its record by its mid-exposure, and keeps a sub taken with no tracker"
         decision: "spec.md:US6-S4"
       - path: crates/finder/tests/motion/steering_steady.rs
         status: new
@@ -2270,17 +2418,17 @@ stories:
       - path: crates/finder/tests/motion/steering_stack.rs
         status: new
         disposition: add
-        assertion: "a stack on a tracked mount 1% fast drifts at most 0.15 arcsec a sub from the 14th on, drops nothing as not_steady, lets the tracker go when stopped, and with the switch off and the finder camera's frames stopped hands nothing over and most subs drift more than 0.5"
+        assertion: "a stack on a tracked mount 1% fast, each saved sub read from its FITS file, drifts at most 0.15 arcsec a sub from the 14th on, drops nothing as not_steady, lets the tracker go when stopped, and with the switch off and the finder camera's frames stopped hands nothing over and most subs drift more than 0.5"
         decision: "spec.md:US7-S1"
       - path: crates/finder/tests/motion/steering_stack.rs
         status: new
         disposition: add
-        assertion: "an exposure setting of 60 s is taken as 30 s under the tracker's limit, set through the stack's own lease, shown as limited, and the setting reads 30 s while the stack runs and 60 s after it"
+        assertion: "an exposure setting of 60 s is taken as 30 s under the tracker's limit, set through the stack's own lease, shown as limited and written as the sub's EXPTIME, and the setting reads 30 s while the stack runs and 60 s after it"
         decision: "spec.md:US7-S2"
       - path: crates/finder/tests/motion/steering_stack.rs
         status: new
         disposition: add
-        assertion: "a sub during which Track was turned off and on is dropped as not_steady, counted in the stack's twelfth count and in the steering's, and the stack's counts still add up"
+        assertion: "a sub during which Track was turned off and on is dropped as not_steady, counted in the stack's twelfth count, in the steering's and in stack.json's subs, the stack's counts still add up, and total() adds the twelfth"
         decision: "spec.md:US7-S3"
       - path: crates/finder/tests/motion/steering_stack.rs
         status: new
@@ -2290,7 +2438,7 @@ stories:
       - path: crates/finder/tests/motion/steering_stack.rs
         status: new
         disposition: add
-        assertion: "a stack whose change of the exposure is refused ends with the reason camera and the stated words, takes no sub, lets the tracker go and leaves the observer's exposure as it was"
+        assertion: "a stack whose change of the exposure is refused ends with the reason camera and the stated words, takes no sub, lets the tracker go and leaves the observer's exposure as it was; a stop while the first gap waits ends the stack at once, and the exposure is set once, before the first sub"
         decision: "spec.md:US7-S5"
       - path: crates/finder/tests/motion/steering_stack.rs
         status: new
@@ -2305,7 +2453,7 @@ stories:
     preserved_behavior:
       - "a stack with Track off takes, solves and stacks its subs as 035 has it: nothing is capped, paused or dropped by the steering (spec.md US7-S4)"
       - "settings.exposure_ms is the observer's own after a stack (US7-S2)"
-      - "the test files 035 creates (stack_loop.rs, stack_gate.rs, stack_display.rs, stack_console.rs, the cli and mcp stack modules) pass unchanged: they read dropped key by key and never count its keys, their rigs do not track, and no exposure is changed for them (plan.md Shapes that existing tests pin, Prerequisites 3)"
+      - "the test files 035 creates (stack_loop.rs, stack_camera.rs, stack_gate.rs, stack_display.rs, stack_console.rs, the cli and mcp stack modules) pass unchanged: they read dropped key by key and never count its keys, their rigs do not track, and no exposure is changed for them (plan.md Shapes that existing tests pin, Prerequisites 3)"
       - "the camera's lease and its refusals are 031's as 035 assumes them: the stack changes the exposure through the lease it already holds and takes no other (plan.md What 035 must provide)"
       - "crates/finder/tests/console/steering_gap.rs and steering_steady.rs, US4's and US6's test files, pass unchanged: Steering's calls behave as before the stack used them"
     checks:
@@ -2329,6 +2477,11 @@ stories:
         other_story: US5
         disposition: merge_order
         reason: "036 depends_on_landed 032, whose US5 last writes solving.rs"
+      - path: crates/finder/README.md
+        other_spec: 036-tracking-from-subs
+        other_story: US8
+        disposition: merge_order
+        reason: "US8 depends_on_merged US7, and adds the readout's four keys to US7's section"
       - path: crates/finder/src/imaging/stack/service.rs
         other_spec: 035-live-stack
         other_story: US8
@@ -2340,7 +2493,7 @@ stories:
       - path: crates/finder/tests/console/steering_readout.rs
         status: new
         disposition: add
-        assertion: "three worked tracking errors with one step between give a drift of 0.58583 arcsec and an error of 0.90370 RMS, and their pixels at 2.16 arcsec a pixel, and one error gives no figure"
+        assertion: "three worked tracking errors with one step between give a drift of 0.58583 arcsec and an error of 0.90370 RMS, the second's 1/sqrt(2) written as FRAC_1_SQRT_2, and their pixels at the newest error's 2.16 arcsec a pixel; a step before the first error is not taken out; and one error gives no figure"
         decision: "spec.md:US8-S1"
       - path: crates/finder/tests/console/steering_readout.rs
         status: new
@@ -2350,12 +2503,12 @@ stories:
       - path: crates/finder/web/src/components/SteeringBlock.test.tsx
         status: new
         disposition: add
-        assertion: "the block reads Steered by the subs with the count, the error, the drift, the exposure and the tracker's limit to one decimal, and no alert"
+        assertion: "the block reads Steered by the subs with the count, the error, the drift, the exposure and the tracker's limit to one decimal, those four terms alone, and no alert"
         decision: "spec.md:US8-S3"
       - path: crates/finder/web/src/components/SteeringBlock.test.tsx
         status: new
         disposition: add
-        assertion: "a cut exposure, no limit, an exposure over the limit, the tracker's own corrections, Track off, a pause and dropped subs each read their own words, and without steering only the form shows"
+        assertion: "a cut exposure, no limit, an exposure over the limit, the tracker's own corrections, Track off, a pause only when not steady, dropped subs and a missing pixel figure each read their own words, and without steering only the form shows, with its defaults"
         decision: "spec.md:US8-S4"
       - path: crates/finder/web/src/components/SteeringBlock.test.tsx
         status: new
@@ -2382,6 +2535,7 @@ stories:
       - "red-only night mode: the block uses existing tokens and classes; 031's night check of the Imaging page still counts no off-red pixel"
       - "track.readout and the Track control are unchanged"
       - "StackBlock.test.tsx, 035's test file, passes unchanged: a dropped object without not_steady reads as it did (spec.md US8-S6)"
+      - "CalibrationBlock.test.tsx and ImagingPage.test.tsx pass unchanged: they read no region by its place from the page's end"
     checks:
       development:
         - "cargo nextest run -p finder --locked --test console steering_readout::"
@@ -2395,6 +2549,7 @@ stories:
     writes:
       - .impeccable/design.json
       - DESIGN.md
+      - crates/finder/README.md
       - crates/finder/src/imaging/steering.rs
       - crates/finder/tests/console/main.rs
       - crates/finder/tests/console/steering_readout.rs
