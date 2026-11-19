@@ -986,7 +986,9 @@ lock of this module guards it. The task owns it from its first line to its last:
   `lease.set(SettingsEdit { exposure_ms: Some(e), ..Default::default() })`, an edit of
   the exposure alone, which waits on nothing (§ The camera's lease, 3);
 - every imaging frame is taken with `lease.take(purpose)`, whose answer is the imaging
-  view with the new frame in it, the frame's id being that view's `frame.id`;
+  view with the new frame in it, the frame's id being that view's `frame.id`, or with no
+  frame when the camera left `ready` in between, which fails the step (§ **A set's
+  frame**, step 1);
 - `imaging.abort()`, `imaging.ended(id)` and `imaging.view()` are called on the
   `Imaging` as anyone may (§ The camera's lease, 4);
 - **the ending**, however the task ends: the exposure in force before the request is
@@ -1007,7 +1009,10 @@ the camera and no `busy` reading: who holds the camera is `imaging.holder()`, 03
 `Lease`, the purpose and the exposure e the frame is to have:
 
 1. `lease.take(purpose)`. A `Refusal` ends the step as failed with the refusal's
-   message.
+   message. The frame's id is the answered view's `frame.id`. An answer with no
+   `frame`, because the camera left `ready` between the take and its answer, ends the
+   step as failed with 031's words for the camera's state, the texts of `take_darks`'
+   second refusal; the frame id is never unwrapped.
 2. `imaging.ended(id)`. `saved` goes on; `aborted` ends the set `stopped`; `failed` ends
    the step as failed with the frame's `error`.
 3. On the blocking pool: read `imaging.root()` joined with the frame's `file`,
@@ -1514,10 +1519,12 @@ Write each phrase a test asserts on one line of JSX, so `textContent` keeps it w
 Only existing classes and tokens are used; `index.css` does not change. The field drafts
 are component state and survive the page's one-second reads.
 
-`components/ImagingPage.tsx` (031 US7): as the page's last block, after the Imaging
+`components/ImagingPage.tsx` (031 US7): after the Imaging
 frame section, its picture, 032's Imaging solve block and 033's `<FocusBlock … />`,
 which 033 renders right after 032's (`specs/033-focus-reading-and-aid/plan.md` § The
-page). On `main` the hook's `view` may be `null`, and the last two blocks sit in one
+page), and before 035's Stack block, which 035 places after it, so no test of this spec
+asserts that the block is the page's last. On `main` the hook's `view` may be `null`,
+and the last two blocks sit in one
 fragment, `{view?.state === "ready" && (<> <ImagingSolveBlock view={view}
 refresh={refresh} /> <FocusBlock view={view} refresh={refresh} /> </>)}`; the block goes
 inside it, right after `<FocusBlock view={view} refresh={refresh} />`, as
@@ -1872,8 +1879,8 @@ each holds as written here (§ Prerequisites 2 and 5).
      US3);
    - (b) where 033 places its block: its Focus block follows 032's Imaging solve block,
      in the same fragment of `ImagingPage.tsx` (033 plan.md § The page), so the
-     Calibration block, placed after it, is the page's last block until 035 places its
-     own after it;
+     Calibration block is placed after it, and 035 places its Stack block after the
+     Calibration block, so no test of this spec reads the page's last region;
    - (c) whether a set should refuse on 033's `Imaging::focus_running`: no. The lease
      refuses a set while the aid holds the camera, with `the focus aid` in the words,
      and refuses the aid while a set holds it (§ The camera's lease, 2); no refusal of

@@ -374,8 +374,9 @@ scenarios runs on the simulated camera or the solving rig.
   `crates/finder/web/src/components/CalibrationBlock.tsx` with the words of plan.md
   § The page, each asserted phrase on one line of JSX and only existing classes, the two
   `anyway` buttons hanging on `not_dark` and never on an error's words; and render it in
-  `crates/finder/web/src/components/ImagingPage.tsx` as the page's last block, only when
-  the ready view carries `calibration`.
+  `crates/finder/web/src/components/ImagingPage.tsx` after 033's `<FocusBlock … />`, only
+  when the ready view carries `calibration`; 035's Stack block follows it, so no test
+  asserts that it is the page's last block.
 - [ ] T039 [US9] Add the Calibration block entry to `DESIGN.md` after the last Imaging
   page entry and its component to `.impeccable/design.json`. Run the `lint` and `test`
   gates with every existing Vitest and Playwright test unchanged and green, 031's

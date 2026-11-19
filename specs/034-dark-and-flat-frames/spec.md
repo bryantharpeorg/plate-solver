@@ -404,7 +404,7 @@ shadow, hot pixels and a column pattern, and its known patterns are the oracles.
   - US8-S2: `list_calibration` equals the route once the set is done; US8-S3: a
     malformed argument reads as the route's 400; US8-S4: without imaging the arguments
     are not read;
-  - US9-S1: the block is the page's last, after 033's Focus block; US9-S2: each item
+  - US9-S1: the block comes after 033's Focus block; US9-S2: each item
     holds a line and a button, and `Remove` deletes the master's id while a set runs.
 
   In the shared setup, **Waiting until** reads the route the condition is about, a
@@ -446,6 +446,24 @@ shadow, hot pixels and a column pattern, and its known patterns are the oracles.
   cites them at the lines that hold them there, `GLOSSARY.md:173` and
   `GLOSSARY.md:177` (plan.md § Prerequisites 2). The probes' notes on memory are in plan.md
   § Risks as measured and add no requirement.
+
+### Session 2026-11-19 (the re-anchoring onto `main`)
+
+- Q: What does a set do when the answer to its take carries no frame? → A: It fails
+  the step, with 031's words for the camera's state (`a dark failed: …` or
+  `a flat failed: …`, as every failed step is worded). On `main` the view that
+  `Lease::take` answers is built once the lock is released, and it carries `frame` only
+  while the camera is `ready`, so a link that drops between the take and its answer
+  leaves no frame id. The owner chose this ending on 2026-11-19, as for 033's focus aid
+  on 2026-11-18. The alternative, waiting for the camera and taking again, would need a
+  scenario of its own. No scenario reaches the case (plan.md § **A set's frame**,
+  step 1).
+- Q: Is the Calibration block the Imaging page's last? → A: No: it comes after 033's Focus
+  block, and 035's Stack block follows it. 035's round-1 probe found that a test asserting
+  the page's last region (`regions.at(-1)`) fails once 035's US9 adds its block, and an
+  existing test may not be edited, so US9-S1 asserts the order after the regions
+  `Imaging frame` and `Focus`, which still catches a block put before them. The owner
+  chose this on 2026-11-19 (plan.md § The page).
 
 ## Owner decisions
 
@@ -1748,8 +1766,8 @@ often the only thing to hand.
    its US1-S1, which has no `calibration`, and with each of 031's not-ready views,
    **Then** the committed test asserts no region named `Calibration`; with that ready
    view, 033's `focus` `{"unit":"arcsec","arcsec_per_px":2.19}` and `calibration`
-   `{"masters":[]}`, one such region, the page's last, after the regions `Imaging frame`
-   and `Focus` in document order.
+   `{"masters":[]}`, one such region, after the regions `Imaging frame` and `Focus` in
+   document order.
 2. **Given** `CalibrationBlock` with the masters
    `{"id":"dark-20260116T020003Z","kind":"dark","made_at":1768528803.7,"frames":20,"checked":true,"gain":120.0,"offset":10.0,"binning":1,"set_temp_c":-10.0,"temp_c":-10.0,"exposure_ms":5000.0,"bad_pixels":137,"label":null,"imaging_angle_deg":null}`
    and
