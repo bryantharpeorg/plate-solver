@@ -318,6 +318,8 @@ struct Held {
     /// the next one (US9, FR-028).
     lease: Option<(u64, &'static str)>,
     next_grant: u64,
+    /// The current grant's save folder (035), cleared with the lease.
+    lease_folder: Option<String>,
     /// The JPEG previews of the last `PREVIEWS_KEPT` saved frames, by id
     /// (FR-018).
     previews: Vec<(u64, Vec<u8>)>,
@@ -360,6 +362,7 @@ impl Default for Held {
             count_date: None,
             lease: None,
             next_grant: 1,
+            lease_folder: None,
             previews: Vec::new(),
             solver: None,
             solve: None,
@@ -668,7 +671,14 @@ impl Imaging {
     /// `take` for one caller (US9), as `set_as`: the lease's check is passed
     /// to `frames::take`, which makes it under its one lock acquisition.
     async fn take_as(&self, grant: Option<u64>, purpose: &str) -> Result<ImagingView, Refusal> {
-        let task = frames::take(self, purpose, |held| held_by(held, grant))?;
+        let task = frames::take(self, purpose, |held| {
+            held_by(held, grant)?;
+            Ok(grant.and_then(|grant| {
+                held.lease
+                    .filter(|(out, _)| *out == grant)
+                    .and(held.lease_folder.clone())
+            }))
+        })?;
         let client = task.client.clone();
         let task = tokio::spawn(frames::run(task));
         let mut held = self.state.lock().expect("imaging state");
@@ -832,6 +842,18 @@ fn gone() -> Refusal {
 }
 
 impl Lease {
+    /// Save this lease's frames in an existing folder relative to the imaging
+    /// folder, as `<folder>/<id as six digits>.fits` (035). With Imaging gone,
+    /// this does nothing. Dropping the lease clears the folder with its grant.
+    pub fn save_in(&self, folder: &str) {
+        if let Some(imaging) = self.imaging.upgrade() {
+            let mut held = imaging.state.lock().expect("imaging state");
+            if held.lease.is_some_and(|(grant, _)| grant == self.grant) {
+                held.lease_folder = Some(folder.to_string());
+            }
+        }
+    }
+
     /// `Imaging::set` for the holder (FR-030): the same checks, refusals,
     /// words and order, less the lease's own. With the `Imaging` gone: 409
     /// `this console takes no imaging frames`.
@@ -860,6 +882,7 @@ impl Drop for Lease {
             let mut held = imaging.state.lock().expect("imaging state");
             if held.lease.is_some_and(|(grant, _)| grant == self.grant) {
                 held.lease = None;
+                held.lease_folder = None;
             }
         }
     }

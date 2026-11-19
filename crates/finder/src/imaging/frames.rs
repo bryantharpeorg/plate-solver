@@ -143,7 +143,7 @@ fn largest_id(root: &Path, date: &str) -> u64 {
 pub(super) fn take(
     imaging: &Imaging,
     purpose: &str,
-    held: impl FnOnce(&Held) -> Result<(), Refusal>,
+    held: impl FnOnce(&Held) -> Result<Option<String>, Refusal>,
 ) -> Result<FrameTask, Refusal> {
     let mut guard = imaging.state.lock().expect("imaging state");
     let (client, settings, camera) = match guard.state {
@@ -155,7 +155,7 @@ pub(super) fn take(
         state => return Err(state_refusal(state, guard.error.as_deref())),
     };
     // The lease's check (FR-029), between the state's and the frame's.
-    held(&guard)?;
+    let folder = held(&guard)?;
     // A second frame while one is exposing or receiving is refused (FR-008).
     if guard
         .frame
@@ -216,6 +216,7 @@ pub(super) fn take(
         serial: camera.serial,
         forward_kib_per_s: settings.forward_kib_per_s,
         save: settings.save_at_node,
+        folder,
     })
 }
 
@@ -235,6 +236,8 @@ pub(super) struct FrameTask {
     forward_kib_per_s: Option<u32>,
     /// Whether the node also keeps a copy of this frame (FR-008).
     save: bool,
+    /// The caller's lease folder, read together with its grant (035).
+    folder: Option<String>,
 }
 
 impl FrameTask {
@@ -422,7 +425,11 @@ async fn save(
     date: &str,
     header_exposure_ms: f64,
 ) -> Option<String> {
-    let relative = format!("frames/{date}/{:06}.fits", task.frame.id);
+    let relative = match &task.folder {
+        Some(folder) => format!("{folder}/{:06}.fits", task.frame.id),
+        None => format!("frames/{date}/{:06}.fits", task.frame.id),
+    };
+    let make_parent = task.folder.is_none();
     let image = fits::FitsImage {
         width: task.frame.width.expect("the header's width"),
         height: task.frame.height.expect("the header's height"),
@@ -443,7 +450,7 @@ async fn save(
     let bayer = task.frame.bayer.clone();
     let saved = tokio::task::spawn_blocking(move || {
         let picture = preview::rgb(&raw, width, height, bits, bayer.as_deref());
-        write(&root, &target, &bytes).map(|()| preview::jpeg(&picture))
+        write(&root, &target, &bytes, make_parent).map(|()| preview::jpeg(&picture))
     })
     .await
     .expect("the frame writer cannot be cancelled");
@@ -551,11 +558,13 @@ fn place(root: &Path, relative: &str) -> PathBuf {
 /// Write the frame under a `.part` name and rename it into place, never
 /// replacing a file that is already there (FR-011). Answers the error the
 /// caller prefixes with `could not save the imaging frame: `.
-fn write(root: &Path, relative: &str, bytes: &[u8]) -> Result<(), String> {
+fn write(root: &Path, relative: &str, bytes: &[u8], make_parent: bool) -> Result<(), String> {
     let file = place(root, relative);
     let part = place(root, &format!("{relative}.part"));
-    std::fs::create_dir_all(file.parent().expect("the frames folder"))
-        .map_err(|error| error.to_string())?;
+    if make_parent {
+        std::fs::create_dir_all(file.parent().expect("the frames folder"))
+            .map_err(|error| error.to_string())?;
+    }
     let mut out = std::fs::OpenOptions::new()
         .create_new(true)
         .write(true)

@@ -194,6 +194,10 @@ _Avoid_: defect map, hot-pixel list, cosmetic correction
 The picture built from a run's subs: each calibrated, turned into colour, rotated and shifted into place by its imaging solve, and averaged with outliers rejected.
 _Avoid_: live view, integration, master light
 
+**Reference sub**:
+The first sub a stack accepts. Every later sub is rotated and shifted onto its grid by the two subs' imaging solves.
+_Avoid_: reference frame, key frame, master
+
 **Imaging solver**:
 The part that works out where an imaging frame points. Today it is the ASTAP program.
 _Avoid_: plate solver (alone: the finder camera's solver is this project's own)

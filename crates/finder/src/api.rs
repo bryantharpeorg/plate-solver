@@ -116,6 +116,7 @@ pub struct AppState {
     recordings: Option<Arc<Recorder>>,
     imaging: Option<Arc<crate::imaging::Imaging>>,
     calibration: Option<Arc<crate::imaging::calibration::service::Calibration>>,
+    stack: Option<Arc<crate::imaging::stack::service::Stacker>>,
     mount_monitor: Option<Arc<crate::live::MountMonitor>>,
     mount_sky: Option<Arc<crate::mount_sky::MountSky>>,
     /// The UTC label of `--mount-sky-night`, when the console runs on a night clock.
@@ -152,6 +153,7 @@ impl AppState {
             recordings: None,
             imaging: None,
             calibration: None,
+            stack: None,
             mount_monitor: None,
             mount_sky: None,
             night_utc: None,
@@ -347,7 +349,13 @@ impl AppState {
                 root.join("calibration"),
                 self.clock.clone(),
             );
+            let stacker = crate::imaging::stack::service::Stacker::new(
+                imaging.clone(),
+                calibration.clone(),
+                self.clock.clone(),
+            );
             imaging.attach_calibration(&calibration);
+            self.stack = Some(stacker);
             self.imaging = Some(imaging);
             self.calibration = Some(calibration);
         }
@@ -362,6 +370,11 @@ impl AppState {
     /// The calibration library and its sets (034); present whenever `imaging()` is.
     pub fn calibration(&self) -> Option<Arc<crate::imaging::calibration::service::Calibration>> {
         self.calibration.clone()
+    }
+
+    /// The live stack (035); present whenever imaging and calibration are.
+    pub fn stack(&self) -> Option<Arc<crate::imaging::stack::service::Stacker>> {
+        self.stack.clone()
     }
 
     /// Give the console its imaging solver (032). Call after `with_live` and
