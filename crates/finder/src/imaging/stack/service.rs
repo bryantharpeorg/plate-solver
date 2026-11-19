@@ -4,6 +4,7 @@
 
 use std::{
     collections::VecDeque,
+    io::Write,
     path::Path,
     sync::{Arc, Mutex},
     time::Instant,
@@ -37,10 +38,18 @@ pub const FOCUS_GATE_MIN: usize = 5;
 pub const FOCUS_GATE_EXCESS: f64 = 0.3;
 pub const REHINT_AFTER: u32 = 3;
 pub const DISPLAY_EVERY: u32 = 8;
+pub const FORMAT: &str = "finder-stack/1";
+
+/// Every character that is not an ASCII letter or digit made `-`.
+pub fn label(name: &str) -> String {
+    name.chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect()
+}
 
 /// Absent is the default, or unchanged on a running stack.
 #[derive(Debug, Clone, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(remote = "Self", deny_unknown_fields)]
 pub struct StartRequest {
     #[serde(default, deserialize_with = "super::super::present_value")]
     pub reject: Option<bool>,
@@ -50,6 +59,15 @@ pub struct StartRequest {
     pub gains: Option<[f64; 3]>,
     #[serde(default, deserialize_with = "super::super::present_value")]
     pub stretch: Option<f64>,
+}
+
+impl<'de> Deserialize<'de> for StartRequest {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        // Require an object before the derived field checks: serde's ordinary
+        // struct visitor also accepts a sequence of the four field values.
+        let object = serde_json::Map::<String, serde_json::Value>::deserialize(deserializer)?;
+        Self::deserialize(serde_json::Value::Object(object)).map_err(serde::de::Error::custom)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -138,7 +156,17 @@ pub struct LastView {
     pub took_ms: f64,
 }
 
-/// The latest stack, running or ended. Later stories add files.
+/// Files written at the end, relative to the imaging folder.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct FilesView {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fits: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub png: Option<String>,
+    pub json: String,
+}
+
+/// The latest stack, running or ended.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[non_exhaustive]
 pub struct StackView {
@@ -169,6 +197,89 @@ pub struct StackView {
     pub ended_reason: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub files: Option<FilesView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub save_error: Option<String>,
+}
+
+#[derive(Clone, Serialize)]
+struct Camera {
+    model: String,
+    serial: Option<String>,
+}
+
+#[derive(Clone, Serialize)]
+struct Manifest {
+    format: &'static str,
+    finder: &'static str,
+    id: String,
+    started_at: f64,
+    started_utc: String,
+    target: Option<String>,
+    options: OptionsView,
+    camera: Camera,
+    #[serde(flatten)]
+    ended: Option<EndManifest>,
+}
+
+#[derive(Clone, Serialize)]
+struct EndManifest {
+    ended_at: f64,
+    ended_reason: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+    taken: u32,
+    stacked: u32,
+    dropped: Dropped,
+    exposure_s: f64,
+    reference: Option<SavedReference>,
+    subs: Vec<Sub>,
+}
+
+#[derive(Clone, Serialize)]
+struct SavedReference {
+    #[serde(flatten)]
+    view: ReferenceView,
+    cd_deg: [[f64; 2]; 2],
+    file: String,
+    #[serde(skip)]
+    start: f64,
+    #[serde(skip)]
+    binning: u32,
+}
+
+#[derive(Clone, Serialize)]
+struct Sub {
+    frame_id: u64,
+    file: Option<String>,
+    outcome: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    turn_deg: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    shift_px: Option<[f64; 2]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rejected_px: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    focus_arcsec: Option<f64>,
+}
+
+impl Sub {
+    fn new(frame: &FrameView, id: &str, outcome: &'static str) -> Self {
+        Self {
+            frame_id: frame.id,
+            file: frame
+                .file
+                .as_deref()
+                .and_then(|file| file.strip_prefix(&format!("runs/{id}/")))
+                .map(str::to_owned),
+            outcome,
+            turn_deg: None,
+            shift_px: None,
+            rejected_px: None,
+            focus_arcsec: None,
+        }
+    }
 }
 
 struct Ending {
@@ -184,6 +295,9 @@ struct Run {
     finished: watch::Sender<bool>,
     ending: Option<Ending>,
     displayed_subs: u32,
+    manifest: Manifest,
+    reference: Option<SavedReference>,
+    subs: Vec<Sub>,
 }
 
 struct Picture {
@@ -339,7 +453,38 @@ impl Stacker {
             ended_at: None,
             ended_reason: None,
             error: None,
+            files: None,
+            save_error: None,
         };
+        let camera = imaging.camera.as_ref().expect("a ready imaging camera");
+        let manifest = Manifest {
+            format: FORMAT,
+            finder: env!("CARGO_PKG_VERSION"),
+            id: view.id.clone(),
+            started_at,
+            started_utc: utc,
+            target: target.map(str::to_owned),
+            options: view.options.clone(),
+            camera: Camera {
+                model: camera.model.clone(),
+                serial: camera.serial.clone(),
+            },
+            ended: None,
+        };
+        let root = self.imaging.root().to_path_buf();
+        let initial = manifest.clone();
+        let saved = tokio::task::spawn_blocking(move || {
+            write_manifest(&root.join("runs").join(&initial.id), &initial)
+        })
+        .await
+        .expect("the initial stack writer cannot be cancelled");
+        if let Err(error) = saved {
+            drop(lease);
+            return Err(Refusal {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: format!("cannot make the stack folder: {error}"),
+            });
+        }
         let (stopping, _) = watch::channel(false);
         let (finished, _) = watch::channel(false);
         let taker_stop = stopping.subscribe();
@@ -352,6 +497,9 @@ impl Stacker {
             finished,
             ending: None,
             displayed_subs: 0,
+            manifest,
+            reference: None,
+            subs: Vec::new(),
         });
         let waiting = Arc::new(Notify::new());
         let notify = waiting.clone();
@@ -382,17 +530,47 @@ impl Stacker {
             worker.await.expect("the stack worker");
             // An option request can also be rendering. Finish it before ending;
             // queued requests check the run's identity and state under this lock.
+            let root = stacker.imaging.root().to_path_buf();
             let _pictures = stacker.pictures.lock().await;
             let ended_at = stacker.clock.now();
+            let manifest = {
+                let mut counts = stacker.counts.lock().expect("stack counts");
+                let run = counts.as_mut().expect("the ending stack");
+                run.view.dropped.unprocessed += run.waiting.len() as u32;
+                // Waiting subs already have the provisional outcome unprocessed.
+                run.waiting.clear();
+                run.view.queued = 0;
+                let ending = run.ending.take().expect("a requested ending");
+                run.view.ended_at = Some(ended_at);
+                run.view.ended_reason = Some(ending.reason);
+                run.view.error = ending.error;
+                let mut manifest = run.manifest.clone();
+                manifest.options = run.view.options.clone();
+                manifest.ended = Some(EndManifest {
+                    ended_at,
+                    ended_reason: ending.reason,
+                    error: run.view.error.clone(),
+                    taken: run.view.taken,
+                    stacked: run.view.stacked,
+                    dropped: run.view.dropped.clone(),
+                    exposure_s: run.view.exposure_s,
+                    reference: run.reference.clone(),
+                    subs: std::mem::take(&mut run.subs),
+                });
+                manifest
+            };
+            let writer = stacker.clone();
+            let saved = tokio::task::spawn_blocking(move || writer.save(&root, &manifest))
+                .await
+                .expect("the final stack writer cannot be cancelled");
             let mut counts = stacker.counts.lock().expect("stack counts");
             let run = counts.as_mut().expect("the ending stack");
-            run.view.dropped.unprocessed += run.waiting.len() as u32;
-            run.waiting.clear();
-            run.view.queued = 0;
-            let ending = run.ending.take().expect("a requested ending");
-            run.view.ended_at = Some(ended_at);
-            run.view.ended_reason = Some(ending.reason);
-            run.view.error = ending.error;
+            match saved {
+                Ok(files) => run.view.files = Some(files),
+                Err(error) => {
+                    run.view.save_error = Some(format!("could not save the stack: {error}"))
+                }
+            }
             run.view.state = "ended";
             run.finished.send_replace(true);
         });
@@ -456,6 +634,71 @@ impl Stacker {
             .rgb
             .clone();
         preview::jpeg(&display::shrink(&picture, max_width))
+    }
+
+    /// Runs only on the blocking pool, after both tasks released the camera.
+    fn save(&self, root: &Path, manifest: &Manifest) -> std::io::Result<FilesView> {
+        use image::{codecs::png::PngEncoder, ExtendedColorType, ImageEncoder};
+        let folder = root.join("runs").join(&manifest.id);
+        let mut files = FilesView {
+            fits: None,
+            png: None,
+            json: format!("runs/{}/stack.json", manifest.id),
+        };
+        let ended = manifest.ended.as_ref().expect("an ended manifest");
+        if let Some(reference) = &ended.reference {
+            // The full-size mean and encoded cube live only through this write.
+            {
+                let mean = self
+                    .pixels
+                    .lock()
+                    .expect("stack pixels")
+                    .stack
+                    .as_ref()
+                    .expect("stacked pixels")
+                    .mean();
+                let cube = fits::RealCube {
+                    width: mean.width,
+                    height: mean.height,
+                    planes: 3,
+                    samples: mean.planes,
+                    cards: stack_cards(manifest, reference),
+                };
+                write_file(&folder, "stack.fits", &fits::encode_cube(&cube))?;
+            }
+            let reduced = {
+                let pixels = self.pixels.lock().expect("stack pixels");
+                let stack = pixels.stack.as_ref().expect("stacked pixels");
+                display::reduce(
+                    stack.sum(),
+                    stack.weight(),
+                    stack.width(),
+                    stack.height(),
+                    stack.width(),
+                )
+            };
+            let planes = display::background(&reduced);
+            let picture = display::tone(
+                &reduced,
+                &planes,
+                manifest.options.gains,
+                manifest.options.stretch,
+            );
+            let mut png = Vec::new();
+            PngEncoder::new(&mut png)
+                .write_image(
+                    &picture.pixels,
+                    picture.width,
+                    picture.height,
+                    ExtendedColorType::Rgb8,
+                )
+                .map_err(std::io::Error::other)?;
+            write_file(&folder, "stack.png", &png)?;
+            files.fits = Some(format!("runs/{}/stack.fits", manifest.id));
+            files.png = Some(format!("runs/{}/stack.png", manifest.id));
+        }
+        write_manifest(&folder, manifest)?;
+        Ok(files)
     }
 
     async fn make_picture(self: &Arc<Self>, id: &str) {
@@ -553,8 +796,15 @@ impl Stacker {
                         let mut counts = self.counts.lock().expect("stack counts");
                         let run = counts.as_mut().expect("the taking stack");
                         run.view.taken += 1;
+                        run.subs.push(Sub::new(&frame, &run.view.id, "unprocessed"));
                         if run.waiting.len() == QUEUE_SUBS {
-                            run.waiting.pop_front();
+                            let behind = run.waiting.pop_front().expect("a full queue");
+                            run.subs
+                                .iter_mut()
+                                .rev()
+                                .find(|sub| sub.frame_id == behind.id)
+                                .expect("a taken sub")
+                                .outcome = "behind";
                             run.view.dropped.behind += 1;
                         }
                         run.waiting.push_back(frame);
@@ -565,9 +815,11 @@ impl Stacker {
                 "failed" => {
                     {
                         let mut counts = self.counts.lock().expect("stack counts");
-                        let view = &mut counts.as_mut().expect("the taking stack").view;
-                        view.taken += 1;
-                        view.dropped.frame_failed += 1;
+                        let run = counts.as_mut().expect("the taking stack");
+                        run.subs
+                            .push(Sub::new(&frame, &run.view.id, "frame_failed"));
+                        run.view.taken += 1;
+                        run.view.dropped.frame_failed += 1;
                     }
                     failed += 1;
                     if failed == FAILED_IN_A_ROW {
@@ -637,6 +889,62 @@ fn make_folder(root: &Path, id: &str) -> std::io::Result<String> {
     }
 }
 
+/// Write only in the reserved folder, never recreating it at the end. A part
+/// already present belongs to somebody else and must not be overwritten.
+fn write_file(folder: &Path, name: &str, bytes: &[u8]) -> std::io::Result<()> {
+    let part = folder.join(format!("{name}.part"));
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&part)?;
+    let result = file.write_all(bytes).and_then(|()| {
+        drop(file);
+        std::fs::rename(&part, folder.join(name))
+    });
+    if result.is_err() {
+        let _ = std::fs::remove_file(&part);
+    }
+    result
+}
+
+fn write_manifest(folder: &Path, manifest: &Manifest) -> std::io::Result<()> {
+    let bytes = serde_json::to_vec_pretty(manifest).map_err(std::io::Error::other)?;
+    write_file(folder, "stack.json", &bytes)
+}
+
+fn stack_cards(manifest: &Manifest, reference: &SavedReference) -> Vec<(String, fits::CardValue)> {
+    use fits::CardValue::{Int, Real, Text};
+    let ended = manifest.ended.as_ref().expect("an ended manifest");
+    let r = &reference.view;
+    let round = |value: f64, factor: f64| (value * factor).round() / factor;
+    let (_, date) = fits::utc(reference.start);
+    [
+        ("IMAGETYP", Text("STACK".into())),
+        ("STACKID", Text(manifest.id.clone())),
+        ("NSUBS", Int(i64::from(ended.stacked))),
+        ("EXPTIME", Real(ended.exposure_s)),
+        ("SUBEXP", Real(r.exposure_ms / 1000.0)),
+        ("DATE-OBS", Text(date)),
+        ("INSTRUME", Text(manifest.camera.model.clone())),
+        ("XBINNING", Int(i64::from(reference.binning))),
+        ("YBINNING", Int(i64::from(reference.binning))),
+        ("ROWORDER", Text("TOP-DOWN".into())),
+        ("CTYPE1", Text("RA---TAN".into())),
+        ("CTYPE2", Text("DEC--TAN".into())),
+        ("CRPIX1", Real(f64::from(r.width) / 2.0 + 0.5)),
+        ("CRPIX2", Real(f64::from(r.height) / 2.0 + 0.5)),
+        ("CRVAL1", Real(round(r.ra_deg, 1e9))),
+        ("CRVAL2", Real(round(r.dec_deg, 1e9))),
+        ("CD1_1", Real(round(reference.cd_deg[0][0], 1e13))),
+        ("CD1_2", Real(round(reference.cd_deg[0][1], 1e13))),
+        ("CD2_1", Real(round(reference.cd_deg[1][0], 1e13))),
+        ("CD2_2", Real(round(reference.cd_deg[1][1], 1e13))),
+    ]
+    .into_iter()
+    .map(|(key, value)| (key.to_owned(), value))
+    .collect()
+}
+
 struct Worker {
     stacker: Arc<Stacker>,
     solver: Arc<dyn ImagingSolver>,
@@ -678,6 +986,19 @@ impl Worker {
             let display = {
                 let mut counts = self.stacker.counts.lock().expect("stack counts");
                 let run = counts.as_mut().expect("the working stack");
+                let record = run
+                    .subs
+                    .iter_mut()
+                    .rev()
+                    .find(|record| record.frame_id == sub.id)
+                    .expect("a taken sub");
+                record.outcome = outcome;
+                if let Some(last) = &last {
+                    record.turn_deg = last.turn_deg;
+                    record.shift_px = last.shift_px;
+                    record.rejected_px = last.rejected_px;
+                    record.focus_arcsec = last.focus_arcsec;
+                }
                 let view = &mut run.view;
                 match &result {
                     Ok(accepted) => {
@@ -687,6 +1008,13 @@ impl Worker {
                         view.focus_median_arcsec = median(&self.focus_readings);
                         if let Some(reference) = &accepted.reference {
                             view.reference = Some(reference.clone());
+                            run.reference = Some(SavedReference {
+                                view: reference.clone(),
+                                cd_deg: accepted.solve.cd_deg,
+                                file: record.file.clone().expect("a saved reference sub"),
+                                start: accepted.frame.start,
+                                binning: accepted.frame.binning,
+                            });
                         }
                     }
                     Err(reason) => view.dropped.count(reason),

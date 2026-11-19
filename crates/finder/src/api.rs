@@ -355,6 +355,7 @@ impl AppState {
                 self.clock.clone(),
             );
             imaging.attach_calibration(&calibration);
+            imaging.attach_stack(&stacker);
             self.stack = Some(stacker);
             self.imaging = Some(imaging);
             self.calibration = Some(calibration);
@@ -375,6 +376,18 @@ impl AppState {
     /// The live stack (035); present whenever imaging and calibration are.
     pub fn stack(&self) -> Option<Arc<crate::imaging::stack::service::Stacker>> {
         self.stack.clone()
+    }
+
+    /// The target's Messier name, or id, through the shared folder-label rule.
+    pub(crate) fn target_label(&self) -> Option<String> {
+        self.session
+            .snapshot(self.clock.now())
+            .target
+            .map(|target| {
+                crate::imaging::stack::service::label(
+                    target.messier.as_deref().unwrap_or(&target.id),
+                )
+            })
     }
 
     /// Give the console its imaging solver (032). Call after `with_live` and

@@ -18,4 +18,5 @@ mod recording;
 mod session;
 mod session_rotation;
 mod simulate;
+mod stack;
 mod track;

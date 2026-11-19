@@ -33,6 +33,45 @@ pub struct RealImage {
     pub cards: Vec<(String, CardValue)>,
 }
 
+/// One FITS file of 32-bit reals in planes (035): a stack.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RealCube {
+    pub width: u32,
+    pub height: u32,
+    pub planes: u32,
+    /// Plane after plane, each row by row from the top.
+    pub samples: Vec<f32>,
+    /// The cards after the structural ones, in order.
+    pub cards: Vec<(String, CardValue)>,
+}
+
+/// A three-axis cube of big-endian IEEE singles, padded to FITS blocks.
+pub fn encode_cube(cube: &RealCube) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    for (name, value) in [
+        ("SIMPLE", CardValue::Logical(true)),
+        ("BITPIX", CardValue::Int(-32)),
+        ("NAXIS", CardValue::Int(3)),
+        ("NAXIS1", CardValue::Int(i64::from(cube.width))),
+        ("NAXIS2", CardValue::Int(i64::from(cube.height))),
+        ("NAXIS3", CardValue::Int(i64::from(cube.planes))),
+    ] {
+        bytes.extend_from_slice(&card(name, &value));
+    }
+    for (name, value) in &cube.cards {
+        bytes.extend_from_slice(&card(name, value));
+    }
+    let mut end = [b' '; 80];
+    end[..3].copy_from_slice(b"END");
+    bytes.extend_from_slice(&end);
+    bytes.resize(bytes.len().div_ceil(2880) * 2880, b' ');
+    for sample in &cube.samples {
+        bytes.extend_from_slice(&sample.to_be_bytes());
+    }
+    bytes.resize(bytes.len().div_ceil(2880) * 2880, 0);
+    bytes
+}
+
 /// A master as BITPIX -32, without scaling, using the ordinary card formatter.
 pub fn encode_real(image: &RealImage) -> Vec<u8> {
     let mut bytes = Vec::new();

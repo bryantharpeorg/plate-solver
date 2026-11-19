@@ -83,6 +83,9 @@ pub struct ImagingView {
     /// The calibration library and what matches the latest saved imaging frame (034).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub calibration: Option<calibration::service::CalibrationView>,
+    /// The latest live stack, retained through camera-state changes (035).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stack: Option<stack::service::StackView>,
 }
 
 impl ImagingView {
@@ -99,6 +102,7 @@ impl ImagingView {
             relation: None,
             focus: None,
             calibration: None,
+            stack: None,
         }
     }
 }
@@ -395,6 +399,8 @@ pub struct Imaging {
     link: Arc<LinkManager>,
     /// Weak because calibration owns this imaging state (034).
     calibration: OnceLock<Weak<Calibration>>,
+    /// Weak because the stacker owns this imaging state (035).
+    stack: OnceLock<Weak<stack::service::Stacker>>,
 }
 
 impl Drop for Imaging {
@@ -432,6 +438,7 @@ impl Imaging {
             clock,
             link,
             calibration: OnceLock::new(),
+            stack: OnceLock::new(),
         })
     }
 
@@ -443,6 +450,11 @@ impl Imaging {
     /// Let every ready view carry the calibration object (034). The first call wins.
     pub(crate) fn attach_calibration(&self, calibration: &Arc<Calibration>) {
         let _ = self.calibration.set(Arc::downgrade(calibration));
+    }
+
+    /// Let every view carry the stack (035). The first call wins.
+    pub(crate) fn attach_stack(&self, stacker: &Arc<stack::service::Stacker>) {
+        let _ = self.stack.set(Arc::downgrade(stacker));
     }
 
     /// `GET /api/imaging`, and `imaging` in the session. Outside `ready` the view
@@ -489,6 +501,7 @@ impl Imaging {
             // The focus view only while `ready` with a solver (033 FR-029).
             focus: (ready && held.solver.is_some()).then(|| focus::run::view(&held, now)),
             calibration: None,
+            stack: None,
         };
         drop(held);
         // The finished view includes the relation's angle; no imaging lock is
@@ -497,6 +510,9 @@ impl Imaging {
             if let Some(calibration) = self.calibration.get().and_then(Weak::upgrade) {
                 view.calibration = Some(calibration.view(Some(&view)));
             }
+        }
+        if let Some(stacker) = self.stack.get().and_then(Weak::upgrade) {
+            view.stack = stacker.view();
         }
         view
     }
