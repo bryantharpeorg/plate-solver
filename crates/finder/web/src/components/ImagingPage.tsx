@@ -10,6 +10,7 @@ import {
 } from "../api";
 import { useColourHold } from "../useColourHold";
 import { useImaging } from "../useImaging";
+import { CalibrationBlock } from "./CalibrationBlock";
 import { FocusBlock } from "./FocusBlock";
 import { ImagingSolveBlock } from "./ImagingSolveBlock";
 
@@ -290,6 +291,7 @@ export function ImagingPage({ night, onBack }: { night: boolean; onBack: () => v
         <>
           <ImagingSolveBlock view={view} refresh={refresh} />
           <FocusBlock view={view} refresh={refresh} />
+          {view.calibration && <CalibrationBlock calibration={view.calibration} onChange={refresh} />}
         </>
       )}
     </main>
