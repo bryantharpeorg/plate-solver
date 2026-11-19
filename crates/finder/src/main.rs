@@ -217,9 +217,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let simulator = state
             .simulator()
             .expect("the simulated console's simulator");
-        state.with_imaging_solver(Arc::new(finder::imaging::simulated::SimulatedSolver::new(
-            simulator,
-        )))
+        // The desk console's stars carry 2% of measure noise and are sharpest
+        // at 0.60, 0.45 of the sensor, so the focus aid has a focuser to turn
+        // and a focus region to find (033 FR-030).
+        state.with_imaging_solver(Arc::new(
+            finder::imaging::simulated::SimulatedSolver::new(simulator)
+                .with_measure_noise(32, 0.02)
+                .with_sharpest_at(0.60, 0.45, 3.0),
+        ))
     } else {
         state
     };
