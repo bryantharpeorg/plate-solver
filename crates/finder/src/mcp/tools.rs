@@ -149,6 +149,31 @@ struct TrackingArguments {
     on: bool,
 }
 
+// Only used to describe the tool. Parsing deliberately uses FocusAsk so the
+// route and tool keep identical rejection reasons for invalid/unknown fields.
+#[derive(rmcp::schemars::JsonSchema)]
+#[expect(
+    dead_code,
+    reason = "schema only; FocusAsk parses the actual arguments"
+)]
+struct FocusAidArguments {
+    on: bool,
+    check: Option<bool>,
+    find: Option<bool>,
+    tile: Option<FocusTileArguments>,
+    exposure_ms: Option<f64>,
+}
+
+#[derive(rmcp::schemars::JsonSchema)]
+#[expect(
+    dead_code,
+    reason = "schema only; FocusAsk parses the actual arguments"
+)]
+struct FocusTileArguments {
+    col: u32,
+    row: u32,
+}
+
 fn object_schema() -> Arc<JsonObject> {
     Arc::new(json!({"type":"object"}).as_object().unwrap().clone())
 }
@@ -165,6 +190,32 @@ fn tool_result(result: Result<Value, String>) -> CallToolResult {
     match result {
         Ok(value) => CallToolResult::structured(value),
         Err(reason) => CallToolResult::error(vec![ContentBlock::text(reason)]),
+    }
+}
+
+/// The words of the error a focus start would be refused with, by the imaging
+/// view's state: 031's words for a camera that is not `ready`, which the
+/// imaging module keeps private to its own modules (FR-035). Both focus tools
+/// use them where the view has no `focus`.
+fn focus_state_error(state: &str, error: Option<&str>) -> String {
+    match state {
+        "ready" => "this console has no imaging solver".to_owned(),
+        "no_service" => "this scope node has no imaging service".to_owned(),
+        "no_camera" => "this scope node has no imaging camera".to_owned(),
+        "error" => format!(
+            "the imaging camera is not answering: {}",
+            error.unwrap_or_default()
+        ),
+        _ => "the scope node is not connected".to_owned(),
+    }
+}
+
+/// The focus view as a tool answer, or the error a start would be refused with
+/// when the view has no `focus` (FR-035, FR-036).
+fn focus_answer(view: crate::imaging::ImagingView) -> Result<Value, String> {
+    match view.focus {
+        Some(focus) => Ok(serde_json::to_value(focus).expect("focus view JSON")),
+        None => Err(focus_state_error(view.state, view.error.as_deref())),
     }
 }
 
@@ -671,6 +722,68 @@ impl Console {
                 }
             }
         }
+    }
+
+    #[tool(description = "Read the focus reading: the focus region, the focus record, and the reading, best, trend and verdict of the focus aid or the last focus check.",
+        output_schema = object_schema(), annotations(read_only_hint = true))]
+    async fn get_focus_reading(&self, arguments: JsonObject) -> CallToolResult {
+        let result = async {
+            if !arguments.is_empty() {
+                return Err("get_focus_reading takes no arguments".to_owned());
+            }
+            let imaging = self
+                .state
+                .imaging()
+                .ok_or_else(|| "this console takes no imaging frames".to_owned())?;
+            focus_answer(imaging.view())
+        };
+        tool_result(result.await)
+    }
+
+    #[tool(description = "Start or stop the focus aid, as POST and DELETE /api/imaging/focus do. With check true it takes a focus check, waits until it ends and returns its verdict against the focus record.",
+        input_schema = rmcp::handler::server::common::schema_for_input::<FocusAidArguments>().expect("focus aid schema"),
+        output_schema = object_schema())]
+    async fn set_focus_aid(&self, arguments: JsonObject) -> CallToolResult {
+        let result = async {
+            let Some(on) = arguments.get("on").and_then(Value::as_bool) else {
+                return Err("on must be true or false".to_owned());
+            };
+            if !on {
+                if arguments.len() > 1 {
+                    return Err("set_focus_aid with on false takes no other argument".to_owned());
+                }
+                let imaging = self
+                    .state
+                    .imaging()
+                    .ok_or_else(|| "this console takes no imaging frames".to_owned())?;
+                return focus_answer(imaging.focus_stop().await);
+            }
+            // With `on` true the other keys are the route's own body, so the
+            // tool refuses with the route's words wherever the words are the
+            // console's own (FR-036).
+            let mut rest = arguments.clone();
+            rest.remove("on");
+            let ask: crate::imaging::focus::run::FocusAsk =
+                serde_json::from_value(Value::Object(rest)).map_err(|error| error.to_string())?;
+            let imaging = self
+                .state
+                .imaging()
+                .ok_or_else(|| "this console takes no imaging frames".to_owned())?;
+            let check = ask.check;
+            let view = imaging
+                .focus_start(ask)
+                .await
+                .map_err(|refusal| refusal.message)?;
+            if !check {
+                return focus_answer(view);
+            }
+            // A focus check: the answer is its verdict, once it has ended.
+            match imaging.focus_ended().await {
+                Some(focus) => Ok(serde_json::to_value(focus).expect("focus view JSON")),
+                None => focus_answer(imaging.view()),
+            }
+        };
+        tool_result(result.await)
     }
 }
 
