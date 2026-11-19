@@ -30,7 +30,9 @@ description: "Task list for 035-live-stack: Live Stack"
   in, and approved the other twenty-five's recommended answers that day; flipping the
   spec gives the approvals (plan.md § Prerequisites 3);
 - every story has been probe-built: met, by probe round 1, whose findings are folded in
-  (plan.md § Prerequisites 9);
+  (plan.md § Prerequisites 9), and after which the owner's split of 2026-11-19 cut US5
+  into US5 and US11, eleven stories in all; US11's scenarios were built in the round as
+  US5's, and the split itself was not built (plan.md § Risks);
 - the plan document, ADR-0002, the research note and the plan document's rewrite of
   `GLOSSARY.md` are on `main`: met, since 030's flip (plan.md § Prerequisites 7);
 - no operator-staged file is needed: met.
@@ -51,8 +53,9 @@ description: "Task list for 035-live-stack: Live Stack"
 - Rigs are written once (spec.md § User Scenarios, **Rigs are written once**; plan.md
   § Test rigs). US5's module `stack_loop` holds them, `pub(crate)`; later `console`
   modules import them with `use crate::stack_loop::…`. The private builders and helpers
-  that § Test rigs names are copied, not imported, and US6's `stack_gate` writes the sim
-  stacking rig. Declare only what your own tests
+  that § Test rigs names are copied, not imported; US11's `stack_camera` writes the
+  scripted camera, which later modules import from there; and US6's `stack_gate` writes
+  the sim stacking rig. Declare only what your own tests
   use, since an unused helper fails `clippy -D warnings`, and never edit an earlier
   story's test module to add one: if a helper you need is missing there, escalate.
 - Write only the files your story's tasks name; they are its `writes` in plan.md
@@ -214,24 +217,23 @@ description: "Task list for 035-live-stack: Live Stack"
 - [ ] T018 [US5] Create `crates/finder/tests/console/stack_loop.rs`, the module
   `stack_loop`, with `mod stack_loop;` after `mod stack_colour;`. Write, `pub(crate)`
   and with the names of plan.md § Test rigs, `Scripted`, `ScriptedSolver` with its
-  `measure_script`, `measure_log` and `measure_wait` fields, `ScriptedCamera` with its
-  `gain_script` field and `add_at`, `Rig`, `stand_in_rig`, `wait_stack` and `cards`;
-  privately, `sim`, `console`, `stand_in_node`, `wait_get` and `const STANDING`; and no
+  `measure_script`, `measure_log` and `measure_wait` fields, `Rig`, `stand_in_rig`, whose
+  camera is a boxed `ImagingCamera`, `wait_stack` and `cards`; no scripted camera, which
+  is US11's (T052); privately, `sim`, `console`, `stand_in_node`, `wait_get` and
+  `const STANDING`; and no
   method that US5's own tests do not call. Write failing tests for a stack started, run
   and stopped, with the first hint 032's and the later ones the stack's own, a 1st sub
   overwritten while its solve waits, and the 3rd hint at the 2nd solve's place
   (US5-S1). US5-S1 reads every sub in `runs/<id>/subs/` and no file under `frames/`.
   The refusals of `start` (US6-S7, was US5-S2) are US6's (T026).
 - [ ] T019 [US5] Add failing tests to `crates/finder/tests/console/stack_loop.rs` for
-  subs that do not solve and a sub solved at the antipode (US5-S2), a failed exposure,
-  three in a row and three apart, the frame taken afterwards, a background raised by
-  `add_at` and `subs` removed mid-stack (US5-S3), a stop against a slow solver and
-  against a 10 000 ms exposure (US5-S4) and an aborted exposure (US5-S5).
+  subs that do not solve and a sub solved at the antipode (US5-S2).
 - [ ] T020 [US5] Add a failing test to `crates/finder/tests/console/stack_loop.rs` for a
-  single imaging frame refused while the stack holds the camera and taken after the
-  stop, and a frame of the test's own lease saved under `frames/` (US5-S6). The two
-  scenarios on the sim stacking rig (US6-S8 and US6-S9, was US5-S7 and US5-S9) are
-  US6's (T026).
+  stop against a slow solver and against a 10 000 ms exposure (US5-S3, was US5-S4).
+  The failed exposures, the aborted exposure and the single imaging frame refused while
+  the stack holds the camera (US11-S1 to US11-S3, was US5-S3, US5-S5 and US5-S6) are
+  US11's (T052 and T053), and the two scenarios on the sim stacking rig (US6-S8 and
+  US6-S9, was US5-S7 and US5-S9) are US6's (T026).
 
 ### Implementation
 
@@ -273,8 +275,7 @@ description: "Task list for 035-live-stack: Live Stack"
   entry, with the three lines of spec owner approval 6.
 - [ ] T024 [US5] Run the `lint` and `test` gates with every existing test unchanged and
   green, 031's `imaging_frames` and `imaging_lease` and 032's `imaging_relation`
-  included. Commit the green story (US5-S1, US5-S2, US5-S3, US5-S4, US5-S5 and
-  US5-S6).
+  included. Commit the green story (US5-S1, US5-S2 and US5-S3).
 
 ## Phase 6: User Story 6 — The gate, and a queue the camera never waits on (Priority: P1)
 
@@ -282,9 +283,10 @@ description: "Task list for 035-live-stack: Live Stack"
 
 - [ ] T025 [US6] Create `crates/finder/tests/console/stack_gate.rs`, the module
   `stack_gate`, with `mod stack_gate;` after `mod stack_colour;` and before
-  `mod stack_loop;`. Import the rigs with `use crate::stack_loop::…` and write the
-  traits `GateScripts`, with `measure_delay`, and `CameraScripts` of plan.md § Test
-  rigs over the fields US5 left. Copy into it the private builders and helpers § Test
+  `mod stack_loop;`. Import the rigs with `use crate::stack_loop::…` and the scripted
+  camera with `use crate::stack_camera::ScriptedCamera`, and write the traits
+  `GateScripts`, with `measure_delay`, and `CameraScripts` of plan.md § Test rigs over
+  the fields US5 and US11 left. Copy into it the private builders and helpers § Test
   rigs lists (`sim`, `console`, `stand_in_node`, `wait_get`, `get`, `close`, `sidecar`
   and `files_under`), and write `refusal` and the sim stacking rig, `sim_rig` and
   `stack_on`, there. Write failing tests for `same_settings`, as a plain `#[test]` over
@@ -328,8 +330,9 @@ description: "Task list for 035-live-stack: Live Stack"
   (plan.md § Plan traps 31); `focus_arcsec` in `LastView` and `focus_median_arcsec` in
   `StackView`.
 - [ ] T029 [US6] Run the `lint` and `test` gates with every existing test unchanged and
-  green, US5's `stack_loop` and 032's `imaging_relation` included. Commit the green
-  story (US6-S1, US6-S2, US6-S3, US6-S4, US6-S5, US6-S6, US6-S7, US6-S8 and US6-S9).
+  green, US5's `stack_loop`, US11's `stack_camera` and 032's `imaging_relation`
+  included. Commit the green story (US6-S1, US6-S2, US6-S3, US6-S4, US6-S5, US6-S6,
+  US6-S7, US6-S8 and US6-S9).
 
 ## Phase 7: User Story 7 — The display picture (Priority: P2)
 
@@ -369,7 +372,9 @@ description: "Task list for 035-live-stack: Live Stack"
 
 - [ ] T035 [US8] Create `crates/finder/tests/console/stack_console.rs`, the module
   `stack_console`, with `mod stack_console;` after `mod stack_colour;` and before
-  `mod stack_display;`. Import the rigs from `stack_loop`, and write a wait over
+  `mod stack_display;`. Import the rigs from `stack_loop`, the scripted camera from
+  `stack_camera` and its trait `CameraScripts` from `stack_gate` (US8-S1's case of the
+  gain 50.0 calls `gain_at`), and write a wait over
   `GET /api/imaging`, a request helper for an `Origin`, another `Content-Type` and
   `DELETE`, and `real_at`. Write failing tests for a stack started and stopped over the
   routes with its three files (US8-S1) and for the routes' refusals and the preview
@@ -482,10 +487,41 @@ description: "Task list for 035-live-stack: Live Stack"
 - [ ] T051 [US10] Run the `lint` and `test` gates with every existing test unchanged and
   green. Commit the green story (US10-S1, US10-S2, US10-S3, US10-S4 and US10-S5).
 
+## Phase 11: User Story 11 — The stack and the imaging camera: failed exposures, an abort and another taker (Priority: P1)
+
+Built after User Story 5 and before User Story 6 (spec.md § Work Graph). Its scenarios
+were US5-S3, US5-S5 and US5-S6 until the owner's split of 2026-11-19. They test User
+Story 5's code, and this story writes nothing under `crates/finder/src`.
+
+### Tests first
+
+- [ ] T052 [US11] Create `crates/finder/tests/console/stack_camera.rs`, the module
+  `stack_camera`, with `mod stack_camera;` after `mod stack_accumulate;` and before
+  `mod stack_colour;` in `crates/finder/tests/console/main.rs`. Import the rigs with
+  `use crate::stack_loop::…`, and do not add to `stack_loop.rs`. Write, `pub(crate)` and
+  with the names of plan.md § Test rigs, `ScriptedCamera` with its `gain_script` field,
+  `new`, `fail_at`, `fail_from`, `add_at` and its `ImagingCamera` impl, for US6 and US8
+  to import; make the node's clock and copy the private helpers this module's tests
+  need, as § Test rigs says. Write tests for a failed exposure, three in a row and three
+  apart, the frame taken afterwards, a background raised by `add_at` and `subs` removed
+  mid-stack (US11-S1, was US5-S3).
+- [ ] T053 [US11] Add tests to `crates/finder/tests/console/stack_camera.rs` for an
+  aborted exposure (US11-S2, was US5-S5), and for a single imaging frame refused while
+  the stack holds the camera and taken after the stop, and a frame of the test's own
+  lease saved under `frames/` (US11-S3, was US5-S6). On US5's code all three scenarios
+  already pass, and they pass before and after this story; no test of theirs fails
+  first.
+
+### Implementation
+
+- [ ] T054 [US11] Change nothing under `crates/finder/src`. Run the `lint` and `test`
+  gates with every existing test unchanged and green, US5's `stack_loop` included and
+  not edited. Commit the green story (US11-S1, US11-S2 and US11-S3).
+
 ## Execution Order
 
 ```text
-US1 ──► US2 ──► US3 ──► US4 ──► US5 ──► US6 ──► US7 ──► US8 ──► US9 ──► US10
+US1 ──► US2 ──► US3 ──► US4 ──► US5 ──► US11 ──► US6 ──► US7 ──► US8 ──► US9 ──► US10
 ```
 
 - **US1** comes first: US3 and US4 take frames from the scene it adds.
@@ -497,9 +533,14 @@ US1 ──► US2 ──► US3 ──► US4 ──► US5 ──► US6 ──
   the stack's own `subs/` through the lease, and writes the rigs every later `console`
   module imports. It follows US2 by a direct edge too, as the next story to write
   `crates/finder/src/imaging/mod.rs`.
+- **US11** holds three more of US5's scenarios, cut from it by the owner's split of
+  2026-11-19, and writes the scripted camera that US6 and US8 import. It follows US5,
+  whose loop they test, and comes before US6, since both add a `mod` line to
+  `crates/finder/tests/console/main.rs`.
 - **US6** adds the gate to US5's worker and bounds its queue, and since probe round 1's
-  cut holds three scenarios of US5's loop on the sim stacking rig it writes; **US7**
-  gives the loop a picture to keep.
+  cut holds three scenarios of US5's loop on the sim stacking rig it writes; it names
+  US5 as well as US11, as the next story after US5 to write `stack.rs` and
+  `stack/service.rs`. **US7** gives the loop a picture to keep.
 - **US8** puts the routes, the view and the files over the loop and reads US7's picture.
 - **US9** calls US8's routes and shows its view; it touches only
   `crates/finder/web/`, `DESIGN.md` and `.impeccable/design.json`.

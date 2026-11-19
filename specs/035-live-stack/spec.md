@@ -46,6 +46,10 @@ depends_on_landed: ["030-imaging-camera-link", "031-imaging-frames-on-console", 
 # landed `frames::take`, `save` and `write`; no shared write's story changed; and the
 # Constitution Check names the other stackers looked at and why each was turned down
 # (plan.md § Prerequisites 1, 2, 5, 8, 13 and 14, § Constitution Check).
+# Split 2026-11-19 on the owner's answer that day, "split if needed": User Story 5,
+# over the budget again with round 1's cases, gave US5-S3, US5-S5 and US5-S6 to a new
+# User Story 11, run between US5 and US6, so the trio has eleven stories
+# (§ Clarifications, the session of the owner's split of US5; plan.md § Risks).
 # It stays draft until the owner settles the owner decisions and flips it to `ready`,
 # which gives the approvals listed under "Owner approvals" and dispatches it.
 ---
@@ -386,7 +390,8 @@ confirmed at the re-anchoring (plan.md § Prerequisites 8, 13 and 14).
   through `Lease::save_in`, the one edit to 031's code this answer needs; US8 writes
   `stack.json` into that folder. Every other imaging frame, and 031's id rule, are as
   before. What changed: FR-013, FR-014, FR-031 and FR-035; US5-S1, US6-S7, US5-S2,
-  US5-S6, US8-S1, US8-S3 and US8-S7; owner approvals 3 and 5; the Edge Cases; the Work
+  US5-S6 [now US11-S3], US8-S1, US8-S3 and US8-S7; owner approvals 3 and 5; the Edge
+  Cases; the Work
   Graph, in which US5 now follows US2 by a direct edge and US8 no longer names US2;
   plan.md § Storage, § The camera's lease, § A lease's folder, § The stack on the
   console, § Shapes that existing tests pin, § Decisions, § Prerequisites 3 and 10,
@@ -395,7 +400,8 @@ confirmed at the re-anchoring (plan.md § Prerequisites 8, 13 and 14).
 
 ### Session 2026-11-19 (round 1 probes)
 
-Probe round 1 built all ten stories from this trio on 2026-11-18 and 19, on probe builds
+Probe round 1 built all ten stories [eleven since the owner's split of US5] from this
+trio on 2026-11-18 and 19, on probe builds
 of 030 to 034, tests first and with both gates, in four agents: US1 to US3, US4 to US6,
 US7 and US8, and US9 and US10. Every story built as written, and every one but US9
 passed its full gates. The round found 3 blocking and 38 clarity defects,
@@ -415,11 +421,11 @@ new number.
 | US5-S1 | US5-S1 | `stack_loop` |
 | US5-S2 | US6-S7 | `stack_gate` |
 | US5-S3 | US5-S2 | `stack_loop` |
-| US5-S4 | US5-S3 | `stack_loop` |
-| US5-S5 | US5-S4 | `stack_loop` |
-| US5-S6 | US5-S5 | `stack_loop` |
+| US5-S4 | US5-S3 [now US11-S1] | `stack_loop` [now `stack_camera`] |
+| US5-S5 | US5-S4 [now US5-S3] | `stack_loop` |
+| US5-S6 | US5-S5 [now US11-S2] | `stack_loop` [now `stack_camera`] |
 | US5-S7 | US6-S8 | `stack_gate` |
-| US5-S8 | US5-S6 | `stack_loop` |
+| US5-S8 | US5-S6 [now US11-S3] | `stack_loop` [now `stack_camera`] |
 | US5-S9 | US6-S9 | `stack_gate` |
 
 - Q: User Story 5 measured 73,780 B, over 64 KiB, and the cut plan.md § Risks named
@@ -434,7 +440,7 @@ new number.
   alone (plan.md § Test rigs). Measured on the probe's trees: User Story 5 about
   61,300 B, and User Story 6 about 50,000 B, estimated and not built. With the round's
   cases User Story 5 comes to about 67,200 B, over 65,536 B again (plan.md § Risks).
-  036 cites US5-S6 where it cited US5-S8; 037 cites no renumbered scenario.
+  036 cites US5-S6 [now US11-S3] where it cited US5-S8; 037 cites no renumbered scenario.
 - Q: User Story 8 measured 65,294 B, 242 B under the budget (D26). Is it cut? → A: Yes,
   by the owner's answer of the same day: the README's `## Live stack` moves to User
   Story 10, which already writes that file (FR-039; plan.md § `crates/finder/README.md`;
@@ -457,7 +463,8 @@ new number.
   Constraints and plan trap 14 have every pixel pass. For US3-S4 (D6): its tolerance
   is 0.02 px, so it fails a quarter-pixel error in the convention on its own (the
   first session's answer on accuracy, SC-003). D16's stop against a 10 000 ms
-  exposure is a second case of US5-S4, beside the 1000 ms one, and the low proposal of
+  exposure is a second case of US5-S4 [now US5-S3], beside the 1000 ms one, and the low
+  proposal of
   D38, files with `fits` and `json` alone, is in US9-S4.
 - Q: What did the round measure that the trio now relies on? → A: On three runs each,
   with the same numbers each time: each star of US3-S4 lands within 0.002 px of its
@@ -505,6 +512,60 @@ new number.
   and 033's focus aid. The alternative, waiting for the camera and taking again, would
   need a scenario of its own. No scenario reaches the case (plan.md § The stack on the
   console, **The taker**).
+
+### Session 2026-11-19 (the owner's split of US5)
+
+With round 1's cases folded in, User Story 5 came to about 67,200 B, over the 65,536 B
+budget again (the session of round 1 probes, above; plan.md § Risks). The owner answered
+"split if needed" on 2026-11-19, and it was needed, so User Story 5 is split by scenario,
+as 034 cut its User Story 7. Each moved or renumbered scenario says in its text what it
+was; every reference in the trio uses the new number, and where an earlier session names
+an old one the new one stands beside it in brackets.
+
+| Was | Now | Module |
+|---|---|---|
+| US5-S1 | US5-S1 | `stack_loop` |
+| US5-S2 | US5-S2 | `stack_loop` |
+| US5-S3 | US11-S1 | `stack_camera` |
+| US5-S4 | US5-S3 | `stack_loop` |
+| US5-S5 | US11-S2 | `stack_camera` |
+| US5-S6 | US11-S3 | `stack_camera` |
+
+- Q: Why was the split needed? → A: The one further cut round 1 named, US5-S5 and
+  US5-S6, would have left User Story 5 at about 64,300 to 64,750 B, 98% to 99% of the
+  budget, which round 1 judged too thin to stand alone (plan.md § Risks).
+- Q: What moved? → A: User Story 5, "The stack on the console", keeps US5-S1, US5-S2
+  and the stop against a slow solver, which was US5-S4 and is now US5-S3. A new story,
+  User Story 11, takes the scenarios that were US5-S3, US5-S5 and US5-S6, now US11-S1
+  to US11-S3, with the cases round 1 folded into them, in a module of its own,
+  `stack_camera`: the failed exposures, with the background raised by `add_at` and the
+  `subs` folder removed mid-stack; the aborted exposure; and the single imaging frame
+  refused while the stack holds the camera, with the frame of the test's own lease saved
+  under `frames/`. What they test is still User Story 5's code: the taker and its count
+  of failed exposures, the ending done once, and the lease with its folder. So User
+  Story 11 writes no code under `crates/finder/src` and implements no FR, and on User
+  Story 5's code its scenarios already pass (tasks.md, US11's test task). The scripted
+  camera moves with them: no scenario left in User Story 5 uses it, and a module
+  declares only what its own tests use, so `stack_camera` writes it, with `add_at`, and
+  User Stories 6 and 8 import it from there; `stand_in_rig` takes a boxed
+  `ImagingCamera` in its place (plan.md § Test rigs). Every other story and scenario
+  keeps its number, which is why the new story is 11. Estimated from round 1's
+  measures, the split itself not built, User Story 5 is about 57,900 B (88%) and User
+  Story 11 about 12,100 B (18%) (plan.md § Risks). Owner decision 1's ten stories are
+  eleven so; its text is kept. Owner approval 9's list of `console` `mod` lines names
+  `mod stack_camera;`, the one line the split adds: the approval's own rule, one `mod`
+  line for each new finder test module, applied to the new module, so SC-002 allows it.
+- Q: How does the Work Graph change? → A: User Story 11 runs between User Stories 5
+  and 6: US11 depends on US5 by a merge edge, and US6 names US11 as well as US5. US11
+  adds `mod stack_camera;` to `crates/finder/tests/console/main.rs` and US6 adds
+  `mod stack_gate;`, so the two may not run at the same time, and US6 and US8 import
+  US11's scripted camera. US6 keeps its edge to US5, as the next story after US5 to
+  write `crates/finder/src/imaging/stack.rs` and `stack/service.rs`. No other edge
+  changes (§ Work Graph).
+- Q: Does another trio cite a moved scenario? → A: 036 cites 035's US5-S6, now
+  US11-S3, in its spec.md and its plan.md, and names 035's test modules without
+  `stack_camera`; those lines are corrected in 036's trio, not here. 037 cites none of
+  the moved scenarios.
 
 ## Owner decisions
 
@@ -695,8 +756,8 @@ and the following. Each is named in the FR or success criterion that makes it.
 9. **Edits to existing test and gate files** (SC-002), and no others:
    - one `mod` line for each new finder test module, in alphabetical order, in
      `crates/finder/tests/console/main.rs` (`mod stack_accumulate;`,
-     `mod stack_colour;`, `mod stack_console;`, `mod stack_display;`,
-     `mod stack_gate;`, `mod stack_loop;`, `mod stack_placement;`,
+     `mod stack_camera;`, `mod stack_colour;`, `mod stack_console;`,
+     `mod stack_display;`, `mod stack_gate;`, `mod stack_loop;`, `mod stack_placement;`,
      `mod stack_reject;`), `crates/finder/tests/cli/main.rs` (`mod stack;`) and
      `crates/finder/tests/mcp/main.rs` (`mod stack;`), as 027's layout asks;
    - in `crates/finder/web/playwright.config.ts`, the string `"**/stack.spec.ts"` added
@@ -792,17 +853,22 @@ Every scenario shares these definitions unless it says otherwise.
   3°: no aim point is measured before the stack (032 US3-S1), and once the subs have
   measured one through `note_solve` the radius stays 3° because no scale is kept, and
   032 narrows the radius only when one is (032 US5).
-- **The stack's view** is `state.stack().unwrap().view()` in US5 to US7, and the `stack`
-  object of `GET /api/imaging` from US8 on. **Waiting until** a condition means reading
+- **The stack's view** is `state.stack().unwrap().view()` in US5 to US7 and in US11, and
+  the `stack` object of `GET /api/imaging` from US8 on. **Waiting until** a condition
+  means reading
   it every 100 ms until the condition holds, for at most 300 s of virtual time, and
   failing otherwise. A rig's scenario first waits until `GET /api/imaging` has `state`
   `ready`. **Σ dropped** is the sum of every count in the view's `dropped`, taken over
   whatever keys it holds, eleven here; a test never asserts how many there are, since a
   later spec adds reasons.
-- **Rigs are written once.** The scripted solver, the scripted camera, the stand-in
+- **Rigs are written once.** The scripted solver, the stand-in
   stacking rig, the wait and a FITS reader of the tests' own are written in the module
   `stack_loop` (US5), declared `pub(crate)`, and imported by the later `console`
   modules with `use crate::stack_loop::…` (plan.md § Test rigs gives their names). The
+  scripted camera is written in `stack_camera` (US11), the first `console` module whose
+  scenarios use it since the owner's split of US5, declared `pub(crate)` there and
+  imported from there by `stack_gate` (US6) and `stack_console` (US8); the stand-in
+  stacking rig takes it as a boxed `ImagingCamera`. The
   sim stacking rig is written in `stack_gate` (US6), the one `console` module whose
   scenarios use it since round 1's cut, with the private helpers it needs copied from
   `stack_loop`. A module declares only what its own tests use; a later story adds nothing to an earlier
@@ -1157,6 +1223,14 @@ What they test is still this story's code: `start` and its refusals, the folder 
 `Lease::save_in`, and the call of `note_solve`. Its other scenarios were renumbered
 (§ Clarifications, the session of 2026-11-19).
 
+With round 1's cases folded in it measured over the budget again, so by the owner's
+split of 2026-11-19 three more of its scenarios are User Story 11's: failed exposures
+(US11-S1), an aborted exposure (US11-S2) and a single imaging frame refused while the
+stack holds the camera (US11-S3). What they test is still this story's code too: the
+taker and its count of failed exposures, the ending done once, and the lease with its
+folder. Its last scenario became US5-S3 (§ Clarifications, the session of the owner's
+split of US5).
+
 **Why this priority**: It is the first time a picture grows on the console from subs
 the camera takes.
 
@@ -1217,23 +1291,7 @@ development, `cargo nextest run -p finder --locked --test console stack_loop::`.
    `imaging.relation.last.frame_id` 1 (worked example: no point of the reference grid
    has a place in a sub solved at the antipode). This scenario was US5-S3 until round
    1's cut.
-3. **Given** the stand-in stacking rig whose node holds a scripted camera, **Then** a
-   committed test asserts that:
-   - with its 2nd `expose` scripted to fail with `the camera fell over`, a stack run
-     until `taken` is at least 4 has `dropped.frame_failed` 1 and `state` `stacking`;
-   - with every `expose` from its 2nd on scripted so, the stack ends by itself with
-     `state` `ended`, `ended_reason` `camera`, `error`
-     `the exposure failed: the camera fell over`, `taken` 4, `dropped.frame_failed` 3
-     and `stacked` plus `dropped.unprocessed` equal to 1; and `POST /api/imaging/frame`
-     sent after that answers 200, the stack having released the camera;
-   - with its 2nd, 4th and 6th `expose` scripted to fail, a stack run until `taken` is
-     at least 8 has `state` `stacking` and `dropped.frame_failed` 3;
-   - with its 2nd `expose` adding 100 counts to every sample, `mean()` read when
-     `stacked` is 2 equals the one read when it was 1, within 0.001;
-   - once `stacked` is 1 the test removes `runs/<id>/subs`, and the view reaches
-     `dropped.frame_failed` 1.
-   This scenario was US5-S4 until round 1's cut.
-4. **Given** the stand-in stacking rig whose scripted solver waits 30 s, **When** a test
+3. **Given** the stand-in stacking rig whose scripted solver waits 30 s, **When** a test
    starts a stack, waits until `taken` is at least 3, calls `stop()` and then lets 60 s
    pass, **Then** a committed test asserts that `stop()` returned within 1 s of virtual
    time with `state` `ended`, `ended_reason` `stopped`, `stacked` 0 and
@@ -1241,25 +1299,8 @@ development, `cargo nextest run -p finder --locked --test console stack_loop::`.
    for key. **Given** a fresh stand-in stacking rig, **Then** the committed test asserts
    that with the exposure set to 10 000 ms through `Imaging::set` before the start, a
    test that calls `stop()` once `taken` is at least 1 finds it returned within 1 s of
-   virtual time. This scenario was US5-S5 until round 1's cut.
-5. **Given** the stand-in stacking rig with a stack whose `stacked` has reached 2,
-   **When** a test sends `POST /api/imaging/abort`, **Then** a committed test asserts
-   that within 5 s the view has `state` `ended` and `ended_reason` `stopped`, and that
-   `taken` equals `stacked` plus Σ dropped. This scenario was US5-S6 until round 1's
-   cut.
-6. **Given** the stand-in stacking rig with a stack whose `stacked` has reached 1,
-   **When** a test sends `POST /api/imaging/frame`, **Then** a committed test asserts
-   that the answer is 409 with a JSON `error` that contains `the stack`; that 5 s later the
-   stack's `taken` is larger than it was at the request, its `state` is still
-   `stacking` and `dropped.frame_failed` is 0; and that once `stop()` has answered, the
-   same request answers 200 and the imaging frame it starts ends `saved` with the
-   `purpose` `frame` and a `file` that begins `frames/2026-01-16/`, and that once
-   `stop()` has answered, a frame the test takes with
-   `state.imaging().unwrap().lease("the test")` and its `take("frame")` has a `file`
-   beginning `frames/` (oracle: the plan
-   document's amendment 1: one holder of the camera at a time, and a second taker
-   refused with the holder's name; owner decision 13: the stack's folder goes with its
-   lease). This scenario was US5-S8 until round 1's cut.
+   virtual time. This scenario was US5-S5 until round 1's cut, and US5-S4 until the
+   owner's split of 2026-11-19.
 
 ---
 
@@ -1877,6 +1918,75 @@ development, `cargo nextest run -p finder --locked --test mcp stack::`.
 
 ---
 
+### User Story 11 - The stack and the imaging camera: failed exposures, an abort and another taker (Priority: P1)
+
+As the observer, I want a stack to go on past an exposure that fails and to end by
+itself, letting the camera go, once three fail in a row; to end as stopped when I abort
+its exposure from the page; and, while it runs, to keep the camera from anything else
+that asks for it and to give it back once it has ended, so that a stack never leaves
+the camera held and no other taker disturbs it.
+
+This story is built after User Story 5 and before User Story 6 (Work Graph). It has the
+number 11 because it was cut from User Story 5 once round 1's cases, folded in, put that
+story over the 64 KiB budget again, and numbering it so left every other story with its
+number. Its three scenarios were US5-S3, US5-S5 and US5-S6. What they test is User Story
+5's code: the taker and its count of failed exposures, the ending done once, and the
+lease with its folder. This story writes no code under `crates/finder/src`, and on User
+Story 5's code its scenarios already pass (tasks.md, US11's test task). Its module
+writes the scripted camera, which User Stories 6 and 8 import (§ User Scenarios,
+**Rigs are written once**).
+
+**Why this priority**: A stack that kept the camera once it had ended, or that a failed
+exposure or an abort left running, would lock every other taker out until the console
+restarts. It follows User Story 5, whose loop it tests, and comes before User Story 6,
+which imports its scripted camera.
+
+**Independent Test**: `crates/finder/tests/console/stack_camera.rs`, the module
+`stack_camera` of `console`. The `test` gate's
+`cargo nextest run --workspace --all-targets --all-features --locked` runs it; during
+development, `cargo nextest run -p finder --locked --test console stack_camera::`.
+
+**Acceptance Scenarios**:
+
+1. **Given** the stand-in stacking rig whose node holds a scripted camera, **Then** a
+   committed test asserts that:
+   - with its 2nd `expose` scripted to fail with `the camera fell over`, a stack run
+     until `taken` is at least 4 has `dropped.frame_failed` 1 and `state` `stacking`;
+   - with every `expose` from its 2nd on scripted so, the stack ends by itself with
+     `state` `ended`, `ended_reason` `camera`, `error`
+     `the exposure failed: the camera fell over`, `taken` 4, `dropped.frame_failed` 3
+     and `stacked` plus `dropped.unprocessed` equal to 1; and `POST /api/imaging/frame`
+     sent after that answers 200, the stack having released the camera;
+   - with its 2nd, 4th and 6th `expose` scripted to fail, a stack run until `taken` is
+     at least 8 has `state` `stacking` and `dropped.frame_failed` 3;
+   - with its 2nd `expose` adding 100 counts to every sample, `mean()` read when
+     `stacked` is 2 equals the one read when it was 1, within 0.001;
+   - once `stacked` is 1 the test removes `runs/<id>/subs`, and the view reaches
+     `dropped.frame_failed` 1.
+   This scenario was US5-S4 until round 1's cut, and US5-S3 until the owner's split
+   of 2026-11-19.
+2. **Given** the stand-in stacking rig with a stack whose `stacked` has reached 2,
+   **When** a test sends `POST /api/imaging/abort`, **Then** a committed test asserts
+   that within 5 s the view has `state` `ended` and `ended_reason` `stopped`, and that
+   `taken` equals `stacked` plus Σ dropped. This scenario was US5-S6 until round 1's
+   cut, and US5-S5 until the owner's split of 2026-11-19.
+3. **Given** the stand-in stacking rig with a stack whose `stacked` has reached 1,
+   **When** a test sends `POST /api/imaging/frame`, **Then** a committed test asserts
+   that the answer is 409 with a JSON `error` that contains `the stack`; that 5 s later the
+   stack's `taken` is larger than it was at the request, its `state` is still
+   `stacking` and `dropped.frame_failed` is 0; and that once `stop()` has answered, the
+   same request answers 200 and the imaging frame it starts ends `saved` with the
+   `purpose` `frame` and a `file` that begins `frames/2026-01-16/`, and that once
+   `stop()` has answered, a frame the test takes with
+   `state.imaging().unwrap().lease("the test")` and its `take("frame")` has a `file`
+   beginning `frames/` (oracle: the plan
+   document's amendment 1: one holder of the camera at a time, and a second taker
+   refused with the holder's name; owner decision 13: the stack's folder goes with its
+   lease). This scenario was US5-S8 until round 1's cut, and US5-S6 until the owner's
+   split of 2026-11-19.
+
+---
+
 ### Edge Cases
 
 - **No master matches.** A sub is still calibrated as far as 034 can, stacked, and the
@@ -1924,7 +2034,7 @@ development, `cargo nextest run -p finder --locked --test mcp stack::`.
   dropped as `settings`, and so is every later one that differs.
 - **Something else wants the camera during a stack.** A single imaging frame, the focus
   aid or a set of darks or flats asked for while a stack runs is refused by 031 with
-  the holder's name, `the stack`, and the stack is not disturbed (US5-S6). A stack asked
+  the holder's name, `the stack`, and the stack is not disturbed (US11-S3). A stack asked
   for while one of those holds the camera is refused the same way, with that holder's
   name, `the focus aid` or `a set of darks or flats`, even while that holder's own
   frame is exposing, which is almost always (US6-S7). A set of darks, and each step of a
@@ -2386,7 +2496,7 @@ US5:
   implements: [FR-012, FR-013, FR-014, FR-015, FR-016, FR-017, FR-018, FR-019, FR-020]
 US6:
   depends_on: []
-  depends_on_merged: [US5]
+  depends_on_merged: [US5, US11]
   implements: [FR-021, FR-022, FR-023, FR-024, FR-025]
 US7:
   depends_on: []
@@ -2404,6 +2514,10 @@ US10:
   depends_on: []
   depends_on_merged: [US8, US9]
   implements: [FR-047, FR-048, FR-049]
+US11:
+  depends_on: []
+  depends_on_merged: [US5]
+  implements: []
 ```
 
 Every edge is a merge edge, and the stories run one after another. US2's tests need
@@ -2412,7 +2526,12 @@ two stories from writing `crates/finder/tests/console/main.rs` at once. US3 adds
 file US2 creates, and US4 to US3's `Stack`. US5 calls all of it from the console's loop;
 US5 also names US2, because it is the next story after US2 to write
 `crates/finder/src/imaging/mod.rs`, where it lets the lease save a stack's subs in the
-stack's folder. US6 adds its gate and replaces its queue; US7 gives the loop a picture
+stack's folder. US11 tests US5's loop; it writes no code of its own and implements no
+FR. US6 follows US11, because both add a `mod` line to
+`crates/finder/tests/console/main.rs` and US6 imports US11's scripted camera; US6 also
+names US5, because it is the next story after US5 to write
+`crates/finder/src/imaging/stack.rs` and `crates/finder/src/imaging/stack/service.rs`.
+US6 adds its gate and replaces its queue; US7 gives the loop a picture
 to keep; US8 puts routes, the view and the files over the loop, and reads US7's
 picture. US8 also names US5, because it is the next story after US5 to write
 `crates/finder/src/imaging/mod.rs` and `crates/finder/src/api.rs`.

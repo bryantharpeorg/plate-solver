@@ -76,6 +76,9 @@ kept in `session.json`; a running stack lives in memory.
   `crates/finder/web/e2e/stack.spec.ts` (new, Playwright, simulate project).
 - US10: `crates/finder/tests/mcp/stack.rs` (new), with its own scripted solver and, for
   US10-S5, the sim stacking rig written again through the MCP door.
+- US11: `crates/finder/tests/console/stack_camera.rs` (new), on the stand-in stacking
+  rig: US11-S1 to US11-S3 (was US5-S3, US5-S5 and US5-S6, until the owner's split of
+  US5), and the scripted camera that US6 and US8 import (§ Test rigs).
 - Where a finder test goes is 027's rule: `console` calls the router and the state in
   process, `cli` starts the built `finder`, `mcp` goes through the MCP door. Each module
   is one file in its binary's folder and one `mod` line, in alphabetical order, in that
@@ -111,7 +114,7 @@ rebuilt for this spec.
   camera. The stack reports the real time each sub took, for the bring-up probe to read.
 
 **Scale/Scope**: three new source files in the console, one extended simulator module,
-three routes, two MCP tools, one page block, ten stories.
+three routes, two MCP tools, one page block, eleven stories.
 
 ## Constitution Check
 
@@ -145,12 +148,13 @@ crates/finder/
 ├── src/imaging/stack/service.rs        # US5: new, the loop, the folder and its subs/, note_solve at step 8; US6: the gate and the queue; US7: the picture; US8: label, stack.json and the files
 ├── src/imaging/stack/display.rs        # US7: new
 ├── src/mcp/tools.rs                    # US10: two tools
-├── tests/console/main.rs               # US2 to US8: one mod line a module
+├── tests/console/main.rs               # US2 to US8 and US11: one mod line a module
 ├── tests/console/stack_colour.rs       # US2: new
 ├── tests/console/stack_placement.rs    # US2: new
 ├── tests/console/stack_accumulate.rs   # US3: new
 ├── tests/console/stack_reject.rs       # US4: new
 ├── tests/console/stack_loop.rs         # US5: new, and the rigs later modules import
+├── tests/console/stack_camera.rs       # US11: new, the scripted camera, and US11-S1 to US11-S3 (was US5-S3, S5, S6)
 ├── tests/console/stack_gate.rs         # US6: new, the sim stacking rig, and US6-S7 to US6-S9 (was US5-S2, S7, S9)
 ├── tests/console/stack_display.rs      # US7: new
 ├── tests/console/stack_console.rs      # US8: new
@@ -596,17 +600,17 @@ last entry). What this spec relies on, and nothing more:
    aid and a set of darks or flats, are refused as in 1, with the holder's name, and
    that check comes before their check for an imaging frame in flight. So a second
    taker hears the holder's name even while a sub is exposing. Those refusals are
-   031's code and 031's tests (031 US9-S2); spec US5-S6 reads one of them during a
+   031's code and 031's tests (031 US9-S2); spec US11-S3 reads one of them during a
    stack.
 3. The holder's `take` behaves as 031's `take` does without a lease: it is refused only
    as `take` is, when the camera is not `ready` or an imaging frame is in flight (031
    US9-S3); the taker asks for a sub only once the last has ended.
 4. `Imaging::abort`, `Imaging::ended`, `Imaging::view`, 032's `solve_frame` and 032's
    `Imaging::note_solve` are open to anyone, lease or no lease. Stopping an exposure is
-   never refused, so the page's Abort ends a sub (spec US5-S5).
+   never refused, so the page's Abort ends a sub (spec US11-S2).
 5. Dropping the `Lease` releases the camera, on every way out, also when the task that
    owns it is aborted, and a `lease` or a `take` asked for after that succeeds (spec
-   US5-S3, US5-S6).
+   US11-S1, US11-S3).
 6. A single imaging frame asked for with `Imaging::take` holds no lease (031 US9).
    While it is in flight and nobody holds the lease, `holder()` is `None`, and that
    frame is the one thing `start`'s step 5 looks for. Spec US6-S7's case of a start
@@ -1625,14 +1629,16 @@ Neither is a moving tool: no rate limit and no call-log line. The MCP session to
 carry `imaging.stack` because they serialize `session_response`
 (`crates/finder/src/mcp/tools.rs:469`); no other MCP code changes.
 
-### Test rigs (`crates/finder/tests/console/stack_loop.rs`, US5)
+### Test rigs (`crates/finder/tests/console/stack_loop.rs`, US5; `stack_camera.rs`, US11)
 
-Written once, `pub(crate)`, and imported by `stack_gate`, `stack_display` and
-`stack_console` with `use crate::stack_loop::…`. The names are fixed here so that a
+Written once, `pub(crate)`, and imported by `stack_camera`, `stack_gate`, `stack_display`
+and `stack_console` with `use crate::stack_loop::…`. The names are fixed here so that a
 later story can call them without reading the file. Probe round 1 cut US5 (spec.md
 § Clarifications, the session of 2026-11-19): `stack_gate` (US6) writes the sim
 stacking rig, and the builders and helpers below that are not `pub(crate)` are copied
-there, not imported:
+there, not imported. The owner's split of US5 (spec.md § Clarifications, the session
+of that split) moved the scripted camera to `stack_camera` (US11), the first module
+whose tests use it, and `stack_gate` and `stack_console` import it from there:
 
 ```rust
 /// What the nth `solve` answers, n from 1, when the scenario scripts it.
@@ -1654,6 +1660,16 @@ impl ScriptedSolver {
 }
 impl ImagingSolver for ScriptedSolver { /* name() is "simulated" */ }
 
+pub(crate) struct Rig { pub state: AppState, pub app: Router, pub sim: Simulator,
+    pub solver: Arc<ScriptedSolver>, pub root: PathBuf, /* the scratch folder's guard */ }
+/// The stand-in stacking rig; with a camera, that one in the stand-in's place.
+pub(crate) async fn stand_in_rig(name: &str, solver: ScriptedSolver, camera: Option<Box<dyn ImagingCamera>>) -> Rig;
+/// Read the stack's view as JSON every 100 ms until `done` holds, for at most 300 s.
+pub(crate) async fn wait_stack(rig: &Rig, done: impl Fn(&serde_json::Value) -> bool) -> serde_json::Value;
+/// A FITS file's cards, as (keyword, value text) with quotes and padding removed.
+pub(crate) fn cards(bytes: &[u8]) -> Vec<(String, String)>;
+
+// US11, in `stack_camera`, imported by `stack_gate` and `stack_console`:
 pub(crate) struct ScriptedCamera {
     /* a SyntheticImagingCamera, the failure scripts, a count, */
     /// The gain the nth `expose` answers its frame with, n from 1.
@@ -1668,16 +1684,7 @@ impl ScriptedCamera {
 }
 impl scope_node::imaging::ImagingCamera for ScriptedCamera { /* … */ }
 
-pub(crate) struct Rig { pub state: AppState, pub app: Router, pub sim: Simulator,
-    pub solver: Arc<ScriptedSolver>, pub root: PathBuf, /* the scratch folder's guard */ }
-/// The stand-in stacking rig; with a camera, that one in the stand-in's place.
-pub(crate) async fn stand_in_rig(name: &str, solver: ScriptedSolver, camera: Option<ScriptedCamera>) -> Rig;
-/// Read the stack's view as JSON every 100 ms until `done` holds, for at most 300 s.
-pub(crate) async fn wait_stack(rig: &Rig, done: impl Fn(&serde_json::Value) -> bool) -> serde_json::Value;
-/// A FITS file's cards, as (keyword, value text) with quotes and padding removed.
-pub(crate) fn cards(bytes: &[u8]) -> Vec<(String, String)>;
-
-// US6, in `stack_gate`, over the three fields above:
+// US6, in `stack_gate`, over the four fields above:
 pub(crate) trait GateScripts {
     /// The nth `measure` answers this half-flux diameter in pixels, or this error.
     fn measure_at(self, n: usize, answer: Result<f64, SolveError>) -> Self;
@@ -1708,11 +1715,21 @@ scripted, and logs every call. `wait_stack` reads
 wait over `GET /api/imaging`.
 
 US5 declares only what US5's tests use, because a `pub(crate)` helper nobody in the
-binary calls fails `clippy -D warnings`. US5's scenarios script no `measure` and no
-gain, so US5 writes no method for either: it leaves the four `pub(crate)` fields
-above, which its `measure` and `expose` already read and write, and US6 puts the
-methods on them through the two traits, in its own module. A field that code locks and
-reads is not dead, so US5 passes without them. `real_at` is first used by US8 and is
+binary calls fails `clippy -D warnings`. Since the owner's split, no scenario of US5
+uses the scripted camera: US5 writes none, and `stand_in_rig` takes any boxed
+`ImagingCamera`; US11, whose scenarios are the first to use it, writes `ScriptedCamera`
+with `fail_at`, `fail_from` and `add_at`, which its own tests call. Neither story's
+scenarios script a `measure` or a gain, so neither writes a method for one: US5 leaves
+the scripted solver's three `pub(crate)` fields, which its `measure` already reads and
+writes, and US11 the scripted camera's `gain_script`, which its `expose` already reads,
+and US6 puts the methods on the four through the two traits, in its own module. A
+field that code locks and reads is not dead, so US5 and US11 pass without them.
+`stack_camera` makes the node's clock that `ScriptedCamera::new` takes as `stack_loop`
+makes it, over a `VirtualClock` from the rigs' start, and copies the private helpers
+its own tests need, `wait_get` among them; it imports `stand_in_rig`, `wait_stack`,
+`Rig` and `ScriptedSolver`, and adds nothing to `stack_loop.rs`. `stack_gate` and
+`stack_console` import `ScriptedCamera` with `use crate::stack_camera::ScriptedCamera`
+and hand it to `stand_in_rig` boxed. `real_at` is first used by US8 and is
 written there. `crates/finder/tests/mcp/stack.rs` cannot import any of this and writes
 a scripted solver of its own with `new`, `solve` and `measure` alone, and, for US10-S5,
 the sim stacking rig again from `SimNode` and `SimulatedSolver` with `with_live`, as
@@ -1730,7 +1747,7 @@ consoles with no imaging solver, with a node with no imaging camera, and without
 `with_imaging` are built in `stack_gate` from its copies of `console` and
 `stand_in_node`; `refusal`, which only US6-S7 uses, is written there alone. The
 standing solve is a `const STANDING: Scripted`, so `Scripted::Solve` is built in US5;
-`Rig.sim` is read by US5-S4's clock (was US5-S5).
+`Rig.sim` is read by US5-S3's clock (was US5-S4, and US5-S5 before round 1's cut).
 
 ## Shapes that existing tests pin
 
@@ -2042,7 +2059,8 @@ These are not changed by any story:
    034's part is prerequisite 13. Spec owner decision 21's other answer, and a
    `StackBlock` written against another hold, are not needed.
 9. **The trio is probe-built.** Met. Probe round 1, on 2026-11-18 and 19, built all ten
-   stories from this trio in throwaway worktrees, on a base of probe builds of 030 to
+   stories [eleven since the owner's split of US5] from this trio in throwaway
+   worktrees, on a base of probe builds of 030 to
    034, tests first, with both gates: four agents in turn, US1 to US3 (US3 first), US4
    to US6 (US5 first), US7 and US8 (US8 first), and US9 and US10 (US10 first). Each
    diff was measured as plan trap 3 says. Every story built as written and was green on
@@ -2063,6 +2081,10 @@ These are not changed by any story:
    - *The fields US5 leaves for US6* pass `clippy -D warnings`, as § Test rigs expects,
      with `Rig.sim`, `Scripted::Solve` and `stack_on` read (§ Test rigs).
    - *The sizes.* US5 was 73,780 B and US8 65,294 B as written; both were cut (§ Risks).
+     With the round's cases US5 came to about 67,200 B, and the owner's split of
+     2026-11-19 cut it again, into US5, about 57,900 B, and US11, about 12,100 B, both
+     estimated from the round's measures and not built (§ Risks). US11's scenarios
+     were built in the round as US5's.
    - *The seams with 031 to 034 that built as written:* 031's lease, all six points,
      which match `origin/main` at `e9687ce9`; 032's `ImagingSolve`, `Imaging::hint`,
      `solve_frame`, `Ask` and `note_solve`, the last as `main` has it; 033's
@@ -2217,10 +2239,10 @@ with the check that keeps it from recurring. They bind every story.
     `taken` equals `stacked` plus the dropped.
 16. **Stopping waits for a solver, or for an exposure.** *Check:* the worker drops a
     solve in flight when the stack stops, the taker aborts a frame it started after
-    the stop's own `abort` had run, and spec US5-S4 holds `stop()` to one second
+    the stop's own `abort` had run, and spec US5-S3 holds `stop()` to one second
     against a solver that takes thirty.
 17. **Two endings.** The taker and `stop()` can both try to end a stack. *Check:* ending
-    is done once, by whoever asks first, and spec US5-S5 ends a stack by an abort.
+    is done once, by whoever asks first, and spec US11-S2 ends a stack by an abort.
 18. **A picture the browser does not fetch.** *Check:* the picture's name counts
     pictures, and spec US7-S5 sees it rise when only the gains change.
 19. **The display changing what is saved.** *Check:* `display` takes the stack, or its
@@ -2244,7 +2266,7 @@ with the check that keeps it from recurring. They bind every story.
     cannot be made, and keeps the camera would lock every other taker out until the
     console restarts. *Check:* the taker owns the `Lease`, so it is dropped on every
     return of the taker, and `start` drops it where it fails after taking it; spec
-    US5-S3 takes a frame after a stack that ended as `camera`, US5-S6 after one that
+    US11-S1 takes a frame after a stack that ended as `camera`, US11-S3 after one that
     was stopped, and US6-S7 reads `holder()` `None` after a folder that could not be
     made.
 27. **A second lock, or a look that hides the holder.** Asking `Calibration::busy` or
@@ -2299,7 +2321,7 @@ with the check that keeps it from recurring. They bind every story.
     taker has started, would do one or the other. *Check:* the folder is kept with the
     lease's grant and cleared with it, and `start` sets it before it spawns the taker
     (§ A lease's folder); spec US5-S1 finds every sub in `runs/<id>/subs/` and no file
-    under `frames/`, and US5-S6's frame after the stop is saved under `frames/`.
+    under `frames/`, and US11-S3's frame after the stop is saved under `frames/`.
 
 ## Risks
 
@@ -2318,9 +2340,9 @@ with the check that keeps it from recurring. They bind every story.
 | Stars' cores vary with seeing and are rejected too often, dimming stars. | The deviation is learned at each pixel, so a core's own spread widens its own limit; the field check compares a stack with `reject` false. |
 | The background's plane is pulled by a nebula that fills most tiles. | Only the darker half of the tiles is fitted; what is saved is untouched; the look is for the design review (spec owner decision 16). |
 | The picture looks green before the observer sets gains. | Expected without a colour matrix (the plan document's Colour row); the gains are on the page; measured gains are spec owner decision 17's alternative. |
-| 031 lands the lease under other names or with other rules: the frame in flight checked before the lease, a single imaging frame that holds the lease, a foreign `abort` refused, a refusal that does not name the holder. | § The camera's lease cites 031 US9 and lists the six points and where each is used, and 033's, 034's and 037's trios use the same shape; § Prerequisites 8 read each in 031's code on `main`, where 031 landed the lease under these names and with these rules. Only `Stacker::start`, the taker and three scenarios (spec US6-S7, US5-S3, US5-S6) touch it, and US6-S7 asserts `holder()` `None` during a single frame, so point 6 shows up there if it changes. |
+| 031 lands the lease under other names or with other rules: the frame in flight checked before the lease, a single imaging frame that holds the lease, a foreign `abort` refused, a refusal that does not name the holder. | § The camera's lease cites 031 US9 and lists the six points and where each is used, and 033's, 034's and 037's trios use the same shape; § Prerequisites 8 read each in 031's code on `main`, where 031 landed the lease under these names and with these rules. Only `Stacker::start`, the taker and three scenarios (spec US6-S7, US11-S1, US11-S3) touch it, and US6-S7 asserts `holder()` `None` during a single frame, so point 6 shows up there if it changes. |
 | 031 lands with no lease at all. | Spec owner decision 21's other answer, which is the first draft's design: ask the two busy checks and wait out a foreign frame, three times at most. 031 landed the lease (§ Prerequisites 8), so it is not needed. |
-| US5's diff is over 64 KiB (73,780 B in probe round 1), and moving US5-S7 and US5-S9 alone leaves 67,826 B. | US5-S2, US5-S7 and US5-S9 move to US6, in `stack_gate.rs`, which copies the sim stacking rig and the private helpers they need (`sim`, `console`, `stand_in_node`, `wait_get`, `get`, `close`, `sidecar`, `refusal`, `files_under`). The call of `note_solve`, the folder and `save_in` stay in US5. Measured: US5 about 61,300 B; US6 about 50,000 B. The moved scenarios are now US6-S7, US6-S8 and US6-S9, and US5's others US5-S1 to US5-S6 (spec.md § Clarifications, the session of 2026-11-19). **With the round's cases folded in, US5 is about 67,200 B, over 65,536 B again**: D16's cases and `ScriptedCamera::add_at` add about 5,850 B. The next cut the round names is US5-S5 and US5-S6 (was US5-S6 and US5-S8), 2,447 B as built and about 500 B more with US5-S6's new case, which leaves about 64,300 to 64,750 B (98% to 99%), judged too thin to stand alone; US5's further cut is settled before the flip. US6, with its own cases (about 5,700 B), the measure's delay (about 1,100 B) and the moved scenarios' cases (about 600 B), is about 57,400 B (88%); the round names no next cut for it. |
+| US5's diff is over 64 KiB (73,780 B in probe round 1), and moving US5-S7 and US5-S9 alone leaves 67,826 B. | US5-S2, US5-S7 and US5-S9 move to US6, in `stack_gate.rs`, which copies the sim stacking rig and the private helpers they need (`sim`, `console`, `stand_in_node`, `wait_get`, `get`, `close`, `sidecar`, `refusal`, `files_under`). The call of `note_solve`, the folder and `save_in` stay in US5. Measured: US5 about 61,300 B; US6 about 50,000 B. The moved scenarios are now US6-S7, US6-S8 and US6-S9, and US5's others US5-S1 to US5-S6 [three of them US11's since the owner's split] (spec.md § Clarifications, the session of 2026-11-19). With the round's cases folded in, US5 came to about 67,200 B, over 65,536 B again: D16's cases and `ScriptedCamera::add_at` add about 5,850 B, and the one further cut the round named, US5-S5 and US5-S6, would have left 98% to 99%, judged too thin. **So the owner's split of 2026-11-19 cut US5 by scenario** (spec.md § Clarifications, the session of that split): US5-S3, US5-S5 and US5-S6 became US11-S1 to US11-S3, with their four folded cases, in `stack_camera.rs`, which also writes the scripted camera and `add_at`, since no scenario left in US5 uses them, and US5-S4 became US5-S3. Estimated from round 1's measures, the split itself not built: **US5 about 57,900 B (88%)**, that is 67,200 B less the three tests as built (1,566, 860 and 1,587 B), their four cases and `add_at` (about 2,980 B) and the scripted camera as built (2,331 B); **US11 about 12,100 B (18%)**, that is those parts (about 9,330 B) with the private helpers it copies (about 1,360 B), its imports (about 830 B), its `mod` line (about 370 B) and its file's diff header (about 230 B). US6, with its own cases (about 5,700 B), the measure's delay (about 1,100 B) and the moved scenarios' cases (about 600 B), is about 57,400 B (88%); the round names no next cut for it. |
 | US8's diff nears 64 KiB: three routes, the view, the cube, three files, the README's three rows and seven tests. | Probe round 1 measured it at 65,294 B whole (99.6%), so the README's `## Live stack` moved to US10 (7,966 B), leaving 57,483 B (87.7%). With the round's cases folded in (about 5,400 to 6,400 B for US8-S1, S3, S5 and S6, and about 450 B for the ending's changes) it is about 63,000 to 64,300 B, 96% to 98%. The next cut is US8-S7, `crates/finder/tests/cli/stack.rs` (5,636 B), which leaves about 57,500 to 58,700 B; the round names no story to take it. |
 | The other stories' diffs grow with the round's cases. | Each stays far from 64 KiB. Measured in probe round 1, then with the cases folded in: US1 21,319 B, about 24,000; US2 22,143, about 23,300; US3 22,556, about 23,000; US4 17,364, about 19,200; US7 31,291, about 34,600; US9 33,513, about 36,200; US10 18,134, 25,945 with `## Live stack`, and about 30,000 with its cases. |
 | Rejection after eight subs leaves out about 5% of good pixels a sub at first (probe round 1, sim camera), falling as subs are added. | The field check reads it; `reject` false turns rejection off. |
@@ -2345,7 +2367,8 @@ in hand, and with 030, 031, 032 and 034 as their review left them; a reviewer's 
 were then applied to the three files (below). **No probe build had been run** when the
 trio was drafted, reviewed and audited: no story had been compiled, linted or tested,
 no interface above built, and no diff measured. Probe round 1 has since built all ten
-(§ Prerequisites 9, and "What probe round 1 changed", below). This spec builds on code
+[eleven since the owner's split of US5] (§ Prerequisites 9, and "What probe round 1
+changed", below). This spec builds on code
 that 030 to 034 created: every type and function of theirs named here is its draft's,
 built in the round on probe builds of those drafts, and was read in their code on
 `main` at 002dbef8 by the re-anchoring of 2026-11-19.
@@ -2357,7 +2380,8 @@ takes the glossary's focus reading through 033's `focus::read`, in the kept focu
 region, and 033 joined `depends_on_landed`; the hint's radius is the sub's diagonal on the sky, no
 longer held to half a degree; 032's `SolveError` variants and `pixel_of` are written as
 its review left them; the test of every MCP tool is cited at its new line; two
-scenarios were added (US5-S6, US6-S6) and five changed (US5-S1, US6-S7, US5-S3, US6-S2
+scenarios were added (US5-S6 [now US11-S3], US6-S6) and five changed (US5-S1, US6-S7,
+US5-S3 [now US11-S1], US6-S2
 and US6-S5, in their hint radius, their refusals or their cases); the Work Graph gained
 the direct merge edges the record's shared writes need (US8 on US2 and US5, US10 on
 US8); and seven scenarios lost a blank line inside their numbered item, which had cut
@@ -2456,16 +2480,19 @@ Graph gained the edge US5 on US2, and US8 no longer names US2, since US5 is now 
 story between them that writes `mod.rs`. FR-013, FR-014, FR-031 and FR-035 changed in
 their words and not in their stories. No scenario was added or removed; the changed
 ones are US5-S1, US6-S7 (it gained the folder that cannot be made and the `-2`, which
-US8-S3 lost), US5-S2, US5-S6, US8-S1, US8-S3 and US8-S7. 031's id rule, and where
+US8-S3 lost), US5-S2, US5-S6 [now US11-S3], US8-S1, US8-S3 and US8-S7. 031's id rule,
+and where
 every frame outside a stack is saved, did not change. No `path:line` was added.
 
 What probe round 1 changed. On 2026-11-18 and 19 four probe agents built all ten
-stories from this trio, on probe builds of 030 to 034, tests first, with both gates,
+stories [eleven since the owner's split of US5] from this trio, on probe builds of
+030 to 034, tests first, with both gates,
 and measured each diff (§ Prerequisites 9). They found 3 blocking and 38 clarity
 defects, D1 to D41, folded in on 2026-11-19 but for what spec.md's session of that day
 lists as not folded. The two cuts: US5, 73,780 B as written, gave US5-S2, US5-S7 and
 US5-S9 to US6 as US6-S7, US6-S8 and US6-S9, in `stack_gate.rs` with the sim stacking
-rig, and its other scenarios became US5-S1 to US5-S6 (§ Test rigs, § Risks); and US8,
+rig, and its other scenarios became US5-S1 to US5-S6 [three of them US11's since the
+owner's split, below] (§ Test rigs, § Risks); and US8,
 65,294 B, gave the README's `## Live stack` to US10. Neither changes the Work Graph:
 US6 already follows US5, and US10 follows US8. D33, a test of 034's that pins the
 Calibration block as the Imaging page's last region, is fixed in 034's trio; this trio
@@ -2519,6 +2546,22 @@ as met; and the Constitution Check's row for principle V, with its line in
 § Decisions. Every shared write below that names 030 to 034 was checked with `git log`
 at 002dbef8 and names the story that last wrote its file; none changed, and no test,
 write or Work Graph edge of the record changed.
+
+What the owner's split changed. On 2026-11-19 the owner answered "split if needed" for
+US5, which with round 1's cases folded in came to about 67,200 B, and it was needed
+(spec.md § Clarifications, the session of the owner's split of US5). US5-S3, US5-S5
+and US5-S6 moved, with their cases, to a new US11 as US11-S1 to US11-S3, in
+`stack_camera.rs`, and US5-S4 became US5-S3. The scripted camera and `add_at` moved
+with them to `stack_camera`, from which US6 and US8 import the camera, and
+`stand_in_rig` takes a boxed `ImagingCamera` (§ Test rigs). The Work Graph gained US11
+after US5, and US6 names US11 as well as US5, so that US11 and US6, which both add a
+`mod` line to `crates/finder/tests/console/main.rs`, run one after the other. US11
+implements no FR and writes nothing under `crates/finder/src`. Below, US5's record
+lost the three moved tests to US11's, and its shared write of `main.rs` names US11;
+US11's record holds them, its two writes and its shared write of `main.rs` with US6;
+US6's shared writes with US5 name the direct merge edge; and US6's, US7's and US8's
+preserved lines, and US6's checks, name US11's module. No `path:line` was added, and
+§ Risks gives the two estimates, which were not built.
 
 § Prerequisites 2, 5, 8, 13 and 14 were done by that re-anchoring, prerequisite 9 being
 met by probe round 1. The record below is the draft's own account, with round 1's
@@ -2827,23 +2870,8 @@ stories:
       - path: crates/finder/tests/console/stack_loop.rs
         status: new
         disposition: add
-        assertion: "a failed exposure is counted, three in a row end the stack as camera with the frame's words, and the camera is then free"
-        decision: "spec.md:US5-S3"
-      - path: crates/finder/tests/console/stack_loop.rs
-        status: new
-        disposition: add
         assertion: "stop answers within a second against a solver that takes thirty, counts the waiting subs as unprocessed, and nothing changes afterwards"
-        decision: "spec.md:US5-S4"
-      - path: crates/finder/tests/console/stack_loop.rs
-        status: new
-        disposition: add
-        assertion: "an aborted exposure ends the stack as stopped"
-        decision: "spec.md:US5-S5"
-      - path: crates/finder/tests/console/stack_loop.rs
-        status: new
-        disposition: add
-        assertion: "while a stack runs a single imaging frame is refused with the holder's name, the stack, and the stack goes on; after the stop a frame is taken and saved under frames"
-        decision: "spec.md:US5-S6"
+        decision: "spec.md:US5-S3"
       - path: crates/finder/tests/layout/main.rs
         status: existing
         disposition: preserve
@@ -2911,17 +2939,17 @@ stories:
         other_spec: 035-live-stack
         other_story: US6
         disposition: merge_order
-        reason: "US6 follows US5 on the merge chain, and adds judge"
+        reason: "US6 follows US5 by a direct merge edge, and adds judge"
       - path: crates/finder/src/imaging/stack/service.rs
         other_spec: 035-live-stack
         other_story: US6
         disposition: merge_order
-        reason: "US6 follows US5 on the merge chain, and adds the gate and bounds the queue"
+        reason: "US6 follows US5 by a direct merge edge, and adds the gate and bounds the queue"
       - path: crates/finder/tests/console/main.rs
         other_spec: 035-live-stack
-        other_story: US6
+        other_story: US11
         disposition: merge_order
-        reason: "US6 follows US5 on the merge chain, and adds mod stack_gate"
+        reason: "US11 follows US5 on the merge chain, and adds mod stack_camera"
     open_questions: []
   US6:
     tests:
@@ -2976,14 +3004,15 @@ stories:
         assertion: "no file at the top level of crates/finder/tests or new file in its support folder, and each binary's main.rs holds only its support include and mod lines"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
-      - "US5's start, stop, view and mean keep their signatures; US5's module stack_loop is imported and not edited, and the sim stacking rig and the private helpers that US6-S7 to US6-S9 need are copied into stack_gate, not imported (plan.md Test rigs)"
+      - "US5's start, stop, view and mean keep their signatures; US5's module stack_loop and US11's module stack_camera are imported and not edited, and the sim stacking rig and the private helpers that US6-S7 to US6-S9 need are copied into stack_gate, not imported (plan.md Test rigs)"
       - "033's focus::read is called as it is; the stack writes no focus region, record or focus.json"
-      - "crates/finder/tests/console/stack_loop.rs, a test file this spec's earlier story creates, passes unchanged: with the default measure no sub is dropped by the gate (plan.md Shapes that existing tests pin)"
+      - "crates/finder/tests/console/stack_loop.rs and crates/finder/tests/console/stack_camera.rs, test files this spec's earlier stories create, pass unchanged: with the default measure no sub is dropped by the gate (plan.md Shapes that existing tests pin)"
       - "crates/finder/tests/console/imaging_focus_reading.rs, a test file 033 creates, passes unchanged: focus::read is read and not changed (plan.md Shapes that existing tests pin)"
     checks:
       development:
         - "cargo nextest run -p finder --locked --test console stack_gate::"
         - "cargo nextest run -p finder --locked --test console stack_loop::"
+        - "cargo nextest run -p finder --locked --test console stack_camera::"
         - "cargo nextest run -p finder --locked --test console imaging_relation::"
         - "cargo nextest run -p finder --locked --test layout"
       handoff: declared_gates
@@ -3050,7 +3079,7 @@ stories:
       - "no mean of the stack's full size is made for the page's picture (plan.md Plan traps 29)"
       - "031's preview::rgb, preview::jpeg and its eight kept previews are unchanged; the stack's picture is kept by the Stacker"
       - "crates/finder/tests/console/imaging_preview.rs, a test file 031 creates, passes unchanged (plan.md Shapes that existing tests pin)"
-      - "crates/finder/tests/console/stack_loop.rs and crates/finder/tests/console/stack_gate.rs, test files this spec's earlier stories create, pass unchanged (plan.md Shapes that existing tests pin)"
+      - "crates/finder/tests/console/stack_loop.rs, crates/finder/tests/console/stack_camera.rs and crates/finder/tests/console/stack_gate.rs, test files this spec's earlier stories create, pass unchanged (plan.md Shapes that existing tests pin)"
     checks:
       development:
         - "cargo nextest run -p finder --locked --test console stack_display::"
@@ -3137,7 +3166,7 @@ stories:
       - "no sub and no solve sidecar is moved, copied or rewritten; nothing of a stack is kept in session.json"
       - "crates/finder/tests/console/imaging.rs, a test file 031 creates, passes unchanged: exactly off without imaging and no extra key in a view with no stack (plan.md Shapes that existing tests pin)"
       - "crates/finder/tests/console/calibration_console.rs and crates/finder/tests/console/calibration_library.rs, test files 034 creates, pass unchanged: the calibration object in the view and real images (plan.md Shapes that existing tests pin)"
-      - "crates/finder/tests/console/stack_loop.rs, crates/finder/tests/console/stack_gate.rs and crates/finder/tests/console/stack_display.rs, test files this spec's earlier stories create, pass unchanged (plan.md Shapes that existing tests pin)"
+      - "crates/finder/tests/console/stack_loop.rs, crates/finder/tests/console/stack_camera.rs, crates/finder/tests/console/stack_gate.rs and crates/finder/tests/console/stack_display.rs, test files this spec's earlier stories create, pass unchanged (plan.md Shapes that existing tests pin)"
     checks:
       development:
         - "cargo nextest run -p finder --locked --test console stack_console::"
@@ -3368,5 +3397,51 @@ stories:
         other_story: US8
         disposition: merge_order
         reason: "035 depends_on_landed 034, whose US8 last changed mcp/main.rs"
+    open_questions: []
+  US11:
+    tests:
+      - path: crates/finder/tests/console/stack_camera.rs
+        status: new
+        disposition: add
+        assertion: "a failed exposure is counted, three in a row end the stack as camera with the frame's words, and the camera is then free"
+        decision: "spec.md:US11-S1"
+      - path: crates/finder/tests/console/stack_camera.rs
+        status: new
+        disposition: add
+        assertion: "an aborted exposure ends the stack as stopped"
+        decision: "spec.md:US11-S2"
+      - path: crates/finder/tests/console/stack_camera.rs
+        status: new
+        disposition: add
+        assertion: "while a stack runs a single imaging frame is refused with the holder's name, the stack, and the stack goes on; after the stop a frame is taken and saved under frames"
+        decision: "spec.md:US11-S3"
+      - path: crates/finder/tests/layout/main.rs
+        status: existing
+        disposition: preserve
+        assertion: "no file at the top level of crates/finder/tests or new file in its support folder, and each binary's main.rs holds only its support include and mod lines"
+        decision: "plan.md:Shapes that existing tests pin"
+    preserved_behavior:
+      - "nothing under crates/finder/src changes: the scenarios test US5's taker, its ending and the lease with its folder as US5 wrote them"
+      - "US5's start, stop, view and mean keep their signatures; US5's module stack_loop is imported and not edited, and the private helpers that US11-S1 to US11-S3 need are copied into stack_camera, not imported (plan.md Test rigs)"
+      - "crates/finder/tests/console/stack_loop.rs, a test file this spec's earlier story creates, passes unchanged (plan.md Shapes that existing tests pin)"
+    checks:
+      development:
+        - "cargo nextest run -p finder --locked --test console stack_camera::"
+        - "cargo nextest run -p finder --locked --test console stack_loop::"
+        - "cargo nextest run -p finder --locked --test layout"
+      handoff: declared_gates
+      independent: declared_pipeline
+      release:
+        - "release owner: the repository owner, through the merge queue's ci.yml jobs"
+    writes:
+      - crates/finder/tests/console/main.rs
+      - crates/finder/tests/console/stack_camera.rs
+    no_write_reason: ""
+    shared_writes:
+      - path: crates/finder/tests/console/main.rs
+        other_spec: 035-live-stack
+        other_story: US6
+        disposition: merge_order
+        reason: "US6 follows US11 on the merge chain, and adds mod stack_gate"
     open_questions: []
 ```
