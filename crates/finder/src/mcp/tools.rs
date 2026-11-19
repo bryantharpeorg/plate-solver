@@ -13,6 +13,7 @@ use serde_json::{json, Value};
 
 use crate::api;
 use crate::imaging::calibration::service::{CalibrationView, DarksRequest, FlatsRequest};
+use crate::imaging::stack::{display, service::StartRequest};
 use crate::session::SessionEdit;
 use crate::AppState;
 
@@ -31,6 +32,19 @@ pub(crate) struct Console {
 )]
 struct TargetArguments {
     target: Option<String>,
+}
+
+#[derive(rmcp::schemars::JsonSchema)]
+#[expect(
+    dead_code,
+    reason = "schema only; StartRequest parses the actual arguments"
+)]
+struct StackingArguments {
+    on: bool,
+    reject: Option<bool>,
+    focus_gate: Option<bool>,
+    gains: Option<Vec<f64>>,
+    stretch: Option<f64>,
 }
 
 #[derive(rmcp::schemars::JsonSchema)]
@@ -863,6 +877,76 @@ impl Console {
             Ok(serde_json::to_value(view).expect("calibration view JSON"))
         };
         tool_result(result.await)
+    }
+
+    #[tool(description = "Start or stop the live stack of subs, as POST and DELETE /api/imaging/stack do. With on true it also takes reject, focus_gate, gains and stretch; on a running stack it changes gains and stretch.",
+        input_schema = rmcp::handler::server::common::schema_for_input::<StackingArguments>().expect("stacking schema"),
+        output_schema = object_schema())]
+    async fn set_stacking(&self, mut arguments: JsonObject) -> CallToolResult {
+        let result = async {
+            let on = arguments
+                .get("on")
+                .and_then(Value::as_bool)
+                .ok_or_else(|| "on must be true or false".to_owned())?;
+            if !on && arguments.len() > 1 {
+                return Err("on false takes no other argument".to_owned());
+            }
+            // Judge the route body's shape before checking for imaging, and
+            // remove the tool-only key before StartRequest's unknown-key check.
+            arguments.remove("on");
+            let request = if on {
+                serde_json::from_value::<StartRequest>(Value::Object(arguments))
+                    .map_err(|error| error.to_string())?
+            } else {
+                StartRequest::default()
+            };
+            let stacker = self
+                .state
+                .stack()
+                .ok_or_else(|| "this console takes no imaging frames".to_owned())?;
+            let view = if on {
+                Some(
+                    stacker
+                        .start(request, self.state.target_label().as_deref())
+                        .await
+                        .map_err(|refusal| refusal.message)?,
+                )
+            } else {
+                stacker.stop().await
+            };
+            Ok(view.map_or_else(
+                || json!({"state":"none"}),
+                |view| serde_json::to_value(view).expect("stack view JSON"),
+            ))
+        };
+        tool_result(result.await)
+    }
+
+    #[tool(description = "Read the live stack: its state, counts, dropped subs by reason and, when it has one, its picture as a colour JPEG.",
+        output_schema = object_schema(), annotations(read_only_hint = true))]
+    async fn get_stack(&self, arguments: JsonObject) -> CallToolResult {
+        if !arguments.is_empty() {
+            return CallToolResult::error(vec![ContentBlock::text("get_stack takes no arguments")]);
+        }
+        let stacker = self.state.stack();
+        let view = stacker.as_ref().and_then(|stacker| stacker.view());
+        let mut result = CallToolResult::structured(view.map_or_else(
+            || json!({"state":"none"}),
+            |view| serde_json::to_value(view).expect("stack view JSON"),
+        ));
+        if let Some(stacker) = stacker {
+            if let Some(preview) =
+                tokio::task::spawn_blocking(move || stacker.preview_within(display::MCP_WIDTH))
+                    .await
+                    .expect("stack preview task")
+            {
+                result.content.push(ContentBlock::image(
+                    BASE64_STANDARD.encode(preview),
+                    "image/jpeg",
+                ));
+            }
+        }
+        result
     }
 }
 

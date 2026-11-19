@@ -82,7 +82,7 @@ moves the telescope, the guidance block and top bar say
 “Moved by an MCP client · <tool>”. The top bar's Stop is the page's only Stop;
 it stays enabled throughout motion and ends GoTo, direct axis moves and tracking.
 
-The imaging camera has nine tools of its own, which answer what the page's
+The imaging camera has eleven tools of its own, which answer what the page's
 Imaging page does:
 
 - `get_imaging_camera` reads the imaging view: the state, the camera's
@@ -114,6 +114,8 @@ Imaging page does:
 - `list_calibration` reads the calibration library's master darks and master flats, the set being taken and what matches the latest imaging frame, as `GET /api/imaging/calibration` does.
 - `take_darks` takes the body of `POST /api/imaging/calibration/darks`, including `anyway`, and answers once the set has started; read its progress with `list_calibration`.
 - `take_flats` takes the body of `POST /api/imaging/calibration/flats`, including `darks` and `anyway`, and answers once the step has started; read its progress with `list_calibration`.
+- `set_stacking` takes `on` to start or stop the live stack as the page does, with `reject`, `focus_gate`, `gains` and `stretch` on a start, and `gains` and `stretch` on a running stack; it answers the stack's view or the route's refusal as a tool error.
+- `get_stack` reads the stack's state, counts and dropped subs by reason, with its picture as a colour JPEG at most 1024 wide when it has one, or `{"state":"none"}` before any stack.
 
 Both taking tools answer a refusal as a tool error with the route's words. On a
 console that takes no imaging frames they answer `this console takes no imaging
@@ -1149,3 +1151,172 @@ While flats wait, requests for new darks or flats answer
 `DELETE /api/imaging/calibration/<id>` drops waiting flats at once, or stops
 a running step. Flats in hand live only in memory and are lost when the
 console restarts.
+
+## Live stack
+
+A stack builds one picture from subs taken one after another: each is
+calibrated, turned into colour, placed on the reference sub's grid and
+averaged, with outliers rejected. It runs on whatever the imaging camera
+points at. Do a GoTo and turn Track on first. Stacking does not move the
+telescope or start Track for you. A trailed sub that solves is stacked
+unless the focus gate finds it soft; there is no separate trailing test.
+
+Start from the Imaging page, `POST /api/imaging/stack` with `{}`, or MCP
+`set_stacking` with `{"on":true}`. The stack holds the imaging camera from
+its start until its taking task returns as the stack ends, releasing it
+before the final files are written. Single imaging frames, the focus aid and a set
+of darks or flats are refused while it holds the camera, with
+`the imaging camera is held by the stack`. A stack requested while another
+holder has the camera is refused with that holder's name. A single imaging
+frame already in flight also refuses a start. The finder camera continues
+solving while the imaging camera stacks.
+
+Subs are handled in this order: check the saved frame and its settings
+against the reference sub, choose a hint, solve, take and judge a focus
+reading when the focus gate is on, check its placement, read and calibrate
+its mosaic through the calibration library, turn it into colour, match its
+background and add it with rejection. The first accepted sub is the
+reference sub. Missing masters do not stop stacking; `missing` says which
+of `dark`, `flat` and `bad_pixels` were absent for the latest calibrated sub.
+
+A sub's hint comes first from live pointing carried through the aim point,
+then from the stack's last solved sub, then from the session's target, or
+from no position. The initial hint and the fallback after three successive
+solve misses use the imaging solver's usual hint selection, which can also
+use a previous imaging solve. A live pointing always takes precedence.
+The stack's own hint uses its last solved centre and this sub's diagonal
+on the sky as its radius; after three misses it is set aside until a sub
+solves. A focus gate refusal does not count as a solve miss. The live
+pointing's hint is narrow only once the aim point is measured and an
+imaging scale is kept; otherwise its radius is 3°. Each stacked sub's solve
+keeps the aim point measured while the finder camera solves too, but keeps
+no scale and does not replace the page's imaging solve. Solving a single
+imaging frame before stacking can keep that scale.
+
+The reference and sub's imaging solves place the sub: their full matrices
+map between the two sky projections, carrying shift, rotation, scale and
+shear. The linear map is checked at all four corners of the reference grid
+and refused if it differs from those projections by more than 0.5 px.
+The imaging solver must therefore give consistent centres and matrices to
+a fraction of a pixel; a solved position alone is insufficient. A mirror
+or an area scale differing by more than 2% is refused, as is a centre
+shift beyond half the reference grid's shorter side. Each pixel's own
+weight counts the subs that reached it, so uncovered edges stay honest.
+
+Rejection is on by default to remove satellite streaks and other outliers.
+Each pixel learns from its first eight subs. Thereafter a sample more than
+three running standard deviations from its mean, with a floor of one
+count for the deviation, is left out in all three channels when any one
+channel fails. The deviation uses the sample variance, divided by the
+weight less one. A streak in the learning subs remains at a fraction of
+its strength and fades as more subs arrive. Background matching first
+adds a separate offset to each channel to match the reference sub's
+median, so changing sky brightness does not itself become an outlier.
+
+The eleven dropped-sub reasons are:
+
+- `not_solved`: the imaging solver found no solution.
+- `too_few_stars`: the solve or focus reading found too few stars.
+- `solver_failed`: the solver, focus measure or solve-sidecar write failed.
+- `soft`: the focus reading was far out, or more than 30% above the median of at least five stacked subs' readings; it is taken in the console's kept focus region when that region lies inside the sub, otherwise over the whole sub.
+- `off_field`: the placing map failed its corner check, or the centre shifted too far.
+- `solve_differs`: the placing map has a wrong area scale, a mirror or no inverse.
+- `settings`: size, depth, Bayer pattern, binning, region, gain, offset or exposure differs from the reference sub's settings.
+- `frame_failed`: the imaging frame could not be received or saved.
+- `unreadable`: a saved sub lacks needed metadata or its FITS file could not be read.
+- `behind`: the waiting queue was full, so the oldest waiting sub was dropped.
+- `unprocessed`: the stack ended before the sub could be processed.
+
+The camera is never kept waiting for processing. At most four saved subs
+wait; `behind` means processing did not keep up, and the newest subs are
+kept in preference to the oldest. Three failed imaging frames in a row end
+the stack with reason `camera` and the frame's error. Stopping with the
+page, `DELETE /api/imaging/stack`, or `set_stacking` with `{"on":false}`
+aborts an exposure in flight and waits for processing to end and files to
+be written. The latest stack and picture remain readable after it ends,
+until the next start. Neither stacking tool writes a call-log line or is
+a moving tool.
+
+The imaging view, the session's `imaging` and MCP `get_stack` carry these
+stack keys (optional keys are absent until known):
+
+- `state` (`stacking` or `ended`), `id`, `started_at` and `options`.
+- `taken`, `stacked`, `queued`, `dropped` (every reason above) and `exposure_s`, the sum of the stacked subs' exposures in seconds.
+- `reference`: its `frame_id`, `width`, `height`, `ra_deg`, `dec_deg`, `up_east_of_north_deg`, `arcsec_per_px` and `exposure_ms`.
+- `last`: the last sub reaching the solver, with `frame_id`, `outcome`, `took_ms`, and when known `turn_deg`, `shift_px` (x, y), `rejected_px` and `focus_arcsec`.
+- `missing`, `focus_median_arcsec` and `preview`, the latest picture's URL with a counter that changes whenever a picture is made.
+- `ended_at`, `ended_reason` (`stopped` or `camera`), `error`, `files` and `save_error`.
+
+Before a stack exists the imaging and session views omit `stack`;
+`get_stack` answers `{"state":"none"}`. Its picture, when kept, is a second
+MCP content block containing a colour JPEG at most 1024 wide. The page's
+JPEG is at most 1920 wide. At night it is red until Hold to see colour is
+held, for at most ten seconds per hold.
+
+For display, whole blocks reduce the sums and weights directly; each
+channel has a fitted background plane taken away, then the observer's
+gains are applied. One span shared by all three channels and an `asinh`
+curve produce the picture. These display steps change nothing saved in
+the FITS samples. Gains default to `[1,1,1]` and each may be from 0.1 to
+10; stretch defaults to 10 and may be from 1 to 1000. A start can also set
+`reject` and `focus_gate`, both true by default. On a running stack only
+gains and stretch can change; stop first to change either gate. Changing
+gains or stretch remakes the picture immediately when one is kept. No
+colour matrix is applied, so gains may need adjustment for the camera.
+
+Everything is under the console's imaging folder, in `runs/<id>/`. The
+id is the UTC start with colons made dashes, then `Z` and, when the session
+has a target, its label (for example `2026-01-16T02-00-00Z-M42`); a clash
+adds `-2`, `-3` and so on. Labels keep ASCII letters and digits and replace
+each other character with a dash. Every sub, including a dropped one,
+is saved as `subs/<frame id, six digits>.fits`, with its solve sidecar
+beside it when a solve was attempted. Every other imaging frame stays
+under `frames/`.
+
+The start writes `stack.json`. The end writes `stack.fits` and `stack.png`
+when at least one sub was stacked, then finishes `stack.json`. A stack
+with no stacked sub writes only JSON. Files are written through `.part`
+and renamed whole; `files` names those written after a successful save,
+and a failure reports `save_error`. If the console exits mid-stack,
+nothing but the start's `stack.json` is saved for the stack itself; the
+subs and sidecars already saved remain. Nothing of a stack is kept in
+`session.json`.
+
+`stack.fits` holds three full-size planes of 32-bit reals, red, green and
+blue, row by row from the top: the calibrated mean before display. Its
+structural cards are `SIMPLE`, `BITPIX` (-32), `NAXIS` (3), `NAXIS1`,
+`NAXIS2` and `NAXIS3`. Following them are `IMAGETYP` (`STACK`), `STACKID`,
+`NSUBS`, `EXPTIME` (total seconds), `SUBEXP` (reference sub seconds),
+`DATE-OBS`, `INSTRUME`, `XBINNING`, `YBINNING`, `ROWORDER` (`TOP-DOWN`),
+`CTYPE1` (`RA---TAN`), `CTYPE2` (`DEC--TAN`), `CRPIX1`, `CRPIX2`, `CRVAL1`,
+`CRVAL2`, `CD1_1`, `CD1_2`, `CD2_1` and `CD2_2`. The celestial cards come
+from the reference sub's imaging solve; the FITS reference pixel is
+(width/2 + 0.5, height/2 + 0.5). `stack.png` is the full-size 8-bit RGB
+picture with the final gains, background removal and stretch.
+
+`stack.json` records `format` (`finder-stack/1`), `finder` (version), `id`,
+`started_at`, `started_utc`, `target`, `options` and `camera` (model and
+serial). At the end it adds `ended_at`, `ended_reason`, `error` when there
+is one, `taken`, `stacked`, `dropped`, `exposure_s`, `reference` and `subs`.
+The reference is the view's reference with `cd_deg` and `file`, or null
+without a stacked sub. Every taken sub is listed in order with `frame_id`,
+`file` and `outcome`; stacked subs also have `turn_deg`, `shift_px` and
+`rejected_px`, and a measured sub has `focus_arcsec`. A sub that never
+arrived has a null `file`. All file names here are relative to this run
+folder, such as `subs/000001.fits`, so the folder opens on its own in
+another program.
+
+Memory grows with the delivered camera size: three planes of sums, one
+plane of weights and, with rejection, three planes of running squared
+deviations, plus the sub's mosaic and three colour planes while processing.
+The picture is made from a reduction, with no full-size mean in between;
+a full-size mean is made only when saving the FITS at the end. At
+4944 × 3284 the stack alone is about 455 MB, the sub in hand adds about
+260 MB, and saving needs further working buffers for the mean, FITS bytes
+and full-size PNG. Binning 2 × 2 quarters the pixel storage and work.
+
+At bring-up, compare `last.took_ms` with the sub length. It measures real
+milliseconds from taking the sub off the queue through its outcome,
+including solving and calibration. The picture the worker makes after
+that sub is not included. Read `behind` too: it exposes processing that
+cannot keep pace with the camera.
