@@ -52,33 +52,56 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
    tracker is handed no step"). Met for decision 26: the owner settled 032's decision
    25 on 2026-11-17 with the hold, which 032 writes as its FR-036 and US4-S8, and this
    trio is written for it.
-5. **A probe build of every story.** Met on 2026-11-19 by probe round 1, for the trio
-   as it then stood. Four agents built all eleven stories from it, tests first and with
-   both gates, each starting where the one before stopped (US1 to US3, 041's US4 to US6, 041's US7
-   and 041's US8, 042's US9 to US11), on `main`'s 030 to 034 and 038 and on probe builds of 035's
-   flipped trio and of 036's folded draft (history.md § Clarifications, the session of
-   round 1 probes and the reanalysis). Every story built and passed both gates, two of
-   them only with a marked deviation (D13 and D14 below), and each wrote only its
-   declared files; every bound but those two held, on three runs each. What the round
-   settled:
-   - each story's diff against 64 KiB (spec SC-007): US1 61,307 B, 93.5 %; US2 17,566;
-     US3 40,205. All were under, and US1 alone was above 85 %. The fold of 2026-11-19
-     added code and cases to every story, so plan.md § Risks carries the figures as
-     they are estimated now;
-   - US3-S6's two runs took 200 ms of their 950 ms;
-   - `Imaging` builds its view in one place, `Imaging::view`, which `Imaging::solve`
-     answers on `main` too; `run` is set there in every state, and no part was reached
-     under the runner's lock (plan.md § Plan traps 23);
-   - a console dropped while a run of its own five parts stacks has its mount at rest
-     within 0.05 s and lets its session go 2.95 s after the drop, all of that time
-     035's stack's (plan.md § Risks). US2-S9 proves the runner's half on the script;
+5. **A probe build of every story.** Met on 2026-11-20 by probe round 2, for the trio as
+   the split of 2026-11-20 left it. Two agents built US12 and US1, then US2 and US3, each
+   starting where the one before stopped, on 036's round-2 probe build, tests first and
+   with both gates, from the trio alone: history.md was read only after the stories were
+   committed. Every story built and passed both gates, wrote only its declared files and
+   needed no stand-in; workspace nextest ran 1158 tests at the base and 1198 after US3.
+   The round found 0 blocking and 15 clarity defects, 037-R1 to 037-R15, all folded on
+   2026-11-20 but R15 (history.md § Probe round 2 and its fold). Probe round 1, on
+   2026-11-19, had built the twelve-story trio (history.md § Clarifications, the session
+   of round 1 probes and the reanalysis). What round 2 ran:
+   - each story's diff against its estimate in plan.md § Risks: US12 51,369 B (78.4 %)
+     against 43.4 KB, 18.4 % over; US1 33,997 B (51.9 %) against 30.0 KB, 13.3 % over;
+     US2 34,869 B (53.2 %) against 35.2 KB, 0.9 % under; US3 47,736 B (72.8 %) against
+     47.1 KB, 1.4 % over. At 1.17, the largest factor of the factory builds of 036, 039
+     and 040, US12 came to 60,102 B, over owner choice 14's 60 KB, so it is cut by tests
+     into US13, the script's two scenarios with their module, the code staying in US12:
+     at most 40,851 B and about 12,056 B, 47,796 B and 14,106 B at 1.17. US3, at
+     57,332 B with the fold's cases, is the story to watch (plan.md § Risks);
+   - each bound, on three runs in paused time, identical on all three: US2-S1's second
+     take at 5.00 s, 0.5 s inside both of its bounds; the third take and `stacking`, and
+     the third failed take's ending, at 10.00 s, 1.0 s inside 11 s; its stop in the first
+     wait at once, inside 1 s; US3-S6's two runs used 200 ms of their 950 ms; US3-S8's
+     writes fell 1.05 s, 28.95 s and 2.05 s from its three reads; US3-S11's fourth change
+     came 3 s past the 60 s and 61 s after the last change held back, which 037-R13
+     makes 61 s and 59 s, so that a rule holding back from the last change held back
+     would not list it; US3-S5 read `no_link` 1.0 s after the link went. The longest
+     test, US3-S8, took 4.2 % of nextest's 300 s, and each US12, US1 and US2 test about
+     0.001 %;
+   - the seams: what US12 to US3 read of 030 to 036 is as plan.md § What 030 to 036 offer
+     says (`Refusal` and its constructors, `fits::utc`, 035's `label`, 036's `FAR_ARCSEC`
+     at 180.0, `Imaging::root()`, `Clock` and `FixedClock`), and US3 sets `run` and
+     `unfinished_run` after 036's `steering` in `Imaging::view`, in every state. Nothing
+     of 040's code is needed: `steady_between` and the tracker's pause come from the
+     script. One seam is text only, 037-R15, in 036's and 040's trios, and is not folded:
+     036 has landed and 040 is building. Stale anchors, left for the re-anchoring
+     (§ Prerequisites 2 and 7): `crates/finder/src/api.rs` lines 570, 593, 644, 652 and
+     904, `crates/simulator/src/controls.rs` line 115, `DESIGN.md` line 308 and
+     `crates/finder/Cargo.toml` line 32;
+   - US1's machine first tested in US2 (plan.md § Risks): US1's own tests bit 1 of 16
+     mutations of that code, and US2-S6 to US2-S10 bit 15; the sixteenth is 037-R4's
+     case, which bites once it is held at `first_frame` (037-R8);
+   - round 1's figures that round 2 did not run again stand: a console dropped while a
+     run of its own five parts stacks has its mount at rest within 0.05 s and lets its
+     session go 2.95 s after the drop, all of that time 035's stack's (plan.md § Risks),
+     and US2-S9 proves the runner's half on the script, as round 2 ran it again.
 
-   Not settled, and for the second probe round the owner asked for (history.md
-   § Clarifications, the owner's answer 17): everything the fold of 2026-11-19 added,
-   none of which has been run (plan.md § Refinement Record, "What probe round 1 and the
-   reanalysis changed"); and each story's diff on the folded trio, US12's and US1's
-   first, because the owner's split of 2026-11-19 came after the round and no probe has
-   built either as it now is (plan.md § Risks).
+   Not run: the page half, since no story here writes under `crates/finder/web`; US13
+   as cut, measured from the probe's bytes by scenario; and the fold's new cases as
+   committed tests: each ran as a throwaway that passed on the probe's code and failed
+   under the mutation it was written for.
 6. **The plan document, ADR-0002, the glossary's imaging terms and the research note
    are on `main`.** Met by 2026-11-19: all four are on `main`.
 7. **`main` is still as read.** Met on 2026-11-15: every `path:line` here was read at

@@ -2,6 +2,86 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
 
 # How 037-imaging-run got here
 
+## Probe round 2 and its fold (2026-11-20)
+
+Probe round 2 built this piece's four stories, as the split of 2026-11-20 left them,
+on 2026-11-19 and 2026-11-20: one agent built US12 and US1, a second US2 and US3, each
+starting where the one before stopped, on 036's round-2 probe build, tests first, with
+both gates and from the trio alone (flip.md § Prerequisites 5 says what it ran). Every
+story built, passed both gates and wrote only its declared files. The round found 0
+blocking and 15 clarity defects, 037-R1 to 037-R15, and they were folded on 2026-11-20,
+while 040 was building and before the re-anchoring onto `main`, which is a step of its
+own. Where a scenario gained a case, it has the words of the throwaway test the probe
+ran, which passed on the probe's code and failed under the mutation it was written for.
+037-R8 replaces 037-R4's fix: R4's case holds the run at `first_frame`, not at
+`stacking`.
+
+| Defect | What it found | Where it went |
+|---|---|---|
+| 037-R1 | Nothing in US1 constructs seven of the nine warnings, so a private enum of them fails `clippy -D warnings`, and the plan named no public item for them | plan.md § The machine, a public `Warning` with `words`; tasks.md T003 |
+| 037-R2 | US12 built at 51,369 B, 18.4 % over its estimate; at § Risks' 1.35 it would pass 64 KiB | US12 cut by tests into US13 (below); plan.md § Risks |
+| 037-R3 | No test pins `limit_at` to the request's `duration_s` (M5 survived) | a third bullet of US1-S2 |
+| 037-R4 | No scenario reaches a stop of the run that finds Track off (E6 survived) | a case of US2-S7, held at `first_frame` as 037-R8 rewrote it |
+| 037-R5 | The record's shared writes named 036's US4 for `imaging/mod.rs`, and five reasons read "whose 041's US<n>" | plan.md § Refinement Record: 036's US5, and "whose US8" or "whose US5" |
+| 037-R6 | US1 needs `use` lines US12's lack, and "changes none of that" read strictly forbids them | plan.md § The machine and tasks.md T003: the `use` lines are no item |
+| 037-R7 | Who words `SubsFailing`'s reasons was not said | plan.md § The run's words: `message` inserts them as the variant holds them; 041's US7 words them |
+| 037-R8 | `guarded` and `steady` take a stop before the mount's ending and step 6 the other way, with no scenario on step 6's order (F32), so R4's case on a stacking run no longer bites E6 | R4's case at `first_frame`; a case of US2-S8; plan.md § Failed steps and counts, step 6 |
+| 037-R9 | Three equal failure words leave "the last error" unpinned (F7) | US2-S1's second bullet: `boom`, `boom`, then `gone` |
+| 037-R10 | No scenario reads `saved` after a failed `stack.stop` (F35) | US2-S4's third bullet: `ended.saved` false |
+| 037-R11 | The wait's words are never seen to go (F31) | US2-S5: `solve` held too, the message read after the wait |
+| 037-R12 | The counts read after `stack.stop` have no oracle, and US3-S3's cannot be one (F28) | US2-S4's last bullet; US3-S3 drops "and not the 4 of the last poll" |
+| 037-R13 | US3-S11's 60 s cannot tell the rule from holding back by the last change held back (N25) | US3-S11 sleeps 58 s, and its Then clause says why |
+| 037-R14 | US3-S9's one record cannot tell the newest from the oldest (N27) | US3-S9 gains an older record that ended |
+| 037-R15 | 036's and 040's plan.md point at this plan's table for five items it no longer lists | not folded (below) |
+
+- Q: What did 037-R2 come to, under owner choice 14? → A: A cut by tests. The owner took
+  choice 14 on 2026-11-19: "if the fold's estimate passes 60 KB, cut it by tests into a
+  new story". The night's factory builds ran 0.93 and 1.04 times their probes' diffs
+  (039's US1 and US2), 0.94 to 1.17 (036's stories) and 0.85 and 0.99 (040's US6 and
+  US10), so the fold took the highest, 1.17, and not § Risks' 1.35. No folded defect adds
+  a case to US12, so its estimate is 51,369 B × 1.17 = 60,102 B, 102 B over 60,000 B.
+  US12-S3 and US12-S4, the script's defaults and call words and its controls, are
+  User Story 13's, with their module `imaging_run_script`; the code, `script.rs`
+  included, stays in US12. By the probe's bytes by scenario the two are 2,859 B and
+  7,659 B of US12's test diff, so US12 is at most 51,369 − 2,859 − 7,659 = 40,851 B,
+  47,796 B at 1.17. US13 is their 10,518 B with the module's head of 607 B, the helpers
+  `m42` and `frame` of 296 B (US12 keeps `m42` too), a file header of about 250 B and
+  its `mod` line of about 385 B: about 12,056 B, 14,106 B at 1.17. The other stories at
+  1.17, with the bytes of the throwaways their cases add: US1 (33,997 + 456) × 1.17 =
+  40,310 B, US2
+  (34,869 + 3,201) × 1.17 = 44,542 B and US3 (47,736 + 1,266) × 1.17 = 57,332 B, the
+  story to watch. US13 `depends_on_merged` US12, implements no FR and writes nothing
+  under `crates/finder/src`, as 036's US12 does for its US5; US1 names US12 and US13,
+  since both last write a file it writes, so the script is proven before the machine is
+  written on it. In the record US12's shared write of the `console` binary's `main.rs`
+  names US13, and US13's names US1. tasks.md's T046 is no longer used; US13's tasks are
+  T050 and T051. No case was dropped or shortened.
+
+  | Was | Now | Module |
+  |---|---|---|
+  | US12-S3 (the script's defaults and call words) | US13-S1 | `imaging_run_script` of `console` |
+  | US12-S4 (the script's controls) | US13-S2 | `imaging_run_script` of `console` |
+- Q: Why was 037-R15 not folded? → A: Its fix texts are edits of 036's plan.md and 040's
+  plan.md, and this fold edits neither: 036 has landed, and 040 is building. Neither
+  touches a build of this piece, which reads only the constant `FAR_ARCSEC` of 036's and
+  nothing of 040's. It is left for those trios' own owners.
+- Q: What did the owner answer on the pause line? → A: On 2026-11-20, "for 037 agree with
+  your recommendation": the run's `paused_by_tracker` line names no cause, and no field
+  is added to `StackProgress`. The trio already said so (plan.md § The run's words,
+  "`paused_by_tracker` names no cause"; flip.md § Prerequisites 2), and nothing changed
+  for it.
+- Q: What else did the round note, and what was left? → A: Three notes that are no
+  defect, none folded: W6, the one survivor of US12's 33 mutations (`label` written as
+  a space made `-` passes, since US12-S2's worked example has only a space; the probe
+  proposed `label("Sh2-155 (Cave)")` as a further example); `RECORD_EVERY`, written
+  inside "`Runner` gains" and built as `Runner::RECORD_EVERY`, which no test reads; and
+  a stop arm of a `select!` that does not return in the same turn, which spins the
+  paused clock, for 041's US7 to keep in mind. The stale anchors the round found are the
+  re-anchoring's (flip.md § Prerequisites 5). No other trio cites US12-S3 or US12-S4:
+  041's and 042's drafts cite US12-S1 and "037's US12" for the script, both unchanged.
+  Owner approval 8 in flip.md still names four test modules; `imaging_run_script` is to
+  be added to it at the flip, with the rest of the flip's wording.
+
 ## The split (2026-11-20)
 
 On 2026-11-20 the owner approved cutting the imaging run's trio, then `037-imaging-run`

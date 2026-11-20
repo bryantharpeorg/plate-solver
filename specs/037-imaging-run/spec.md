@@ -3,7 +3,7 @@ state: draft
 depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-confirm", "030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "034-dark-and-flat-frames", "035-live-stack", "036-tracking-from-subs", "038-track-follows-a-push", "040-stack-waits-for-steady"]
 # The imaging run, first of three pieces: the run's parts, words and script, the machine
 # with its retries, failures, counts and soft-focus warning, and the routes and the record,
-# all on the scripted parts (US12, US1, US2, US3). 041-imaging-run-on-the-rig gives the run
+# all on the scripted parts (US12, US13, US1, US2, US3). 041-imaging-run-on-the-rig gives the run
 # the console's own parts; 042-imaging-run-page-and-mcp its page, MCP tools and README.
 # Depends on 014 to 017, 030 to 036, 038 and 040 having landed. State: draft, re-anchored to
 # `main` before the flip. history.md has how it got here; flip.md what the flip needs.
@@ -172,7 +172,10 @@ asserted by US2's test module (US2-S6 to US2-S10), so that this story's diff sta
      settle, `focus` is `{"verdict":"unmeasurable","unit":"px"}` and `warnings` is
      `["The focus check did not finish: the focus check ended: no_region."]`. The test
      reads `focus` and `warnings` only, and asserts nothing of the state or of `calls()`
-     after `focus.check`: from 041's US6 this run pauses there.
+     after `focus.check`: from 041's US6 this run pauses there;
+   - a run started with `RunRequest { duration_s: Some(60.0), ..RunRequest::default() }`
+     reaches `stacking` after a settle with `limit_at` 1768528860.0: the limit is the
+     request's.
 
 ---
 
@@ -203,9 +206,11 @@ this story's code is written and must still pass after it.
      `camera.take` 4.5 s after the start and two 1 s later, and 11 s after the start
      the run has reached `stacking` and `calls()` holds `camera.take` four times: three
      for the first imaging frame, 5 s apart, and one for the solve;
-   - with it given three times, 11 s after the start the run has ended `camera_failed`
-     with `Ended: the imaging camera failed: boom.` after exactly three `camera.take`,
-     and `calls()` holds no `focus.check`; and on another such run a `runner.stop()`
+   - with it given `Err(Failure::Camera("boom"))` twice and then
+     `Err(Failure::Camera("gone"))`, 11 s after the start the run has ended
+     `camera_failed` with `Ended: the imaging camera failed: gone.` after exactly three
+     `camera.take`, the last failure's words, and `calls()` holds no `focus.check`; and
+     on another such run a `runner.stop()`
      awaited 2 s after the start, inside the first wait, answers within 1 s a run ended
      `stopped` after one `camera.take`;
    - with `Err(Failure::Save("could not save the imaging frame: disk"))` once, the run
@@ -261,8 +266,8 @@ this story's code is written and must still pass after it.
      `stack.start M42`, `camera.release`;
    - with
      `fail_stack_stop(Failure::Other("could not remove subs/000004.fits"))`
-     a run stopped while stacking still ends `stopped`, with `warnings`
-     `["The stack did not end cleanly: could not remove subs/000004.fits."]`;
+     a run stopped while stacking still ends `stopped`, with `ended.saved` false and
+     `warnings` `["The stack did not end cleanly: could not remove subs/000004.fits."]`;
    - with `fail_stack_start(Failure::NotSolved("the imaging solver found no solution"))`
      it ends `solver_failing`, and with
      `fail_stack_start(Failure::Camera("the imaging camera is held by a set of darks"))`
@@ -278,13 +283,17 @@ this story's code is written and must still pass after it.
      reads after a settle the state `stacking` and the message
      `Saving the stack: 2 stacked.`, and a start is refused with 409 and
      `an imaging run is already running`; once `stack_stop` is released the run has
-     ended `stopped`.
-5. **Given** a script holding `check`, **When** a test starts a scripted run, settles,
-   sets the mount to tracking and not steady, releases `check` and settles, **Then** a
-   committed test asserts the state `solving`, the message
+     ended `stopped`; and with `stack_stop` held, after the spawned `runner.stop()` and
+     a settle the test calls `set_stack(3, &[], false)`, and once `stack_stop` is
+     released the run has ended `stopped` with `subs.stacked` 3: the counts are read
+     once more after the stack has stopped.
+5. **Given** a script holding `check` and `solve`, **When** a test starts a scripted
+   run, settles, sets the mount to tracking and not steady, releases `check` and
+   settles, **Then** a committed test asserts the state `solving`, the message
    `Solving an imaging frame. Waiting for the mount to settle; nothing to do.` and one
-   `camera.take` in `calls()`; and that after the mount is set steady and the test
-   settles, the state is `stacking`.
+   `camera.take` in `calls()`; that after the mount is set steady and the test
+   settles, the state is `solving` with the message `Solving an imaging frame.`; and
+   that once `solve` is released and the test settles, the state is `stacking`.
 6. **Given** a script whose mount is tracking and not steady, **When** a test starts a
    scripted run and settles, **Then** a committed test asserts the state `tracking`, the
    message `Tracking M42. Waiting for the mount to settle; nothing to do.` and neither
@@ -308,7 +317,11 @@ this story's code is written and must still pass after it.
    `camera.release`; that no call is added in the 10 s after the ending; that
    `calls()` never holds `mount.repoint`; and that, once the test has set the mount of
    the run stopped while stacking to `Ended(Ending::Stopped)`, its view's
-   `ended.track_on` is false.
+   `ended.track_on` is false; and that a scripted run held at `first_frame` (`take`
+   held), whose mount the test sets to `Ended(Ending::Stopped)` and which it then stops
+   with `runner.stop()` with no settle between, ends `stopped` with
+   `Stopped: the mount was stopped.` and `ended.track_on` false: a stop of the run that
+   finds Track off says that the mount was stopped.
 8. **Given** a scripted run that is stacking, **When** a test sets the mount to each of
    `Ended(Ending::Stopped)`, `Ended(Ending::TooLow)`, `Ended(Ending::SunUp)`,
    `Ended(Ending::LinkLost)`, `Ended(Ending::MountFailed("failed after 5 corrections"))`,
@@ -334,7 +347,11 @@ this story's code is written and must still pass after it.
    then sets to `Ended(Ending::TooLow)`, has after a settle `ended.reason` `too_low`
    and `camera.abort` called once; and a scripted run started with its mount set to
    slewing, whose mount the test sets to `Ended(Ending::SunUp)` after a settle, has
-   after another settle `ended.reason` `sun_up` and `camera.release` as its last call.
+   after another settle `ended.reason` `sun_up` and `camera.release` as its last call;
+   and a scripted run that is stacking, whose mount the test sets to
+   `Ended(Ending::TooLow)` and which it then stops with `runner.stop()` with no settle
+   between, ends `too_low`: while it stacks, the run judges the mount's ending before a
+   stop.
 9. **Given** a scripted run that is stacking, built so that the test holds the only
    `Arc` of the `Runner` and no `Steps` of its own, **When** the test drops that `Arc`
    and sleeps 1 s, **Then** a committed test asserts that `Arc::strong_count` of the
@@ -419,10 +436,9 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_ro
    written when it happens; that the answer of the `DELETE` is 200
    with `run.state` `ended` and `run.ended.reason` `stopped`; that `run.json` then has
    `state` `ended`, an `ended` equal to the view's, `subs.stacked` 5, the count the
-   stack held when it was stopped and not the 4 of the last poll, and `ended` as the
-   last of its `events`; that a second `DELETE`
-   answers 200 with the same `run`; and that on a console where no run was ever started
-   `DELETE` answers 200 with no `run` key.
+   stack held when it was stopped, and `ended` as the last of its `events`; that a
+   second `DELETE` answers 200 with the same `run`; and that on a console where no run
+   was ever started `DELETE` answers 200 with no `run` key.
 4. **Given** the scripted console, **Then** a committed test asserts that
    `POST /api/imaging/run/continue` with `{"anyway":true}` answers 409 and
    `no imaging run is running` before any run, and 409 and
@@ -457,7 +473,9 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_ro
 9. **Given** an R in which the test has written
    `runs/2026-01-15T03-00-00Z-M31/run.json` holding
    `{"format":"imaging-run/1","id":"2026-01-15T03-00-00Z-M31","state":"stacking"}`, with
-   no `ended`, and the scripted console built over it, **Then** a committed test
+   no `ended`, and an older `runs/2026-01-14T03-00-00Z-M31/run.json` holding
+   `{"format":"imaging-run/1","ended":{"reason":"stopped"}}`, and the scripted console
+   built over it, **Then** a committed test
    asserts that `GET /api/imaging` carries `unfinished_run`
    `runs/2026-01-15T03-00-00Z-M31` and no `run`; that once a start has been accepted
    the view has no `unfinished_run`; and that on a console built over an R whose only
@@ -476,14 +494,16 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_ro
       folder that cannot be made at the ending is a warning and changes no reason.
 11. **Given** the scripted console with a run that is stacking, **When** a test calls
     `set_stack(0, &[], true)` and settles, calls `set_stack(0, &[], false)` and settles,
-    calls `set_stack(0, &[], true)`, settles and reads `run.json`, and then sleeps 60 s,
+    calls `set_stack(0, &[], true)`, settles and reads `run.json`, and then sleeps 58 s,
     calls `set_stack(0, &[], false)`, settles and reads `run.json` again, **Then** a
     committed test asserts that `run.state` read `stacking` after the second settle;
     that the first record has the `state` `paused_by_tracker` and `events` that end
     `stacking`, `paused_by_tracker`, with one `paused_by_tracker` among them; and that
     the second record's `events` end `paused_by_tracker`, `stacking`: a change between
     `stacking` and `paused_by_tracker` is listed and written at most once every 60 s,
-    and the view shows every one at once.
+    and the view shows every one at once; that change comes 61 s after the first was
+    listed and 59 s after the last one held back: only a listed change holds the next
+    back.
 
 ---
 
@@ -495,25 +515,26 @@ parts a run is handed, what a start may ask for, the words for where a run is an
 ended, with a sentence for every ending, and a scripted stand-in for the five parts, so
 that the machine and every later story are written against names that do not move.
 
-This story is built first, before User Story 1 (Work Graph), though its number comes
-last. It writes every public
+This story is built first, before User Story 13 and User Story 1 (Work Graph), though
+its number comes after those of User Stories 1 to 3. It writes every public
 item of `finder::imaging::run` but the view's types and the `Runner`, and `script.rs`
-whole; User Story 1 adds the machine after it and changes none of it. What is made from
+whole; User Story 13 tests the script, and User Story 1 adds the machine after it and
+changes none of it. What is made from
 a run's own state stays with the machine, because only a run can show it: the view, each
 state's message, the focus sentences and the warnings. `RunView` is `#[non_exhaustive]`,
 so no test outside the crate can build one.
 
 **Why this priority**: The machine, the console's own parts, the page and the tools are
 all written against these traits and words, and every scripted test of this spec runs on
-this script, which no later story may write again. Tested by itself, a wrong sentence or
-a script that lists a call late is found here and not three stories on.
+this script, which no later story may write again. Tested by itself, a wrong sentence is
+found here, and a script that lists a call late in User Story 13, and not three stories
+on.
 
 **Independent Test**: `crates/finder/tests/console/imaging_run_words.rs`, the module
 `imaging_run_words` of finder's `console` test binary. The `test` gate's
 `cargo nextest run --workspace --all-targets --all-features --locked` runs it; during
 development, `cargo nextest run -p finder --locked --test console imaging_run_words::`.
-Its tests make no `Runner`, and those that await a part run under
-`#[tokio::test(start_paused = true)]`. A test of US12-S1 calls `Ending::message` and
+Its tests make no `Runner`. A test of US12-S1 calls `Ending::message` and
 compares its answer with the sentence typed here; it never builds an expected sentence
 with it (plan.md § Plan traps 6).
 
@@ -595,7 +616,36 @@ with it (plan.md § Plan traps 6).
      it is `{"id":"NGC 1976","name":"M42","ra_deg":83.82,"dec_deg":-5.39}`;
    - `POLL` is 250 ms, `DEFAULT_DURATION_S` 7200.0, `MAX_DURATION_S` 43200.0 and
      `MAX_SUBS` 100000.
-3. **Given** a new `Script` and the `Steps` its `steps()` answers, **When** a test makes
+
+---
+
+
+### User Story 13 - The script's defaults and controls, tested with no run (Priority: P1)
+
+As the factory that builds User Story 12, I test in a story of their own what that
+story's script answers with no run: every default and call word in its order, and every
+control, so that each later scripted test stands on a script that has been proven.
+
+This story is built after User Story 12 and before User Story 1 (Work Graph). Its two
+scenarios test User Story 12's script: this story writes nothing under
+`crates/finder/src`, and on User Story 12's code its scenarios already pass (tasks.md,
+US13's test tasks).
+
+**Why this priority**: Every scripted test of this spec, of 041 and of 042 runs on this
+script, which no story after User Story 12 may write again. A script that lists a call
+late or answers a control wrongly is found here, before the machine is written on it.
+It is P1, as User Story 12 is.
+
+**Independent Test**: `crates/finder/tests/console/imaging_run_script.rs`, the module
+`imaging_run_script` of finder's `console` test binary. The `test` gate's
+`cargo nextest run --workspace --all-targets --all-features --locked` runs it; during
+development, `cargo nextest run -p finder --locked --test console imaging_run_script::`.
+Its tests make no `Runner`, and those that await a part run under
+`#[tokio::test(start_paused = true)]`.
+
+**Acceptance Scenarios**:
+
+1. **Given** a new `Script` and the `Steps` its `steps()` answers, **When** a test makes
    these calls of the five parts in this order, awaiting each that answers a future:
    `camera.ready()`, `solver.ready()`, `mount.target()`, `camera.hold()`,
    `mount.point(By::Page)`, `camera.take()` twice, `camera.abort()`, `camera.release()`,
@@ -624,7 +674,7 @@ with it (plan.md § Plan traps 6).
    - `stack.progress()` has `running` false before `stack.start`, true after it and
      false again after `stack.stop(true)`, with `stacked` 0, `dropped` empty,
      `waiting_for_tracker` false and `failed` `None` each time.
-4. **Given** a new `Script` for each bullet, its parts called as in US12-S3, **Then** a
+2. **Given** a new `Script` for each bullet, its parts called as in US13-S1, **Then** a
    committed test asserts that:
    - after `push_frame(Err(Failure::Camera("boom".into())))` and then
      `push_frame(Ok(FrameRef { id: 9, file: "x.fits".into() }))`, three takes answer
@@ -821,8 +871,8 @@ with it (plan.md § Plan traps 6).
 - **FR-008**: `finder::imaging::run::script` SHALL offer `Script`, a stand-in for all
   five parts with the default answers, controls, holds and call list of plan.md § The
   script. Its stack SHALL run from an accepted start until it is stopped or ended by
-  `end_stack`, whatever counts `set_stack` gives it (owner approval 5; US12-S3,
-  US12-S4).
+  `end_stack`, whatever counts `set_stack` gives it (owner approval 5; US13-S1,
+  US13-S2).
 - **FR-009**: A take that the camera part fails SHALL be asked again 5 s later, a wait
   that gives way to a stop and to the mount's ending; three failures in a
   row SHALL end the run `camera_failed` with the last error, and a failure to save SHALL
@@ -926,7 +976,8 @@ with it (plan.md § Plan traps 6).
   entry, `ergane.yaml` or `playwright.config.ts` is edited. The only edits to existing
   files under `crates/finder/tests` are one `mod` line for each new test module, in
   alphabetical order, in its binary's `main.rs`: `imaging_run`, `imaging_run_routes`,
-  `imaging_run_steps` and `imaging_run_words` in `crates/finder/tests/console/main.rs`.
+  `imaging_run_script`, `imaging_run_steps` and `imaging_run_words` in
+  `crates/finder/tests/console/main.rs`.
   No other line of that file and no other existing test changes.
 - **SC-003**: No `Cargo.toml`, `Cargo.lock` or `deny.toml` changes, no scope-link message,
   config key, console flag or glossary term is added, and no `unsafe` is written.
@@ -978,7 +1029,7 @@ with it (plan.md § Plan traps 6).
 ```yaml
 US1:
   depends_on: []
-  depends_on_merged: [US12]
+  depends_on_merged: [US12, US13]
   implements: [FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007]
 US2:
   depends_on: []
@@ -991,6 +1042,10 @@ US3:
 US12:
   depends_on: []
   implements: [FR-008, FR-042]
+US13:
+  depends_on: []
+  depends_on_merged: [US12]
+  implements: []
 ```
 
 Every edge is a merge edge, and the stories run one after another. An edge names each
@@ -998,11 +1053,14 @@ earlier story of this spec that last wrote a file the story writes next, so that
 later story builds on the merged file.
 
 - **US12** comes first and names no story: it writes the parts' traits, the words and
-  the script. Its number comes last among this spec's stories, and every other story
-  kept its number when it was made.
+  the script. Its number comes after US1 to US3, and every other story kept its number
+  when it was made.
+- **US13** tests US12's script: it writes nothing under `crates/finder/src` and
+  implements no FR. It follows US12, whose code it tests, and adds its `mod` line to
+  `crates/finder/tests/console/main.rs` after US12's.
 - **US1** adds the view and the machine to the `crates/finder/src/imaging/run.rs` that
   US12 creates, and its `mod` line to `crates/finder/tests/console/main.rs` after
-  US12's.
+  US13's, so it names both; the script is proven before the machine is written on it.
 - **US2** grows US1's machine in `crates/finder/src/imaging/run.rs`: the retries, the
   table of failed steps, the stack's counts and the warning for soft focus.
 - **US3** serves that `Runner` and adds the record to its machine. It names US2 for

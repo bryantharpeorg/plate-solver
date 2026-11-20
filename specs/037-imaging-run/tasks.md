@@ -91,12 +91,14 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
 ### Implementation
 
 - [ ] T003 [US1] In `crates/finder/src/imaging/run.rs`, which US12 created, add after
-  what is there, and change none of it: the view's types `SubCounts`, `FocusNote`,
+  what is there, and change none of it (you may add to the `use` lines at its head,
+  which are no item): the view's types `SubCounts`, `FocusNote`,
   `CentringNote`, `EndedNote` and `RunView`, with the `skip_serializing_if` attributes
   as the code block of plan.md § The machine has them, and the three tables of plan.md
   § The run's words that are made from a run's own state, whole: each state's message,
-  the focus sentences and the warnings, the two for a target stacked off the centre each
-  in its two forms, chosen by the offset against 036's
+  the focus sentences and the warnings, as `Warning::words`, public because only later
+  stories construct most of its variants; the two for a target stacked off the centre
+  each in its two forms, chosen by the offset against 036's
   `crate::imaging::steering::FAR_ARCSEC`, which is read and never copied. `EndedNote`
   holds `saved` and `track_on`, and
   the view `stacking_since`, `limit_at`, set with it, and `pause_ends_at`. A warning
@@ -125,7 +127,7 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
   23). What this story writes for a refused start, a stop, the mount's endings and a
   dropped runner is asserted by US2's tests (US2-S6 to US2-S10).
 - [ ] T005 [US1] Run the `lint` and `test` gates with every existing test unchanged and
-  green, US12's included. Commit the green story (US1-S1 and US1-S2).
+  green, US12's and US13's included. Commit the green story (US1-S1 and US1-S2).
 
 ## Phase 2: User Story 2 — Failed steps, counts and warnings, over injected steps (Priority: P1)
 
@@ -178,8 +180,8 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
   `The subs were kept: nothing was stacked.` (plan.md § The
   machine, Ending). Read neither `running` nor `failed` yet.
 - [ ] T009 [US2] Run the `lint` and `test` gates with every existing test unchanged and
-  green, US12's and US1's included. Commit the green story (US2-S1, US2-S2, US2-S3,
-  US2-S4, US2-S5, US2-S6, US2-S7, US2-S8, US2-S9 and US2-S10).
+  green, US12's, US13's and US1's included. Commit the green story (US2-S1, US2-S2,
+  US2-S3, US2-S4, US2-S5, US2-S6, US2-S7, US2-S8, US2-S9 and US2-S10).
 
 ## Phase 3: User Story 3 — Start, stop and read a run over HTTP, and its record (Priority: P1)
 
@@ -238,13 +240,14 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
   three route lines to `crates/finder/src/lib.rs`, worded as that section gives them.
   The README is 042's US11's.
 - [ ] T015 [US3] Run the `lint` and `test` gates with every existing test unchanged and
-  green, US12's, US1's and US2's included. Commit the green story (US3-S1, US3-S2, US3-S3,
-  US3-S4, US3-S5, US3-S6, US3-S7, US3-S8, US3-S9, US3-S10 and US3-S11).
+  green, US12's, US13's, US1's and US2's included. Commit the green story (US3-S1,
+  US3-S2, US3-S3, US3-S4, US3-S5, US3-S6, US3-S7, US3-S8, US3-S9, US3-S10 and US3-S11).
 
 ## Phase 12: User Story 12 — The run's parts and words, and a script to test them with (Priority: P1)
 
-Built first, before User Story 1 (spec.md § Work Graph), though its number and its
-tasks' numbers come last. It writes no `Runner`, no view and no message of a state.
+Built first, before User Story 13 and User Story 1 (spec.md § Work Graph), though its
+number and its tasks' numbers come after those of User Stories 1 to 3. It writes no
+`Runner`, no view and no message of a state.
 
 ### Tests first
 
@@ -257,14 +260,8 @@ tasks' numbers come last. It writes no `Runner`, no view and no message of a sta
   limit and an offset in arcseconds and in arcminutes; and for the words of `By`,
   `Verdict`, `Unit` and `Failure` (US12-S1). Then for `label` and `run_id`, the request
   parsed from JSON, the settings and the target written as JSON, and the four constants
-  (US12-S2). No test of this story makes a `Runner`.
-- [ ] T046 [US12] Add failing tests to that file, under
-  `#[tokio::test(start_paused = true)]`, that call the script's five parts themselves:
-  every default and the nineteen call words in their order, what is not listed, and the
-  stack's `running` (US12-S3); and every control: the three queues, the four `fail_`
-  controls, the five refusals, `unsteady`, `set_mount` with `track_on`, `set_stack` and
-  `end_stack`, and `hold` and `release` on `Step::Take`, `Step::StackStop` and
-  `Step::CloseAid`, the held call spawned by the test (US12-S4).
+  (US12-S2). No test of this story makes a `Runner`. The script's tests are US13's
+  (T050).
 
 ### Implementation
 
@@ -294,16 +291,46 @@ tasks' numbers come last. It writes no `Runner`, no view and no message of a sta
   calls after `unsteady(n)`; neither of the last two is listed. The default solve has
   a `near_arcsec` of 450.0.
 - [ ] T049 [US12] Run the `lint` and `test` gates with every existing test unchanged and
-  green. Commit the green story (US12-S1, US12-S2, US12-S3 and US12-S4).
+  green. Commit the green story (US12-S1 and US12-S2).
+
+## Phase 13: User Story 13 — The script's defaults and controls, tested with no run (Priority: P1)
+
+Built after User Story 12 and before User Story 1 (spec.md § Work Graph). Its two
+scenarios test User Story 12's script, and this story writes nothing under
+`crates/finder/src`.
+
+### Tests first
+
+- [ ] T050 [US13] Create `crates/finder/tests/console/imaging_run_script.rs`, the module
+  `imaging_run_script` of finder's `console` test binary, with `mod imaging_run_script;`
+  in its alphabetical place in `crates/finder/tests/console/main.rs`, after
+  `mod imaging_relation;` and before `mod imaging_run_words;`. Write tests, under
+  `#[tokio::test(start_paused = true)]`, that call the script's five parts themselves:
+  every default and the nineteen call words in their order, what is not listed, and the
+  stack's `running` (US13-S1); and every control: the three queues, the four `fail_`
+  controls, the five refusals, `unsteady`, `set_mount` with `track_on`, `set_stack` and
+  `end_stack`, and `hold` and `release` on `Step::Take`, `Step::StackStop` and
+  `Step::CloseAid`, the held call spawned by the test (US13-S2). No test makes a
+  `Runner`. On US12's code both scenarios already pass, and they pass before and after
+  this story: no test of theirs fails first. One that fails is a finding about US12's
+  script: stop and escalate with its output.
+
+### Implementation
+
+- [ ] T051 [US13] Change nothing under `crates/finder/src`. Run the `lint` and `test`
+  gates with every existing test unchanged and green, US12's included and not edited.
+  Commit the green story (US13-S1 and US13-S2).
 
 ## Execution Order
 
 ```text
-US12 ──► US1 ──► US2 ──► US3
+US12 ──► US13 ──► US1 ──► US2 ──► US3
 ```
 
 - **US12** comes first: it writes the traits, the words and the script that the machine
-  and every scripted test are written on, and proves them with no run.
+  and every scripted test are written on, and proves the words with no run.
+- **US13** proves the script with no run, before the machine is written on it. It
+  writes no code.
 - **US1** writes the view and the machine on them: every other story hangs a route, a
   real part, a page or a tool on its machine.
 - **US2** completes the machine for a step that fails and for the stack's counts, before

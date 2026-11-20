@@ -14,7 +14,8 @@ Add a `Runner` to the console's imaging module. It carries one imaging run throu
 parts it is handed, each a small trait: the mount, the camera, the focus check, the
 solver and the stack. US12, built first, writes what a run is handed and what it can say
 before any run exists: the five traits, the endings with their words, and a scripted
-stand-in for the parts, each tested with no run. US1 writes the machine on them and
+stand-in for the parts, each tested with no run, the stand-in by US13, which writes no
+code. US1 writes the machine on them and
 tests, in paused time, the path on which every step answers and two failures on it. US2
 adds what the machine does when a step fails or the stack reports: the retries, the
 table of failed steps, the counts, the tracker's pause and the warnings; its test module
@@ -45,7 +46,10 @@ Nothing about a run is kept in `session.json`: it is run-only, like Track.
 **Testing**:
 - US12: `crates/finder/tests/console/imaging_run_words.rs` (new), the module
   `imaging_run_words` of finder's `console` test binary: the endings' words, the
-  request, `run_id` and the script's own contract, with no `Runner`.
+  request and `run_id`, with no `Runner`.
+- US13: `crates/finder/tests/console/imaging_run_script.rs` (new), the module
+  `imaging_run_script` of `console`: the script's own contract, its defaults, call
+  words and controls, with no `Runner`, on US12's code.
 - US1: `crates/finder/tests/console/imaging_run.rs` (new), the module `imaging_run` of
   finder's `console` test binary: a `Runner` over the script, in paused time.
 - US2: `crates/finder/tests/console/imaging_run_steps.rs` (new), the module
@@ -86,7 +90,7 @@ scope node.
 - Budgets are things a test measures; this plan states none for the real telescope.
 
 **Scale/Scope**: one module and two of its three children (`script.rs`, `store.rs`),
-three routes, in four stories.
+three routes, in five stories.
 
 ## Constitution Check
 
@@ -111,11 +115,12 @@ crates/finder/
 ├── src/imaging/run.rs                    # US12: new, the parts and the words; US1: the view and the machine; US2: failed steps, counts; US3: the record
 ├── src/imaging/run/script.rs             # US12: new, the scripted stand-in
 ├── src/imaging/run/store.rs              # US3: new, run.json
-├── tests/console/main.rs                 # US12, US1, US2, US3: one mod line each
+├── tests/console/main.rs                 # US12, US13, US1, US2, US3: one mod line each
 ├── tests/console/imaging_run.rs          # US1: new
 ├── tests/console/imaging_run_steps.rs    # US2: new
 ├── tests/console/imaging_run_routes.rs   # US3: new
-└── tests/console/imaging_run_words.rs    # US12: new
+├── tests/console/imaging_run_words.rs    # US12: new
+└── tests/console/imaging_run_script.rs   # US13: new
 ```
 
 `041-imaging-run-on-the-rig` adds `src/imaging/run/console.rs` and more of `run.rs`, and
@@ -383,7 +388,8 @@ number of subs asked for and the time limit. US12-S1 types every sentence.
 
 ### The machine (`crates/finder/src/imaging/run.rs`, US1)
 
-US1 adds the rest of `run.rs` after what US12 wrote, and changes none of that: the view,
+US1 adds the rest of `run.rs` after what US12 wrote, and changes none of that (it may
+add to the `use` lines at the head of the file, which are no item): the view,
 which only a run fills (`RunView` is `#[non_exhaustive]`, so a test outside the crate
 reads one and cannot build one), and the `Runner` with its task.
 
@@ -409,6 +415,16 @@ pub struct EndedNote {
     pub reason: &'static str, pub at: f64, pub message: String,
     pub saved: bool, pub track_on: bool,
 }
+/// A warning a run keeps, worded by § The run's words. Public, so that the variants
+/// only a later story adds are not dead code in US1; no test builds an expected
+/// warning with it (§ Plan traps 6).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Warning {
+    SlightlySoft(FocusCheck), CheckUnfinished(String), WentOnAnyway, AidNotOpened(String),
+    StackUnclean(String), SubsKept, RecordUnsaved(String),
+    OffCentre { offset_arcsec: f64, measured: bool }, TrackerNotSteady,
+}
+impl Warning { pub fn words(&self, name: &str) -> String; }
 
 /// `run` in the imaging view. Serialized in this field order; `focus`, `centring`,
 /// `stacking_since`, `limit_at`, `pause_ends_at`, `ended` and `folder` are skipped
@@ -665,7 +681,10 @@ progress. 041's US5 and 041's US7 use its last two rows.
 - **Step 6**, every `POLL`, in this order: `stack.progress()` is copied into `subs`;
   then the mount's `Ended(e)` ends the run with `e` and a stop ends it `RunStopped`;
   then the state is `paused_by_tracker` while `waiting_for_tracker`, else `stacking`,
-  each with its message. The counts come first so that an ending holds them. The
+  each with its message. The counts come first so that an ending holds them.
+  `guarded` and `steady` take a stop before the mount's state; step 6 takes the mount's
+  ending first, so a stop and an ending seen in one poll read `stopped` before the stack
+  has started and the mount's reason once it has. The
   mount and the stop come before anything the stack reports (041's US7 puts its rules after
   them), so that a lost link, which also fails the stack's next take, reads
   `link_lost` when Track has seen it. Nothing in US2 reads `running` or `failed`: 041's US7
@@ -736,7 +755,7 @@ is written `1 sub`, with `is` where the sentence has `are`.
 | `FocusTimeout` | `focus_timeout` | `Ended: focus was left paused for 15 minutes. Start again when ready.` |
 | `NotCentred`, `measured` true | `not_centred` | `Ended: {name} is still {offset} from the sensor's centre after 3 tries. Check the aim point on the console page, then start again.` |
 | `NotCentred`, `measured` false | `not_centred` | `Ended: {name} is {offset} from the sensor's centre and no new aim point could be measured.` |
-| `SubsFailing(w)` | `subs_failing` | `Ended: no sub was stacked for 10 minutes ({w}). Cloud, dew or a tree is the usual cause; check the sky and start again.`, `{w}` the reasons with a space for each underscore |
+| `SubsFailing(w)` | `subs_failing` | `Ended: no sub was stacked for 10 minutes ({w}). Cloud, dew or a tree is the usual cause; check the sky and start again.`, `{w}` as the variant holds it: 041's US7 words it, the reasons with a space for each underscore, and `message` changes nothing in it |
 | `StackFailed(w)` | `stack_failed` | `Ended: the stack stopped: {w}.` |
 
 | Warning | Words |
@@ -873,8 +892,9 @@ refused `ready()`, `target()`, `hold()` or `point()` is listed.
 It is public product code that only tests call (owner decision 16, owner approval
 5). It holds no logic of the run: it answers what it was told and writes down what it
 was asked. It is whole from US12, with the controls only later stories use, so that no
-later story writes this file, and US12-S3 and US12-S4 assert its defaults, its call
-words and every one of its controls on the script alone, with no run.
+later story writes this file, and US13-S1 and US13-S2, built right after US12, assert
+its defaults, its call words and every one of its controls on the script alone, with no
+run.
 
 ### `crates/finder/src/imaging/mod.rs` (US12; US3)
 
@@ -1069,9 +1089,9 @@ These are not changed by any story:
   it:
   - US1 adds the view and the `Runner` to `run.rs` after what US12 wrote, and changes
     no item of it: no trait, no type, no reason and no sentence of an ending, and
-    nothing of the script. US12's four scenarios make no run, so they hold whatever
-    a later story adds to the machine; no later story changes an ending's reason or
-    sentence, a call word or a default of the script either.
+    nothing of the script. US12's two scenarios and US13's two make no run, so they
+    hold whatever a later story adds to the machine; no later story changes an
+    ending's reason or sentence, a call word or a default of the script either.
   - US2 replaces what US1 does with a failed take, solve or `stack.start`, an ending at
     once, and reads the stack's progress. No US1 scenario fails a take, a solve or a
     stack start, or sets a count; the one that fails a focus check (US1-S2) gives it
@@ -1217,9 +1237,9 @@ story.
 | Risk | Mitigation |
 |---|---|
 | Another taker gets the lease in the instant of a hand-over. | The run's next step is refused with that holder's name and the run says so: a pause, `stack_failed` or `camera_failed` (spec § Edge Cases, US1-S2, US2-S4). Owner decision 15 names the other answer, a change to 033 and 035. |
-| A story's diff passes 64 KiB. | Estimated from probe round 1's measured bytes, each within about 1 KB but for US12 and US1, which are within about 2 KB: US12 43.4 KB (66 %), US1 30.0 KB (46 %), US2 35.2 KB (54 %) and US3 47.1 KB (72 %). A factory build has run to 1.35 times its probe build: at that US12 would be about 89 % and US3 about 97 %, so US3 is the next story to cut. The second probe round measures all of it (flip.md § Prerequisites 5). |
-| US1's refusals of a start, its stop, the mount's endings and its `Drop` are written in US1 and first tested in US2 (US2-S6 to US2-S10). | A fault in `run.rs` that one of those tests shows is US2's to correct, since US2 writes that file. A fault in `script.rs` is not: no story after US12 writes it, so US2 escalates. US12's own scenarios assert every control of the script with no run (US12-S3, US12-S4), which is what keeps that unlikely. |
-| US12 writes public items that nothing in the crate calls until US1 lands: the traits, `Ending::message`, the script. | They are public items of a library, which the lints do not count as dead code, and US12's test module calls each of them. |
+| A story's diff passes 64 KiB. | Probe round 2 built the four stories as they stood before US13 was cut: US12 51,369 B (78.4 %), US1 33,997 B (51.9 %), US2 34,869 B (53.2 %) and US3 47,736 B (72.8 %), against estimates of 43.4, 30.0, 35.2 and 47.1 KB from round 1. Factory builds of 036, 039 and 040 ran 0.85 to 1.17 times their probes' diffs, so each story is estimated at 1.17 times its build with the cases the round's fold added, as tests. US12 came to 51,369 B × 1.17 = 60,102 B, over owner choice 14's 60 KB, and is cut by tests: its two scenarios of the script and their module are US13's, and the code stays in US12 (history.md § Probe round 2 and its fold). With the probe's per-scenario bytes, US12 is at most 40,851 B, 47,796 B at 1.17 (73 %), and US13 about 12,056 B, 14,106 B at 1.17 (22 %). US1 is (33,997 + 456) × 1.17 = 40,310 B (62 %), US2 (34,869 + 3,201) × 1.17 = 44,542 B (68 %) and US3 (47,736 + 1,266) × 1.17 = 57,332 B (87 %): US3 is the story to watch. Its record's refresh, the pauses' listing and the unfinished run (US3-S8, US3-S9 and US3-S11 with their code) are about 9 KB with a copied rig; a cut there would move code, and is the owner's. No story drops or shortens a case to get under. |
+| US1's refusals of a start, its stop, the mount's endings and its `Drop` are written in US1 and first tested in US2 (US2-S6 to US2-S10). | A fault in `run.rs` that one of those tests shows is US2's to correct, since US2 writes that file. A fault in `script.rs` is not: no story after US12 writes it, so US2 escalates. US13's scenarios, built after US12 and before US1, assert every control of the script with no run (US13-S1, US13-S2), which is what keeps that unlikely. |
+| US12 writes public items that nothing in the crate calls until US1 lands: the traits, `Ending::message`, the script. | They are public items of a library, which the lints do not count as dead code, and US12's and US13's test modules call each of them. |
 | A console dropped in the middle of a run keeps Track on through something the imaging state of 030 to 036 holds. | 037 adds no delay of its own: a dropped `Runner` aborts its task and lets its parts go (US2-S9). 035's stack holds the session until its take ends, so a test that drops a console while a stack runs waits more than 015's 2 s for the session. A console dropped during a focus pause leaves 033's aid, opened by the run, with no owner. In the binary the state lives until exit, so only tests are touched. |
 | A stop of the run waits up to about 7 s when it arrives during a re-centre. | Said in spec FR-005 and owner decision 14, and asserted on the script (041's US5-S3). The console's Stop does not wait: it stops the mount at once, and the run then ends `stopped`. |
 | The first imaging frame costs an exposure and a transfer the run does not use again. | Owner decision 20 names the two other answers. The first imaging frame is what tells a camera fault from poor focus. |
@@ -1255,7 +1275,7 @@ stories:
   - path: crates/finder/tests/console/imaging_run.rs
     status: new
     disposition: add
-    assertion: "a lease that cannot be taken back after the focus check ends camera_failed with the lease's words and no solve, its ended written as json with exactly its five keys, and a focus check that fails with another failure leaves focus unmeasurable in px with the warning of a check that did not finish, the test reading nothing of the state or of the calls after it"
+    assertion: "a lease that cannot be taken back after the focus check ends camera_failed with the lease's words and no solve, its ended written as json with exactly its five keys, and a focus check that fails with another failure leaves focus unmeasurable in px with the warning of a check that did not finish, the test reading nothing of the state or of the calls after it, and a run started with a duration_s of 60 has its limit_at 60 s after the start of stacking, the request's"
     decision: "spec.md:US1-S2"
   - path: crates/finder/tests/layout/main.rs
     status: existing
@@ -1266,11 +1286,12 @@ stories:
   - "no Cargo.toml, Cargo.lock or deny.toml changes and no unsafe is written (spec.md SC-003)"
   - "nothing under crates/finder/src/imaging/run.rs imports goto, tracking, ephemeris, model or scope_link, holds an identifier or arithmetic for an axis, or holds a number sized to one telescope (plan.md Plan traps 18)"
   - "the imaging state of 030 to 036 and their tests are untouched but for one mod line"
-  - "every scenario of US12 still holds: US1 adds to run.rs after what US12 wrote, changes no item of it, and does not write script.rs (plan.md Shapes that existing tests pin)"
+  - "every scenario of US12 and US13 still holds: US1 adds to run.rs after what US12 wrote, changes no item of it, and does not write script.rs (plan.md Shapes that existing tests pin)"
   checks:
    development:
    - "cargo nextest run -p finder --locked --test console imaging_run::"
    - "cargo nextest run -p finder --locked --test console imaging_run_words::"
+   - "cargo nextest run -p finder --locked --test console imaging_run_script::"
    - "cargo nextest run -p finder --locked --test layout"
    handoff: declared_gates
    independent: declared_pipeline
@@ -1313,12 +1334,12 @@ stories:
   - path: crates/finder/tests/console/imaging_run_steps.rs
     status: new
     disposition: add
-    assertion: "a stack that cannot start ends the run by its failure's kind without being stopped and with no folder, a stack start that fails as no solution ends solver_failing, as a camera camera_failed and as a solver that cannot run solver_unavailable, a stack that does not end cleanly at an ending leaves a warning and the ending's reason, a run stopped with keep_subs false and nothing stacked asks the stack to discard and warns that the subs were kept, with no such warning once subs are stacked, and while stack.stop is held an ending run still reads stacking with the message Saving the stack and its count, and refuses a new start"
+    assertion: "a stack that cannot start ends the run by its failure's kind without being stopped and with no folder, a stack start that fails as no solution ends solver_failing, as a camera camera_failed and as a solver that cannot run solver_unavailable, a stack that does not end cleanly at an ending leaves a warning, the ending's reason and saved false, a run stopped with keep_subs false and nothing stacked asks the stack to discard and warns that the subs were kept, with no such warning once subs are stacked, and while stack.stop is held an ending run still reads stacking with the message Saving the stack and its count, and refuses a new start, and a count set while it is held is the ending's"
     decision: "spec.md:US2-S4"
   - path: crates/finder/tests/console/imaging_run_steps.rs
     status: new
     disposition: add
-    assertion: "a run that goes on from its focus check to a mount that is not steady reads solving, its message followed by the words of a wait for the tracker, with one take made, and reaches stacking once the mount is steady"
+    assertion: "a run that goes on from its focus check to a mount that is not steady reads solving, its message followed by the words of a wait for the tracker, with one take made, then the message of solving alone once the mount is steady, and stacking once the solve is released"
     decision: "spec.md:US2-S5"
   - path: crates/finder/tests/console/imaging_run_steps.rs
     status: new
@@ -1328,12 +1349,12 @@ stories:
   - path: crates/finder/tests/console/imaging_run_steps.rs
     status: new
     disposition: add
-    assertion: "a stop in each of five states ends the run as stopped, saying that the imaging run stopped and Track is still on, with track_on true, in the four states after slewing, and that the mount was stopped in the run still slewing, which alone asks the mount part for Stop, before the lease is given back; saved is true only for the run stopped while stacking; the stop aborts a take in flight, stops a focus check in flight, stops a started stack once and no other, gives the lease back as the last call, lists no call after the ending and never repoints; and track_on reads false once the mount is found stopped after the ending"
+    assertion: "a stop in each of five states ends the run as stopped, saying that the imaging run stopped and Track is still on, with track_on true, in the four states after slewing, and that the mount was stopped in the run still slewing, which alone asks the mount part for Stop, before the lease is given back; saved is true only for the run stopped while stacking; the stop aborts a take in flight, stops a focus check in flight, stops a started stack once and no other, gives the lease back as the last call, lists no call after the ending and never repoints; and track_on reads false once the mount is found stopped after the ending; and a run held at first_frame whose mount is found stopped when the run is stopped ends saying that the mount was stopped, with track_on false"
     decision: "spec.md:US2-S7"
   - path: crates/finder/tests/console/imaging_run_steps.rs
     status: new
     disposition: add
-    assertion: "each of seven endings of the mount's motion while stacking stops the stack once, gives the lease back, and ends the run with its reason and exact message, the first being that the mount was stopped, with saved true and track_on false after the five endings that stop the mount and true after target_changed and pushed_away; a mount ending while a take is held at first_frame ends too_low with the take aborted once, and one while the run waits for a slewing mount ends sun_up with the lease given back as the last call"
+    assertion: "each of seven endings of the mount's motion while stacking stops the stack once, gives the lease back, and ends the run with its reason and exact message, the first being that the mount was stopped, with saved true and track_on false after the five endings that stop the mount and true after target_changed and pushed_away; a mount ending while a take is held at first_frame ends too_low with the take aborted once, and one while the run waits for a slewing mount ends sun_up with the lease given back as the last call; and a stacking run whose mount ends too_low as it is stopped, with no poll between, ends too_low"
     decision: "spec.md:US2-S8"
   - path: crates/finder/tests/console/imaging_run_steps.rs
     status: new
@@ -1427,7 +1448,7 @@ stories:
   - path: crates/finder/tests/console/imaging_run_routes.rs
     status: new
     disposition: add
-    assertion: "a console built over an imaging folder whose newest run record has no ended carries unfinished_run with that record's folder and no run, drops the key at the first accepted start, and never has it when the record holds an ended"
+    assertion: "a console built over an imaging folder whose newest run record has no ended, beside an older one that has, carries unfinished_run with the newest's folder and no run, drops the key at the first accepted start, and never has it when the record holds an ended"
     decision: "spec.md:US3-S9"
   - path: crates/finder/tests/console/imaging_run_routes.rs
     status: new
@@ -1437,7 +1458,7 @@ stories:
   - path: crates/finder/tests/console/imaging_run_routes.rs
     status: new
     disposition: add
-    assertion: "of three changes between stacking and paused_by_tracker within seconds run.json lists and writes the first only, the view showing each at once, and one 60 s later is listed and written"
+    assertion: "of three changes between stacking and paused_by_tracker within seconds run.json lists and writes the first only, the view showing each at once, and one 61 s after the first listed and 59 s after the last held back is listed and written"
     decision: "spec.md:US3-S11"
   - path: crates/finder/tests/console/session/edits.rs
     status: existing
@@ -1485,17 +1506,17 @@ stories:
     other_spec: 035-live-stack
     other_story: US8
     disposition: merge_order
-    reason: "037 depends_on_landed 035-live-stack, whose 041's US8 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "037 depends_on_landed 035-live-stack, whose US8 last writes this file in the drafts; re-read at the re-anchoring"
   - path: crates/finder/src/imaging/routes.rs
     other_spec: 036-tracking-from-subs
     other_story: US5
     disposition: merge_order
-    reason: "037 depends_on_landed 036-tracking-from-subs, whose 041's US5 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "037 depends_on_landed 036-tracking-from-subs, whose US5 last writes this file in the drafts; re-read at the re-anchoring"
   - path: crates/finder/src/lib.rs
     other_spec: 036-tracking-from-subs
     other_story: US5
     disposition: merge_order
-    reason: "037 depends_on_landed 036-tracking-from-subs, whose 041's US5 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "037 depends_on_landed 036-tracking-from-subs, whose US5 last writes this file in the drafts; re-read at the re-anchoring"
   open_questions: []
  US12:
   tests:
@@ -1509,16 +1530,6 @@ stories:
     disposition: add
     assertion: "label and run_id turn NGC 1976 into NGC-1976; a request parses from an empty object and from its three keys and refuses a key it does not know; the settings are written with subs null and the target with its four keys; and the four constants have their values"
     decision: "spec.md:US12-S2"
-  - path: crates/finder/tests/console/imaging_run_words.rs
-    status: new
-    disposition: add
-    assertion: "a new script's five parts answer their defaults, takes numbered from 1; calls() lists one string a call in the order made, nineteen in all, with page and mcp, keep and discard; the mount's three reads and the stack's progress are not listed; and the stack runs from its start to its stop with zero counts"
-    decision: "spec.md:US12-S3"
-  - path: crates/finder/tests/console/imaging_run_words.rs
-    status: new
-    disposition: add
-    assertion: "a pushed take, focus check or solve is answered as pushed, in order and using no frame number, then the default; each of the four fail controls fails its call once; each of the five refusals lasts and is listed; unsteady(2) makes two answers false and the third true; track_on is false after the five endings that stop the mount and true otherwise; set_stack sets the counts and the tracker's pause, leaves out a zero count and never ends the stack, which end_stack does with its failure; and a held take is listed at once, answers only once released, holds no other step and is not held again, as with stack.stop and focus.close_aid"
-    decision: "spec.md:US12-S4"
   - path: crates/finder/tests/layout/main.rs
     status: existing
     disposition: preserve
@@ -1547,9 +1558,9 @@ stories:
   shared_writes:
   - path: crates/finder/src/imaging/mod.rs
     other_spec: 036-tracking-from-subs
-    other_story: US4
+    other_story: US5
     disposition: merge_order
-    reason: "037 depends_on_landed 036-tracking-from-subs, whose 041's US4 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "037 depends_on_landed 036-tracking-from-subs, whose US5 last writes this file in the drafts; re-read at the re-anchoring"
   - path: crates/finder/src/imaging/run.rs
     other_spec: 037-imaging-run
     other_story: US1
@@ -1559,11 +1570,52 @@ stories:
     other_spec: 040-stack-waits-for-steady
     other_story: US8
     disposition: merge_order
-    reason: "037 depends_on_landed 040-stack-waits-for-steady, whose 041's US8 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "037 depends_on_landed 040-stack-waits-for-steady, whose US8 last writes this file in the drafts; re-read at the re-anchoring"
+  - path: crates/finder/tests/console/main.rs
+    other_spec: 037-imaging-run
+    other_story: US13
+    disposition: merge_order
+    reason: "US13 depends_on_merged US12, and adds mod imaging_run_script"
+  open_questions: []
+ US13:
+  tests:
+  - path: crates/finder/tests/console/imaging_run_script.rs
+    status: new
+    disposition: add
+    assertion: "a new script's five parts answer their defaults, takes numbered from 1; calls() lists one string a call in the order made, nineteen in all, with page and mcp, keep and discard; the mount's three reads and the stack's progress are not listed; and the stack runs from its start to its stop with zero counts"
+    decision: "spec.md:US13-S1"
+  - path: crates/finder/tests/console/imaging_run_script.rs
+    status: new
+    disposition: add
+    assertion: "a pushed take, focus check or solve is answered as pushed, in order and using no frame number, then the default; each of the four fail controls fails its call once; each of the five refusals lasts and is listed; unsteady(2) makes two answers false and the third true; track_on is false after the five endings that stop the mount and true otherwise; set_stack sets the counts and the tracker's pause, leaves out a zero count and never ends the stack, which end_stack does with its failure; and a held take is listed at once, answers only once released, holds no other step and is not held again, as with stack.stop and focus.close_aid"
+    decision: "spec.md:US13-S2"
+  - path: crates/finder/tests/layout/main.rs
+    status: existing
+    disposition: preserve
+    assertion: "no file at the top level of crates/finder/tests, no new file in its support folder, and each main.rs only its support include and mod lines"
+    decision: "plan.md:Shapes that existing tests pin"
+  preserved_behavior:
+  - "nothing under crates/finder/src is written: US13's two scenarios test the script US12 wrote, and pass on US12's code as soon as they are written"
+  - "every scenario of US12 still holds, and imaging_run_words.rs is not written"
+  - "no Cargo.toml, Cargo.lock or deny.toml changes and no unsafe is written (spec.md SC-003)"
+  checks:
+   development:
+   - "cargo nextest run -p finder --locked --test console imaging_run_script::"
+   - "cargo nextest run -p finder --locked --test console imaging_run_words::"
+   - "cargo nextest run -p finder --locked --test layout"
+   handoff: declared_gates
+   independent: declared_pipeline
+   release:
+   - "release owner: the repository owner, through the merge queue's ci.yml jobs"
+  writes:
+  - crates/finder/tests/console/imaging_run_script.rs
+  - crates/finder/tests/console/main.rs
+  no_write_reason: ""
+  shared_writes:
   - path: crates/finder/tests/console/main.rs
     other_spec: 037-imaging-run
     other_story: US1
     disposition: merge_order
-    reason: "US1 depends_on_merged US12, and adds mod imaging_run"
+    reason: "US1 depends_on_merged US13, and adds mod imaging_run"
   open_questions: []
 ```
