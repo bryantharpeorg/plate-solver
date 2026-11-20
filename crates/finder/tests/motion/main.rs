@@ -17,5 +17,6 @@ mod recording_raw;
 mod simulate;
 mod steering;
 mod steering_claim;
+mod steering_gap;
 mod stop;
 mod tracking;

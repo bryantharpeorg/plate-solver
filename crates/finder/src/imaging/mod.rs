@@ -87,6 +87,9 @@ pub struct ImagingView {
     /// The latest live stack, retained through camera-state changes (035).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stack: Option<stack::service::StackView>,
+    /// Tracking steered by the subs, from the steering's first use (036).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub steering: Option<steering::SteeringView>,
 }
 
 impl ImagingView {
@@ -104,6 +107,7 @@ impl ImagingView {
             focus: None,
             calibration: None,
             stack: None,
+            steering: None,
         }
     }
 }
@@ -402,6 +406,7 @@ pub struct Imaging {
     calibration: OnceLock<Weak<Calibration>>,
     /// Weak because the stacker owns this imaging state (035).
     stack: OnceLock<Weak<stack::service::Stacker>>,
+    steering: Arc<steering::Steering>,
 }
 
 impl Drop for Imaging {
@@ -436,6 +441,7 @@ impl Imaging {
             changes,
             task,
             root,
+            steering: steering::Steering::new(clock.clone()),
             clock,
             link,
             calibration: OnceLock::new(),
@@ -446,6 +452,11 @@ impl Imaging {
     /// The imaging folder this state saves under (031).
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// The console's steering (036), shared by the stack and imaging run.
+    pub fn steering(&self) -> Arc<steering::Steering> {
+        self.steering.clone()
     }
 
     /// Let every ready view carry the calibration object (034). The first call wins.
@@ -503,6 +514,7 @@ impl Imaging {
             focus: (ready && held.solver.is_some()).then(|| focus::run::view(&held, now)),
             calibration: None,
             stack: None,
+            steering: None,
         };
         drop(held);
         // The finished view includes the relation's angle; no imaging lock is
@@ -515,6 +527,7 @@ impl Imaging {
         if let Some(stacker) = self.stack.get().and_then(Weak::upgrade) {
             view.stack = stacker.view();
         }
+        view.steering = self.steering.view();
         view
     }
 

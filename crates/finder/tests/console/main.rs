@@ -56,4 +56,5 @@ mod stack_placement;
 mod stack_reject;
 mod star_detected;
 mod steering_error;
+mod steering_gap;
 mod targets;
