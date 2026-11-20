@@ -4,33 +4,8 @@ description: "Task list for 037-imaging-run: The Imaging Run"
 
 # Tasks: The Imaging Run
 
-**Prerequisites** (plan.md § Prerequisites):
-- `014-goto`, `015-tracking`, `016-mcp` and `017-console-stop-confirm` have landed on
-  `main`: met;
-- `030-imaging-camera-link`, `031-imaging-frames-on-console`,
-  `032-imaging-solve-and-aim-point`, `033-focus-reading-and-aid`,
-  `034-dark-and-flat-frames` and `038-track-follows-a-push` have landed: met by
-  2026-11-19;
-- `035-live-stack` and `036-tracking-from-subs` have landed, and this trio has been
-  re-anchored to all eight, with every name of plan.md § What 030 to 036 offer re-read
-  on `main`: not met (plan.md § Prerequisites 1 and 2);
-- 031 holds the lease of the imaging camera the plan document's amendment 1 names, as
-  its US9, and 033 to 035 take it: met in the drafts, and re-read when 031 lands
-  (plan.md § Prerequisites 3);
-- the first twenty-five owner decisions in spec.md are settled and its owner approvals
-  given: not met; the owner's seventeen answers of 2026-11-19 are folded in, each
-  with a dated note (plan.md § Prerequisites 4);
-- 032's owner decision 25, the seam between 032 and 015 that decision 26 cites, is
-  settled in 032's trio, and this trio is written for its answer: met on 2026-11-17.
-  The owner chose the hold (032's FR-036), so FR-022's test counts a held aim point as
-  moved and FR-025's wait comes after the re-centre's Track off (plan.md
-  § Prerequisites 4);
-- every story has been probe-built: met on 2026-11-19 by probe round 1, for the trio as
-  it then stood (plan.md § Prerequisites 5);
-- a second probe round has built the stories that the fold of 2026-11-19 changed, US12
-  and US1 as the owner's split of that day left them among them: not
-  met (spec.md § Clarifications, the owner's answer 17);
-- no operator-staged file is needed.
+**Prerequisites** (flip.md § Prerequisites): every spec in spec.md's `depends_on_landed`
+has landed and this trio is re-anchored to `main`; no operator-staged file is needed.
 
 **Rules for every story:**
 - Never edit an existing test, golden, fixture, `scripts/ci/`, `.github/`, `deny.toml`,
@@ -38,7 +13,7 @@ description: "Task list for 037-imaging-run: The Imaging Run"
   If an existing test fails, stop and escalate with its exact output. Do not edit it.
   The one exception is the `mod` line of each new finder test module, added in
   alphabetical order to the binary's `main.rs` your story's tasks name, which holds no
-  test (spec.md owner approval 8). Change nothing else there. A test file an earlier
+  test (spec.md SC-002). Change nothing else there. A test file an earlier
   story of this spec created is an existing test: add your tests in the new file your
   tasks name, and leave every earlier scenario passing (plan.md § Plan traps 24).
 - A new finder test is a module file in the binary's folder plan.md § Technical Context
@@ -87,7 +62,8 @@ description: "Task list for 037-imaging-run: The Imaging Run"
   named without a line. If a cited line has moved, re-read it rather than guess.
 - Add no dependency and change no `Cargo.toml`. Write no `unsafe`. Change nothing under
   `crates/simulator`, `crates/scope-node` or `crates/scope-link`.
-- Do not edit `specs/037-imaging-run/`.
+- Do not edit `specs/037-imaging-run/`, `specs/041-imaging-run-on-the-rig/` or
+  `specs/042-imaging-run-page-and-mcp/`.
 - Run no tool the gates don't run: no `cargo deny`, `cargo machete`, Rust 1.96 or
   `ergane`.
 
@@ -260,357 +236,15 @@ description: "Task list for 037-imaging-run: The Imaging Run"
   and `continue_run` with their order of checks, the start wrapped in
   `api::start_motion` with `page` and `imaging_run` (plan.md § The routes). Add the
   three route lines to `crates/finder/src/lib.rs`, worded as that section gives them.
-  The README is US11's.
+  The README is 042's US11's.
 - [ ] T015 [US3] Run the `lint` and `test` gates with every existing test unchanged and
   green, US12's, US1's and US2's included. Commit the green story (US3-S1, US3-S2, US3-S3,
   US3-S4, US3-S5, US3-S6, US3-S7, US3-S8, US3-S9, US3-S10 and US3-S11).
 
-## Phase 4: User Story 4 — Pointing through Track, on the console's own mount, camera and solver parts (Priority: P1)
-
-### Tests first
-
-- [ ] T016 [US4] Create `crates/finder/tests/motion/imaging_run.rs`, the module
-  `imaging_run` of `motion`, with `mod imaging_run;` in its alphabetical place in
-  `crates/finder/tests/motion/main.rs`, and the centred rig of spec.md US4: 032's
-  solving rig built with `with_live_solver(Arc::new(crate::support::goto::Stars))` in
-  place of `with_live()`, the target M42, a first sync awaited, the session's aim point
-  set to the true one, the parts `console::mount`, `console::camera` and
-  `console::solver` with the script's focus and stack, and the test's own handle of the
-  `SimMount`. Add helpers for the true offset and for "at rest for 10 s" as spec.md
-  § User Scenarios defines them. Write failing tests for a run that needs no re-centre,
-  with the tolerance exactly 90.0, `slewing` read while Track is `armed`, nothing
-  later than `tracking` read in the 9.5 s after Track first read `tracking`, and the
-  imaging frame's purpose `run` (US4-S1), and for the refusals of a start with the lease
-  given back, an unresponsive scope node among them (US4-S2).
-- [ ] T017 [US4] Add failing tests to that file for Stop while stacking (US4-S3), the
-  five endings of the mount's motion and the imaging frame refused during a run with
-  `the imaging camera is held by the imaging run`, a tracker that is not steady
-  near M42's transit, a push of 6′ undone 3 s later, and a `DELETE` while the run
-  still slews (US4-S4), and the mount part alone:
-  point, point again, and point again after a Stop, with rest read from 2 s after the
-  stop, and, on a rig of its own, point again after the target was changed
-  (US4-S5), and a start refused with `an exposure is in progress` while a single
-  imaging frame is in flight, with the lease given back (US4-S6), each against the
-  simulator's truth, the session or 031's own route as its scenario says. In US4-S5,
-  await each part call to its answer before the next request
-  is sent, or spawn it (plan.md § Plan traps 25).
-
-### Implementation
-
-- [ ] T018 [US4] Create `crates/finder/src/imaging/run/console.rs` with `CENTRE_SHARE`,
-  `CENTRE_FLOOR_ARCSEC`, `mount`, `camera` and `solver`, and add `pub mod console;` to
-  `crates/finder/src/imaging/run.rs`. Write the mount part's `target`, `point`, the
-  table of `state` with its `repointing` flag, and `repoint`'s steps 1, 2 and 4 to 6:
-  refuse when the stop generation has changed, Track off, Track on under
-  `start_motion`, the generation compared before Track's answer is read, Stop asked
-  again when it changed, and only then Track's error as a failure of the mount (plan.md
-  § The console's mount part). Keep the id `target` answers, refuse in `point` when
-  the session's target is no longer that one, and write step 3a: a re-centre whose
-  target was changed answers `Ok` without asking Track. In `state`, read steady only
-  when 036's tracker was steady over the larger of 032's `FIT_REACH_S` and the
-  exposure setting (`steady_between`), and end `pushed_away` only on a push that is
-  `following` or has read `moving` for `PUSH_GRACE`, a younger one reading not steady.
-  Write `stop` over `api::stop`, `track_on` and `steady_between`. Step 3, the wait, is
-  US5's. Write the camera part over
-  031 US9's lease, with `HOLDER`, an `Arc` of the lease kept under a std `Mutex`, the
-  lease taken in `hold` before the look for an imaging frame in flight and before the
-  region-of-interest check, and the holder's take with the purpose `run` at the
-  camera's settings as they stand, setting nothing and asking nothing of 036's
-  steering; and the solver part, with the session's aim point read before and after
-  the solve, and 032's `Session::held_aim` after it, for `aim_moved`, and
-  `near_arcsec` from `CENTRE_NEAR_SHARE`; a take that 031 answers with no frame is a
-  camera failure (plan.md § The
-  console's camera and solver parts).
-- [ ] T019 [US4] Run the `lint` and `test` gates with every existing test unchanged and
-  green, US12's and US1's to US3's included. Commit the green story (US4-S1, US4-S2, US4-S3,
-  US4-S4, US4-S5 and US4-S6).
-
-## Phase 5: User Story 5 — Centring on the sensor (Priority: P1)
-
-### Tests first
-
-- [ ] T020 [US5] Create `crates/finder/tests/console/imaging_run_centring.rs`, the
-  module `imaging_run_centring` of `console`, with its `mod` line in
-  `crates/finder/tests/console/main.rs`, and failing scripted tests for one re-centre
-  (US5-S1), a target 600″ off that is never centred, its offset written `10.0′`
-  (US5-S2), and a solve that measured no new aim point, which is no try, four of them
-  in a row with the target 400″ off, which is stacked with a warning, and 600″ off,
-  which ends the run, the count started again by a re-centre, a target 400″ off after
-  three tries that is stacked with a warning, both warnings saying at 400″ that the
-  target is stacked where it is and at 180″ and 150″ that the stack's steering will
-  bring it in, a failed `repoint`, a mount that is not steady after one, and a stop of
-  the run while `repoint` is held (US5-S3).
-- [ ] T021 [US5] Create `crates/finder/tests/motion/imaging_run_centring.rs`, the module
-  `imaging_run_centring` of `motion`, with its `mod` line in
-  `crates/finder/tests/motion/main.rs`, holding its own build of the run rig with no
-  aim point. Write failing tests for centring from no aim point with the console's own
-  mount, camera and solver parts, with the tolerance exactly 90.0 and Track read as no
-  longer `off` within 2 s of the first sample that read it `off` while centring
-  (US5-S4), for Stop while centring with the script's solver given 400″ four times
-  (US5-S5), for the same centring at an
-  exposure of 20 s, with 032's last aim reading never `moving` (US5-S6), and for a
-  target changed as soon as the run reads `centring` (US5-S7), against the simulator's
-  truth, the session and the simulator's mount.
-
-### Implementation
-
-- [ ] T022 [US5] In `crates/finder/src/imaging/run.rs`, add `CENTRE_TRIES` and
-  `CENTRE_IDLE` and make step
-  4 of the task the centring loop of plan.md § Centring in the machine, with `repoint`
-  awaited unguarded and only after a solve whose `aim_moved` is true, a solve that
-  measured no new aim point counted apart from the tries, and a target within
-  `near_arcsec` stacked with its warning after the last try, and after the fourth solve
-  in a row that measured no new aim point, each warning in the form its offset gives
-  (plan.md § The run's words).
-- [ ] T023 [US5] In `crates/finder/src/imaging/run/console.rs`, add `FRESH_POLLS` and
-  step 3 of `repoint`: after the part's own Track off and with Track off, the wait for
-  a live pointing newer than the one found then, at most `FRESH_POLLS` polls, going on
-  to ask Track when none has come and refusing as stopped, with `repointing` cleared,
-  when the stop generation changes meanwhile (plan.md § The console's mount part).
-- [ ] T024 [US5] Run the `lint` and `test` gates with every existing test unchanged and
-  green, US12's and US1's to US4's included. Commit the green story (US5-S1, US5-S2, US5-S3,
-  US5-S4, US5-S5, US5-S6 and US5-S7).
-
-## Phase 6: User Story 6 — The focus gate and its pause (Priority: P1)
-
-### Tests first
-
-- [ ] T025 [US6] Create `crates/finder/tests/console/imaging_run_focus.rs`, the module
-  `imaging_run_focus` of `console`, with its `mod` line in
-  `crates/finder/tests/console/main.rs`, and failing scripted tests for the pause, with
-  its message and `pause_ends_at` (US6-S1), checking again (US6-S2), going on anyway
-  (US6-S3), the 900
-  s limit, read 899.5 s after the start and 1 s later (US6-S4), and a stop, a mount ending, an aid that cannot open and a resume
-  outside a pause (US6-S5).
-- [ ] T026 [US6] Add failing tests to that file for the route on the scripted console
-  (US6-S6), and, on 033's focus rig with the console's own camera and focus parts and
-  the script's mount, solver and stack, set up by running the focus aid until the
-  imaging view's `focus.record.tonight` is present, for a run at the simulator's focus
-  error 0.0 with `focus.unit` `arcsec`, a
-  defocused one found in at most ten steps of 1.0, a refocused one, a start while the
-  focus aid runs, refused with `the imaging camera is held by the focus aid` and
-  followed by no `mount.point`, a
-  camera with no focus record, and a run whose own check is stopped by a
-  `DELETE /api/imaging/focus` the test spawns and does not await, which ends the run
-  `stopped` (US6-S7). Add failing scripted tests for a check repeated once when the
-  tracker was not steady during it (US6-S8), and for a second resume and a resume that
-  comes after the limit has fired, with `Step::CloseAid` held (US6-S9), for the five
-  other checks that pause, each with its words, a check that did not
-  finish reading as unmeasurable only when its failure is `NotSolved` (US6-S10), and for
-  a check still clearly
-  out after `resume(false)`, which pauses again with no second `camera.release`
-  (US6-S11).
-
-### Implementation
-
-- [ ] T027 [US6] In `crates/finder/src/imaging/run.rs`, add `FOCUS_PAUSE_LIMIT`, replace
-  the going-on of step 3 for a verdict that pauses and for a check that did not finish
-  with the pause of plan.md § The focus gate in the machine, a check that did not finish
-  pausing with the words of unmeasurable when its failure is `NotSolved` and with
-  `The focus check did not finish: {words}. Check the imaging camera, then check focus again or go on anyway.`
-  otherwise, close the aid on every way
-  out of a pause whether or not it opened, take the lease again on every way on to
-  the solve, give it up no second time before a check that is repeated, and make
-  `Runner::resume` hand `anyway` to the waiting task. Before a pause
-  for `ClearlyOut` or `Unmeasurable`, ask `mount.steady_between` over the check's two
-  clock readings and repeat an unsteady check once, a second unsteady one pausing with
-  its warning. Set `pause_ends_at` while paused. Take resumes from the moment the
-  state is `focus_pause`, act on the first, and refuse one that comes after a stop,
-  the mount's ending or the limit has answered the pause, in that order when more than
-  one is ready.
-- [ ] T028 [US6] In `crates/finder/src/imaging/run/console.rs`, add `focus` over 033's
-  `focus_start`, `focus_ended` and `focus_stop`, with the table that turns 033's view
-  into a `FocusCheck`, as plan.md § The console's focus part gives it; a check 033 ended
-  as `stopped` is `Failure::Stopped`, which ends the run, and one it ended as
-  `no_region` is `Failure::NotSolved`.
-- [ ] T029 [US6] Run the `lint` and `test` gates with every existing test unchanged and
-  green, US12's and US1's to US5's included. Commit the green story (US6-S1, US6-S2, US6-S3,
-  US6-S4, US6-S5, US6-S6, US6-S7, US6-S8, US6-S9, US6-S10 and US6-S11).
-
-## Phase 7: User Story 7 — Stacking to a limit, and the endings a stack can cause (Priority: P1)
-
-### Tests first
-
-- [ ] T030 [US7] Create `crates/finder/tests/console/imaging_run_limits.rs`, the module
-  `imaging_run_limits` of `console`, with its `mod` line in
-  `crates/finder/tests/console/main.rs`, and failing scripted tests for the count limit
-  with a dropped sub in its counts (US7-S1) and with subs discarded (US7-S7), the time
-  limit, read 58.5 s after the settle and 1 s later (US7-S2), and the same under the
-  tracker's pause (US7-S8), 600 s of stacking with failed subs and none stacked
-  (US7-S3), and a stacked sub that starts the time again (US7-S9), the stack's own
-  failures and a stack
-  that ends by itself, each through `end_stack` (US7-S4), a stack's failure and the
-  mount's ending in one poll (US7-S5), and what the 600 s do not count: `behind` and
-  `unprocessed` subs, and time paused by the tracker (US7-S6).
-
-### Implementation
-
-- [ ] T031 [US7] In `crates/finder/src/imaging/run.rs`, add `NO_SUB_LIMIT`,
-  `NOT_FAILURES` and the five
-  checks of plan.md § Limits and the stack's endings in the machine to the stacking
-  loop, in their order and after the mount's ending and a stop are judged, the time
-  limit on tokio's clock from the instant `stack.start` answered, and a stack that no
-  longer runs ending the run `StackStopped`.
-- [ ] T032 [US7] Run the `lint` and `test` gates with every existing test unchanged and
-  green, US12's and US1's to US6's included. Commit the green story (US7-S1, US7-S2, US7-S3,
-  US7-S4, US7-S5, US7-S6, US7-S7, US7-S8 and US7-S9).
-
-## Phase 8: User Story 8 — The whole run on the console's own parts, and in the binary (Priority: P1)
-
-### Tests first
-
-- [ ] T033 [US8] Create `crates/finder/tests/motion/imaging_run_stack.rs`, the module
-  `imaging_run_stack` of `motion`, with its `mod` line in
-  `crates/finder/tests/motion/main.rs`, holding its own build of the run rig with
-  `with_imaging_run()` and its focus aid run until the imaging view's
-  `focus.record.tonight` is present, and failing tests for a whole run to three subs
-  (US8-S1), for `keep_subs` false (US8-S2), for a `DELETE` while stacking (US8-S8), for
-  a stack
-  stopped from 035's own route (US8-S4), for an imaging folder whose `runs` is a
-  regular file (US8-S5), for a scope node that stops answering while the run stacks
-  (US8-S6) and for the reserve file, its size worked out from the imaging view, once the
-  run has a folder and after (US8-S7), and a test that
-  reads the run's four source files from `CARGO_MANIFEST_DIR` and finds nothing of
-  GoTo, the tracker, the ephemeris or the scope link named in them (US8-S9). Create
-  `crates/finder/tests/cli/imaging_run.rs`, the module `imaging_run` of `cli`, with
-  `mod imaging_run;` in its alphabetical place in `crates/finder/tests/cli/main.rs`,
-  and a failing test for the built binary under `--simulate` (US8-S3).
-
-### Implementation
-
-- [ ] T034 [US8] In `crates/finder/src/imaging/run/console.rs`, add `stack` over 035 and
-  036, as plan.md § The console's stack part and the wiring gives it: the set point
-  told to the steering, the stack started for the target's label, the counts with only
-  the reasons above 0, the wait for the tracker, the stack's own ending sorted into a
-  `Failure`, and with `keep_subs` false the removal of the subs `stack.json` lists.
-  The part stops only the stack it started, and only while that stack reads
-  `stacking`; when another stack has replaced it, `progress` answers the counts last
-  read with `running` false, and `stop` answers `Ok(())` and removes no sub. A start
-  that 035 answers with a stack whose `started_at` is before the part's own reading of
-  the clock is another client's: a failure, with no id kept. Once its own stack has
-  started the part writes `.reserve` in the stack's folder: `reserve_bytes` of zeros for
-  the imaging view's camera and binning, `RESERVE_CHUNK` at a time with
-  `tokio::task::yield_now().await` between two chunks and no `spawn_blocking`; it
-  removes the file first thing in `stop`, and when a chunk cannot be written it removes
-  the file, stops the stack it has just started and fails the start as `Save`. With
-  `keep_subs` false it removes subs only
-  when the stack it stopped was saved, has at least one sub stacked and ended as
-  `stopped`. In
-  `crates/finder/src/api.rs`, add `with_imaging_run`, cloning the state for the parts
-  before the runner is kept. In `crates/finder/src/main.rs`, call it after the imaging
-  solver is set, on the `--simulate` path too.
-- [ ] T035 [US8] Run the `lint` and `test` gates with every existing test unchanged and
-  green, US12's and US1's to US7's included. Commit the green story (US8-S1, US8-S2, US8-S3,
-  US8-S4, US8-S5, US8-S6, US8-S7, US8-S8 and US8-S9).
-
-## Phase 9: User Story 9 — The run on the Imaging page (Priority: P2)
-
-### Tests first
-
-- [ ] T036 [US9] Create `crates/finder/web/src/components/ImagingRunBlock.test.tsx` with
-  failing tests for US9-S1, US9-S2, US9-S3, US9-S4, US9-S5 and US9-S6, stubbing `fetch`
-  as 031's Imaging page tests do, with the cases each scenario lists: a limit typed as
-  `0`, a draft that survives a new view, no pause buttons outside a pause, the elapsed
-  time rounded down, no brackets with none dropped, a limit's ending as a status and an
-  ended run's warnings; and for US9-S7, reading `DESIGN.md` and
-  `.impeccable/design.json` with `readWebFile` from `src/test/files.ts`. Add failing
-  tests for the ended line's forms when the stack was not saved, `1 sub`, and the line
-  that Track is still on (US9-S8), the second tap of `Stop imaging run` under fake
-  timers, the button while its request is out and while the run saves its stack
-  (US9-S9), a refused or unanswered `Check focus again` and when its alert goes
-  (US9-S10), the start form's placeholder, quiet line, size estimate and the line of
-  an unfinished run (US9-S11), and the time a pause has left and the time stacked
-  against the limit (US9-S12), and what a click on `Start imaging run` posts, with
-  a refusal's alert gone once a run appears (US9-S13).
-
-### Implementation
-
-- [ ] T037 [US9] Add `ImagingRun`, `ImagingRunRequest`, `postImagingRun`,
-  `deleteImagingRun` and `postImagingRunContinue` to `crates/finder/web/src/api.ts`,
-  and `run` to `ImagingView`. Create
-  `crates/finder/web/src/components/ImagingRunBlock.tsx` with the words of plan.md
-  § The page, keeping its two fields and its checkbox in its own state, and render it
-  in `crates/finder/web/src/components/ImagingPage.tsx` right after the title block.
-  The three calls throw the block's own words when `fetch` rejects; the type gains
-  `stacking_since`, `limit_at`, `pause_ends_at`, `ended.saved` and `ended.track_on`,
-  and the view
-  `unfinished_run`.
-- [ ] T038 [US9] Add the Imaging run entry to `DESIGN.md` and the Imaging run component
-  to `.impeccable/design.json` (plan.md § `DESIGN.md` and `.impeccable/design.json`).
-  Run the `lint` and `test` gates with every existing Vitest and Playwright test
-  unchanged and green, commit the rebuilt `crates/finder/web/dist`, and commit the
-  green story (US9-S1, US9-S2, US9-S3, US9-S4, US9-S5, US9-S6, US9-S7, US9-S8, US9-S9,
-  US9-S10, US9-S11, US9-S12 and US9-S13).
-
-## Phase 10: User Story 10 — Four MCP tools (Priority: P2)
-
-### Tests first
-
-- [ ] T039 [US10] Create `crates/finder/tests/mcp/imaging_run.rs`, the module
-  `imaging_run` of finder's `mcp` test binary, with `mod imaging_run;` in its
-  alphabetical place in `crates/finder/tests/mcp/main.rs`, serving the scripted console
-  through the door as `crates/finder/tests/support/mcp.rs` serves a state, with a call
-  log the test reads. Write failing tests for the list (US10-S1), a start and a read
-  (US10-S2), the errors, each tool of a console without parts called with arguments it
-  would otherwise accept, and an unknown key of `continue_imaging_run` (US10-S3), the
-  rate limit (US10-S4), stop (US10-S5) and continue, read back with
-  `get_imaging_run` after a settle (US10-S8), a start during a direct axis move on
-  `crate::support::mcp::sim::Rig` (`crates/finder/tests/support/mcp.rs:182`), and
-  `stop_imaging_run` sending the recording mount no `StopAll`
-  (US10-S6), and the token (US10-S7). Leave 1 s of virtual time between two starts but
-  in US10-S4.
-
-### Implementation
-
-- [ ] T040 [US10] In `crates/finder/src/mcp/tools.rs`, add `ImagingRunArguments`,
-  `ImagingRunContinueArguments` and the four tools with the descriptions, order of
-  checks, parsing and answers of plan.md § The MCP tools, `start_imaging_run` answering
-  and logging `runner.view()` as read once `start_motion` has answered. In
-  `crates/finder/src/api.rs`, add `start_imaging_run` to the one `matches!` of
-  `start_motion` plan.md § The console names. The README is US11's.
-- [ ] T041 [US10] Run the `lint` and `test` gates with every existing test unchanged and
-  green. Commit the green story (US10-S1, US10-S2, US10-S3, US10-S4, US10-S5, US10-S6,
-  US10-S7 and US10-S8).
-
-## Phase 11: User Story 11 — The README and the field checklist (Priority: P3)
-
-### Tests first
-
-- [ ] T042 [US11] Create `crates/finder/tests/console/imaging_run_docs.rs`, the module
-  `imaging_run_docs` of `console`, with its `mod` line in
-  `crates/finder/tests/console/main.rs`, reading `README.md` from `CARGO_MANIFEST_DIR`.
-  Write failing tests for the section's words, with `corner`, `7200` and
-  `What to do next` in its prose before the checklist (US11-S1), the checklist's
-  eighteen steps
-  and the word `corner` in its step 8 (US11-S2), each text read to the next heading or
-  to the end of the file, and the three rows of the API table
-  and the four tools in MCP clients (US11-S3).
-
-### Implementation
-
-- [ ] T043 [US11] In `crates/finder/README.md`, add the three rows to the `## API`
-  table, the four tools to `## MCP clients` with the count in the sentence before its
-  list made four higher, and the sections `## An imaging run` and
-  `### Field checklist: the first imaging run`, with the rows, the content and the
-  eighteen steps of plan.md § The README: rows, tools, the section and the field
-  checklist, every state word and ending reason between backticks, and the known limit
-  that the run's own imaging frames are not capped as subs are, in the prose and in
-  step 8. The prose also says, as that section lists them: the four sentences of
-  `stopped` and what the mount does after each, what to do next after each ending,
-  in a fourth column of the table of endings headed `What to do next`, the waits and
-  counts as they now are,
-  that the imaging exposure should be at least as long as the finder camera's (and
-  step 4 of the checklist says so), what a console that exits mid-run leaves, and the
-  reserve file.
-- [ ] T044 [US11] Run the `lint` and `test` gates with every existing test unchanged and
-  green. Commit the green story (US11-S1, US11-S2 and US11-S3).
-
 ## Phase 12: User Story 12 — The run's parts and words, and a script to test them with (Priority: P1)
 
-Built first, before User Story 1 (spec.md § Work Graph). It has the number 12 because
-the owner cut it from User Story 1 on 2026-11-19, and its tasks are numbered after the
-last of the others for the same reason. It writes no `Runner`, no view and no message of
-a state.
+Built first, before User Story 1 (spec.md § Work Graph), though its number and its
+tasks' numbers come last. It writes no `Runner`, no view and no message of a state.
 
 ### Tests first
 
@@ -665,7 +299,7 @@ a state.
 ## Execution Order
 
 ```text
-US12 ──► US1 ──► US2 ──► US3 ──► US4 ──► US5 ──► US6 ──► US7 ──► US8 ──► US9 ──► US10 ──► US11
+US12 ──► US1 ──► US2 ──► US3
 ```
 
 - **US12** comes first: it writes the traits, the words and the script that the machine
@@ -674,19 +308,8 @@ US12 ──► US1 ──► US2 ──► US3 ──► US4 ──► US5 ─�
   real part, a page or a tool on its machine.
 - **US2** completes the machine for a step that fails and for the stack's counts, before
   anything is served.
-- **US3** serves the machine and gives it its record; US4 to US6 drive their real parts
+- **US3** serves the machine and gives it its record; 041's US4 to US6 drive their real parts
   through its routes.
-- **US4** writes the console's own mount, camera and solver parts and proves them on the
-  simulated mount with runs that need no re-centre.
-- **US5** adds the centring loop to the machine and the wait a re-centre needs to the
-  mount part, and proves a re-centre end to end.
-- **US6** and **US7** each add a group of states or endings to
-  `crates/finder/src/imaging/run.rs`, in the order a run meets them, so they cannot run
-  together.
-- **US8** adds the stack part, assembles the five parts and wires the binary.
-- **US9** touches only `crates/finder/web/`, `DESIGN.md` and `.impeccable/design.json`,
-  and reads every state and ending the earlier stories make.
-- **US10** writes `crates/finder/src/api.rs` after US8.
-- **US11** comes last: it writes the README for the routes and tools as they were
-  built, and its test reads it.
+- After US3, `041-imaging-run-on-the-rig` and then `042-imaging-run-page-and-mcp` build
+  on this spec once it has landed.
 - **`[P]`** marks nothing here: the stories form one chain.
