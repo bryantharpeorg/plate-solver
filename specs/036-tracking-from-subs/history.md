@@ -463,7 +463,8 @@ they were merged.
   measured at 0.299879°, while with the held mode testing `lapsed` alone 015's bound
   broke at transit + 319.7 s, as plan.md § Plan traps 28 says; and US7-S1's drift from
   the 14th sub at most 0.01558″ (9.6×), and 0.746″ on every sub with the switch off.
-  US5-S6's limit is 37.28 s on the rig, not the worked 37.15 s, which is corrected
+  US5-S6's [now US12-S1's] limit is 37.28 s on the rig, not the worked 37.15 s, which is
+  corrected
   (D32). US3's test file passed unedited before and after US6. US7's stacking rig tracks
   and stacks, 18 subs in about 97 s of virtual time, and US7-S5's rig saw its link
   dropped within 1 s, well inside its gap. A first reversal's measurement held the
@@ -549,18 +550,18 @@ before this spec is flipped.
   8. **The exposure limit.** The exposure is decided from the shortest limit of the hour
      ahead, is never halved to under 1 s, and exposures pause while the limit is under
      half the exposure held (owner decision 2; FR-017, FR-018, FR-022; US5-S1, US5-S10,
-     US5-S11, US6-S17).
+     US5-S11 [now US12-S3], US6-S17).
   9. **The default smear** is 6 px (owner decision 1; FR-019; US5-S1, US5-S4).
   10. **The limit before and after a stack.** The view carries the limit, and what a
       stack started now would take, whenever a tracker runs, and neither otherwise
-      (FR-018; US5-S4, US5-S12).
+      (FR-018; US5-S4, US5-S12 [now US5-S6]).
   11. **The sentences.** The page's sentences are reworded; a pause says why, in a word
       the tracker gives through `Steered`; and the count of subs dropped as not steady
       is one stack's (FR-021, FR-022, FR-027; US8-S3, US8-S4, US8-S7, US8-S8).
   12. **An agent's reach.** `set_steering` is an MCP tool, and the README says what each
       key of `steering` means (owner decision 11; FR-025, FR-031; User Story 11).
   13. **The gains.** The step share and the rate share are run-only settings (owner
-      decision 3; FR-030; US5-S13, US5-S14).
+      decision 3; FR-030; US5-S13 [now US5-S8], US5-S14 [now US12-S4]).
   14. **User Story 3's size.** If the fold's estimate passes 60 KB it is cut by tests
       into a new story, as 035's User Story 5 was. It did (the next answer).
   15. **A second probe round** builds the changed stories before the flip.
@@ -598,7 +599,8 @@ before this spec is flipped.
   Given, When and Then, and a later one becomes a scenario of its own at the end of its
   story, so that the judge grades each case (CC9). Besides the ones the two cuts took:
   US2-S5's second Given is US2-S7; US4-S1's is US4-S9, and US4-S2's second and third
-  US4-S10 and US4-S11; US5-S4's is US5-S7 and US5-S6's US5-S8; US6-S3's second to sixth
+  US4-S10 and US4-S11; US5-S4's is US5-S7 and US5-S6's US5-S8 [the two now US12-S1 and
+  US12-S2]; US6-S3's second to sixth
   are US6-S12 to US6-S16; US7-S1's second When is US7-S8, and US7-S5's two And cases
   US7-S9 and US7-S10; and US8-S6's second Given is US8-S10. A triple begins at a Given,
   or at a When that starts on another rig, steering or console; cases that a Then lists
@@ -607,8 +609,10 @@ before this spec is flipped.
   US5-S1, US5-S2, US5-S5, US6-S4, US8-S1, US8-S4 and US9-S4 among them). New with this
   fold: US1-S7, a push on the mount itself (BB10); US4-S12, a set point changed during a
   stack (AA12, BB7); US5-S9, the switch turned off during a stack (AA5, CC1, DD5, FF2);
-  US5-S10 to US5-S12, the hour ahead and what a stack started now would take (choices 8
-  and 10); US5-S13 and US5-S14, the two shares (choice 13); US6-S17, the wait for the
+  US5-S10 to US5-S12 [now US5-S10, US12-S3 and US5-S6], the hour ahead and what a stack
+  started now would take (choices 8
+  and 10); US5-S13 and US5-S14 [now US5-S8 and US12-S4], the two shares (choice 13);
+  US6-S17, the wait for the
   limit (choice 8); US8-S7 to US8-S9, the status's sentences, the pause's and the form's
   drafts (choice 11, DD6); US10-S9, a rate whose time has run out (EE1); and US11-S1 to
   US11-S3, the tool (choice 12). The first pass's were US3-S13 and US3-S14 [now US9-S13
@@ -660,6 +664,81 @@ before this spec is flipped.
   FF12's rule for an axis whose rate is held at zero waits for what probe round 2
   measures (plan.md § Risks). And the statuses of 030 to 035 as drafts, and the line
   numbers of citations, are the re-anchoring's.
+
+### Session 2026-11-20 (round 2 probes)
+
+Probe round 2 built this spec's six stories on 2026-11-20, on `main` at `52785403` with
+the re-anchored trio, tests first and with both gates, in two agents: US1, US2 and US3,
+then US9, US4 and US5. Every story was built from the trio, passed its gates under
+64 KiB and wrote only its declared files, and every bound held on three runs (flip.md
+§ Prerequisites 5 has the figures). The round found no blocking defect and 21 clarity
+defects, R1 to R21, all folded the same day. Each case it proposed where a mutation
+survived a story's committed tests is now in its scenario, in the words of the case as
+it was run, which passed on the code and failed under the mutation, and a clause of
+that scenario's assertion in plan.md § Refinement Record says the same.
+
+- Q: What did the fold change? → A: By story:
+  - US1: the twins of US1-S2 are built together, with `tokio::join!` (R1; tasks.md
+    T001); US1-S5 reads `count_steps()` back as true (R2); and US1-S7 has a read at the
+    instant of a push replace the newest sample (R3).
+  - US3: US3-S7 asks `target()` before and after the stop (R8); and US3-S11's last
+    bullet has the error that takes a lapsed claim back judged against the held step
+    (R7).
+  - US9: US9-S5 has the claim forget the pointing before it (R4); US9-S4 has the eight
+    idle gaps counted in a row (R5) and waits 1 s after its second pointing, so that
+    the window it checks holds what that pointing did (R9); and US9-S10 has a pointing
+    inside 015's deadband clear the held step (R6).
+  - US4: US4-S7 names the console it is built on (R10); US4-S8 tests only a stack's
+    first error against 180″ (R11); US4-S10 sees no stand-back and no `release` (R12);
+    and US4-S3 gives a frame to the newest record's tracker (R13).
+  - US5: `Control` keeps its derived `Default`, and the shares are set where
+    `start_with_resets` builds it (R14; plan.md § The tracker's two answers); the
+    setters' checks are `pub(crate)` and the route calls them (R15; plan.md § The
+    steering, **The cap**); US5-S3 has a refused setter mark nothing used (R18); US5-S5
+    checks smear, step share and rate share in that order (R19); and US5-S6, which was
+    US5-S12, shows the limit for the stack's own ask and has the console ask with its
+    camera's own shortest exposure and sensor (R17, R20).
+  - US12: US12-S4, which was US5-S14, reaches `tune` through `&dyn Steered`, a share
+    held to 0 to 1 and a NaN ignored (R16).
+- Q: What was cut, and how? → A: User Story 5 measured 62,776 B, 95.8% of the budget,
+  against its estimate of 53,100 B (81%): 18.2% over, where the factory's builder lands
+  large stories 2% to 4% over, so a builder 4.4% over that build would pass 65,536 B.
+  The owner's choice 14 of 2026-11-19, "if the fold's estimate passes 60 KB, cut it by
+  tests into a new story", is the authority, as it was for User Stories 9 and 10, and
+  the cut is the one plan.md § Risks wrote in advance. User Story 12, "The cap's limits
+  and tuning, tested on the tracker", takes US5's four motion scenarios whole, with
+  `crates/finder/tests/motion/steering_cap.rs` and its `mod` line; the code stays in
+  US5. The probe built the cut on a branch of its own: US5 49,157 B (75.0%), with
+  clippy, all 43 `steering_` tests and the layout test passing; and US12 13,619 B
+  (20.8%), where § Risks had said about 9 KB, its four tests passing on US5's code with
+  none failing first; the cut's tip is byte for byte the uncut build. With the cases the
+  round added, US5 is about 51,700 B (79%) and US12 about 14,200 B (22%). US12
+  `depends_on_merged` US5 alone and implements no FR, as US9 does. It has no shared
+  write: it and US4 both write `crates/finder/tests/motion/main.rs`, ordered through
+  US5, and the validator refuses a `merge_order` entry that no edge of the pair's own
+  carries; US4's entry for that file, which named US5, is gone, since US5 no longer
+  writes it. As in User Story 9's cut, a scenario that moved has a new number, and two
+  that stayed: US5-S12 took the number 6 that US5-S6 left, and US5-S13 the 8 that
+  US5-S8 left, so that US5-S7, US5-S9 and US5-S10 keep theirs.
+
+  | Was | Now | Module |
+  |---|---|---|
+  | US5-S6 (the longest exposure, against 015's) | US12-S1 | `steering_cap` of `motion` |
+  | US5-S8 (a target due east) | US12-S2 | `steering_cap` of `motion` |
+  | US5-S11 (the hour ahead) | US12-S3 | `steering_cap` of `motion` |
+  | US5-S14 (a tuned tracker) | US12-S4 | `steering_cap` of `motion` |
+  | US5-S12 (`view_for`) | US5-S6 | `steering_cap` of `console` |
+  | US5-S13 (the two shares) | US5-S8 | `steering_cap` of `console` |
+- Q: What was left out, and what is left for others? → A: R7's fix text also had the
+  gap after that error make `steered_by_subs()` true, which the case as run did not
+  assert; it is not in US3-S11. US12's tasks are T052 and T053, after 040's T051, and
+  T023, the motion module's task, is no longer used. 040's trio cites five things of
+  US5's that are now US12's: "036's US5-S6" in its US7-S2, the merge reason "036, whose
+  US5 last writes motion/main.rs" and the preserved "036's US5's console and motion
+  steering_cap.rs" in its Refinement Record, "036's US5's two modules" in its § Plan
+  traps 34, and "036's US5's two test files" in its tasks.md; 040's own fold corrects
+  them. Owner approval 9 is left as it stands, `steering_cap` still among `motion`'s
+  modules, for the flip.
 
 ## Story notes moved out of spec.md
 
@@ -810,6 +889,7 @@ the probe round or the earlier draft it told of. As each read:
 | The two shares as run-only settings, handed to the tracker before every gap | Constants in code; a second argument of `steer` | The telescope is two hours from where a console is rebuilt, and the switch alone compares all of the feedback with none. Handed before every gap, a tracker a GoTo has just made has them by its first step, and `steer` keeps its shape. |
 | The switch turned off, a set point that changes and the wait for the limit each let the tracker go | Storing the flag or the set point only | A claim lapses only at a gap, and none is asked for then: the claim stood, the finder camera's pointings changed no rate under it, and nothing steered. |
 | US3 and US6 cut by tests, into US9 and US10 | Building at 93% and 92% of the budget; the code cut § Risks once named for US3 | A cut by tests moves whole scenarios and no line of code, so the story that keeps the code is graded on fewer criteria and builds as it would have. The code cut was never built. A cut found mid-epic needs a relaunch. |
+| US5 cut by tests, into US12 (2026-11-20) | Building whole at 95.8% of the budget, as probe round 2 measured it | It built 18% over its estimate, and a builder 4.4% over that build would pass the budget. The cut is § Risks' own, built by the probe: 75% and 21%. |
 
 Added at the re-anchor of 2026-11-20, for principle V of constitution 1.3.0, which asks a
 plan to name what it looked at and why it turned it down:
@@ -839,7 +919,8 @@ ends the stack (US7, § The stack, § What 035 must provide); the tracker rig wa
 a tracker's first rates and a gap before them is turned away (US3, US6, § Plan traps
 22); a lapsed claim is taken back only once a tracking error has come (US3); `limited`
 is held with the exposure (US5); and six scenarios whose numbers could not pass as
-written were corrected (US2-S5, US5-S1, US5-S2, US5-S6, US7-S1, US8-S4). An audit of
+written were corrected (US2-S5, US5-S1, US5-S2, US5-S6 [now US12-S1 and US12-S2],
+US7-S1, US8-S4). An audit of
 the seven trios the series then had, side by side, followed the same day, and its five findings
 were applied (spec.md § Clarifications, the audit's session): after a lapse the
 finder camera's corrections are held for the next gap, and while the tracker is not
@@ -877,7 +958,8 @@ What stood in for a probe until round 1, and what it did not show:
   (probe round 1 measured the limit on the rig as 37.28 s, at 14.91°/h, 0.36% off: D32).
   The review recomputed them independently, and its corrections are in: the turns of
   US5 are now the test's own `hypot` expressions, US3-S10's signs are right, US5-S6's
-  due-east instant is worked out (9.7″ of azimuth a second against a 3.2″ window), and
+  [now US12-S2's] due-east instant is worked out (9.7″ of azimuth a second against a
+  3.2″ window), and
   US8-S4 no longer rests on how a tie rounds.
 - **Anchors** were read at 49bb210, read again there after the audit, and checked by
   the validator.
@@ -952,6 +1034,17 @@ to what it still asserts; US4's and US7's edges to US9 and US10, for
 development checks of US6, which run US9's module beside US3's. Two scenarios were found
 broken by the fold's own rules and mended: US4-S4's set point and a case of US5-S1
 (spec.md § Clarifications).
+
+**What probe round 2 changed** (2026-11-20; § Clarifications above, the session of round
+2 probes). Two agents built the six stories on `main` at `52785403`, and found no
+blocking and 21 clarity defects, R1 to R21, all folded the same day. The records below
+change with them: a clause in the assertion of every scenario a case was added to
+(US1-S5, US1-S7, US3-S7, US3-S11, US4-S3, US4-S8, US4-S10, US5-S3, US5-S5, US5-S6,
+US9-S4, US9-S5, US9-S10 and US12-S4); a new block for US12, which takes US5's four
+motion entries, the motion module and its `mod` line's file; US5's block without them,
+its entries in the new numbering and its layout entry for `console` alone; and US4's
+shared write of `crates/finder/tests/motion/main.rs` with US5 gone, since US5 no longer
+writes that file.
 
 ## A risk that told the record's own history
 

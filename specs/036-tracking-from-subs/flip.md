@@ -11,9 +11,12 @@ this spec has landed.
 
 ## Owner decisions
 
-Each is a design or taste call the plan document leaves open. None is settled. A
-different answer is written into the trio and re-validated before the flip, never left
-to a story.
+Each is a design or taste call the plan document leaves open. All are settled. The owner
+approved the recommended answers of the imaging series on 2026-11-17 ("im good with all of
+the info in the decisions doc"), and on 2026-11-19 he changed 1, 2, 3, 4, 6, 7 and 15 to
+the answers written here (the reanalysis, "Take all 15"). 5 and 8 took fixes with no
+choice, and 13, 14 and 16 their recommended answers. The text of each is the answer in
+force.
 
 1. **The smear's unit and default.** Recommended: pixels of the imaging frame as
    delivered (after binning), at its corner farthest from the set point, 6 px by
@@ -290,13 +293,16 @@ above, and the following. Each is named in the FR or success criterion that make
    what is settled of them before 040's flip. They were read on `main` at `52785403`
    too (history.md, the re-anchor of 2026-11-20).
 4. **The owner decisions are settled and the approvals given** (§ Owner decisions and
-   § Owner approvals above). Not met: this spec's decisions, 1 to 8 and 13 to 16, are
-   open.
-5. **A probe build.** Met on 2026-11-19 for the trio as round 1 found it, and not met
-   for the trio as the reanalysis of the same day left it: nothing the two passes of
-   that second fold wrote has been built (the end of this point says what a second round
-   must show). Probe round 1 built all eight stories on 2026-11-18 and 19, tests first
-   and with both gates, on probe builds of 030 to 035
+   § Owner approvals above). Met on 2026-11-20: the decisions are settled as § Owner
+   decisions says, and the flip of that day gives the approvals, under the owner's
+   standing permission for the imaging specs ("You have my permission to move them to
+   ready when needed", 2026-11-19, extended to the split pieces on 2026-11-20: "you can
+   flip things to ready as you get them ready").
+5. **A probe build.** Met: on 2026-11-19 by probe round 1 for the trio as round 1 found
+   it, and on 2026-11-20 by probe round 2 for the trio as the reanalysis of 2026-11-19
+   and the re-anchoring left it (the end of this point says what round 2 had to show,
+   and what it showed). Probe round 1 built all eight stories on 2026-11-18 and 19,
+   tests first and with both gates, on probe builds of 030 to 035
    (spec.md § Clarifications, the session of round 1 probes). Before it, the bounds of
    US3-S1, US3-S2, US4-S5 and 040's US7-S1 came from arithmetic on a model of the loop
    (§ Refinement Record), and 040's US6-S5's rested on 015's own follow staying within 60″
@@ -341,16 +347,76 @@ above, and the following. Each is named in the FR or success criterion that make
    Everything else of the second fold rests on reading and on models of this plan's law:
    two of them reproduce round 1's two measured drifts and give, with the rate's limit a
    gap and the two-deadband rule added, the same 12th-sub figures to four places. Probe
-   round 2 builds this spec's six stories on `main`, with 035 landed, and must show:
+   round 2 was to build this spec's six stories on `main`, with 035 landed, and show:
    - every bound of round 1 again under the changed law: US3-S1 and US3-S2 with the
      rig's 3.5 s, and US4-S5 from the 14th sub;
-   - the scenarios nobody has run: US5-S11's hour ahead;
+   - the scenarios nobody has run: US5-S11's hour ahead [now US12-S3];
    - that every test file passes unedited under every later story, and US9's on the code
      of US3, the story it was cut from, with no test of its failing first;
    - each story's diff against its estimate in § Risks, US3 and US5 above all;
-   - the points of flip.md § Prerequisites 3 that 035's US9 and US10 settle, now that they have
-     landed.
+   - the two points of § Prerequisites 3 that this spec's own stories meet, the worker's
+     settings test and its queue of four, in 035's landed code; the points that 035's
+     US9 and US10 settle serve 040's stories, and 040's flip.md § Prerequisites 3 lists
+     them.
    What round 2 must show of 040's stories is in 040's flip.md § Prerequisites 5.
+
+   **What probe round 2 showed.** Met on 2026-11-20. Two agents built US1, US2 and US3,
+   then US9, US4 and US5, on `main` at `52785403` with the re-anchored trio, one commit
+   a story, tests first and with both gates, each writing only its story's declared
+   files. They found no blocking defect and 21 clarity defects, which are folded
+   (history.md, the session of round 2 probes).
+   - **Every bound held** on three runs, with the same digits each run:
+     - US3-S1: the first sub's drift 0.7485″, against at least 0.6″ (1.25×; the model
+       gives 0.749″); from the 12th sub, every drift at most 0.02425″ with each error
+       handed over at once (6.2×) and 0.03429″ played late (4.37×, 14% over the
+       model's 0.030″; round 1 measured 0.0340″), against 0.15″; every truth error from
+       the 12th sub at most 1.322″ at once and 1.788″ late, against 3.0″ (2.3× and
+       1.7×); the offset after the 40th sub −0.19771 against −0.19943, 0.9% off where
+       10% is allowed; and without feedback every drift at least 0.74714″ (1.25×), the
+       offset exactly zero.
+     - US3-S2: a median drift of 13.28″ (the smallest 5.46″), against above 3.0″
+       (4.4×; round 1 measured 17.19″). The figure is the seed's: over eight seeds of
+       the test's own generator it ran 12.07″ to 21.53″, 4.0× the bound at the least.
+     - US4-S5: the first tracking error 0.86904″, against at most 5.0″ (5.75×); the
+       first sub's drift 0.74594″, against at least 0.6″ (1.24×); from the 14th sub,
+       every drift at most 0.01655″, against 0.15″ (9.06×; round 1 9.7×), and every
+       tracking error at most 1.43694″, against 3.0″ (2.09×); and every rate during an
+       exposure within 0.000000″/s of the feed-forward plus the offset, against 0.001″/s.
+     - US12-S1 [was US5-S6]: M42's limit 37.276770 s, 015's own to a relative
+       1.9 × 10⁻¹⁶, and M81's 41.281911 s, its field turning the other way.
+     - US12-S2 [was US5-S8]: none at t*, and 89,408 s 10 s later, against more than
+       3600 s (24.8×; the worked example says about 89,000 s).
+     - The narrowest margins are the first sub's drifts, 1.24× and 1.25×, which the
+       model fixes at 0.749″ without feedback, and US3-S1 played late, 4.37×.
+   - **US5-S11's hour ahead** [now US12-S3], which no round had run: 34.333128 s, equal
+     to the test's oracle, at the 54th minute, M42's transit, on three runs; the limit
+     now 37.276770 s; inside the bound of 33 s to 36 s by 1.33 s at its low edge, and
+     as the worked example has it, 34.33 s against 37.28 s.
+   - **US9 on US3's code.** All thirteen of its tests passed on US3's code with no source
+     changed, at the first run and on three more: none failed first. Each of the 18
+     mutations of US3's code that only US9's scenarios can see was bitten by them. The
+     cut of US5 (history.md) was built as well, and US12's four tests passed on US5's
+     code without the motion module in the same way.
+   - **Every test file passed unedited under every later story:** US1's and US2's under
+     the stories after them, US3's eleven under US9, US4 and US5, US9's thirteen under
+     US4 and US5, US4's twelve under US5, and 015's and 038's 51 tracking tests under
+     US3.
+   - **Each story's diff against its estimate** (§ Risks; 65,536 B the budget): US1
+     22,914 B (35.0%) against 24,400 B, 6.1% under; US2 15,419 B (23.5%) against
+     15,600 B, 1.2% under; US3 52,693 B (80.4%) against 49,100 B, 7.3% over; US9
+     25,265 B (38.6%) against 23,900 B, 5.7% over; US4 41,545 B (63.4%) against
+     38,700 B, 7.4% over; and US5 62,776 B (95.8%) against 53,100 B, 18.2% over. None
+     passed the budget, but a builder 4.4% over US5's build would, so US5 was cut by
+     tests into US5 and US12 under owner choice 14: 49,157 B (75.0%) and 13,619 B
+     (20.8%), built, where § Risks had put the cut at about 9 KB.
+   - **The two points of 035** (§ Prerequisites 3), read in its landed code: the
+     worker's settings test drops a sub whose exposure differs from the reference sub's
+     by more than 1 ms, and US5 holds one exposure for a stack until `release`
+     (US5-S2), so every sub of a stack asks the same one; and the queue holds four
+     waiting subs, the oldest dropped as `behind` at a fifth, so US3's eight idle gaps
+     and sixteen corrections are sized as § What 035 must provide says, and US9-S4
+     sees the lapse at the eighth idle gap and not the seventh. No story of this spec
+     runs 035's worker or its queue: the stack's calls are 040's.
 6. **Outside the factory, before this spec is used at the telescope:** GoTo and Track
    proven on the real mount (the plan document, § Before any flip, 4), and its backlash
    measured on both axes: altitude reverses at transit, and azimuth too for a target
@@ -360,7 +426,10 @@ above, and the following. Each is named in the FR or success criterion that make
    since 030's flip (`55e41f57`). US2 inserts one of its entries after **Imaging
    angle**, which only the rewrite has (`GLOSSARY.md:107` at `52785403`).
 8. **No operator-staged files are needed.** Met.
-9. **The plan document agrees with the settled decisions.** Not met. `main` has held
+9. **The plan document agrees with the settled decisions.** Met for this spec on
+   2026-11-20: on `main` at `52785403` the plan document's route row, the session's
+   `steering` part, the module tree and § Simulator say what this trio builds. Its list
+   of MCP tools gains `set_steering` with 040's flip, whose US11 makes that tool. `main` has held
    the plan document since `55e41f57` (§ Prerequisites 7), and on `main` at `52785403`
    `docs/plans/2026-11-15-specs-030-037-imaging.md` § Interfaces shared across the specs
    carries this trio's recommended answers: its route table has the row

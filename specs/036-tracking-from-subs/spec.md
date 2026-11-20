@@ -1,13 +1,14 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["015-tracking", "030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "034-dark-and-flat-frames", "035-live-stack", "038-track-follows-a-push"]
 # Tracking steered by the subs, the first of two pieces: the simulator's memory, the
 # tracking error, the tracker steered by it, corrections only in the gap and the exposure
-# cap (US1 to US5, and US9, which tests US3's tracker). 040-stack-waits-for-steady holds
-# the rest (US6, US7, US8, US10, US11) and lists this spec in its depends_on_landed.
-# Depends on 015, 030 to 035 and 038 (depends_on_landed), all landed. State: draft, to be
-# probe-built again before the owner flips it (flip.md).
-# Re-anchored on 2026-11-20 to `main` at 52785403, after 035 landed.
+# cap (US1 to US5; US9 tests US3's tracker, and US12 US5's). 040-stack-waits-for-steady
+# holds the rest (US6, US7, US8, US10, US11) and lists this spec in its depends_on_landed.
+# Depends on 015, 030 to 035 and 038 (depends_on_landed), all landed. State: ready,
+# flipped on 2026-11-20 under the owner's standing permission for the imaging specs (flip.md).
+# Re-anchored on 2026-11-20 to `main` at 52785403, after 035 landed, and probe-built there
+# again (round 2): its 21 clarity defects are folded, and US5 is cut by tests into US12.
 # history.md has how it got here.
 ---
 
@@ -17,7 +18,7 @@ depends_on_landed: ["015-tracking", "030-imaging-camera-link", "031-imaging-fram
 
 **Created**: 2026-11-15
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: Spec 015 keeps a target at the aim point with the finder camera's solves. That
 is enough for an eyepiece and not for an imaging camera: a finder solve wanders by tens of
@@ -35,7 +36,8 @@ work.
 the tracking error and the one interface between the stack and a tracker (US2), the
 tracker steered by tracking errors (US3, whose claim's edges US9 tests), the steering
 that corrects only in the gap (US4), and the exposure cap with the steering's settings
-(US5). `040-stack-waits-for-steady` builds on it as landed: the pause while the tracker
+(US5, whose limits and tuning US12 tests on the tracker). `040-stack-waits-for-steady`
+builds on it as landed: the pause while the tracker
 is not steady, the stack that asks the steering before every exposure, the readout on
 the Imaging page and the MCP tool `set_steering`. A cite such as "040's US6-S5" is to
 that spec.
@@ -218,8 +220,10 @@ development, `cargo nextest run -p simulator --locked --test imaging_history`.
      simulator's truth; the measure is 030 US2-S6's second half, with a window sized
      to the trail, since 41 × 41 samples do not hold one of 40 px or more; the test
      computes the separation and the angle itself, from the truths' RA and Dec).
-2. **Given** two simulators built as in US1-S1, the same instant apart from nothing,
-   each with its altitude axis also commanded at 0.01°/s after its azimuth axis,
+2. **Given** two simulators built as in US1-S1 together (the two builds awaited with
+   `tokio::join!`, so that both clocks read the same instant; built one after the other,
+   the second starts after the first's 5 s wait), each with its altitude axis also
+   commanded at 0.01°/s after its azimuth axis,
    **When** a test reads the first's `imaging_truth()` at t and t + 2 s only, and the
    second's `imaging_truth()` and `telescope().eyepiece` at t, t + 1 s and t + 2 s,
    **Then** a committed test asserts that the first's `imaging_truth_at(t + 1.0)`, asked
@@ -250,8 +254,9 @@ development, `cargo nextest run -p simulator --locked --test imaging_history`.
 5. **Given** a `SimMount::with_config` with no backlash and no base tilt, **Then** a
    committed test asserts that `count_steps()` is false; that with the azimuth axis at 0.0001°/s for
    20 s, `true_direction().az` read every 100 ms takes more than 100 distinct values;
-   and that after `set_count_steps(true)` on a mount built the same way, the same 200
-   readings take between 8 and 11 distinct values, each a whole multiple of
+   and that after `set_count_steps(true)` on a mount built the same way,
+   `count_steps()` is true and the same 200 readings take between 8 and 11 distinct
+   values, each a whole multiple of
    360/1,620,000° from the first within 10⁻⁹ degrees (worked example: 0.36″/s for 20 s
    is 7.2″, nine counts of 0.8″); and that, with count steps on, the reading 2.0 s after
    the rate command still equals the first: 0.72″ of drive is under one count of 0.8″,
@@ -273,7 +278,10 @@ development, `cargo nextest run -p simulator --locked --test imaging_history`.
    answer's centre is within 0.02″ of the reading at t and more than 1000″ from the
    reading after the push: a push made on the mount is a motion like any other and keeps
    the memory, where a push made through the simulator starts it again, as US1-S3 has it
-   (oracle: the simulator's own truth, read live; FR-001).
+   (oracle: the simulator's own truth, read live; FR-001). **And** on a fresh simulator
+   of US1-S1, a read of `imaging_truth()`, `push_by(0.0, -1.0)` on the mount with no
+   wait, and a second read give centres more than 1000″ apart: a read at the newest
+   sample's instant replaces that sample (plan.md § The simulator's memory).
 
 ---
 
@@ -450,11 +458,11 @@ development, `cargo nextest run -p finder --locked --test motion steering::`.
    **Then** a committed test asserts of the rate log that between each gap's answer and
    the next gap's call every rate equals its axis's feed-forward rate plus the tracking
    offset read just after that answer, within 0.001″/s; that every gap put at least one
-   rate for each axis into the log between its call and its answer; and that after
-   `tracker.stop("stopped")`, `steered_by_subs()` is false, a `gap` answers (0.0, 0.0)
-   at once and the log gains no rate (oracle: 015's own rule that nothing follows a
-   stop, `specs/015-tracking/spec.md:229`. A gap before a tracker's first rates and a
-   gap nobody waits for are US9-S7 and US9-S8).
+   rate for each axis into the log between its call and its answer; and that `target()`
+   is `Some` before `tracker.stop("stopped")` and `None` after it, `steered_by_subs()`
+   is false, a `gap` answers (0.0, 0.0) at once and the log gains no rate (oracle:
+   015's own rule that nothing follows a stop, `specs/015-tracking/spec.md:229`. A gap
+   before a tracker's first rates and a gap nobody waits for are US9-S7 and US9-S8).
 8. **Given** the tracker rig with no rate error, a first gap, the error (0.0, 0.0)
    handed over at the time now, a second gap and 6 s waited, **When** the axis
    displacement (−6.0″, 0.0) is handed as an error at the time now and a third gap
@@ -520,10 +528,14 @@ development, `cargo nextest run -p finder --locked --test motion steering::`.
       the subs left it; and the last rate the log holds for each axis at or before that
       gap's answer equals its feed-forward rate plus the tracking offset within 0.01″/s:
       the pulse has ended;
-    - `steered_by_subs()` is still false after that gap (oracle: the simulator's truth
-      and its horizon transform, differentiated by the test, and 015's constants. A
-      held step over one gap's limit is US9-S10, and a noisy finder camera after a
-      lapse US9-S11).
+    - `steered_by_subs()` is still false after that gap;
+    - **And** a `steer` of (36.0, 0.0) with the console time read with o and e0, handed
+      after that gap, makes the next gap answer a `Stepped` within 0.3″ of
+      −0.5 × ((36.0, 0.0) + that gap's `Stepped`), about (−9.0, 0.0): the held step was
+      remembered, and the error that takes a lapsed claim back is judged against it
+      (oracle: the simulator's truth and its horizon transform, differentiated by the
+      test, and 015's constants. A held step over one gap's limit is US9-S10, and a
+      noisy finder camera after a lapse US9-S11).
 
 ---
 
@@ -580,7 +592,11 @@ development, `cargo nextest run -p finder --locked --test console steering_gap::
    holding `gap` and then `release`: the tracker found is released even when no exposure
    was recorded. **And** on another, after one `before_exposure`, `accepted` with the
    worked frame at `start` 1768528799.99, 10 ms before the answer, puts one `steer` in
-   the log: an exposure is found by its middle, not its start.
+   the log: an exposure is found by its middle, not its start. **And** on another, after
+   one `before_exposure`, the source's cell given a second scripted tracker, a second
+   `before_exposure` and `accepted` with the worked frame at `start` 1768528800.0 put
+   one `steer` in the second tracker's log and none in the first's: a frame goes to the
+   tracker of the newest record that holds its middle.
 4. **Given** a scripted steering with `set_set_point(Some((668.0, 386.0)))`, **Then** a
    committed test asserts that the `steer` after a `before_exposure` and `accepted` with
    the worked frame and solve carries −54.2373 ± 0.001 east and 95.6174 ± 0.001 north
@@ -624,7 +640,10 @@ development, `cargo nextest run -p finder --locked --test console steering_gap::
    answers a tracker whose `target()` is M42's catalogue place, (83.81867, −5.38967),
    exactly; and that after `POST /api/track` with `{"on":false}` it is `None` again
    (oracle: the session's own Track state).
-7. **Given** a console built with `with_imaging`, **Then** a committed test asserts that
+7. **Given** a console built as
+   `crate::support::live::state(&crate::support::live::sim(), None, false).with_imaging(root)`,
+   root a `Scratch` folder (`with_imaging` does nothing without the link that `state`
+   gives it, `crates/finder/src/api.rs:342`), **Then** a committed test asserts that
    its imaging view has no `steering` key; and that after
    `state.imaging().unwrap().steering()` is given a source that answers no tracker and
    awaits one `before_exposure` with the worked ask, the view's `steering.source` is
@@ -642,7 +661,10 @@ development, `cargo nextest run -p finder --locked --test console steering_gap::
    `accepted` with the worked frame and a solve built the same way for (100.0, 0.0) puts
    one `steer` in the log and leaves `far_arcsec` absent (oracle: FR-014: the steering
    stands back from a stack whose first tracking error is over 180″, until its next
-   `release`, and steers one whose first error is under it).
+   `release`, and steers one whose first error is under it). **And** a further
+   `before_exposure`, and `accepted` with a solve built the same way for (200.0, 0.0),
+   put a second `steer` in the log and leave `far_arcsec` absent: only the first
+   tracking error after a `release` is tested against 180″.
 9. **Given** a `Steering` on a clock that follows tokio's time from 1768528800.0, whose
    source answers a scripted tracker whose `gap` waits 0.7 s, **When** a test awaits one
    `before_exposure` with the worked ask, **Then** a committed test asserts that
@@ -653,7 +675,8 @@ development, `cargo nextest run -p finder --locked --test console steering_gap::
 10. **Given** a scripted steering whose tracker has no target, **When** a test awaits
     `before_exposure` with the worked ask and calls `accepted` with the worked frame
     (`start` 1768528800.0) and the worked solve, **Then** a committed test asserts that
-    the log holds no `steer` and that `view()`'s `subs` is 0 (oracle: FR-014).
+    the log holds no `steer` and that `view()`'s `subs` is 0, and that `view()` has no
+    `far_arcsec`, and the log holds no `release` (oracle: FR-014).
 11. **Given** a scripted steering after one `before_exposure` with the worked ask,
     **When** the test empties the source's cell and drops its own `Arc` of the tracker,
     **Then** a committed test asserts that a `Weak` of it taken before the drop no
@@ -684,16 +707,16 @@ was cut, when the limit has since fallen under it, and what a stack started now 
 take. I can turn the feedback off, and set the two shares of its control law, for the
 field.
 
+Four scenarios that test this story's code on the tracker are User Story 12's, which
+follows this story on the chain (Work Graph).
+
 **Why this priority**: Field rotation is the one limit no correction removes. It is P2
 because short exposures chosen by hand already stay under it.
 
 **Independent Test**: `crates/finder/tests/console/steering_cap.rs`, the module
-`steering_cap` of `console`, and, for US5-S6, US5-S8, US5-S11 and US5-S14,
-`crates/finder/tests/motion/steering_cap.rs`,
-the module `steering_cap` of `motion`. The `test` gate's
-`cargo nextest run --workspace --all-targets --all-features --locked` runs both; during
-development, `cargo nextest run -p finder --locked --test console steering_cap::` and
-`cargo nextest run -p finder --locked --test motion steering_cap::`.
+`steering_cap` of `console`. The `test` gate's
+`cargo nextest run --workspace --all-targets --all-features --locked` runs it; during
+development, `cargo nextest run -p finder --locked --test console steering_cap::`.
 
 **Acceptance Scenarios**:
 
@@ -739,7 +762,9 @@ development, `cargo nextest run -p finder --locked --test console steering_cap::
 3. **Given** the same after `set_smear_px(1.0)`, **Then** a committed test asserts the
    turn asked about equals `1.0 / 618f64.hypot(411.0)` within 10⁻¹², and that
    `set_smear_px` refuses 0.05, 20.5 and a value that is not finite with
-   `the corner smear must be a number from 0.1 to 20`.
+   `the corner smear must be a number from 0.1 to 20`. **And** on a steering never used,
+   `set_smear_px(0.05)`, `set_step_share(1.5)` and `set_rate_share(-0.1)` are each
+   refused and `view()` stays `None`: a refused value changes nothing, its use included.
 4. **Given** a scripted steering whose tracker answers a longest exposure of 37.15 s,
    after a first `before_exposure` with the worked ask and a wanted exposure of 60 s,
    **Then** a committed test asserts `view()` has `smear_px` 6.0, `on` true,
@@ -765,25 +790,41 @@ development, `cargo nextest run -p finder --locked --test console steering_cap::
      `the rate share must be a number from 0 to 1`, and change nothing; after
      `{"on":false}`, `{"on":true,"smear_px":0}` answers 400
      and `on` is still false; and `{"on":null}` and `{"smear_px":null}` each answer 400;
+     `{"rate_share":-0.1,"step_share":1.5,"smear_px":0}` answers 400 with the corner
+     smear's words, and `{"rate_share":-0.1,"step_share":1.5}` with the step share's:
+     the three are checked in the order smear, step share, rate share;
    - `{"on":true}` with a foreign `Origin` answers 403; the same body sent with
      `Content-Type: text/plain` answers 415; the body `not json` sent as
      `application/json` answers 400; and none of the three changes anything: `on` is
      still false;
    - a console built the same way without `with_imaging` answers 409 with
      `this console takes no imaging frames`.
-6. **Given** the tracker rig with no rate error, **Then** a committed test asserts that
-   `tracker.longest_exposure_s(2.0 / 618f64.hypot(411.0))` equals, within one part in a
-   million, the seconds `ephemeris::longest_exposure(23.63232, 15.71664, 19.12, r, 2.0)`
-   answers (`crates/finder/src/ephemeris.rs:105`), r being the field rotation the test
-   computes for M42 with `sky::alt_az` and `ephemeris::altaz_rates_from_alt_az`, as
-   `crates/finder/tests/motion/tracking/routes.rs:312` does, in radians a second, at
-   the console time it reads immediately before the call with no await between the
-   two; and that it is between 30 s and 45 s (worked example: 1236 × 822 pixels of
-   19.12 µm are 23.63232 × 15.71664 mm; at 14.91°/h the answer is 37.28 s). The same
-   holds, with the same oracle, for M81 (`targets::find("M81")`), whose field rotation
-   at the rig's start is negative; through `&dyn Steered` the answer is the same;
-   `longest_exposure_s` answers `None` for a turn of 0.0, −1.0 and NaN; and after
-   `stop("stopped")` it answers `None`.
+6. **Given** a scripted steering never used, whose tracker answers a longest exposure
+   of 37.15 s and, for the hour ahead, of 20.0 s, **Then** a committed test asserts
+   that `view()` is `None`; that `view_for(Some(ask))`, the ask being the worked ask
+   with a wanted 60 s, has `source` `tracker`, `longest_exposure_s` 37.15,
+   `would_take_s` 15.0, no `exposure_s` and `limited` false, and leaves `view()`
+   `None`; that when the tracker names no longest exposure it has `longest_exposure_s`
+   `no limit` and `would_take_s` 60.0; that when the source answers no tracker
+   `view_for(Some(ask))` is `None`; and that after a `before_exposure` for a wanted
+   60 s that found the first tracker, `view_for` with the worked ask and a wanted 10 s
+   has `exposure_s` 15.0 and `would_take_s` 10.0: what a stack started now would take
+   is worked from the ask given, whatever a running stack holds. **And** on 032's
+   solving rig, with the console's steering given a source that answers a scripted
+   tracker naming no longest exposure and no other call made, `GET /api/imaging`'s
+   `steering.longest_exposure_s` is `no limit` and its `steering.would_take_s` equals
+   that view's `settings.exposure_ms` over 1000: the console asks with its own camera
+   and settings (oracle: FR-018). **And** on another scripted steering, whose tracker
+   answers a longest exposure of 37.15 s, after a `before_exposure` with the worked ask
+   and a wanted 60 s, `view_for` with the worked ask at binning 2 and a wanted 10 s asks
+   the tracker's limit now for the turn `6.0 / 618f64.hypot(411.0)` within 10⁻¹²: the
+   limit shown is for the stack's own ask, and only `would_take_s` for the ask given.
+   **And** on 032's solving rig, after `PUT /api/imaging/settings` with `exposure_ms`
+   8000, with the console's steering given a scripted tracker whose limit is 1000 s now
+   and 0.3 s for the hour ahead, `GET /api/imaging`'s `steering.would_take_s` is 1.0,
+   and the turn the tracker is asked about is `6.0 / (w / 2.0).hypot(h / 2.0)` within
+   10⁻¹², w and h being that view's `camera.width` and `camera.height`: the console asks
+   with its camera's own shortest exposure and sensor.
 7. **Given** a scripted steering whose tracker answers a longest exposure of 37.15 s,
    with `set_on(false)`, **When** a test awaits `before_exposure` with the worked ask
    and a wanted 60 s and calls `accepted` with the worked frame and solve, **Then** a
@@ -791,22 +832,15 @@ development, `cargo nextest run -p finder --locked --test console steering_cap::
    the call answered 30.0 with `limited` true, and that `view()`'s `source` is `tracker`
    and its `on` false: the switch turns off the steering and not the cap. **And** on a
    steering never used, `set_on(false)` alone makes `view()` answer, with `on` false.
-8. **Given** a tracker rig whose target is due east at an instant the test chooses, t* =
-   1768528830.0, 30 s after the rig's clock starts: with Dec fixed at +18.75° the test
-   steps RA through 0°, 1°, … 359°, takes the first two neighbours whose azimuths at t*
-   by `sky::alt_az` for 40° N 75° W lie either side of 90° with both altitudes above 0°,
-   and bisects RA between them 60 times, so that the azimuth at t* is 90° within 10⁻⁹
-   degrees (the altitude is then near 30°); the rig's target is a clone of M42's
-   `Target` with that `ra_deg` and `dec_deg`, and its mount's zero points put its axes
-   on that place's apparent direction at the start, as the tracker rig does for M42;
-   **When** the test sleeps until the rig's clock reads t* to within 2 ms (tokio's timer
-   counts in milliseconds) and calls `longest_exposure_s(0.0027)` with no await after
-   the sleep, **Then** a committed test asserts it is `None`; and that after 10 s more
-   it is `Some` of more than 3600 s (oracle: 015's own function and its 10⁻⁹ rad/s rule.
-   Worked example: due east at this place the azimuth moves 9.7″ a second, and the field
-   rotation passes 10⁻⁹ rad/s 3.2″ of azimuth from due east, a third of a second either
-   side of t*, so the instant matters and 2 ms is 0.02″; 10 s later the azimuth is 97″
-   past east, the rotation 3 × 10⁻⁸ rad/s and the answer about 89,000 s).
+8. **Given** a scripted steering, **When** a test awaits `before_exposure` with the
+   worked ask, calls `set_step_share(0.25)` and `set_rate_share(0.0)`, and awaits
+   `before_exposure` again, **Then** a committed test asserts that the tracker's log
+   holds `tune(0.5, 0.3)` right before its first `gap` and `tune(0.25, 0.0)` right
+   before its second; that `view()` has `step_share` 0.25 and `rate_share` 0.0; that
+   `set_step_share` refuses −0.1, 1.5 and a value that is not finite with
+   `the step share must be a number from 0 to 1`, and `set_rate_share` the same three
+   with `the rate share must be a number from 0 to 1`, each leaving the view as it was;
+   and that both accept 0.0 and 1.0 (oracle: FR-030).
 9. **Given** a scripted steering after one `before_exposure` with the worked ask and one
    `accepted` with the worked frame (`start` 1768528800.0) and the worked solve, so that
    its log holds one `gap` and one `steer` and `view()` has `source` `subs` and `subs`
@@ -824,60 +858,6 @@ development, `cargo nextest run -p finder --locked --test console steering_cap::
     shortest limit of the hour ahead and held, and the view shows the limit as it is now
     (oracle: FR-018; worked example: 60 s halved twice is 15 s, the first value not over
     20 s).
-11. **Given** the tracker rig with no rate error, **Then** a committed test asserts that
-    `tracker.longest_exposure_ahead_s(2.0 / 618f64.hypot(411.0))` equals, within one
-    part in a million, the smallest of the 61 values `turn / r.abs()` the test computes,
-    r as US5-S6 computes it, for M42 at the console time it reads immediately before the
-    call, with no await between the two, and at each whole minute after that time up to
-    the sixtieth; that it is less than `tracker.longest_exposure_s` of the same turn
-    asked at that instant, and between 33 s and 36 s; that through `&dyn Steered` the
-    answer is the same; that it is `None` for a turn of 0.0, −1.0 and NaN; and that
-    after `stop("stopped")` it is `None` (oracle: 015's own functions, sampled by the
-    test as 015 samples its forecasts. Worked example: the rig starts 54 minutes before
-    M42's transit, where the field turns fastest, 16.19°/h against 14.91°/h at the
-    start, so the shortest limit of the hour is the transit's: 34.33 s for this turn,
-    against 37.28 s at the start).
-12. **Given** a scripted steering never used, whose tracker answers a longest exposure
-    of 37.15 s and, for the hour ahead, of 20.0 s, **Then** a committed test asserts
-    that `view()` is `None`; that `view_for(Some(ask))`, the ask being the worked ask
-    with a wanted 60 s, has `source` `tracker`, `longest_exposure_s` 37.15,
-    `would_take_s` 15.0, no `exposure_s` and `limited` false, and leaves `view()`
-    `None`; that when the tracker names no longest exposure it has `longest_exposure_s`
-    `no limit` and `would_take_s` 60.0; that when the source answers no tracker
-    `view_for(Some(ask))` is `None`; and that after a `before_exposure` for a wanted
-    60 s that found the first tracker, `view_for` with the worked ask and a wanted 10 s
-    has `exposure_s` 15.0 and `would_take_s` 10.0: what a stack started now would take
-    is worked from the ask given, whatever a running stack holds. **And** on 032's
-    solving rig, with the console's steering given a source that answers a scripted
-    tracker naming no longest exposure and no other call made, `GET /api/imaging`'s
-    `steering.longest_exposure_s` is `no limit` and its `steering.would_take_s` equals
-    that view's `settings.exposure_ms` over 1000: the console asks with its own camera
-    and settings (oracle: FR-018).
-13. **Given** a scripted steering, **When** a test awaits `before_exposure` with the
-    worked ask, calls `set_step_share(0.25)` and `set_rate_share(0.0)`, and awaits
-    `before_exposure` again, **Then** a committed test asserts that the tracker's log
-    holds `tune(0.5, 0.3)` right before its first `gap` and `tune(0.25, 0.0)` right
-    before its second; that `view()` has `step_share` 0.25 and `rate_share` 0.0; that
-    `set_step_share` refuses −0.1, 1.5 and a value that is not finite with
-    `the step share must be a number from 0 to 1`, and `set_rate_share` the same three
-    with `the rate share must be a number from 0 to 1`, each leaving the view as it was;
-    and that both accept 0.0 and 1.0 (oracle: FR-030).
-14. **Given** the tracker rig with no rate error and a first gap, **When** a test calls
-    `tracker.tune(1.0, 0.6)`, hands the error (0.0, 0.0) at the time now, awaits a gap,
-    waits 6 s, hands (0.5, 0.0) at the time now and awaits a gap, reading the tracking
-    offset o after it, waits 6 s more, hands (12.0, −16.0) at the time now and awaits
-    one more gap, **Then** a committed test asserts that for each axis o is within
-    0.002″/s of −0.6 × d/6, d being that axis's part of a sky offset of (0.5, 0.0) by
-    the differencing of `crates/finder/tests/motion/tracking/pi_loop.rs:481`, and that
-    its azimuth part is above +0.05″/s; that the last gap's `Stepped` is within 0.2″ of
-    (−12.0, 16.0); and that on another rig, after `tracker.tune(0.5, 0.0)`, the same
-    first two errors leave the tracking offset exactly `[0.0, 0.0]` (oracle: the
-    simulator's truth and its horizon transform, differentiated by the test. Worked
-    example: 0.5″ east is about −0.66″ of azimuth, under the deadband, so no step lies
-    between the first two errors; with a rate share of 0.6 the azimuth offset is about
-    +0.066″/s, where the default 0.3 gives +0.033″/s; and with a step share of 1.0 the
-    whole of (12, −16) is stepped out, about 10.4″ and 18.5″ of axis angle, which runs
-    with both axes and is under one gap's limit).
 
 ---
 
@@ -942,7 +922,8 @@ development, `cargo nextest run -p finder --locked --test motion steering_claim:
    rate log gains no rate from the eighth gap's call to its answer, and that the ninth
    leaves it false and answers exactly (0.0, 0.0): a claim that lapsed stays lapsed
    while no tracking error comes. **When** the test then calls
-   `tracker.pointing(30.0, 0.0)` twice 2 s apart, **Then** neither changes a rate: every
+   `tracker.pointing(30.0, 0.0)` twice 2 s apart and waits 1 s after the second,
+   **Then** neither changes a rate: every
    rate the log gains from the first call until the next gap's call equals its axis's
    feed-forward rate within 0.001″/s, and the tracking offset stays exactly `[0.0, 0.0]`
    (US3-S11 says what a gap does with those pointings). **When** it then calls
@@ -954,7 +935,10 @@ development, `cargo nextest run -p finder --locked --test motion steering_claim:
    **Then** `steered_by_subs()` is false again and that last gap answers exactly (0.0,
    0.0): nothing held before the claim was taken back survives it (oracle: the rig's
    rate log and the test's own feed-forward rate; the eight are 035's queue of four
-   waiting subs, the one in work and the three of before).
+   waiting subs, the one in work and the three of before). **And** on another rig, a
+   first gap, seven gaps with no `steer`, a `steer` of (0.0, 0.0) at the time now, a
+   gap and seven more gaps with no `steer` leave `steered_by_subs()` true: the eight
+   are eight in a row with no tracking error.
 5. **Given** the tracker rig with no rate error and a first gap, **When** a test calls
    `release()`, **Then** a committed test asserts that `steered_by_subs()` is false at
    once; that a `steer` of (12.0, −16.0) at the time now, made after it, is dropped, so
@@ -964,7 +948,11 @@ development, `cargo nextest run -p finder --locked --test motion steering_claim:
    gap answering exactly (0.0, 0.0): `release` forgets an error not yet applied. **And**
    on another rig whose claim has lapsed as in US9-S4, `release()` and one more gap make
    `steered_by_subs()` true: a released tracker is claimed by the next gap, lapsed or
-   not (oracle: FR-011).
+   not (oracle: FR-011). **And** on another rig, `tracker.pointing(30.0, 0.0)` called,
+   2 s waited, a first gap, `release()` and `tracker.pointing(30.0, 0.0)` again leave
+   the tracking offset exactly `[0.0, 0.0]`: the claim forgot the pointing before it, so
+   the first pointing after a release adds nothing to 015's integral (plan.md § The
+   tracker, **`Shared::pointing`**).
 6. **Given** the tracker rig with no rate error and a first gap, **When** a test awaits
    eight more gaps, each preceded by a `steer` at the time now whose east is NaN,
    **Then** a committed test asserts that `steered_by_subs()` is false after the eighth:
@@ -1004,7 +992,11 @@ development, `cargo nextest run -p finder --locked --test motion steering_claim:
     `crates/finder/tests/motion/tracking/pi_loop.rs:481`: a held step moves an axis 30″
     on the sky at most, about 33″ in all here, against 60″ unclamped (oracle: the
     simulator's truth and its horizon transform, differentiated by the test, and 015's
-    constants. US3-S11 has a held step under the limit).
+    constants. US3-S11 has a held step under the limit). **And** on another rig lapsed
+    the same way, `tracker.pointing(30.0, 0.0)`, 2 s waited,
+    `tracker.pointing(3.0, 4.0)`, 1 s waited and a gap: the gap answers exactly (0.0,
+    0.0): a pointing inside 015's 10″ deadband clears the held step, as it zeroes 015's
+    proportional rate.
 11. **Given** the tracker rig with a rate error of 0.01 and the second task of US3-S2,
     which calls `tracker.pointing` every 2 s with the truth error plus Gaussian noise of
     σ 15″ on each of east and north, **When** a test awaits a first gap, eight more 6 s
@@ -1041,6 +1033,94 @@ development, `cargo nextest run -p finder --locked --test motion steering_claim:
     `steered_by_subs()` true: `follow` forgets the step a lapsed claim held and clears
     the lapse, so the stack's next gap claims (oracle: FR-011; without it that gap would
     step about (−18.0, 0.0), as in US3-S11, and claim nothing).
+
+---
+
+### User Story 12 - The cap's limits and tuning, tested on the tracker (Priority: P2)
+
+As the factory that builds User Story 5, I test in a story of their own what that
+story's tracker answers on the simulated mount: its longest exposure now and over the
+hour ahead, against 015's own functions, its answer at the instant a target is due east,
+and the shares it takes when it is tuned.
+
+This story is built after User Story 5 (Work Graph). Its four scenarios test User Story
+5's code: this story writes nothing under `crates/finder/src`, and on User Story 5's code
+its scenarios already pass (tasks.md, US12's test tasks). Its module writes the tracker
+rig out again, as every module that uses it does.
+
+**Why this priority**: A limit that disagreed with 015's, or a tracker that ignored its
+tuning, would cap or steer every stack wrongly with no error shown. It is P2, as User
+Story 5 is, and follows that story, whose code it tests.
+
+**Independent Test**: `crates/finder/tests/motion/steering_cap.rs`, the module
+`steering_cap` of finder's `motion` test binary. The `test` gate's
+`cargo nextest run --workspace --all-targets --all-features --locked` runs it; during
+development, `cargo nextest run -p finder --locked --test motion steering_cap::`.
+
+**Acceptance Scenarios**:
+
+1. **Given** the tracker rig with no rate error, **Then** a committed test asserts that
+   `tracker.longest_exposure_s(2.0 / 618f64.hypot(411.0))` equals, within one part in a
+   million, the seconds `ephemeris::longest_exposure(23.63232, 15.71664, 19.12, r, 2.0)`
+   answers (`crates/finder/src/ephemeris.rs:105`), r being the field rotation the test
+   computes for M42 with `sky::alt_az` and `ephemeris::altaz_rates_from_alt_az`, as
+   `crates/finder/tests/motion/tracking/routes.rs:312` does, in radians a second, at
+   the console time it reads immediately before the call with no await between the
+   two; and that it is between 30 s and 45 s (worked example: 1236 × 822 pixels of
+   19.12 µm are 23.63232 × 15.71664 mm; at 14.91°/h the answer is 37.28 s). The same
+   holds, with the same oracle, for M81 (`targets::find("M81")`), whose field rotation
+   at the rig's start is negative; through `&dyn Steered` the answer is the same;
+   `longest_exposure_s` answers `None` for a turn of 0.0, −1.0 and NaN; and after
+   `stop("stopped")` it answers `None`.
+2. **Given** a tracker rig whose target is due east at an instant the test chooses, t* =
+   1768528830.0, 30 s after the rig's clock starts: with Dec fixed at +18.75° the test
+   steps RA through 0°, 1°, … 359°, takes the first two neighbours whose azimuths at t*
+   by `sky::alt_az` for 40° N 75° W lie either side of 90° with both altitudes above 0°,
+   and bisects RA between them 60 times, so that the azimuth at t* is 90° within 10⁻⁹
+   degrees (the altitude is then near 30°); the rig's target is a clone of M42's
+   `Target` with that `ra_deg` and `dec_deg`, and its mount's zero points put its axes
+   on that place's apparent direction at the start, as the tracker rig does for M42;
+   **When** the test sleeps until the rig's clock reads t* to within 2 ms (tokio's timer
+   counts in milliseconds) and calls `longest_exposure_s(0.0027)` with no await after
+   the sleep, **Then** a committed test asserts it is `None`; and that after 10 s more
+   it is `Some` of more than 3600 s (oracle: 015's own function and its 10⁻⁹ rad/s rule.
+   Worked example: due east at this place the azimuth moves 9.7″ a second, and the field
+   rotation passes 10⁻⁹ rad/s 3.2″ of azimuth from due east, a third of a second either
+   side of t*, so the instant matters and 2 ms is 0.02″; 10 s later the azimuth is 97″
+   past east, the rotation 3 × 10⁻⁸ rad/s and the answer about 89,000 s).
+3. **Given** the tracker rig with no rate error, **Then** a committed test asserts that
+   `tracker.longest_exposure_ahead_s(2.0 / 618f64.hypot(411.0))` equals, within one
+   part in a million, the smallest of the 61 values `turn / r.abs()` the test computes,
+   r as US12-S1 computes it, for M42 at the console time it reads immediately before the
+   call, with no await between the two, and at each whole minute after that time up to
+   the sixtieth; that it is less than `tracker.longest_exposure_s` of the same turn
+   asked at that instant, and between 33 s and 36 s; that through `&dyn Steered` the
+   answer is the same; that it is `None` for a turn of 0.0, −1.0 and NaN; and that
+   after `stop("stopped")` it is `None` (oracle: 015's own functions, sampled by the
+   test as 015 samples its forecasts. Worked example: the rig starts 54 minutes before
+   M42's transit, where the field turns fastest, 16.19°/h against 14.91°/h at the
+   start, so the shortest limit of the hour is the transit's: 34.33 s for this turn,
+   against 37.28 s at the start).
+4. **Given** the tracker rig with no rate error and a first gap, **When** a test calls
+   `tracker.tune(1.0, 0.6)`, hands the error (0.0, 0.0) at the time now, awaits a gap,
+   waits 6 s, hands (0.5, 0.0) at the time now and awaits a gap, reading the tracking
+   offset o after it, waits 6 s more, hands (12.0, −16.0) at the time now and awaits
+   one more gap, **Then** a committed test asserts that for each axis o is within
+   0.002″/s of −0.6 × d/6, d being that axis's part of a sky offset of (0.5, 0.0) by
+   the differencing of `crates/finder/tests/motion/tracking/pi_loop.rs:481`, and that
+   its azimuth part is above +0.05″/s; that the last gap's `Stepped` is within 0.2″ of
+   (−12.0, 16.0); and that on another rig, after `tracker.tune(0.5, 0.0)`, the same
+   first two errors leave the tracking offset exactly `[0.0, 0.0]` (oracle: the
+   simulator's truth and its horizon transform, differentiated by the test. Worked
+   example: 0.5″ east is about −0.66″ of azimuth, under the deadband, so no step lies
+   between the first two errors; with a rate share of 0.6 the azimuth offset is about
+   +0.066″/s, where the default 0.3 gives +0.033″/s; and with a step share of 1.0 the
+   whole of (12, −16) is stepped out, about 10.4″ and 18.5″ of axis angle, which runs
+   with both axes and is under one gap's limit). **And** on another rig, after a first
+   gap, `tune(2.0, f64::NAN)` then `tune(f64::NAN, f64::NAN)` called through
+   `&dyn Steered`, and the error (12.0, −16.0) at the time now, make the next gap
+   answer within 0.2″ of (−12.0, 16.0): a share is held to 0 to 1, a NaN leaves it as it
+   was, and the trait reaches the tracker's own `tune`.
 
 ---
 
@@ -1106,7 +1186,7 @@ development, `cargo nextest run -p finder --locked --test motion steering_claim:
 - **A sub of a region, or binned.** The set point is a place on the sensor; it need not
   lie inside the frame (US4-S4).
 - **The limit falls under the exposure in use.** The exposure was decided from the
-  shortest limit of the hour ahead (US5-S10, US5-S11), so this comes to a stack more
+  shortest limit of the hour ahead (US5-S10, US12-S3), so this comes to a stack more
   than an hour old, or to one whose exposure the floor of 1 s kept above that limit. The
   stack keeps its exposure and the readout says `over_limit`; a new stack starts shorter
   (US5-S2).
@@ -1116,7 +1196,7 @@ development, `cargo nextest run -p finder --locked --test motion steering_claim:
   waits (040's US6-S17).
 - **A stack started while the limit is low.** It holds a short exposure for its whole
   life while the limit climbs. The block's `A stack started now would take` says what a
-  new stack would hold (US5-S12, 040's US8-S4).
+  new stack would hold (US5-S6, 040's US8-S4).
 - **Master darks.** A halved exposure needs a master dark of its own length; without
   one 034's fallback applies and says so.
 - **Count steps.** With the simulator's count steps on, the truth read at an instant
@@ -1401,6 +1481,10 @@ US9:
   depends_on: []
   depends_on_merged: [US3]
   implements: []
+US12:
+  depends_on: []
+  depends_on_merged: [US5]
+  implements: []
 ```
 
 Every edge is a merge edge, because each dependent builds on what its predecessor
@@ -1409,9 +1493,12 @@ writes no code of its own and implements no FR, and it follows US3 on the chain 
 both add a `mod` line to `crates/finder/tests/motion/main.rs`. US4 creates `Steering` in
 US2's file over the tracker US3 made steerable, and its US4-S5 reads US1's memory; it
 names US9 as well as US3, as the next story after US9 to write that `main.rs`. US5 adds
-to US4's `steering.rs` and `imaging/mod.rs` and to US3's `tracking.rs`. Where a story
-names two predecessors and one already follows the other, the second edge is there
-because both wrote a file the story writes.
+to US4's `steering.rs` and `imaging/mod.rs` and to US3's `tracking.rs`. US12 tests US5's
+tracker: it writes no code of its own and implements no FR, and it follows US5, whose
+code it tests; its `mod` line in `crates/finder/tests/motion/main.rs` comes after US4's,
+which US5's edge to US4 orders. Where a story names two predecessors and one already
+follows the other, the second edge is there because both wrote a file the story writes.
 US1 touches no file in common with US2 or US3 (`crates/simulator` against
 `crates/finder` and `GLOSSARY.md`) and may run beside them. The stories that follow US5
-are `040-stack-waits-for-steady`'s, which lists this spec in its `depends_on_landed`.
+and US12 are `040-stack-waits-for-steady`'s, which lists this spec in its
+`depends_on_landed`.

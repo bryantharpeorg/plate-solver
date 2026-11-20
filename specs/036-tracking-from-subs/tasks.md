@@ -49,9 +49,10 @@ dispatched only once they are met.
   finished story measures over it, do not drop or shorten a case to get under: say its
   size when you hand off.
 - A test asserts nothing a later story changes, and no story edits an earlier story's
-  test file. US9 is a story of tests only: it writes nothing under `crates/finder/src`,
-  its tests pass on the code of US3 as soon as they are written, and one that fails is
-  escalated with its output (plan.md § Plan traps 36).
+  test file. US9 and US12 are stories of tests only: each writes nothing under
+  `crates/finder/src`, its tests pass on the code of the story it was cut from, US3 or
+  US5, as soon as they are written, and one that fails is escalated with its output
+  (plan.md § Plan traps 36).
 - Every `path:line` was read on `main` at 52785403 in the re-anchoring of 2026-11-20,
   the `GLOSSARY.md` lines included, and names what it says there. If a cited line has
   moved, re-read it rather than guess.
@@ -73,7 +74,8 @@ dispatched only once they are met.
   later, against `sim.telescope().eyepiece` read live, the azimuth's rise and the star's
   trail, measured over the window US1-S1 gives round the midpoint of the star's two
   places (US1-S1), and for the instant between two samples against a twin read live,
-  with both axes turning and across 0° of azimuth (US1-S2).
+  with both axes turning and across 0° of azimuth (US1-S2). US1-S2 builds its twins with
+  `tokio::join!` and asserts their clocks equal.
 - [ ] T002 [US1] Add failing tests to `crates/simulator/tests/imaging_history.rs` for a
   push by hand and the other three ways the memory begins again (US1-S3), a simulator
   with no mount (US1-S4), count steps on both axes (US1-S5), the memory's hour and a
@@ -247,19 +249,12 @@ dispatched only once they are met.
   expressions, and the halving with its floor of 1 s (US5-S1), the exposure and
   `limited` held, `over_limit`, and the view right after a release (US5-S2), the smear
   setting and its refusals (US5-S3), the view (US5-S4), the route on 032's solving rig,
-  its four keys and its 400, 403, 415 and 409 among them (US5-S5), the switch off before
-  a stack (US5-S7), the switch turned off during one (US5-S9), an exposure decided from
-  the hour ahead (US5-S10), `view_for` and what a stack started now would take
-  (US5-S12), and the two shares (US5-S13). Give no case a limit under half the exposure
-  it answers: from 040's US6 such a call waits.
-- [ ] T023 [US5] Create `crates/finder/tests/motion/steering_cap.rs`, the module
-  `steering_cap` of `motion`, with `mod steering_cap;` after `mod steering;` and before
-  `mod steering_claim;` in `crates/finder/tests/motion/main.rs`, holding the part of the
-  tracker rig it uses, for M42 and for a target of the test's own. Write failing tests
-  for the tracker's longest exposure against 015's `ephemeris::longest_exposure` at the
-  same instant (US5-S6), for a target the test finds to be due east at t*, asked at t*
-  and 10 s later (US5-S8), for the tracker's limit of the hour ahead against the test's
-  own 61 samples (US5-S11), and for a tracker tuned with other shares (US5-S14).
+  its four keys and its 400, 403, 415 and 409 among them (US5-S5), `view_for` and what a
+  stack started now would take (US5-S6), the switch off before a stack (US5-S7), the two
+  shares (US5-S8), the switch turned off during one (US5-S9), and an exposure decided
+  from the hour ahead (US5-S10). Give no case a limit under half the exposure it
+  answers: from 040's US6 such a call waits. The tracker's own answers and its tuning,
+  tested on the tracker, are US12's.
 
 ### Implementation
 
@@ -268,7 +263,9 @@ dispatched only once they are met.
   `rate_share` in `Control` and `serve_gaps` step 2 reading them where US3 wrote the two
   constants, and their three lines in `impl Steered for Tracker` (plan.md § The
   tracker's two answers). Do not edit US3's or US9's test files: a tracker nobody tunes
-  uses 0.5 and 0.3.
+  uses 0.5 and 0.3. Build all of plan.md § The tracker's two answers, though this story's
+  own scenarios reach the tracker only through a scripted one: US12's four test this
+  code on the tracker.
 - [ ] T025 [US5] In `crates/finder/src/imaging/steering.rs`, add the three constants,
   the four settings with `set_smear_px`, `set_on`, `set_step_share` and
   `set_rate_share`, `held` (the exposure and whether it was cut, decided together) and
@@ -285,7 +282,7 @@ dispatched only once they are met.
   `## API` table of `crates/finder/README.md` (plan.md § The route).
 - [ ] T027 [US5] Run the `lint` and `test` gates with every existing test unchanged and
   green. Commit the green story (US5-S1, US5-S2, US5-S3, US5-S4, US5-S5, US5-S6, US5-S7,
-  US5-S8, US5-S9, US5-S10, US5-S11, US5-S12, US5-S13 and US5-S14).
+  US5-S8, US5-S9 and US5-S10).
 
 ## Phase 9: User Story 9 — The claim's edges, tested on the tracker (Priority: P1)
 
@@ -323,11 +320,37 @@ scenarios test User Story 3's code, and this story writes nothing under
   edited. Commit the green story (US9-S1, US9-S2, US9-S3, US9-S4, US9-S5, US9-S6,
   US9-S7, US9-S8, US9-S9, US9-S10, US9-S11, US9-S12 and US9-S13).
 
+## Phase 12: User Story 12 — The cap's limits and tuning, tested on the tracker (Priority: P2)
+
+Built after User Story 5 (spec.md § Work Graph). Its four scenarios test User Story 5's
+code, and this story writes nothing under `crates/finder/src`.
+
+### Tests first
+
+- [ ] T052 [US12] Create `crates/finder/tests/motion/steering_cap.rs`, the module
+  `steering_cap` of `motion`, with `mod steering_cap;` after `mod steering;` and before
+  `mod steering_claim;` in `crates/finder/tests/motion/main.rs`, holding the part of the
+  tracker rig it uses, for M42 and for a target of the test's own. Write tests for the
+  tracker's longest exposure against 015's `ephemeris::longest_exposure` at the same
+  instant (US12-S1), for a target the test finds to be due east at t*, asked at t* and
+  10 s later (US12-S2), for the tracker's limit of the hour ahead against the test's own
+  61 samples (US12-S3), and for a tracker tuned with other shares (US12-S4). On US5's
+  code all four scenarios already pass, and they pass before and after this story: no
+  test of theirs fails first. One that fails is a finding about US5's code: stop and
+  escalate with its output.
+
+### Implementation
+
+- [ ] T053 [US12] Change nothing under `crates/finder/src`. Run the `lint` and `test`
+  gates with every existing test unchanged and green, US5's console `steering_cap` and
+  the motion modules of US3, US9 and US4 included and not edited. Commit the green story
+  (US12-S1, US12-S2, US12-S3 and US12-S4).
+
 ## Execution Order
 
 ```text
 US1 ─────────────────────────┐
-                             ├──► US4 ──► US5 ──► (040-stack-waits-for-steady)
+                             ├──► US4 ──► US5 ──► US12 ──► (040-stack-waits-for-steady)
 US2 ──► US3 ──► US9 ─────────┘
 ```
 
@@ -342,5 +365,8 @@ US2 ──► US3 ──► US9 ─────────┘
   write that `main.rs`.
 - **US5** adds to `steering.rs` and `tracking.rs`, and gives the imaging view its ask in
   `imaging/mod.rs`, after US4.
+- **US12** holds four scenarios that test US5's tracker, with no code of its own. It
+  follows US5, and its `mod` line in `crates/finder/tests/motion/main.rs` comes after
+  US4's, which US5 follows.
 - **`040-stack-waits-for-steady`** builds the rest once this spec has landed.
 - **`[P]`** marks nothing here: every task shares a file with another in its story.
