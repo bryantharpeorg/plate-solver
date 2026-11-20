@@ -10,9 +10,11 @@ this file is to plan.md.
 
 ## Owner decisions
 
-Each is a design or taste call the plan document leaves open. None is settled. A
-different answer is written into the trio and re-validated before the flip, never left
-to a story.
+Each is a design or taste call the plan document leaves open. All are settled. The owner
+approved the recommended answers of the imaging series on 2026-11-17 ("im good with all of
+the info in the decisions doc"), and on 2026-11-19 he changed 11 and 17 to the answers
+written here (the reanalysis, "Take all 15"). 9 took a fix with no choice (AA13), and 10
+and 12 their recommended answers. The text of each is the answer in force.
 
 9. **Subs taken across a time the tracker was not steady.** Recommended: dropped before
    they are solved, with the reason `not_steady`, including a sub during which tracking
@@ -82,9 +84,9 @@ above, and the following, under the numbers 036's flip.md gives the rest. Each i
 in the FR or success criterion that makes it.
 
 3. **The MCP tool `set_steering`** (FR-031). 036's approval 3 gives the route, the
-   `steering` part and the module. The plan document's § Interfaces, in this worktree,
-   names no MCP tool for 036; owner decision 11's answer of 2026-11-19 corrects its list
-   of tools in the same change as the flip (flip.md § Prerequisites 9).
+   `steering` part and the module. The plan document's § Interfaces, on `main`,
+   named no MCP tool for 036; owner decision 11's answer of 2026-11-19 corrects its list
+   of tools in the flip's own change (flip.md § Prerequisites 9).
 6. **035's stack changes in four ways** (FR-023): `Dropped` gains a twelfth count,
    `not_steady`, written last and always; a sub may end with the outcome `not_steady`;
    the taker waits for the steering before every exposure; and before a stack's first
@@ -100,7 +102,9 @@ in the FR or success criterion that makes it.
    entry and its component in `.impeccable/design.json`; and the words
    `while the mount was not steady` in 035's `Dropped` line (FR-027, FR-028, FR-029).
 8. **A README section and the lines of one MCP tool** in `crates/finder/README.md`
-   (FR-025, FR-031); 036's approval 8 gives the route's row.
+   (FR-025, FR-031), and in 035's `## Live stack` the twelfth dropped-sub reason,
+   `not_steady`, last in its list, whose sentence then says twelve (040-R15); 036's
+   approval 8 gives the route's row.
 9. **Each new test module is declared in an existing test file** (SC-002): one `mod`
    line a module, in alphabetical order, in `crates/finder/tests/console/main.rs`
    (`steering_readout`, `steering_steady`), `crates/finder/tests/motion/main.rs`
@@ -197,8 +201,11 @@ in the FR or success criterion that makes it.
      and `Focus`, and 035's US9-S6 its region after Calibration (none does at `fc161a54`:
      the two `.at(-1)` there read arrays, not regions);
 4. **The owner decisions are settled and the approvals given** (§ Owner decisions and
-   § Owner approvals above). Not met: this spec's decisions, 9 to 12 and 17, are open,
-   and 036's flip settles the rest.
+   § Owner approvals above). Met on 2026-11-20: the decisions are settled as § Owner
+   decisions says, and 036's flip of that day settled the rest; this spec's flip gives the
+   approvals, under the owner's standing permission for the imaging specs ("You have my
+   permission to move them to ready when needed", 2026-11-19, extended to the split pieces
+   on 2026-11-20: "you can flip things to ready as you get them ready").
 5. **A probe build.** Met on 2026-11-20 by probe round 2. Probe round 1 built US6, US7
    and US8 on 2026-11-18 and 19 as stories of 036 (036's flip.md § Prerequisites 5 has
    what it settled, and 036's history.md how). Round 2 built this spec's five stories
@@ -283,13 +290,11 @@ in the FR or success criterion that makes it.
    (`docs/research/2026-11-15-imaging-camera.md`) have been on `main` since 030's flip
    (`55e41f57`), and are there at `fc161a54`.
 8. **No operator-staged files are needed.** Met.
-9. **The plan document agrees with the settled decisions.** Not met: on `main` its list
-   of MCP tools has none for 036
-   (`docs/plans/2026-11-15-specs-030-037-imaging.md:216`); owner decision 11's answer of
-   2026-11-19 gives this work one, `set_steering`, and the plan document's list gains it
-   in the same change as the flip.
-   If the owner settles decision 11 otherwise, the plan document is corrected in the
-   same change. Rule 1 is not edited: owner decision 17 declares the further times a
+9. **The plan document agrees with the settled decisions.** Met on 2026-11-20, in the
+   flip's own change: owner decision 11's answer of 2026-11-19 gives this work an MCP
+   tool, `set_steering`, and the plan document's list of MCP tools
+   (`docs/plans/2026-11-15-specs-030-037-imaging.md:216`), which had none for 036, now
+   names it. Rule 1 is not edited: owner decision 17 declares the further times a
    tracker is not steady on its own.
 10. **031 carries the camera's lease.** Met: 031's US9 landed it on `main`
     (`e9687ce9`), with `Imaging::lease`, `Lease::take` and `Lease::set` as this trio

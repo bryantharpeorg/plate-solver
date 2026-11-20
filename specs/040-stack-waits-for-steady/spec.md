@@ -1,14 +1,15 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["015-tracking", "030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "034-dark-and-flat-frames", "035-live-stack", "038-track-follows-a-push", "036-tracking-from-subs"]
 # The second of two pieces of tracking steered by the subs: the stack waits while the
 # tracker is not steady and drops what was taken across it (US6, and US10, which tests
 # US6's tracker), asks the steering before every exposure (US7), shows the readout (US8)
 # and takes set_steering over MCP (US11). Story and FR numbers are 036's, kept.
 # Depends on 036-tracking-from-subs (US1 to US5, US9 and US12) and on what 036 depends on.
-# State: draft, to be probe-built before the owner flips it (flip.md). history.md has
-# how it got here.
-# Re-anchored on 2026-11-20 to `main` at `fc161a54`, after 036 landed (#327 to #333).
+# State: ready, flipped on 2026-11-20 under the owner's standing permission for the
+# imaging specs (flip.md). history.md has how it got here.
+# Re-anchored on 2026-11-20 to `main` at `fc161a54`, after 036 landed (#327 to #333), and
+# probe round 2's findings folded: 3 blocking and 20 clarity, US6 cut by tests into US10.
 ---
 
 # Feature Specification: The Stack Waits for a Steady Tracker, and Shows the Steering
@@ -17,7 +18,7 @@ depends_on_landed: ["015-tracking", "030-imaging-camera-link", "031-imaging-fram
 
 **Created**: 2026-11-20, from `036-tracking-from-subs` (created 2026-11-15)
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: Spec 036 lets the subs of a live stack steer the tracker through `Steering`,
 the console's part between the stack and the tracker: the tracker's rates change only in
