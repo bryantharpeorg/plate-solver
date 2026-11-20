@@ -19,5 +19,6 @@ mod steering;
 mod steering_cap;
 mod steering_claim;
 mod steering_gap;
+mod steering_steady;
 mod stop;
 mod tracking;
