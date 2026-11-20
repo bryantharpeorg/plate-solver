@@ -10,6 +10,7 @@ pub mod frames;
 pub mod preview;
 pub mod relation;
 pub mod routes;
+pub mod run;
 pub mod simulated;
 pub mod solver;
 pub mod solving;
