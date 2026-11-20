@@ -60,10 +60,14 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
 3. **The lease of the imaging camera exists.** Met in the drafts. Only 041's camera part
    touches it; the five points the re-anchoring reads are in 041's flip.md
    § Prerequisites 3. US1-S2 and US2-S10 of this spec rest on it through the script.
-4. **The owner decisions are settled and the approvals given** (§ Owner decisions
-   still open, § Owner approvals). Not met: none of this spec's is settled as a whole;
-   on 2026-11-19 the owner's answers to the seventeen choices of the reanalysis
-   (history.md § Clarifications) changed 1, 7, 9, 14 and 22, each with a dated note.
+4. **The owner decisions are settled and the approvals given** (§ Owner decisions,
+   § Owner approvals). Met on 2026-11-20: the decisions are settled as § Owner
+   decisions says, and the flip of that day gives the approvals, under the owner's
+   standing permission for the imaging specs ("You have my permission to move them to
+   ready when needed", 2026-11-19, extended to the split pieces on 2026-11-20: "you can
+   flip things to ready as you get them ready"). On 2026-11-19 the owner's answers to
+   the seventeen choices of the reanalysis (history.md § Clarifications) changed 1, 7,
+   9, 14 and 22, each with a dated note.
    Decision 26,
    the tracker and a newly measured aim point, is not this trio's: it cites 032's owner
    decision 25, which the owner settles in 032's trio, because the behaviour is
@@ -138,16 +142,16 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
    few minutes, and if one of those ends Track, no run outlasts it.
 9. **No operator-staged files are needed.** Met.
 
-## Owner decisions still open
+## Owner decisions
 
 The owner decisions of this spec's stories, 1, 7, 8, 9, 10, 11, 14, 15, 16, 18, 20, 22,
 23 and 25, keep the numbers they had in the twelve-story trio. Each is a design or taste
 call the plan document leaves open, but for 11, 15, 22 and 25, whose recommended answer
-the plan document now writes into its shared interfaces; they stay here, under their
-numbers, for the owner to settle at the flip. None is settled as a whole. On 2026-11-19
-the owner's answers to the reanalysis of round 1's probes changed 1, 7, 9, 14 and 22, as
-the dated note under each says, and the rest of each waits for the flip. A different
-answer is written into the trio and re-validated before the flip, never left to a story.
+the plan document now writes into its shared interfaces. All are settled. The owner
+approved the recommended answers of the imaging series on 2026-11-17 ("im good with all
+of the info in the decisions doc"), and on 2026-11-19 his answers to the reanalysis of
+round 1's probes changed 1, 7, 9, 14 and 22 to the answers written here, as the dated
+note under each says. The text of each is the answer in force.
 
 1. **What an ending does to the mount.** Recommended: nothing. An ending that a guard or
    Stop caused finds the mount as that guard left it, at rest; every other ending (the
@@ -273,7 +277,8 @@ and the following. Each is named in the FR or success criterion that makes it.
 5. **A public scripted stand-in**, `finder::imaging::run::script` (FR-008, owner
    decision 16).
 8. **New test modules are declared in existing test files** (SC-002). Each is one `mod`
-   line, in alphabetical order, in its binary's `main.rs`: `imaging_run`, `imaging_run_routes`, `imaging_run_steps` and `imaging_run_words` in
+   line, in alphabetical order, in its binary's `main.rs`: `imaging_run`,
+   `imaging_run_routes`, `imaging_run_script`, `imaging_run_steps` and `imaging_run_words` in
    `crates/finder/tests/console/main.rs`. No other line of
    those files and no other existing test changes.
 9. **Nothing else new.** No dependency, no `Cargo.toml` change, no scope-link message,

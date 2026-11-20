@@ -24,6 +24,13 @@ was carried across it:
 
 This spec reads nothing of 043's.
 
+The seat flipped the trio to `ready` the same day, under the owner's standing permission
+for the imaging specs (flip.md § Prerequisites 4). Every owner decision takes the answer
+flip.md writes: the recommended answers the owner approved on 2026-11-17, with his
+changes of 2026-11-19 to 1, 7, 9, 14 and 22. Owner approval 8 gained
+`imaging_run_script`, the module US13 was cut with, so that it names all five test
+modules SC-002 names.
+
 ## Probe round 2 and its fold (2026-11-20)
 
 Probe round 2 built this piece's four stories, as the split of 2026-11-20 left them,

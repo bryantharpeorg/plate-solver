@@ -1263,7 +1263,7 @@ read with `git log -1` at `2ae73c66` by the re-anchoring of 2026-11-20: 035's US
 file an earlier story creates does not exist yet and cannot be listed as an existing test; what a later story must leave passing in it
 is under that story's `preserved_behavior`. The record's `open_questions` are empty
 because the validator refuses a record that holds any; what is not established is in
-§ Risks and flip.md, and what the owner must settle is in flip.md. Nothing in this record
+§ Risks and flip.md, and what the owner settled is in flip.md. Nothing in this record
 is an owner approval: those are in flip.md, and flipping to `ready` gives them.
 
 ```yaml

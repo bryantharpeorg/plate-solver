@@ -1,14 +1,16 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-confirm", "030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "034-dark-and-flat-frames", "035-live-stack", "036-tracking-from-subs", "038-track-follows-a-push", "040-stack-waits-for-steady", "043-imaging-abort-answers-in-time"]
 # The imaging run, first of three pieces: the run's parts, words and script, the machine
 # with its retries, failures, counts and soft-focus warning, and the routes and the record,
 # all on the scripted parts (US12, US13, US1, US2, US3). 041-imaging-run-on-the-rig gives the run
 # the console's own parts; 042-imaging-run-page-and-mcp its page, MCP tools and README.
-# Depends on 014 to 017, 030 to 036, 038, 040 and 043 having landed. State: draft, re-anchored to
-# `main` before the flip. history.md has how it got here; flip.md what the flip needs.
+# Depends on 014 to 017, 030 to 036, 038, 040 and 043 having landed. State: ready.
+# history.md has how it got here; flip.md what the flip needed.
 # Re-anchored on 2026-11-20 to `main` at `6d79292b`, after 040 landed (#336 to #340), and
-# carried across 043 to `2ae73c66` (#342) once it landed the same day.
+# carried across 043 to `2ae73c66` (#342) once it landed the same day. The seat flipped it
+# to `ready` that day under the owner's standing permission for the imaging specs, which
+# gives the owner approvals; every owner decision takes the answer written in flip.md.
 ---
 
 # Feature Specification: The Imaging Run
@@ -17,7 +19,7 @@ depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-con
 
 **Created**: 2026-11-15
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: Specs 030 to 036 give the console an imaging camera, imaging solves, a measured
 aim point, a focus reading, calibration frames, a live stack and tracking from the subs,
