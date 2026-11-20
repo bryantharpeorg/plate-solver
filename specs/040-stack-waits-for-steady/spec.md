@@ -290,10 +290,10 @@ development, `cargo nextest run -p finder --locked --test motion steering_steady
      the old place, and the stack waits).
 7. **Given** the backlash rig followed to 60 s before the transit with
    `rig.follow(transit - 60.0, 60.0)` and one `gap` awaited then, so that
-   `steered_by_subs()` is true, **When** a test waits until the rate log gains an
-   azimuth rate, at the time r, waits 0.5 s, stops both axes on the simulated mount
-   itself with `rig.mount.stop_all().await`, and waits 2 s, **Then** a committed test
-   asserts that `steady_between(r + 0.1, r + 0.9)` is false; that
+   `steered_by_subs()` is true, **When** a test waits 2.5 s, then waits until the rate
+   log gains an azimuth rate, at the time r, waits 0.5 s, stops both axes on the
+   simulated mount itself with `rig.mount.stop_all().await`, and waits 2 s, **Then** a
+   committed test asserts that `steady_between(r + 0.1, r + 0.9)` is false; that
    `steady_between(r - 5.0, r - 0.1)` and `steady_between(r + 1.1, r + 1.9)` are true;
    that `steady()` is true and `steered_by_subs()` false at the end; and that the first
    azimuth rate the log holds after r is not zero (oracle: the rig's rate log and clock.
@@ -332,8 +332,9 @@ development, `cargo nextest run -p finder --locked --test motion steering_steady
     `before_exposure` for ever).
 11. **Given** a scripted steering whose tracker is steady and whose `gap` waits 5 s,
     **When** a test awaits `before_exposure` with the worked ask in a task, sets the
-    tracker not steady 0.5 s later and waits 0.6 s more, **Then** a committed test
-    asserts that `view()` has `steady` false and `waiting` true, that
+    tracker not steady, with the `pause` word `overhead`, 0.5 s later and waits 0.6 s
+    more, **Then** a committed test asserts that `view()` has `steady` false, `waiting`
+    true and `pause` `overhead`, the tracker's word, that
     `Steering::waiting()` is true, and that the log holds exactly one `gap`: a tracker
     that stops being steady while its gap is awaited, as one does whose keyhole pass
     begins just then, shows as a wait.
@@ -343,8 +344,9 @@ development, `cargo nextest run -p finder --locked --test motion steering_steady
     the call has not answered 4 s after it was made, and that it answers between 6.4 s
     and 6.8 s after it was made, with exactly two `gap`s in the log: the first gap ended
     on a tracker that was not steady, so it does not count.
-13. **Given** a scripted steering whose tracker is steady, after one `before_exposure`,
-    and a `Steering` whose source answers no tracker, after one, **Then** a committed
+13. **Given** a scripted steering whose tracker is steady, before any `before_exposure`,
+    given only `set_smear_px(6.0)` so that it has a view, and after one; and a
+    `Steering` whose source answers no tracker, after one, **Then** a committed
     test asserts that each `view()` has `steady` true, `waiting` false, no `pause` and
     `dropped_not_steady` 0.
 14. **Given** a scripted steering whose tracker is not steady, a `Hold` taken from it
@@ -376,7 +378,12 @@ development, `cargo nextest run -p finder --locked --test motion steering_steady
     (oracle: FR-022. While the limit is under half the exposure a stack holds, its subs
     would be smeared by more than twice the smear chosen, so it takes none, lets the
     tracker go to its own corrections and goes on by itself once the limit has risen:
-    15.0 s is half of 30.0 s and is not under it).
+    15.0 s is half of 30.0 s and is not under it). **And** on another such steering
+    whose tracker answers a longest exposure of 0.4 s from the start, a first
+    `before_exposure` with the worked ask and a wanted 5 s has not answered after 1 s,
+    with `pause` `limit` and one `release` in the log: the cap's 1 s floor is more than
+    twice the limit, and the first call looks at the limit again once the cap has
+    decided.
 
 ---
 
@@ -452,7 +459,10 @@ dropped** is the sum of the twelve counts of its `dropped`.
    `steering.dropped_not_steady` equals it, and `stack.taken` equals `stack.stacked`
    plus Σ dropped; and that `stack.json`'s `subs` lists as many subs with `outcome`
    `not_steady` as `stack.dropped.not_steady`, and that
-   `Dropped { not_steady: 2, ..Default::default() }.total()` is 2.
+   `Dropped { not_steady: 2, ..Default::default() }.total()` is 2; and that at no read
+   is `stack.last.outcome` `not_steady`, and that no sub `stack.json` lists as
+   `not_steady` has its `subs/<frame_id, six digits>.solve.json`: the check comes before
+   the solve and before `last`.
 4. **Given** 032's solving rig as it stands, with no target and Track off, and
    `{"exposure_ms":2000}`, **When** a test starts a stack, waits until `stack.taken` is
    at least 3 and stops it, **Then** a committed test asserts that `steering.source` is
@@ -576,13 +586,23 @@ tracking error is (e, n) within 10⁻⁴″.
    solve at half the worked scale, after the second sub `error_rms_px` is
    `error_rms_arcsec` / 1.08 within 10⁻⁴; and on another, with the first gap answering
    `Stepped` (0.3, 0.0), before the first error, the second sub's `drift_arcsec` is
-   still 0.76923 ± 10⁻⁴.
+   still 0.76923 ± 10⁻⁴. **And** on another, where the fourth gap, at T + 19.5 and
+   answering (0.4, 0.0), is asked before the third sub is handed over, the third sub's
+   `drift_arcsec` is still 0.58583 ± 10⁻⁴. On another, whose tracker reads not steady
+   once just after its third gap answers (0.3, 0.0) and then serves a fourth answering
+   (−0.8, 0.0) in the same call, it is 0.58583 too: a call's steps are summed. On
+   another with the errors (0.0, 0.0), (0.8, 0.6) and (1.2, 0.1) and a third gap
+   answering (0.0, −0.5), it is 0.58583 too.
 2. **Given** the same steering after 12 subs 6.5 s apart whose errors are (1.0, 0.0) for
    the first two, (2.0, 0.0) for the third and (0.0, 0.0) for the last nine, **Then** a
    committed test asserts `error_rms_arcsec` is 0.63246 ± 10⁻⁴ (√(4/10): the window is
    the last ten, of which the third error is the oldest; a window of nine would give 0.0
-   and one of eleven 0.67420). **And** after `release` and a new `before_exposure`, none
-   of the four keys is present.
+   and one of eleven 0.67420); and `drift_arcsec` is 0.51282 ± 10⁻⁴ (2.0 × 5/6.5/3: the
+   nine drifts between the last ten errors, the window's first error's own drift left
+   out; with it, 0.57335). **And** after `release` and a new `before_exposure`, none
+   of the four keys is present. **And** on another after three subs, once the tracker's
+   limit falls under half the held exposure and `before_exposure` waits, with `waiting`
+   true, none of the four keys is present: letting the tracker go empties the window.
 3. **Given** `SteeringBlock` rendered with a view whose `steering` is
    `{"smear_px":6,"on":true,"step_share":0.5,"rate_share":0.3,"source":"subs","holding":true,"steady":true,"waiting":false,"subs":12,"dropped_not_steady":0,"exposure_s":5,"limited":false,"over_limit":false,"longest_exposure_s":9.29,"would_take_s":5,"error_rms_arcsec":0.9037,"error_rms_px":0.41838,"drift_arcsec":0.58583,"drift_px":0.27122}`,
    **Then** a committed test asserts one region named `Tracking from the subs` whose
@@ -613,13 +633,16 @@ tracking error is (e, n) within 10⁻⁴″.
    `Save tracking settings`, with `fetch` answering 200 and a view, **Then** a committed
    test asserts `fetch` was called with `/api/imaging/steering` and
    `{"method":"PUT","headers":{"Content-Type":"application/json"},"body":"{\"on\":false,\"smear_px\":1.5,\"step_share\":0.5,\"rate_share\":0.3}"}`,
-   then `onChange`; and that a 400 answer with
-   `{"error":"the corner smear must be a number from 0.1 to 20"}` shows an alert with
-   exactly that text and calls no `onChange`.
+   then `onChange`; and that on another such block, with `Step share` set to 0.25 and
+   `Rate share` to 0.1, the body is
+   `{"on":true,"smear_px":6,"step_share":0.25,"rate_share":0.1}`; and that a 400 answer
+   with `{"error":"the corner smear must be a number from 0.1 to 20"}` shows an alert
+   with exactly that text and calls no `onChange`.
 6. **Given** `ImagingPage` rendered as 031's own test renders it, with a view that holds
    the `steering` of US8-S3, **Then** a committed test asserts the region
    `Tracking from the subs` is present and comes after 035's stack block in document
-   order.
+   order, and that a click on `Save tracking settings` there reads `/api/imaging` once
+   more.
 7. **Given** `SteeringBlock` with the view of US8-S3, **Then** a committed test asserts
    that the status reads exactly: with `source` `tracker` and `holding` false,
    `Steered by the tracker's own corrections`; with `source` `tracker`, `holding` true
@@ -653,7 +676,9 @@ tracking error is (e, n) within 10⁻⁴″.
    committed test asserts that the field still reads `1.5`; and that when it is then
    rendered with a view whose `smear_px` is 3, the field reads `3`: the fields are
    drafts of the block's own, which the page's one-second read of the same settings
-   leaves alone and a change of the settings replaces.
+   leaves alone and a change of the settings replaces. **And** with a view that has no
+   `steering`, the field `Corner smear (px)` set to 3 reads `6` once the block is
+   rendered with the view of US8-S3: a block first given a steering takes its values.
 10. **Given** 035's `StackBlock` rendered with a view whose `stack` is stacking with
     `dropped` holding `not_steady` 2 and every other count 0, **Then** a committed test
     asserts that its line reads exactly `Dropped 2: 2 while the mount was not steady`;
@@ -716,9 +741,11 @@ during development,
    holds no rate, `steady()` is false and `pause()` is `Some("starting")`; that a `gap`
    awaited then answers exactly (0.0, 0.0) and leaves `steered_by_subs()` false; that
    0.1 s later the log holds a rate for each axis and `steady()` is still false; that it
-   is false 1.9 s after the first rate in the log and true 3.1 s after it, with
-   `pause()` then `None`: the tracker settles for 2 s after its first rates, to the end
-   of one of its once-a-second turns; that `steady_between(s - 20.0, s - 10.0)` is
+   is false 1.9 s after the first rate in the log and true 2.1 s after it, with
+   `pause()` then `None`, and that `steady_between` from 2.0 s to 3.0 s after it is
+   true: the tracker settles for 2 s after its first rates, which a turn sends at its
+   start, and a time not steady ends at the instant it is steady again; that
+   `steady_between(s - 20.0, s - 10.0)` is
    false: it was not tracking then; that `steady_between(now - 10.0, now)`, now being
    the console time when it is asked, is false asked 6 s after s and true asked 14 s
    after s: the window 037's mount part asks, ending now and reaching back the larger of
@@ -786,9 +813,9 @@ during development,
    (transit − 5.4), about 3.4 s: the turn that ends the settling still sends it, and its
    time runs out before the gap, so the tracker's own state says no rate is in force
    while the mount runs one until the next turn. The first assertion shows that the case
-   was met. The 5.4 s is worked, not measured: from the take-up's start as the recheck
-   of round 1 saw it, 1.99 s before the rig's transit, and the 3.0 s from there to the
-   turn that ends the settling; probe round 2 confirms it or moves it).
+   was met. The 5.4 s is worked: from the take-up's start as the recheck of round 1
+   saw it, 1.99 s before the rig's transit, and the 3.0 s from there to the turn that
+   ends the settling; probe round 2 measured the interval at 3.410 s and confirmed it).
 
 ---
 
@@ -821,7 +848,8 @@ theirs (031 spec.md US8), and reached through the MCP door as they reach it.
    `Set what steers the tracker during a live stack, as PUT /api/imaging/steering does: on, smear_px, step_share and rate_share, each optional. Read the result in the steering part of get_imaging_camera.`,
    an `outputSchema` of `{"type":"object"}`, no `readOnlyHint`, and an `inputSchema`
    whose `properties` are exactly `on`, `rate_share`, `smear_px` and `step_share` and
-   which requires none of them.
+   which requires none of them, and whose properties' types are `boolean` for `on` and
+   `number` for the other three, none of them nullable.
 2. **Given** the imaging console, **Then** a committed test asserts that `set_steering`
    with `{"smear_px":1.5}` answers the imaging view, whose `steering.smear_px` is 1.5
    and `steering.on` true; that with `{"on":false,"step_share":0.25,"rate_share":0}` it
@@ -835,9 +863,11 @@ theirs (031 spec.md US8), and reached through the MCP door as they reach it.
    `the step share must be a number from 0 to 1`, and with `{"smear":2}` and with
    `{"on":1}` a tool error, and that none of the four changes anything; and that on a
    console that takes no imaging frames `set_steering` with `{}` answers the tool error
-   `this console takes no imaging frames`, with no tokio time passed (oracle: the
-   route's own refusals; an existing test calls every listed tool with `{}` on such a
-   console, and a tool that waited there would hang it).
+   `this console takes no imaging frames`, with no tokio time passed, and `{"smear":2}`
+   answers a tool error other than that one: the arguments are judged first, as the
+   route judges its body (oracle: the route's own refusals; an existing test calls
+   every listed tool with `{}` on such a console, and a tool that waited there would
+   hang it).
 
 ---
 

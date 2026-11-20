@@ -199,22 +199,72 @@ in the FR or success criterion that makes it.
 4. **The owner decisions are settled and the approvals given** (§ Owner decisions and
    § Owner approvals above). Not met: this spec's decisions, 9 to 12 and 17, are open,
    and 036's flip settles the rest.
-5. **A probe build.** Not met for the trio as it stands. Probe round 1 built US6, US7 and
-   US8 on 2026-11-18 and 19 as stories of 036 (036's flip.md § Prerequisites 5 has what
-   it settled, and 036's history.md how). Probe round 2 builds this spec's five stories
-   on `main`, with 036 and 035 landed, and must show:
-   - the bounds of round 1 again under the changed law: US7-S1 from the 14th sub, and
-     US6-S5 with eight gaps and the offset left alone after a lapse;
-   - a bound for US10-S8, which has none, written into the scenario with its margin;
-   - the scenarios nobody has run, the least trusted first: the stopped-axis test
-     raising no false alarm in any motion module (§ Plan traps 32) and US6-S7; US6-S6's
-     push on the goto rig; US7-S7's far stack; US10-S9's timing, which is worked and not
-     measured; US6-S17's wait for the limit; US10-S1, US6-S8 and US6-S9; and the
-     settle's times in US6-S1 and US10-S3;
-   - that every test file passes unedited under every later story: 036's under US6, and
-     US10's on the code of US6, the story it was cut from, with no test of theirs
-     failing first;
-   - each story's diff against its estimate in § Risks, US6 above all.
+5. **A probe build.** Met on 2026-11-20 by probe round 2. Probe round 1 built US6, US7
+   and US8 on 2026-11-18 and 19 as stories of 036 (036's flip.md § Prerequisites 5 has
+   what it settled, and 036's history.md how). Round 2 built this spec's five stories
+   from the trio, in two agents (US6 and US10, then US7, US8 and US11), one commit a
+   story in the Work Graph's order, tests first and with both gates green, each story
+   writing only its declared files; one PROBE-ONLY commit outside every story built the
+   fix of a plan rule (040-R2, now folded). It found 3 blocking and 20 clarity defects, 040-R1 to
+   040-R23 (history.md, probe round 2 and its fold). It built on 036's probe code, the
+   tip of 036's round 2 split (`a0602839`), not on `main`: the re-anchoring compared that
+   code with 036's landed code (`a0602839..fc161a54`), and found every point of § What
+   036 provides the same and no difference that changes what a 040 story builds; the
+   trio names the landed code throughout. It showed:
+   - **The bounds**, each on three runs with the same digits:
+     - US7-S1 from the 14th sub: at most 0.014181″, against 0.15″ (10.6×; round 1
+       0.01558″, 9.6×); the 12th sub's drift 0.030450″, against the model's 0.030″.
+     - US6-S5, with eight gaps and the offset left alone after the lapse: the largest
+       true error 41.412530″, against 015's 60″ (1.449×), while the first reversal's
+       measurement is open, as round 1's 41.414″ with three gaps and the integral held;
+       at most 10.078066″ after the close (round 1 10.850″); the play measured
+       0.299879°, 0.43″ off the 0.3° configured, against 30″.
+     - US6-S1: the gap asked during the take-up answered 2.150 s before L, against at
+       least 1.5 s.
+     - US7-S2's limit equal to the test's own figure within 2 × 10⁻¹⁶, against 2%;
+       US7-S3 one sub dropped `not_steady`, against at least one; US7-S7 `far_arcsec`
+       471.98″, within 420″ to 540″, and the eyepiece within 2.045″ of its first
+       reading, against 60″; US7-S8 12 of 12 subs over 0.5″ (0.7452″ to 0.7466″, the
+       model's 0.749″), against at least 8; and US7-S9's stop answered at once, against
+       0.5 s.
+     - US10-S1, US6-S8 and US10-S9: the feed-forward plus the offset in force at the
+       gap's answer to 0.000000″/s, against 0.01″/s; and US10-S9's last azimuth rate
+       before the gap 7.4189″/s off it, against more than 1″/s.
+     - US10-S8, which had no bound: as written it failed (040-R3, the owner's).
+   - **The cases nobody had run** all ran and passed as written:
+     - the stopped-axis test raising no false alarm (§ Plan traps 32): with its branch
+       printing, the 165 motion tests at US6's tip and the 174 at US10's, 036's US3's,
+       US9's and US4's modules among them, raised one stall, US6-S7's own;
+     - US6-S7: the stall found at the turn at r + 1 s, with `sent`'s time r;
+     - US6-S6's push, on the goto rig;
+     - US7-S7's far stack, and US7-S9's and US7-S10's gaps that a stop and a lost link
+       end;
+     - US10-S9's worked 5.4 s, confirmed: the interval was 3.410 s;
+     - US6-S17's wait for the limit, on the scripted tracker;
+     - US10-S1, US6-S8 and US6-S9, what the mount is left running after a time not
+       steady;
+     - the settle's times: 2.150 s before L in US6-S1, and steady exactly 2.000 s after
+       the first rates in US10-S3 (040-R4 and 040-R10 folded what they showed);
+     - US8-S1's worked figures, all six to 10⁻⁴.
+   - **Every test file passed unedited under every later story:** 036's under US6, the
+     sha256 of every existing test file the same before and after it and 036's motion
+     and console modules passing on three runs; US6's under US10; every earlier one
+     under US7, US8 and US11, with 035's three page tests among the 545 and 031's MCP
+     tests. US10's on US6's code, with none failing first: not as written. 7 of 9
+     passed at the first run; US10-S7 failed on the plan's rule for a take-up's word
+     (040-R2, folded: the keyhole pass's own take-up keeps `overhead`), and US10-S8 as
+     written (040-R3); with that fix and US10-S8 read from the player's last false
+     reading of `steady()`, 9 of 9 on three runs. Every other story's tests failed first, but
+     US7-S6, the guard, which passes on any code without the thirteen names, as
+     § Prerequisites 3 means it to.
+   - **Each story's diff against its estimate** (§ Risks; 65,536 B the budget): US6
+     66,145 B (100.9%) against 48,400 B, 36.7% over and over the budget (040-R1, the
+     owner's); US10 16,978 B (25.9%) against 15,300 B, 11.0% over; US7 43,790 B (66.8%)
+     against 43,500 B, 0.7% over; US8 47,784 B (72.9%, `dist/` counted as binary)
+     against 43,700 B, 9.3% over; and US11 12,354 B (18.9%) against 8,700 B, 42.0%
+     over, most of it the imaging console its own module builds.
+   - **Not run:** the msrv gate on Rust 1.96, coverage and CI; no real hardware; and
+     040-R20's schema, folded as its report wrote it, was not built.
 6. **Outside the factory, before this spec is used at the telescope:** GoTo and Track
    proven on the real mount (the plan document, § Before any flip, 4), and its backlash
    measured on both axes: altitude reverses at transit, and azimuth too for a target
@@ -224,10 +274,11 @@ in the FR or success criterion that makes it.
    (`docs/research/2026-11-15-imaging-camera.md`) have been on `main` since 030's flip
    (`55e41f57`), and are there at `fc161a54`.
 8. **No operator-staged files are needed.** Met.
-9. **The plan document agrees with the settled decisions.** Not met on `main`, which
-   does not hold the plan document yet. In this worktree its list of MCP tools has none
-   for 036; owner decision 11's answer of 2026-11-19 gives this work one,
-   `set_steering`, and the plan document's list gains it in the same change as the flip.
+9. **The plan document agrees with the settled decisions.** Not met: on `main` its list
+   of MCP tools has none for 036
+   (`docs/plans/2026-11-15-specs-030-037-imaging.md:216`); owner decision 11's answer of
+   2026-11-19 gives this work one, `set_steering`, and the plan document's list gains it
+   in the same change as the flip.
    If the owner settles decision 11 otherwise, the plan document is corrected in the
    same change. Rule 1 is not edited: owner decision 17 declares the further times a
    tracker is not steady on its own.

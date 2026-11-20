@@ -99,15 +99,16 @@ builder's task: a story is dispatched only once they are met.
 
 - [ ] T030 [US6] In `crates/finder/src/tracking.rs`, add `SETTLE` and, to `Control`,
   `steady`, `unsteady`, `settle_until`, `pushed`, `stalled`, `sent` and `cause`, the
-  word written wherever `settling` is set, `Tracker::pause` with its line in
-  `impl Steered for Tracker`, the list's first entry from before the start, `mark` and
-  its calls, `settling = true` at the start of a
-  take-up and of the keyhole pass and the settling rule at the end of every turn,
+  word written wherever `settling` is set (a take-up's only while the state is
+  `tracking`, so that the keyhole pass's own keeps `overhead`), `Tracker::pause` with
+  its line in `impl Steered for Tracker`, the list's first entry from before the start,
+  `mark` and its calls, `settling = true` at the start of a take-up and of the keyhole
+  pass and the settling rule at the end of every turn,
   `Tracker::pushed`, the stopped-axis test at the top of a turn with `sent` written
-  wherever the task sends the azimuth axis a rate, `Tracker::steady` and
-  `steady_between`, whose window does not touch a time that ends as it begins, with
-  their lines in `impl Steered for Tracker`, `mark` forgetting `held` and setting
-  `fresh_after` as the tracker stops being steady, `follow` and `end` clearing `pushed`,
+  where the turn's loop and `serve_gaps` send the azimuth axis its rate,
+  `Tracker::steady` and `steady_between`, whose window does not touch a time that ends
+  as it begins, with their lines in `impl Steered for Tracker`, `mark` forgetting
+  `held` and setting `fresh_after` as the tracker stops being steady, `follow` and `end` clearing `pushed`,
   `steer` doing nothing while the tracker is not steady, the test in `serve_gaps` step 1
   changed from `settling` to `!steady`, and the held mode's test in `Shared::pointing`
   changed from `lapsed` to `lapsed && steady` (plan.md § Steady, the tracker's second answer). In
@@ -175,8 +176,9 @@ builder's task: a story is dispatched only once they are met.
 - [ ] T035 [US7] In `crates/finder/src/imaging/solving.rs`, give the steering its source
   in `set_solver` (plan.md § `set_solver`). Add the section
   `## Tracking steered by the subs` to `crates/finder/README.md`, with the meaning of
-  each key of the `steering` part and the paragraph on why subs are dropped (plan.md
-  § `crates/finder/README.md`).
+  each key of the `steering` part and the paragraph on why subs are dropped, and in
+  035's `## Live stack` make the count of dropped-sub reasons twelve, with `not_steady`
+  last (plan.md § `crates/finder/README.md`).
 - [ ] T036 [US7] Run the `lint` and `test` gates with every existing test unchanged and
   green. Commit the green story (US7-S1, US7-S2, US7-S3, US7-S4, US7-S5, US7-S6, US7-S7,
   US7-S8, US7-S9 and US7-S10).
