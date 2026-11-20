@@ -27,6 +27,8 @@ use tokio::{
 
 const TICK: Duration = Duration::from_millis(50);
 const SECOND: Duration = Duration::from_secs(1);
+/// Tube settling after first rates, a take-up or a keyhole pass.
+const SETTLE: Duration = Duration::from_secs(2);
 const AXES: [Axis; 2] = [Axis::Azimuth, Axis::Altitude];
 const PROPORTIONAL_GAIN: f64 = 0.6;
 const INTEGRAL_TIME_S: f64 = 60.0;
@@ -123,8 +125,16 @@ struct Control {
     direction: [f64; 2],
     /// No gap may claim before the rate task's first rates.
     settling: bool,
+    steady: bool,
+    unsteady: VecDeque<(f64, Option<f64>)>,
+    settle_until: Option<Instant>,
+    pushed: bool,
+    stalled: bool,
+    /// Last azimuth tracking rate and its console time (not a take-up or slew).
+    sent: Option<(f64, f64)>,
+    cause: &'static str,
     pending: Option<TrackingError>,
-    /// Only errors measured after the last followed push may steer.
+    /// Only errors measured after the last followed push or loss of steady may steer.
     fresh_after: f64,
     subs: Option<Subs>,
     /// A stack still holds the tracker, but its errors have gone quiet.
@@ -266,6 +276,8 @@ impl Tracker {
             *control = Control {
                 counts,
                 settling: true,
+                cause: "starting",
+                unsteady: VecDeque::from([(f64::NEG_INFINITY, None)]),
                 step_share: SUB_STEP_SHARE,
                 rate_share: SUB_RATE_SHARE,
                 state: State {
@@ -357,6 +369,8 @@ impl Tracker {
         control.lapsed = false;
         control.held = Held::default();
         control.fresh_after = self.shared.clock.now();
+        control.pushed = false;
+        self.shared.mark(&mut control);
         Ok(())
     }
 
@@ -374,6 +388,7 @@ impl Tracker {
     pub fn steer(&self, error: TrackingError) {
         let mut control = self.shared.control.lock().unwrap();
         if control.state.state != "tracking"
+            || !control.steady
             || ![error.time, error.east_arcsec, error.north_arcsec]
                 .into_iter()
                 .all(f64::is_finite)
@@ -420,6 +435,49 @@ impl Tracker {
     /// Whether tracking errors currently steer the tracker.
     pub fn steered_by_subs(&self) -> bool {
         self.shared.control.lock().unwrap().subs.is_some()
+    }
+
+    /// Whether the tracker is steady enough for an exposure now.
+    pub fn steady(&self) -> bool {
+        self.shared.control.lock().unwrap().steady
+    }
+
+    /// Whether a window touches none of the last 64 times not steady.
+    /// The ending instant of a pause belongs to the steady time that follows.
+    pub fn steady_between(&self, start: f64, end: f64) -> bool {
+        let control = self.shared.control.lock().unwrap();
+        !control.unsteady.is_empty()
+            && !control
+                .unsteady
+                .iter()
+                .any(|(from, to)| *from <= end && to.is_none_or(|to| to > start))
+    }
+
+    /// The tracker's own word for its current pause, in priority order.
+    pub fn pause(&self) -> Option<&'static str> {
+        let control = self.shared.control.lock().unwrap();
+        if control.steady || control.state.state == "off" {
+            None
+        } else if control.pushed {
+            Some("pushed")
+        } else if control.measurement.iter().any(Option::is_some) {
+            Some("measuring")
+        } else if control.settling {
+            Some(control.cause)
+        } else if control.stalled {
+            Some("stalled")
+        } else {
+            None
+        }
+    }
+
+    /// The session says whether the telescope is being moved by hand.
+    pub fn pushed(&self, moving: bool) {
+        let mut control = self.shared.control.lock().unwrap();
+        if control.state.state != "off" {
+            control.pushed = moving;
+            self.shared.mark(&mut control);
+        }
     }
 
     /// The longest exposure for this turn at the target now, or no limit.
@@ -503,6 +561,15 @@ impl Steered for Tracker {
     fn longest_exposure_ahead_s(&self, turn_rad: f64) -> Option<f64> {
         self.longest_exposure_ahead_s(turn_rad)
     }
+    fn steady(&self) -> bool {
+        self.steady()
+    }
+    fn steady_between(&self, start: f64, end: f64) -> bool {
+        self.steady_between(start, end)
+    }
+    fn pause(&self) -> Option<&'static str> {
+        self.pause()
+    }
     fn tune(&self, step_share: f64, rate_share: f64) {
         self.tune(step_share, rate_share);
     }
@@ -545,6 +612,7 @@ impl Shared {
                 proportional,
                 proportional_until,
                 lapsed,
+                steady,
                 held,
                 ..
             } = &mut *control;
@@ -559,7 +627,7 @@ impl Shared {
                 let target = state.target.as_ref().unwrap();
                 let axis_error = self.axis_error(target, time, east_arcsec, north_arcsec);
                 for i in 0..2 {
-                    if *lapsed {
+                    if *lapsed && *steady {
                         held.step[i] = -PROPORTIONAL_GAIN * axis_error[i];
                     } else {
                         proportional[i] = -PROPORTIONAL_GAIN * axis_error[i] / interval;
@@ -586,6 +654,35 @@ impl Shared {
 }
 
 impl Shared {
+    /// Publish transitions under the control lock. A lost steady time ends the
+    /// subs' claim and invalidates even errors still queued in the stack worker.
+    fn mark(&self, control: &mut Control) {
+        let steady = control.state.state == "tracking"
+            && !control.settling
+            && !control.pushed
+            && !control.stalled
+            && control.measurement.iter().all(Option::is_none);
+        if steady == control.steady {
+            return;
+        }
+        let now = self.clock.now();
+        control.steady = steady;
+        if steady {
+            if let Some((_, to)) = control.unsteady.back_mut() {
+                *to = Some(now);
+            }
+        } else {
+            control.unsteady.push_back((now, None));
+            if control.unsteady.len() > 64 {
+                control.unsteady.pop_front();
+            }
+            control.subs = None;
+            control.pending = None;
+            control.held = Held::default();
+            control.fresh_after = now;
+        }
+    }
+
     /// The model the loop currently plans through; a handed-over replacement
     /// shares the same backlash and crossing state through `Model::motion`.
     fn model(&self) -> Arc<Model> {
@@ -609,6 +706,8 @@ impl Shared {
         control.held = Held::default();
         control.corrections.clear();
         control.gaps.clear();
+        control.pushed = false;
+        self.mark(&mut control);
         for (i, measurement) in control.measurement.iter_mut().enumerate() {
             if measurement.take().is_some() {
                 model.motion.crossing(i, false);
@@ -844,6 +943,10 @@ impl Shared {
                 return Err("stopped".into());
             }
             control.state.state = "keyhole_wait";
+            control.settling = true;
+            control.settle_until = None;
+            control.cause = "overhead";
+            self.mark(&mut control);
             control.state.tracking_offset = [0.0; 2];
             control.proportional = [0.0; 2];
             control.previous_pointing = None;
@@ -958,6 +1061,7 @@ impl Shared {
                     m.settled_since = None;
                 }
             }
+            self.mark(&mut control);
         }
         for (i, degrees) in measured.into_iter().enumerate() {
             if let Some(degrees) = degrees {
@@ -983,7 +1087,7 @@ impl Shared {
         let (target, counts, direction, offset, want, changed, applied, held_step) = {
             let mut control = self.control.lock().unwrap();
             // Dropping these senders answers zero, including before the first rates.
-            if control.state.state != "tracking" || control.settling {
+            if control.state.state != "tracking" || !control.steady {
                 return Ok(());
             }
             let target = control.state.target.clone().unwrap();
@@ -1121,6 +1225,9 @@ impl Shared {
                 .rate_axis(axis, rate)
                 .await
                 .map_err(|_| "link_lost")?;
+            if axis == Axis::Azimuth {
+                self.control.lock().unwrap().sent = Some((rate, self.clock.now()));
+            }
             if has_pulse {
                 step[i] = pulse[i] * 3600.0 * began[i].elapsed().as_secs_f64();
             }
@@ -1172,6 +1279,15 @@ impl Shared {
         direction: f64,
         degrees: f64,
     ) -> Result<(), String> {
+        {
+            let mut control = self.control.lock().unwrap();
+            control.settling = true;
+            control.settle_until = None;
+            if control.state.state == "tracking" {
+                control.cause = "reversing";
+            }
+            self.mark(&mut control);
+        }
         let model = self.model();
         model.motion.moving(i, direction);
         model.motion.crossing(i, true);
@@ -1238,6 +1354,18 @@ impl Shared {
                     Ok(state) => state,
                     Err(_) => return "link_lost".into(),
                 };
+                {
+                    let mut control = self.control.lock().unwrap();
+                    if let Some((rate, sent)) = control.sent {
+                        if !state.moving && rate != 0.0 {
+                            control.stalled = true;
+                            self.mark(&mut control);
+                            if let Some((from, _)) = control.unsteady.back_mut() {
+                                *from = from.min(sent);
+                            }
+                        }
+                    }
+                }
                 let resets = *resets.get_or_insert(state.mount_resets);
                 if state.mount_resets != resets {
                     return "the mount was power-cycled".into();
@@ -1323,12 +1451,16 @@ impl Shared {
                             };
                             let expected =
                                 self.positions(&target, counts, self.clock.now()).unwrap();
-                            self.control.lock().unwrap().measurement[i] = Some(Measurement {
-                                baseline_deg: (f64::from(state.position) - expected[i]) * 360.0
-                                    / f64::from(counts[i]),
-                                saw_error: false,
-                                settled_since: None,
-                            });
+                            {
+                                let mut control = self.control.lock().unwrap();
+                                control.measurement[i] = Some(Measurement {
+                                    baseline_deg: (f64::from(state.position) - expected[i]) * 360.0
+                                        / f64::from(counts[i]),
+                                    saw_error: false,
+                                    settled_since: None,
+                                });
+                                self.mark(&mut control);
+                            }
                             model.motion.crossing(i, true);
                             direction[i] = next;
                         }
@@ -1369,8 +1501,23 @@ impl Shared {
                     if movement.rate_axis(axis, rate).await.is_err() {
                         return "link_lost".into();
                     }
+                    if axis == Axis::Azimuth {
+                        self.control.lock().unwrap().sent = Some((rate, self.clock.now()));
+                    }
                 }
-                self.control.lock().unwrap().settling = false;
+                let mut control = self.control.lock().unwrap();
+                control.stalled = false;
+                if control.settling {
+                    match control.settle_until {
+                        None => control.settle_until = Some(Instant::now() + SETTLE),
+                        Some(until) if Instant::now() >= until => {
+                            control.settling = false;
+                            control.settle_until = None;
+                        }
+                        Some(_) => {}
+                    }
+                }
+                self.mark(&mut control);
             }
         };
         let reason = tokio::select! {

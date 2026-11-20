@@ -1206,6 +1206,9 @@ impl Session {
         if state.state != "tracking" || !state.checks_push || !armed {
             let (east, north) = error(&pointing);
             let within = separation(pointing.ra_deg, pointing.dec_deg) <= PUSH_THRESHOLD_DEG;
+            if matches!(push, Push::Moving { .. }) {
+                tracker.pushed(false);
+            }
             hand_over(east, north);
             {
                 let mut values = self.values.lock().expect("observing session");
@@ -1245,6 +1248,7 @@ impl Session {
                         since: now,
                     }
                 });
+                tracker.pushed(true);
                 return;
             }
         }
@@ -1253,6 +1257,7 @@ impl Session {
         if separation(pointing.ra_deg, pointing.dec_deg) <= PUSH_THRESHOLD_DEG {
             if matches!(push, Push::Moving { .. }) {
                 self.edit_push(generation, |run| run.push = Push::None);
+                tracker.pushed(false);
             }
             let (east, north) = error(&pointing);
             hand_over(east, north);
@@ -1269,6 +1274,7 @@ impl Session {
                         since: now,
                     }
                 });
+                tracker.pushed(true);
                 self.mark_slip();
             }
             // Step 7: still within a minute of arc of the stretch's first
@@ -1289,6 +1295,7 @@ impl Session {
                             since: now,
                         }
                     });
+                    tracker.pushed(true);
                 } else if now - since >= PUSH_SETTLE_S
                     && tracker.follow(pointing.ra_deg, pointing.dec_deg).is_ok()
                 {

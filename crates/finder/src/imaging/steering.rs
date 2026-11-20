@@ -6,9 +6,11 @@ use std::{
     future::Future,
     pin::Pin,
     sync::{Arc, Mutex, Weak},
+    time::Duration,
 };
 
 use serde::Serialize;
+use tokio::time::sleep;
 
 use crate::session::Clock;
 
@@ -129,6 +131,16 @@ pub const EXPOSURES_KEPT: usize = 32;
 pub const FAR_ARCSEC: f64 = 180.0;
 /// An exposure is not halved to under this many seconds.
 pub const HALVING_FLOOR_S: f64 = 1.0;
+const POLL: Duration = Duration::from_millis(250);
+/// A sub whose tracker cannot vouch for its whole exposure is dropped with this reason.
+pub const NOT_STEADY: &str = "not_steady";
+
+/// Whether a sub can proceed to its solve.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Verdict {
+    Keep,
+    Drop(&'static str),
+}
 /// The shares handed to the tracker until set.
 pub const STEP_SHARE: f64 = 0.5;
 pub const RATE_SHARE: f64 = 0.3;
@@ -236,6 +248,10 @@ struct State {
     rate_share: f64,
     held: Option<(f64, bool)>,
     asked: Option<ExposureAsk>,
+    steady: bool,
+    waiting: bool,
+    pause: Option<&'static str>,
+    dropped_not_steady: u64,
 }
 
 impl State {
@@ -261,6 +277,7 @@ impl Steering {
             state: Mutex::new(State {
                 smear_px: 6.0,
                 on: true,
+                steady: true,
                 step_share: STEP_SHARE,
                 rate_share: RATE_SHARE,
                 ..State::default()
@@ -274,7 +291,11 @@ impl Steering {
 
     /// For the life of a stack's taker.
     pub fn hold(self: &Arc<Self>) -> Hold {
-        self.state.lock().expect("steering state").holds += 1;
+        {
+            let mut state = self.state.lock().expect("steering state");
+            state.holds += 1;
+            state.dropped_not_steady = 0;
+        }
         Hold {
             steering: self.clone(),
         }
@@ -282,54 +303,172 @@ impl Steering {
 
     /// In the gap, before every exposure. Remember only when the answer is ready.
     pub async fn before_exposure(&self, ask: ExposureAsk) -> Go {
-        let source = {
+        {
             let mut state = self.state.lock().expect("steering state");
             state.used = true;
-            state.source.clone()
-        };
-        let tracker = source.and_then(|source| source());
-        let weak = tracker.as_ref().map(Arc::downgrade);
-        let (feedback, step_share, rate_share) = {
-            let mut state = self.state.lock().expect("steering state");
-            state.tracker = weak.clone();
-            (
-                state.on && state.far.is_none(),
-                state.step_share,
-                state.rate_share,
-            )
-        };
-        if let Some(tracker) = tracker {
-            if feedback {
-                tracker.tune(step_share, rate_share);
-                let answer = tracker.gap();
-                drop(tracker);
-                answer.await;
-            }
+            state.asked = Some(ask);
         }
-        // A gap's future owns no tracker. It may have disappeared while waiting.
-        let tracker = weak.and_then(|weak| weak.upgrade());
+        let mut released_for_limit = false;
+        loop {
+            let source = self.state.lock().expect("steering state").source.clone();
+            let mut tracker = source.and_then(|source| source());
+            let weak = tracker.as_ref().map(Arc::downgrade);
+            self.state.lock().expect("steering state").tracker = weak.clone();
+            if !self.read_steady(tracker.as_deref()) {
+                drop(tracker);
+                sleep(POLL).await;
+                continue;
+            }
+            if tracker
+                .as_ref()
+                .is_some_and(|t| self.under_half(t.as_ref(), &ask))
+            {
+                if !released_for_limit {
+                    self.let_go();
+                    released_for_limit = true;
+                }
+                self.limit_wait();
+                drop(tracker);
+                sleep(POLL).await;
+                continue;
+            }
+            released_for_limit = false;
+            // Read the switch here: it may have changed during the wait.
+            let (feedback, step_share, rate_share) = {
+                let state = self.state.lock().expect("steering state");
+                (
+                    state.on && state.far.is_none(),
+                    state.step_share,
+                    state.rate_share,
+                )
+            };
+            if let Some(t) = tracker.as_ref().filter(|_| feedback) {
+                t.tune(step_share, rate_share);
+                let mut answer = t.gap();
+                drop(tracker);
+                loop {
+                    tokio::select! {
+                        _ = &mut answer => break,
+                        _ = sleep(POLL) => {
+                            let current = weak.as_ref().and_then(Weak::upgrade);
+                            self.read_steady(current.as_deref());
+                        }
+                    }
+                }
+                // The answer owns no tracker; it may have gone while awaited.
+                tracker = weak.as_ref().and_then(Weak::upgrade);
+                if !self.read_steady(tracker.as_deref()) {
+                    continue;
+                }
+            }
+            let (held, set_point, smear_px) = {
+                let state = self.state.lock().expect("steering state");
+                (state.held, state.set_point, state.smear_px)
+            };
+            let decided = held.unwrap_or_else(|| {
+                let ahead = tracker
+                    .as_ref()
+                    .and_then(|t| t.longest_exposure_ahead_s(turn_for(&ask, set_point, smear_px)));
+                decide(&ask, ahead)
+            });
+            self.state
+                .lock()
+                .expect("steering state")
+                .held
+                .get_or_insert(decided);
+            // The first cap may reach its floor while still over twice the limit.
+            if tracker
+                .as_ref()
+                .is_some_and(|t| self.under_half(t.as_ref(), &ask))
+            {
+                self.let_go();
+                released_for_limit = true;
+                self.limit_wait();
+                drop(tracker);
+                sleep(POLL).await;
+                continue;
+            }
+            let go_time = self.clock.now();
+            let mut state = self.state.lock().expect("steering state");
+            let (exposure_s, limited) = state.held.unwrap();
+            state.steady = true;
+            state.waiting = false;
+            state.pause = None;
+            state.remember(Taken {
+                go_time,
+                tracker: tracker.as_ref().map(Arc::downgrade),
+                sensor: ask.sensor,
+            });
+            return Go {
+                exposure_s,
+                limited,
+            };
+        }
+    }
+
+    // Read the tracker outside the leaf lock, then publish its answer.
+    fn read_steady(&self, tracker: Option<&dyn Steered>) -> bool {
+        let steady = tracker.is_none_or(Steered::steady);
+        let pause = if steady {
+            None
+        } else {
+            tracker.and_then(Steered::pause)
+        };
+        let mut state = self.state.lock().expect("steering state");
+        state.steady = steady;
+        state.waiting = !steady;
+        state.pause = pause;
+        steady
+    }
+
+    fn under_half(&self, tracker: &dyn Steered, ask: &ExposureAsk) -> bool {
         let (held, set_point, smear_px) = {
             let state = self.state.lock().expect("steering state");
             (state.held, state.set_point, state.smear_px)
         };
-        let decided = held.unwrap_or_else(|| {
-            let ahead = tracker.as_ref().and_then(|tracker| {
-                tracker.longest_exposure_ahead_s(turn_for(&ask, set_point, smear_px))
-            });
-            decide(&ask, ahead)
-        });
-        let go_time = self.clock.now();
+        held.is_some_and(|(exposure, _)| {
+            tracker
+                .longest_exposure_s(turn_for(ask, set_point, smear_px))
+                .is_some_and(|limit| limit < exposure / 2.0)
+        })
+    }
+
+    fn limit_wait(&self) {
         let mut state = self.state.lock().expect("steering state");
-        let (exposure_s, limited) = *state.held.get_or_insert(decided);
-        state.asked = Some(ask);
-        state.remember(Taken {
-            go_time,
-            tracker: tracker.as_ref().map(Arc::downgrade),
-            sensor: ask.sensor,
-        });
-        Go {
-            exposure_s,
-            limited,
+        state.waiting = true;
+        state.pause = Some("limit");
+    }
+
+    /// Whether a call before an exposure is waiting for the tracker or its limit.
+    pub fn waiting(&self) -> bool {
+        self.state.lock().expect("steering state").waiting
+    }
+
+    /// For every sub, before it is solved: whether its tracker was steady for it.
+    pub fn check(&self, frame: &SolveFrame) -> Verdict {
+        let time = frame.start + frame.exposure_s / 2.0;
+        let weak = {
+            let state = self.state.lock().expect("steering state");
+            state
+                .taken
+                .iter()
+                .rev()
+                .find(|record| record.go_time <= time)
+                .and_then(|record| record.tracker.clone())
+        };
+        let Some(weak) = weak else {
+            return Verdict::Keep;
+        };
+        if weak.upgrade().is_none_or(|tracker| {
+            !tracker.steady_between(frame.start, frame.start + frame.exposure_s)
+        }) {
+            self.state
+                .lock()
+                .expect("steering state")
+                .dropped_not_steady += 1;
+            Verdict::Drop(NOT_STEADY)
+        } else {
+            Verdict::Keep
         }
     }
 
@@ -398,6 +537,9 @@ impl Steering {
             state.far = None;
             state.held = None;
             state.asked = None;
+            state.steady = true;
+            state.waiting = false;
+            state.pause = None;
             state.tracker.take()
         };
         if let Some(tracker) = tracker.and_then(|weak| weak.upgrade()) {
@@ -498,6 +640,10 @@ impl Steering {
                     longest_exposure_s: None,
                     over_limit: false,
                     would_take_s: None,
+                    steady: state.steady,
+                    waiting: state.waiting,
+                    pause: state.pause.filter(|_| state.waiting),
+                    dropped_not_steady: state.dropped_not_steady,
                 },
             )
         };
@@ -572,4 +718,11 @@ pub struct SteeringView {
     pub over_limit: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub would_take_s: Option<f64>,
+    pub steady: bool,
+    pub waiting: bool,
+    /// The tracker's word, or `limit`, only while waiting.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pause: Option<&'static str>,
+    /// This stack's drops, retained after release and reset by the next Hold.
+    pub dropped_not_steady: u64,
 }
