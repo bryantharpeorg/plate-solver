@@ -1,5 +1,5 @@
 //! Connect a mount in the background while the scope node keeps serving its camera.
-pub use super::protocol::{GotoPath, MountHealth};
+pub use super::protocol::{GotoPath, LineHealth, MountHealth};
 use super::{protocol::wrapped_delta, transport::BaudStream, Parameters, SkyWatcher};
 use crate::{
     clock::NodeClock,
@@ -30,6 +30,8 @@ struct Snapshot<S> {
     pending_cause: Option<String>,
     health: MountHealth,
     retired_health: MountHealth,
+    line_health: LineHealth,
+    retired_line_health: LineHealth,
 }
 struct Inner<S> {
     open: Opener<S>,
@@ -87,6 +89,8 @@ impl<S: BaudStream + 'static> MountLink<S> {
                 pending_cause: None,
                 health: MountHealth::default(),
                 retired_health: MountHealth::default(),
+                line_health: LineHealth::default(),
+                retired_line_health: LineHealth::default(),
             }),
             io: tokio::sync::Mutex::new(()),
             device: tokio::sync::Mutex::new(()),
@@ -103,8 +107,14 @@ impl<S: BaudStream + 'static> MountLink<S> {
         let snapshot = self.inner.snapshot.lock().unwrap();
         combined_health(&snapshot.retired_health, &snapshot.health)
     }
+    /// Stale input over every board this link has had, keeping the latest bytes.
+    pub fn line_health(&self) -> LineHealth {
+        let snapshot = self.inner.snapshot.lock().unwrap();
+        combined_line_health(&snapshot.retired_line_health, &snapshot.line_health)
+    }
     async fn copy_health(&self, board: &Arc<SkyWatcher<S>>) {
         let health = board.health().await;
+        let line_health = board.line_health().await;
         let mut snapshot = self.inner.snapshot.lock().unwrap();
         if snapshot
             .board
@@ -112,6 +122,7 @@ impl<S: BaudStream + 'static> MountLink<S> {
             .is_some_and(|current| Arc::ptr_eq(current, board))
         {
             snapshot.health = health;
+            snapshot.line_health = line_health;
         }
     }
     fn board(&self) -> Option<Arc<SkyWatcher<S>>> {
@@ -145,6 +156,16 @@ fn combined_health(retired: &MountHealth, current: &MountHealth) -> MountHealth 
             .clone()
             .or_else(|| retired.last_invalid.clone()),
         goto_path: std::array::from_fn(|i| current.goto_path[i].or(retired.goto_path[i])),
+    }
+}
+
+fn combined_line_health(retired: &LineHealth, current: &LineHealth) -> LineHealth {
+    LineHealth {
+        stale_replies: retired.stale_replies + current.stale_replies,
+        last_stale: current
+            .last_stale
+            .clone()
+            .or_else(|| retired.last_stale.clone()),
     }
 }
 
@@ -206,6 +227,10 @@ async fn attempt<S: BaudStream + 'static>(inner: &Inner<S>) -> Result<(), String
             snapshot.failures = 0;
             snapshot.retired_health = combined_health(&snapshot.retired_health, &snapshot.health);
             snapshot.health = MountHealth::default();
+            snapshot.retired_line_health = combined_line_health(
+                &snapshot.retired_line_health, &snapshot.line_health,
+            );
+            snapshot.line_health = LineHealth::default();
             snapshot.stop_board = Some(board.clone());
             snapshot.board = Some(board);
             Ok(())

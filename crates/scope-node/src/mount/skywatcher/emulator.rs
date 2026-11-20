@@ -1,6 +1,6 @@
 //! Byte-stream motor board for tests and bring-up tooling. Mechanics use the
 //! injected node clock: 3°/s² ramps and a 3.4°/s trapezoidal positioning profile.
-use super::codec;
+use super::{codec, transport::BaudStream};
 use crate::clock::NodeClock;
 use std::{
     collections::VecDeque,
@@ -8,8 +8,12 @@ use std::{
     pin::Pin,
     sync::{Arc, Mutex},
     task::{Context, Poll, Waker},
+    time::Duration,
 };
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::{
+    io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf},
+    time::Instant,
+};
 
 #[derive(Clone, Debug)]
 pub struct EmulatorConfig {
@@ -385,6 +389,10 @@ pub struct Emulator {
     reader: Option<Waker>,
 }
 impl Emulator {
+    /// Take produced, unread reply bytes without recording a baud change.
+    pub fn discard_input(&mut self) -> Vec<u8> {
+        self.output.drain(..).collect()
+    }
     pub fn new(config: EmulatorConfig, clock: Arc<dyn NodeClock>) -> (Self, EmulatorHandle) {
         let board = Arc::new(Mutex::new(Board {
             axes: std::array::from_fn(|_| Motor::new(config.auxiliary_encoders)),
@@ -505,6 +513,98 @@ impl AsyncWrite for Emulator {
     }
     fn poll_shutdown(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> {
         Poll::Ready(Ok(()))
+    }
+}
+
+/// A serial line for tests, retaining unread replies and delivering bytes in order.
+/// Individual transmissions may have their replies delayed or be lost entirely.
+pub struct Line {
+    board: Emulator,
+    faults: LineHandle,
+    coming: VecDeque<(Instant, u8)>,
+}
+
+#[derive(Default)]
+struct LineFaults {
+    late: Vec<(Vec<u8>, Duration)>,
+    lost: Vec<Vec<u8>>,
+}
+
+/// One-use faults shared with a test line, including across reopened streams.
+#[derive(Clone, Default)]
+pub struct LineHandle(Arc<Mutex<LineFaults>>);
+impl LineHandle {
+    /// Delay the next reply to a frame starting with `command` (e.g. `:f1`).
+    pub fn delay_next(&self, command: &str, by: Duration) {
+        self.0
+            .lock()
+            .unwrap()
+            .late
+            .push((command.as_bytes().to_vec(), by));
+    }
+    /// Lose the next matching frame before it reaches or is recorded by the board.
+    pub fn lose_next(&self, command: &str) {
+        self.0
+            .lock()
+            .unwrap()
+            .lost
+            .push(command.as_bytes().to_vec());
+    }
+}
+impl Line {
+    pub fn new(board: Emulator, faults: LineHandle) -> Self {
+        Self {
+            board,
+            faults,
+            coming: VecDeque::new(),
+        }
+    }
+    fn arrived(&mut self) -> Vec<u8> {
+        let now = Instant::now();
+        let mut bytes = Vec::new();
+        while self.coming.front().is_some_and(|(due, _)| *due <= now) {
+            bytes.push(self.coming.pop_front().expect("a byte has arrived").1);
+        }
+        bytes
+    }
+}
+impl BaudStream for Line {
+    fn set_baud(&mut self, baud: u32) -> io::Result<()> {
+        self.arrived();
+        self.board.set_baud(baud)
+    }
+    fn discard_input(&mut self) -> io::Result<Vec<u8>> {
+        Ok(self.arrived())
+    }
+    async fn write(&mut self, bytes: &[u8]) -> io::Result<()> {
+        let now = Instant::now();
+        let delay = {
+            let mut faults = self.faults.0.lock().unwrap();
+            if let Some(i) = faults.lost.iter().position(|c| bytes.starts_with(c)) {
+                faults.lost.remove(i);
+                return Ok(());
+            }
+            match faults.late.iter().position(|(c, _)| bytes.starts_with(c)) {
+                Some(i) => faults.late.remove(i).1,
+                None => Duration::ZERO,
+            }
+        };
+        self.board.write_all(bytes).await?;
+        let mut due = now + delay;
+        if let Some((last, _)) = self.coming.back() {
+            due = due.max(*last);
+        }
+        let reply: Vec<u8> = self.board.output.drain(..).collect();
+        self.coming
+            .extend(reply.into_iter().map(|byte| (due, byte)));
+        Ok(())
+    }
+    async fn read_byte(&mut self) -> io::Result<u8> {
+        let Some(&(due, _)) = self.coming.front() else {
+            return std::future::pending().await;
+        };
+        tokio::time::sleep_until(due).await;
+        Ok(self.coming.pop_front().expect("a byte was waiting").1)
     }
 }
 
