@@ -92,6 +92,10 @@ _Avoid_: current position, last solve
 The mount following the target across the sky so that it stays at the aim point.
 _Avoid_: tracking mode (that is the solver's hinted solving)
 
+**Tracking error**:
+How far the sky at the set point is from the target, as east and north arcseconds at a stated time. While a stack runs it comes from each sub's imaging solve and steers the tracker; otherwise the tracker steers on the finder camera's live pointing.
+_Avoid_: guide error, guiding, drift (that is how far the target moves during one sub)
+
 **Followed push**:
 A push by hand of more than the push threshold while Track is on, after which Track holds the place the telescope was left at until the observer turns Track on for the target again.
 _Avoid_: drift, pushed target
@@ -107,6 +111,10 @@ _Avoid_: turn (the base's motion in azimuth), roll (the solve's angle to north)
 **Imaging angle**:
 How far the imaging camera's frame is turned from the finder camera's frame, about the line of sight. Measured together with the aim point.
 _Avoid_: camera rotation (the finder camera's rotation on the tube is a fixed term), roll (that is a solve's angle from celestial north)
+
+**Set point**:
+Where on the imaging camera's sensor the imaging run wants the target, and where a sub's tracking error is measured from. The sensor's centre unless the run names another place.
+_Avoid_: lock position, guide position, aim point (that is a spot in the finder camera's frame)
 
 **Imaging run**:
 The console's whole procedure from a chosen target to a saved stack: GoTo, tracking, the focus check, centring the target on the imaging camera's sensor, and stacking subs until it is stopped.
