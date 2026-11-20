@@ -5,7 +5,11 @@ depends_on_landed: ["027-finder-tests-by-system", "030-imaging-camera-link", "03
 # at the owner's ask the same day ("Yes, draft 043"), from 041's second probe round
 # (041-R17), 042's (042-R3) and a probe of that day on `main`: tests of the fault and a
 # trial fix of one call, built and run on a branch cut from fc161a54, with both gates'
-# Rust commands passing. Every `path:line` here was read at fc161a54. 040, which the
+# Rust commands passing. Probe round 1, the same day, built the story from this text
+# alone: the claims about `main` and the fix held exactly, it found no blocking defect,
+# and its seven clarity defects (043-R1 to R7) are folded here, US1-S3's second abort
+# now 3 s after the silence and US1-S4 the round's case for a call left running.
+# Every `path:line` here was read at fc161a54. 040, which the
 # factory is building, writes two files this spec writes; its trio is not on `main`, so
 # it cannot be named here yet (plan.md § Prerequisites 2). State: draft. The seat reviews it and asks the owner before any
 # flip; both owner decisions are open. What rests on a run and what on reading is said
@@ -210,8 +214,9 @@ Every scenario shares these definitions.
   camera of the test's own, `SlowAbort`: a `SyntheticImagingCamera` on a node clock that
   reads `VirtualClock::new(START)`'s `node_now()`, with `START` from
   `crates/finder/tests/support/live.rs:34`, passing every call through but `abort`,
-  which first sleeps `late` and then calls the stand-in's abort. Its exposure is set to
-  30 s, a frame is taken, exposing, and 1 s passes.
+  which first sleeps `late` and then calls the stand-in's abort. Its imaging folder,
+  `Rig::root`, is called R. Its exposure is set to 30 s, a frame is taken, exposing,
+  and 1 s passes.
 - **Oracles.** The routes' answers, `Imaging::ended`, `Imaging::holder`,
   `Imaging::focus_running`, the stack's file on disk, the words in these scenarios, and
   paused Tokio time. No expected value comes from the code under test: 5,000 ms is the
@@ -256,14 +261,15 @@ development, `cargo nextest run -p finder --locked --test console imaging_abort_
    holds no folder `frames`.
 3. **Given** the silent rig with a frame taken and exposing, the node then gone silent,
    and a timed `POST /api/imaging/abort` sent from a spawned task, **When** a committed
-   test sends a second timed `POST /api/imaging/abort` 1 s later, **Then** it asserts
+   test sends a second timed `POST /api/imaging/abort` 3 s later, **Then** it asserts
    that the second answers after 0 to 100 ms with exactly `{"state":"no_link"}`, and
    that the first answers after 5,000 to 5,100 ms with exactly `{"state":"no_link"}`.
 4. **Given** the slow rig with `late` 8,000 ms, **When** a committed test sends a timed
-   `POST /api/imaging/abort`, waits 1 s, applies `{"exposure_ms":100}` and takes frame
-   id+1 until it ends, **Then** it asserts that the abort answers after 5,000 to
-   5,100 ms with `state` `ready`, `frame.id` id and `frame.state` `aborted`, and that
-   frame id+1 ends `failed` with `error` the busy words.
+   `POST /api/imaging/abort`, waits 4 s, applies `{"exposure_ms":100}`, takes frame
+   id+1 until it ends and waits 30 s, **Then** it asserts that the abort answers after
+   5,000 to 5,100 ms with `state` `ready`, `frame.id` id and `frame.state` `aborted`;
+   that frame id+1 ends `failed` with `error` the busy words; and that `GET /api/imaging`
+   then has `frame.id` id+1 and R holds no folder `frames`.
 5. **Given** the slow rig with `late` 3,000 ms, **When** a committed test sends a timed
    `POST /api/imaging/abort`, reads `GET /api/imaging` every 100 ms until `frame.state`
    is `aborted`, applies `{"exposure_ms":100}` and takes frame id+1 until it ends,
@@ -345,8 +351,11 @@ development, `cargo nextest run -p finder --locked --test console imaging_abort_
   view (US1-S1, US1-S3, US1-S4).
 - **FR-002**: A call the node answers OK within `ABORT_WAIT` SHALL leave the frame to
   its task, which ends it `aborted` when the node's `Aborted` arrives, and a call that
-  fails SHALL end it at once, both as today (031's FR-013). An abort of a frame
-  `receiving`, or with nothing in progress, SHALL be as today (US1-S2, US1-S5).
+  fails SHALL end it at once, both as today (031's FR-013; US1-S2, US1-S5; that an
+  answered call leaves the frame to its task rests on the diff, plan.md § Read from the
+  diff). An abort of a frame `receiving`, or with nothing in progress, SHALL be as today
+  (a frame `receiving` rests on the diff, T002; nothing in progress, US1-S3's second
+  abort).
 - **FR-003**: Every caller of `Imaging::abort` SHALL be unchanged: the abort route,
   `Stacker::stop` and the stack's taker, `Imaging::focus_stop`, `Calibration::remove`
   and the calibration set's frame, and through them `DELETE /api/imaging/stack`,
@@ -361,12 +370,12 @@ development, `cargo nextest run -p finder --locked --test console imaging_abort_
   `CALL_WAIT`, `SET_WAIT` and the link's heartbeat and silence. No file under
   `crates/finder/src` but `crates/finder/src/imaging/mod.rs` SHALL be written.
 - **FR-005**: `crates/finder/README.md` SHALL say, in the row of
-  `POST /api/imaging/abort` (`crates/finder/README.md:231`) and in the paragraph on the
-  abort (`crates/finder/README.md:662`), that a node that does not answer the abort
-  within 5 s is given up on and the frame ends `aborted` then, that the node's exposure
-  may run on, and that a frame asked for before it ends fails with the busy words; and
-  in the row of `DELETE /api/imaging/stack` (`crates/finder/README.md:241`) that on a
-  node that has stopped answering the stop answers after 5 s.
+  `POST /api/imaging/abort` (`crates/finder/README.md:231`), that a node that does not
+  answer the abort within 5 s is given up on and the frame ends `aborted` then; in the
+  paragraph on the abort (`crates/finder/README.md:662`), that too, that the node's
+  exposure may run on, and that a frame asked for before it ends fails with the busy
+  words; and in the row of `DELETE /api/imaging/stack` (`crates/finder/README.md:241`)
+  that on a node that has stopped answering the stop answers after 5 s.
 
 ### Key Entities
 
