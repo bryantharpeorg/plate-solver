@@ -2,6 +2,28 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
 
 # How 041-imaging-run-on-the-rig got here
 
+## The re-anchoring and the flip (2026-11-20)
+
+The trio was re-anchored onto `main` at `581be8c3` once 037 had landed (#344 to #348):
+- **Citations.** Of the 44 code citations the draft held at 49bb210, 23 were where they
+  had been, 19 had moved and were fixed, and 2 were found again by their content. R15's
+  and R31's anchors and the validator's `crates/simulator/src/mount.rs:269` are among
+  them. 20 more name 037's landed code.
+- **Names.** Every name the trio takes from 037, and from 030 to 036, 038, 040 and 043,
+  was read in the landed code. None differs in a way that changes what a story builds.
+  037's public items are as its probe built them, and its internals, which this trio
+  names nowhere, were rewritten.
+- **Shared writes.** The six that name another spec matched `git log -1`.
+- **Other edits.** 043 is in `depends_on_landed`. Row V points at 037's, which weighs
+  Ekos's scheduler and sequencer. Two rows of § Risks that awaited 031 to 036's landing
+  now say what the re-anchoring read.
+
+The seat flipped the trio to `ready` the same day, under the owner's standing permission
+for the imaging specs (flip.md § Prerequisites 4). Every owner decision takes the answer
+flip.md writes: the recommended answers the owner approved on 2026-11-17, with his
+changes of 2026-11-19 to 3, 4, 12 and 27. The owner's four answers of 2026-11-20 to
+round 2's choices are under § Probe round 2 and its fold.
+
 ## Probe round 2 and its fold (2026-11-20)
 
 Probe round 2 built this piece's five stories, as the split of 2026-11-20 left them, on

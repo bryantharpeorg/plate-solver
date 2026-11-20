@@ -116,15 +116,19 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
    US8-S8 are the scenarios that rest on the lease. Two state its refusal word for word:
    `the imaging camera is held by the imaging run` (US4-S4) and
    `the imaging camera is held by the focus aid` (US6-S7).
-4. **The owner decisions are settled and the approvals given** (§ Owner decisions
-   still open, § Owner approvals). Not met: none of this spec's is settled as a whole;
-   on 2026-11-19 the owner's answers changed 3, 4, 12 and 27, each with a dated note.
+4. **The owner decisions are settled and the approvals given** (§ Owner decisions,
+   § Owner approvals). Met on 2026-11-20: the decisions are settled as § Owner
+   decisions says, and the flip of that day gives the approvals, under the owner's
+   standing permission for the imaging specs ("You have my permission to move them to
+   ready when needed", 2026-11-19, extended to the split pieces on 2026-11-20: "you can
+   flip things to ready as you get them ready"). On 2026-11-19 the owner's answers
+   changed 3, 4, 12 and 27, each with a dated note.
    Met for 037's decision 26, which 032's owner decision 25, settled on 2026-11-17 with
    the hold, answers (037's flip.md § Prerequisites 4). Every aim reading of a run is taken while Track is on and
    held back, so FR-022's test counts a held aim point as moved and FR-025's wait comes
    after the re-centre's Track off, whose first live pointing puts it in force; US5-S4,
-   SC-004 and the whole runs of US8-S1, US8-S2 and US8-S8 rest on both. This trio is
-   re-validated with 032's before the flip.
+   SC-004 and the whole runs of US8-S1, US8-S2 and US8-S8 rest on both. This trio was
+   validated on `main` at `581be8c3`, where 032 has landed, before the flip.
 5. **A probe build of every story.** Met on 2026-11-20 by probe round 2, for the trio as
    the split of 2026-11-20 left it. Two agents built US4 and US5, then US6, US7 and US8,
    the second starting where the first stopped, on a probe base of 036's, 040's and
@@ -223,15 +227,15 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
    few minutes, and if one of those ends Track, no run outlasts it.
 9. **No operator-staged files are needed.** Met.
 
-## Owner decisions still open
+## Owner decisions
 
 The owner decisions of this spec's stories, 2, 3, 4, 5, 6, 12, 21, 24 and 27, keep the
 numbers they had in the twelve-story trio. Each is a design or taste call the plan
-document leaves open. None is settled as a whole. On 2026-11-19 the owner's answers to
-the reanalysis of round 1's probes changed 3, 4, 12 and 27, as the dated note under each
-says, and the rest of each waits for the flip. Decision 26 is 037's, settled (037's
-history.md). A different answer is written into the trio and re-validated before the
-flip, never left to a story.
+document leaves open. All are settled. The owner approved the recommended answers of the
+imaging series on 2026-11-17 ("im good with all of the info in the decisions doc"), and
+on 2026-11-19 his answers to the reanalysis of round 1's probes changed 3, 4, 12 and 27
+to the answers written here, as the dated note under each says. Decision 26 is 037's,
+settled (037's history.md). The text of each is the answer in force.
 
 2. **When the target counts as centred.** Recommended: within the larger of 1/20 of the
    imaging frame's shorter side on the sky and 90″ of the sensor's centre: 90″ for the
@@ -297,7 +301,8 @@ Flipping this spec to `ready` approves the settled answer to every owner decisio
 and the following. Each is named in the FR or success criterion that makes it.
 
 8. **New test modules are declared in existing test files** (SC-002). Each is one `mod`
-   line, in alphabetical order, in its binary's `main.rs`: `imaging_run_centring`, `imaging_run_focus` and `imaging_run_limits` in
+   line, in alphabetical order, in its binary's `main.rs`: `imaging_run_centring`,
+   `imaging_run_focus` and `imaging_run_limits` in
    `crates/finder/tests/console/main.rs`; `imaging_run`, `imaging_run_centring` and
    `imaging_run_stack` in `crates/finder/tests/motion/main.rs`; and `imaging_run` in
    `crates/finder/tests/cli/main.rs`. No other line of
