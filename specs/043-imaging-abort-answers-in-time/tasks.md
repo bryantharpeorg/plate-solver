@@ -8,7 +8,7 @@ description: "Task list for 043-imaging-abort-answers-in-time: An Imaging Abort 
 - every spec in `depends_on_landed` has landed on `main`: met at fc161a54;
 - 040 has landed and is named in `depends_on_landed`, and every citation has been re-read
   on that `main`: not yet met, 040 is being built;
-- the owner decisions in spec.md are settled: not yet met, both are open;
+- the owner decisions in spec.md are settled: met, on 2026-11-20;
 - no operator-staged file is needed.
 
 **Rules for the story:**

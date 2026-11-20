@@ -326,7 +326,8 @@ tests fail (§ What was run and what was read). Then `ABORT_WAIT` and the bound 
    probe's tests on the new `main`. If the owner wants 043 before 040 instead, 040's
    stories merge their rows and `mod` lines over 043's.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
-   decisions, § Owner approvals). Both decisions are open.
+   decisions, § Owner approvals). Met for the decisions: both settled on 2026-11-20 with
+   the recommended answers ("Yes, take them"); the approvals are given by the flip.
 4. **Probe builds.** Met for round 1. The drafting probe of 2026-11-20 built the
    story's code and tests from the draft's design. Probe round 1, the same day, built
    US1 from this trio's text alone: seven of nine failed on `main` as T001 says and all
@@ -421,8 +422,8 @@ day, and a reading of 031's, 033's, 034's, 035's and 039's trios and the constit
 Writes come from the task text. Shared writes name the merge edge that orders them, and
 the story that last wrote the same file on `main`.
 
-The two owner decisions of spec.md are open; the record's `open_questions` is empty
-because the validator refuses a record that holds any. This record approves nothing:
+The two owner decisions of spec.md are settled (2026-11-20, the recommended answers);
+the record's `open_questions` is empty. This record approves nothing:
 the owner approvals of spec.md are given by the flip.
 
 ```yaml

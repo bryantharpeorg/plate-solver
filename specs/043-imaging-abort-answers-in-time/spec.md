@@ -11,8 +11,10 @@ depends_on_landed: ["027-finder-tests-by-system", "030-imaging-camera-link", "03
 # now 3 s after the silence and US1-S4 the round's case for a call left running.
 # Every `path:line` here was read at fc161a54. 040, which the
 # factory is building, writes two files this spec writes; its trio is not on `main`, so
-# it cannot be named here yet (plan.md § Prerequisites 2). State: draft. The seat reviews it and asks the owner before any
-# flip; both owner decisions are open. What rests on a run and what on reading is said
+# it cannot be named here yet (plan.md § Prerequisites 2). State: draft. The owner settled
+# both owner decisions on 2026-11-20 with the recommended answers ("Yes, take them"), and let
+# the seat flip this spec once 040 has landed and the trio is re-anchored on that `main`
+# with validate and preflight at 0. What rests on a run and what on reading is said
 # where it is used (plan.md § What was run and what was read).
 ---
 
@@ -134,10 +136,11 @@ in time ends the frame `aborted`, as a failed call already does.
 
 ## Owner decisions
 
-Both are open. Each is a design call with a cost to a node that answers slowly.
+Both are settled. The owner took the recommended answers on 2026-11-20 ("Yes, take them"). Each
+is a design call with a cost to a node that answers slowly.
 
 1. **How long the console waits for the node's answer to an abort** (FR-001).
-   Recommended: 5 s, the console's own limit on the calls its imaging task makes
+   Settled: 5 s, the recommended answer. Recommended: 5 s, the console's own limit on the calls its imaging task makes
    (`CALL_WAIT`, `crates/finder/src/imaging/mod.rs:47`), five times the link's own loss
    detection (`SILENCE`, 1 s, `crates/finder/src/link.rs:32`). A stop on a silent node
    then answers in 5 s plus its own work: the page's Stop, 042's `stop_imaging_run` and
@@ -156,7 +159,8 @@ Both are open. Each is a design call with a cost to a node that answers slowly.
    10 s, which gives up on fewer and keeps the page's Stop and 042's tool waiting up to
    10 s on a lost link. The scenarios name 5 s; another value changes their numbers
    only.
-2. **What becomes of a call given up on** (FR-001). Recommended: drop it, as the trial
+2. **What becomes of a call given up on** (FR-001). Settled: drop it, the recommended
+   answer. Recommended: drop it, as the trial
    fix does, so the console sends nothing more for that abort. Its cost is decision 1's:
    the node's exposure runs on. Instead: (b) leave the call running in a task of its
    own, so that a late answer still stops the node's exposure. Not tried. By reading,
