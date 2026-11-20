@@ -161,9 +161,11 @@ runs `src/components/ImagingRunBlock.test.tsx`.
     text and calls no `refresh`; that the block rendered again with a view whose
     `run.state` is `solving` no longer shows it; that while a `fetch` of
     `Check focus again` is unanswered that button reads `Checking…` and it, `Go anyway`
-    and the stop button are disabled; and that when `fetch` rejects, the second alert
+    and the stop button are disabled; that when `fetch` rejects, the second alert
     reads exactly
-    `The console did not answer. The run itself is not affected; try again.`
+    `The console did not answer. The run itself is not affected; try again.`; and
+    that after a refused `Check focus again`, a click on `Go anyway` whose `fetch` is
+    unanswered leaves no alert with the refusal's words.
 11. **Given** the block rendered with a `ready` imaging view whose `camera` is 1236 by
     822 pixels and whose `settings` hold `exposure_ms` 1000 and `binning` 1, and no
     `run`, **Then** a committed test asserts that `Minutes to stack` has the
@@ -171,23 +173,34 @@ runs `src/components/ImagingRunBlock.test.tsx`.
     `Goes to the target, checks focus, centres it on the imaging camera's sensor and stacks subs until you stop it or a limit is reached (two hours unless you give another).`
     and the text `About 14.6 GB of subs in 120 minutes at the current exposure.`; that
     with `30` typed into `Minutes to stack` the second reads
-    `About 3.7 GB of subs in 30 minutes at the current exposure.`; and that with a view
+    `About 3.7 GB of subs in 30 minutes at the current exposure.`; that with
+    `settings.binning` 2 the size line reads
+    `About 3.7 GB of subs in 120 minutes at the current exposure.`, and with
+    `exposure_ms` 293878
+    `About 0.0 GB of subs in 120 minutes at the current exposure.` (24 exposures fit,
+    not 25); and that with a view
     that also holds `unfinished_run` `runs/2026-01-15T03-00-00Z-M31` the block shows an
     alert reading exactly
     `The last imaging run did not finish: the console stopped while it ran. Its subs are in runs/2026-01-15T03-00-00Z-M31/subs.`
     and still the button `Start imaging run`.
 12. **Given** the block with the paused `run` of US9-S3 whose `started_at` is
     1768528800, `elapsed_s` 25.4 and `pause_ends_at` 1768529700, **Then** a committed
-    test asserts the text "Focus aid open below · 14:34 left"; and, with the stacking
+    test asserts the text "Focus aid open below · 14:34 left"; with the stacking
     `run` of US9-S2 given `started_at` 1768528800, `stacking_since` 1768528860 and
-    `settings.duration_s` 7200, the text "Stacking for 1:05 of 120:00".
+    `settings.duration_s` 7200, the text "Stacking for 1:05 of 120:00"; that with
+    `elapsed_s` 925.4 the paused run reads "Focus aid open below · 0:00 left"; that
+    with `settings.duration_s` 1800 the stacking run reads
+    "Stacking for 1:05 of 30:00"; and that the stacking run with `stacking_since` still
+    reads "Elapsed 2:05".
 13. **Given** the block of US9-S1, **When** a test clicks `Start imaging run`, with
     `fetch` answering 200 and a view, **Then** a committed test asserts that `fetch` was
     called with `/api/imaging/run` and
     `{"method":"POST","headers":{"Content-Type":"application/json"},"body":"{\"keep_subs\":true}"}`,
     then `refresh`; that with `50` and `30` typed and the checkbox cleared the body is
     `{"subs":50,"duration_s":1800,"keep_subs":false}`; that with `0` typed in both
-    fields the body is `{"keep_subs":true}`; that `50` typed into `Subs to stack`, the
+    fields the body is `{"keep_subs":true}`; that `2.5` typed into `Subs to stack`
+    posts `{"keep_subs":true}`; that while the start's `fetch` is unanswered its button
+    reads `Starting…` and is disabled; that `50` typed into `Subs to stack`, the
     block then rendered again with a new view object, as `useImaging`'s one-second read
     gives it, and the button clicked, posts `{"subs":50,"keep_subs":true}`; and that a
     409 answer with
@@ -226,7 +239,8 @@ development, `cargo nextest run -p finder --locked --test mcp imaging_run::`.
    `get_imaging_run`, **Then** it asserts that the first answers `{"run":null}`; that
    the start answers a `run` with `by` `mcp` and `settings.subs` 5; that the last
    answers the same `run`, key for key but for `elapsed_s`, `state`, `message`, `focus`,
-   `centring` and `folder`; that the script's `calls()` hold `mount.point mcp`; and
+   `centring`, `stacking_since`, `limit_at` and `folder`; that the script's `calls()`
+   hold `mount.point mcp`; and
    that the log holds exactly one line, beginning
    `mcp start_imaging_run {"subs":5} -> `.
 3. **Given** the same console, **Then** a committed test asserts tool errors with these
@@ -240,9 +254,16 @@ development, `cargo nextest run -p finder --locked --test mcp imaging_run::`.
    `get_imaging_run` answers `{"run":null}`. `start_imaging_run` with
    `{"exposure_ms":1}` and `continue_imaging_run` with `{}` each answer a result with
    `isError` true, and `continue_imaging_run` with `{"anyway":true,"x":1}` answers a
-   tool error beginning ``unknown field `x` ``. The test leaves 1 s of virtual time
-   between two calls of
-   `start_imaging_run`, so the rate limit of US10-S4 is not what answers.
+   tool error beginning ``unknown field `x` ``. `start_imaging_run` with
+   `{"exposure_ms":1}` answers the words `POST /api/imaging/run` answers with 400 for
+   that body, and on the console without `with_imaging_run_steps`,
+   `continue_imaging_run` with `{}` answers an error beginning
+   ``missing field `anyway` ``. The test leaves 1 s of
+   virtual time between two calls of
+   `start_imaging_run`, so the rate limit of US10-S4 is not what answers, but in one
+   case: `start_imaging_run` with `{"exposure_ms":1}` twice and then `{}` in the same
+   second, where the third answers
+   `the rate limit of 2 moving calls a second was reached`.
 4. **Given** the same console with `refuse(Part::Solver, "this console has no imaging solver")`,
    **When** a committed test calls `start_imaging_run` three times within one second of
    virtual time, **Then** it asserts that the first two answer the tool error
@@ -270,8 +291,9 @@ development, `cargo nextest run -p finder --locked --test mcp imaging_run::`.
 8. **Given** the same console with a run paused as in 041's US6-S1, **When** a committed test
    calls `continue_imaging_run` with `{"anyway":true}` and settles, **Then** it asserts
    that `get_imaging_run` answers a `run` whose state is no longer `focus_pause` and
-   whose `warnings` are `["Focus was not checked again: the observer went on anyway."]`
-   (the tool itself answers the view as the resume is handed over, still `focus_pause`).
+   whose `warnings` are `["Focus was not checked again: the observer went on anyway."]`,
+   and that the continue tool's own answer is a `run` whose state is still
+   `focus_pause` (the tool answers the view as the resume is handed over).
 
 ---
 
@@ -299,7 +321,11 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_do
    word of `finder::imaging::run::ENDINGS`, the three routes, the four tool names, and
    `run.json`; and that the text from that heading to
    `### Field checklist: the first imaging run` contains `corner`, `7200` and
-   `What to do next`, the heading of the fourth column of its table of endings.
+   `What to do next`, the heading of the fourth column of its table of endings; and
+   that the same text holds `` `.reserve` ``, `at least as long as the finder camera's`,
+   `did not finish`, and each of the four sentences of `stopped` between backticks:
+   `Imaging run stopped. Track is still on.`, `Stopped: the mount was stopped.`,
+   `Ended: the stack was stopped.` and `Ended: the focus check was stopped.`.
 2. **Given** the same section, **Then** a committed test asserts that it holds the
    heading `### Field checklist: the first imaging run`, and that the text from that
    heading to the next heading, or to the end of the file, holds exactly eighteen lines
@@ -307,11 +333,13 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_do
    `Start imaging run`, `start_imaging_run`, `continue_imaging_run`, `Stop` and
    `run.json`; and that the text from the line that
    begins `8.` to the line that begins `9.` contains the word `corner` (the known limit
-   of the run's own imaging frames, FR-040).
+   of the run's own imaging frames, FR-040); and that the text from the line that
+   begins `4.` to the line that begins `5.` holds
+   `at least as long as the finder camera's`.
 3. **Given** the same file, **Then** a committed test asserts that its `## API` table
    holds a row for each of `POST /api/imaging/run`, `DELETE /api/imaging/run` and
    `POST /api/imaging/run/continue`, and that the text of `## MCP clients` names the
-   four tools.
+   four tools; and that the row for `POST /api/imaging/run` holds `default 7200`.
 
 ---
 
@@ -352,7 +380,9 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_do
   `Imaging run`; and `crates/finder/web/dist` SHALL be the build of its source.
 - **FR-037**: The console SHALL offer the MCP tools `start_imaging_run`,
   `stop_imaging_run`, `continue_imaging_run` and `get_imaging_run`, each passing through
-  to the action its route calls, refusing with the route's words, and answering
+  to the action its route calls, refusing with the route's words, but for
+  `continue_imaging_run`'s arguments, whose missing or extra key is refused in serde's
+  words, and answering
   `{"run": …}` with the run's view or null (owner approval 3).
 - **FR-038**: `start_imaging_run` SHALL be a moving tool: it SHALL take the rate limit
   first, start the run by `mcp` through `start_motion` with the tool's own name, be

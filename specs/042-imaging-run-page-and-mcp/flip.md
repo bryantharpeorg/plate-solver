@@ -18,27 +18,96 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
    041-imaging-run-on-the-rig provides is re-read on `main`, and the last story of each
    spec that writes a shared file replaces the one named in plan.md § Refinement Record. Where
    037 or 041 lands offering something else than those sections say, the story that
-   reads it changes, and a gap goes to the owner before the flip.
+   reads it changes, and a gap goes to the owner before the flip. The point known to
+   need that reading:
+   - 043 has landed: `Imaging::abort` answers within `ABORT_WAIT` on a scope node that
+     has stopped answering, so 041's run's ending finishes on a lost link, and
+     `stop_imaging_run` and `DELETE /api/imaging/run` answer (042-R3). Both wait on
+     `Runner::stop`, which waits for the run's ending, which awaits 041's stack part's
+     `stop`; probe round 2 found that, with 041's stop as its trio writes it, the tool
+     did not answer within 60 s of virtual time on a lost link, and answered 1 s after
+     the node went quiet with 041's round-2 stand-in. The owner settled 041-R17, and
+     042-R3 with it, on 2026-11-20 with 043, so 041's stack part keeps
+     `stacker.stop().await` and no stand-in is folded here either.
+     `depends_on_landed` gains `043-imaging-abort-answers-in-time` at the re-anchoring,
+     not before: 043's trio is not on `main` yet, and the validator refuses an edge to
+     a spec it cannot find.
 3. **The lease of the imaging camera exists.** Nothing of this spec touches it
    (041's flip.md § Prerequisites 3).
 4. **The owner decisions are settled and the approvals given** (§ Owner decisions
    still open, § Owner approvals). Not met: none of this spec's is settled as a whole.
-5. **A probe build of every story.** Met on 2026-11-19 by probe round 1, for the trio
-   as it then stood, as 037's flip.md § Prerequisites 5 tells. What the round settled for
-   this spec's stories:
-   - each story's diff against 64 KiB (spec SC-007): US9 25,710 B; US10 20,747; US11
-     16,425. All were under. The fold of 2026-11-19 added code and cases to every story,
-     so plan.md § Risks carries the figures as they are estimated now;
-   - the earlier page tests still find their controls: all 380 earlier Vitest tests
-     passed unchanged with the block on the page, and so did the Playwright suite,
-     031's night check of the Imaging page among it;
-   - one more defect blocked a story as written: US10's continue read the tool's own
-     answer, which is still `focus_pause` (D30: it is now read back with
-     `get_imaging_run` after a settle, US10-S8).
+5. **A probe build of every story.** Met on 2026-11-20 by probe round 2, for the trio as
+   the split of 2026-11-20 left it. One agent built US9, US10 and US11 on 041's round-2
+   probe build (036, 040, 037 and 041's US4 to US8, with 041's stand-in for 041-R17),
+   tests first and with both gates, from the trio alone: history.md was not read. Every
+   story built and passed both gates and wrote only its declared files, and every
+   earlier test file passed unedited, 037's and 041's among them; workspace nextest ran
+   1299 tests at the base and 1310 after US11, and `npm test` 545 at the base and 558
+   after each story. The round found 1 blocking and 9 clarity defects, 042-R1 to
+   042-R10, all folded on 2026-11-20 but the anchors, which are the re-anchoring's
+   (history.md § Probe round 2 and its fold). Probe round 1, on 2026-11-19, had built
+   the trio as it then stood; what this point said of it is in the same section. What
+   round 2 ran:
+   - each story's diff against its estimate in plan.md § Risks: US9 39,648 B (60.5 %)
+     plain and 38,951 B (59.4 %) without `crates/finder/web/dist`, against 37.7 KB,
+     3.3 % over; US10 22,881 B (34.9 %) as written against 23.9 KB, 4.3 % under, and
+     23,087 B with the round's stand-in for R1; US11 21,834 B (33.3 %) against 20.3 KB,
+     7.6 % over. At 1.17, the largest factor of the factory builds of 036, 039 and 040,
+     with the cases the fold added as tests, the largest estimate is US9's 49,457 B,
+     under owner choice 14's 60 KB, so no story is cut (plan.md § Risks);
+   - each bound, in paused time or under fake timers, identical on all three runs:
+     - US9-S9, the second tap within 5 s: armed to 4.999 s after a tap, and
+       `Stop imaging run` again at 5.000 s; windows of 4 s and of 6 s both failed it,
+       so it is exact to 1 ms either side;
+     - US9-S2: 125.4 s and 125.6 s both read "Elapsed 2:05", 0.4 s below the next
+       second;
+     - US9-S12: the pause's "14:34 left" is 874.6 s rounded down, 0.4 s below "14:35";
+       the time stacked is 65.4 s of 7200 s, 0.6 s below "1:06";
+     - US9-S11: 14.630 GB and 3.658 GB, 0.020 GB and 0.008 GB from the edges of their
+       rounding;
+     - US10-S4: the three starts at one virtual instant, the third answering the rate
+       limit, 1.0 s inside its second;
+     - US10-S3: its two starts 1.0 s apart; a start its arguments refuse still takes
+       the rate limit, so the 1 s is needed (R6);
+     - US10-S6: a start after `stop` refused at 0.999 s by the rate limit, `move_axis`
+       and the refused start having taken that second's two calls, and accepted from
+       1.000 s, 2.0 s inside its 3 s; the direct move's reservation is gone when `stop`
+       answers; no `StopAll` in the 10 s after `stop_imaging_run`, 9 s beyond the 1 s
+       asked;
+     - US10-S8: the read is past the pause from 0 s, 1.0 s inside the settle, and the
+       tool's own answer is still `focus_pause`;
+     - US10-S5: the read shows 4 stacked from 0.25 s, the first poll, 0.75 s inside the
+       settle; the stop's answer reads 4 either way;
+     - the slowest Rust test of the three stories, US10-S6, took about 0.21 % of
+       nextest's 300 s;
+   - the seams, and their state:
+     - every name the trio takes from 037 and 041 matched the probe's code, and matches
+       their folded trios (037's at bcf0fdfd, 041's at 534691eb). `RECORD_EVERY` is
+       `Runner::RECORD_EVERY`, an associated constant; a run stopped while Track is off
+       ends `Stopped: the mount was stopped.`, now in the README's row of `stopped`
+       (R3);
+     - 040 → 042: in 040's trio and in the probe's build, 040's US11 last writes
+       `tools.rs`, `tests/mcp/main.rs` and the README's tool list, and its
+       `set_steering` line follows `get_stack`'s. Folded into plan.md § The README and
+       the Refinement Record (R2); the re-anchoring reads each last writer again once
+       040 has landed;
+     - 041 and 035 over 031 → 042: `stop_imaging_run` and the page's Stop hang on a lost
+       link without a fix of 041-R17. Settled by 043 (§ Prerequisites 2, R3). No
+       scenario of this spec runs a lost link, so its tests pass either way;
+     - 031's page: the block goes right after the header; under `no_link` with no run
+       the page still shows only its one status, 031's not-ready and ready tests pass
+       unchanged, and 031's night check (`e2e/imaging.spec.ts`) stays green with the
+       block's start form on the page;
+     - 016's `start_motion` refuses an MCP `start_imaging_run` during a direct move
+       with `a direct axis move is running`, and 016's rate limit counts a start that
+       its arguments refuse.
 
-   Not settled, and for the second probe round the owner asked for (037's history.md
-   § Clarifications, the owner's answer 17): everything the fold of 2026-11-19 added,
-   none of which has been run, and each story's diff on the folded trio.
+   Not run: a night pixel check of a run that is on (owner decision 17), a lost link
+   through the page's own Stop in a browser, `start_imaging_run` from a real MCP client,
+   and the field checklist. R1 stopped US10-S2 passing as written; the round's
+   stand-in, its two keys, is the fold's text. The fold's new cases are not yet
+   committed tests: each ran as a throwaway that passed on the probe's code four times
+   and failed under the mutant it was written for, in the story it is now in.
 6. **The plan document, ADR-0002, the glossary's imaging terms and the research note
    are on `main`.** Met by 2026-11-19: all four are on `main`.
 7. **`main` is still as read.** Met on 2026-11-15: every `path:line` here was read at

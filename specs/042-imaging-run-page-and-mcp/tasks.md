@@ -57,9 +57,11 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
   that Track is still on (US9-S8), the second tap of `Stop imaging run` under fake
   timers, the button while its request is out and while the run saves its stack
   (US9-S9), a refused or unanswered `Check focus again` and when its alert goes
-  (US9-S10), the start form's placeholder, quiet line, size estimate and the line of
-  an unfinished run (US9-S11), and the time a pause has left and the time stacked
-  against the limit (US9-S12), and what a click on `Start imaging run` posts, with
+  (US9-S10), the start form's placeholder, quiet line, size estimate, at binning 2
+  and for only the exposures that fit, and the line of an unfinished run (US9-S11),
+  and the time a pause has left, never below zero, and the time stacked against the
+  run's own limit, with `Elapsed` still from the press (US9-S12), and what a click on
+  `Start imaging run` posts, no fraction of a sub, `Starting…` while it is out, with
   a refusal's alert gone once a run appears (US9-S13).
 
 ### Implementation
@@ -91,13 +93,16 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
   through the door as `crates/finder/tests/support/mcp.rs` serves a state, with a call
   log the test reads. Write failing tests for the list (US10-S1), a start and a read
   (US10-S2), the errors, each tool of a console without parts called with arguments it
-  would otherwise accept, and an unknown key of `continue_imaging_run` (US10-S3), the
+  would otherwise accept, an unknown key and a missing `anyway` of
+  `continue_imaging_run`, the route's 400 words for a start's bad body, and three
+  starts in one second (US10-S3), the
   rate limit (US10-S4), stop (US10-S5) and continue, read back with
-  `get_imaging_run` after a settle (US10-S8), a start during a direct axis move on
+  `get_imaging_run` after a settle, its own answer still `focus_pause` (US10-S8), a
+  start during a direct axis move on
   `crate::support::mcp::sim::Rig` (`crates/finder/tests/support/mcp.rs:182`), and
   `stop_imaging_run` sending the recording mount no `StopAll`
   (US10-S6), and the token (US10-S7). Leave 1 s of virtual time between two starts but
-  in US10-S4.
+  in US10-S4 and in US10-S3's three starts in one second.
 
 ### Implementation
 
@@ -118,12 +123,13 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
 - [ ] T042 [US11] Create `crates/finder/tests/console/imaging_run_docs.rs`, the module
   `imaging_run_docs` of `console`, with its `mod` line in
   `crates/finder/tests/console/main.rs`, reading `README.md` from `CARGO_MANIFEST_DIR`.
-  Write failing tests for the section's words, with `corner`, `7200` and
-  `What to do next` in its prose before the checklist (US11-S1), the checklist's
-  eighteen steps
+  Write failing tests for the section's words, with `corner`, `7200`,
+  `What to do next`, `` `.reserve` ``, the exposure rule, `did not finish` and the four
+  sentences of `stopped` in its prose before the checklist (US11-S1), the checklist's
+  eighteen steps, the exposure rule in its step 4
   and the word `corner` in its step 8 (US11-S2), each text read to the next heading or
-  to the end of the file, and the three rows of the API table
-  and the four tools in MCP clients (US11-S3).
+  to the end of the file, and the three rows of the API table, with `default 7200` in
+  the start's, and the four tools in MCP clients (US11-S3).
 
 ### Implementation
 
@@ -132,7 +138,8 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
   list made four higher, and the sections `## An imaging run` and
   `### Field checklist: the first imaging run`, with the rows, the content and the
   eighteen steps of plan.md § The README: rows, tools, the section and the field
-  checklist, every state word and ending reason between backticks, and the known limit
+  checklist, every state word, ending reason and sentence of `stopped` between
+  backticks, and the known limit
   that the run's own imaging frames are not capped as subs are, in the prose and in
   step 8. The prose also says, as that section lists them: the four sentences of
   `stopped` and what the mount does after each, what to do next after each ending,

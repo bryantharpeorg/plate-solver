@@ -426,7 +426,9 @@ pub fn reserve_bytes(width: u32, height: u32, binning: u32) -> u64;
   exposure setting when that is longer (041's § The console's mount part).
 - **The focus pause**: `focus_pause`, its `pause_ends_at` and `Runner::resume(anyway)` in
   a pause, as above (041's § The focus gate in the machine).
-- **The stack part**: the `.reserve` file in the stack's folder while the run stacks,
+- **The stack part**, whose stop finishes on a scope node that has stopped answering
+  (041-R17; with 043 landed, flip.md § Prerequisites 2): the `.reserve` file in the
+  stack's folder while the run stacks,
   `reserve_bytes` long and removed before the stack's save, and the subs removed when
   `keep_subs` is false (041's § The console's stack part and the wiring).
 - **The steering**: the stack part tells the steering of 036 and 040 the set point and
@@ -507,7 +509,8 @@ with these words exactly, each phrase a test asserts on one line of JSX:
   second field's number when it holds one above 0, else 120, and `{n}` is, with one
   decimal, `camera.width` × `camera.height` ÷ `settings.binning`² × 2 bytes, 031's
   sixteen-bit pixels, × the number of exposures of `settings.exposure_ms` that fit in
-  `{m}` minutes, ÷ 10⁹. It is an estimate at the exposure as set: 036 may cap a sub
+  `{m}` minutes, ÷ 10⁹ (the whole sensor, whatever the region). It is an estimate at
+  the exposure as set: 036 may cap a sub
   shorter, which makes more of them. With no run and `view.unfinished_run` present,
   the block also shows, in an `alert`,
   `The last imaging run did not finish: the console stopped while it ran. Its subs are in {unfinished_run}/subs.`
@@ -671,10 +674,11 @@ Three rows after the last `/api/imaging` row of the `## API` table
 | `POST /api/imaging/run/continue` | JSON `{"anyway":false}` or `{"anyway":true}`. From a focus pause, check focus again, or go on unchecked; 409 with a JSON `error` when no run is paused. Same-origin writes only. |
 ```
 
-In `## MCP clients` (`crates/finder/README.md:57`): four lines after `get_stack`'s, the
-last 035 adds, worded like their neighbours, the first saying that `start_imaging_run`
-moves the telescope, is rate-limited and is logged; and the count in the sentence
-before the list made four higher, in the words that sentence has on `main` then.
+In `## MCP clients` (`crates/finder/README.md:57`): four lines after `set_steering`'s,
+the last tool 040 adds (040's US11), worded like their neighbours, the first saying
+that `start_imaging_run` moves the telescope, is rate-limited and is logged; and the
+count in the sentence before the list made four higher, in the words that sentence has
+on `main` then.
 
 A section `## An imaging run`, after the last imaging section then there. In prose: what
 a run does, in order; that the imaging camera is held throughout, by the run, the focus
@@ -687,8 +691,9 @@ between backticks and one line each; a table of the seventeen endings with their
 between backticks, what each means, what the mount is doing afterwards and, in a
 fourth column headed `What to do next`, what to do next (start again; check focus,
 cloud or the aim point first; call `stop`; nothing), the row of `stopped` giving its
-four sentences and what the mount does after each (the run's own
-stop: Track on; the console's Stop, or a stop of the run while it slewed: at rest; the
+four sentences, each between backticks, and what the mount does after each (the
+run's own stop: Track on; the console's Stop, or a stop of the run while Track is off
+(while it slewed, or once a guard or a lost link had ended Track): at rest; the
 stack or the focus check stopped from its own route, or an aborted sub: Track on), the
 row of `mount_failed` saying that Track or GoTo ended for a reason of its own, a
 guard's among them, whose words the message carries, and that after a re-centre
@@ -840,7 +845,7 @@ story.
    calls it, and compares what it answers with a sentence typed into the test.
 13. **The rate limit in tool tests.** Two `start_imaging_run` calls in one virtual
     second are both counted, refused or not. *Check:* the tests of US10 leave 1 s
-    between starts, except US10-S4.
+    between starts, except US10-S4 and US10-S3's three starts in one second.
 14. **`useImaging` reads every second.** A draft typed into a field would be lost on
     each read. *Check:* the block keeps its fields in its own state; US9-S1 types,
     renders the block again with a new view, then clicks.
@@ -865,8 +870,8 @@ story.
 
 | Risk | Mitigation |
 |---|---|
-| A story's diff passes 64 KiB. | Estimated from probe round 1's measured bytes, each within about 1 KB: US9 37.7 KB (58 %), US10 23.9 KB (36 %) and US11 20.3 KB (31 %), `crates/finder/web/dist` excluded (§ Plan traps 3). A factory build has run to 1.35 times its probe build: at that US9 would be about 78 %. The second probe round measures all of it (flip.md § Prerequisites 5). |
-| An earlier page test queries a control the block also has. | The block's controls have their own names and it shows no `status` or `alert` before a run; flip.md § Prerequisites 5 has what probe round 1 found. |
+| A story's diff passes 64 KiB. | Probe round 2 built the three stories: US9 39,648 B (60.5 %) as a plain diff and 38,951 B (59.4 %) with `crates/finder/web/dist` excluded (§ Plan traps 3), US10 22,881 B (34.9 %) as written and US11 21,834 B (33.3 %), against estimates of 37.7, 23.9 and 20.3 KB from round 1. Factory builds of 036, 039 and 040 ran 0.85 to 1.17 times their probes' diffs, so each story is estimated at 1.17 times its build with the cases the round's fold added, as tests: US9 (39,648 + 2,623) × 1.17 = 49,457 B (75.5 %), US10 (22,881 + 2,415) × 1.17 = 29,596 B (45.2 %) and US11 (21,834 + 1,574) × 1.17 = 27,387 B (41.8 %). Each is under owner choice 14's 60 KB, so no story is cut. US9 is the story to watch: US9-S8 to S13 can become a story of their own if a factory build passes 60,000 B. No story drops or shortens a case to get under. |
+| An earlier page test queries a control the block also has. | The block's controls have their own names and it shows no `status` or `alert` before a run; flip.md § Prerequisites 5 has what probe round 2 found. |
 | The real GoTo and Track are unproven. | flip.md § Prerequisites 8. The checklist of FR-041 starts with an imaging frame and a solve by hand before the first run. |
 
 ## Refinement Record
@@ -876,7 +881,9 @@ names what the drafts named: its tests are the scenarios, its writes are the fil
 § Project Structure names, and its shared writes name the merge edge that orders two
 stories of this spec on one file, or the story of another spec that last writes the file
 among the drafts as they stood on 2026-11-15, read from each draft's own record, a story
-of 036 that went to 040 when 036 was split being named in 040. Each of those names is
+of 036 that went to 040 when 036 was split being named in 040. `tools.rs`,
+`tests/mcp/main.rs` and the README name 040's US11, which writes them last in 040's trio
+and in probe round 2's build (042-R2). Each of those names is
 checked again at the re-anchoring. A test file an earlier story creates does not exist
 yet and cannot be listed as an existing test; what a later story must leave passing in it
 is under that story's `preserved_behavior`. The record's `open_questions` are empty
@@ -938,22 +945,22 @@ stories:
   - path: crates/finder/web/src/components/ImagingRunBlock.test.tsx
     status: new
     disposition: add
-    assertion: "a refused Check focus again shows its words in a second alert with no refresh, the alert goes when the run's state changes, the pause buttons and the stop button are disabled while the request is out, and a request that got no answer shows the block's own words"
+    assertion: "a refused Check focus again shows its words in a second alert with no refresh, the alert goes when the run's state changes and when another call of the block starts, the pause buttons and the stop button are disabled while the request is out, and a request that got no answer shows the block's own words"
     decision: "spec.md:US9-S10"
   - path: crates/finder/web/src/components/ImagingRunBlock.test.tsx
     status: new
     disposition: add
-    assertion: "the start form shows 120 as the placeholder of Minutes to stack, the quiet line with the two-hour default, and the size of the subs for the minutes typed or 120, and a view with unfinished_run shows the alert that the last imaging run did not finish, with Start imaging run still offered"
+    assertion: "the start form shows 120 as the placeholder of Minutes to stack, the quiet line with the two-hour default, and the size of the subs for the minutes typed or 120, divided by the binning squared and for only the exposures that fit, and a view with unfinished_run shows the alert that the last imaging run did not finish, with Start imaging run still offered"
     decision: "spec.md:US9-S11"
   - path: crates/finder/web/src/components/ImagingRunBlock.test.tsx
     status: new
     disposition: add
-    assertion: "a focus pause shows the time it has left from pause_ends_at, and a stacking run the time stacked against its limit from stacking_since"
+    assertion: "a focus pause shows the time it has left from pause_ends_at, never below zero, and a stacking run the time stacked from stacking_since against its own limit, while Elapsed still counts from the press"
     decision: "spec.md:US9-S12"
   - path: crates/finder/web/src/components/ImagingRunBlock.test.tsx
     status: new
     disposition: add
-    assertion: "a click on Start imaging run posts the request given, sends no limit typed as 0, keeps a draft across a new view, shows a refusal as an alert with no refresh, and drops that alert once a run appears"
+    assertion: "a click on Start imaging run posts the request given, sends no limit typed as 0 and no fraction of a sub, reads Starting and is disabled while its request is out, keeps a draft across a new view, shows a refusal as an alert with no refresh, and drops that alert once a run appears"
     decision: "spec.md:US9-S13"
   - path: crates/finder/web/e2e/session.spec.ts
     status: existing
@@ -988,27 +995,27 @@ stories:
     other_spec: 040-stack-waits-for-steady
     other_story: US8
     disposition: merge_order
-    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose 041's US8 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US8 last writes this file in the drafts; re-read at the re-anchoring"
   - path: DESIGN.md
     other_spec: 040-stack-waits-for-steady
     other_story: US8
     disposition: merge_order
-    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose 041's US8 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US8 last writes this file in the drafts; re-read at the re-anchoring"
   - path: crates/finder/web/dist
     other_spec: 040-stack-waits-for-steady
     other_story: US8
     disposition: merge_order
-    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose 041's US8 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US8 last writes this file in the drafts; re-read at the re-anchoring"
   - path: crates/finder/web/src/api.ts
     other_spec: 040-stack-waits-for-steady
     other_story: US8
     disposition: merge_order
-    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose 041's US8 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US8 last writes this file in the drafts; re-read at the re-anchoring"
   - path: crates/finder/web/src/components/ImagingPage.tsx
     other_spec: 040-stack-waits-for-steady
     other_story: US8
     disposition: merge_order
-    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose 041's US8 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US8 last writes this file in the drafts; re-read at the re-anchoring"
   open_questions: []
  US10:
   tests:
@@ -1020,12 +1027,12 @@ stories:
   - path: crates/finder/tests/mcp/imaging_run.rs
     status: new
     disposition: add
-    assertion: "get_imaging_run answers null before a run, start_imaging_run answers a run by mcp with the settings asked for and points the mount as mcp, and exactly one call-log line is written, for the start"
+    assertion: "get_imaging_run answers null before a run, start_imaging_run answers a run by mcp with the settings asked for and points the mount as mcp, the read after it answers the same run but for the keys that change, stacking_since and limit_at among them, and exactly one call-log line is written, for the start"
     decision: "spec.md:US10-S2"
   - path: crates/finder/tests/mcp/imaging_run.rs
     status: new
     disposition: add
-    assertion: "bad arguments, an unknown key of continue_imaging_run, a run that is not on and a console given no parts, each tool called with arguments it would otherwise accept, are tool errors with the routes' words"
+    assertion: "bad arguments, an unknown key of continue_imaging_run, a run that is not on and a console given no parts, each tool called with arguments it would otherwise accept, are tool errors with the routes' words, a start's bad body in the route's 400 words and continue's missing key in serde's, and a third start in one second meets the rate limit whatever the first two asked"
     decision: "spec.md:US10-S3"
   - path: crates/finder/tests/mcp/imaging_run.rs
     status: new
@@ -1050,7 +1057,7 @@ stories:
   - path: crates/finder/tests/mcp/imaging_run.rs
     status: new
     disposition: add
-    assertion: "after continue_imaging_run with anyway true and a settle get_imaging_run answers a run no longer in focus_pause with the go-anyway warning"
+    assertion: "after continue_imaging_run with anyway true and a settle get_imaging_run answers a run no longer in focus_pause with the go-anyway warning, while the tool's own answer is still in focus_pause"
     decision: "spec.md:US10-S8"
   - path: crates/finder/tests/mcp/motion.rs
     status: existing
@@ -1094,32 +1101,32 @@ stories:
     disposition: merge_order
     reason: "042 depends_on_landed 041-imaging-run-on-the-rig, whose 041's US8 last writes this file; re-read at the re-anchoring"
   - path: crates/finder/src/mcp/tools.rs
-    other_spec: 035-live-stack
-    other_story: US10
+    other_spec: 040-stack-waits-for-steady
+    other_story: US11
     disposition: merge_order
-    reason: "042 depends_on_landed 035-live-stack, whose US10 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US11 last writes this file with `set_steering`; re-read at the re-anchoring"
   - path: crates/finder/tests/mcp/main.rs
-    other_spec: 035-live-stack
-    other_story: US10
+    other_spec: 040-stack-waits-for-steady
+    other_story: US11
     disposition: merge_order
-    reason: "042 depends_on_landed 035-live-stack, whose US10 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US11 last writes this file with `set_steering`; re-read at the re-anchoring"
   open_questions: []
  US11:
   tests:
   - path: crates/finder/tests/console/imaging_run_docs.rs
     status: new
     disposition: add
-    assertion: "the README's An imaging run section, read to the next section or to the end of the file, names every state word, every ending reason, the three routes, the four tools and run.json between backticks, and its prose before the field checklist contains corner, 7200 and What to do next, the heading of the fourth column of its table of endings"
+    assertion: "the README's An imaging run section, read to the next section or to the end of the file, names every state word, every ending reason, the three routes, the four tools and run.json between backticks, and its prose before the field checklist contains corner, 7200 and What to do next, the heading of the fourth column of its table of endings, the reserve file, the exposure rule, a console that exits mid-run and the four sentences of stopped"
     decision: "spec.md:US11-S1"
   - path: crates/finder/tests/console/imaging_run_docs.rs
     status: new
     disposition: add
-    assertion: "the field checklist, read to the next heading or to the end of the file, has exactly eighteen steps numbered in order, names Start imaging run, start_imaging_run, continue_imaging_run, Stop and run.json, and its step 8 has the observer look at the corners of the run's own solved imaging frames"
+    assertion: "the field checklist, read to the next heading or to the end of the file, has exactly eighteen steps numbered in order, names Start imaging run, start_imaging_run, continue_imaging_run, Stop and run.json, its step 4 sets the imaging exposure at least as long as the finder camera's, and its step 8 has the observer look at the corners of the run's own solved imaging frames"
     decision: "spec.md:US11-S2"
   - path: crates/finder/tests/console/imaging_run_docs.rs
     status: new
     disposition: add
-    assertion: "the API table has a row for each of the three routes and MCP clients names the four tools"
+    assertion: "the API table has a row for each of the three routes, the start's giving its default of 7200, and MCP clients names the four tools"
     decision: "spec.md:US11-S3"
   - path: crates/finder/tests/layout/main.rs
     status: existing
@@ -1145,9 +1152,9 @@ stories:
   shared_writes:
   - path: crates/finder/README.md
     other_spec: 040-stack-waits-for-steady
-    other_story: US8
+    other_story: US11
     disposition: merge_order
-    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose 041's US8 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US11 last writes this file with `set_steering`'s tool line; re-read at the re-anchoring"
   - path: crates/finder/tests/console/main.rs
     other_spec: 041-imaging-run-on-the-rig
     other_story: US7
