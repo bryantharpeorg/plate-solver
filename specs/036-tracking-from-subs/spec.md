@@ -5,8 +5,9 @@ depends_on_landed: ["015-tracking", "030-imaging-camera-link", "031-imaging-fram
 # tracking error, the tracker steered by it, corrections only in the gap and the exposure
 # cap (US1 to US5, and US9, which tests US3's tracker). 040-stack-waits-for-steady holds
 # the rest (US6, US7, US8, US10, US11) and lists this spec in its depends_on_landed.
-# Depends on 015, 030 to 035 and 038 (depends_on_landed). State: draft, to be re-anchored
-# on them as landed and probe-built again before the owner flips it (flip.md).
+# Depends on 015, 030 to 035 and 038 (depends_on_landed), all landed. State: draft, to be
+# probe-built again before the owner flips it (flip.md).
+# Re-anchored on 2026-11-20 to `main` at 52785403, after 035 landed.
 # history.md has how it got here.
 ---
 
@@ -76,7 +77,7 @@ Every scenario shares these definitions unless it says otherwise.
   `VirtualClock` from Unix 1768528800 (`2026-01-16T02:00:00Z`); the target M42; a
   `SimMount` with no backlash whose zero points put its axes on M42's apparent place at
   the start, and whose truth is loaded into the model with `load_known_terms`
-  (`crates/finder/src/model.rs:347`); a wrapper round the mount that logs every rate
+  (`crates/finder/src/model.rs:351`); a wrapper round the mount that logs every rate
   command with the console's time and its axis, as
   `crates/finder/tests/motion/tracking/pi_loop.rs:41` does: **the rate log**; frames
   stopped; and a `Tracker` on the console's clock at the site 40° N 75° W with a
@@ -234,7 +235,7 @@ development, `cargo nextest run -p simulator --locked --test imaging_history`.
    **Then** a committed test asserts the answer's centre equals
    `sim.directions_at(t).eyepiece`'s RA and Dec within 10⁻⁹ degrees: a push by hand
    starts the memory again, and the answer is the one 030 gives (oracle:
-   `crates/simulator/src/optics.rs:120`); and that 2 s after the push, after one read of
+   `crates/simulator/src/optics.rs:127`); and that 2 s after the push, after one read of
    `imaging_truth()` 1 s after it, `imaging_truth_at(t)` still equals
    `sim.directions_at(t).eyepiece`'s RA and Dec within 10⁻⁹ degrees. The same holds,
    each on a fresh simulator of US1-S1, when in place of the push the test calls
@@ -263,7 +264,7 @@ development, `cargo nextest run -p simulator --locked --test imaging_history`.
    after further reads every 100 s up to t + 3700 s, `imaging_truth_at(t)` equals
    `sim.directions_at(t).eyepiece`'s RA and Dec within 10⁻⁹ degrees: a sample older than
    the hour is dropped, and the answer is then the one 030 gives (oracle: the
-   simulator's own truth, read live, and `crates/simulator/src/optics.rs:120`; owner
+   simulator's own truth, read live, and `crates/simulator/src/optics.rs:127`; owner
    decision 16's hour).
 7. **Given** the simulator of US1-S1 after 10 s of turning, **When** a test reads
    `imaging_truth()` at t, waits 1 s, pushes the tube on the mount itself with
@@ -748,7 +749,8 @@ development, `cargo nextest run -p finder --locked --test console steering_cap::
    tracker's, asked as the view is made, and no tracker is running; and on another,
    whose tracker names no longest exposure, after the same call, `longest_exposure_s` is
    the string `no limit`, `exposure_s` 60.0 and `limited` false.
-5. **Given** 032's solving rig (032 spec.md § User Scenarios), **Then** a committed test
+5. **Given** 032's solving rig (032 spec.md § User Scenarios; 032's own test builds it
+   at `crates/finder/tests/console/imaging_solve.rs:131`), **Then** a committed test
    asserts that:
    - `PUT /api/imaging/steering` with `{"smear_px":1.5}` answers 200 with the imaging
      view, whose `steering.smear_px` is 1.5 and `steering.on` true, and
@@ -988,7 +990,7 @@ development, `cargo nextest run -p finder --locked --test motion steering_claim:
    for 20 s hands the error (0.0, 0.0) at the time now and awaits `gap` every 2 s,
    **Then** a committed test asserts that the newest sync's `time` in the session's
    pointing model advanced by at least 15 s over those 20 s (the model keeps one sync of
-   a place and replaces it, `crates/finder/src/model.rs:512`), that the tracker's
+   a place and replaces it, `crates/finder/src/model.rs:524`), that the tracker's
    `state().samples` grew, that `steered_by_subs()` is true throughout, and that the
    tracking offset at the end is the one read after the first gap within 0.002″/s
    (oracle: the session's own model; the finder camera still feeds it).
@@ -1348,11 +1350,13 @@ development, `cargo nextest run -p finder --locked --test motion steering_claim:
 
 ## Assumptions
 
-- **Earlier features are in place.** 015 and 038 have landed. 030, 031, 032, 033, 034
-  and 035 are drafts (flip.md § Prerequisites). 031's draft carries the camera's lease
-  of the plan document's amendment 1 as its US9, in the names 033 and 035 use; this trio
-  reaches it through 035 (plan.md § What 035 must provide). Every `path:line` here was
-  read at 49bb210, and read again there after the audit.
+- **Earlier features are in place.** 015, 030, 031, 032, 033, 034, 035 and 038 have
+  landed (flip.md § Prerequisites 1), 031 with the camera's lease of the plan document's
+  amendment 1 as its US9. This trio does not reach the lease: 040's stories do. It was
+  re-anchored to their code on 2026-11-20 (flip.md § Prerequisites 2 and 3): every
+  `path:line` here was read by its content on `main` at 52785403, whose line numbers
+  are cited, the lines of `GLOSSARY.md` among them; those the drafts held were first
+  read at 49bb210, the drafting worktree's HEAD.
 - **Out of scope:**
   - an equatorial mount, a tracker that corrects in small steps, meridian flips,
     dithering and guiding with a second camera (the plan document, § Deferred);

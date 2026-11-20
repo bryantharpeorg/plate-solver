@@ -246,88 +246,49 @@ above, and the following. Each is named in the FR or success criterion that make
 
 ## Prerequisites before this spec is flipped to `ready`
 
-1. **The earlier specs have landed:** `015-tracking`, `030-imaging-camera-link`, `031-imaging-frames-on-console`,
-   `032-imaging-solve-and-aim-point`, `033-focus-reading-and-aid`,
-   `034-dark-and-flat-frames`, `035-live-stack` and `038-track-follows-a-push`, all in
-   this spec's `depends_on_landed`. Not met: 015 and 038 have landed; the six others are
-   drafts. 033 is named because it writes `imaging/mod.rs`, `imaging/routes.rs`,
-   `lib.rs`, the README and the Imaging page before this spec does, and 035 depends on
-   it; nothing of 033's is called here.
-2. **The trio is re-anchored against `main` after they land.** Not met. Every
-   `path:line` here was read at 49bb210, in files that exist there. After the six
-   land, every name taken from their plan.md is re-read as landed and corrected here
-   where it differs (030: `imaging_truth_at`, `imaging_rotation_at` and
-   `SimImagingCamera`; 031: `Imaging`, `Imaging::start`, `set`, `view`, `ImagingView`,
-   `CameraView`, `SettingsView`, `RoiView`, `FrameView`, `SessionWrite`, `sim_json`,
-   `put_settings`, `SettingsEdit`, `Refusal`, `putImagingSettings`, the simulator's
-   `set_unresponsive` as 031 US1-S6 uses it, and the camera's lease, `Imaging::lease`,
-   `Lease::take` and `Lease::set`, as 031's US9 gives them (031 plan.md § The camera
-   lease); 032: `ImagingSolve`,
-   `from_cd`, `pixel_of`, `cd_deg`, `SolveFrame`, `Region`, `set_solver`,
-   `solve_frame`, `SimulatedSolver`, the solving rig; 034: that a master dark matches
-   a sub's exposure within 1 ms; 035: § What 035 must provide); every file they create
-   is cited with a line; the story that last wrote each shared file is put right in
-   § Refinement Record; and the validator is re-run on `main`. Probe round 1 found that
-   038, on `main`, moved most of this trio's citations of
-   `crates/finder/src/tracking.rs` from line 83 on (D7): the lines still hold content,
-   so the validator passes every one but the citation of `impl Drop for Tracker`, and
-   each is read again then. The same holds for the last route line of
-   `crates/finder/src/lib.rs` and the last
-   `/api/imaging` row of the README, after which US5 inserts its own and which § The
-   route now also names by content (D36), and for the `dl` of `TrackControl.tsx`, at
-   line 69 on round 1's base.
-3. **035 is read as landed, against § What 035 must provide.** Not met. 035's trio was
-   read whole when the review of this one was applied: its plan.md with the camera's
-   lease, its tasks.md and its Refinement Record. It was then still a draft and not
-   probe-built, and the lease it uses is 031's US9, which 031's draft carries and `main`
-   does not yet (035 plan.md § Prerequisites 8). Since then 035's own probe round 1 has
-   built it, and its trio has been re-anchored and flipped with its US5 split in two
-   (its US5-S6 is now 040's US11-S3); this trio's probe round 1 built 040's US7 and 040's US8 on 035's
-   probe code and found the nine points provided, with the three words 040's plan.md § The stack and
-   040's plan.md § The page now give (flip.md § Prerequisites 5). Before the flip each of the
-   nine points of § What 035 must provide is read in the landed code, and these are
-   settled:
-   - the taker's loop, its returns, and the worker's `process` and `run` are where § The
-     stack puts 040's US7's calls, by name and line (read by name on `main` on 2026-11-19,
-     after 035's US8 landed: 040's plan.md § The stack says what was found);
-   - how the worker counts and lists a dropped sub, and what `Dropped::count` does with
-     an outcome it does not name: on `main` it is `unreachable!`, and 040's US7 gives
-     `not_steady` its arm;
-   - the stopping mark is the `tokio::sync::watch` of `bool` that 035's plan.md names
-     (point 2), and the taker holds a receiver of it;
-   - the taker owns the run's `Lease` and it drops as the taker's task ends, and the
-     holder's `set` behaves as point 3 says. This replaces the first draft's use of
-     034's `Calibration::restore_exposure`, which called `Imaging::set`, would be refused
-     while the stack holds the camera and has since been removed from 034 (034 A1), and
-     the second draft's restore in 035's ending, after the taker had returned and the
-     lease with it;
-   - 035's landed `crates/finder/src/imaging/stack/service.rs` holds none of the
-     thirteen names US2-S6 lists, so that 040's US7-S6 rests on 040's US7's own diff (read on `main`
-     at `52785403` on 2026-11-19: none). If it holds one, the trio goes back to the
-     owner before any story is dispatched;
-   - no landed test compares an imaging view, or the session's `imaging` object, whole
-     on a console that tracks with its camera ready: from 040's US7 such a view carries
-     `steering` (§ Shapes that existing tests pin);
-   - 031's MCP test still asserts `get_imaging_camera`'s description word for word, so
-     040's US11 leaves it, and the test that calls every listed tool with `{}` still does so
-     on a console with no imaging;
-   - no test of 035 counts `dropped`'s keys, compares the whole object with a literal, a
-     fixed list of keys, a golden file or a schema that lists its keys (a comparison of
-     two serializations of the same `Dropped`, as
-     `stack_console.rs` makes between `stack.json` and the view, is not one), or builds
-     `Dropped { .. }` by a struct literal without `..Default::default()`. If one does,
-     the trio goes back to the owner for an approval that names that test, before any
-     story is dispatched: no approval here covers an unnamed test;
-   - 035's `StackBlock` builds its `Dropped` line as 040's plan.md § The page assumes;
-   - no landed test of 031 to 035 reads a region of the Imaging page by its place from
-     the page's end (`getAllByRole("region").at(-1)` or `.at(-2)`): 036's block becomes
-     the page's last region. 034's US9-S1 places its block after `Imaging frame` and
-     `Focus`, and 035's US9-S6 its region after Calibration;
-   - the worker still drops a sub whose exposure differs from the reference sub's. If
-     035 comes to weight subs by exposure instead, owner decision 2's last
-     alternative becomes possible and is put to the owner.
-   The points 040's US7, US8 and US11 rely on are read again at 040's flip (040's
-   flip.md § Prerequisites 3).
+1. **The earlier specs have landed:** `015-tracking`, `030-imaging-camera-link`,
+   `031-imaging-frames-on-console`, `032-imaging-solve-and-aim-point`,
+   `033-focus-reading-and-aid`, `034-dark-and-flat-frames`, `035-live-stack` and
+   `038-track-follows-a-push`, all in this spec's `depends_on_landed`. Met: each landed
+   with its last story's merge on `main`: 015 at `a02dc35b` (US9, #177), 030 at
+   `49f8dcd2` (US8, #269), 031 at `e9687ce9` (US9, #279), 032 at `670ddcf9` (US7, #288),
+   033 at `80f414ff` (US7, #298), 034 at `002dbef8` (US8, #309), 035 at `52785403`
+   (US10, #321) and 038 at `1c2b427b` (US3, #260). 033 is named because it writes
+   `imaging/mod.rs`, `imaging/routes.rs`, `lib.rs`, the README and the Imaging page
+   before this spec does, and 035 depends on it; nothing of 033's is called here.
+2. **The trio is re-anchored against `main` after they land.** Met on 2026-11-20, on
+   `main` at `52785403`. Every `path:line` the trio cites, read at 49bb210, was read
+   again there by its content and its number put right: 038 had moved most citations of
+   `crates/finder/src/tracking.rs` from line 83 on (D7), so that the validator refused
+   the citation of `impl Drop for Tracker`, and 030 to 035 had moved the others, among
+   them the last route line of `crates/finder/src/lib.rs` and the last `/api/imaging`
+   row of the README, after which US5 inserts its own and which § The route also names
+   by content (D36). Every name the trio takes from 030 to 035 was read in their code:
+   030's `imaging_truth_at`, `imaging_rotation_at` and `SimImagingCamera`; 031's
+   `Imaging`, `Imaging::start`, `Imaging::view`, `ImagingView`, `CameraView`,
+   `SettingsView`, `RoiView`, `SessionWrite`, `sim_json`, `put_settings`, `SettingsEdit`
+   and `with_imaging`; 032's `ImagingSolve`, `from_cd`, `pixel_of`, `cd_deg`,
+   `SolveFrame`, `Region` and the solving rig; 034's match of a master dark to a sub's
+   exposure within 1 ms; and 035's, in § What 035 must provide. Each is as the trio
+   names it. Where the trio took one from their plan.md, it now cites their code by
+   line; elsewhere a file they created is named without a line, as 035's re-anchoring
+   left its own. The other names this list held before the split (`set`, `FrameView`,
+   `Refusal`, `putImagingSettings`, `set_unresponsive`, the camera's lease, `set_solver`,
+   `solve_frame` and `SimulatedSolver`) and the `dl` of `TrackControl.tsx` are used by
+   040's stories alone, which read them at 040's flip. The story that last wrote each
+   shared file was read with `git log` on `main` and matches § Refinement Record, and
+   the validator was re-run there.
+3. **035 is read as landed, against § What 035 must provide.** Met on 2026-11-20 for
+   the two points this spec's own stories use, each read in 035's landed code on `main`
+   at `52785403`: the worker's settings test, which still drops a sub whose exposure
+   differs from the reference sub's by more than 1 ms, so that owner decision 2's last
+   alternative is still not possible; and the worker's queue of four waiting subs,
+   which the re-anchoring added to the section. The rest of it, its nine points but
+   for point 6's settings test, and its table of what changes in 035's two files,
+   serve 040's US7, US8 and US11, and the re-anchoring took them out of this trio: 040's
+   plan.md § What 035 provides holds them, and 040's flip.md § Prerequisites 3 lists
+   what is settled of them before 040's flip. They were read on `main` at `52785403`
+   too (history.md, the re-anchor of 2026-11-20).
 4. **The owner decisions are settled and the approvals given** (§ Owner decisions and
    § Owner approvals above). Not met: this spec's decisions, 1 to 8 and 13 to 16, are
    open.
@@ -394,15 +355,15 @@ above, and the following. Each is named in the FR or success criterion that make
    proven on the real mount (the plan document, § Before any flip, 4), and its backlash
    measured on both axes: altitude reverses at transit, and azimuth too for a target
    that culminates north of the zenith. Not met.
-7. **The documents this trio cites are on `main`.** Not met: the plan document,
-   ADR-0002, the changed `GLOSSARY.md` and the research note are in the drafting
-   worktree, uncommitted. US2 inserts one of its entries after **Imaging angle**, which
-   only the rewrite has.
+7. **The documents this trio cites are on `main`.** Met: the plan document,
+   ADR-0002, the changed `GLOSSARY.md` and the research note have been on `main`
+   since 030's flip (`55e41f57`). US2 inserts one of its entries after **Imaging
+   angle**, which only the rewrite has (`GLOSSARY.md:107` at `52785403`).
 8. **No operator-staged files are needed.** Met.
-9. **The plan document agrees with the settled decisions.** Not met on `main`, which
-   does not hold the plan document yet (flip.md § Prerequisites 7). In this worktree
+9. **The plan document agrees with the settled decisions.** Not met. `main` has held
+   the plan document since `55e41f57` (§ Prerequisites 7), and on `main` at `52785403`
    `docs/plans/2026-11-15-specs-030-037-imaging.md` § Interfaces shared across the specs
-   already carries this trio's recommended answers: its route table has the row
+   carries this trio's recommended answers: its route table has the row
    `PUT /api/imaging/steering` for 036 (owner decision 3); its list of the parts of
    the session's `imaging` object names `steering`, and its module tree
    `crates/finder/src/imaging/steering.rs` (owner decision 14); and its list of MCP
@@ -418,12 +379,12 @@ above, and the following. Each is named in the FR or success criterion that make
    is not edited: it gives its two times a tracker is not steady as today's examples,
    and owner decision 17 declares the three further times on its own, and since
    2026-11-19 three more. 035's Prerequisites 10 does the same for its own departures.
-10. **031 carries the camera's lease.** Met in the drafts: 031's trio in this worktree
-    carries it as its US9 (031 plan.md § The camera lease), with `Imaging::lease`,
-    `Lease::take` and `Lease::set` as this trio names them. Not met on `main`, where 031
-    has not landed; 035 tracks it (035 plan.md § Prerequisites 8), and flip.md § Prerequisites 2
-    and 3 read it as landed. This trio reaches the lease only through § What 035 must
-    provide, points 3 to 5.
+10. **031 carries the camera's lease.** Met: 031's US9 landed it on `main`
+    (`e9687ce9`), with `Imaging::lease`, `Lease::take` and `Lease::set`
+    (`crates/finder/src/imaging/mod.rs:711`, `crates/finder/src/imaging/mod.rs:884`,
+    `crates/finder/src/imaging/mod.rs:876`), and 035 holds it for a stack. Since the
+    re-anchoring of 2026-11-20 this trio does not reach the lease: 040's stories do
+    (040's plan.md § What 035 provides).
 11. **A bound on the rate one tracking error may ask for.** Met on 2026-11-17, with
     nothing to add here. 032's owner decision on a newly measured aim point while Track
     is on (032's owner decision 25, raised by the audit's finding A4 on 032; 037's

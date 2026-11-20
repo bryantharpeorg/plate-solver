@@ -52,8 +52,9 @@ dispatched only once they are met.
   test file. US9 is a story of tests only: it writes nothing under `crates/finder/src`,
   its tests pass on the code of US3 as soon as they are written, and one that fails is
   escalated with its output (plan.md § Plan traps 36).
-- Every code citation is `path:line` as read at 49bb210. If a cited line has moved,
-  re-read it rather than guess.
+- Every `path:line` was read on `main` at 52785403 in the re-anchoring of 2026-11-20,
+  the `GLOSSARY.md` lines included, and names what it says there. If a cited line has
+  moved, re-read it rather than guess.
 - Add no dependency and change no `Cargo.toml`. Change nothing under
   `crates/scope-node`, `crates/scope-link` or `proto/`, and outside US1 nothing under
   `crates/simulator`.

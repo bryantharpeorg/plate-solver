@@ -5,6 +5,36 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
 How `036-tracking-from-subs` came to be as it is. The trio holds the rules and flip.md
 what the flip settles.
 
+## The re-anchor (2026-11-20)
+
+After 035 landed, the trio was re-anchored to `main` at `52785403` (flip.md
+§ Prerequisites 1, 2, 3, 7 and 10, now met). The state stays `draft`, and nothing a
+story builds changed.
+- **Citations.** Of the 79 distinct `path:line` the trio cited, read at 49bb210, 48 were
+  unchanged, 27 had moved and were renumbered, and 4 were found by their content: the
+  **Imaging angle** entry (`GLOSSARY.md:97`, a line of the then uncommitted rewrite,
+  now 107), the end of `Shared::pointing`'s block (`tracking.rs:313`, now 355), the loop
+  that sends the rates (`tracking.rs:868`, now 940) and the last route line of `lib.rs`
+  (`:35`, now 50). 21 were added where the trio named a plan.md section of 030 to 035
+  or a line by its content: 18 in files those specs created.
+- **Names.** Every name the trio takes from 030 to 035 is as their code has it. The
+  sentences that called them drafts, or took an interface from their plan.md, now say
+  they have landed and cite their code.
+- **plan.md § What 035 must provide** kept what this spec's stories use: the worker's
+  settings test, from its point 6, and the worker's queue of four, which was added. The
+  rest of its nine points and its table of changes to 035's files serve 040's US7, US8
+  and US11, and 040's plan.md § What 035 provides holds them. Each was read in the
+  landed code and holds as 040 has it: the taker's loop (`Stacker::take_subs`), the
+  stopping mark, the run's `Lease` and its `set`, the lease's refusal of
+  `Imaging::set`, the taker's returns, the worker's `process` and `run`, `Dropped`
+  with `count`'s `unreachable!`, `StackBlock`'s `Dropped` line and `Stacker::start`'s
+  refusal of a camera not `ready`.
+- **Shared writes.** All eleven that name 015, 030 to 035 or 038 matched `git log -1` on
+  `main`; their reasons now name the commit.
+- **Principle V's row** names PHD2, with a row in § Decisions and the alternatives
+  rejected.
+- **A stale count.** `STALE_GAPS`'s doc comment said three; the constant is eight.
+
 ## The split (2026-11-20)
 
 The spec held eleven stories when it was split in two:
@@ -780,6 +810,13 @@ the probe round or the earlier draft it told of. As each read:
 | The two shares as run-only settings, handed to the tracker before every gap | Constants in code; a second argument of `steer` | The telescope is two hours from where a console is rebuilt, and the switch alone compares all of the feedback with none. Handed before every gap, a tracker a GoTo has just made has them by its first step, and `steer` keeps its shape. |
 | The switch turned off, a set point that changes and the wait for the limit each let the tracker go | Storing the flag or the set point only | A claim lapses only at a gap, and none is asked for then: the claim stood, the finder camera's pointings changed no rate under it, and nothing steered. |
 | US3 and US6 cut by tests, into US9 and US10 | Building at 93% and 92% of the budget; the code cut § Risks once named for US3 | A cut by tests moves whole scenarios and no line of code, so the story that keeps the code is graded on fewer criteria and builds as it would have. The code cut was never built. A cut found mid-epic needs a relaunch. |
+
+Added at the re-anchor of 2026-11-20, for principle V of constitution 1.3.0, which asks a
+plan to name what it looked at and why it turned it down:
+
+| Decision | Rejected | Why |
+|---|---|---|
+| The correction from the subs is this project's own code | PHD2 (BSD-3-Clause), the proven guider | It guides a mount through ASCOM, INDI or ST-4, and this mount is driven by the scope node, which has no INDI mount driver. It expects a guide camera's steady stream, not imaging subs that may come minutes apart. Nothing of it is copied. |
 
 ## The Refinement Record: how the trio was drafted, probe-built and folded
 
