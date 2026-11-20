@@ -527,7 +527,18 @@ impl Imaging {
         if let Some(stacker) = self.stack.get().and_then(Weak::upgrade) {
             view.stack = stacker.view();
         }
-        view.steering = self.steering.view();
+        let ask = view
+            .camera
+            .as_ref()
+            .zip(view.settings.as_ref())
+            .map(|(camera, settings)| steering::ExposureAsk {
+                wanted_s: settings.exposure_ms / 1000.0,
+                shortest_s: camera.exposure_ms.min / 1000.0,
+                sensor: (camera.width, camera.height),
+                roi: settings.roi.into(),
+                binning: settings.binning,
+            });
+        view.steering = self.steering.view_for(ask);
         view
     }
 

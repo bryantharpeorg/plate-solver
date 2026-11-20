@@ -50,6 +50,9 @@ const SUB_STEP_TIME: Duration = Duration::from_millis(500);
 const STALE_GAPS: u32 = 8;
 /// Corrections remembered for late subs, oldest first.
 const CORRECTIONS: usize = 16;
+/// Forecast a held exposure's limit for an hour, sampled each minute.
+const LIMIT_AHEAD_S: f64 = 3600.0;
+const LIMIT_SAMPLE_S: f64 = 60.0;
 
 struct Measurement {
     baseline_deg: f64,
@@ -129,6 +132,8 @@ struct Control {
     held: Held,
     corrections: VecDeque<Correction>,
     gaps: Vec<oneshot::Sender<Stepped>>,
+    step_share: f64,
+    rate_share: f64,
 }
 
 #[derive(Default)]
@@ -261,6 +266,8 @@ impl Tracker {
             *control = Control {
                 counts,
                 settling: true,
+                step_share: SUB_STEP_SHARE,
+                rate_share: SUB_RATE_SHARE,
                 state: State {
                     state: "tracking",
                     target: Some(target.clone()),
@@ -415,6 +422,59 @@ impl Tracker {
         self.shared.control.lock().unwrap().subs.is_some()
     }
 
+    /// The longest exposure for this turn at the target now, or no limit.
+    pub fn longest_exposure_s(&self, turn_rad: f64) -> Option<f64> {
+        self.exposure_limit(turn_rad, false)
+    }
+
+    /// The shortest limit from now through the hour ahead, sampled each minute.
+    pub fn longest_exposure_ahead_s(&self, turn_rad: f64) -> Option<f64> {
+        self.exposure_limit(turn_rad, true)
+    }
+
+    fn exposure_limit(&self, turn_rad: f64, ahead: bool) -> Option<f64> {
+        if !turn_rad.is_finite() || turn_rad <= 0.0 {
+            return None;
+        }
+        let target = {
+            let control = self.shared.control.lock().unwrap();
+            if control.state.state == "off" {
+                return None;
+            }
+            control.state.target.clone()?
+        };
+        let now = self.shared.clock.now();
+        let samples = if ahead {
+            (LIMIT_AHEAD_S / LIMIT_SAMPLE_S) as u32
+        } else {
+            0
+        };
+        let worst = (0..=samples)
+            .map(|k| {
+                let (alt, az) = self
+                    .shared
+                    .place(&target, now + f64::from(k) * LIMIT_SAMPLE_S);
+                ephemeris::altaz_rates_from_alt_az(self.shared.site.lat_deg, alt, az)
+                    .field_rotation_deg_per_h
+                    .to_radians()
+                    .abs()
+                    / 3600.0
+            })
+            .fold(0.0, f64::max);
+        (worst >= 1e-9).then(|| turn_rad / worst)
+    }
+
+    /// Set each finite share for the next gap, held to the inclusive range 0 to 1.
+    pub fn tune(&self, step_share: f64, rate_share: f64) {
+        let mut control = self.shared.control.lock().unwrap();
+        if step_share.is_finite() {
+            control.step_share = step_share.clamp(0.0, 1.0);
+        }
+        if rate_share.is_finite() {
+            control.rate_share = rate_share.clamp(0.0, 1.0);
+        }
+    }
+
     /// Use this pointing model for every later rate, forecast and keyhole plan.
     pub fn set_model(&self, model: Model) {
         *self.shared.model.lock().unwrap() = Arc::new(model);
@@ -436,6 +496,15 @@ impl Steered for Tracker {
     }
     fn steered_by_subs(&self) -> bool {
         self.steered_by_subs()
+    }
+    fn longest_exposure_s(&self, turn_rad: f64) -> Option<f64> {
+        self.longest_exposure_s(turn_rad)
+    }
+    fn longest_exposure_ahead_s(&self, turn_rad: f64) -> Option<f64> {
+        self.longest_exposure_ahead_s(turn_rad)
+    }
+    fn tune(&self, step_share: f64, rate_share: f64) {
+        self.tune(step_share, rate_share);
     }
 }
 
@@ -975,7 +1044,7 @@ impl Shared {
                             {
                                 let old = control.state.tracking_offset[i];
                                 let new = (old
-                                    - (SUB_RATE_SHARE * drift_rate)
+                                    - (control.rate_share * drift_rate)
                                         .clamp(-SUB_RATE_STEP, SUB_RATE_STEP))
                                 .clamp(-OFFSET_LIMIT, OFFSET_LIMIT);
                                 changed[i] = new - old;
@@ -991,7 +1060,7 @@ impl Shared {
                         .sum();
                     let seen = a[i] + after;
                     if seen.abs() >= deadband[i] {
-                        want[i] = (-SUB_STEP_SHARE * seen).clamp(-limit[i], limit[i]);
+                        want[i] = (-control.step_share * seen).clamp(-limit[i], limit[i]);
                     }
                 }
                 applied = Some((t1, a));
