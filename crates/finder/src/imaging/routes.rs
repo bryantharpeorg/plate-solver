@@ -15,6 +15,7 @@ use crate::{
     imaging::{
         calibration::service::{CalibrationView, DarksRequest, FlatsRequest},
         focus::run::FocusAsk,
+        run::{By, RunRequest, Runner},
         stack::service::StartRequest,
         steering::{rate_share_checked, smear_checked, step_share_checked},
         Imaging, ImagingView, SettingsEdit,
@@ -38,6 +39,8 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/api/imaging/stack", post(start_stack).delete(stop_stack))
         .route("/api/imaging/stack/preview.jpg", get(stack_preview))
         .route("/api/imaging/steering", put(put_steering))
+        .route("/api/imaging/run", post(start_run).delete(stop_run))
+        .route("/api/imaging/run/continue", post(continue_run))
 }
 
 /// A partial edit of the run-only steering settings. Present nulls are refused.
@@ -338,4 +341,63 @@ async fn stack_preview(State(state): State<AppState>) -> Result<impl IntoRespons
             ApiError::new(StatusCode::NOT_FOUND, "the console holds no stack picture")
         })?;
     Ok(([(header::CONTENT_TYPE, "image/jpeg")], bytes))
+}
+
+/// Deserialize through a map so serde's struct sequence form is refused too.
+fn run_body<T: serde::de::DeserializeOwned>(
+    body: Result<Json<serde_json::Map<String, serde_json::Value>>, JsonRejection>,
+) -> Result<T, ApiError> {
+    let object = sim_json(body)?;
+    serde_json::from_value(serde_json::Value::Object(object))
+        .map_err(|error| ApiError::new(StatusCode::BAD_REQUEST, error.to_string()))
+}
+
+fn imaging_runner(state: &AppState) -> Result<std::sync::Arc<Runner>, ApiError> {
+    state
+        .imaging_runner()
+        .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "this console runs no imaging runs"))
+}
+
+async fn start_run(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    request: Result<Json<serde_json::Map<String, serde_json::Value>>, JsonRejection>,
+) -> Result<Json<ImagingView>, ApiError> {
+    let request: RunRequest = run_body(request)?;
+    let runner = imaging_runner(&state)?;
+    crate::api::start_motion(&state, "page", "imaging_run", || async {
+        runner
+            .start(request, By::Page)
+            .await
+            .map(|_| ())
+            .map_err(|refusal| ApiError::new(refusal.status, refusal.message))
+    })
+    .await?;
+    Ok(Json(state.imaging().unwrap().view()))
+}
+
+async fn stop_run(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+) -> Result<Json<ImagingView>, ApiError> {
+    imaging_runner(&state)?.stop().await;
+    Ok(Json(state.imaging().unwrap().view()))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ContinueEdit {
+    anyway: bool,
+}
+
+async fn continue_run(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    request: Result<Json<serde_json::Map<String, serde_json::Value>>, JsonRejection>,
+) -> Result<Json<ImagingView>, ApiError> {
+    let edit: ContinueEdit = run_body(request)?;
+    imaging_runner(&state)?
+        .resume(edit.anyway)
+        .map_err(|refusal| ApiError::new(refusal.status, refusal.message))?;
+    Ok(Json(state.imaging().unwrap().view()))
 }

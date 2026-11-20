@@ -4,10 +4,12 @@
 //! stopped while it still slews.
 
 pub mod script;
+pub mod store;
 
 use std::{
     collections::BTreeMap,
     future::Future,
+    path::PathBuf,
     pin::Pin,
     sync::{Arc, Mutex},
     time::Duration,
@@ -20,6 +22,7 @@ use tokio::{
     time::{self, Instant},
 };
 
+use self::store::{Event, Store};
 use super::Refusal;
 use crate::session::Clock;
 
@@ -647,12 +650,29 @@ struct ActiveRun {
     done: Arc<watch::Sender<bool>>,
     focus_failure: Option<Failure>,
     aim_moved: bool,
+    events: Vec<Event>,
+    store: Option<Store>,
+    last_write: Option<(Instant, u64)>,
+    tracker_event: Option<Instant>,
+}
+
+impl ActiveRun {
+    /// Only actual writes reset the refresh clock and the saved count.
+    fn write_record(&mut self) -> std::io::Result<()> {
+        if let Some(store) = self.store.as_ref().filter(|store| store.folder().is_some()) {
+            store.write(&self.view, &self.events)?;
+            self.last_write = Some((Instant::now(), self.view.subs.stacked));
+        }
+        Ok(())
+    }
 }
 
 /// Carries one imaging run through the five injected parts.
 pub struct Runner {
     steps: Steps,
     clock: Arc<dyn Clock>,
+    root: Option<PathBuf>,
+    unfinished: Mutex<Option<String>>,
     starting: AsyncMutex<()>,
     inner: Arc<Mutex<Option<ActiveRun>>>,
     task: Mutex<Option<JoinHandle<()>>>,
@@ -668,13 +688,30 @@ impl Drop for Runner {
 
 impl Runner {
     pub fn new(steps: Steps, clock: Arc<dyn Clock>) -> Arc<Self> {
+        Self::build(steps, clock, None)
+    }
+
+    /// As `new`, keeping each run's record under the imaging folder.
+    pub fn with_folder(steps: Steps, clock: Arc<dyn Clock>, root: PathBuf) -> Arc<Self> {
+        Self::build(steps, clock, Some(root))
+    }
+
+    fn build(steps: Steps, clock: Arc<dyn Clock>, root: Option<PathBuf>) -> Arc<Self> {
+        let unfinished = root.as_deref().and_then(store::unfinished);
         Arc::new(Self {
             steps,
             clock,
+            root,
+            unfinished: Mutex::new(unfinished),
             starting: AsyncMutex::new(()),
             inner: Arc::new(Mutex::new(None)),
             task: Mutex::new(None),
         })
+    }
+
+    /// The newest unfinished record's folder, until the first accepted start.
+    pub fn unfinished(&self) -> Option<String> {
+        self.unfinished.lock().unwrap().clone()
     }
 
     /// Check, take the lease, ask Track, and start the run's task.
@@ -701,7 +738,7 @@ impl Runner {
             .lock()
             .unwrap()
             .as_ref()
-            .is_some_and(|run| run.view.ended.is_none());
+            .is_some_and(|run| run.finished.is_none());
         if running {
             return Err(Refusal::conflict("an imaging run is already running"));
         }
@@ -714,6 +751,7 @@ impl Runner {
             return Err(Refusal::conflict(words));
         }
 
+        *self.unfinished.lock().unwrap() = None;
         let started_at = self.clock.now();
         let started = Instant::now();
         let mut view = RunView {
@@ -750,6 +788,13 @@ impl Runner {
             done: Arc::new(done),
             focus_failure: None,
             aim_moved: true,
+            events: vec![Event {
+                at: started_at,
+                state: "slewing",
+            }],
+            store: self.root.clone().map(Store::new),
+            last_write: None,
+            tracker_event: None,
         });
         // The task owns only the inner state and the parts, never the Runner.
         let task = RunTask {
@@ -769,8 +814,7 @@ impl Runner {
         // A start still asking Track must install its run before we signal it.
         let starting = self.starting.lock().await;
         let signals = self.inner.lock().unwrap().as_ref().and_then(|run| {
-            run.view
-                .ended
+            run.finished
                 .is_none()
                 .then(|| (run.stop.clone(), run.done.subscribe()))
         });
@@ -789,7 +833,7 @@ impl Runner {
             .lock()
             .unwrap()
             .as_ref()
-            .is_some_and(|run| run.view.ended.is_none());
+            .is_some_and(|run| run.finished.is_none());
         Err(Refusal::conflict(if running {
             "the imaging run is not paused"
         } else {
@@ -842,13 +886,46 @@ impl RunTask {
         change(inner.as_mut().unwrap());
     }
 
-    fn set_state(&self, state: &'static str) {
-        self.update(|run| {
-            run.view.state = state;
-            run.view.message = run
-                .view
-                .state_message(run.focus_failure.as_ref(), run.aim_moved);
-        });
+    fn set_state(&self, state: &'static str) -> Result<(), Ending> {
+        let at = self.clock.now();
+        let now = Instant::now();
+        let mut inner = self.inner.lock().unwrap();
+        let run = inner.as_mut().unwrap();
+        let changed = run.view.state != state;
+        let tracker_change = matches!(
+            (run.view.state, state),
+            ("stacking", "paused_by_tracker") | ("paused_by_tracker", "stacking")
+        );
+        run.view.state = state;
+        run.view.message = run
+            .view
+            .state_message(run.focus_failure.as_ref(), run.aim_moved);
+        if changed
+            && (!tracker_change
+                || run
+                    .tracker_event
+                    .is_none_or(|last| now.duration_since(last) >= RECORD_EVERY))
+        {
+            run.events.push(Event { at, state });
+            if tracker_change {
+                run.tracker_event = Some(now);
+            }
+            run.write_record()
+                .map_err(|error| Ending::SaveFailed(error.to_string()))?;
+        }
+        Ok(())
+    }
+
+    fn refresh_record(&self) -> Result<(), Ending> {
+        let mut inner = self.inner.lock().unwrap();
+        let run = inner.as_mut().unwrap();
+        if run.last_write.is_some_and(|(last, stacked)| {
+            run.view.subs.stacked > stacked && last.elapsed() >= RECORD_EVERY
+        }) {
+            run.write_record()
+                .map_err(|error| Ending::SaveFailed(error.to_string()))?;
+        }
+        Ok(())
     }
 
     fn waiting_for_tracker(&self, waiting: bool) {
@@ -932,12 +1009,12 @@ impl RunTask {
                 }
                 MountState::Slewing => {
                     if let Some((slewing, _)) = show {
-                        self.set_state(slewing);
+                        self.set_state(slewing)?;
                     }
                 }
                 MountState::Tracking { steady: false } => {
                     if let Some((_, tracking)) = show {
-                        self.set_state(tracking);
+                        self.set_state(tracking)?;
                     }
                 }
             }
@@ -991,10 +1068,10 @@ impl RunTask {
 
     async fn procedure(&mut self) -> Result<(), Ending> {
         self.steady(Some(("slewing", "tracking"))).await?;
-        self.set_state("first_frame");
+        self.set_state("first_frame")?;
         self.frame().await?;
 
-        self.set_state("focus_check");
+        self.set_state("focus_check")?;
         self.steady(None).await?;
         self.steps.camera.release();
         let mut checking = false;
@@ -1032,7 +1109,7 @@ impl RunTask {
         }
         self.steps.camera.hold().map_err(Ending::CameraFailed)?;
 
-        self.set_state("solving");
+        self.set_state("solving")?;
         let target = self
             .inner
             .lock()
@@ -1072,7 +1149,7 @@ impl RunTask {
             });
         });
 
-        self.set_state("stacking");
+        self.set_state("stacking")?;
         self.steps.camera.release();
         let folder = match self.steps.stack.start(&target).await {
             Ok(folder) => folder,
@@ -1088,11 +1165,22 @@ impl RunTask {
         self.stack_started = true;
         let stacking_since = self.clock.now();
         self.update(|run| {
+            if let Some(store) = &mut run.store {
+                store.adopt(&folder);
+            }
             run.view.folder = Some(folder);
             run.view.stacking_since = Some(stacking_since);
             run.view.limit_at = Some(stacking_since + run.view.settings.duration_s);
         });
 
+        {
+            let mut inner = self.inner.lock().unwrap();
+            inner
+                .as_mut()
+                .unwrap()
+                .write_record()
+                .map_err(|error| Ending::SaveFailed(error.to_string()))?;
+        }
         let mut stopped = self.stopped.clone();
         loop {
             let waiting_for_tracker = self.read_stack_counts();
@@ -1108,7 +1196,8 @@ impl RunTask {
                 "paused_by_tracker"
             } else {
                 "stacking"
-            });
+            })?;
+            self.refresh_record()?;
             tokio::select! {
                 biased;
                 _ = stopped.wait_for(|stop| *stop) => {},
@@ -1165,7 +1254,6 @@ impl RunTask {
         let done = {
             let mut inner = self.inner.lock().unwrap();
             let run = inner.as_mut().unwrap();
-            run.finished = Some(finished);
             run.view.elapsed_s = finished.duration_since(run.started).as_secs_f64();
             run.view.ended = Some(EndedNote {
                 reason: ending.reason(),
@@ -1176,6 +1264,23 @@ impl RunTask {
             });
             run.view.state = "ended";
             run.view.message = message;
+            run.events.push(Event { at, state: "ended" });
+            let made = if let Some(store) = &mut run.store {
+                let result = store.make(&run.view.id);
+                run.view.folder = store.folder().map(str::to_owned);
+                result
+            } else {
+                Ok(())
+            };
+            if let Err(error) = made.and_then(|()| run.write_record()) {
+                let warning =
+                    Warning::RecordUnsaved(error.to_string()).words(&run.view.target.name);
+                if !run.view.warnings.contains(&warning) {
+                    run.view.warnings.push(warning);
+                }
+            }
+            // Completion is published only after the final record attempt.
+            run.finished = Some(finished);
             run.done.clone()
         };
         done.send_replace(true);
@@ -1188,3 +1293,6 @@ pub const FRAME_TRIES: u32 = 3;
 pub const SOLVE_TRIES: u32 = 3;
 /// How long the run waits after a failed take before it asks again.
 pub const RETRY_WAIT: Duration = Duration::from_secs(5);
+
+/// How often, at most, a rising stacked count or a tracker transition is recorded.
+pub const RECORD_EVERY: Duration = Duration::from_secs(60);
