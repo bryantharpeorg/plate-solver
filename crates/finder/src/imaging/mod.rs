@@ -14,6 +14,7 @@ pub mod simulated;
 pub mod solver;
 pub mod solving;
 pub mod stack;
+pub mod steering;
 
 use std::{
     future::Future,
