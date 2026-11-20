@@ -16,6 +16,7 @@ mod calibration_flats_sim;
 mod calibration_library;
 mod freshness;
 mod imaging;
+mod imaging_abort_silent;
 mod imaging_astap;
 mod imaging_checks;
 mod imaging_control;
