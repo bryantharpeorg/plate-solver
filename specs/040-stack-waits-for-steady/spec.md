@@ -5,9 +5,10 @@ depends_on_landed: ["015-tracking", "030-imaging-camera-link", "031-imaging-fram
 # tracker is not steady and drops what was taken across it (US6, and US10, which tests
 # US6's tracker), asks the steering before every exposure (US7), shows the readout (US8)
 # and takes set_steering over MCP (US11). Story and FR numbers are 036's, kept.
-# Depends on 036-tracking-from-subs (US1 to US5 and US9) and on what 036 depends on.
-# State: draft, to be re-anchored on 036 as landed (plan.md § What 036 provides) and
-# probe-built before the owner flips it (flip.md). history.md has how it got here.
+# Depends on 036-tracking-from-subs (US1 to US5, US9 and US12) and on what 036 depends on.
+# State: draft, to be probe-built before the owner flips it (flip.md). history.md has
+# how it got here.
+# Re-anchored on 2026-11-20 to `main` at `fc161a54`, after 036 landed (#327 to #333).
 ---
 
 # Feature Specification: The Stack Waits for a Steady Tracker, and Shows the Steering
@@ -71,7 +72,7 @@ Every scenario shares these definitions unless it says otherwise.
   `VirtualClock` from Unix 1768528800 (`2026-01-16T02:00:00Z`); the target M42; a
   `SimMount` with no backlash whose zero points put its axes on M42's apparent place at
   the start, and whose truth is loaded into the model with `load_known_terms`
-  (`crates/finder/src/model.rs:347`); a wrapper round the mount that logs every rate
+  (`crates/finder/src/model.rs:351`); a wrapper round the mount that logs every rate
   command with the console's time and its axis, as
   `crates/finder/tests/motion/tracking/pi_loop.rs:41` does: **the rate log**; frames
   stopped; and a `Tracker` on the console's clock at the site 40° N 75° W with a
@@ -79,7 +80,8 @@ Every scenario shares these definitions unless it says otherwise.
   **The rig waits for the first rates:** after `start` answers, it looks at the rate log
   every 10 ms of tokio time until the log holds at least one rate for each axis, and
   fails if that takes more than 5 s; then it waits 3.5 s more. A tracker's first rates
-  are sent by its task's first turn, not by `start` (036's plan.md § The tracker, **The rate task**), and a gap asked
+  are sent by its task's first turn, not by `start` (036's rate task, as landed:
+  `crates/finder/src/tracking.rs:1367`), and a gap asked
   for before them moves and claims nothing. The 3.5 s are for US6, under which a tracker
   settles for 2 s after its first rates and turns a gap away until then (FR-021): 036's US3's
   scenarios must pass before US6 and after it. Every scenario on the tracker rig begins
@@ -435,7 +437,7 @@ dropped** is the sum of the twelve counts of its `dropped`.
    30.0 and no `steering.exposure_s`; that the sub's `EXPTIME` is 30.0; that
    `settings.exposure_ms` is 30000.0 while the stack runs; that `steering.limited` is
    true, `steering.exposure_s` 30.0, `steering.over_limit` false and
-   `steering.longest_exposure_s` within 2% of the figure the test computes as 036's US5-S6
+   `steering.longest_exposure_s` within 2% of the figure the test computes as 036's US12-S1
    does for the console time of its read; and that `settings.exposure_ms` is 60000.0
    once `DELETE /api/imaging/stack` has answered (the stack set the exposure through its
    own lease and put the observer's back through it before letting the camera go. Worked
@@ -462,7 +464,7 @@ dropped** is the sum of the twelve counts of its `dropped`.
    `state.imaging().unwrap().steering().set_source(…)`: a scripted tracker whose target
    is the worked target, which names a longest exposure of 37.15 s and whose `gap`
    waits 10 s, **When** a test starts a stack, calls the simulator's
-   `set_unresponsive(true)` (`crates/simulator/src/controls.rs:115`) 1 s later, while
+   `set_unresponsive(true)` (`crates/simulator/src/controls.rs:117`) 1 s later, while
    the stack's first `before_exposure` waits in that gap, and waits until
    `stack.state` is `ended`, **Then** a committed test asserts that
    `stack.ended_reason` is `camera`; that `stack.error` is exactly
@@ -501,7 +503,7 @@ dropped** is the sum of the twelve counts of its `dropped`.
    pointing was 5′ from the target 038 would have read a push nobody made).
 8. **Given** the stacking rig with `set_rate_error(0.01)` on its mount and
    `PUT /api/imaging/settings` with `{"exposure_ms":5000}`, **When** a test calls
-   `sim.stop_frames()` (`crates/simulator/src/controls.rs:106`) as soon as the session
+   `sim.stop_frames()` (`crates/simulator/src/controls.rs:108`) as soon as the session
    reports `tracking`, so that no finder pointing reaches the tracker and its own
    corrections change no rate, sends `PUT /api/imaging/steering` with `{"on":false}`,
    starts a stack and waits until 12 subs are saved, **Then** a committed test asserts
@@ -1016,8 +1018,10 @@ step, the drift, the drift rate and the steering. This spec adds:
 - **Earlier features are in place.** `036-tracking-from-subs` has landed, and with it the
   specs it depends on, 015, 030 to 035 and 038 (flip.md § Prerequisites). What this spec
   uses of 036 is plan.md § What 036 provides. 035's stack holds the camera through 031's
-  lease, which this trio reaches through 035 (plan.md § What 035 provides). Every
-  `path:line` here was read at 49bb210.
+  lease, which this trio reaches through 035 (plan.md § What 035 provides). It was
+  re-anchored to 036's code on 2026-11-20 (flip.md § Prerequisites 2 and 3): every
+  `path:line` here was read by its content on `main` at `fc161a54`, whose line numbers
+  are cited; those the draft held were first read at 49bb210.
 - **Out of scope:**
   - everything 036 builds, which this spec uses as landed (plan.md § What 036 provides);
   - stopping a stack when tracking ends, and the run's states (037);

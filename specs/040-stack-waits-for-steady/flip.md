@@ -117,51 +117,85 @@ in the FR or success criterion that makes it.
    `030-imaging-camera-link`, `031-imaging-frames-on-console`,
    `032-imaging-solve-and-aim-point`, `033-focus-reading-and-aid`,
    `034-dark-and-flat-frames`, `035-live-stack` and `038-track-follows-a-push`, all in
-   this spec's `depends_on_landed` with `036-tracking-from-subs`. Not met: 036 is a
-   draft.
-2. **The trio is re-anchored against `main` after 036 lands.** Not met. Each point of
-   § What 036 provides is read in 036's landed code and corrected here where it
-   differs; every `path:line` here, read at 49bb210, is read again; the story that last
-   wrote each shared file is put right in § Refinement Record, the five files 036's US4
-   and 036's US5 last write before US6 among them; and the validator is re-run on `main`.
-3. **035 is read as landed, against § What 035 provides.** Not met. Before the flip each
-   of its nine points is read in the landed code, and these are settled:
+   this spec's `depends_on_landed` with `036-tracking-from-subs`. Met: 036 was flipped
+   to `ready` (`6287c51b`, #325) and landed on 2026-11-20 with its seven stories, US2 at
+   `c24f88cf` (#327), US1 at `8b13dcaf` (#328), US3 at `89ac00cf` (#329), US9 at
+   `950355a0` (#330), US4 at `1ad49378` (#331), US5 at `72877199` (#332) and US12 at
+   `fc161a54` (#333). What 036 depends on had landed before it, each with its last
+   story's merge (036's flip.md § Prerequisites 1): 015 at `a02dc35b` (US9, #177), 030
+   at `49f8dcd2` (US8, #269), 031 at `e9687ce9` (US9, #279), 032 at `670ddcf9` (US7,
+   #288), 033 at `80f414ff` (US7, #298), 034 at `002dbef8` (US8, #309), 035 at
+   `52785403` (US10, #321) and 038 at `1c2b427b` (US3, #260).
+2. **The trio is re-anchored against `main` after 036 lands.** Met on 2026-11-20, on
+   `main` at `fc161a54`. Each point of § What 036 provides was read in 036's landed code
+   and corrected where it differed: the cap's turn is the private `turn_for`, letting the
+   tracker go is `let_go`, and `SteeringEdit` refuses anything but a JSON object by a
+   `Deserialize` of its own; the section now cites that code by line, and no difference
+   found changes what a story builds. Every `path:line` here, read at 49bb210, was read
+   again by its content and its number put right: 038 and 036 had moved the citations of
+   `crates/finder/src/tracking.rs` (`impl Drop for Tracker`, `keyhole`, `take_up`, and
+   where a measurement opens and closes), 036's US1 those of the simulator's
+   `controls.rs`, and 038 those of `model.rs` and of the `dl` of `TrackControl.tsx`. The
+   names 036's re-anchoring left to this one (`set`, `FrameView`, `Refusal`,
+   `putImagingSettings`, `set_unresponsive`, the camera's lease, `set_solver`,
+   `solve_frame` and `SimulatedSolver`) are as the trio names them. The cites of 036's
+   US5 follow 036's cut of US5 into US12 (036's history.md). The story that last wrote
+   each shared file was read with `git log` on `main`: `crates/finder/tests/motion/main.rs`
+   is now 036's US12's, and the rest matched. The validator was re-run there.
+3. **035 is read as landed, against § What 035 provides.** Met on 2026-11-20, on `main`
+   at `fc161a54`, where 035's `stack/service.rs` and `StackBlock.tsx` are as 035 left
+   them (`6a519d49`, `6e506ec6`): each of its nine points was read in the landed code
+   and holds as written, and § What 035 provides now gives each its lines. These were
+   settled:
    - the taker's loop, its returns, and the worker's `process` and `run` are where § The
      stack puts US7's calls, by name and line (read by name on `main` on 2026-11-19,
-     after 035's US8 landed: § The stack says what was found);
+     after 035's US8 landed, and by line at `fc161a54`: § What 035 provides gives the
+     lines);
    - how the worker counts and lists a dropped sub, and what `Dropped::count` does with
-     an outcome it does not name: on `main` it is `unreachable!`, and US7 gives
+     an outcome it does not name: on `main` it is `unreachable!`
+     (`crates/finder/src/imaging/stack/service.rs:123`), and US7 gives
      `not_steady` its arm;
    - the stopping mark is the `tokio::sync::watch` of `bool` that 035's plan.md names
-     (point 2), and the taker holds a receiver of it;
+     (point 2), and the taker holds a receiver of it (both hold, `service.rs:488` and
+     `:769`);
    - the taker owns the run's `Lease` and it drops as the taker's task ends, and the
-     holder's `set` behaves as point 3 says. This replaces the first draft's use of
+     holder's `set` behaves as point 3 says (both hold, `service.rs:508` and
+     `crates/finder/src/imaging/mod.rs:901`). This replaces the first draft's use of
      034's `Calibration::restore_exposure`, which called `Imaging::set`, would be refused
      while the stack holds the camera and has since been removed from 034 (034 A1), and
      the second draft's restore in 035's ending, after the taker had returned and the
      lease with it;
    - 035's landed `crates/finder/src/imaging/stack/service.rs` holds none of the
      thirteen names 036's US2-S6 lists, so that US7-S6 rests on US7's own diff (read on `main`
-     at `52785403` on 2026-11-19: none). If it holds one, the trio goes back to the
-     owner before any story is dispatched;
+     at `52785403` on 2026-11-19, and again at `fc161a54` on 2026-11-20: none). If it
+     holds one, the trio goes back to the owner before any story is dispatched;
    - no landed test compares an imaging view, or the session's `imaging` object, whole
      on a console that tracks with its camera ready: from US7 such a view carries
-     `steering` (§ Shapes that existing tests pin);
+     `steering` (§ Shapes that existing tests pin). None does at `fc161a54`, 036's seven
+     test files among them. 036's US5-S5 compares the whole `steering` part before and
+     after refused edits (`crates/finder/tests/console/steering_cap.rs:602`), on 032's
+     solving rig, which does not track: two reads of one steering, which the keys US6
+     and US8 add leave equal there;
    - 031's MCP test still asserts `get_imaging_camera`'s description word for word, so
      US11 leaves it, and the test that calls every listed tool with `{}` still does so
-     on a console with no imaging;
+     on a console with no imaging (both hold, `crates/finder/tests/mcp/imaging.rs:199`
+     and `crates/finder/tests/mcp/motion.rs:528`; no `mcp` test changed after 035);
    - no test of 035 counts `dropped`'s keys, compares the whole object with a literal, a
      fixed list of keys, a golden file or a schema that lists its keys (a comparison of
      two serializations of the same `Dropped`, as
      `stack_console.rs` makes between `stack.json` and the view, is not one), or builds
-     `Dropped { .. }` by a struct literal without `..Default::default()`. If one does,
-     the trio goes back to the owner for an approval that names that test, before any
-     story is dispatched: no approval here covers an unnamed test;
-   - 035's `StackBlock` builds its `Dropped` line as § The page assumes;
+     `Dropped { .. }` by a struct literal without `..Default::default()` (none does at
+     `fc161a54`: `Dropped {` is found only in the type and its `impl`, and
+     `stack_console.rs` and `stack_loop.rs` read whatever keys `dropped` holds). If one
+     does, the trio goes back to the owner for an approval that names that test, before
+     any story is dispatched: no approval here covers an unnamed test;
+   - 035's `StackBlock` builds its `Dropped` line as § The page assumes (it does,
+     `crates/finder/web/src/components/StackBlock.tsx:62`);
    - no landed test of 031 to 035 reads a region of the Imaging page by its place from
-     the page's end (`getAllByRole("region").at(-1)` or `.at(-2)`): 036's block becomes
-     the page's last region. 034's US9-S1 places its block after `Imaging frame` and
-     `Focus`, and 035's US9-S6 its region after Calibration;
+     the page's end (`getAllByRole("region").at(-1)` or `.at(-2)`): this spec's block
+     becomes the page's last region. 034's US9-S1 places its block after `Imaging frame`
+     and `Focus`, and 035's US9-S6 its region after Calibration (none does at `fc161a54`:
+     the two `.at(-1)` there read arrays, not regions);
 4. **The owner decisions are settled and the approvals given** (§ Owner decisions and
    § Owner approvals above). Not met: this spec's decisions, 9 to 12 and 17, are open,
    and 036's flip settles the rest.
@@ -185,8 +219,10 @@ in the FR or success criterion that makes it.
    proven on the real mount (the plan document, § Before any flip, 4), and its backlash
    measured on both axes: altitude reverses at transit, and azimuth too for a target
    that culminates north of the zenith. Not met.
-7. **The documents this trio cites are on `main`.** Not met: the plan document,
-   ADR-0002 and the research note are in the drafting worktree, uncommitted.
+7. **The documents this trio cites are on `main`.** Met: the plan document
+   (`docs/plans/2026-11-15-specs-030-037-imaging.md`), ADR-0002 and the research note
+   (`docs/research/2026-11-15-imaging-camera.md`) have been on `main` since 030's flip
+   (`55e41f57`), and are there at `fc161a54`.
 8. **No operator-staged files are needed.** Met.
 9. **The plan document agrees with the settled decisions.** Not met on `main`, which
    does not hold the plan document yet. In this worktree its list of MCP tools has none
@@ -195,12 +231,12 @@ in the FR or success criterion that makes it.
    If the owner settles decision 11 otherwise, the plan document is corrected in the
    same change. Rule 1 is not edited: owner decision 17 declares the further times a
    tracker is not steady on its own.
-10. **031 carries the camera's lease.** Met in the drafts: 031's trio in this worktree
-    carries it as its 036's US9 (031 plan.md § The camera lease), with `Imaging::lease`,
-    `Lease::take` and `Lease::set` as this trio names them. Not met on `main`, where 031
-    has not landed; 035 tracks it (035 plan.md § Prerequisites 8), and flip.md § Prerequisites 2
-    and 3 read it as landed. This trio reaches the lease only through § What 035
-provides, points 3 to 5.
+10. **031 carries the camera's lease.** Met: 031's US9 landed it on `main`
+    (`e9687ce9`), with `Imaging::lease`, `Lease::take` and `Lease::set` as this trio
+    names them (`crates/finder/src/imaging/mod.rs:736`,
+    `crates/finder/src/imaging/mod.rs:909`, `crates/finder/src/imaging/mod.rs:901` at
+    `fc161a54`), and 035 holds it for a stack. This trio reaches the lease only through
+    § What 035 provides, points 3 to 5.
 
 ## Field checks, outside the factory
 

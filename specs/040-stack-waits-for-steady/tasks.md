@@ -56,8 +56,8 @@ builder's task: a story is dispatched only once they are met.
   test file, 036's among them. US10 is a story of tests only: it writes nothing under
   `crates/finder/src`, its tests pass on the code of US6 as soon as they are written, and
   one that fails is escalated with its output (plan.md § Plan traps 36).
-- Every code citation is `path:line` as read at 49bb210. If a cited line has moved,
-  re-read it rather than guess.
+- Every `path:line` was read on `main` at `fc161a54` in the re-anchoring of 2026-11-20
+  and names what it says there. If a cited line has moved, re-read it rather than guess.
 - Add no dependency and change no `Cargo.toml`. Change nothing under
   `crates/scope-node`, `crates/scope-link`, `crates/simulator` or `proto/`.
 - Do not edit `specs/040-stack-waits-for-steady/` or `specs/036-tracking-from-subs/`.
@@ -115,7 +115,8 @@ builder's task: a story is dispatched only once they are met.
   wherever the run's push becomes `Moving` and wherever a `Moving` push ends with no
   follow, with the session's lock released, and change nothing else there (plan.md § The
   session's push). Do not edit `crates/finder/tests/motion/steering.rs`,
-  `steering_claim.rs` or 036's US5's two test files: they pass as they stand.
+  `steering_claim.rs` or 036's two `steering_cap.rs`, US5's in `console` and US12's in
+  `motion`: they pass as they stand.
 - [ ] T031 [US6] In `crates/finder/src/imaging/steering.rs`, add `POLL`, the wait before
   the gap, the look at the tracker every `POLL` while the gap's answer is awaited, and
   the check after it in `before_exposure`, `steady` and `waiting` in the

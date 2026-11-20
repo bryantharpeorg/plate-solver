@@ -159,3 +159,10 @@ the probe round or the earlier draft it told of. As each read:
 | `dropped_not_steady` set to 0 where a stack takes its `Hold` | Since the console started; cleared in `release` | It sits beside 035's count of the same drops, which is one stack's and stays after the stack has ended. Cleared in `release`, the two would disagree after every stop. |
 | `set_steering` as a story of its own, built last | A part of US5; a part of US8 | Spec owner decision 11 named it "one more story after US5". US5 is the second largest story with this fold's cases, and a tool, its schema and a module in a third test binary are about 9 KB more. |
 | `get_imaging_camera`'s description left as 031 has it | Naming the stack and the steering in it | 031's MCP test asserts its words, and no existing test is edited. |
+
+Added at the re-anchor of 2026-11-20, for principle V of constitution 1.3.0, which asks a
+plan to name what it looked at and why it turned it down:
+
+| Decision | Rejected | Why |
+|---|---|---|
+| The wait for a steady tracker, the drop of a sub taken across a time it was not and the readout are this project's own code | PHD2 (BSD-3-Clause), the proven guider, which also tells an imaging program when its guiding has settled | It guides a mount through ASCOM, INDI or ST-4, and this mount is driven by the scope node, which has no INDI mount driver. It expects a guide camera's steady stream, not imaging subs that may come minutes apart. Nothing of it is copied. |
