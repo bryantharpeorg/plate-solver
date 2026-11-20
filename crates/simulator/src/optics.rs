@@ -7,7 +7,14 @@ use crate::{
 };
 use math_core::{attitude::RotationMatrix, PinholeCamera, UnitVector};
 use pattern_database::PatternDatabase;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
+
+/// How long the simulator remembers where its telescope pointed, in seconds of
+/// its clock: an hour, the simulated imaging camera's longest exposure (030).
+pub const HISTORY_S: f64 = 3600.0;
 
 /// Full-frame pixels use (x, y); the horizontal field is in degrees.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -78,6 +85,7 @@ pub struct Simulator {
     pub(crate) state: Arc<Mutex<Pointing>>,
     pub(crate) imaging_bench: Arc<Mutex<(SensorPattern, LightPath)>>,
     pub(crate) imaging_scene: Arc<Mutex<Scene>>,
+    history: Arc<Mutex<VecDeque<(f64, f64, f64)>>>,
     clock: VirtualClock,
 }
 
@@ -95,6 +103,7 @@ impl Simulator {
             })),
             imaging_bench: Arc::new(Mutex::new((SensorPattern::default(), LightPath::default()))),
             imaging_scene: Arc::new(Mutex::new(Scene::default())),
+            history: Arc::new(Mutex::new(VecDeque::new())),
             clock,
         }
     }
@@ -110,6 +119,7 @@ impl Simulator {
     pub fn set_optics(&self, optics: Optics) {
         optics.eyepiece_ray();
         self.state.lock().unwrap().optics = optics;
+        self.forget();
     }
 
     pub fn push_to(&self, alt: f64, az: f64) {
@@ -117,6 +127,54 @@ impl Simulator {
         let mut state = self.state.lock().unwrap();
         state.alt = alt;
         state.az = az.rem_euclid(360.0);
+        drop(state);
+        self.forget();
+    }
+
+    /// Remember the direction now. A sample at the newest sample's instant
+    /// replaces it; samples older than HISTORY_S are dropped.
+    pub(crate) fn remember(&self) {
+        let now = self.clock.now();
+        let p = *self.state.lock().unwrap();
+        let mut history = self.history.lock().unwrap();
+        if history.back().is_some_and(|sample| sample.0 == now) {
+            history.pop_back();
+        }
+        history.push_back((now, p.alt, p.az));
+        while history
+            .front()
+            .is_some_and(|sample| sample.0 < now - HISTORY_S)
+        {
+            history.pop_front();
+        }
+    }
+
+    /// Forget every sample: the telescope was moved by hand.
+    pub(crate) fn forget(&self) {
+        self.history.lock().unwrap().clear();
+    }
+
+    /// The camera centre's altitude and azimuth at an instant. Outside the
+    /// remembered interval, preserve 030's answer from the direction now.
+    fn direction_at(&self, unix_s: f64) -> (f64, f64) {
+        let history = self.history.lock().unwrap();
+        let upper = history.partition_point(|sample| sample.0 < unix_s);
+        if let Some(b) = history.get(upper) {
+            let a = history[upper.saturating_sub(1)];
+            if a.0 <= unix_s {
+                let f = if a.0 == b.0 {
+                    0.0
+                } else {
+                    (unix_s - a.0) / (b.0 - a.0)
+                };
+                let alt = a.1 + f * (b.1 - a.1);
+                let turn = (b.2 - a.2 + 180.0).rem_euclid(360.0) - 180.0;
+                let az = (a.2 + f * turn).rem_euclid(360.0);
+                return (alt, az);
+            }
+        }
+        let p = *self.state.lock().unwrap();
+        (p.alt, p.az)
     }
 
     pub fn telescope(&self) -> TrueDirections {
@@ -256,7 +314,8 @@ impl Simulator {
     /// The imaging frame's axes in J2000, with the optics in force.
     pub(crate) fn imaging_rotation_at(&self, unix_s: f64) -> (RotationMatrix, ImagingOptics) {
         let p = *self.state.lock().unwrap();
-        let rotation = sky::camera_rotation(p.alt, p.az, p.site, unix_s);
+        let (alt, az) = self.direction_at(unix_s);
+        let rotation = sky::camera_rotation(alt, az, p.site, unix_s);
         let boresight = sky::unrotate(rotation, p.optics.eyepiece_ray());
         let up = unit(rotation.rows[2]);
         let along = up.x * boresight.x + up.y * boresight.y + up.z * boresight.z;

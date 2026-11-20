@@ -33,6 +33,7 @@ impl Simulator {
     /// Connect a mount using this simulator's virtual clock. Its true direction
     /// is the eyepiece direction; the finder camera retains its known aim point.
     pub fn connect_mount(&self, mount: SimMount) {
+        self.sky.forget();
         *self.mount.lock().unwrap() = Some(mount);
         *self.followed.lock().unwrap() = None;
         self.follow_mount();
@@ -98,6 +99,7 @@ impl Simulator {
         self.follow_mount();
         self.sky.point_eyepiece_at(ra, dec);
         self.push_mount_to_eyepiece();
+        self.sky.forget();
     }
     pub fn push_by(&self, turn: f64, tilt: f64) {
         let current = self.telescope().camera;
@@ -120,6 +122,7 @@ impl Deref for Simulator {
     type Target = optics::Simulator;
     fn deref(&self) -> &Self::Target {
         self.follow_mount();
+        self.sky.remember();
         &self.sky
     }
 }
