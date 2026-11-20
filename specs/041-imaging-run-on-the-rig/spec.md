@@ -134,10 +134,11 @@ in US5.
      (`crates/finder/src/tracking.rs:31`); and `run.centring.offset_arcsec` is within
      30″ of that true offset, the deadband three times over;
    - the imaging view's `frame.purpose` read `run` when the test first saw `stacking`;
-   - at no sample in the 9.5 s after `track.state` first read `tracking` did
+   - at no sample in the 11 s after `track.state` first read `tracking` did
      `run.state` read anything but `slewing` or `tracking`: the mount part reads steady
-     only once 040's tracker has been steady for the whole of 032's fit reach, 10 s at
-     the simulator's exposure of 1 s (FR-019; less the sampling);
+     only once 040's tracker has settled and then been steady for the whole of 032's
+     fit reach, 10 s at the simulator's exposure of 1 s (FR-019; 12.1 s on the
+     simulator);
    - `track.state`, once it first read `tracking`, never read anything else.
 2. **Given** the centred rig, **Then** a committed test asserts that
    `POST /api/imaging/run` with `{}` answers 409: with `no target is selected` after
@@ -173,6 +174,10 @@ in US5.
      the run stacks, the run ends `pushed_away` within 60 s, and `track.state` is still
      `tracking` with `track.push.state` `moving` or `following` (oracle: the session,
      whose `push` is 038's);
+   - after `rig.mount.push_by(0.0, -0.1)` once a second while the run stacks, until the
+     run ends or 20 times, the run ends `pushed_away` between 10 s and 15 s after the
+     first push: a push that keeps reading `moving` ends the run once it has lasted
+     `PUSH_GRACE` (10.4 s on the simulator; oracle: the session, whose `push` is 038's);
    - on a centred rig whose clock starts 120 s before the Sun's centre reaches −0.83°
      at the site, found by the test by bisection of `crate::support::goto::sun_truth`
      (`crates/finder/tests/support/goto.rs:91`), with the target M81, a run started at
@@ -219,7 +224,34 @@ in US5.
      `{"target":"M45"}`, `repoint()` answers `Ok(())`, the session's `track.state` is
      `off` right after it and still `off` 10 s later, and `state()` is
      `Ended(Ending::TargetChanged)`: a re-centre does not ask Track for a target the
-     run was not started for (oracle: the session).
+     run was not started for (oracle: the session);
+   - on a centred rig of its own, after `target()` has answered M42 and
+     `PUT /api/session` has set `{"target":"M45"}`, `point(By::Page)` answers
+     `Err("the target was changed")` and the session's `track` is absent or its
+     `track.wanted` is not true: the part asks Track for no target but the one it
+     answered (oracle: the session);
+   - on a centred rig of its own, after `point(By::Page)` has answered and `state()`
+     has read `Tracking { steady: true }`, then `PUT /api/session` with
+     `{"target":"M45"}`, `POST /api/track` with `{"on":true}`, answered 200, and
+     `PUT /api/session` with `{"target":"M42"}` again, `state()` is
+     `Ended(Ending::TargetChanged)`: Track on another target ends the motion whatever
+     the session names (oracle: the session);
+   - on a centred rig of its own, after `point(By::Page)` has answered, `state()` has
+     read `Tracking { steady: true }`, `POST /api/stop` has been sent and, 1 s later,
+     `POST /api/track` with `{"on":true}` has answered 200, `state()` is
+     `Ended(Ending::Stopped)` 1 s after that while `track.state` is not `off`: Track
+     turned on again after a Stop does not bring the run back (oracle: the session);
+   - on a centred rig of its own, after `point(By::Page)` has answered, `state()` has
+     read `Tracking { steady: true }` and `PUT /api/session` has set
+     `{"min_alt_deg":80.0}`, `repoint()` asked 1 s later answers
+     `Err(Failure::Mount("M42 is below the minimum altitude"))`, Track's own refusal
+     (oracle: Track's words);
+   - on a centred rig of its own, after `point(By::Page)` has answered and `state()`
+     has read `Tracking { steady: true }`, one imaging frame taken 12 s later by
+     `console::camera`'s `hold` and `take`, given back with `release`, and solved by
+     `console::solver` gives `near_arcsec` 449″ within 1″, a quarter of the simulated
+     sensor's shorter side at its scale (448.9″ on the simulator; oracle: the
+     simulator's sensor).
 6. **Given** the centred rig, on which `PUT /api/imaging/settings` has set
    `{"exposure_ms":10000}`, **When** a test sends `POST /api/imaging/frame`, sleeps 1 s
    and sends `POST /api/imaging/run` with `{}`, **Then** a committed test asserts 409
@@ -243,7 +275,7 @@ press Stop while it does so, Stop still wins.
 **Independent Test**: `crates/finder/tests/console/imaging_run_centring.rs`, the module
 `imaging_run_centring` of `console`, for the scripted scenarios US5-S1 to US5-S3, and
 `crates/finder/tests/motion/imaging_run_centring.rs`, the module `imaging_run_centring`
-of `motion`, for US5-S4 to US5-S7 on the run rig. The `test` gate's
+of `motion`, for US5-S4 to US5-S8 on the run rig. The `test` gate's
 `cargo nextest run --workspace --all-targets --all-features --locked` runs both; during
 development, `cargo nextest run -p finder --locked --test console imaging_run_centring::`
 and `cargo nextest run -p finder --locked --test motion imaging_run_centring::`.
@@ -288,12 +320,26 @@ and `cargo nextest run -p finder --locked --test motion imaging_run_centring::`.
      `centring.tries` 0, four `solver.solve`, and neither `mount.repoint` nor
      `stack.start` in `calls()`;
    - an offset of 400″ with `aim_moved` false three times, true once, false three
-     times more, and then 50″, reaches `stacking` with `centring.tries` 1 and one
-     `mount.repoint`: a re-centre starts the count of such solves again;
+     times more, and then 50″, reaches `stacking` with `centring.tries` 1, one
+     `mount.repoint`, `centring.offset_arcsec` 50, eight `solver.solve` and no
+     `warnings`: a re-centre starts the count of such solves again;
+   - with `repoint` held, an offset of 400″ with `aim_moved` true, then 400″ with
+     `aim_moved` false, then 50″ with `aim_moved` false: the message is
+     `Centring M42: 400″ from the sensor's centre, try 1 of 3.` while `repoint` is
+     held; and with `solve` held, `repoint` released and a settle, then the mount set
+     to tracking and not steady and `solve` released, after a settle the state is
+     `centring` and the message is
+     `Centring M42: 400″ from the sensor's centre, no new aim point yet. Waiting for the mount to settle; nothing to do.`:
+     after a try as before one, a solve that measured nothing reads the second message;
    - an offset of 400″, inside the `near_arcsec` of 450″, with `aim_moved` true four
      times reaches `stacking` with `centring.tries` 3, `mount.repoint` three times in
      `calls()`, and `warnings`
      `["M42 is 400″ from the sensor's centre after 3 tries; it is stacked where it is."]`;
+   - an offset of exactly 90″ with `aim_moved` true reaches `stacking` with
+     `centring.tries` 0 and no `mount.repoint`; and an offset of exactly 450″, the
+     `near_arcsec`, with `aim_moved` true four times reaches `stacking` with `warnings`
+     `["M42 is 450″ from the sensor's centre after 3 tries; it is stacked where it is."]`:
+     both bounds hold the target that sits on them;
    - an offset of 180″, outside the tolerance of 90″ and not over 036's 180″, with
      `aim_moved` true four times reaches `stacking` with `warnings`
      `["M42 is 180″ from the sensor's centre after 3 tries; the stack's steering will bring it in."]`,
@@ -331,8 +377,12 @@ and `cargo nextest run -p finder --locked --test motion imaging_run_centring::`.
    - sampling `GET /api/session` every 100 ms, the first sample whose `track.state` is
      not `off`, after the first sample that read `off` while its `imaging.run.state`
      was `centring`, came at most 2 s later: the re-centre waits for the finder
-     camera's first live pointing with Track off, 0.30 s on the simulator, and no
-     longer (oracle: the session).
+     camera's first live pointing with Track off, which came within two polls
+     (0.50 s) on the simulator, and no longer (oracle: the session);
+   - on a rig of its own, the same run with `Simulator::set_frame_interval` set to
+     2 s once the rig is ready reaches `stacking` with `run.centring.tries` 1 and the
+     true offset at most the tolerance plus 20″: a re-centre waits for a finder camera
+     slower than one poll (5.59″ on the simulator).
 5. **Given** the run rig with the console's own mount and camera parts and the script's
    solver, focus and stack parts, the script's `push_solve` given an offset of 400″ with
    `aim_moved` true four times, all such a run can ask for (US5-S2), **When** a test
@@ -359,6 +409,14 @@ and `cargo nextest run -p finder --locked --test motion imaging_run_centring::`.
    the session's `track.state` is `off` 10 s later; and that from 2 s after the ending
    the simulated mount is at rest for 10 s: the re-centre did not ask Track for the new
    target (oracle: the session and the simulator's mount).
+8. **Given** the run rig with the session's aim point set first to the true aim point
+   with `Session::set_aim`, and its mount part alone, made by the test with
+   `finder::imaging::run::console::mount`, no run being started, **Then** a committed
+   test asserts that, after `point(By::Page)` has answered, `state()` has read
+   `Tracking { steady: true }` and `Simulator::stop_frames()` has been called,
+   `repoint()` answers `Ok(())` between 4.9 s and 5.5 s after it was asked: with no
+   live pointing, a re-centre goes on after `FRESH_POLLS` polls (FR-025; 5.000 s on the
+   simulator; oracle: the simulator's clock).
 
 ---
 
@@ -388,14 +446,15 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_fo
    and no `solver.solve` in it.
 2. **Given** the paused run of US6-S1, **When** a test calls `runner.resume(false)` and
    settles, **Then** a committed test asserts that `calls()` goes on with
-   `focus.close_aid`, `focus.check`, `camera.hold`, `camera.take`, `solver.solve 2`, and
-   that the state is `stacking`.
+   `focus.close_aid`, `focus.check`, `camera.hold`, `camera.take`, `solver.solve 2`,
+   that the state is `stacking`, and that `pause_ends_at` is absent.
 3. **Given** the paused run of US6-S1, **When** a test calls `runner.resume(true)` and
    settles, **Then** a committed test asserts that `calls()` goes on with
    `focus.close_aid`, `camera.hold`, `camera.take`, `solver.solve 2`, with no second
    `focus.check`;
-   that the state is `stacking`; and that `warnings` is
-   `["Focus was not checked again: the observer went on anyway."]`.
+   that the state is `stacking`; that `warnings` is
+   `["Focus was not checked again: the observer went on anyway."]`; and that
+   `pause_ends_at` is absent.
 4. **Given** the paused run of US6-S1, **Then** a committed test asserts that 899.5 s
    after the start the state is still `focus_pause`; that 1 s later the run has ended
    `focus_timeout` with
@@ -404,7 +463,7 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_fo
 5. **Given** the paused run of US6-S1, in a run of its own each, **Then** a committed
    test asserts that `runner.stop()` ends it `stopped`, and the mount set to
    `Ended(Ending::TooLow)` ends it `too_low`, each with `focus.close_aid` called once
-   before `camera.release`; that with
+   before `camera.release` and the ended view with no `pause_ends_at`; that with
    `fail_open_aid(Failure::Other("the focus aid is busy"))` the run still pauses, with
    `warnings` `["The focus aid could not be opened: the focus aid is busy."]`, and a
    `runner.stop()` on that run still calls `focus.close_aid` once, before
@@ -445,6 +504,9 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_fo
      flight, FR-021);
    - on a focus rig whose R is fresh, so that the camera has no focus record, a run
      pauses with `focus.verdict` `no_record`;
+   - on a focus rig built with no imaging solver, and no focus aid run on it, a run
+     ends `solver_unavailable` at its focus check, with no `focus_pause` (oracle: 033's
+     refusal `this console has no imaging solver`);
    - with a `DELETE /api/imaging/focus` sent, and not waited for, while a run's own
      check runs (the imaging view's `focus.aid.state` `running` and `run.state`
      `focus_check`), the run ends `stopped` with `run.ended.message`
@@ -463,7 +525,17 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_fo
      `focus.check` and one `focus.open_aid`, with `warnings`
      `["The tracker was not steady during the focus check."]`;
    - with `unsteady(1)` and the script's default check, which is good, the run reaches
-     `stacking` with one `focus.check`: a check that goes on is not repeated.
+     `stacking` with one `focus.check`: a check that goes on is not repeated;
+   - with `push_focus` giving a `Verdict::NoRecord` check with reading 3.2 in
+     arcseconds and no record, and `unsteady(1)`, the run pauses after one
+     `focus.check`: only a check that is clearly out or unmeasurable is repeated;
+   - with the check of US6-S1 given three times and `unsteady(1)`, the run pauses
+     after two `focus.check`; after `unsteady(1)` again and a `resume(false)`, it
+     reaches `stacking` after four `focus.check` and with no `warnings`: every check
+     the run makes after a resume starts the rule again;
+   - with the check of US6-S1 once and `unsteady(1)`, the run reaches `stacking` and
+     `calls()` holds no `camera.release` between the two `focus.check`: a repeat gives
+     the lease up no second time.
 9. **Given** the paused run of US6-S1, in a run of its own each, **Then** a committed
    test asserts that:
    - a `resume(true)` called right after a `resume(false)`, with no settle between, is
@@ -492,7 +564,11 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_fo
       `focus.verdict` `unmeasurable`, and `warnings`
       `["The focus check did not finish: the focus check ended: failed: the camera stopped answering."]`:
       a check that failed for another reason does not tell the observer to look
-      for cloud.
+      for cloud;
+    - `Err(Failure::Other("the focus check ended: failed: the camera stopped answering"))`
+      and then the `Verdict::ClearlyOut` check of US6-S1: after the first pause and a
+      `resume(false)`, the run pauses again with the message of US6-S1: each pause
+      words its own verdict, not the failure of a check before it.
 11. **Given** a script whose `push_focus` gives the `Verdict::ClearlyOut` check of
     US6-S1 twice, **When** a test starts a scripted run, settles, calls
     `runner.resume(false)` and settles, **Then** a committed test asserts that the state
@@ -529,18 +605,24 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_li
    a dropped sub does not count toward the number asked for.
 2. **Given** a script holding `solve`, and a scripted run started with `duration_s` 60,
    **When** a test waits 100 s, releases `solve`, and settles, **Then** a committed test
-   asserts that 58.5 s later the state is still `stacking`, and that 1 s after that the
+   asserts that 58.6 s later the state is still `stacking`, and that 1 s after that the
    run has ended `duration_limit` with `Finished: the 1-minute limit was reached.` and
    `stack.stop keep` called once: the time before stacking does not count.
 3. **Given** a scripted run that is stacking, **When** a test calls
    `set_stack(4, &[], false)` and settles, and then calls
    `set_stack(4, &[("behind", 30), ("not_solved", 7), ("too_few_stars", 3)], false)`,
-   **Then** a committed test asserts that 598.5 s later the state is still `stacking`,
+   **Then** a committed test asserts that 598.6 s later the state is still `stacking`,
    and that 1 s after that the run has ended `subs_failing` with
    `Ended: no sub was stacked for 10 minutes (not solved 7, too few stars 3). Cloud, dew or a tree is the usual cause; check the sky and start again.`
    and `stack.stop keep` called once: the rule is time without a stacked sub, the
    reasons are written with spaces, and a sub the stack let go because the console was
-   behind is not named.
+   behind is not named; that on a run of its own, after
+   `set_stack(4, &[("not_solved", 2)], false)`, a settle and
+   `set_stack(4, &[("not_solved", 9)], false)`, the run has ended `subs_failing` 601 s
+   later with a message holding `(not solved 7)`: the words give each reason's rise
+   since the last stacked sub, not its total; and that on a run of its own, after
+   `set_stack(4, &[], false)`, a settle and `set_stack(4, &[("not_solved", 1)], false)`,
+   the run has ended `subs_failing` 601 s later: a single failed sub is enough.
 4. **Given** a scripted run that is stacking, in a run of its own each, **When** a test
    calls `end_stack(Some(failure))` and settles, **Then** a committed test asserts, for
    `Failure::Camera("no imaging frame header arrived within 152 s")`,
@@ -551,8 +633,12 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_li
    `save_failed`, `solver_unavailable`, `solver_failing` and `stack_failed`, the last
    with `Ended: the stack stopped: the stack's grid could not be built.`; that after
    `end_stack(None)` and a settle a run has ended `stopped` with
-   `Ended: the stack was stopped.`; and that each of the six
-   runs called `stack.stop keep` once, so that the stack is saved whoever ended it.
+   `Ended: the stack was stopped.`; that each of the six
+   runs called `stack.stop keep` once, so that the stack is saved whoever ended it; and
+   that a run started with `subs` 3, given `set_stack(3, &[], false)` and then
+   `end_stack(Some(Failure::Camera("the camera stopped answering")))` with no settle
+   between, has ended `camera_failed` after a settle: a stack's failure is judged
+   before the count limit.
 5. **Given** a scripted run that is stacking, **When** a test calls
    `end_stack(Some(Failure::Camera("the scope node is not connected")))` and, with no
    settle between, sets the mount to `Ended(Ending::LinkLost)`, and settles, **Then** a
@@ -567,7 +653,7 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_li
      is still `stacking`: neither reason is a failed sub;
    - 700 s after `set_stack(4, &[("not_solved", 3)], true)` the state is still
      `paused_by_tracker`; and after `set_stack(4, &[("not_solved", 3)], false)` it is
-     `stacking` 590 s later and has ended `subs_failing` 12 s after that: time in
+     `stacking` 598.6 s later and has ended `subs_failing` 1 s after that: time in
      which the tracker pauses the stack does not count.
 7. **Given** a scripted run started with `subs` 3 and `keep_subs` false that is
    stacking, **When** a test calls `set_stack(3, &[("not_solved", 1)], false)` and
@@ -575,7 +661,7 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_li
    `stack.stop discard` called once and never `stack.stop keep`.
 8. **Given** a script holding `solve`, and a scripted run started with `duration_s` 60,
    **When** a test waits 100 s, releases `solve`, calls `set_stack(0, &[], true)` right
-   after and settles, **Then** a committed test asserts that 58.5 s later the state is
+   after and settles, **Then** a committed test asserts that 58.6 s later the state is
    `paused_by_tracker`, and that 1 s after that the run has ended `duration_limit`: the
    time the tracker pauses the stack does count.
 9. **Given** a scripted run that is stacking, **When** a test calls
@@ -583,7 +669,11 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_li
    `set_stack(4, &[("not_solved", 9)], false)` and waits 400 s, calls
    `set_stack(5, &[("not_solved", 9)], false)` and settles, and calls
    `set_stack(5, &[("not_solved", 18)], false)` and waits 400 s, **Then** a committed
-   test asserts that the state is still `stacking`: a stacked sub starts the time again.
+   test asserts that the state is still `stacking`: a stacked sub starts the time again;
+   and that on a run of its own, after `set_stack(4, &[("not_solved", 9)], false)`, a
+   settle and `set_stack(5, &[("not_solved", 9)], false)`, the state is still
+   `stacking` 700 s later: a stacked sub keeps the drops it saw, so they end nothing
+   later.
 
 ---
 
@@ -665,7 +755,13 @@ runs both; during development,
    16777216, W and H being the imaging view's `camera.width` and `camera.height`, each
    divided by `settings.binning` and rounded up, which is 32017096 on this rig's 1236 ×
    822 at binning 1; and that the folder holds none once the run has ended, beside its
-   `stack.json` (oracle: the imaging view, and 035's files of FR-033).
+   `stack.json` (oracle: the imaging view, and 035's files of FR-033); and that, in a
+   plain `#[test]` of its own,
+   `finder::imaging::run::console::reserve_bytes(4944, 3284, 1)` is 260318656,
+   `reserve_bytes(4944, 3284, 3)` is 43845616 (15 × 1648 × 1095 + 16777216; rounded
+   down it would be 43820896), and `reserve_bytes(1236, 822, 0)` is 32017096: a binned
+   side is rounded up, and a binning of 0 counts as 1 (oracle: the arithmetic typed
+   into the test).
 8. **Given** the rig of US8-S1 with a run that is stacking, **When** a test sends
    `DELETE /api/imaging/run`, **Then** a committed test asserts `stopped`, the imaging
    view's `stack.state` `ended`, a `run.json` in the run's folder, `track.state` still
@@ -738,11 +834,11 @@ runs both; during development,
   032 holds back while Track is on, which is where every aim reading of a run goes, does
   move it: the re-centre's Track off puts it in force (FR-022; 032's FR-036).
 - **No finder live pointing arrives after the re-centre's Track off.** After 5 s the
-  run asks Track anyway, and Track decides with the pointing it has, taken at the old
-  aim point; an aim point 032 held back stays held under the new Track, so the next
-  solve asks for another re-centre, and at worst a try is spent. A finder camera that
-  gives a live pointing less often than every 5 s is already outside what 015's tracker
-  is built for (`crates/finder/src/tracking.rs:248`).
+  run asks Track anyway (US5-S8), and Track decides with the pointing it has, taken at
+  the old aim point; an aim point 032 held back stays held under the new Track, so the
+  next solve asks for another re-centre, and at worst a try is spent. A finder camera
+  that gives a live pointing less often than every 5 s is already outside what 015's
+  tracker is built for (`crates/finder/src/tracking.rs:248`).
 - **A newly measured aim point while Track is on.** 032 holds it back until Track is
   off, so the tracker never chases it and, since 038, it is never read as a push by
   hand that marks the pointing model's slip (032's FR-036; 032's owner decision 25, which

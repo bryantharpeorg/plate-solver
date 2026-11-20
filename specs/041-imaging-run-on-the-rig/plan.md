@@ -432,13 +432,13 @@ uses and no story here writes. A call is listed when it is made, before any hold
 
 ## Interfaces
 
-Everything 030 to 036, 038 and 040 create is named as their plan.md gives it in the
+Everything 030 to 036, 038, 040 and 043 create is named as their plan.md gives it in the
 drafting worktree, and 037's as its plan.md gives it. The lease of the imaging camera,
 which the plan document's amendment 1 gives 031, is 031's US9; 033, 034 and 035 take the
 same lease. All of it is re-read on `main` before the flip (flip.md § Prerequisites 2
 and 3).
 
-### What 030 to 036, 038 and 040 offer the console's parts (read, never written, by this spec)
+### What 030 to 036, 038, 040 and 043 offer the console's parts (read, never written, by this spec)
 
 | What a part needs | From | Name | Where it is written |
 |---|---|---|---|
@@ -458,6 +458,7 @@ and 3).
 | whether the tracker is steady enough to expose, and was over a past window | 036, 040 | `Session::steered()` → `Option<Arc<dyn Steered>>`; `Steered::steady()`, `Steered::steady_between(start, end)` over console Unix seconds, the trait's (036) and the tracker's answers to both (040 FR-021) | 036 plan.md § The session, § The tracking error and the interface; 040 plan.md, the tracker's two answers |
 | how far back an aim reading fits the finder camera's solves | 032 | `crate::imaging::relation::FIT_REACH_S`, 10 s, or the exposure when that is longer | 032 plan.md § The relation |
 | a push by hand, and whether it has settled | 038 | `TrackView::push` → `moving` or `following`, absent with no push | 038 spec.md FR-009 |
+| an abort, and a stack's stop that awaits one, that answer on a scope node that has stopped answering | 043 | `Imaging::abort()` answers within `crate::imaging::ABORT_WAIT`, 5 s, whether or not the node answers, the frame having then ended `aborted`; so `Stacker::stop()` answers within that and the stack's save, the stack `ended` and `stopped`. The camera part's `abort` and the stack part's `stop` await them as this plan writes them, with no race or limit of their own, and a run's ending finishes on a lost link (US8-S6) | 043 plan.md § What this gives later specs |
 
 ### The console's mount part (`crates/finder/src/imaging/run/console.rs`, new, US4; the wait of `repoint`, US5)
 
@@ -597,8 +598,11 @@ and Track's answer; and the tokio instant at which `state` first read 038's push
   6. `asked` is `Err(error)`: `Err(Mount(message))`, the error's `message`. Otherwise
      `Ok(())`.
 
-  Steps 1, 3's check and 5 guard one window between them; a mutation of any one alone
-  survives on the simulator, and US5-S5 catches two removed together.
+  Steps 1, 3's check and 5 guard one window between them. A mutation of any one alone
+  survives on the simulator, and so do steps 1 and 5 removed together and steps 1 and
+  3's check removed together: step 3 checks the generation at each poll, and step 5
+  stands in for both. US5-S5 catches step 3's check and step 5 removed together, and
+  US4-S5 and US5-S5 catch all three.
 
   **Step 5 comes before `asked` is read.** A Stop that lands while step 4 runs makes
   Track itself answer an error: `Session::start_tracking` answers `stopped` when the
@@ -841,7 +845,8 @@ to look for either (US6-S10).
 
 **An unsteady check is repeated once.** The run reads the console clock before it
 calls `focus.check` and again when it answers. For a verdict of `ClearlyOut` or
-`Unmeasurable`, it asks `mount.steady_between` over those two times. When the tracker
+`Unmeasurable`, and not for a check that did not finish, it asks
+`mount.steady_between` over those two times. When the tracker
 was not steady, and this check is not itself such a repeat, the check is made again at
 once, `steady(None)` and `guarded(focus.check())`, with no pause and no second
 `camera.release()`: trailed stars read
@@ -854,7 +859,8 @@ a resume starts the rule again.
 Then, for a check that pauses:
 1. the state is `focus_pause` with the verdict's message; `pause_ends_at` is the
    console clock's time plus `FOCUS_PAUSE_LIMIT`; the run notes that it is in a
-   pause, and takes resumes from this moment, the opening of the aid included;
+   pause, and takes resumes from this moment, the opening of the aid included (no test
+   holds `open_aid`; the order of the two lines is the rule);
    `focus.open_aid().await`, an `Err` adding the warning of 037's plan.md § The run's words
    and changing nothing else;
 2. it waits, with `tokio::select!`, `biased` in this order, for the first of: a stop; a
@@ -865,9 +871,13 @@ Then, for a check that pauses:
    the ending closes the aid because the note is set, whether or not the aid opened:
    033's `focus_stop` is safe when nothing runs, and one rule is easier to test than
    two. Whichever of the four comes first answers the pause: from then on a resume is
-   refused, though the state word is still `focus_pause` until the aid has closed;
+   refused, though the state word is still `focus_pause` until the aid has closed.
+   The pause is answered by whoever takes it first: the task, as soon as its wait
+   answers, or a resume. A resume that took it before the task did is acted on, even
+   when the limit had fired in the same instant; a stop and the mount's ending are
+   still read at the next step;
 3. a resume: `focus.close_aid().await`, on the same rule, the note and `pause_ends_at`
-   cleared. With
+   cleared; every ending clears `pause_ends_at` too. With
    `anyway` false the state is `focus_check` again, then `steady(None)` and
    `guarded(focus.check())` as in step 3, without another `camera.release()`: the
    lease is still given up (US6-S11). With `anyway` true
@@ -1031,7 +1041,9 @@ pub fn reserve_bytes(width: u32, height: u32, binning: u32) -> u64;
   `Some(Camera(error))` when `ended_reason` is `camera`, else `Some(Save(words))` when
   the view has a `save_error`, else `None`.
 - `stop(keep_subs)`: first it removes `.reserve` from the folder of the stack it
-  started, a missing file being no failure, so that 035's save has that room. Then,
+  started, so that 035's save has that room, a missing file being no failure and any
+  other failure to remove it ignored: if the room is not freed, 035's save says so in
+  its `save_error`. Then,
   when `stacker.view()` is the stack the part started:
   `stacker.stop().await` while its state is `stacking`, else that view. When it is
   another stack, or none: `Ok(())`, and no sub is removed, because the part can no
@@ -1269,21 +1281,21 @@ story.
 |---|---|
 | 033, 035 or 036 lands offering something other than its draft. | The run touches them in three small parts and nowhere else; the states, routes, page and tools do not move. flip.md § Prerequisites 2 re-anchors, and a gap goes to the owner. |
 | 031 lands the lease under other names, words or rules than its US9 gives. | flip.md § Prerequisites 3 lists the five points. Only the camera part's `hold`, `release` and `take` touch it, and seven scenarios, two of which state its refusal word for word. |
-| The simulator leaves the target just outside 90″, with the true aim point set or after a re-centre, or needs more than three tries. | US4-S1 and US5-S4 assert the bounds against the truth, and owner decisions 2 and 3 are where the numbers change; flip.md § Prerequisites 5 has what probe round 1 measured. |
-| A story's diff passes 64 KiB. | Estimated from probe round 1's measured bytes, each within about 1 KB: US4 40.9 KB (62 %), US5 29.1 KB (44 %), US6 37.4 KB (57 %), US7 14.8 KB (23 %) and US8 28.2 KB (43 %). A factory build has run to 1.35 times its probe build: at that US4 would be about 84 %, and its scenario of the guards (US4-S4) could become a story of its own. The second probe round measures all of it (flip.md § Prerequisites 5). |
-| A Stop that lands while a re-centre's Track is being asked is covered by step 5 of `repoint` alone, which no test can reach by itself on the simulator. | Steps 1 and 3 cover the windows either side, and US5-S5 catches two of the three removed together. The field checklist's steps 11 and 14 press Stop during a run. |
+| The simulator leaves the target just outside 90″, with the true aim point set or after a re-centre, or needs more than three tries. | US4-S1 and US5-S4 assert the bounds against the truth, and owner decisions 2 and 3 are where the numbers change; flip.md § Prerequisites 5 has what probe round 2 measured. |
+| A story's diff passes 64 KiB. | Probe round 2 built the five stories: US4 41,483 B (63.3 %), US5 31,921 B (48.7 %), US6 41,188 B (62.8 %), US7 14,797 B (22.6 %) and US8 31,488 B (48.0 %) as written, against estimates of 40.9, 29.1, 37.4, 14.8 and 28.2 KB from round 1. Factory builds of 036, 039 and 040 ran 0.85 to 1.17 times their probes' diffs, so each story is estimated at 1.17 times its build with the cases the round's fold added, as tests: US4 (41,483 + 4,715) × 1.17 = 54,052 B (82 %), US5 (31,921 + 5,195) × 1.17 = 43,426 B (66 %), US6 (41,188 + 5,708) × 1.17 = 54,868 B (84 %), US7 (14,797 + 2,074) × 1.17 = 19,739 B (30 %) and US8 (31,488 + 406) × 1.17 = 37,316 B (57 %). Each is under owner choice 14's 60 KB, so no story is cut. US4 and US6 are the stories to watch: the scenario of the guards (US4-S4) or US4-S5's cases on the parts alone, and US6-S7's rig cases with their rig, are where a cut by tests would fall. No story drops or shortens a case to get under. |
+| A Stop that lands while a re-centre's Track is being asked is covered by step 5 of `repoint` alone, which no test can reach by itself on the simulator. | Steps 1 and 3 cover the windows either side, and US5-S5 catches step 3's check and step 5 removed together. The field checklist's steps 11 and 14 press Stop during a run. |
 | 032's aim reading fits the finder camera's solves from 10 s, or the exposure when that is longer, before the imaging exposure, so an imaging frame taken sooner than that after a GoTo or a re-centre reads `moving` and gives no aim reading. | The mount part reads steady only when 040's tracker was steady for that whole look-back (`steady_between`, spec FR-019). The cost is the larger of 10 s and the exposure, after the 2 s to 3 s for which 040's tracker settles, after each GoTo and each re-centre. US4-S1's bullet and US5-S6, at 20 s, assert it. The lasting fix is a small follow-up to 032, which has landed: drop from the fit every finder solve older than the session's last end of a GoTo or start of Track. When it lands the look-back shrinks to `steady()`. |
 | A solve measures no new aim point, again and again: the finder camera's exposure is longer than the imaging camera's, so no finder solve falls inside the imaging frame, or 032 sets readings aside after a camera was re-seated. | Such a solve is not a try; after four in a row the run stacks a target that is near the centre, with a warning, and ends `not_centred` with their own sentence beyond that (spec FR-024). The README and step 4 of the field checklist say to set the imaging exposure at least as long as the finder camera's. The real finder's cadence is a field check. |
 | A push that reads `moving` for less than 10 s does not end the run, and while the run stacks nothing of this spec pauses the stack for it. | 040's tracker reads not steady while the push is `moving` (040's US6-S6), so the stack waits and the sub in flight is dropped as `not_steady`. US4-S4's bullet shows only that the run goes on. |
 | The reserve is worked out from the files 035 writes at a stack's end as they are today: 15 bytes a pixel of a sub and a margin of 16 MiB, about 260 MB at the worked camera's full size, where a `stack.fits` alone is about 195 MB (`reserve_bytes`). | If 035 comes to write more at a stack's end, a fourth plane or a 16-bit picture, the figure for a pixel is one constant, and the re-anchoring reads 035's save again (flip.md § Prerequisites 2). A `stack.json` that lists more than about fifty thousand subs outgrows the margin. The reserve helps only an ending the run makes: a stack that ends by itself saves while the reserve is still there. It is itself room the subs cannot use, and a disk that cannot hold it ends the run `save_failed` before its first sub. While it is written, 4 MiB at a time with a yield between, a stop of the run waits for `stack.start` to answer, for as long as the disk needs (US8-S7). |
-| A target changed in the instant after a re-centre has asked Track again is not seen by step 3a. | Track then goes on with the old target, the next `state()` reads `target_changed` by its second row, and Track is left on the old target, as outside a re-centre. US5-S7's timing rests on the first live pointing with Track off coming 0.30 s after it on the simulator. |
+| A target changed in the instant after a re-centre has asked Track again is not seen by step 3a. | Track then goes on with the old target, the next `state()` reads `target_changed` by its second row, and Track is left on the old target, as outside a re-centre. US5-S7's timing rests on the first live pointing with Track off coming within two polls (0.50 s) of it on the simulator. A target set between step 3a and Track's own read of it, two lock waits later, starts Track on the new target: `state()` reads `target_changed` by its second row and Track is left on the new target. No test reaches that window. |
 | With `keep_subs` false, the two conditions under which the stack part removes subs are asserted on the script only, by the warning. | No rig scenario stops a run before its first sub is stacked at a moment a test can fix. |
 | The observer's exposure setting is longer than the tracker's limit, and the run's own imaging frames, which 036 does not cap, trail their corner stars. | A known limit (§ The console's camera and solver parts). The solve's centre, all the run reads, is not moved; a solve that fails for want of stars is counted (037's US2-S2). The README says so and step 8 of the field checklist has the observer look. The other answer is a getter in 036 for the capped exposure, an edit to 036. |
 | A re-centre asks Track again while the mount still reports motion after Track off; GoTo refuses with `the mount is already moving` and the run ends `mount_failed`. | `Session::start_tracking` waits up to 2 s for both axes to rest whenever it replaces a tracker, before it asks GoTo. The field checklist's step 8 watches the first centring. `stop_tracking` itself waits for the mount's acknowledgement of the stop, not for rest (`crates/finder/src/tracking.rs:219`). If the telescope shows it all the same, `repoint` waits, for a counted number of polls, until the session's mount view no longer says the mount is moving (`crates/finder/src/session.rs:508`) before it asks Track; that reads no axis. |
 | The kept subs fill the disk. | The default time limit (037's owner decision 8), the size shown on the start form, `save_failed`, and the reserve the stack part frees before the stack's save. |
 | Subs that are not kept still fill the disk while the run stacks. | Owner decision 22 names the other answer, an edit to 035. |
 | A second client stops or restarts the stack under a run. | The lease refuses a second stack; a stop of the run's own stack from 035's route ends the run `stopped` (US7-S4 on the script, US8-S4 on the rig). A stack another client starts in the instant of the hand-over, which 035's `start` joins and answers `Ok` for, is told from the run's own by its `started_at` and ends the run `stack_failed`, with nothing of that stack stopped or removed. A stack started in the one poll between the run's stack ending and the run's own ending is left running; the run keeps its last counts and its subs (§ The console's stack part). Neither race is run by a test. |
-| On the simulator no run meets 040's wait (`paused_by_tracker` on the console's own stack part), a stack's `camera` ending, a `save_error` at `stop`, or a dropped sub; and no test can see the set point. | Those five rows of the stack part are asserted on the script only (037's US2-S3, 037's US2-S4, US7-S4). |
+| On the simulator no run meets 040's wait (`paused_by_tracker` on the console's own stack part), a stack's `camera` ending or a dropped sub, and no test can see the set point; US8-S6 ends `link_lost`. | Those rows are asserted on the script only (037's US2-S3, 037's US2-S4, US7-S4). A `save_error` is reached on the rig by a stack folder made read-only while stacking, at a stop of the run and at a stop from 035's route (probe round 2's throwaways); US8 can carry both. |
 | The real GoTo and Track are unproven. | flip.md § Prerequisites 8. The checklist of 042's FR-041 starts with an imaging frame and a solve by hand before the first run. |
 
 ## Refinement Record
@@ -1310,7 +1322,7 @@ stories:
   - path: crates/finder/tests/motion/imaging_run.rs
     status: new
     disposition: add
-    assertion: "on the simulator with the true aim point set a run reaches stacking with no try, the tolerance exactly 90.0, its solved offset inside the tolerance and within 30 arcseconds of the true offset, the true offset at most 110 arcseconds, the run reading slewing at every sample at which Track read armed and nothing later than tracking in the 9.5 s after Track first read tracking, its imaging frame's purpose run, Track never leaving tracking, and the motion record reading page and imaging_run"
+    assertion: "on the simulator with the true aim point set a run reaches stacking with no try, the tolerance exactly 90.0, its solved offset inside the tolerance and within 30 arcseconds of the true offset, the true offset at most 110 arcseconds, the run reading slewing at every sample at which Track read armed and nothing later than tracking in the 11 s after Track first read tracking, its imaging frame's purpose run, Track never leaving tracking, and the motion record reading page and imaging_run"
     decision: "spec.md:US4-S1"
   - path: crates/finder/tests/motion/imaging_run.rs
     status: new
@@ -1325,12 +1337,12 @@ stories:
   - path: crates/finder/tests/motion/imaging_run.rs
     status: new
     disposition: add
-    assertion: "a raised minimum altitude ends the run too_low, an unresponsive node link_lost, a changed target target_changed with Track still on the old target, a push by hand pushed_away with Track following it, dawn sun_up, an imaging frame asked for while the run holds the lease is refused with the imaging camera is held by the imaging run and accepted after the run, a tracker that is not steady near the transit still holds the run in tracking with its message 30 s after it first read tracking, a push of 6 arcminutes undone 3 s later is read as moving and does not end the run, and a DELETE while the run still slews ends it stopped with the sentence that the mount was stopped, track_on false, Track off and the simulated mount at rest for 10 s"
+    assertion: "a raised minimum altitude ends the run too_low, an unresponsive node link_lost, a changed target target_changed with Track still on the old target, a push by hand pushed_away with Track following it, a push that keeps moving pushed_away 10 s to 15 s after its first push, dawn sun_up, an imaging frame asked for while the run holds the lease is refused with the imaging camera is held by the imaging run and accepted after the run, a tracker that is not steady near the transit still holds the run in tracking with its message 30 s after it first read tracking, a push of 6 arcminutes undone 3 s later is read as moving and does not end the run, and a DELETE while the run still slews ends it stopped with the sentence that the mount was stopped, track_on false, Track off and the simulated mount at rest for 10 s"
     decision: "spec.md:US4-S4"
   - path: crates/finder/tests/motion/imaging_run.rs
     status: new
     disposition: add
-    assertion: "the mount part alone points, reads tracking and steady, points again leaving the motion record as page and imaging_run, and after POST /api/stop reads ended stopped and refuses to point again with Track off and the simulated mount at rest for 10 s from 2 s after the stop; and on a rig of its own, after the target is changed, a re-centre answers Ok with Track left off for 10 s and the part reading target_changed"
+    assertion: "the mount part alone points, reads tracking and steady, points again leaving the motion record as page and imaging_run, and after POST /api/stop reads ended stopped and refuses to point again with Track off and the simulated mount at rest for 10 s from 2 s after the stop; and on a rig of its own, after the target is changed, a re-centre answers Ok with Track left off for 10 s and the part reading target_changed; and on rigs of their own, point refuses with the target was changed once the session names another target than target answered, Track turned to another target reads target_changed whatever the session names, Track turned on again after a Stop still reads stopped, a re-centre Track refuses fails as the mount in Track's own words, and one frame taken and solved by the console's camera and solver parts gives near_arcsec 449 arcseconds within 1"
     decision: "spec.md:US4-S5"
   - path: crates/finder/tests/motion/imaging_run.rs
     status: new
@@ -1416,12 +1428,12 @@ stories:
   - path: crates/finder/tests/console/imaging_run_centring.rs
     status: new
     disposition: add
-    assertion: "a solve that measured no new aim point is retried without a repoint and is not a try, its message saying so while the run waits for the tracker; four such solves in a row stack a target 400 arcseconds off with their warning and end not_centred 600 arcseconds off with their sentence, with no try and no repoint; a re-centre starts that count again; a target 400 arcseconds off after three tries, inside the near bound, is stacked with its warning; at 400 arcseconds both warnings say it is stacked where it is, and at 180 and 150, not over 036's 180, that the stack's steering will bring it in; a failed repoint ends mount_failed or stopped by its failure, no take follows a repoint until the mount is steady, and a stop of the run during a repoint is answered only after it and ends the run stopped with no further take"
+    assertion: "a solve that measured no new aim point is retried without a repoint and is not a try, its message saying so while the run waits for the tracker; four such solves in a row stack a target 400 arcseconds off with their warning and end not_centred 600 arcseconds off with their sentence, with no try and no repoint; a re-centre starts that count again, so that three more such solves and a 50 arcsecond one stack with no warning; after a try, a solve that measured no new aim point reads the second centring message; a target 400 arcseconds off after three tries, inside the near bound, is stacked with its warning; a target exactly at the tolerance is centred with no try, and one exactly at the near bound after three tries is stacked with its warning; at 400 arcseconds both warnings say it is stacked where it is, and at 180 and 150, not over 036's 180, that the stack's steering will bring it in; a failed repoint ends mount_failed or stopped by its failure, no take follows a repoint until the mount is steady, and a stop of the run during a repoint is answered only after it and ends the run stopped with no further take"
     decision: "spec.md:US5-S3"
   - path: crates/finder/tests/motion/imaging_run_centring.rs
     status: new
     disposition: add
-    assertion: "on the simulator with no aim point a run reaches stacking after at least one try with the tolerance exactly 90.0, the true offset within the tolerance plus 20 arcseconds, the session's aim point measured within 2.0 pixels of the true one, and Track read as no longer off within 2 s of the first sample that read it off while centring"
+    assertion: "on the simulator with no aim point a run reaches stacking after at least one try with the tolerance exactly 90.0, the true offset within the tolerance plus 20 arcseconds, the session's aim point measured within 2.0 pixels of the true one, and Track read as no longer off within 2 s of the first sample that read it off while centring; and with a finder frame every 2 s a run still centres with one try"
     decision: "spec.md:US5-S4"
   - path: crates/finder/tests/motion/imaging_run_centring.rs
     status: new
@@ -1438,6 +1450,11 @@ stories:
     disposition: add
     assertion: "a target changed as soon as the run reads centring ends it target_changed with track_on false, Track off 10 s later and the simulated mount at rest for 10 s"
     decision: "spec.md:US5-S7"
+  - path: crates/finder/tests/motion/imaging_run_centring.rs
+    status: new
+    disposition: add
+    assertion: "the mount part alone, on the run rig with the true aim point set, with no live pointing after its own Track off, answers a re-centre Ok between 4.9 s and 5.5 s after it was asked"
+    decision: "spec.md:US5-S8"
   - path: crates/finder/tests/motion/tracking/routes.rs
     status: existing
     disposition: preserve
@@ -1514,12 +1531,12 @@ stories:
   - path: crates/finder/tests/console/imaging_run_focus.rs
     status: new
     disposition: add
-    assertion: "resume(false) closes the aid and checks focus again, taking the lease back and going on to the solve when it is good"
+    assertion: "resume(false) closes the aid and checks focus again, taking the lease back and going on to the solve when it is good, with pause_ends_at gone"
     decision: "spec.md:US6-S2"
   - path: crates/finder/tests/console/imaging_run_focus.rs
     status: new
     disposition: add
-    assertion: "resume(true) closes the aid, takes the lease back and goes on to the solve with no second check and the go-anyway warning"
+    assertion: "resume(true) closes the aid, takes the lease back and goes on to the solve with no second check and the go-anyway warning, with pause_ends_at gone"
     decision: "spec.md:US6-S3"
   - path: crates/finder/tests/console/imaging_run_focus.rs
     status: new
@@ -1529,7 +1546,7 @@ stories:
   - path: crates/finder/tests/console/imaging_run_focus.rs
     status: new
     disposition: add
-    assertion: "a stop and a mount ending from a pause close the aid before the lease is given back, an aid that cannot open leaves the run paused with a warning, and resume outside a pause is refused"
+    assertion: "a stop and a mount ending from a pause close the aid before the lease is given back and leave no pause_ends_at, an aid that cannot open leaves the run paused with a warning, and resume outside a pause is refused"
     decision: "spec.md:US6-S5"
   - path: crates/finder/tests/console/imaging_run_focus.rs
     status: new
@@ -1539,12 +1556,12 @@ stories:
   - path: crates/finder/tests/console/imaging_run_focus.rs
     status: new
     disposition: add
-    assertion: "on the simulator the console's own focus part passes a run at the focus error 0.0 with its reading in arcsec, pauses one that 033's own check calls clearly out with the focus aid running, goes on after refocusing, refuses a start with the imaging camera is held by the focus aid while the aid already runs, with no mount.point after the refused start, pauses with no_record on a fresh folder, and ends stopped with the sentence that the focus check was stopped, no solve and 033's aid ended when the run's own check is stopped from 033's route"
+    assertion: "on the simulator the console's own focus part passes a run at the focus error 0.0 with its reading in arcsec, pauses one that 033's own check calls clearly out with the focus aid running, goes on after refocusing, refuses a start with the imaging camera is held by the focus aid while the aid already runs, with no mount.point after the refused start, pauses with no_record on a fresh folder, and ends stopped with the sentence that the focus check was stopped, no solve and 033's aid ended when the run's own check is stopped from 033's route, and ends solver_unavailable at its focus check on a rig with no imaging solver"
     decision: "spec.md:US6-S7"
   - path: crates/finder/tests/console/imaging_run_focus.rs
     status: new
     disposition: add
-    assertion: "a clearly out check during which the tracker was not steady is repeated once with no pause and no warning, a second one that was not steady either pauses with the warning that the tracker was not steady, and a good check is not repeated"
+    assertion: "a clearly out check during which the tracker was not steady is repeated once with no pause and no warning, a second one that was not steady either pauses with the warning that the tracker was not steady, and a good check is not repeated; a no-record check is not repeated either, every check after a resume starts the rule again, and a repeat gives the lease up no second time"
     decision: "spec.md:US6-S8"
   - path: crates/finder/tests/console/imaging_run_focus.rs
     status: new
@@ -1554,7 +1571,7 @@ stories:
   - path: crates/finder/tests/console/imaging_run_focus.rs
     status: new
     disposition: add
-    assertion: "clearly out without a record, unmeasurable and no record each pause with their own words; a check that did not finish because it found no stars to measure pauses with the words of unmeasurable, and one that failed otherwise with the words that it did not finish, its reason and to check the imaging camera, each of the two with its warning"
+    assertion: "clearly out without a record, unmeasurable and no record each pause with their own words; a check that did not finish because it found no stars to measure pauses with the words of unmeasurable, and one that failed otherwise with the words that it did not finish, its reason and to check the imaging camera, each of the two with its warning; and after a check that did not finish and resume(false), a clearly out check pauses with its own words"
     decision: "spec.md:US6-S10"
   - path: crates/finder/tests/console/imaging_run_focus.rs
     status: new
@@ -1570,7 +1587,7 @@ stories:
   - "033's verdict, thresholds, focus record and focus aid are unchanged; the part only calls them"
   - "Track stays on through a focus pause (spec.md Edge Cases)"
   - "no trait of a part gains a method and Steps gains no field"
-  - "every scenario of 037's US1 to US5 still holds: none gives a verdict that pauses, the one run whose check did not finish (037's US1-S2) is read only for focus and warnings, which US6 leaves as they are, and 037's US3's continue refusals outside a pause are unchanged"
+  - "every scenario of 037's US1 to US3 and of US4 and US5 still holds: none gives a verdict that pauses, the one run whose check did not finish (037's US1-S2) is read only for focus and warnings, which US6 leaves as they are, and 037's US3's continue refusals outside a pause are unchanged"
   checks:
    development:
    - "cargo nextest run -p finder --locked --test console imaging_run_focus::"
@@ -1614,17 +1631,17 @@ stories:
   - path: crates/finder/tests/console/imaging_run_limits.rs
     status: new
     disposition: add
-    assertion: "a 60 s limit counts from the start of stacking, not of the run: still stacking 59.5 s in and ended duration_limit by 60.5 s"
+    assertion: "a 60 s limit counts from the start of stacking, not of the run: still stacking 59.6 s in and ended duration_limit by 60.6 s"
     decision: "spec.md:US7-S2"
   - path: crates/finder/tests/console/imaging_run_limits.rs
     status: new
     disposition: add
-    assertion: "with a failed sub and none stacked the run still stacks 599.5 s after the last stacked sub and has ended subs_failing 1 s later, naming each failed reason's rise with spaces and not the subs the console was behind on"
+    assertion: "with a failed sub and none stacked the run still stacks 599.6 s after the last stacked sub and has ended subs_failing 1 s later, naming each failed reason's rise with spaces and not the subs the console was behind on; the words give each reason's rise since the last stacked sub, and a single failed sub is enough"
     decision: "spec.md:US7-S3"
   - path: crates/finder/tests/console/imaging_run_limits.rs
     status: new
     disposition: add
-    assertion: "each kind of stack failure ends the run with its own reason, an unknown one as stack_failed with its words, a stack that ends with no failure as stopped with the sentence that the stack was stopped, and each still stops the stack once"
+    assertion: "each kind of stack failure ends the run with its own reason, an unknown one as stack_failed with its words, a stack that ends with no failure as stopped with the sentence that the stack was stopped, and each still stops the stack once; a stack's failure in the poll that reaches the count is judged before the count"
     decision: "spec.md:US7-S4"
   - path: crates/finder/tests/console/imaging_run_limits.rs
     status: new
@@ -1634,7 +1651,7 @@ stories:
   - path: crates/finder/tests/console/imaging_run_limits.rs
     status: new
     disposition: add
-    assertion: "700 s with only behind and unprocessed subs leave the run stacking, 700 s paused by the tracker leave it paused, and after the pause it still stacks 590 s on and has ended subs_failing 12 s later"
+    assertion: "700 s with only behind and unprocessed subs leave the run stacking, 700 s paused by the tracker leave it paused, and after the pause it still stacks 598.6 s on and has ended subs_failing 1 s later"
     decision: "spec.md:US7-S6"
   - path: crates/finder/tests/console/imaging_run_limits.rs
     status: new
@@ -1644,12 +1661,12 @@ stories:
   - path: crates/finder/tests/console/imaging_run_limits.rs
     status: new
     disposition: add
-    assertion: "the time limit counts the time the tracker pauses the stack: paused_by_tracker 59.5 s in and ended duration_limit by 60.5 s"
+    assertion: "the time limit counts the time the tracker pauses the stack: paused_by_tracker 59.6 s in and ended duration_limit by 60.6 s"
     decision: "spec.md:US7-S8"
   - path: crates/finder/tests/console/imaging_run_limits.rs
     status: new
     disposition: add
-    assertion: "a stacked sub between two stretches of 400 s with failed subs starts the time again, and the run still stacks"
+    assertion: "a stacked sub between two stretches of 400 s with failed subs starts the time again, and the run still stacks; and a stacked sub keeps the drops it saw, so that they end nothing 700 s later"
     decision: "spec.md:US7-S9"
   - path: crates/finder/tests/layout/main.rs
     status: existing
@@ -1657,7 +1674,7 @@ stories:
     assertion: "no file at the top level of crates/finder/tests, no new file in its support folder, and each main.rs only its support include and mod lines"
     decision: "plan.md:Shapes that existing tests pin"
   preserved_behavior:
-  - "every scenario of 037's US1 to US6 still holds: the default request has no count and 7200 s, none stacks for 600 s with a dropped sub, and the script's stack runs until it is stopped or end_stack is called, whatever set_stack gave it (plan.md The script, Plan traps 24)"
+  - "every scenario of 037's US1 to US3 and of US4 to US6 still holds: the default request has no count and 7200 s, none stacks for 600 s with a dropped sub, and the script's stack runs until it is stopped or end_stack is called, whatever set_stack gave it (plan.md The script, Plan traps 24)"
   - "no trait of a part gains a method and Steps gains no field"
   - "nothing under crates/finder/src/imaging/run.rs waits a fixed time for an exposure (plan.md Plan traps 21)"
   checks:
@@ -1713,7 +1730,7 @@ stories:
   - path: crates/finder/tests/motion/imaging_run_stack.rs
     status: new
     disposition: add
-    assertion: "once the stack part's start has answered, the run's folder holds a reserve file of 15 bytes for each binned pixel of the imaging view's camera plus 16777216, 32017096 bytes on the rig, and none once the run has been stopped"
+    assertion: "once the stack part's start has answered, the run's folder holds a reserve file of 15 bytes for each binned pixel of the imaging view's camera plus 16777216, 32017096 bytes on the rig, and none once the run has been stopped; and reserve_bytes answers 260318656, 43845616 and 32017096 for the worked camera at binning 1 and 3 and the simulated one at binning 0"
     decision: "spec.md:US8-S7"
   - path: crates/finder/tests/motion/imaging_run_stack.rs
     status: new
@@ -1739,7 +1756,7 @@ stories:
   - "035's stack and 036's steering are unchanged; the part only calls them"
   - "no ending changes what Track is doing but those spec.md SC-005 names"
   - "no flag and no start-up line is added to the binary"
-  - "every scenario of 037's US1 to US7 still holds: the machine is not written, and the parts of US4 to US6 are not changed"
+  - "every scenario of 037's US1 to US3 and of US4 to US7 still holds: the machine is not written, and the parts of US4 to US6 are not changed"
   checks:
    development:
    - "cargo nextest run -p finder --locked --test motion imaging_run_stack::"

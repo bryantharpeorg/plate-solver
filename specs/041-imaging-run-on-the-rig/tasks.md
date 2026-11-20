@@ -81,16 +81,20 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
   `SimMount`. Add helpers for the true offset and for "at rest for 10 s" as spec.md
   § User Scenarios defines them. Write failing tests for a run that needs no re-centre,
   with the tolerance exactly 90.0, `slewing` read while Track is `armed`, nothing
-  later than `tracking` read in the 9.5 s after Track first read `tracking`, and the
+  later than `tracking` read in the 11 s after Track first read `tracking`, and the
   imaging frame's purpose `run` (US4-S1), and for the refusals of a start with the lease
   given back, an unresponsive scope node among them (US4-S2).
 - [ ] T017 [US4] Add failing tests to that file for Stop while stacking (US4-S3), the
   five endings of the mount's motion and the imaging frame refused during a run with
   `the imaging camera is held by the imaging run`, a tracker that is not steady
-  near M42's transit, a push of 6′ undone 3 s later, and a `DELETE` while the run
+  near M42's transit, a push of 6′ undone 3 s later, a push that keeps moving, which
+  ends the run between 10 s and 15 s after its first push, and a `DELETE` while the run
   still slews (US4-S4), and the mount part alone:
   point, point again, and point again after a Stop, with rest read from 2 s after the
-  stop, and, on a rig of its own, point again after the target was changed
+  stop, and, on a rig of its own each, point again after the target was changed,
+  `point` refused once the target was changed after `target` answered, Track turned on
+  another target, Track turned on again after a Stop, a re-centre that Track refuses,
+  and `near_arcsec` from one frame taken and solved by the camera and solver parts
   (US4-S5), and a start refused with `an exposure is in progress` while a single
   imaging frame is in flight, with the lease given back (US4-S6), each against the
   simulator's truth, the session or 031's own route as its scenario says. In US4-S5,
@@ -137,22 +141,28 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
   (US5-S1), a target 600″ off that is never centred, its offset written `10.0′`
   (US5-S2), and a solve that measured no new aim point, which is no try, four of them
   in a row with the target 400″ off, which is stacked with a warning, and 600″ off,
-  which ends the run, the count started again by a re-centre, a target 400″ off after
-  three tries that is stacked with a warning, both warnings saying at 400″ that the
+  which ends the run, the count started again by a re-centre, so that the 50″ solve
+  after it stacks with no warning, the second `centring` message after a try, a target
+  400″ off after three tries that is stacked with a warning, targets exactly at the
+  tolerance and at `near_arcsec`, both warnings saying at 400″ that the
   target is stacked where it is and at 180″ and 150″ that the stack's steering will
   bring it in, a failed `repoint`, a mount that is not steady after one, and a stop of
-  the run while `repoint` is held (US5-S3).
+  the run while `repoint` is held (US5-S3). The case of exactly 90″ passes before
+  T022, and pins it once it is in.
 - [ ] T021 [US5] Create `crates/finder/tests/motion/imaging_run_centring.rs`, the module
   `imaging_run_centring` of `motion`, with its `mod` line in
   `crates/finder/tests/motion/main.rs`, holding its own build of the run rig with no
   aim point. Write failing tests for centring from no aim point with the console's own
   mount, camera and solver parts, with the tolerance exactly 90.0 and Track read as no
-  longer `off` within 2 s of the first sample that read it `off` while centring
-  (US5-S4), for Stop while centring with the script's solver given 400″ four times
-  (US5-S5), for the same centring at an
+  longer `off` within 2 s of the first sample that read it `off` while centring, and
+  again with a finder frame every 2 s (US5-S4), for Stop while centring with the
+  script's solver given 400″ four times (US5-S5), for the same centring at an
   exposure of 20 s, with 032's last aim reading never `moving` (US5-S6), and for a
   target changed as soon as the run reads `centring` (US5-S7), against the simulator's
-  truth, the session and the simulator's mount.
+  truth, the session and the simulator's mount; and for the mount part alone, with the
+  true aim point set and no live pointing after its own Track off, whose re-centre goes
+  on between 4.9 s and 5.5 s after it was asked (US5-S8), with this module's own wait
+  for `Tracking { steady: true }`.
 
 ### Implementation
 
@@ -171,7 +181,7 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
   when the stop generation changes meanwhile (plan.md § The console's mount part).
 - [ ] T024 [US5] Run the `lint` and `test` gates with every existing test unchanged and
   green, 037's and US4's included. Commit the green story (US5-S1, US5-S2, US5-S3,
-  US5-S4, US5-S5, US5-S6 and US5-S7).
+  US5-S4, US5-S5, US5-S6, US5-S7 and US5-S8).
 
 ## Phase 6: User Story 6 — The focus gate and its pause (Priority: P1)
 
@@ -183,7 +193,8 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
   its message and `pause_ends_at` (US6-S1), checking again (US6-S2), going on anyway
   (US6-S3), the 900
   s limit, read 899.5 s after the start and 1 s later (US6-S4), and a stop, a mount ending, an aid that cannot open and a resume
-  outside a pause (US6-S5).
+  outside a pause (US6-S5). A resume and every ending leave no `pause_ends_at`
+  (US6-S2, US6-S3, US6-S5).
 - [ ] T026 [US6] Add failing tests to that file for the route on the scripted console
   (US6-S6), and, on 033's focus rig with the console's own camera and focus parts and
   the script's mount, solver and stack, set up by running the focus aid until the
@@ -192,13 +203,17 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
   defocused one found in at most ten steps of 1.0, a refocused one, a start while the
   focus aid runs, refused with `the imaging camera is held by the focus aid` and
   followed by no `mount.point`, a
-  camera with no focus record, and a run whose own check is stopped by a
+  camera with no focus record, a rig with no imaging solver, whose run ends
+  `solver_unavailable` at its focus check, and a run whose own check is stopped by a
   `DELETE /api/imaging/focus` the test spawns and does not await, which ends the run
   `stopped` (US6-S7). Add failing scripted tests for a check repeated once when the
-  tracker was not steady during it (US6-S8), and for a second resume and a resume that
-  comes after the limit has fired, with `Step::CloseAid` held (US6-S9), for the five
+  tracker was not steady during it, a no-record check that is not, the rule started
+  again after a resume, and no `camera.release` before a repeat (US6-S8), and for a
+  second resume and a resume that comes after the limit has fired, with `Step::CloseAid` held (US6-S9), for the five
   other checks that pause, each with its words, a check that did not
-  finish reading as unmeasurable only when its failure is `NotSolved` (US6-S10), and for
+  finish reading as unmeasurable only when its failure is `NotSolved`, and a clearly-out
+  check after one that did not finish and a `resume(false)`, which words its own
+  verdict (US6-S10), and for
   a check still clearly
   out after `resume(false)`, which pauses again with no second `camera.release`
   (US6-S11).
@@ -214,12 +229,15 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
   out of a pause whether or not it opened, take the lease again on every way on to
   the solve, give it up no second time before a check that is repeated, and make
   `Runner::resume` hand `anyway` to the waiting task. Before a pause
-  for `ClearlyOut` or `Unmeasurable`, ask `mount.steady_between` over the check's two
+  for `ClearlyOut` or `Unmeasurable`, and not for a check that did not finish, ask
+  `mount.steady_between` over the check's two
   clock readings and repeat an unsteady check once, a second unsteady one pausing with
-  its warning. Set `pause_ends_at` while paused. Take resumes from the moment the
+  its warning. Set `pause_ends_at` while paused, and clear it at a resume and at every
+  ending. Take resumes from the moment the
   state is `focus_pause`, act on the first, and refuse one that comes after a stop,
   the mount's ending or the limit has answered the pause, in that order when more than
-  one is ready.
+  one is ready; the pause is answered by whoever takes it first, the task or a resume
+  (plan.md § The focus gate in the machine).
 - [ ] T028 [US6] In `crates/finder/src/imaging/run/console.rs`, add `focus` over 033's
   `focus_start`, `focus_ended` and `focus_stop`, with the table that turns 033's view
   into a `FocusCheck`, as plan.md § The console's focus part gives it; a check 033 ended
@@ -237,13 +255,17 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
   `imaging_run_limits` of `console`, with its `mod` line in
   `crates/finder/tests/console/main.rs`, and failing scripted tests for the count limit
   with a dropped sub in its counts (US7-S1) and with subs discarded (US7-S7), the time
-  limit, read 58.5 s after the settle and 1 s later (US7-S2), and the same under the
-  tracker's pause (US7-S8), 600 s of stacking with failed subs and none stacked
-  (US7-S3), and a stacked sub that starts the time again (US7-S9), the stack's own
+  limit, read 58.6 s after the settle and 1 s later (US7-S2), and the same under the
+  tracker's pause (US7-S8), 600 s of stacking with failed subs and none stacked, the
+  words giving each reason's rise since the last stacked sub, and a single failed sub
+  (US7-S3), and a stacked sub that starts the time again and keeps the drops it saw
+  (US7-S9), the stack's own
   failures and a stack
-  that ends by itself, each through `end_stack` (US7-S4), a stack's failure and the
+  that ends by itself, each through `end_stack`, and a failure judged before the count
+  limit (US7-S4), a stack's failure and the
   mount's ending in one poll (US7-S5), and what the 600 s do not count: `behind` and
-  `unprocessed` subs, and time paused by the tracker (US7-S6).
+  `unprocessed` subs, and time paused by the tracker (US7-S6). US7-S5 and US7-S9 pass
+  before T031, and pin it once it is in.
 
 ### Implementation
 
@@ -271,7 +293,8 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
   stopped from 035's own route (US8-S4), for an imaging folder whose `runs` is a
   regular file (US8-S5), for a scope node that stops answering while the run stacks
   (US8-S6) and for the reserve file, its size worked out from the imaging view, once the
-  run has a folder and after (US8-S7), and a test that
+  run has a folder and after, and `reserve_bytes` on the plan's worked figures in a
+  plain `#[test]` (US8-S7), and a test, which passes before T034 too, that
   reads the run's four source files from `CARGO_MANIFEST_DIR` and finds nothing of
   GoTo, the tracker, the ephemeris or the scope link named in them (US8-S9). Create
   `crates/finder/tests/cli/imaging_run.rs`, the module `imaging_run` of `cli`, with
@@ -293,7 +316,8 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
   started the part writes `.reserve` in the stack's folder: `reserve_bytes` of zeros for
   the imaging view's camera and binning, `RESERVE_CHUNK` at a time with
   `tokio::task::yield_now().await` between two chunks and no `spawn_blocking`; it
-  removes the file first thing in `stop`, and when a chunk cannot be written it removes
+  removes the file first thing in `stop`, ignoring any failure to remove it, and when a
+  chunk cannot be written it removes
   the file, stops the stack it has just started and fails the start as `Save`. With
   `keep_subs` false it removes subs only
   when the stack it stopped was saved, has at least one sub stacked and ended as

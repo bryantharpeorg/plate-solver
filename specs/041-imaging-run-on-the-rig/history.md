@@ -2,6 +2,176 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
 
 # How 041-imaging-run-on-the-rig got here
 
+## Probe round 2 and its fold (2026-11-20)
+
+Probe round 2 built this piece's five stories, as the split of 2026-11-20 left them, on
+2026-11-20: one agent built US4 and US5, a second US6, US7 and US8, starting where the
+first stopped, on a probe base of 036's, 040's and 037's round-2 probe builds, tests
+first, with both gates and from the trio alone (flip.md § Prerequisites 5 says what it
+ran). Every story built, passed both gates and wrote only its declared files. The round
+found 1 blocking and 30 clarity defects, 041-R1 to 041-R31. They were folded on
+2026-11-20, while 040 was building, after 037's own round-2 fold and before the
+re-anchoring onto `main`, which is a step of its own and comes after 037 has landed.
+Where a scenario gained a case, it has the words of the throwaway test the probe ran,
+which passed on the probe's code and failed under the mutation it was written for, in
+the story the probe named.
+
+| Defect | What it found | Where it went |
+|---|---|---|
+| 041-R1 | US4-S1's window of 9.5 s did not pin 032's 10 s reach: the first frame came 12.1 s after `tracking`, and a reach of 8 s survived (A15) | US4-S1's bullet, T016 and the record: 11 s, with the throwaway's words |
+| 041-R2 | Nothing pinned `PUSH_GRACE` from above: a grace of 60 s survived (A6) | a US4-S4 case, a push that keeps moving ends the run 10 s to 15 s after it; T017; the record |
+| 041-R3 | No scenario changed the target between `target` and `point` (A18) | a US4-S5 case, `point` refuses with `the target was changed`; T017; the record |
+| 041-R4 | The `track.target.id` clause of `state`'s second row was unpinned (A2) | a US4-S5 case, Track turned to another target reads `target_changed`; T017; the record |
+| 041-R5 | The generation row of `state` was unpinned once Track is turned on again (A3) | a US4-S5 case, Track turned on after a Stop still reads `stopped`; T017; the record |
+| 041-R6 | No rig scenario had Track refuse a re-centre (R5) | a US4-S5 case, `repoint` fails as the mount in Track's words; T017; the record |
+| 041-R7 | `near_arcsec` from the wrong share survived (V3) | a US4-S5 case, `near_arcsec` 449″ within 1″; T017; the record |
+| 041-R8 | US5-S3's count started again passed without it (M5) | that bullet: offset 50, eight solves and no warning; T020; the record |
+| 041-R9 | The second `centring` message after a try was unpinned (M18) | a US5-S3 case; T020; the record |
+| 041-R10 | No scenario sat on either inclusive bound (M20, M7) | a US5-S3 case at exactly 90″ and at 450″; T020, which says the 90″ case passes before T022 |
+| 041-R11 | `FRESH_POLLS` of 1 and of 200 both survived (U5, U6) | a US5-S4 case with a finder frame every 2 s, and US5-S8, the mount part alone with no live pointing; the edge case; T021, T024; the record |
+| 041-R12 | "US5-S5 catches two removed together" was not exact: only step 3's check with step 5 (P3) | plan.md § The console's mount part, after `repoint`'s steps, and § Risks |
+| 041-R13 | The first live pointing after the re-centre's Track off came within two polls, 0.50 s, not 0.30 s | US5-S4, plan.md § Risks and flip.md § Prerequisites 5 |
+| 041-R14 | US4 and US5 over their estimates; at 1.35, US4 with the round's cases near 64 KiB | plan.md § Risks at 1.17, under owner choice 14: no cut (below) |
+| 041-R15 | plan.md cites lines that 036, 040 and 037 moved | not folded: the re-anchoring's (below) |
+| 041-R16 | A target set between step 3a and Track's own read of it starts Track on the new target | plan.md § Risks, the row of a target changed after a re-centre |
+| 041-R17 | Blocking. 035's `Stacker::stop` awaits 031's `Imaging::abort`, which a scope node that has stopped answering never answers, so US8-S6's run never finished its ending; the camera part's abort (US4) awaits the same call, not verified | settled by the owner with 043, which covers the camera part's abort as well (below): flip.md § Prerequisites 2 and plan.md § What 030 to 036, 038, 040 and 043 offer; the stand-in not folded |
+| 041-R18 | US7's reads fell on the run's 250 ms poll, so limits 0.6 s short survived (L7, L26) | US7-S2, US7-S3, US7-S6 and US7-S8 read 0.6 s off a whole second; T030; the record |
+| 041-R19 | T030 and T033 called three tests failing that pass before the code: US7-S5, US7-S9 and US8-S9 | T030 and T033 |
+| 041-R20 | § Risks said no `save_error` is reached on the rig; a read-only stack folder reaches it (S11, S23) | plan.md § Risks; the two cases are the owner's (below) |
+| 041-R21 | The focus part's `SolverUnavailable` row was unreached (P7) | a US6-S7 case on a rig with no imaging solver; T026; the record |
+| 041-R22 | Four stated rules of the repeat and of a pause's words were unpinned (F9, F11, F17, F20) | three US6-S8 cases and one US6-S10 case; T026; the record |
+| 041-R23 | `pause_ends_at` cleared at a resume was unpinned, and at an ending unstated (F21, F27) | plan.md § The focus gate in the machine, step 3; US6-S2, US6-S3 and US6-S5; T025, T027; the record |
+| 041-R24 | Who answers a pause when a resume and the limit come in the same instant was not said | plan.md § The focus gate in the machine, step 2; T027 |
+| 041-R25 | No test can resume while `open_aid` is awaited: 037's script has no `Step::OpenAid` | plan.md § The focus gate in the machine, step 1: the order is the rule (below) |
+| 041-R26 | Whether a check that did not finish is repeated when the tracker was not steady was not said | plan.md § The focus gate in the machine and T027: it is not (below) |
+| 041-R27 | Four stated rules of the limits were unpinned (L18, L20, L22, L24) | cases in US7-S3, US7-S4 and US7-S9; T030; the record |
+| 041-R28 | `reserve_bytes`' rounding up and its binning of 0 were unreached on the rig (S19) | a US8-S7 case on the plan's worked figures; T033; the record |
+| 041-R29 | A failure to remove `.reserve` other than a missing file was not said | plan.md § The console's stack part, `stop`; T034 |
+| 041-R30 | US6 and US8 over their estimates | plan.md § Risks (below) |
+| 041-R31 | Two cited lines in US6 to US8's text moved | not folded: the re-anchoring's (below) |
+
+- Q: How was 041-R17 settled? → A: By the owner, on 2026-11-20, with a fix spec of its
+  own, `043-imaging-abort-answers-in-time`: 031's `Imaging::abort` waits for the node's
+  answer for at most `ABORT_WAIT`, 5 s, and a call not answered by then is dropped and
+  ends the frame `aborted` (043's two decisions, "Yes, take them"). 043 lands after 040
+  and before 037. With it the stack part's `stop` stays `stacker.stop().await` as the
+  trio wrote it: the probe's stand-in, a race of the stop against the stack's own
+  `ended` view, is not folded, and US8-S6 is unchanged. The camera part's `abort` (US4,
+  `console.rs`), which awaits the same `Imaging::abort` and which the round left not
+  verified on a lost link, is covered by 043 as well, and so are 042's stop route and
+  tool (042-R3). flip.md § Prerequisites 2 has the point. `depends_on_landed` gains
+  `043-imaging-abort-answers-in-time` at the re-anchoring, not now: 043's trio is not on
+  `main`, and the validator refuses an edge to a spec it cannot find.
+- Q: What did the sizes come to, under owner choice 14? → A: No cut. The owner took
+  choice 14 on 2026-11-19: "if the fold's estimate passes 60 KB, cut it by tests into a
+  new story". The night's factory builds ran 0.93 and 1.04 times their probes' diffs
+  (039), 0.94 to 1.17 (036) and 0.85 and 0.99 (040's US6 and US10), so the fold took
+  the highest, 1.17. Each estimate is the story's round-2 diff plus the diff bytes of
+  the throwaways the fold makes cases of, each counted whole, with a `+` a line, though
+  some only add asserts to a test the story has anyway; a case that only changes a
+  number counts 0:
+  - US4: (41,483 + 4,715) × 1.17 = 54,052 B, the 4,715 being R2's 823, R3's 637, R4's
+    781, R5's 873, R6's 700 and R7's 901; R1 changes a number;
+  - US5: (31,921 + 5,195) × 1.17 = 43,426 B: R8's 670, R9's 1,033, R10's 497 and 549,
+    R11's 1,004, and its parts-alone case at 1,442, the throwaway's 734 with 408 for
+    US4's `steady_within` written again in US5's module and about 300 for the aim
+    point and the imports;
+  - US6: (41,188 + 5,708) × 1.17 = 54,868 B: R21's 2,376, R22's 526, 774, 718 and 678,
+    and R23's 636;
+  - US7: (14,797 + 2,074) × 1.17 = 19,739 B: R27's 496, 613, 473 and 492; R18 changes
+    numbers;
+  - US8: (32,398 − 910 + 406) × 1.17 = 37,316 B: the round's diff less R17's stand-in,
+    and R28's 406.
+
+  Every story is at or under 60,000 B. US6 and US4 are the stories to watch, at 84 % and
+  82 % of 64 KiB.
+- Q: Which choices did the round leave to the owner? → A: Four, none folded past what
+  the probe ran:
+  - R1: the window is 11 s, the case the probe ran. 11.5 s would also catch a reach of
+    9 s, whose first frame would come at 11.1 s, with 0.6 s of margin; not run.
+  - R20: two US8 cases for a `save_error`, a stack folder made read-only while the run
+    stacks, stopped once from the run and once from 035's route. They do not hold for a
+    test run as root. With both, US8's estimate is (31,894 + 1,881) × 1.17 = 39,517 B.
+  - R25: the fold took the plan's sentence, option (b). Option (a), a `Step::OpenAid` in
+    037's script and a US6-S9 case, is an edit to 037's file, and no probe ran it.
+  - R26: the fold says a check that did not finish is not repeated, which is what the
+    trio's rule already said and what the probe built. The other answer, repeating one
+    that did not finish with `NotSolved`, since stars trailed by an unsteady tracker are
+    a likely cause of 033's `no_region`, is a change of rule.
+- Q: What of 037's own fold did this trio need? → A: Every name the trio takes from 037
+  was read against 037's folded trio (`specs/037-ready`, bcf0fdfd). `Warning` is now a
+  public enum with `words` (037-R1); nothing here names it, and the tests still type
+  each warning in. `SubsFailing`'s `{w}` is 041's US7's to word (037-R7), as plan.md
+  § Limits and the stack's endings in the machine already does. US12's script tests are
+  US13's (037-R2); this trio cites only US12-S1 and "037's US12" for the script, both
+  unchanged. The record's `preserved_behavior` of US6, US7 and US8 read "037's US1 to
+  US5", "to US6" and "to US7", left from the twelve-story numbering; they now read
+  037's US1 to US3 and this spec's stories.
+- Q: Which anchors are the re-anchoring's? → A: R15's and R31's, left as they stand,
+  and one the validator already reported on the untouched draft. The re-anchoring also
+  adds `043-imaging-abort-answers-in-time` to `depends_on_landed` and to the header's
+  comment (flip.md § Prerequisites 2).
+
+  | Citation | What it names | Where the round found it |
+  |---|---|---|
+  | plan.md, `crates/finder/src/session.rs` line 463 | the pointing's `seq` | 566 |
+  | plan.md, `crates/finder/src/session.rs` line 950 | `stop_tracking` | 1125 |
+  | plan.md, `crates/finder/src/session.rs` line 854 | `start_tracking`'s `stopped` | about 992 and 1009, inside `start_tracking` at 952 |
+  | plan.md, `crates/finder/src/session.rs` line 508 | the mount view's `moving` | 611 |
+  | plan.md, `crates/finder/src/api.rs` line 904 | `stop` | 1081 |
+  | spec.md and plan.md, `crates/finder/src/tracking.rs` line 31 | the 10″ deadband | 33, `DEADBAND_ARCSEC` |
+  | plan.md, `crates/finder/src/imaging/relation.rs` line 205 | the reach | 293; `FIT_REACH_S` at 36 |
+  | spec.md and plan.md, `crates/finder/src/tracking.rs` lines 219 and 248 | Stop's acknowledgement; the 5 s within which Track expects a live pointing | moved; not looked for |
+  | plan.md, `crates/finder/src/main.rs` line 114 | `.with_live()` | 200 |
+  | spec.md, `crates/finder/src/api.rs` line 613 | `goto_target`'s refusal `Track is on` | 782 |
+  | spec.md, `crates/simulator/src/mount.rs` line 269 | `push_by` | blank at 2abc9a6b: the validator's finding on the untouched draft |
+
+  `crates/finder/src/goto.rs` line 739, `the mount is already moving`, holds.
+- Q: What did flip.md § Prerequisites 5 say of round 1? → A: This, until the fold put
+  round 2's points in its place:
+
+  > 5. **A probe build of every story.** Met on 2026-11-19 by probe round 1, for the trio
+  > as it then stood, as 037's flip.md § Prerequisites 5 tells. What the round settled for
+  > this spec's stories:
+  > - each story's diff against 64 KiB (spec SC-007): US4 32,441 B; US5 23,300; US6
+  >   31,886; US7 11,298; US8 20,250. All were under. The fold of 2026-11-19 added code
+  >   and cases to every story, so plan.md § Risks carries the figures as they are
+  >   estimated now;
+  > - US4-S1 leaves the target 4.43″ from the centre by the truth with the true aim
+  >   point set, against its 110″, and its solved offset is 0.07″ from the truth,
+  >   against 30″;
+  > - US5-S4 centres in one try, 8.67″ by the truth, with the aim point 0.017 and 0.009
+  >   pixels from the true one, against 2.0. It did so only once the mount part read
+  >   steady no sooner than 032's fit reach after Track first worked: an imaging
+  >   exposure started 8.2 s after `tracking` read `moving` and took no aim reading,
+  >   and one started 9.2 s after it read `measured` (D14, blocking). The round built
+  >   that as a fixed wait of 10 s; the fold wrote `steady_between` in its place (the
+  >   owner's answer 2), which no probe has run;
+  > - the simulator's mount did not move toward the newly measured aim point between
+  >   the first imaging solve and the re-centre's Track off (0.00″), the pointing
+  >   model's slip was not marked then, and the first live pointing after that Track
+  >   off came 0.30 s later, against the 5 s of `repoint`'s step 3;
+  > - the simulated axes are at rest by the time a re-centre's Track asks GoTo, and
+  >   Track itself waits up to 2 s for that; GoTo did not refuse (plan.md § Risks);
+  > - US6-S4's pause ended at 900.000 s and US7-S2's limit at 60.000 s, each on a poll.
+  >   Their reads were a second either side, and a limit a second short survived
+  >   them, so both now read half a second before and after (D22, D25);
+  > - the run rig syncs, slews and solves at dawn: US4-S4's run stacked for 31 s before
+  >   `sun_up`;
+  > - US8-S1 reached three stacked subs on the simulator with 036's steering in the
+  >   loop, none dropped, on all three runs;
+  > - one more defect blocked a story as written: US4-S5 read rest the instant after a
+  >   Stop, while the axes still braked (D13: it now reads from 2 s after).
+  >
+  > Not settled, and for the second probe round the owner asked for (037's history.md
+  > § Clarifications, the owner's answer 17): everything the fold of 2026-11-19 added,
+  > none of which has been run; each story's diff on the folded trio; what 036's own fold
+  > changed underneath this trio the same day (037's history.md, the Refinement Record's
+  > prose, "036's second fold"): the two forms of the warnings in US5-S3, and every wait
+  > for a steady tracker 2 s longer on the simulator, inside which US4-S5's 900 s and
+  > 120 s must still hold; and the margin of US4-S4's "within 60 s" for `pushed_away`,
+  > the one bound round 1 did not time.
+
 ## The split (2026-11-20)
 
 This spec held US4 to US8 of `037-imaging-run` until the owner approved cutting that trio
