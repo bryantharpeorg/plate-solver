@@ -227,22 +227,22 @@ in the FR or success criterion that makes it.
        reading, against 60″; US7-S8 12 of 12 subs over 0.5″ (0.7452″ to 0.7466″, the
        model's 0.749″), against at least 8; and US7-S9's stop answered at once, against
        0.5 s.
-     - US10-S1, US6-S8 and US10-S9: the feed-forward plus the offset in force at the
-       gap's answer to 0.000000″/s, against 0.01″/s; and US10-S9's last azimuth rate
-       before the gap 7.4189″/s off it, against more than 1″/s.
+     - US10-S1, US10-S12 [was US6-S8] and US10-S9: the feed-forward plus the offset in
+       force at the gap's answer to 0.000000″/s, against 0.01″/s; and US10-S9's last
+       azimuth rate before the gap 7.4189″/s off it, against more than 1″/s.
      - US10-S8, which had no bound: as written it failed (040-R3, the owner's).
    - **The cases nobody had run** all ran and passed as written:
      - the stopped-axis test raising no false alarm (§ Plan traps 32): with its branch
        printing, the 165 motion tests at US6's tip and the 174 at US10's, 036's US3's,
-       US9's and US4's modules among them, raised one stall, US6-S7's own;
-     - US6-S7: the stall found at the turn at r + 1 s, with `sent`'s time r;
-     - US6-S6's push, on the goto rig;
+       US9's and US4's modules among them, raised one stall, US10-S11's own [was US6-S7];
+     - US10-S11 [was US6-S7]: the stall found at the turn at r + 1 s, with `sent`'s time r;
+     - US10-S10's push [was US6-S6], on the goto rig;
      - US7-S7's far stack, and US7-S9's and US7-S10's gaps that a stop and a lost link
        end;
      - US10-S9's worked 5.4 s, confirmed: the interval was 3.410 s;
-     - US6-S17's wait for the limit, on the scripted tracker;
-     - US10-S1, US6-S8 and US6-S9, what the mount is left running after a time not
-       steady;
+     - US6-S10's wait for the limit [was US6-S17], on the scripted tracker;
+     - US10-S1, US10-S12 and US10-S13 [were US6-S8 and US6-S9], what the mount is left
+       running after a time not steady;
      - the settle's times: 2.150 s before L in US6-S1, and steady exactly 2.000 s after
        the first rates in US10-S3 (040-R4 and 040-R10 folded what they showed);
      - US8-S1's worked figures, all six to 10⁻⁴.
@@ -258,11 +258,16 @@ in the FR or success criterion that makes it.
      US7-S6, the guard, which passes on any code without the thirteen names, as
      § Prerequisites 3 means it to.
    - **Each story's diff against its estimate** (§ Risks; 65,536 B the budget): US6
-     66,145 B (100.9%) against 48,400 B, 36.7% over and over the budget (040-R1, the
-     owner's); US10 16,978 B (25.9%) against 15,300 B, 11.0% over; US7 43,790 B (66.8%)
-     against 43,500 B, 0.7% over; US8 47,784 B (72.9%, `dist/` counted as binary)
-     against 43,700 B, 9.3% over; and US11 12,354 B (18.9%) against 8,700 B, 42.0%
-     over, most of it the imaging console its own module builds.
+     66,145 B (100.9%) against 48,400 B, 36.7% over and over the budget, and US10
+     16,978 B (25.9%) against 15,300 B, 11.0% over; so US6 was cut by tests into US6 and
+     US10 (040-R1; history.md), as the probe built the cut on a branch of its own: US6
+     55,847 B (85.2%) and US10 25,956 B (39.6%), every gate green at its tip, and US10's
+     fourteen tests passing on US6's code with the fix of 040-R2, none failing first; US7
+     43,790 B (66.8%) against 43,500 B, 0.7% over; US8 47,784 B (72.9%, `dist/`
+     counted as binary) against 43,700 B, 9.3% over; and US11 12,354 B (18.9%) against
+     8,700 B, 42.0% over, most of it the imaging console its own module builds. With
+     what the fold added, US6 is about 56,900 B (87%) and US10 about 26,400 B (40%)
+     (§ Risks).
    - **Not run:** the msrv gate on Rust 1.96, coverage and CI; no real hardware; and
      040-R20's schema, folded as its report wrote it, was not built.
 6. **Outside the factory, before this spec is used at the telescope:** GoTo and Track

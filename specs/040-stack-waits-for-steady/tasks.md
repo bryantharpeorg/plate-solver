@@ -74,13 +74,9 @@ builder's task: a story is dispatched only once they are met.
   take-up at transit, with the follower, the reader and the asker joined on the test's
   own task, and the tracker's word for it (US6-S1), for a first reversal on a fresh
   session (US6-S2), for a first reversal's measurement under a claim that lapsed before
-  it, with gaps asked every 6 s (US6-S5), and, on the tracking console
-  (`crate::support::goto::Rig`), for a push by hand that comes back and one that is
-  followed (US6-S6); and on the backlash rig again for both axes stopped on the
-  simulated mount itself (US6-S7), a quiet pointing before a lapsed gap (US6-S8),
-  tracking errors from before and from inside a time not steady (US6-S9), and a gap
-  queued behind a take-up when tracking ends (US6-S10). Nine scenarios on this rig are
-  US10's.
+  it, with gaps asked every 6 s (US6-S5). The fourteen scenarios of US10 test this
+  story's code too, five of them cut from it by tests (spec.md US10-S10 to US10-S14,
+  which were US6-S6 to US6-S10); their tests are US10's, in its own module.
 - [ ] T029 [US6] Create `crates/finder/tests/console/steering_steady.rs`, the module
   `steering_steady` of `console`, with its `mod` line in
   `crates/finder/tests/console/main.rs` and a scripted tracker whose `steady`,
@@ -88,12 +84,12 @@ builder's task: a story is dispatched only once they are met.
   window it keeps. Write failing tests for the wait and its word (US6-S3), for `check`:
   a sub the tracker was not steady for, one it was, a tracker that has gone, a sub taken
   with no tracker, the count after a `release` and after a new `Hold`, a frame started
-  just before its record, and the drop with the switch off (US6-S4), a tracker that
-  stops being steady while its gap is awaited (US6-S11), a gap that ends on a tracker no
-  longer steady (US6-S12), the view before any wait (US6-S13), a wait abandoned with its
-  `Hold` (US6-S14), the switch off, before the call and during the wait (US6-S15), a
-  source that no longer answers a tracker (US6-S16), and the wait for the limit
-  (US6-S17).
+  just before its record, and the drop with the switch off (US6-S4), the view before
+  any wait (US6-S6), a wait abandoned with its `Hold` (US6-S7), the switch off, before
+  the call and during the wait (US6-S8), a source that no longer answers a tracker
+  (US6-S9), the wait for the limit (US6-S10), a tracker that stops being steady while
+  its gap is awaited (US6-S11), and a gap that ends on a tracker no longer steady
+  (US6-S12).
 
 ### Implementation
 
@@ -129,8 +125,7 @@ builder's task: a story is dispatched only once they are met.
   steering's wait and its check).
 - [ ] T032 [US6] Run the `lint` and `test` gates with every existing test unchanged and
   green, 036's US3's among them. Commit the green story (US6-S1, US6-S2, US6-S3, US6-S4,
-  US6-S5, US6-S6, US6-S7, US6-S8, US6-S9, US6-S10, US6-S11, US6-S12, US6-S13, US6-S14,
-  US6-S15, US6-S16 and US6-S17).
+  US6-S5, US6-S6, US6-S7, US6-S8, US6-S9, US6-S10, US6-S11 and US6-S12).
 
 ## Phase 7: User Story 7 — The stack asks before every exposure (Priority: P2)
 
@@ -222,9 +217,9 @@ builder's task: a story is dispatched only once they are met.
 
 ## Phase 10: User Story 10 — Not steady at its edges, tested on the tracker (Priority: P2)
 
-Built after User Story 6 and before User Story 7 (spec.md § Work Graph). Its nine
-scenarios test User Story 6's code, and this story writes nothing under
-`crates/finder/src`.
+Built after User Story 6 and before User Story 7 (spec.md § Work Graph). Its fourteen
+scenarios test User Story 6's code, the last five cut from that story by tests, and this
+story writes nothing under `crates/finder/src`.
 
 ### Tests first
 
@@ -247,13 +242,24 @@ scenarios test User Story 6's code, and this story writes nothing under
   US6's code: stop and escalate with its output. US10-S8's bound is the one probe round
   2 writes into spec.md: if the scenario still reads "the bound probe round 2 measures"
   when this story is built, stop and escalate, and assert no figure of your own.
+- [ ] T054 [US10] Add tests to `crates/finder/tests/motion/steering_unsteady.rs` for the
+  five scenarios cut from User Story 6 by tests, which were US6-S6 to US6-S10, with the
+  helpers they need written out in this module: on the tracking console of spec.md
+  § User Scenarios (`crate::support::goto::Rig`, set up as
+  `crates/finder/tests/motion/tracking/routes.rs:96` does, whose `centred()` is private
+  to that module), a push by hand that comes back and one that is followed (US10-S10);
+  and on the backlash rig, both axes stopped on the simulated mount itself (US10-S11), a
+  quiet pointing before a lapsed gap (US10-S12), tracking errors from before and from
+  inside a time not steady (US10-S13), and a gap queued behind a take-up when tracking
+  ends (US10-S14). They test US6's code and pass on it, as T046's do.
 
 ### Implementation
 
 - [ ] T047 [US10] Change nothing under `crates/finder/src`. Run the `lint` and `test`
   gates with every existing test unchanged and green, US6's `steering_steady` modules
   included and not edited. Commit the green story (US10-S1, US10-S2, US10-S3, US10-S4,
-  US10-S5, US10-S6, US10-S7, US10-S8 and US10-S9).
+  US10-S5, US10-S6, US10-S7, US10-S8, US10-S9, US10-S10, US10-S11, US10-S12, US10-S13
+  and US10-S14).
 
 ## Phase 11: User Story 11 — An MCP client sets the steering (Priority: P3)
 
@@ -293,7 +299,7 @@ Built last, after User Story 8 (spec.md § Work Graph).
 
 - **US6** adds to what 036 left in `steering.rs` and `tracking.rs`, and adds the push's
   calls to `session.rs`, after 036's `Session::steered`.
-- **US10** holds nine scenarios that test US6's tracker, with no code of its own. It
+- **US10** holds fourteen scenarios that test US6's tracker, with no code of its own. It
   follows US6 and comes before US7, since both add a `mod` line to
   `crates/finder/tests/motion/main.rs`.
 - **US7** wires the finished steering into 035's taker and worker; it is the one story

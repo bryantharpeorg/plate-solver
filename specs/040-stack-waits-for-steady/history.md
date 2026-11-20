@@ -43,15 +43,15 @@ Record says the same.
 
 | Defect | What it found | Where it went |
 |---|---|---|
-| R1 (blocking) | US6 built to the trio measured 66,145 B, 100.9% of the budget, 36.7% over its estimate; § Risks wrote no further cut | Left for the owner (040-R1); the measure is in flip.md § Prerequisites 5 |
+| R1 (blocking) | US6 built to the trio measured 66,145 B, 100.9% of the budget, 36.7% over its estimate; § Risks wrote no further cut | US6 cut by tests into US10 (below, the cut of US6 into US10); the measures are in flip.md § Prerequisites 5 and plan.md § Risks |
 | R2 (blocking) | The keyhole pass ends in its own take-up, which wrote `reversing` over `overhead`; US10-S7 failed on US6's code, and US10 cannot fix it | plan.md § Steady, **Why it is not steady**: `reversing` only while the state is `tracking`; tasks.md T030 |
 | R3 (blocking) | US10-S8 counted from the start's own settling, where no bound near 0.15″ holds, and wrote none | Left for the owner (040-R3) |
 | R4 | A take-up's settling ends 3.0 s after its pulse in paused time, not 2 s after its rates | plan.md § Steady, the settling rule |
 | R5 | The stall rule moved the start of an entry `mark` may not have pushed | plan.md § Steady, **A stopped axis**: the earlier of the open entry's start and `sent`'s time |
-| R6 (G21) | The first call's second look at the limit was pinned by no scenario | US6-S17, a case for a first call; its record entry |
+| R6 (G21) | The first call's second look at the limit was pinned by no scenario | US6-S17 [now US6-S10], a case for a first call; its record entry |
 | R7 | The word shown while a gap is awaited and the tracker stops being steady was not stated | plan.md § The steering's wait, **Steady**: `pause` set from `tracker.pause()`; US6-S11 reads it, with the word `overhead` (the fold's choice: no case was run for it); its record entry |
-| R8 (G20) | A steering built steady, before any wait, was pinned by no scenario | US6-S13, before any `before_exposure`; its record entry |
-| R9 (T34) | US6-S7's rate at r was answered at the instant of its gap, so a turn's rate not noted as sent passed | US6-S7's When waits 2.5 s first; its record entry. The case asserted `steady_between(r - 2.0, r - 0.1)` true; the scenario keeps its `r - 5.0`, which a stall dated from the gap's rate, about 3 s before r, touches as well |
+| R8 (G20) | A steering built steady, before any wait, was pinned by no scenario | US6-S13 [now US6-S6], before any `before_exposure`; its record entry |
+| R9 (T34) | US6-S7's [now US10-S11's] rate at r was answered at the instant of its gap, so a turn's rate not noted as sent passed | US6-S7's When waits 2.5 s first; its record entry. The case asserted `steady_between(r - 2.0, r - 0.1)` true; the scenario keeps its `r - 5.0`, which a stall dated from the gap's rate, about 3 s before r, touches as well |
 | R10 (T23, T9) | US10-S3's "true 3.1 s after" let the settling end a turn late | US10-S3: true 2.1 s after, and a window from 2.0 s to 3.0 s after true; its record entry |
 | R11 | Who sends the azimuth axis a rate: `take_up`, `stop_axis` and `keyhole` command it too, on `main` as well | plan.md § What 036 provides 2, § Steady **A stopped axis** and § Plan traps 32; tasks.md T030 |
 | R12 | Rules no committed test pins: T10, T14, T31, T33, P3 and P4 unpinned; T11, T20, T36 and G22 equivalent; T15 unreachable in paused time; T29 and P5 cover each other | No change: the report proposes no case, and each would take one of its own |
@@ -74,6 +74,49 @@ flip.md § Prerequisites 9's "main does not hold the plan document yet"); the §
 US10-S9's note that round 2 settled, with its figures; and flip.md § Prerequisites 5,
 met. No fix text named a probe-only name of 036's code.
 
+### The cut of US6 into US10 (040-R1)
+
+Probe round 2 built US6 to the trio at 66,145 B, 100.9% of the 64 KiB budget and 36.7%
+over its estimate of 48,400 B, where the factory's builder lands large stories 2% to 4%
+over; § Risks wrote no further cut, and 036's choice 14 ("cut it by tests into a new
+story") had not been carried into this spec's flip.md. The owner's answer to 040-R1,
+given on [date, for the seat], is the authority: US6 is cut by tests into US10, as
+036's US5 was cut into US12, and as US10 was first cut from US6. Its five motion
+scenarios move whole, with the cases this fold gave them, to the end of US10's list; the
+judge reads each story's scenarios against its own diff, so a scenario stays with the
+story whose diff holds its test. Their tests move into US10's file,
+`crates/finder/tests/motion/steering_unsteady.rs`, with the helpers they need (tasks.md
+T054, after 036's T053), and their record entries into US10's block; US6's code stays in
+US6, and neither story's `writes` changes. The probe built the cut on a branch of its
+own: US6 55,847 B (85.2%), with its code and console tests whole and its motion module
+holding US6-S1, US6-S2 and US6-S5; US10 25,956 B (39.6%), its nine tests and the five
+moved, which passed on US6's code with the fix of 040-R2, none failing first; every gate
+green at the cut's tip, and no test's text changed in the move. With what this fold
+added, US6 is about 56,900 B (87%) and US10 about 26,400 B (40%) (plan.md § Risks). As in
+036's cut, a scenario that moved has a new number, and the ones past US6's new end took
+the numbers the moved ones left, so that US6-S11 and US6-S12 keep theirs.
+
+| Was | Now | Module |
+|---|---|---|
+| US6-S6 (a push by hand, on the goto rig) | US10-S10 | `steering_unsteady` of `motion` |
+| US6-S7 (both axes stopped behind the tracker's back) | US10-S11 | `steering_unsteady` of `motion` |
+| US6-S8 (a quiet pointing before a lapsed gap) | US10-S12 | `steering_unsteady` of `motion` |
+| US6-S9 (errors from before and inside a time not steady) | US10-S13 | `steering_unsteady` of `motion` |
+| US6-S10 (a gap queued behind a take-up when tracking ends) | US10-S14 | `steering_unsteady` of `motion` |
+| US6-S13 (the view before any wait) | US6-S6 | `steering_steady` of `console` |
+| US6-S14 (a wait abandoned with its stack) | US6-S7 | `steering_steady` of `console` |
+| US6-S15 (the switch off) | US6-S8 | `steering_steady` of `console` |
+| US6-S16 (a source that no longer answers a tracker) | US6-S9 | `steering_steady` of `console` |
+| US6-S17 (the wait for the limit) | US6-S10 | `steering_steady` of `console` |
+
+Every cite of them in the trio follows: in spec.md, US6's and US10's narratives and
+Independent Tests, US6-S3's note, US10-S1's oracle and the edge cases; in plan.md,
+§ Technical Context, § Shapes that existing tests pin, § Plan traps 25, 29 to 31 and 33,
+§ Risks and the Refinement Record; in tasks.md, T028, T029, T032, the Phase 10 note,
+the new T054, T047 and the execution order; and flip.md § Prerequisites 5, which gives
+the old numbers in brackets. Owner approval 9, which names `steering_unsteady` as
+US10's module, is left as it stands for the flip.
+
 ## Story notes moved out of spec.md
 
 **User Story 6**, under its story:
@@ -83,7 +126,8 @@ The cases of the reanalysis's second pass took this story's estimate past 85% of
 eight scenarios of User Story 10 are US6-S11 whole and the later halves of US6-S1 and
 US6-S2, which each held more than one Given, When and Then. What they test is still this
 story's code. The scenario that was US6-S12 took the number 11, and the later halves of
-US6-S3 are US6-S12 to US6-S16 (§ Clarifications, the session of the reanalysis).
+US6-S3 are US6-S12 to US6-S16 [now US6-S12 and US6-S6 to US6-S9] (§ Clarifications, the
+session of the reanalysis).
 
 **User Story 10**, under its story:
 
@@ -109,7 +153,7 @@ because it edits the README's list of tools after that story's section.
 Each was replaced in the trio by the rule or the reason it gave, without the date,
 the probe round or the earlier draft it told of. As each read:
 
-- **spec.md US6-S8, its oracle**:
+- **spec.md US6-S8 [now US10-S12], its oracle**:
 
   > that state says takes the rate off the mount (oracle: the rig's rate log. The recheck
   > of round 1 measured +25.3″/s still in force at such a gap's answer, for a pointing

@@ -164,15 +164,16 @@ after the subs have lapsed, so that a first reversal's measurement still closes.
 start none while the tracker's limit is under half the exposure I hold: I let the
 tracker go and wait for the limit to rise.
 
-The nine scenarios of User Story 10, which follows this story on the chain (Work Graph),
-test this story's code.
+The fourteen scenarios of User Story 10, which follows this story on the chain (Work
+Graph), test this story's code; five of them were cut from this story by tests (below its
+scenarios).
 
 **Why this priority**: Altitude reverses at transit, where a target is highest and a
 run will sit. It is P2 because it is rare within a night.
 
 **Independent Test**: `crates/finder/tests/motion/steering_steady.rs`, the module
-`steering_steady` of `motion`, on the backlash rig and, for US6-S6, on
-`crate::support::goto::Rig`; and `crates/finder/tests/console/steering_steady.rs`, the
+`steering_steady` of `motion`, on the backlash rig; and
+`crates/finder/tests/console/steering_steady.rs`, the
 module `steering_steady` of `console`, with the scripted tracker. The `test` gate's
 `cargo nextest run --workspace --all-targets --all-features --locked` runs both; during
 development, `cargo nextest run -p finder --locked --test motion steering_steady::` and
@@ -226,7 +227,7 @@ development, `cargo nextest run -p finder --locked --test motion steering_steady
    false, `waiting` true, `pause` `reversing`, `Steering::waiting()` true and no `gap`
    in the log; and that it answered within 0.5 s of the change, after exactly one `gap`,
    with `steady` true, `waiting` false, no `pause` and `Steering::waiting()` false (the
-   five later cases this scenario held are US6-S12 to US6-S16).
+   five later cases this scenario held are US6-S12 and US6-S6 to US6-S9).
 4. **Given** a scripted steering after a `before_exposure` with the worked ask, whose
    tracker answers `steady_between` false, **Then** a committed test asserts that
    `check` with the
@@ -266,107 +267,29 @@ development, `cargo nextest run -p finder --locked --test motion steering_steady
    not steady, its gaps are turned away, and the finder camera's pointings correct it
    as 015 has them though the claim had lapsed; held for a gap instead, they would
    never be applied, and the measurement would not close).
-6. **Given** the tracking console, its session's tracker taken once
-   `steady()` reads true (read every 100 ms, for at most 10 s) and one `gap` awaited, so
-   that `steered_by_subs()` is true, **When** a test pushes the tube with
-   `rig.mount.push_by(0.0, -0.1)`, 6′ as `crates/finder/tests/motion/tracking/push.rs`
-   pushes it, and from then on reads `GET /api/session` and the tracker every 100 ms;
-   puts the tube back with `rig.mount.push_by(0.0, 0.1)` at the first read whose
-   `track.push.state` is `moving`; and, once `track.push` is absent again, pushes it a
-   second time with `rig.mount.push_by(0.0, -0.1)` and leaves it there, **Then** a
-   committed test asserts that:
-   - at the first read whose `track.push.state` is `moving`, `steady()` is false,
-     `pause()` is `Some("pushed")` and `steered_by_subs()` is false, and a `gap` awaited
-     then answers exactly (0.0, 0.0) and leaves `steered_by_subs()` false;
-   - at the first read after it that has no `track.push`, `steady()` is true, and a
-     `gap` awaited then makes `steered_by_subs()` true: a push that comes back ends the
-     time not steady with no follow;
-   - after the second push, with m the console time of the first read whose
-     `track.push.state` is `moving` and f that of the first whose state is `following`,
-     `steady()` is false at m and true at f, `steady_between(m, f)`, asked at f, is
-     false, and a `gap` awaited at f makes `steered_by_subs()` true (oracle: 038's own
-     `track.push`, as its tests read it. While the session reads a push as moving the
-     tracker is not steady: the claim is dropped, no gap steps the telescope back toward
-     the old place, and the stack waits).
-7. **Given** the backlash rig followed to 60 s before the transit with
-   `rig.follow(transit - 60.0, 60.0)` and one `gap` awaited then, so that
-   `steered_by_subs()` is true, **When** a test waits 2.5 s, then waits until the rate
-   log gains an azimuth rate, at the time r, waits 0.5 s, stops both axes on the
-   simulated mount itself with `rig.mount.stop_all().await`, and waits 2 s, **Then** a
-   committed test asserts that `steady_between(r + 0.1, r + 0.9)` is false; that
-   `steady_between(r - 5.0, r - 0.1)` and `steady_between(r + 1.1, r + 1.9)` are true;
-   that `steady()` is true and `steered_by_subs()` false at the end; and that the first
-   azimuth rate the log holds after r is not zero (oracle: the rig's rate log and clock.
-   Stopping the mount behind the tracker's back is what the scope node does when a rate
-   command fails on the mount's side: both axes stop and the command is still
-   acknowledged. The tracker's next turn finds the azimuth axis at rest although the
-   rate it last sent was not zero, reads not steady from the time of that rate to its
-   own next rates, which start the axes again, and so drops the claim).
-8. **Given** the lapsed backlash rig and a `pointing(0.0, 0.0)` right after its ninth
-   gap, **When** a `pointing(30.0, 0.0)` arrives once the take-up at transit has made
-   `steady()` false, a `pointing(0.0, 0.0)` arrives as soon as `steady()` reads true
-   again, both read every 10 ms, and a `gap` is awaited at once, **Then** a committed
-   test asserts that the azimuth rate in force when the gap answers, the last in the
-   rate log at or before its answer, is the feed-forward rate plus the tracking offset
-   read just after the answer, within 0.01″/s, and so is the first rate after it: a
-   pointing inside 015's deadband that arrives steady and lapsed zeroes the proportional
-   rate in the tracker's own state and sends nothing, so only a gap that sends whatever
-   that state says takes the rate off the mount (oracle: the rig's rate log).
-9. **Given** the lapsed backlash rig, with b the console time read right after its ninth
-   gap, **When** the take-up at transit has made `steady()` false and a test hands over
-   a `steer` of (12.0, −16.0) at the time now; and, once `steady()` reads true again,
-   both read every 10 ms, it hands over a `steer` of (12.0, −16.0) with the time b and
-   awaits a `gap`, **Then** a committed test asserts that the gap answers exactly (0.0,
-   0.0) and leaves `steered_by_subs()` false: a tracking error handed over while the
-   tracker is not steady, or measured before it stopped being steady, steers nothing and
-   takes no lapsed tracker back; and that a `steer` of (0.0, 0.0) at the time now and
-   one more gap then make `steered_by_subs()` true (oracle: 036's FR-011 and FR-021).
-10. **Given** the backlash rig followed to 3 s before the transit with
-    `rig.follow(transit - 3.0, 60.0)`, **When** a test reads `steady()` every 10 ms
-    until it is false, for at most 5 s, and then joins, on its own task, an asker that
-    awaits `rig.tracker.gap()` under a timeout of 1.1 s and a stopper that waits 0.1 s
-    and calls `rig.tracker.stop("stopped")`, **Then** a committed test asserts that the
-    gap answered, exactly (0.0, 0.0): the take-up holds the rate task for most of a
-    second, the gap waits in the tracker's queue, and tracking that ends answers every
-    gap still waiting (oracle: 015's Stop; without it a stack's taker would wait in
-    `before_exposure` for ever).
-11. **Given** a scripted steering whose tracker is steady and whose `gap` waits 5 s,
-    **When** a test awaits `before_exposure` with the worked ask in a task, sets the
-    tracker not steady, with the `pause` word `overhead`, 0.5 s later and waits 0.6 s
-    more, **Then** a committed test asserts that `view()` has `steady` false, `waiting`
-    true and `pause` `overhead`, the tracker's word, that
-    `Steering::waiting()` is true, and that the log holds exactly one `gap`: a tracker
-    that stops being steady while its gap is awaited, as one does whose keyhole pass
-    begins just then, shows as a wait.
-12. **Given** a scripted steering whose tracker's `gap` waits 1 s, **When** a test
-    awaits `before_exposure` with the worked ask in a task, sets the tracker not steady
-    0.5 s later and steady again 5 s after that, **Then** a committed test asserts that
-    the call has not answered 4 s after it was made, and that it answers between 6.4 s
-    and 6.8 s after it was made, with exactly two `gap`s in the log: the first gap ended
-    on a tracker that was not steady, so it does not count.
-13. **Given** a scripted steering whose tracker is steady, before any `before_exposure`,
-    given only `set_smear_px(6.0)` so that it has a view, and after one; and a
-    `Steering` whose source answers no tracker, after one, **Then** a committed
-    test asserts that each `view()` has `steady` true, `waiting` false, no `pause` and
-    `dropped_not_steady` 0.
-14. **Given** a scripted steering whose tracker is not steady, a `Hold` taken from it
-    and a `before_exposure` awaited in a task for 2 s, **When** the test aborts that
-    task and drops the `Hold`, **Then** a committed test asserts that
-    `Steering::waiting()` is false and that `view()` has `waiting` false, `steady` true
-    and no `pause`: a wait abandoned with its stack does not go on showing.
-15. **Given** a scripted steering whose tracker is not steady, after `set_on(false)`,
-    **When** a test awaits `before_exposure` with the worked ask in a task, **Then** a
-    committed test asserts that it has not answered 1 s after it was called, with
-    `steady` false and `waiting` true, and that once the tracker is steady it answers
-    with no `gap` in the log: the switch turns off the steering, not the wait. **And**
-    on another such steering with the switch still on, where `set_on(false)` is called
-    0.5 s into the wait, the same holds: the switch is read where a gap would be asked
-    for, not when the call is made.
-16. **Given** a scripted steering whose tracker is not steady and a `before_exposure`
-    waiting in a task for 1.1 s, **When** the test makes the source answer no tracker,
-    **Then** a committed test asserts that the call answers within 0.25 s, and that
-    `view()` has `steady` true and `waiting` false.
-17. **Given** a scripted steering whose tracker answers a longest exposure of 37.15 s,
+6. **Given** a scripted steering whose tracker is steady, before any `before_exposure`,
+   given only `set_smear_px(6.0)` so that it has a view, and after one; and a
+   `Steering` whose source answers no tracker, after one, **Then** a committed
+   test asserts that each `view()` has `steady` true, `waiting` false, no `pause` and
+   `dropped_not_steady` 0.
+7. **Given** a scripted steering whose tracker is not steady, a `Hold` taken from it
+   and a `before_exposure` awaited in a task for 2 s, **When** the test aborts that
+   task and drops the `Hold`, **Then** a committed test asserts that
+   `Steering::waiting()` is false and that `view()` has `waiting` false, `steady` true
+   and no `pause`: a wait abandoned with its stack does not go on showing.
+8. **Given** a scripted steering whose tracker is not steady, after `set_on(false)`,
+   **When** a test awaits `before_exposure` with the worked ask in a task, **Then** a
+   committed test asserts that it has not answered 1 s after it was called, with
+   `steady` false and `waiting` true, and that once the tracker is steady it answers
+   with no `gap` in the log: the switch turns off the steering, not the wait. **And**
+   on another such steering with the switch still on, where `set_on(false)` is called
+   0.5 s into the wait, the same holds: the switch is read where a gap would be asked
+   for, not when the call is made.
+9. **Given** a scripted steering whose tracker is not steady and a `before_exposure`
+   waiting in a task for 1.1 s, **When** the test makes the source answer no tracker,
+   **Then** a committed test asserts that the call answers within 0.25 s, and that
+   `view()` has `steady` true and `waiting` false.
+10. **Given** a scripted steering whose tracker answers a longest exposure of 37.15 s,
     after a first `before_exposure` with the worked ask and a wanted 60 s that answered
     30.0, **When** the tracker's longest exposure becomes 14.0 s and a test awaits
     `before_exposure` again in a task, waits 1.1 s, sets the longest exposure to 15.0 s
@@ -384,6 +307,26 @@ development, `cargo nextest run -p finder --locked --test motion steering_steady
     with `pause` `limit` and one `release` in the log: the cap's 1 s floor is more than
     twice the limit, and the first call looks at the limit again once the cap has
     decided.
+11. **Given** a scripted steering whose tracker is steady and whose `gap` waits 5 s,
+    **When** a test awaits `before_exposure` with the worked ask in a task, sets the
+    tracker not steady, with the `pause` word `overhead`, 0.5 s later and waits 0.6 s
+    more, **Then** a committed test asserts that `view()` has `steady` false, `waiting`
+    true and `pause` `overhead`, the tracker's word, that
+    `Steering::waiting()` is true, and that the log holds exactly one `gap`: a tracker
+    that stops being steady while its gap is awaited, as one does whose keyhole pass
+    begins just then, shows as a wait.
+12. **Given** a scripted steering whose tracker's `gap` waits 1 s, **When** a test
+    awaits `before_exposure` with the worked ask in a task, sets the tracker not steady
+    0.5 s later and steady again 5 s after that, **Then** a committed test asserts that
+    the call has not answered 4 s after it was made, and that it answers between 6.4 s
+    and 6.8 s after it was made, with exactly two `gap`s in the log: the first gap ended
+    on a tracker that was not steady, so it does not count.
+
+Its five motion scenarios that were US6-S6 to US6-S10 (the push by hand on the goto rig,
+the stall, a quiet pointing before a lapsed gap, errors from before and inside a time not
+steady, and a gap queued behind a take-up) are US10-S10 to US10-S14: their tests are
+committed in User Story 10's file, and the judge reads each story's scenarios against
+its own diff. US6-S13 to US6-S17 took the numbers 6 to 10.
 
 ---
 
@@ -692,12 +635,17 @@ tracking error is (e, n) within 10⁻⁴″.
 As the factory that builds User Story 6, I test in a story of their own what that
 story's tracker does around a time it is not steady: what the mount is left running at
 the first gap after one, a first reversal's measurement and its close, a start and a
-stop, what a take-up forgets, the keyhole pass, and subs steered through a reversal.
+stop, what a take-up forgets, the keyhole pass, subs steered through a reversal, a push
+by hand, both axes stopped behind the tracker's back, what a pointing and a tracking
+error do around a time not steady, and a gap queued behind a take-up when tracking
+ends.
 
-This story is built after User Story 6 and before User Story 7 (Work Graph). Its nine
-scenarios test User Story 6's code: this story writes nothing under `crates/finder/src`,
-and on User Story 6's code its scenarios already pass (tasks.md, US10's test tasks). One
-of them, US10-S8, has no bound yet: probe round 2 measures it.
+This story is built after User Story 6 and before User Story 7 (Work Graph). Its
+fourteen scenarios test User Story 6's code, the last five, US10-S10 to US10-S14, cut
+from that story by tests, where they were US6-S6 to US6-S10: this story writes nothing
+under `crates/finder/src`, and on User Story 6's code its scenarios already pass
+(tasks.md, US10's test tasks). One of them, US10-S8, has no bound yet: probe round 2
+measures it.
 
 **Why this priority**: The first exposure after a take-up, a measurement or the keyhole
 pass is the one most likely to start on a rate nobody meant, and a stop that left a gap
@@ -706,7 +654,8 @@ and comes before User Story 7, since both add a `mod` line to
 `crates/finder/tests/motion/main.rs`.
 
 **Independent Test**: `crates/finder/tests/motion/steering_unsteady.rs`, the module
-`steering_unsteady` of finder's `motion` test binary, on the backlash rig. The `test`
+`steering_unsteady` of finder's `motion` test binary, on the backlash rig and, for
+US10-S10, on `crate::support::goto::Rig`. The `test`
 gate's `cargo nextest run --workspace --all-targets --all-features --locked` runs it;
 during development,
 `cargo nextest run -p finder --locked --test motion steering_unsteady::`.
@@ -724,7 +673,7 @@ during development,
    second an interval of about 50 s, so the proportional rate 015 sets for the second,
    about +0.5″/s of azimuth, outlasts the settling; with no earlier pointing it would
    last 1 s, and a turn would have dropped it before the tracker was steady again.
-   US6-S8 and US10-S9 are the two ways the tracker's own state stops showing that rate
+   US10-S12 and US10-S9 are the two ways the tracker's own state stops showing that rate
    while the mount still runs it).
 2. **Given** `crate::support::tracker::Rig` for M42 from 120 s before its transit on a
    fresh session, so that no backlash is measured, followed to transit + 30 s, while the
@@ -816,6 +765,70 @@ during development,
    was met. The 5.4 s is worked: from the take-up's start as the recheck of round 1
    saw it, 1.99 s before the rig's transit, and the 3.0 s from there to the turn that
    ends the settling; probe round 2 measured the interval at 3.410 s and confirmed it).
+10. **Given** the tracking console, its session's tracker taken once
+    `steady()` reads true (read every 100 ms, for at most 10 s) and one `gap` awaited, so
+    that `steered_by_subs()` is true, **When** a test pushes the tube with
+    `rig.mount.push_by(0.0, -0.1)`, 6′ as `crates/finder/tests/motion/tracking/push.rs`
+    pushes it, and from then on reads `GET /api/session` and the tracker every 100 ms;
+    puts the tube back with `rig.mount.push_by(0.0, 0.1)` at the first read whose
+    `track.push.state` is `moving`; and, once `track.push` is absent again, pushes it a
+    second time with `rig.mount.push_by(0.0, -0.1)` and leaves it there, **Then** a
+    committed test asserts that:
+    - at the first read whose `track.push.state` is `moving`, `steady()` is false,
+      `pause()` is `Some("pushed")` and `steered_by_subs()` is false, and a `gap` awaited
+      then answers exactly (0.0, 0.0) and leaves `steered_by_subs()` false;
+    - at the first read after it that has no `track.push`, `steady()` is true, and a
+      `gap` awaited then makes `steered_by_subs()` true: a push that comes back ends the
+      time not steady with no follow;
+    - after the second push, with m the console time of the first read whose
+      `track.push.state` is `moving` and f that of the first whose state is `following`,
+      `steady()` is false at m and true at f, `steady_between(m, f)`, asked at f, is
+      false, and a `gap` awaited at f makes `steered_by_subs()` true (oracle: 038's own
+      `track.push`, as its tests read it. While the session reads a push as moving the
+      tracker is not steady: the claim is dropped, no gap steps the telescope back toward
+      the old place, and the stack waits).
+11. **Given** the backlash rig followed to 60 s before the transit with
+    `rig.follow(transit - 60.0, 60.0)` and one `gap` awaited then, so that
+    `steered_by_subs()` is true, **When** a test waits 2.5 s, then waits until the rate
+    log gains an azimuth rate, at the time r, waits 0.5 s, stops both axes on the
+    simulated mount itself with `rig.mount.stop_all().await`, and waits 2 s, **Then** a
+    committed test asserts that `steady_between(r + 0.1, r + 0.9)` is false; that
+    `steady_between(r - 5.0, r - 0.1)` and `steady_between(r + 1.1, r + 1.9)` are true;
+    that `steady()` is true and `steered_by_subs()` false at the end; and that the first
+    azimuth rate the log holds after r is not zero (oracle: the rig's rate log and clock.
+    Stopping the mount behind the tracker's back is what the scope node does when a rate
+    command fails on the mount's side: both axes stop and the command is still
+    acknowledged. The tracker's next turn finds the azimuth axis at rest although the
+    rate it last sent was not zero, reads not steady from the time of that rate to its
+    own next rates, which start the axes again, and so drops the claim).
+12. **Given** the lapsed backlash rig and a `pointing(0.0, 0.0)` right after its ninth
+    gap, **When** a `pointing(30.0, 0.0)` arrives once the take-up at transit has made
+    `steady()` false, a `pointing(0.0, 0.0)` arrives as soon as `steady()` reads true
+    again, both read every 10 ms, and a `gap` is awaited at once, **Then** a committed
+    test asserts that the azimuth rate in force when the gap answers, the last in the
+    rate log at or before its answer, is the feed-forward rate plus the tracking offset
+    read just after the answer, within 0.01″/s, and so is the first rate after it: a
+    pointing inside 015's deadband that arrives steady and lapsed zeroes the proportional
+    rate in the tracker's own state and sends nothing, so only a gap that sends whatever
+    that state says takes the rate off the mount (oracle: the rig's rate log).
+13. **Given** the lapsed backlash rig, with b the console time read right after its ninth
+    gap, **When** the take-up at transit has made `steady()` false and a test hands over
+    a `steer` of (12.0, −16.0) at the time now; and, once `steady()` reads true again,
+    both read every 10 ms, it hands over a `steer` of (12.0, −16.0) with the time b and
+    awaits a `gap`, **Then** a committed test asserts that the gap answers exactly (0.0,
+    0.0) and leaves `steered_by_subs()` false: a tracking error handed over while the
+    tracker is not steady, or measured before it stopped being steady, steers nothing and
+    takes no lapsed tracker back; and that a `steer` of (0.0, 0.0) at the time now and
+    one more gap then make `steered_by_subs()` true (oracle: 036's FR-011 and FR-021).
+14. **Given** the backlash rig followed to 3 s before the transit with
+    `rig.follow(transit - 3.0, 60.0)`, **When** a test reads `steady()` every 10 ms
+    until it is false, for at most 5 s, and then joins, on its own task, an asker that
+    awaits `rig.tracker.gap()` under a timeout of 1.1 s and a stopper that waits 0.1 s
+    and calls `rig.tracker.stop("stopped")`, **Then** a committed test asserts that the
+    gap answered, exactly (0.0, 0.0): the take-up holds the rate task for most of a
+    second, the gap waits in the tracker's queue, and tracking that ends answers every
+    gap still waiting (oracle: 015's Stop; without it a stack's taker would wait in
+    `before_exposure` for ever).
 
 ---
 
@@ -884,12 +897,12 @@ theirs (031 spec.md US8), and reached through the MCP door as they reach it.
   the tracker is not steady: exposures pause, the sub in flight is dropped as
   `not_steady`, and the claim and any error not yet applied are dropped as for a
   take-up. When the push is followed or comes back, the stack's next gap claims again.
-  One finder solve more than 5′ wrong costs one sub in the same way (US6-S6).
+  One finder solve more than 5′ wrong costs one sub in the same way (US10-S10).
 - **A rate command that fails at the scope node.** The node stops both axes and still
   acknowledges the command. The tracker's next turn finds the azimuth axis at rest
   although the rate it last sent was not zero and reads not steady from that rate to its
   own next rates, which start the axes again: the sub in flight is dropped as
-  `not_steady` and steers nothing (US6-S7). What the node does with a failed command is
+  `not_steady` and steers nothing (US10-S11). What the node does with a failed command is
   another spec's.
 - **Settling.** For 2 s after the rates that follow a tracker's start, a take-up and the
   keyhole pass the tracker is not steady, and no exposure starts: a real tube rings
@@ -903,7 +916,7 @@ theirs (031 spec.md US8), and reached through the MCP door as they reach it.
   out: a stack that is waiting for a tracker in the keyhole waits until it leaves, and
   stopping the stack ends the wait. The block says why exposures are paused (US8-S8).
 - **The limit falls under half the exposure held.** The stack takes no exposure until the
-  limit has risen again, lets the tracker go meanwhile, and the block says so (US6-S17,
+  limit has risen again, lets the tracker go meanwhile, and the block says so (US6-S10,
   US8-S8).
 - **The observer edits the exposure during a stack.** The edit is refused: while the
   stack holds the camera's lease, `PUT /api/imaging/settings` answers 409 with the
