@@ -119,7 +119,10 @@ description: "Task list for 037-imaging-run: The Imaging Run"
   `CentringNote`, `EndedNote` and `RunView`, with the `skip_serializing_if` attributes
   as the code block of plan.md § The machine has them, and the three tables of plan.md
   § The run's words that are made from a run's own state, whole: each state's message,
-  the focus sentences and the warnings. `EndedNote` holds `saved` and `track_on`, and
+  the focus sentences and the warnings, the two for a target stacked off the centre each
+  in its two forms, chosen by the offset against 036's
+  `crate::imaging::steering::FAR_ARCSEC`, which is read and never copied. `EndedNote`
+  holds `saved` and `track_on`, and
   the view `stacking_since`, `limit_at`, set with it, and `pause_ends_at`. A warning
   already in the list is not added again. Write neither
   `crates/finder/src/imaging/run/script.rs` nor `crates/finder/src/imaging/mod.rs`: they
@@ -333,8 +336,9 @@ description: "Task list for 037-imaging-run: The Imaging Run"
   (US5-S2), and a solve that measured no new aim point, which is no try, four of them
   in a row with the target 400″ off, which is stacked with a warning, and 600″ off,
   which ends the run, the count started again by a re-centre, a target 400″ off after
-  three tries that is stacked with a
-  warning, a failed `repoint`, a mount that is not steady after one, and a stop of
+  three tries that is stacked with a warning, both warnings saying at 400″ that the
+  target is stacked where it is and at 180″ and 150″ that the stack's steering will
+  bring it in, a failed `repoint`, a mount that is not steady after one, and a stop of
   the run while `repoint` is held (US5-S3).
 - [ ] T021 [US5] Create `crates/finder/tests/motion/imaging_run_centring.rs`, the module
   `imaging_run_centring` of `motion`, with its `mod` line in
@@ -355,8 +359,9 @@ description: "Task list for 037-imaging-run: The Imaging Run"
   4 of the task the centring loop of plan.md § Centring in the machine, with `repoint`
   awaited unguarded and only after a solve whose `aim_moved` is true, a solve that
   measured no new aim point counted apart from the tries, and a target within
-  `near_arcsec` stacked with its warning after the last try, and after the fourth
-  solve in a row that measured no new aim point.
+  `near_arcsec` stacked with its warning after the last try, and after the fourth solve
+  in a row that measured no new aim point, each warning in the form its offset gives
+  (plan.md § The run's words).
 - [ ] T023 [US5] In `crates/finder/src/imaging/run/console.rs`, add `FRESH_POLLS` and
   step 3 of `repoint`: after the part's own Track off and with Track off, the wait for
   a live pointing newer than the one found then, at most `FRESH_POLLS` polls, going on

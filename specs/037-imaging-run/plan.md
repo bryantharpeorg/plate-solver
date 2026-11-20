@@ -208,7 +208,8 @@ is re-read on `main` before the flip (§ Prerequisites 2 and 3).
 | the focus check, awaited | 033 | `Imaging::focus_start(FocusAsk { check: true, .. })`, `Imaging::focus_ended()` → `FocusView { unit, aid, .. }`, `AidView { check, state, verdict, median, last, reference, ended_reason, error, .. }` | 033 plan.md § The aid on the console, § The focus view |
 | the focus aid, opened and closed | 033 | `Imaging::focus_start(FocusAsk::default())`, `Imaging::focus_stop()` | 033 plan.md § The aid on the console |
 | the live stack | 035 | `AppState::stack()` → `Option<Arc<Stacker>>`; `Stacker::start(StartRequest, Option<&str>)`; `Stacker::stop()` and `Stacker::view()` → `Option<StackView>`, `StackView { state, id, started_at, stacked, dropped, ended_reason, error, save_error, .. }`; `dropped`'s keys `behind` and `unprocessed`, which are not failed subs | 035 plan.md § The stack on the console, § The console |
-| whether the stack waits for the tracker, and the set point | 036 | `Imaging::steering()` → `Steering::waiting()`, `Steering::set_set_point(None)` | 036 plan.md § The steering, § The imaging state |
+| whether the stack waits, for the tracker or for its exposure limit, and the set point | 036 | `Imaging::steering()` → `Steering::waiting()`, `Steering::set_set_point(None)` | 036 plan.md § The steering, § The imaging state |
+| how far from the set point a stack may begin and still be steered | 036 | `crate::imaging::steering::FAR_ARCSEC`, 180.0 | 036 plan.md § The steering; 036 spec.md FR-014 |
 | whether the tracker is steady enough to expose, and was over a past window | 036 | `Session::steered()` → `Option<Arc<dyn Steered>>`; `Steered::steady()`, `Steered::steady_between(start, end)` over console Unix seconds | 036 plan.md § The session, § The tracking error and the interface |
 | how far back an aim reading fits the finder camera's solves | 032 | `crate::imaging::relation::FIT_REACH_S`, 10 s, or the exposure when that is longer | 032 plan.md § The relation |
 | a push by hand, and whether it has settled | 038 | `TrackView::push` → `moving` or `following`, absent with no push | 038 spec.md FR-009 |
@@ -772,7 +773,7 @@ is written `1 sub`, with `is` where the sentence has `are`.
 | `solving` | `Solving an imaging frame.` |
 | `centring` (US5) | `Centring {name}: {offset} from the sensor's centre, try {n} of 3.` after a re-centre was asked for; `Centring {name}: {offset} from the sensor's centre, no new aim point yet.` after a solve that measured no new aim point |
 | `stacking` | `Stacking {name}: {stacked} stacked, {dropped} dropped.`, `{dropped}` the sum over the reasons |
-| `paused_by_tracker` | `Waiting for the mount to settle: {stacked} stacked so far. It goes on by itself.` |
+| `paused_by_tracker` | `Exposures paused: {stacked} stacked so far. They resume by themselves.` |
 | `first_frame`, `focus_check`, `solving` or `centring`, while the run waits for the tracker (US2) | the state's own message, then ` Waiting for the mount to settle; nothing to do.` |
 | any, once the run is ending (US2) | `Saving the stack: {stacked} stacked.` when step 5 returned `Ok`, else the state's own message |
 | `ended` | the ending's message |
@@ -821,8 +822,8 @@ is written `1 sub`, with `is` where the sentence has `are`.
 | the stack at an ending (US2) | `The stack did not end cleanly: {words}.` |
 | subs not removed because nothing was stacked (US2) | `The subs were kept: nothing was stacked.` |
 | the record at an ending (US3) | `The run's record could not be saved: {words}.` |
-| a target stacked off the centre after the last try (US5) | `{name} is {offset} from the sensor's centre after 3 tries; the stack's steering will bring it in.` |
-| a target stacked off the centre after four solves that measured no new aim point (US5) | `{name} is {offset} from the sensor's centre and no new aim point could be measured; the stack's steering will bring it in.` |
+| a target stacked off the centre after the last try (US5) | `{name} is {offset} from the sensor's centre after 3 tries; the stack's steering will bring it in.` while the offset is at most 036's `FAR_ARCSEC`, 180″; over it, `{name} is {offset} from the sensor's centre after 3 tries; it is stacked where it is.` |
+| a target stacked off the centre after four solves that measured no new aim point (US5) | `{name} is {offset} from the sensor's centre and no new aim point could be measured; the stack's steering will bring it in.` while the offset is at most `FAR_ARCSEC`; over it, `{name} is {offset} from the sensor's centre and no new aim point could be measured; it is stacked where it is.` |
 | a focus check that would pause, twice not steady (US6) | `The tracker was not steady during the focus check.` |
 
 The table of endings is whole in `run.rs` from US12, as `Ending::reason` and
@@ -834,6 +835,26 @@ first adds it. A warning already in the
 list is not added again. The one sentence whose
 subject is an altitude, the `too_low` message, is an observer's word and not code
 (§ Plan traps 18).
+
+**Stacked off the centre, in two forms.** Each of the two warnings for a target stacked
+off the centre ends `; the stack's steering will bring it in.` while
+`offset_arcsec <= crate::imaging::steering::FAR_ARCSEC`, and
+`; it is stacked where it is.` over it. `FAR_ARCSEC`, 180″, is 036's: its steering
+stands back from a stack whose first tracking error is longer, and the view then carries
+`steering.far_arcsec` (036 FR-014). The function that words the warning reads the
+constant and writes no 180 of its own, as `label` calls 035's rule. It judges by the
+offset of the run's last solve, before the stack has taken a sub, and 036 by the stack's
+first tracking error, so within a few arcseconds of 180″ the two can fall on different
+sides; 036's block on the page then says what the steering does (036 plan.md § The
+page).
+
+**`paused_by_tracker` names no cause.** 036's stack waits before an
+exposure for more than a mount that settles: its view's `steering.pause` has a word for
+a start, a take-up, a measurement, the keyhole pass, a push and a stopped axis, and
+`limit` while the tracker is steady and its exposure limit is under half the exposure
+held (036 FR-021, FR-022). The stack part hands the machine `Steering::waiting()` alone,
+so the run reads no such word, and its one sentence is true of every one of them. 036's
+block, on the same page, shows the sentence of the word.
 
 ### The script (`crates/finder/src/imaging/run/script.rs`, new, US12)
 
@@ -1038,7 +1059,8 @@ counts are written at changes of state, at most once a minute while they rise, a
 the ending, not at every poll.
 
 The words `stacking` and `paused_by_tracker` can change places for hours: 036's steering
-waits whenever the tracker is not steady before an exposure. So a change between those
+waits before an exposure whenever the tracker is not steady, and whenever its exposure
+limit is under half the exposure held (036 FR-022). So a change between those
 two is listed as an event, and written, only when no such change was listed in the
 `RECORD_EVERY` before it, on tokio's clock. One that is held back is neither an event
 nor a write; the view's `state` and `message` change at once all the same, and the
@@ -1193,12 +1215,18 @@ and Track's answer; and the tokio instant at which `state` first read 038's push
   finder camera's solves from `reach` before the imaging exposure, and a fit that
   reaches into a GoTo, a re-centre or a take-up reads `moving`, or is biased: round 1
   saw every solve after a re-centre take no aim reading for that reason. 036's
-  `steady_between` is false from a tracker's start until its first rates and across
-  every take-up, keyhole pass and measurement, and every GoTo and every re-centre
-  starts a new tracker, so the row needs no clock and no field of its own. The window
+  `steady_between` is false from a tracker's start until 2 s after its first rates,
+  across every take-up and keyhole pass with the 2 s that follow each, across a
+  measurement, while 038's push reads `moving`, and for a turn that finds an axis
+  stopped; a window that begins at the instant such a time ended is not touched by it
+  (036 FR-021). Every GoTo and every re-centre starts a new tracker, so the row needs no
+  clock and no field of its own. The window
   is in console Unix seconds, which is what 036 keeps its list in. The cost is the
-  larger of 10 s and the exposure, once after each GoTo and each re-centre: at most
-  four times a run, 2 minutes in all at exposures of 30 s. A run started while Track
+  larger of 10 s and the exposure, after the 2 s to 3 s for which a new tracker settles
+  (036's US10-S3 pins this window on 036's own rig: false asked 6 s after a tracker's
+  start, true asked 14 s after it), once after each GoTo and each re-centre: at most
+  four times a run, a little over 2 minutes in all at exposures of 30 s. A run started
+  while Track
   has long been steady on the target waits for nothing. The lasting fix is 032's
   (§ Risks).
 
@@ -1208,7 +1236,10 @@ and Track's answer; and the tokio instant at which `state` first read 038's push
   `moving` would end on a knee against the tube, a gust or a hand on the focuser,
   with nothing pushed away. So `moving` reads `Tracking { steady: false }` until it
   has lasted `PUSH_GRACE`: the run starts no take and no focus check meanwhile, and
-  while it stacks the stack goes on as 036's steering decides (§ Risks). The instant
+  while it stacks 036's tracker is itself not steady for as long as the push reads
+  `moving`: the stack waits before its next exposure, `Steering::waiting()` is true and
+  the run reads `paused_by_tracker`, and the sub in flight is dropped as `not_steady`
+  (036 FR-021, FR-022). The instant
   is kept by the part and compared on tokio's clock, not counted in calls, because
   tests and the machine read `state` at different paces.
 
@@ -1462,13 +1493,16 @@ the first that holds:
   the mount tracks and is steady, and the solve again;
 - `centre.aim_moved`, the three tries being spent: when
   `offset_arcsec <= near_arcsec` the run adds the first of the two warnings that § The
-  run's words gives a target stacked off the centre, and goes on to stacking, because
-  036's steering removes half of what is left at each
-  gap between subs; otherwise it ends
-  `NotCentred { offset_arcsec, measured: true }`;
+  run's words gives a target stacked off the centre, in the form its offset gives, and
+  goes on to stacking. Up to 036's `FAR_ARCSEC`, 180″, its steering takes out half of
+  what is left at each gap, at most 30″ on the sky an axis and, against an axis's
+  motion, at most that axis's rate times 0.5 s (036 FR-008); beyond 180″ it stands back,
+  the view carries `steering.far_arcsec`, and the target stays where it is. Otherwise
+  the run ends `NotCentred { offset_arcsec, measured: true }`;
 - else, the solve having measured no new aim point: `idle += 1`. At `CENTRE_IDLE`, when
-  `offset_arcsec <= near_arcsec` the run adds the second of those warnings and goes on
-  to stacking, and otherwise it ends `NotCentred { offset_arcsec, measured: false }`: it
+  `offset_arcsec <= near_arcsec` the run adds the second of those warnings, in the form
+  its offset gives, and goes on to stacking, and otherwise it ends
+  `NotCentred { offset_arcsec, measured: false }`: it
   is the case of the branch above, a target plainly in the frame that is not thrown away
   (spec owner decision 4). Below `CENTRE_IDLE` the state is `centring` with its second
   message, and `frame()` and the solve again, `tries` unchanged and no re-centre asked
@@ -1644,8 +1678,10 @@ pub fn reserve_bytes(width: u32, height: u32, binning: u32) -> u64;
 
 `stack(state)` keeps the id of the stack it started. With `stacker` being
 `state.stack()` (035), which is there whenever imaging is:
-- `start(target)`: `imaging.steering().set_set_point(None)` (036): the run says where
-  on the sensor it wants the target, today the centre. Then
+- `start(target)`: `imaging.steering().set_set_point(None)` (036): the run says where on
+  the sensor it wants the target, today the centre. 036 lets go a tracker a stack holds
+  when the set point changes (036 FR-014); called here, before the stack's start, the
+  call changes nothing a stack holds. Then
   `stacker.start(StartRequest::default(), Some(&run::label(&target.name))).await`. A
   `Refusal` whose message begins `cannot make the stack folder` is `Err(Save(message))`;
   any other is `Err(Other(message))`. The part reads the console clock before that
@@ -1687,7 +1723,8 @@ pub fn reserve_bytes(width: u32, height: u32, binning: u32) -> u64;
   `stacked` is the view's; `dropped` is the view's `dropped` object as
   `serde_json::to_value` gives it, keeping each key whose number is above 0, so a
   reason a later spec adds is carried without a change here; `waiting_for_tracker` is
-  `imaging.steering().waiting()` (036); and `failed`, for an `ended` view, is
+  `imaging.steering().waiting()` (036), true while 036's stack waits before an exposure,
+  for the tracker or for its exposure limit to rise; and `failed`, for an `ended` view, is
   `Some(Camera(error))` when `ended_reason` is `camera`, else `Some(Save(words))` when
   the view has a `save_error`, else `None`.
 - `stop(keep_subs)`: first it removes `.reserve` from the folder of the stack it
@@ -1983,7 +2020,9 @@ long as the finder camera's exposure, so that a finder solve falls inside each
 imaging frame, without which a solve can measure no aim point; the centring
 tolerance, and that a target left within a quarter of the frame's shorter side after
 three tries, or after four solves in a row that measured no new aim point, is stacked
-with a warning; that the run's own imaging frames are taken at the
+with a warning, which says that the stack's steering will bring it in when it is within
+3′ of the centre, and otherwise that it is stacked where it is; that the run's own
+imaging frames are taken at the
 camera's exposure setting and only the stack's subs are capped by the tracker's limit,
 so that a long setting on an alt-az mount trails the corner stars of the imaging frames
 the run solves; the three routes and the four tools between backticks; where
@@ -2227,17 +2266,24 @@ These are not changed by any story:
      calls, and `run::label` calls it too (§ The parts and the words); US12-S2 holds it
      to the worked
      example `NGC 1976` → `NGC-1976`. The re-anchoring re-reads only the function's path;
-   - 036's `Steering::waiting` is true only inside 035's loop; `paused_by_tracker`
-     rests on it;
+   - 036's `Steering::waiting` is true only inside 035's loop; `paused_by_tracker` rests
+     on it. It is also true while the stack waits for its exposure limit to rise, with
+     `steering.pause` `limit` and the tracker steady (036 FR-022), so the run's sentence
+     for `paused_by_tracker` names no cause, and the run does not read
+     `steering.pause` (§ The run's words);
    - 036's `Steered::steady`, read through `Session::steered`, is false while a tracker
      settles after a start; the run's
      first exposure waits on it;
    - 036's tracker is not steady for at least 60 s around M42's transit on the
      simulator; US4-S4's unsteady bullet rests on it;
-   - 036's `Steered::steady_between` is false from a tracker's start until its first
-     rates and across every take-up, keyhole pass and measurement, over a window of
-     console Unix seconds; the mount part's `steady` and the repeat of an unsteady
-     focus check rest on it;
+   - 036's `Steered::steady_between` is false from a tracker's start until 2 s after its
+     first rates, across every take-up and keyhole pass with the 2 s that follow each,
+     across a measurement, while 038's push reads `moving`, and for a turn that finds an
+     axis stopped, over a window of console Unix seconds; a window that begins at the
+     instant such a time ended is not touched by it (036 FR-021). 036's US10-S3 pins the
+     window the mount part asks, ending now and 10 s long: false asked 6 s after a
+     tracker's start and true asked 14 s after it. The mount part's `steady` and the
+     repeat of an unsteady focus check rest on it;
    - 035's `StackView::started_at` is set once, at the start that made the stack, and
      035's `start` on a running stack answers `Ok` with that stack's view; the stack
      part tells its own stack from another's by it;
@@ -2246,8 +2292,16 @@ These are not changed by any story:
      leaves those two out;
    - 038's `push` reads `moving` from the first live pointing more than 5′ off and
      `following` after 5 s of stillness, and is absent otherwise; `pushed_away` and
-     its 10 s rest on it. Whether 036's tracker reads not steady while a push is
-     `moving` is not known (§ Risks);
+     its 10 s rest on it. 036's tracker reads not steady while a push is `moving` (036
+     FR-021, US6-S6);
+   - 036's `crate::imaging::steering::FAR_ARCSEC` is public and 180.0, and its steering
+     stands back from a stack whose first tracking error is longer (036 FR-014); the two
+     forms of the warnings for a target stacked off the centre rest on it. 036's list of
+     what this spec reads names the view's `steering.far_arcsec` and not the constant,
+     so the re-anchoring reads the constant's path as it reads `label`'s;
+   - 036's `Steering::set_set_point` lets go a tracker a stack holds when the set point
+     changes (036 FR-014); the stack part calls it before the stack's start, where it
+     changes nothing a stack holds;
    - 032's task sets a measured aim point in the session before it shows a solve as
      `solved`, and sets it only when `should_apply` says so; while Track is on it
      holds it back instead, `Session::held_aim` answers it, and the first live solve
@@ -2348,7 +2402,10 @@ These are not changed by any story:
    none of which has been run (§ Refinement Record, "What probe round 1 and the
    reanalysis changed"); each story's diff on the folded trio, US12's and US1's first,
    because the owner's split of 2026-11-19 came after the round and no probe has built
-   either as it now is (§ Risks);
+   either as it now is (§ Risks); what 036's own fold changed underneath this trio the
+   same day (§ Refinement Record, "036's second fold"): the two forms of the warnings in
+   US5-S3, and every wait for a steady tracker 2 s longer on the simulator, inside which
+   US4-S5's 900 s and 120 s must still hold;
    and the margin of US4-S4's "within 60 s" for `pushed_away`, the one bound round 1
    did not time.
 6. **The plan document, ADR-0002, the glossary's imaging terms and the research note
@@ -2427,7 +2484,8 @@ story.
 18. **Mount-neutral code.** *Check:* `crates/finder/src/imaging/run.rs`, `script.rs` and
     `store.rs` import nothing of `crate::goto`, `crate::tracking`, `crate::session` but
     `Clock`, `crate::ephemeris`, `crate::model` or `scope_link`, and of 035 `run.rs`
-    calls only `crate::imaging::stack::service::label`; `console.rs` imports
+    calls only `crate::imaging::stack::service::label`, and of 036 it reads only the
+    constant `crate::imaging::steering::FAR_ARCSEC`; `console.rs` imports
     `crate::model::separation` and no other item of those, reaches Track and Stop
     through `crate::api` and `Session::stop_tracking` only, reads the session through
     `Session::snapshot`, `Session::steered` and `Session::held_aim`, and GoTo's stop
@@ -2516,9 +2574,9 @@ story.
 | US1's refusals of a start, its stop, the mount's endings and its `Drop` are written in US1 and first tested in US2 (US2-S6 to US2-S10). | A fault in `run.rs` that one of those tests shows is US2's to correct, since US2 writes that file. A fault in `script.rs` is not: no story after US12 writes it, so US2 escalates. US12's own scenarios assert every control of the script with no run (US12-S3, US12-S4), which is what keeps that unlikely. |
 | US12 writes public items that nothing in the crate calls until US1 lands: the traits, `Ending::message`, the script. | They are public items of a library, which the lints do not count as dead code, and US12's test module calls each of them. Not built: the second probe round builds US12 by itself, with both gates. |
 | A Stop that lands while a re-centre's Track is being asked is covered by step 5 of `repoint` alone, which no test can reach by itself on the simulator. | Steps 1 and 3 cover the windows either side, and US5-S5 catches two of the three removed together. The field checklist's steps 11 and 14 press Stop during a run. |
-| 032's aim reading fits the finder camera's solves from 10 s, or the exposure when that is longer, before the imaging exposure, so an imaging frame taken sooner than that after a GoTo or a re-centre reads `moving` and gives no aim reading. Round 1 saw it after every re-centre. | The mount part reads steady only when 036's tracker was steady for that whole look-back (`steady_between`, spec FR-019). The cost is the larger of 10 s and the exposure after each GoTo and each re-centre. Not probed: round 1 built a fixed wait of 10 s instead, and no run had an exposure above 1 s; US4-S1's bullet and US5-S6, at 20 s, are for the second probe round. The lasting fix is a small follow-up to 032, which has landed: drop from the fit every finder solve older than the session's last end of a GoTo or start of Track. When it lands the look-back shrinks to `steady()`. |
+| 032's aim reading fits the finder camera's solves from 10 s, or the exposure when that is longer, before the imaging exposure, so an imaging frame taken sooner than that after a GoTo or a re-centre reads `moving` and gives no aim reading. Round 1 saw it after every re-centre. | The mount part reads steady only when 036's tracker was steady for that whole look-back (`steady_between`, spec FR-019). The cost is the larger of 10 s and the exposure, after the 2 s to 3 s for which 036's tracker settles, after each GoTo and each re-centre. Not probed: round 1 built a fixed wait of 10 s instead, and no run had an exposure above 1 s; US4-S1's bullet and US5-S6, at 20 s, are for the second probe round. The lasting fix is a small follow-up to 032, which has landed: drop from the fit every finder solve older than the session's last end of a GoTo or start of Track. When it lands the look-back shrinks to `steady()`. |
 | A solve measures no new aim point, again and again: the finder camera's exposure is longer than the imaging camera's, so no finder solve falls inside the imaging frame, or 032 sets readings aside after a camera was re-seated. | Such a solve is not a try; after four in a row the run stacks a target that is near the centre, with a warning, and ends `not_centred` with their own sentence beyond that (spec FR-024). The README and step 4 of the field checklist say to set the imaging exposure at least as long as the finder camera's. The real finder's cadence is a field check. |
-| A push that reads `moving` for less than 10 s no longer ends the run, and while the run stacks nothing of this spec pauses the stack for it. | Whether 036's tracker reads not steady while 038's push is `moving`, so that the subs taken across it are dropped as `not_steady`, is not known; if it does not, a few smeared subs are stacked. 036 owns that answer (§ Prerequisites 2). US4-S4's bullet shows only that the run goes on. |
+| A push that reads `moving` for less than 10 s no longer ends the run, and while the run stacks nothing of this spec pauses the stack for it. | 036's tracker reads not steady while the push is `moving`, so the stack waits and the sub in flight is dropped as `not_steady`. Not run: 036's second probe round runs its US6-S6. US4-S4's bullet shows only that the run goes on. |
 | The reserve is worked out from the files 035 writes at a stack's end as they are today: 15 bytes a pixel of a sub and a margin of 16 MiB, about 260 MB at the worked camera's full size (`reserve_bytes`; the owner's answer of 2026-11-19, in place of a fixed 64 MiB, which could not hold a full-size `stack.fits` of about 195 MB). | If 035 comes to write more at a stack's end, a fourth plane or a 16-bit picture, the figure for a pixel is one constant, and the re-anchoring reads 035's save again (§ Prerequisites 2). A `stack.json` that lists more than about fifty thousand subs outgrows the margin. The reserve helps only an ending the run makes: a stack that ends by itself saves while the reserve is still there. It is itself room the subs cannot use, and a disk that cannot hold it ends the run `save_failed` before its first sub. While it is written, 4 MiB at a time with a yield between, a stop of the run waits for `stack.start` to answer, for as long as the disk needs. Not run: the second probe round builds it (US8-S7). |
 | A target changed in the instant after a re-centre has asked Track again is not seen by step 3a. | Track then goes on with the old target, the next `state()` reads `target_changed` by its second row, and Track is left on the old target, as outside a re-centre. US5-S7's timing rests on the first live pointing with Track off coming 0.30 s after it on the simulator; not run. |
 | With `keep_subs` false, the two conditions under which the stack part removes subs are asserted on the script only, by the warning. | No rig scenario stops a run before its first sub is stacked at a moment a test can fix. The second probe round looks for one. |
@@ -2663,6 +2721,22 @@ its list items stand under their keys, and every level under `stories` is one sp
 deep. The record parses to the same object before and after each of the two steps, no
 `checks` list was narrowed and no clause of an assertion dropped. Nothing of the split
 has been built.
+
+**036's second fold** (2026-11-19, after the split; spec.md § Clarifications, the fourth
+point of that session's last question). 036's fold of its own reanalysis changed four
+things this trio said of it, and they are corrected here with no choice put to the
+owner; the two new sentences are the fold's wording. Its steering stands back from a
+stack that begins more than 180″ from the set point, so each of the two warnings for a
+target stacked off the centre has a second form, `; it is stacked where it is.`, chosen
+by 036's own `FAR_ARCSEC` (FR-024; US5-S3, whose two examples at 400″ now read the
+second form, and which gained a bullet at 180″ and 150″ for the first). Its tracker
+settles for 2 s after its first rates, so each wait for a steady tracker is that much
+longer (§ The console's mount part). It is not steady while 038's push reads `moving`,
+which § Risks had as not known. And its stack also waits for its exposure limit to rise,
+with the tracker steady, so the sentence of `paused_by_tracker` names the tracker and no
+cause (US2-S3). No story, scenario or FR number moved and no scenario was added. In the
+record below US5-S3's assertion gained one clause, and nothing else changed: it is
+65,440 B of the 65,536 a record may be. None of it has been run.
 
 § Prerequisites 2 and 3, the re-anchoring, are still to do. Until then the record
 below names what the drafts named: its
@@ -3056,7 +3130,7 @@ stories:
   - path: crates/finder/tests/console/imaging_run_centring.rs
     status: new
     disposition: add
-    assertion: "a solve that measured no new aim point is retried without a repoint and is not a try, its message saying so while the run waits for the tracker; four such solves in a row stack a target 400 arcseconds off with their warning and end not_centred 600 arcseconds off with their sentence, with no try and no repoint; a re-centre starts that count again; a target 400 arcseconds off after three tries, inside the near bound, is stacked with its warning; a failed repoint ends mount_failed or stopped by its failure, no take follows a repoint until the mount is steady, and a stop of the run during a repoint is answered only after it and ends the run stopped with no further take"
+    assertion: "a solve that measured no new aim point is retried without a repoint and is not a try, its message saying so while the run waits for the tracker; four such solves in a row stack a target 400 arcseconds off with their warning and end not_centred 600 arcseconds off with their sentence, with no try and no repoint; a re-centre starts that count again; a target 400 arcseconds off after three tries, inside the near bound, is stacked with its warning; at 400 arcseconds both warnings say it is stacked where it is, and at 180 and 150, not over 036's 180, that the stack's steering will bring it in; a failed repoint ends mount_failed or stopped by its failure, no take follows a repoint until the mount is steady, and a stop of the run during a repoint is answered only after it and ends the run stopped with no further take"
     decision: "spec.md:US5-S3"
   - path: crates/finder/tests/motion/imaging_run_centring.rs
     status: new

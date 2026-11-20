@@ -516,7 +516,7 @@ run.
   the second probe round, for everything the fold and those two answers added, and the
   field checks, which the README's checklist carries.
 - Q: What did the owner answer after the fold, the same day? → A: Two more answers, on
-  2026-11-19, and one correction that needed none.
+  2026-11-19, and two corrections that needed none.
   1. **"Yes, split US1."** After every move of tests that could be made, US1 was
      estimated at about 56 KB, 86 % of 64 KiB, about 50 KB of it code, and factory
      builds have run to 1.35 times their probe build. So the story is two. **User Story
@@ -545,6 +545,27 @@ run.
      dew", whatever had stopped it. Those words are now kept for a check that found no
      stars to measure; any other check that did not finish says so, with its reason, and
      says to check the imaging camera (FR-026, FR-029, US6-S10).
+  4. **What 036's own fold changed underneath.** 036's reanalysis was folded the same
+     day, and four things this trio said of 036 were corrected for it, with no choice
+     put to the owner; the two new sentences are the fold's wording. First, 036 steers
+     no stack whose first tracking error is over 180″ (036 FR-014), and inside that a
+     step is at most 30″ a gap, and far less against an axis's motion (036 FR-008). So
+     each of the two warnings for a target stacked off the centre has two forms, by the
+     offset: up to 180″ it ends `; the stack's steering will bring it in.`, and over it
+     `; it is stacked where it is.` (FR-024, US5-S3; the note under owner decision 4).
+     Second, 036's tracker settles for 2 s after its first rates, a take-up and the
+     keyhole pass, so the wait before an imaging frame of the run's own is 2 s to 3 s
+     longer after each GoTo and each re-centre; FR-019's look-back is as it was (036
+     FR-021; plan.md § The console's mount part). Third, 036's tracker is not steady
+     while 038's push reads `moving`: the stack waits before its next exposure and the
+     sub in flight is dropped as `not_steady`, which at the fold was not known (036
+     FR-021; plan.md § Risks). Fourth, 036's stack also waits, with the tracker steady,
+     while its exposure limit is under half the exposure held (036 FR-022). The run's
+     sentence for `paused_by_tracker` said `Waiting for the mount to settle`, which is
+     not true of that wait, and now says `Exposures paused`, naming no part; 036's own block on
+     the Imaging page says why (FR-033, US2-S3; plan.md § The run's words). A sentence
+     of the run's own for each cause is not folded: it needs the stack part to carry
+     036's word. No story, scenario or FR number moved, and no scenario was added.
 
 ## Owner decisions
 
@@ -588,9 +609,13 @@ flip, never left to a story.
    Instead: stack anyway with a warning whenever the target is inside the imaging frame.
    **Changed by the owner on 2026-11-19** to a part of the other answer: after the
    three tries a target within a quarter of the imaging frame's shorter side of the
-   sensor's centre is stacked with a warning, because 036's steering brings it in
-   within a few subs; only beyond that does the run end `not_centred` (FR-024). The same
-   holds for a run
+   sensor's centre is stacked with a warning. Within 180″ of the centre 036's steering
+   brings it in over the following subs, at most 30″ on the sky a gap, and far more
+   slowly where an axis would have to back up; beyond 180″ 036 does not steer that stack
+   at all, and the target is stacked where it is. The warning says which (036 FR-008,
+   FR-014; corrected the same day, after 036's own fold: this note first said that the
+   steering brings every such target in within a few subs). Only beyond the quarter does
+   the run end `not_centred` (FR-024). The same holds for a run
    whose four solves in a row measured no new aim point (owner decision 3): near the
    centre it is stacked with a warning of its own, and it ends `not_centred` only beyond
    the quarter.
@@ -1021,7 +1046,7 @@ it.
      `Stacking M42: 5 stacked, 2 dropped.`;
    - after `set_stack(5, &[("not_solved", 2)], true)` and a settle the state is
      `paused_by_tracker` and the message
-     `Waiting for the mount to settle: 5 stacked so far. It goes on by itself.`,
+     `Exposures paused: 5 stacked so far. They resume by themselves.`,
      and after `set_stack(5, &[("not_solved", 2)], false)` and a settle the state is
      `stacking` again;
    - a run whose `push_focus` gave a `Verdict::SlightlySoft` check with reading 3.6 and
@@ -1455,7 +1480,8 @@ and `cargo nextest run -p finder --locked --test motion imaging_run_centring::`.
    - an offset of 400″, inside the `near_arcsec` of 450″, with `aim_moved` false four
      times reaches `stacking` with `centring.tries` 0, four `solver.solve` and no
      `mount.repoint` in `calls()`, and `warnings`
-     `["M42 is 400″ from the sensor's centre and no new aim point could be measured; the stack's steering will bring it in."]`;
+     `["M42 is 400″ from the sensor's centre and no new aim point could be measured; it is stacked where it is."]`,
+     400″ being over the 180″ up to which 036 steers a stack;
      and an offset of 600″ with `aim_moved` false four times ends `not_centred` with
      `Ended: M42 is 10.0′ from the sensor's centre and no new aim point could be measured.`,
      `centring.tries` 0, four `solver.solve`, and neither `mount.repoint` nor
@@ -1466,7 +1492,14 @@ and `cargo nextest run -p finder --locked --test motion imaging_run_centring::`.
    - an offset of 400″, inside the `near_arcsec` of 450″, with `aim_moved` true four
      times reaches `stacking` with `centring.tries` 3, `mount.repoint` three times in
      `calls()`, and `warnings`
-     `["M42 is 400″ from the sensor's centre after 3 tries; the stack's steering will bring it in."]`;
+     `["M42 is 400″ from the sensor's centre after 3 tries; it is stacked where it is."]`;
+   - an offset of 180″, outside the tolerance of 90″ and not over 036's 180″, with
+     `aim_moved` true four times reaches `stacking` with `warnings`
+     `["M42 is 180″ from the sensor's centre after 3 tries; the stack's steering will bring it in."]`,
+     and an offset of 150″ with `aim_moved` false four times with `warnings`
+     `["M42 is 150″ from the sensor's centre and no new aim point could be measured; the stack's steering will bring it in."]`:
+     each of the two warnings has two forms, by the offset against the 180″ beyond which
+     036 steers no stack (FR-024);
    - an offset of 400″ followed by `fail_repoint(Failure::Mount("the mount is already moving"))`
      ends `mount_failed` with
      `Ended: Track ended and the run with it: the mount is already moving. Check the mount, then start again.`;
@@ -2422,7 +2455,11 @@ with it (plan.md § Plan traps 6).
   (FR-027, US6-S9).
 - **The target is plainly in the frame but not centred**, after three tries or after
   four solves in a row that measured no new aim point. Within a quarter of the imaging
-  frame's shorter side of the centre, the run stacks with a warning (FR-024, US5-S3).
+  frame's shorter side of the centre, the run stacks with a warning (FR-024, US5-S3). Up
+  to 180″ from the centre 036's steering then brings the target in over the following
+  subs, slowly where an axis would have to back up, and the warning says so; beyond 180″
+  036 does not steer that stack, and the warning says that the target is stacked where
+  it is.
 - **A run started while Track is already on the target.** Track answers at once, and
   the run takes its first imaging frame as soon as the tracker has been steady for the
   whole of FR-019's look-back, which it already has when Track was left alone that
@@ -2679,7 +2716,10 @@ with it (plan.md § Plan traps 6).
   stack with a warning when the target is within a quarter of the imaging frame's
   shorter side of the sensor's centre, and SHALL otherwise end `not_centred` without
   starting the stack, saying after the fourth such solve that no new aim point could be
-  measured (owner decisions 3 and 4).
+  measured (owner decisions 3 and 4). The warning SHALL say that the stack's steering
+  will bring the target in when the offset is at most 180″, the bound beyond which 036
+  steers no stack (036 FR-014), and that the target is stacked where it is when the
+  offset is over it.
 - **FR-025**: After it turns Track off and before it asks Track again, the mount part's
   pointing again SHALL wait, with Track off, for a live pointing newer than the one it
   finds once Track is off: at most twenty polls of 250 ms, 5 s. That live pointing is
@@ -2743,7 +2783,8 @@ with it (plan.md § Plan traps 6).
 - **FR-033**: The console's own stack part SHALL tell 036's steering that the set point
   is the sensor's centre and start 035's stack for the run's target, answering the
   stack's folder; SHALL answer its counts, with the reasons whose count is above 0,
-  whether 036's steering is waiting for the tracker, and why it ended by itself; and
+  whether 036's steering is waiting, for the tracker or for its exposure limit to rise
+  (036 FR-022), and why it ended by itself; and
   SHALL stop it, which saves it. With `keep_subs` false, a saved stack of at least one
   sub and a stack the run itself stopped, it SHALL then
   remove each sub's file and solve sidecar that `stack.json` lists; otherwise it SHALL
