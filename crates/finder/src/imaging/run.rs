@@ -851,6 +851,37 @@ impl RunTask {
         });
     }
 
+    fn waiting_for_tracker(&self, waiting: bool) {
+        self.update(|run| {
+            run.view.message = run
+                .view
+                .state_message(run.focus_failure.as_ref(), run.aim_moved);
+            if waiting
+                && matches!(
+                    run.view.state,
+                    "first_frame" | "focus_check" | "solving" | "centring"
+                )
+            {
+                run.view
+                    .message
+                    .push_str(" Waiting for the mount to settle; nothing to do.");
+            }
+        });
+    }
+
+    /// Copy the counts and answer whether the stack waits for the tracker. Read
+    /// outside the run's lock: the stack part may read the imaging view.
+    fn read_stack_counts(&self) -> bool {
+        let progress = self.steps.stack.progress();
+        self.update(|run| {
+            run.view.subs = SubCounts {
+                stacked: progress.stacked,
+                dropped: progress.dropped,
+            };
+        });
+        progress.waiting_for_tracker
+    }
+
     fn warn(&self, warning: Warning) {
         self.update(|run| {
             let words = warning.words(&run.view.target.name);
@@ -893,7 +924,12 @@ impl RunTask {
             }
             match self.steps.mount.state() {
                 MountState::Ended(ending) => return Err(ending),
-                MountState::Tracking { steady: true } => return Ok(()),
+                MountState::Tracking { steady: true } => {
+                    if show.is_none() {
+                        self.waiting_for_tracker(false);
+                    }
+                    return Ok(());
+                }
                 MountState::Slewing => {
                     if let Some((slewing, _)) = show {
                         self.set_state(slewing);
@@ -905,6 +941,9 @@ impl RunTask {
                     }
                 }
             }
+            if show.is_none() {
+                self.waiting_for_tracker(true);
+            }
             tokio::select! {
                 biased;
                 _ = stopped.wait_for(|stop| *stop) => {},
@@ -914,24 +953,34 @@ impl RunTask {
     }
 
     async fn frame(&self) -> Result<FrameRef, Ending> {
-        self.steady(None).await?;
-        let mut taking = false;
-        let answer = self
-            .guarded(async {
-                taking = true;
-                self.steps.camera.take().await
-            })
-            .await;
-        match answer {
-            Err(ending) => {
-                if taking {
-                    self.steps.camera.abort().await;
+        let mut failures = 0;
+        loop {
+            self.steady(None).await?;
+            let mut taking = false;
+            let answer = self
+                .guarded(async {
+                    taking = true;
+                    self.steps.camera.take().await
+                })
+                .await;
+            match answer {
+                Err(ending) => {
+                    if taking {
+                        self.steps.camera.abort().await;
+                    }
+                    return Err(ending);
                 }
-                Err(ending)
+                Ok(Ok(frame)) => return Ok(frame),
+                Ok(Err(Failure::Stopped)) => return Err(Ending::Stopped),
+                Ok(Err(Failure::Save(words))) => return Err(Ending::SaveFailed(words)),
+                Ok(Err(failure)) => {
+                    failures += 1;
+                    if failures == FRAME_TRIES {
+                        return Err(Ending::CameraFailed(failure.words().into()));
+                    }
+                    self.guarded(time::sleep(RETRY_WAIT)).await?;
+                }
             }
-            Ok(Ok(frame)) => Ok(frame),
-            Ok(Err(Failure::Stopped)) => Err(Ending::Stopped),
-            Ok(Err(failure)) => Err(Ending::CameraFailed(failure.words().into())),
         }
     }
 
@@ -962,6 +1011,10 @@ impl RunTask {
             }
             Ok(Ok(check)) => check,
             Ok(Err(Failure::Stopped)) => return Err(Ending::CheckStopped),
+            Ok(Err(Failure::Save(words))) => return Err(Ending::SaveFailed(words)),
+            Ok(Err(Failure::SolverUnavailable(words))) => {
+                return Err(Ending::SolverUnavailable(words));
+            }
             Ok(Err(failure)) => {
                 self.warn(Warning::CheckUnfinished(failure.words().into()));
                 self.update(|run| run.focus_failure = Some(failure));
@@ -974,10 +1027,12 @@ impl RunTask {
             }
         };
         self.update(|run| run.view.focus = Some(check.into()));
+        if check.verdict == Verdict::SlightlySoft {
+            self.warn(Warning::SlightlySoft(check));
+        }
         self.steps.camera.hold().map_err(Ending::CameraFailed)?;
 
         self.set_state("solving");
-        let frame = self.frame().await?;
         let target = self
             .inner
             .lock()
@@ -987,13 +1042,26 @@ impl RunTask {
             .view
             .target
             .clone();
-        let centre = match self
-            .guarded(async { self.steps.solver.solve(&frame, &target).await })
-            .await?
-        {
-            Ok(centre) => centre,
-            Err(Failure::Stopped) => return Err(Ending::Stopped),
-            Err(failure) => return Err(Ending::SolverFailing(failure.words().into())),
+        let mut failures = 0;
+        let centre = loop {
+            let frame = self.frame().await?;
+            match self
+                .guarded(async { self.steps.solver.solve(&frame, &target).await })
+                .await?
+            {
+                Ok(centre) => break centre,
+                Err(Failure::Stopped) => return Err(Ending::Stopped),
+                Err(Failure::Save(words)) => return Err(Ending::SaveFailed(words)),
+                Err(Failure::SolverUnavailable(words)) => {
+                    return Err(Ending::SolverUnavailable(words));
+                }
+                Err(failure) => {
+                    failures += 1;
+                    if failures == SOLVE_TRIES {
+                        return Err(Ending::SolverFailing(failure.words().into()));
+                    }
+                }
+            }
         };
         self.update(|run| {
             run.aim_moved = centre.aim_moved;
@@ -1009,6 +1077,12 @@ impl RunTask {
         let folder = match self.steps.stack.start(&target).await {
             Ok(folder) => folder,
             Err(Failure::Stopped) => return Err(Ending::Stopped),
+            Err(Failure::Camera(words)) => return Err(Ending::CameraFailed(words)),
+            Err(Failure::Save(words)) => return Err(Ending::SaveFailed(words)),
+            Err(Failure::SolverUnavailable(words)) => {
+                return Err(Ending::SolverUnavailable(words));
+            }
+            Err(Failure::NotSolved(words)) => return Err(Ending::SolverFailing(words)),
             Err(failure) => return Err(Ending::StackFailed(failure.words().into())),
         };
         self.stack_started = true;
@@ -1021,6 +1095,7 @@ impl RunTask {
 
         let mut stopped = self.stopped.clone();
         loop {
+            let waiting_for_tracker = self.read_stack_counts();
             // Once stacking, the mount's ending takes precedence over a stop
             // observed at the same poll, including after an unguarded start.
             if let MountState::Ended(ending) = self.steps.mount.state() {
@@ -1029,6 +1104,11 @@ impl RunTask {
             if *stopped.borrow() {
                 return Err(Ending::RunStopped);
             }
+            self.set_state(if waiting_for_tracker {
+                "paused_by_tracker"
+            } else {
+                "stacking"
+            });
             tokio::select! {
                 biased;
                 _ = stopped.wait_for(|stop| *stop) => {},
@@ -1038,6 +1118,11 @@ impl RunTask {
     }
 
     async fn end(&self, mut ending: Ending) {
+        if self.stack_started {
+            self.update(|run| {
+                run.view.message = format!("Saving the stack: {} stacked.", run.view.subs.stacked);
+            });
+        }
         let (target, settings) = {
             let inner = self.inner.lock().unwrap();
             let view = &inner.as_ref().unwrap().view;
@@ -1047,7 +1132,25 @@ impl RunTask {
             self.steps.focus.close_aid().await;
         }
         let saved = if self.stack_started {
-            self.steps.stack.stop(settings.keep_subs).await.is_ok()
+            let saved = match self.steps.stack.stop(settings.keep_subs).await {
+                Ok(()) => true,
+                Err(failure) => {
+                    self.warn(Warning::StackUnclean(failure.words().into()));
+                    false
+                }
+            };
+            // Include subs saved after the last poll, without judging any rule.
+            self.read_stack_counts();
+            let stacked = {
+                let mut inner = self.inner.lock().unwrap();
+                let view = &mut inner.as_mut().unwrap().view;
+                view.message = format!("Saving the stack: {} stacked.", view.subs.stacked);
+                view.subs.stacked
+            };
+            if !settings.keep_subs && stacked == 0 {
+                self.warn(Warning::SubsKept);
+            }
+            saved
         } else {
             false
         };
@@ -1078,3 +1181,10 @@ impl RunTask {
         done.send_replace(true);
     }
 }
+
+/// Imaging frames in a row the camera may fail before the run ends.
+pub const FRAME_TRIES: u32 = 3;
+/// Solves in a row that may find no solution before the run ends.
+pub const SOLVE_TRIES: u32 = 3;
+/// How long the run waits after a failed take before it asks again.
+pub const RETRY_WAIT: Duration = Duration::from_secs(5);
