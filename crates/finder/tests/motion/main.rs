@@ -15,5 +15,6 @@ mod mount_sky_night;
 mod night;
 mod recording_raw;
 mod simulate;
+mod steering;
 mod stop;
 mod tracking;
