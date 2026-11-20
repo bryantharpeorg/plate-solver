@@ -45,6 +45,10 @@ pub struct LineHealth {
     pub stale_replies: u64,
     /// The last such bytes, escaped as `MountHealth::last_invalid` is.
     pub last_stale: Option<String>,
+    /// Starts whose acknowledgement was missing, unframeable or carried data.
+    pub unacknowledged_starts: u64,
+    /// Failed rate and GoTo commands followed by a stop sent to both axes.
+    pub halted_moves: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -174,6 +178,7 @@ struct Protocol<S> {
     states: [AxisState; 2],
     initialised: [Option<bool>; 2],
     health: MountHealth,
+    line: LineHealth,
 }
 struct Status {
     moving: bool,
@@ -233,6 +238,33 @@ impl<S: BaudStream> Protocol<S> {
             return Err(Error::InvalidReply);
         }
         Ok(())
+    }
+    /// Send the start once. If its acknowledgement is missing or garbled, one
+    /// retried status read decides whether the axis took the start.
+    async fn start(&mut self, axis: u8) -> Result<(), Error> {
+        let error = match self.ack(b'J', axis, b"").await {
+            Err(error @ (Error::Timeout | Error::InvalidReply)) => error,
+            result => return result,
+        };
+        self.line.unacknowledged_starts += 1;
+        match self.status(axis).await {
+            Ok(status) if status.moving => {
+                eprintln!("mount start :J{axis} not acknowledged ({error}): the axis is running");
+                Ok(())
+            }
+            Ok(_) => {
+                eprintln!(
+                    "mount start :J{axis} not acknowledged ({error}): the axis is not running"
+                );
+                Err(error)
+            }
+            Err(unreadable) => {
+                eprintln!(
+                    "mount start :J{axis} not acknowledged ({error}): its status could not be read"
+                );
+                Err(unreadable)
+            }
+        }
     }
     async fn stop_wait(&mut self, axis: u8) -> Result<(), Error> {
         if self.ack(b'K', axis, b"").await.is_err() {
@@ -318,7 +350,7 @@ impl<S: BaudStream> Protocol<S> {
         let ticks = (scale / rate.abs()).round().clamp(1.0, 0xff_ffff as f64) as u32;
         self.motion(b'I', axis, &codec::encode_u24(ticks)).await?;
         self.rates[i] = (scale / f64::from(ticks)).copysign(rate);
-        self.motion(b'J', axis, b"").await
+        self.start(axis).await
     }
     async fn goto(&mut self, axis: u8, target: i32) -> Result<(), Error> {
         if self.status(axis).await?.moving {
@@ -366,7 +398,7 @@ impl<S: BaudStream> Protocol<S> {
             eprintln!("mount goto path on axis {axis}: {path}");
             *previous = Some(path);
         }
-        self.motion(b'J', axis, b"").await
+        self.start(axis).await
     }
     async fn halt(&mut self) -> Result<(), Error> {
         // Always reach both axes before escalating an unacknowledged stop.
@@ -445,6 +477,7 @@ impl<S: BaudStream> SkyWatcher<S> {
                 sampled_at: [now; 2],
                 initialised: [None; 2],
                 health: MountHealth::default(),
+                line: LineHealth::default(),
                 states: [AxisState {
                     position: 0,
                     rate_deg_per_s: 0.0,
@@ -466,12 +499,15 @@ impl<S: BaudStream> SkyWatcher<S> {
     pub async fn health(&self) -> MountHealth {
         self.protocol.lock().await.health.clone()
     }
-    /// Stale input accumulated on this board since its connect sequence.
+    /// Line events accumulated on this board since its connect sequence.
     pub async fn line_health(&self) -> LineHealth {
-        let (stale_replies, last_stale) = self.protocol.lock().await.transport.stale();
+        let protocol = self.protocol.lock().await;
+        let (stale_replies, last_stale) = protocol.transport.stale();
         LineHealth {
             stale_replies,
             last_stale,
+            unacknowledged_starts: protocol.line.unacknowledged_starts,
+            halted_moves: protocol.line.halted_moves,
         }
     }
     /// The init bit from the last full state read; none before a read or on failure.
@@ -493,10 +529,12 @@ impl<S: BaudStream> SkyWatcher<S> {
         }
         true
     }
-    async fn log_motion(&self, result: Result<(), Error>) {
+    async fn log_motion(&self, command: &str, axis: u8, result: Result<(), Error>) {
         if let Err(error) = result {
-            eprintln!("mount command failed: {error}");
-            if let Err(error) = self.protocol.lock().await.halt().await {
+            let mut protocol = self.protocol.lock().await;
+            protocol.line.halted_moves += 1;
+            eprintln!("mount {command} on axis {axis} failed ({error}): stopping both axes");
+            if let Err(error) = protocol.halt().await {
                 eprintln!("mount stop failed: {error}");
             }
         }
@@ -535,7 +573,8 @@ impl<S: BaudStream> Mount for SkyWatcher<S> {
                 .await
                 .goto(axis.index() as u8 + 1, position)
                 .await;
-            self.log_motion(result).await;
+            self.log_motion("goto", axis.index() as u8 + 1, result)
+                .await;
         })
     }
     fn rate(&self, axis: Axis, rate: f64) -> MountFuture<'_, ()> {
@@ -546,7 +585,8 @@ impl<S: BaudStream> Mount for SkyWatcher<S> {
                 .await
                 .rate(axis.index() as u8 + 1, rate)
                 .await;
-            self.log_motion(result).await;
+            self.log_motion("rate", axis.index() as u8 + 1, result)
+                .await;
         })
     }
     fn stop_all(&self) -> MountFuture<'_, ()> {
