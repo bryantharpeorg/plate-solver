@@ -13,9 +13,12 @@ the console.
 The transport learns that an exchange can be cut short. It remembers the frame it sent
 until that frame's reply has been read. Before each transmission it reads a reply still
 owed off the line, waiting no longer than what is left of that reply's own 300 ms, and
-then discards whatever input has arrived. A left-over reply can then never answer the
-next command, so one late reply, one read the console gave up on, or one Stop that
-cancelled a move no longer leaves the line out of step.
+then discards whatever input has arrived. A retry that follows a try whose reply never
+came may be owed two replies: it stays remembered after it has read one, so that the
+transmission behind it reads the other off the line first (FR-016). A left-over reply
+then no longer answers the next command, so one late reply, one read the console gave
+up on, or one Stop that cancelled a move no longer leaves the line out of step. The one
+case left is two replies still on their way at once (spec Edge Cases).
 
 The protocol stops treating a spoiled acknowledgement of a motion start as a failed
 start. It reads the axis's status once; a running axis took the start. The start is
@@ -36,7 +39,8 @@ discard uses `rustix::io::read`, as `read_byte` does.
 
 **Testing**:
 - US1: `crates/scope-node/tests/mount_step.rs` (new), over the emulator behind the new
-  test line, and one new test in the `tests` module of `serial.rs`, over a socket pair.
+  test line (US1-S10 alone runs over the bare emulator), and one new test in the `tests`
+  module of `serial.rs`, over a socket pair.
 - US2: `crates/scope-node/tests/mount_start.rs` (new), over the same rig.
 - US3: `crates/finder/tests/motion/tracking/mount_line.rs` (new), a module of finder's
   `motion` test binary: the console's `Tracker`, `LinkManager` and `MountClient` over
@@ -121,7 +125,9 @@ The three implementations:
 - **`Serial`** (`serial.rs`): reads with `rustix::io::read` into a 256-byte buffer until
   the device answers `AGAIN`, a read of 0 bytes, or the buffer is full; `INTR` is tried
   again; any other error is returned. It returns the bytes read. It is not `async` and
-  never sleeps. `set_baud` keeps its `tcflush`.
+  never sleeps. A read of 0 bytes is a peer that has gone: the discard returns what it
+  has and no error, and leaves the report to `read_byte` (US1-S8's last step).
+  `set_baud` keeps its `tcflush`.
 - **`Line`** (`emulator.rs`): below.
 
 ### The transport (`crates/scope-node/src/mount/skywatcher/transport.rs`, US1)
@@ -132,6 +138,11 @@ pub struct Transport<S> {
     /// The frame of an exchange that was begun and not finished: when it was sent, and
     /// its bytes. Its reply may still be on the line or on its way.
     open: Option<(tokio::time::Instant, Vec<u8>)>,
+    /// The frame about to be sent is the open exchange's own, sent again after its
+    /// reply never came: the reply it reads may be the first try's, with its own behind.
+    again: bool,
+    /// The open exchange has read a line and is owed, at most, one more.
+    answered: bool,
     stale_replies: u64,
     last_stale: Option<String>,
 }
@@ -140,7 +151,7 @@ impl<S: BaudStream> Transport<S> {
     pub fn new(stream: S) -> Self;                       // signature unchanged
     pub async fn command(&mut self, command: u8, axis: u8, data: &[u8], safe: bool)
         -> Result<Vec<u8>, Error>;                       // signature unchanged
-    pub fn set_baud(&mut self, baud: u32) -> Result<(), Error>;  // also closes an open exchange
+    pub fn set_baud(&mut self, baud: u32) -> Result<(), Error>;  // unchanged
     /// Transmissions that stale input preceded, and the last such bytes, escaped.
     pub fn stale(&self) -> (u64, Option<String>);
 }
@@ -152,7 +163,7 @@ is a first step in every try:
 
 ```rust
 for attempt in 0..tries {
-    self.clear_line(command, axis).await?;
+    self.clear_line(command, axis, &frame).await?;
     let result = tokio::time::timeout(REPLY_TIMEOUT, self.exchange(&frame))
         .await
         .unwrap_or(Err(Error::Timeout));
@@ -160,14 +171,18 @@ for attempt in 0..tries {
 }
 
 /// Take a reply still owed off the line, then whatever has arrived.
-async fn clear_line(&mut self, command: u8, axis: u8) -> Result<(), Error> {
+async fn clear_line(&mut self, command: u8, axis: u8, next: &[u8]) -> Result<(), Error> {
     let mut stale = Vec::new();
+    self.again = false;
     if let Some((sent, frame)) = self.open.clone() {
         let deadline = sent + REPLY_TIMEOUT;
         if let Ok(Ok(line)) = tokio::time::timeout_at(deadline, self.line(&frame)).await {
             stale = line;
+        } else {
+            self.again = !self.answered && frame == next;
         }
         self.open = None;
+        self.answered = false;
     }
     stale.extend(self.stream.discard_input()?);
     if !stale.is_empty() {
@@ -183,7 +198,13 @@ async fn exchange(&mut self, frame: &[u8]) -> Result<Vec<u8>, Error> {
     self.open = Some((tokio::time::Instant::now(), frame.to_vec()));
     self.stream.write(frame).await?;
     let line = self.line(frame).await;
-    self.open = None;
+    if self.again && line.is_ok() {
+        // Stay open with this try's own deadline: one more reply may be behind.
+        self.answered = true;
+    } else {
+        self.open = None;
+    }
+    self.again = false;
     codec::reply(&line?)
 }
 
@@ -212,12 +233,24 @@ which a scenario or an existing test holds:
   same whichever of the two took them (US1-S2's 25 bytes).
 - **A dropped `clear_line` loses nothing.** `open` is cleared only after the read-out
   has ended, so a caller that goes away while the node waits leaves the exchange open
-  with its first deadline, and the next transmission waits on to that same moment.
+  with its first deadline, and the next transmission waits on to that same moment
+  (US1-S11).
 - **A partial line is taken but not kept.** Bytes of a left-over line that had not all
   arrived when the read-out ended are consumed and dropped; they are stale either way.
+- **A retry keeps its exchange open (FR-016).** When the read-out got no line and the
+  frame about to be sent is the open exchange's own, `clear_line` sets `again`. The
+  exchange that then reads a line leaves `open` set, with its own moment of sending,
+  and sets `answered`. The next `clear_line` reads one more line for it, to that
+  frame's own deadline, and closes it whether or not a line came; `answered` keeps the
+  exchange after it from staying open in its turn. A reply more than 300 ms late then
+  no longer leaves the retry's own reply to answer the next command (US1-S12 to
+  US1-S14). After a reply lost outright the wait lasts until 300 ms after the retry's
+  frame was sent, and nothing is counted (US1-S15). The probe tried this code on its
+  build, where `set_baud` still closed the exchange and cleared both flags.
 - **Nothing else changes.** No extra transmission, no wait when no exchange is open and
-  nothing has arrived. `set_baud` sets `open` to `None` before changing the baud: the
-  device is flushed there and the old reply is not owed any more.
+  nothing has arrived. `set_baud` does not touch `open`: the device's flush takes what
+  has arrived, and a reply still on its way is read out before the next transmission
+  like any other. It does not touch `again` or `answered` either.
 
 ### The emulator and the test line (`crates/scope-node/src/mount/skywatcher/emulator.rs`, US1)
 
@@ -235,7 +268,7 @@ pub struct Line {
     board: Emulator,
     faults: LineHandle,
     /// Each byte on its way to the reader, with the moment it arrives.
-    coming: VecDeque<(tokio::time::Instant, u8)>,
+    coming: VecDeque<(Instant, u8)>,
 }
 
 #[derive(Clone, Default)]
@@ -269,7 +302,7 @@ impl BaudStream for Line {
         Ok(self.arrived())
     }
     async fn write(&mut self, bytes: &[u8]) -> io::Result<()> {
-        let now = tokio::time::Instant::now();
+        let now = Instant::now();
         let delay = {
             let mut faults = self.faults.0.lock().unwrap();
             if let Some(i) = faults.lost.iter().position(|c| bytes.starts_with(c)) {
@@ -289,7 +322,8 @@ impl BaudStream for Line {
             due = due.max(*last);
         }
         let reply: Vec<u8> = self.board.output.drain(..).collect();
-        self.coming.extend(reply.into_iter().map(|byte| (due, byte)));
+        self.coming
+            .extend(reply.into_iter().map(|byte| (due, byte)));
         Ok(())
     }
     async fn read_byte(&mut self) -> io::Result<u8> {
@@ -307,7 +341,9 @@ impl BaudStream for Line {
 earlier. `LineFaults` holds `late: Vec<(Vec<u8>, Duration)>` and `lost: Vec<Vec<u8>>`.
 `Line` and `LineHandle` are test tooling in the emulator's source, as its handle's
 `inject_reply` is; no existing test uses them, and the `Emulator` type behaves as it
-does today for every existing caller. `EmulatorHandle` gains nothing.
+does today for every existing caller. `EmulatorHandle` gains nothing. `emulator.rs`
+gains the imports `Line` needs: `AsyncWriteExt`, `BaudStream`, `Duration` and
+`tokio::time::Instant`, which the code above names `Instant`.
 
 ### Line health (`protocol.rs` and `mount_link.rs`, US1; two fields more in US2)
 
@@ -348,7 +384,8 @@ pub struct LineHealth {
   delegated `state`, `goto` and `rate`. A new connect folds the current into the
   retired and clears the current, where it does so for `MountHealth`
   (`crates/scope-node/src/mount/skywatcher/mount_link.rs:207`). The fold sums the three
-  counts and prefers the current board's `last_stale`, else the retired one.
+  counts and prefers the current board's `last_stale`, else the retired one (US2-S9,
+  across a power cycle).
 - `MountLink::stop` is not changed. Stale input found by a Stop is counted on the
   transport at once and shows in `MountLink::line_health()` after the next read or
   move, which is where US1-S5 reads it.
@@ -415,7 +452,9 @@ start (`:J`) is always sent once, even when its acknowledgement is lost."
 
 - **US1**: a paragraph on the line in step. Before each transmission the node reads a
   reply still owed by an exchange that was cut short, for at most what is left of its
-  300 ms, then discards any input that has arrived; what this costs Stop; that such
+  300 ms, then discards any input that has arrived; what this costs Stop; that a retry
+  behind a reply that never came is kept open for one reply more, and that after a reply
+  lost outright whatever is sent next waits until 300 ms after the retry; that such
   input is counted in `MountLink::line_health().stale_replies`, kept escaped as
   `last_stale`, and logged, with the line of FR-004 in a `text` block as the README
   shows its other lines.
@@ -427,9 +466,9 @@ start (`:J`) is always sent once, even when its acknowledgement is lost."
 
 ## What was run and what was read
 
-**Run** on 2026-11-19, on the emulator in paused time, three times each with identical
-output, on a branch of `main` at 6a519d49; the adapter's files are the same at
-6e506ec6:
+**Run on 2026-11-19, before the draft**, on the emulator in paused time, three times each
+with identical output, on a branch of `main` at 6a519d49; the adapter's files are the
+same at 6e506ec6:
 
 - today's behaviour of both faults, on the node's service and under the console's
   tracker (spec Clarifications);
@@ -445,30 +484,70 @@ output, on a branch of `main` at 6a519d49; the adapter's files are the same at
   stopped both axes short; with the line out of step no `:S` and no `:J` reached the
   board.
 
+**Run in probe round 1**, on 2026-11-19: all three stories built in order from this trio
+as it stood that day, each story's scenarios three times with identical output:
+
+- every value that US1-S1 to US1-S8, US2-S1 to US2-S7 and US3-S1 to US3-S4 assert, the
+  four of `LineHealth` among them, with its copy in the link;
+- the log lines of FR-004, FR-012 and FR-013, written by the node as the FRs give them;
+- `discard_input` returning its bytes in all three implementations, `Serial`'s over a
+  socket pair (US1-S8);
+- `Line` and `LineHandle` in the library and `clear_line` as one function, as
+  § Interfaces then wrote them, but for the one line rustfmt breaks and the imports
+  that are now named there;
+- US1-S6's two added assertions, and that US2-S4's call answers after 300 ms;
+- every existing test, unchanged, at every story, and both gates;
+- that outside `scope-node` only `mount_identity.rs` and US3's `mount_line.rs` name the
+  adapter;
+- the tests first: US1-S1 to US1-S7 fail on today's transport and US2-S1 to US2-S7 on
+  today's protocol, as tasks.md T001 and T008 say, and US3's four pass on arrival and
+  fail with both fixes switched off;
+- 52 changes to the stories' source, each against every test of `scope-node`, US3's
+  module and `mount_identity.rs`: 34 were caught and 18 were not (spec Clarifications,
+  session 2026-11-20);
+- as cases that were not committed, each passing on the build and failing under the
+  change it is for: US1-S9, US1-S10, US1-S11, the last step of US1-S8, US2-S8, US2-S9
+  and US2-S10;
+- US3-S3 with its wait at 2,250 ms, its counts read through `MountLink::state` and
+  through the console's client: 60 `:J` and 60 `:I` either way, the counts rising by 757
+  and 130;
+- Stop under Track behind a lost status reply (spec owner decision 1);
+- a Stop through `SkyWatcher::halt_once` after a read given up part-way, with a baud
+  change closing the open exchange and with it left open (spec Clarifications);
+- a start lost on an axis already running the same way, and GoTos of 303 and 304 counts
+  whose acknowledgement is lost (spec Edge Cases);
+- the Edge Case of a late reply with the retry's own answer behind it, four ways (spec
+  Clarifications).
+
+**Run in the trial of FR-016**: that build with the rule added as § The transport writes
+it, but with a baud change still closing the open exchange and clearing both flags.
+Every test of `scope-node`, the three stories' scenarios, the uncommitted cases above
+and `mount_identity.rs` passed, 204 tests in all, and no time a scenario asserts
+changed. US1-S12, US1-S13 and US1-S14 are three of its cases. The fourth, a Stop while
+two replies are on their way, still sent `:L1`.
+
 **Read, not run**:
 
-- `LineHealth`, its four values in every scenario, and its copy and fold: the probe's
-  discard counted bytes and its trial fixes counted nothing else;
-- the three log lines of FR-004 and FR-012 and the line of FR-013: the probe logged
-  `mount start on axis <n> not acknowledged (<error>): the axis is running` and kept
-  `mount command failed`;
-- `discard_input` returning its bytes, and `Serial` reading in place of the probe's
-  `tcflush(TCIFLUSH)`, which was compiled and never run (US1-S8 is new);
-- `Line` in the library reading the emulator's buffer: the probe's line was in its test
-  files and polled the emulator's reads;
-- `clear_line` as one function: the probe had the read-out and the discard as two calls
-  in the same order;
-- US1-S6's two added assertions (both axes at rest after the Stop, `stale_replies` 0),
-  and that US2-S4's call answers after 300 ms, which is why that scenario states no
-  time;
-- that no test outside `scope-node` and finder's `motion` binary reaches the adapter:
-  a search of the workspace finds the emulator and `MountLink` only in the files
-  § Shapes names.
+- FR-016 together with FR-002 as it now reads. Each was run, on builds that differ in
+  `set_baud`; no build had both. By reading they meet in two places, a Stop over a lost
+  link less than 300 ms after an answered retry, and discovery at the second baud (spec
+  Edge Cases), and in no existing test: none times a connect at the second baud, and
+  none has a retry answered in the 300 ms before a Stop over a lost link;
+- US1-S15: the probe's report gives the 600 ms, and the exchanges and counters are read
+  from the code;
+- FR-016's cost to a Stop: one asked less than 300 ms after an answered retry, and
+  `:K2` behind a `:K1` that was sent twice;
+- that US1-S9 to US1-S15 fail before T004 is done, and that before T009 US2-S8 passes
+  while US2-S9 and US2-S10 fail (tasks.md T001, T008);
+- the `lint` gate on FR-016's code: its trial ran the tests, not `cargo fmt --check` or
+  clippy;
+- the added scenarios in their committed files: each ran as a case in a file of its
+  own.
 
-**Not run at all**: a real serial device, the real board, the camera loop, the page; a
-console GoTo, whose wait for rest ends on one reading of both axes at rest
-(`crates/finder/src/goto.rs:947`); two left-over replies still on their way; the
-back-to-back case of spec Edge Cases.
+**Not run at all**: a real serial device, the real board, the camera loop, the page; the
+page half of the `test` gate in the probe's builds, whose stories write nothing the page
+is built from; a console GoTo, whose wait for rest ends on one reading of both axes at
+rest (`crates/finder/src/goto.rs:947`).
 
 ## Read from the diff, not from a test
 
@@ -476,14 +555,21 @@ back-to-back case of spec Edge Cases.
   from FR-004, FR-012 and FR-013, character for character.
 - **`Serial::discard_input` on a serial device.** US1-S8 runs it over a socket pair. On
   a tty it relies on the same `AGAIN` that `read_byte` already relies on
-  (`crates/scope-node/src/mount/skywatcher/serial.rs:69`).
-- **The retired fold of `LineHealth`.** No scenario reconnects after counting. It is the
-  shape of `combined_health`
+  (`crates/scope-node/src/mount/skywatcher/serial.rs:69`). Its loop until `AGAIN` cannot
+  be told from a single read over a socket pair, where one read returns all that waits:
+  US1-S8 passes either way.
+- **`Line::set_baud` takes only what has arrived.** No scenario changes the baud with
+  bytes on their way (§ Plan traps 8).
+- **The retired fold of `LineHealth`, in US1's own diff.** US1's scenarios never
+  reconnect after counting; US2-S9 holds the fold for all four fields once US2 lands.
+  Until then it is the shape of `combined_health`
   (`crates/scope-node/src/mount/skywatcher/mount_link.rs:140`).
-- **The status read that fails after an unacknowledged start** (FR-011's second case),
-  and FR-012's third line.
-- **A caller that goes away during the read-out.** No scenario drops a call while the
-  node waits for a left-over reply.
+- **FR-012's third line, and which of the two errors the command fails with** when the
+  status cannot be read. US2-S10 holds that the command fails and both axes are
+  stopped; which error it was shows only in the log line.
+- **FR-016's last sentence**, that an exchange kept open does not keep the next one
+  open. It shows only as one more wait, when a retry's reply has the wrong length and
+  the read is sent a third time. *Check:* `again` is set only when `answered` is not.
 
 ## Shapes that existing tests pin
 
@@ -495,12 +581,20 @@ change, and what each story does to what they observe:
   `Transport::new`, calls `command` with four arguments, and asserts that four dropped
   replies cost 1.2 s within 10 ms, five transmissions and no more, and one `:J`. US1
   keeps both signatures, adds no transmission, and adds no wait after a try that timed
-  out. `connection_and_motion_failures`
+  out. Under FR-016 the fifth `:e1`, a retry that is answered, stays open, and the
+  `:a1` that follows first waits 300 ms for a second reply; the test times the `:e1`
+  alone (run in the trial of FR-016).
+  `baud_discovery_initialization_and_auxiliary_encoders`
+  (`crates/scope-node/tests/skywatcher.rs:136`) finds its board at the second baud:
+  with FR-016 and `set_baud` as on `main`, the command after the first `:e1` that is
+  answered waits 300 ms, once. The test asserts the baud attempts and the commands
+  sent, and no time (read, not run). `connection_and_motion_failures`
   (`crates/scope-node/tests/skywatcher.rs:324`) still sees `:K2` after a rate that is
   not finite: US2 changes that failure's log line and count, not its stop.
 - **`crates/scope-node/tests/skywatcher_stop.rs`**. 017's halt on a connected board:
   `:K1`, `:K2`, `:L` after a silent `:K`, five tries a command. No exchange is open
-  when these stops begin, so US1 adds no wait and no byte.
+  when these stops begin, so US1 adds no wait and no byte. No `:K` in them is answered
+  on a second try, so FR-016 holds no `:K2` back.
 - **`crates/scope-node/tests/mount_link.rs`**. Its last test
   (`crates/scope-node/tests/mount_link.rs:239`) builds a `Transport` over
   `handle.reopen`, asserts `handle.baud_attempts()` is empty, and reads replies after a
@@ -509,9 +603,11 @@ change, and what each story does to what they observe:
 - **`crates/scope-node/tests/mount_reset.rs`**. Stop over a lost link within 1.2 s
   (`crates/scope-node/tests/mount_reset.rs:327`), within 100 ms while a connect holds
   the device (`crates/scope-node/tests/mount_reset.rs:296`) and within 10 ms during a
-  re-initialisation (`crates/scope-node/tests/mount_reset.rs:232`). `halt_once` sets the
-  baud first, which closes any open exchange, and each of its commands that times out
-  leaves a deadline already passed. US1 adds no wait to any of them.
+  re-initialisation (`crates/scope-node/tests/mount_reset.rs:232`). No exchange is open
+  with time left when `halt_once` runs, and each of its commands that times out leaves
+  a deadline already passed. US1 adds no wait to any of them. In none of the three is a
+  retry answered in the 300 ms before the Stop, the one way FR-016 could leave an
+  exchange with time left there (spec Edge Cases).
 - **`crates/scope-node/tests/mount_garble.rs`**. It builds `MountHealth` by literal
   twice (`crates/scope-node/tests/mount_garble.rs:144`,
   `crates/scope-node/tests/mount_garble.rs:266`) and compares it whole with
@@ -547,7 +643,10 @@ change, and what each story does to what they observe:
 | Read out an abandoned reply, then discard what has arrived | The discard alone | Run in the probe: a reply still on its way when the next command is sent answers it, and nothing counts the misread (a slewing axis read at rest once; Stop's `:K1` read as unacknowledged). |
 | The read-out waits only to the abandoned frame's own deadline | A fresh 300 ms; or wait until the line is quiet | A try that timed out has paid its 300 ms; a fresh wait would double every timeout and break 024's 1.2 s for a silent Stop. A quiet-line wait taxes every exchange. |
 | The open exchange is the transport's state | A guard in the exchange's future | The future is what gets dropped. |
-| Before every transmission, retries included | Only before the first try | The retry is the transmission most likely to follow a late reply. |
+| Before every transmission, retries included | Only before the first try | The retry is the transmission most likely to follow a late reply. US1-S9 holds it. |
+| A baud change leaves the open exchange alone | `set_baud` closes it | Run in probe round 1: closed, a Stop over the kept stream after a read given up part-way sent `:K1`, `:K2`, `:L1`; left open, it waited for the left-over and sent `:K1`, `:K2`. No test held the clause. |
+| A retry behind a reply that never came stays open for one reply more | Leave the case to the next pause | Owner decision 6. Run in the probe: without the rule a rate command behind a late reply fails and both axes are stopped; with it nothing is stopped. |
+| One open exchange and two flags | A count of the replies owed | The count would also close a Stop asked while two replies are on their way. It is a larger change that was not tried (spec Edge Cases, Out of scope). |
 | Stop takes the same path as every command | Stop skips the read-out | Owner decision 1. Skipping it is what makes `:K1` read the left-over. |
 | `discard_input` returns the bytes | A flush that returns nothing | The count and the bytes are the only evidence a night's journal will hold of a late reply; 024 kept wrong-length bytes for the same reason. |
 | `Serial` reads until `AGAIN`, at most 256 bytes | `tcflush(TCIFLUSH)` | Owner decision 5. A read returns what it took, and runs in the gate over a socket pair, where `tcflush` fails. The bound keeps a line that never stops sending from holding the node in a loop with no await. |
@@ -564,8 +663,8 @@ change, and what each story does to what they observe:
 ## User Story 1 - The line
 
 Tests first: `mount_step.rs` with its rig, then the `serial.rs` test. Then
-`BaudStream::discard_input` and its three implementations with `Line`; the transport;
-`LineHealth` and its two accessors; the README paragraph.
+`BaudStream::discard_input` and its three implementations with `Line`; the transport,
+with FR-016's rule; `LineHealth` and its two accessors; the README paragraph.
 
 ## User Story 2 - The start
 
@@ -596,15 +695,21 @@ probe saw each of them do on `main`, without US1 and US2.
 ## Prerequisites before this spec is flipped to `ready`
 
 1. **The earlier specs have landed:** every spec in `depends_on_landed`. Met at
-   6e506ec6.
-2. **`main` is still as read.** Every citation here was read at 6e506ec6. If `main` has
-   moved in the files § Project Structure names or the tests § Shapes names, re-read
-   them and re-run the validator.
+   52785403.
+2. **`main` is still as read.** Every citation here was read at 6e506ec6. Met at
+   52785403, checked on 2026-11-20: the one commit between the two, 035's US10, touches
+   no file § Project Structure names, no test § Shapes names and no file cited. If
+   `main` moves in those files again, re-read them and re-run the validator.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
-   decisions, § Owner approvals). Not met: all five decisions are open.
-4. **Probe builds.** Not met. No story has been built from this text. The parts of
-   § What was run and what was read that were only read are what a probe build has to
-   show first.
+   decisions, § Owner approvals). The decisions are met: the owner settled all six on
+   2026-11-20. The approvals are given by the flip. Approval 7 names four cases of
+   FR-016's cost that were read from the code and not run.
+4. **Probe builds.** Met by probe round 1 for the trio as it stood on 2026-11-19: all
+   three stories were built in order from the text, passed both gates and gave every
+   value the scenarios assert. Not met for what the fold of 2026-11-20 then added to
+   US1: FR-016 in one build with `set_baud` as on `main`, and US1-S15 (§ What was run
+   and what was read, "Read, not run"). A build of US1 from this text is the first to
+   run those.
 5. **No operator-staged files are needed.**
 
 **Outside the factory: the field check.** The emulator cannot show a real line's
@@ -637,10 +742,14 @@ They bind every story.
 1. **Gate evidence or nothing.** The judge credits only gate results and the story's
    diff. *Check:* every Then names a committed test the `test` gate runs.
 2. **One evidence budget.** *Check:* a story's diff stays under 64 KiB, measured with
-   `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c`. Estimates from
-   the probe (its three fixes came to 6.9 KB of source in all; its test files, with
-   their printing and their two behaviours, to 46.8 and 20.2 KB): US1 about 33 KB, US2
-   about 18 KB, US3 about 15 KB.
+   `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c`. Measured in probe
+   round 1, each story against its parent: US1 32,894 B, US2 18,367 B, US3 11,180 B.
+   The fold of 2026-11-20 adds, by the size of the cases as the probe ran them: to US1,
+   seven scenarios and US1-S8's last step (about 6.0 KB), FR-016's code less the baud
+   clause (about 0.5 KB) and its README sentences (about 0.4 KB); to US2, three
+   scenarios (about 3.4 KB); to US3, one changed wait. That gives US1 about 39.8 KB,
+   US2 about 21.7 KB and US3 about 11.2 KB. US1 is the largest, at about 61 % of
+   65,536 B.
 3. **A spec fixed mid-epic needs a relaunch.** *Check:* no builder edits
    `specs/039-mount-replies-in-step/` or `.specify/`.
 4. **An earlier story's test file is an existing test.** *Check:* US2 writes
@@ -654,11 +763,13 @@ They bind every story.
    *Check:* `timeout_at(sent + REPLY_TIMEOUT, ...)`.
 7. **The open exchange must outlive its caller.** *Check:* `open` is a field of
    `Transport`, set before the write and cleared only after the reply's line is read or
-   the read-out has ended.
+   the read-out has ended. US1-S11 fails when `open` is taken before the read-out's
+   wait.
 8. **Discard only what has arrived.** A discard that also drops bytes still on their
    way is not what a serial device does, and hides the case the read-out exists for.
-   *Check:* `Line::discard_input` and `Line::set_baud` use `arrived`; otherwise US1-S1's
-   first read answers after 300 ms, not 400.
+   *Check:* `Line::discard_input` uses `arrived`; otherwise US1-S1's first read answers
+   after 300 ms, not 400. `Line::set_baud` uses it too; no scenario changes the baud
+   with bytes on their way, so read that from the diff.
 9. **Paused time and held replies.** A held reply arrives only when the test sleeps or
    awaits a call. *Check:* every scenario states its waits, and every time it asserts
    is exact on paused time.
@@ -689,18 +800,27 @@ They bind every story.
 19. **Stop's path in the link is not touched.** *Check:* `MountLink::stop` and
     `SkyWatcher::halt_once` are byte for byte as on `main`; US1-S5 reads `line_health()`
     after later reads have copied it.
+20. **A baud change does not end an exchange.** *Check:* `Transport::set_baud` is byte
+    for byte as on `main`: it touches neither `open` nor the two flags of FR-016.
+21. **One more line, once, to the retry's own deadline.** *Check:* `again` is set only
+    where the read-out got no line, the next frame is the open exchange's own and
+    `answered` is not set, and the exchange stays open only when it then read a line.
+    Without the rule US1-S12 to US1-S14 fail on their exchange lists; a wait with no
+    end never returns from US1-S15; a rule that ignores the frame holds `:K2` back in
+    US1-S6, whose Stop then answers after 580 ms, not 280.
 
 ## Risks
 
 | Risk | Mitigation |
 |---|---|
-| On the real device a reply later than 300 ms is followed at once by another command, and the line is out of step for a few exchanges (spec Edge Cases). | It ends at the first pause, where the discard takes the left-over; every such exchange is counted and logged. The field check counts them. |
+| On the real device a retry's own answer comes more than 300 ms after the retry's frame, or a Stop is asked while two replies are still on their way, and the next command reads a left-over (spec Edge Cases). A rate command in that stretch fails and stops both axes; a Stop in it sends `:L`. | FR-016 closes the case of one late reply, which the probe ran. What is left ends at the first transmission that finds the left-over arrived; every such exchange is counted and logged, and the field check counts them. A count of the replies owed is out of scope. |
+| After a reply lost outright, FR-016 holds whatever follows the answered retry until 300 ms after the retry's frame: a read, a rate call, a Stop, `:K2` inside a Stop, the first command after discovery at the second baud; over a lost link it can add up to 300 ms to 024's 1.2 s (spec Edge Cases). | Owner decision 6 and owner approval 7. The wait is bounded and paid once for each lost reply. How often a real line loses a reply outright is not known. The cases other than the read and the rate call were read from the code, not run. |
 | Stop is held up to 300 ms behind a lost reply. | Owner decision 1. It needs Stop to cancel a move part-way and that move's reply to be lost; the console's second attempt is answered. |
 | The real board answers a status read "moving" for an axis whose start it did not take. | Only on the same-direction slow-rate path, where the axis runs the way it was asked (§ The start). |
 | `Serial::discard_input` behaves differently on a tty than on a socket. | It relies on the `AGAIN` `read_byte` already relies on; the field check looks for `mount I/O`. |
 | A status read is trusted after an unacknowledged start while the line is out of step. | US1 lands first; US2 depends on it. |
 | The node's log grows: a line for every stale input. | One line per event, and an event needs an exchange cut short or a late reply: a Stop that cancels a move part-way, a read the console gave up on. |
-| The form of the stories was not run (§ What was run and what was read). | Prerequisite 4: probe builds before the flip. |
+| FR-016 and FR-002 as it now reads were each run, never in one build, and US1-S15 was read from the code (§ What was run and what was read). | Prerequisite 4. A build of US1 from this text runs both, with every existing test of `scope-node`. |
 
 ## Refinement Record
 
@@ -710,10 +830,23 @@ and the constitution, and one extension of the probe: a GoTo under each fault, w
 without the trial fixes. Writes come from the task text. Shared writes name the merge
 edge that orders them, and the stories that last wrote the same file on `main`.
 
-Nothing in this record is an owner approval or an owner's answer. The five owner
-decisions of spec.md are open; `open_questions` is empty below because the text is
-written to each recommended answer and no story waits on a fact, not because anything
-was settled. No story has been probe-built from this text.
+**What probe round 1 and the owner's answers changed** (folded 2026-11-20). The round
+built all three stories from the draft, and no value the draft asserted changed. The
+fold took the round's 14 clarity defects with their fix text: US3-S3's stretch moved
+off the tracker's refresh instants; FR-002's baud clause removed, in its five places
+and in T004; six scenarios and one step added for requirements no test held (US1-S9,
+US1-S10, US1-S11, US1-S8's last step, US2-S8, US2-S9, US2-S10); SC-002 and the lead-in
+to the owner approvals naming both exceptions; T001's order; plan trap 8; the Edge
+Cases as they ran; `Line`'s formatting and imports. It added FR-016, the rule the probe
+tried for a late reply with the retry's own answer behind it, with US1-S12 to US1-S15.
+And it recorded the owner's answers: the recommended one to each of decisions 1 to 5,
+and the adoption of FR-016 as decision 6. Sizes are the round's measured ones plus what
+the fold adds (§ Plan traps 2).
+
+All six owner decisions of spec.md are settled, by the owner, on 2026-11-20, and
+`open_questions` is empty below because none is open. This record itself approves
+nothing: the owner approvals of spec.md are given by the flip. What of this text has
+not been built from it is in § Prerequisites 4.
 
 ```yaml
 version: 1
@@ -749,8 +882,33 @@ stories:
       - path: crates/scope-node/src/mount/skywatcher/serial.rs
         status: new
         disposition: add
-        assertion: "over a socket pair, discard_input returns the seven bytes waiting, then nothing, then 256 of 300 bytes, then 44, and the next two bytes read are = and a carriage return"
+        assertion: "over a socket pair, discard_input returns the seven bytes waiting, then nothing, then 256 of 300 bytes, then 44, and the next two bytes read are = and a carriage return; after the peer is closed it returns nothing and no error"
         decision: "spec.md:US1-S8"
+      - path: crates/scope-node/tests/mount_step.rs
+        status: new
+        disposition: add
+        assertion: "a rate call whose I1 is answered by a line over 16 bytes answers OK over f1 I1 I1 J1, the second try answered by its own reply and not by the tail of the first, with both axes moving, invalid_replies 0, stale_replies 1 and last_stale 0123\\r"
+        decision: "spec.md:US1-S9"
+      - path: crates/scope-node/tests/mount_step.rs
+        status: new
+        disposition: add
+        assertion: "a MountLink over a bare Emulator, with no Line, reads an axis whose status reply is over 16 bytes as moving false over f1 f1 j1, with stale_replies 1, last_stale 0123\\r and no baud attempt recorded for the discard"
+        decision: "spec.md:US1-S10"
+      - path: crates/scope-node/tests/mount_step.rs
+        status: new
+        disposition: add
+        assertion: "after a read given up at 100 ms and a second caller that gives up 50 ms into the read-out, the third read answers 100 ms after it was asked, 250 ms after the abandoned f1 was sent, with moving true over f2 j2; azimuth then reads at rest, with invalid_replies 0, stale_replies 1 and last_stale =001\\r"
+        decision: "spec.md:US1-S11"
+      - path: crates/scope-node/tests/mount_step.rs
+        status: new
+        disposition: add
+        assertion: "with a status reply held 400 ms and its retry's own reply held 150 ms, a read answers after 450 ms with moving true over f1 f1 j1 and three later rounds of reads take 4 exchanges each; a rate call answers OK after 450 ms over f1 f1 I1 J1 with both axes moving; a GoTo of both axes answers OK twice within 450 ms over f1 f1 j1 G1 S1 J1 f2 j2 G2 S2 J2 and ends at 90,000 and 45,000 with no K or L; each with invalid_replies 0 and stale_replies 1, and last_stale =111\\r for the read and the rate call and =001\\r for the GoTo"
+        decision: "spec.md:US1-S12"
+      - path: crates/scope-node/tests/mount_step.rs
+        status: new
+        disposition: add
+        assertion: "a status reply lost outright makes the read answer after 600 ms, 300 ms after the retry's frame was sent, with moving true over f1 f1 j1, invalid_replies 0 and stale_replies 0"
+        decision: "spec.md:US1-S15"
       - path: crates/scope-node/tests/skywatcher.rs
         status: existing
         disposition: preserve
@@ -785,7 +943,8 @@ stories:
       - "Transport::new and Transport::command keep their signatures, and their exchanges and timing when every reply is valid and in time (spec.md FR-008)"
       - "SkyWatcher::connect and its Mount methods keep their signatures (024 FR-004)"
       - "MountHealth, EmulatorConfig, Exchange and Error gain nothing"
-      - "Stop over a lost link costs at most four reply timeouts (024 FR-018)"
+      - "Stop over a lost link costs at most four reply timeouts on a board that answers nothing (024 FR-018)"
+      - "Transport::set_baud is as on main"
     checks:
       development:
         - "cargo nextest run -p scope-node --locked --test mount_step"
@@ -872,6 +1031,21 @@ stories:
         disposition: add
         assertion: "a 100-count GoTo whose acknowledgement is lost answers OK after 300 ms over f1 j1 G1 S1 J1 f1 K1 K2, ends at 100 counts while the other axis's slew stops under 45,000, with unacknowledged_starts 1 and halted_moves 1"
         decision: "spec.md:US2-S7"
+      - path: crates/scope-node/tests/mount_start.rs
+        status: new
+        disposition: add
+        assertion: "a refused start on a tracking axis answers OK after 0 ms over f1 I1 J1 K1 K2, with no status read after the refusal, both axes at rest, unacknowledged_starts 0 and halted_moves 1"
+        decision: "spec.md:US2-S8"
+      - path: crates/scope-node/tests/mount_start.rs
+        status: new
+        disposition: add
+        assertion: "stale_replies, unacknowledged_starts and halted_moves are 1, 1 and 1 with last_stale =001\\r before a power cycle; with resets 1 they are unchanged after the read that finds the new board and after the next read; after one more of each on the new board they are 2, 2 and 2 with last_stale =111\\r"
+        decision: "spec.md:US2-S9"
+      - path: crates/scope-node/tests/mount_start.rs
+        status: new
+        disposition: add
+        assertion: "an unacknowledged start whose status read loses all five replies answers OK after 1,800 ms over f1 I1 J1, f1 five times, K1 K2, with both axes at rest, unacknowledged_starts 1 and halted_moves 1"
+        decision: "spec.md:US2-S10"
       - path: crates/scope-node/tests/mount_garble.rs
         status: existing
         disposition: preserve
@@ -911,7 +1085,7 @@ stories:
       - path: crates/finder/tests/motion/tracking/mount_line.rs
         status: new
         disposition: add
-        assertion: "under Track on M42, after one status reply 400 ms late, 30 s hold 60 J, 60 I and no K or L, azimuth's count rises by at least 700 and altitude's by at least 100, the board says both axes move, Track is tracking, invalid_replies is 0, stale_replies 1, resets 0 and both links connected"
+        assertion: "under Track on M42, after one status reply 400 ms late, the 30 s that start 2,250 ms later, off the tracker's refresh instants, hold 60 J, 60 I and no K or L, and between two reads through MountLink::state azimuth's count rises by at least 700 and altitude's by at least 100, the board says both axes move, Track is tracking, invalid_replies is 0, stale_replies 1, resets 0 and both links connected"
         decision: "spec.md:US3-S3"
       - path: crates/finder/tests/motion/tracking/mount_line.rs
         status: new
