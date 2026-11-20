@@ -48,6 +48,7 @@
 //! * POST /api/imaging/stack: a JSON object with optional reject, focus_gate, gains and stretch; start the live stack, or change the gains and stretch of the one running.
 //! * DELETE /api/imaging/stack: no body; stop the live stack and save it as stack.json, and with a sub stacked stack.fits and stack.png.
 //! * GET /api/imaging/stack/preview.jpg: the stack's latest picture as a colour JPEG at most 1920 wide.
+//! * PUT /api/imaging/steering: {"on":true|false,"smear_px":N,"step_share":N,"rate_share":N}, any of them; whether the subs steer the tracker, the corner smear that caps the exposure, and the two shares of the control law.
 //!
 //! A fresh session has no site, target or pointing and a 15° minimum altitude. Site
 //! coordinates are `lat_deg` (±90°) and `lon_deg` (±180°, east positive); the minimum

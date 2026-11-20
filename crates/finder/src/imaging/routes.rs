@@ -8,6 +8,7 @@ use axum::{
     routing::{delete, get, post, put},
     Json, Router,
 };
+use serde::Deserialize;
 
 use crate::{
     api::{sim_json, ApiError, AppState, SessionWrite},
@@ -15,7 +16,8 @@ use crate::{
         calibration::service::{CalibrationView, DarksRequest, FlatsRequest},
         focus::run::FocusAsk,
         stack::service::StartRequest,
-        ImagingView, SettingsEdit,
+        steering::{rate_share_checked, smear_checked, step_share_checked},
+        Imaging, ImagingView, SettingsEdit,
     },
 };
 
@@ -35,6 +37,79 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/api/imaging/frames/{id}/preview.jpg", get(frame_preview))
         .route("/api/imaging/stack", post(start_stack).delete(stop_stack))
         .route("/api/imaging/stack/preview.jpg", get(stack_preview))
+        .route("/api/imaging/steering", put(put_steering))
+}
+
+/// A partial edit of the run-only steering settings. Present nulls are refused.
+#[derive(Debug, Default)]
+pub struct SteeringEdit {
+    pub on: Option<bool>,
+    pub smear_px: Option<f64>,
+    pub step_share: Option<f64>,
+    pub rate_share: Option<f64>,
+}
+
+impl<'de> Deserialize<'de> for SteeringEdit {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Fields {
+            #[serde(default, deserialize_with = "super::present_value")]
+            on: Option<bool>,
+            #[serde(default, deserialize_with = "super::present_value")]
+            smear_px: Option<f64>,
+            #[serde(default, deserialize_with = "super::present_value")]
+            step_share: Option<f64>,
+            #[serde(default, deserialize_with = "super::present_value")]
+            rate_share: Option<f64>,
+        }
+        // A derived struct also accepts sequences. Require an object before
+        // applying its field/type checks, so even an empty array is refused.
+        let object = serde_json::Map::<String, serde_json::Value>::deserialize(deserializer)?;
+        let fields: Fields = serde_json::from_value(serde_json::Value::Object(object))
+            .map_err(serde::de::Error::custom)?;
+        Ok(Self {
+            on: fields.on,
+            smear_px: fields.smear_px,
+            step_share: fields.step_share,
+            rate_share: fields.rate_share,
+        })
+    }
+}
+
+/// Validate the whole edit in a fixed order before changing any setting.
+pub(crate) fn apply_steering(imaging: &Imaging, edit: SteeringEdit) -> Result<ImagingView, String> {
+    let smear = edit.smear_px.map(smear_checked).transpose()?;
+    let step = edit.step_share.map(step_share_checked).transpose()?;
+    let rate = edit.rate_share.map(rate_share_checked).transpose()?;
+    let steering = imaging.steering();
+    if let Some(smear) = smear {
+        steering.set_smear_px(smear)?;
+    }
+    if let Some(step) = step {
+        steering.set_step_share(step)?;
+    }
+    if let Some(rate) = rate {
+        steering.set_rate_share(rate)?;
+    }
+    if let Some(on) = edit.on {
+        steering.set_on(on);
+    }
+    Ok(imaging.view())
+}
+
+async fn put_steering(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    edit: Result<Json<SteeringEdit>, JsonRejection>,
+) -> Result<Json<ImagingView>, ApiError> {
+    let edit = sim_json(edit)?;
+    let imaging = state.imaging().ok_or_else(|| {
+        ApiError::new(StatusCode::CONFLICT, "this console takes no imaging frames")
+    })?;
+    apply_steering(&imaging, edit)
+        .map(Json)
+        .map_err(|error| ApiError::new(StatusCode::BAD_REQUEST, error))
 }
 
 /// `GET /api/imaging`: the imaging view, or `{"state":"off"}` without imaging.

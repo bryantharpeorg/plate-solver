@@ -127,6 +127,60 @@ pub type Source = Arc<dyn Fn() -> Option<Arc<dyn Steered>> + Send + Sync>;
 pub const EXPOSURES_KEPT: usize = 32;
 /// A stack whose first tracking error exceeds this many arcseconds is not steered.
 pub const FAR_ARCSEC: f64 = 180.0;
+/// An exposure is not halved to under this many seconds.
+pub const HALVING_FLOOR_S: f64 = 1.0;
+/// The shares handed to the tracker until set.
+pub const STEP_SHARE: f64 = 0.5;
+pub const RATE_SHARE: f64 = 0.3;
+
+pub(crate) fn smear_checked(px: f64) -> Result<f64, &'static str> {
+    if px.is_finite() && (0.1..=20.0).contains(&px) {
+        Ok(px)
+    } else {
+        Err("the corner smear must be a number from 0.1 to 20")
+    }
+}
+
+pub(crate) fn step_share_checked(share: f64) -> Result<f64, &'static str> {
+    if share.is_finite() && (0.0..=1.0).contains(&share) {
+        Ok(share)
+    } else {
+        Err("the step share must be a number from 0 to 1")
+    }
+}
+
+pub(crate) fn rate_share_checked(share: f64) -> Result<f64, &'static str> {
+    if share.is_finite() && (0.0..=1.0).contains(&share) {
+        Ok(share)
+    } else {
+        Err("the rate share must be a number from 0 to 1")
+    }
+}
+
+fn turn_for(ask: &ExposureAsk, set_point: Option<(f64, f64)>, smear_px: f64) -> f64 {
+    let set = set_point.unwrap_or((f64::from(ask.sensor.0) / 2.0, f64::from(ask.sensor.1) / 2.0));
+    let x = f64::from(ask.roi.x);
+    let y = f64::from(ask.roi.y);
+    let right = x + f64::from(ask.roi.width);
+    let bottom = y + f64::from(ask.roi.height);
+    let radius = [(x, y), (right, y), (x, bottom), (right, bottom)]
+        .into_iter()
+        .map(|(cx, cy)| (cx - set.0).hypot(cy - set.1))
+        .fold(0.0, f64::max)
+        / f64::from(ask.binning);
+    smear_px / radius
+}
+
+fn decide(ask: &ExposureAsk, ahead: Option<f64>) -> (f64, bool) {
+    let floor = ask.shortest_s.max(HALVING_FLOOR_S);
+    let mut exposure = ask.wanted_s;
+    if let Some(limit) = ahead {
+        while exposure > limit && exposure / 2.0 >= floor {
+            exposure /= 2.0;
+        }
+    }
+    (exposure, exposure < ask.wanted_s)
+}
 
 /// The exposure the stack is about to take.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -176,6 +230,12 @@ struct State {
     subs: u64,
     last: Option<ErrorView>,
     far: Option<f64>,
+    smear_px: f64,
+    on: bool,
+    step_share: f64,
+    rate_share: f64,
+    held: Option<(f64, bool)>,
+    asked: Option<ExposureAsk>,
 }
 
 impl State {
@@ -198,7 +258,13 @@ impl Steering {
     pub fn new(clock: Arc<dyn Clock>) -> Arc<Self> {
         Arc::new(Self {
             clock,
-            state: Mutex::new(State::default()),
+            state: Mutex::new(State {
+                smear_px: 6.0,
+                on: true,
+                step_share: STEP_SHARE,
+                rate_share: RATE_SHARE,
+                ..State::default()
+            }),
         })
     }
 
@@ -223,31 +289,47 @@ impl Steering {
         };
         let tracker = source.and_then(|source| source());
         let weak = tracker.as_ref().map(Arc::downgrade);
-        let far = {
+        let (feedback, step_share, rate_share) = {
             let mut state = self.state.lock().expect("steering state");
             state.tracker = weak.clone();
-            state.far.is_some()
+            (
+                state.on && state.far.is_none(),
+                state.step_share,
+                state.rate_share,
+            )
         };
         if let Some(tracker) = tracker {
-            if !far {
+            if feedback {
+                tracker.tune(step_share, rate_share);
                 let answer = tracker.gap();
                 drop(tracker);
                 answer.await;
             }
         }
         // A gap's future owns no tracker. It may have disappeared while waiting.
-        let tracker = weak
-            .and_then(|weak| weak.upgrade())
-            .map(|tracker| Arc::downgrade(&tracker));
+        let tracker = weak.and_then(|weak| weak.upgrade());
+        let (held, set_point, smear_px) = {
+            let state = self.state.lock().expect("steering state");
+            (state.held, state.set_point, state.smear_px)
+        };
+        let decided = held.unwrap_or_else(|| {
+            let ahead = tracker.as_ref().and_then(|tracker| {
+                tracker.longest_exposure_ahead_s(turn_for(&ask, set_point, smear_px))
+            });
+            decide(&ask, ahead)
+        });
         let go_time = self.clock.now();
-        self.state.lock().expect("steering state").remember(Taken {
+        let mut state = self.state.lock().expect("steering state");
+        let (exposure_s, limited) = *state.held.get_or_insert(decided);
+        state.asked = Some(ask);
+        state.remember(Taken {
             go_time,
-            tracker,
+            tracker: tracker.as_ref().map(Arc::downgrade),
             sensor: ask.sensor,
         });
         Go {
-            exposure_s: ask.wanted_s,
-            limited: false,
+            exposure_s,
+            limited,
         }
     }
 
@@ -256,7 +338,7 @@ impl Steering {
         let time = frame.start + frame.exposure_s / 2.0;
         let (weak, sensor, set_point) = {
             let state = self.state.lock().expect("steering state");
-            if state.far.is_some() {
+            if !state.on || state.far.is_some() {
                 return;
             }
             let Some(record) = state
@@ -281,7 +363,7 @@ impl Steering {
         };
         let far = {
             let mut state = self.state.lock().expect("steering state");
-            if state.far.is_some() {
+            if !state.on || state.far.is_some() {
                 return;
             }
             let length = error.east_arcsec.hypot(error.north_arcsec);
@@ -314,6 +396,8 @@ impl Steering {
             state.subs = 0;
             state.last = None;
             state.far = None;
+            state.held = None;
+            state.asked = None;
             state.tracker.take()
         };
         if let Some(tracker) = tracker.and_then(|weak| weak.upgrade()) {
@@ -347,30 +431,101 @@ impl Steering {
         }
     }
 
+    /// Set the allowed corner smear in delivered pixels.
+    pub fn set_smear_px(&self, px: f64) -> Result<(), String> {
+        let px = smear_checked(px)?;
+        let mut state = self.state.lock().expect("steering state");
+        state.smear_px = px;
+        state.used = true;
+        Ok(())
+    }
+
+    /// Turn feedback on or let the tracker go at once; the cap stays in force.
+    pub fn set_on(&self, on: bool) {
+        {
+            let mut state = self.state.lock().expect("steering state");
+            state.on = on;
+            state.used = true;
+        }
+        if !on {
+            self.let_go();
+        }
+    }
+
+    pub fn set_step_share(&self, share: f64) -> Result<(), String> {
+        let share = step_share_checked(share)?;
+        let mut state = self.state.lock().expect("steering state");
+        state.step_share = share;
+        state.used = true;
+        Ok(())
+    }
+
+    pub fn set_rate_share(&self, share: f64) -> Result<(), String> {
+        let share = rate_share_checked(share)?;
+        let mut state = self.state.lock().expect("steering state");
+        state.rate_share = share;
+        state.used = true;
+        Ok(())
+    }
+
     /// `None` until the steering is first used.
     pub fn view(&self) -> Option<SteeringView> {
-        let (source, mut view) = {
+        self.view_for(None)
+    }
+
+    /// Also show what a stack started with `ask` would take while a tracker runs.
+    /// Making a view marks nothing used.
+    pub fn view_for(&self, ask: Option<ExposureAsk>) -> Option<SteeringView> {
+        let (source, used, asked, set_point, mut view) = {
             let state = self.state.lock().expect("steering state");
-            if !state.used {
-                return None;
-            }
             (
                 state.source.clone(),
+                state.used,
+                state.asked,
+                state.set_point,
                 SteeringView {
                     source: "none",
                     subs: state.subs,
                     last: state.last.clone(),
                     far_arcsec: state.far,
                     holding: state.holds > 0,
+                    smear_px: state.smear_px,
+                    on: state.on,
+                    step_share: state.step_share,
+                    rate_share: state.rate_share,
+                    exposure_s: state.held.map(|held| held.0),
+                    limited: state.held.is_some_and(|held| held.1),
+                    longest_exposure_s: None,
+                    over_limit: false,
+                    would_take_s: None,
                 },
             )
         };
-        if let Some(tracker) = source.and_then(|source| source()) {
+        let tracker = source.and_then(|source| source());
+        if !used && (tracker.is_none() || ask.is_none()) {
+            return None;
+        }
+        if let Some(tracker) = tracker {
             view.source = if tracker.steered_by_subs() {
                 "subs"
             } else {
                 "tracker"
             };
+            if let Some(asked) = asked.or(ask) {
+                let limit = tracker.longest_exposure_s(turn_for(&asked, set_point, view.smear_px));
+                view.longest_exposure_s = Some(match limit {
+                    Some(seconds) => LimitView::Seconds(seconds),
+                    None => LimitView::Text("no limit"),
+                });
+                view.over_limit = limit
+                    .zip(view.exposure_s)
+                    .is_some_and(|(limit, exposure)| limit < exposure);
+            }
+            if let Some(ask) = ask {
+                let ahead =
+                    tracker.longest_exposure_ahead_s(turn_for(&ask, set_point, view.smear_px));
+                view.would_take_s = Some(decide(&ask, ahead).0);
+            }
         }
         Some(view)
     }
@@ -381,6 +536,14 @@ pub struct ErrorView {
     pub time: f64,
     pub east_arcsec: f64,
     pub north_arcsec: f64,
+}
+
+/// Serialized as a number of seconds, or the string `no limit`.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum LimitView {
+    Seconds(f64),
+    Text(&'static str),
 }
 
 /// The `steering` part of the imaging view.
@@ -397,4 +560,16 @@ pub struct SteeringView {
     pub far_arcsec: Option<f64>,
     /// Whether a stack keeps a `Hold` alive.
     pub holding: bool,
+    pub smear_px: f64,
+    pub on: bool,
+    pub step_share: f64,
+    pub rate_share: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exposure_s: Option<f64>,
+    pub limited: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub longest_exposure_s: Option<LimitView>,
+    pub over_limit: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub would_take_s: Option<f64>,
 }
