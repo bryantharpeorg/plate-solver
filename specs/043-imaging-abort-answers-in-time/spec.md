@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["027-finder-tests-by-system", "030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "034-dark-and-flat-frames", "035-live-stack", "036-tracking-from-subs", "040-stack-waits-for-steady"]
 # Drafted 2026-11-20 against `main` at fc161a54 (fc161a54983b9f69edbc26d63cd376e1dd0e6b7c),
 # at the owner's ask the same day ("Yes, draft 043"), from 041's second probe round
@@ -11,7 +11,8 @@ depends_on_landed: ["027-finder-tests-by-system", "030-imaging-camera-link", "03
 # now 3 s after the silence and US1-S4 the round's case for a call left running.
 # Re-anchored on 2026-11-20 onto `main` at 6d79292b, once 040 had landed: 040 is named in
 # `depends_on_landed`, every `path:line` here was re-read at 6d79292b, and the probe's
-# tests and fix pass there with every finder test (plan.md § Prerequisites 2). State: draft. The owner settled
+# tests and fix pass there with every finder test (plan.md § Prerequisites 2). The seat flipped it to `ready` the same day under the
+# owner's leave, which gives the owner approvals. The owner settled
 # both owner decisions on 2026-11-20 with the recommended answers ("Yes, take them"), and let
 # the seat flip this spec once 040 has landed and the trio is re-anchored on that `main`
 # with validate and preflight at 0. What rests on a run and what on reading is said
@@ -24,7 +25,7 @@ depends_on_landed: ["027-finder-tests-by-system", "030-imaging-camera-link", "03
 
 **Created**: 2026-11-20
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: 041's second probe round found that a stop on a silent link never answers on
 `main` (041-R17), and 042's found the same wait one level up (042-R3). 031's

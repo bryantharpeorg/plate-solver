@@ -336,7 +336,9 @@ tests fail (§ What was run and what was read). Then `ABORT_WAIT` and the bound 
    stories merge their rows and `mod` lines over 043's.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
    decisions, § Owner approvals). Met for the decisions: both settled on 2026-11-20 with
-   the recommended answers ("Yes, take them"); the approvals are given by the flip.
+   the recommended answers ("Yes, take them"), and the approvals given by the flip of
+   2026-11-20, which the owner left to the seat once 040 had landed and these checks
+   were met.
 4. **Probe builds.** Met for round 1. The drafting probe of 2026-11-20 built the
    story's code and tests from the draft's design. Probe round 1, the same day, built
    US1 from this trio's text alone: seven of nine failed on `main` as T001 says and all
