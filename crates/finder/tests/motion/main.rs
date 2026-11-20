@@ -16,5 +16,6 @@ mod night;
 mod recording_raw;
 mod simulate;
 mod steering;
+mod steering_claim;
 mod stop;
 mod tracking;
