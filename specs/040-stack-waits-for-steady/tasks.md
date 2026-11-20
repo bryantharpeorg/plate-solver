@@ -236,12 +236,12 @@ story writes nothing under `crates/finder/src`.
   and a claim with an error not yet applied (US10-S5).
 - [ ] T046 [US10] Add tests to `crates/finder/tests/motion/steering_unsteady.rs` for the
   trait's answers (US10-S6), the keyhole pass, read for at most 1800 s (US10-S7), subs
-  played late through the transit on a mount 1% fast (US10-S8), and a proportional rate
+  played late through the transit on a mount 1% fast, counted from the tracker's last
+  time not steady (US10-S8), and a proportional rate
   whose time has run out before a lapsed gap (US10-S9). On US6's code the scenarios
   already pass, and no test of theirs fails first; one that fails is a finding about
-  US6's code: stop and escalate with its output. US10-S8's bound is the one probe round
-  2 writes into spec.md: if the scenario still reads "the bound probe round 2 measures"
-  when this story is built, stop and escalate, and assert no figure of your own.
+  US6's code: stop and escalate with its output. US10-S8's bound is the scenario's
+  0.15″: assert it, and no figure of your own.
 - [ ] T054 [US10] Add tests to `crates/finder/tests/motion/steering_unsteady.rs` for the
   five scenarios cut from User Story 6 by tests, which were US6-S6 to US6-S10, with the
   helpers they need written out in this module: on the tracking console of spec.md

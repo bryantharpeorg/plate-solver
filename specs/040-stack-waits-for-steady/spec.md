@@ -644,8 +644,7 @@ This story is built after User Story 6 and before User Story 7 (Work Graph). Its
 fourteen scenarios test User Story 6's code, the last five, US10-S10 to US10-S14, cut
 from that story by tests, where they were US6-S6 to US6-S10: this story writes nothing
 under `crates/finder/src`, and on User Story 6's code its scenarios already pass
-(tasks.md, US10's test tasks). One of them, US10-S8, has no bound yet: probe round 2
-measures it.
+(tasks.md, US10's test tasks).
 
 **Why this priority**: The first exposure after a take-up, a measurement or the keyhole
 pass is the one most likely to start on a rate nobody meant, and a stop that left a gap
@@ -743,12 +742,13 @@ during development,
    is true; and a sub for which `steady_between`, asked as the sub ends for the console
    times of its e0 and e1, is false is left out, its drift not judged and its error not
    handed over, **Then** a committed test asserts that `steady()`, read at each of the
-   player's 50 ms steps, read false at least once; and that, of the subs whose e0 was
-   read after it next read true, every one from the fourth on has a true drift of at
-   most the bound probe round 2 measures (oracle: the simulator's truth. This scenario's
-   bound is not written yet: no build has steered through a reversal with a rate error,
-   and the number is to be put here, with its margin, before this spec is flipped; a
-   drift under 0.15″ is expected).
+   player's 50 ms steps, read false at least once after the player's first sub; and
+   that, of the subs whose e0 was read at or after its first true reading after the
+   last of its false readings, there are at least four, and every one from the fourth
+   on has a true drift of at most 0.15″ (oracle: the simulator's truth. Probe round 2
+   measured at most 0.00654″ over 18 subs, three runs, so the margin is 22.9×; 0.15″ is
+   036's US4-S5 bound for the same drift. The sub after a left-out one hands no error
+   over).
 9. **Given** the lapsed backlash rig and a `pointing(0.0, 0.0)` 5.4 s before the
    transit, **When** a `pointing(30.0, 0.0)` arrives once the take-up at transit has
    made `steady()` false, at the console time p, and a `gap` is awaited at the first

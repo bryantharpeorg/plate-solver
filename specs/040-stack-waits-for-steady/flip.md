@@ -230,7 +230,11 @@ in the FR or success criterion that makes it.
      - US10-S1, US10-S12 [was US6-S8] and US10-S9: the feed-forward plus the offset in
        force at the gap's answer to 0.000000″/s, against 0.01″/s; and US10-S9's last
        azimuth rate before the gap 7.4189″/s off it, against more than 1″/s.
-     - US10-S8, which had no bound: as written it failed (040-R3, the owner's).
+     - US10-S8, which had no bound: as written it counted from the start's own
+       settling, where the fourth sub drifted 0.52140″, and failed (040-R3); counted
+       from the player's last false reading of `steady()`, at most 0.006541″ from the
+       fourth sub over 18 subs, against the 0.15″ now written (22.9×; 0.03″ would have
+       been 4.6×).
    - **The cases nobody had run** all ran and passed as written:
      - the stopped-axis test raising no false alarm (§ Plan traps 32): with its branch
        printing, the 165 motion tests at US6's tip and the 174 at US10's, 036's US3's,

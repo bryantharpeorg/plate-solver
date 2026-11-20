@@ -45,7 +45,7 @@ Record says the same.
 |---|---|---|
 | R1 (blocking) | US6 built to the trio measured 66,145 B, 100.9% of the budget, 36.7% over its estimate; § Risks wrote no further cut | US6 cut by tests into US10 (below, the cut of US6 into US10); the measures are in flip.md § Prerequisites 5 and plan.md § Risks |
 | R2 (blocking) | The keyhole pass ends in its own take-up, which wrote `reversing` over `overhead`; US10-S7 failed on US6's code, and US10 cannot fix it | plan.md § Steady, **Why it is not steady**: `reversing` only while the state is `tracking`; tasks.md T030 |
-| R3 (blocking) | US10-S8 counted from the start's own settling, where no bound near 0.15″ holds, and wrote none | Left for the owner (040-R3) |
+| R3 (blocking) | US10-S8 counted from the start's own settling, where no bound near 0.15″ holds, and wrote none | US10-S8's Then: counted from the tracker's last time not steady, bound 0.15″ (036's US4-S5 bound), 22.9× the 0.00654″ measured; the owner's answer to 040-R3, given on [date, for the seat]; its record entry, tasks.md T046 and flip.md § Prerequisites 5 |
 | R4 | A take-up's settling ends 3.0 s after its pulse in paused time, not 2 s after its rates | plan.md § Steady, the settling rule |
 | R5 | The stall rule moved the start of an entry `mark` may not have pushed | plan.md § Steady, **A stopped axis**: the earlier of the open entry's start and `sent`'s time |
 | R6 (G21) | The first call's second look at the limit was pinned by no scenario | US6-S17 [now US6-S10], a case for a first call; its record entry |
