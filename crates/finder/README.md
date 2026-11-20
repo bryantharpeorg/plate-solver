@@ -82,11 +82,12 @@ moves the telescope, the guidance block and top bar say
 “Moved by an MCP client · <tool>”. The top bar's Stop is the page's only Stop;
 it stays enabled throughout motion and ends GoTo, direct axis moves and tracking.
 
-The imaging camera has eleven tools of its own, which answer what the page's
+The imaging camera has twelve tools of its own, which answer what the page's
 Imaging page does:
 
 - `get_imaging_camera` reads the imaging view: the state, the camera's
-  description, its status, the settings in force and the latest imaging frame.
+  description, its status, the settings in force and the latest imaging frame;
+  with a stack the view carries its `stack` and `steering` parts.
 - `set_imaging_camera` takes the same body as `PUT /api/imaging/settings` and
   answers the view, or the route's refusal as a tool error.
 - `take_imaging_frame` takes no arguments, does what
@@ -116,6 +117,7 @@ Imaging page does:
 - `take_flats` takes the body of `POST /api/imaging/calibration/flats`, including `darks` and `anyway`, and answers once the step has started; read its progress with `list_calibration`.
 - `set_stacking` takes `on` to start or stop the live stack as the page does, with `reject`, `focus_gate`, `gains` and `stretch` on a start, and `gains` and `stretch` on a running stack; it answers the stack's view or the route's refusal as a tool error.
 - `get_stack` reads the stack's state, counts and dropped subs by reason, with its picture as a colour JPEG at most 1024 wide when it has one, or `{"state":"none"}` before any stack.
+- `set_steering` takes any of `on`, `smear_px`, `step_share` and `rate_share`, as `PUT /api/imaging/steering` does, and answers the imaging view or the route's refusal as a tool error.
 
 Both taking tools answer a refusal as a tool error with the route's words. On a
 console that takes no imaging frames they answer `this console takes no imaging

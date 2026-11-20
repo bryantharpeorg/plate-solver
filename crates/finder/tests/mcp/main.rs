@@ -16,4 +16,5 @@ mod push_tool;
 mod session_rotation;
 mod session_tools;
 mod stack;
+mod steering;
 mod tracking;
