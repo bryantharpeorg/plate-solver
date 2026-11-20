@@ -58,5 +58,6 @@ mod star_detected;
 mod steering_cap;
 mod steering_error;
 mod steering_gap;
+mod steering_readout;
 mod steering_steady;
 mod targets;
