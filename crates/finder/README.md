@@ -1407,6 +1407,10 @@ absent until known:
 - `waiting`: true while the stack waits before an exposure, for the tracker or its limit.
 - `pause`: while waiting, the tracker's reason in one word: `starting`, `reversing`, `measuring`, `overhead`, `pushed`, `stalled`, or `limit` while waiting for the longest exposure to rise. Other trackers may give other words.
 - `dropped_not_steady`: this stack's subs dropped because the tracker was not steady during them, equal to `stack.dropped.not_steady`; retained after stop and reset for the next stack.
+- `error_rms_arcsec`: root mean square of the last ten tracking errors, in arcseconds; present once two errors have been handed over since the tracker was last let go.
+- `error_rms_px`: the same tracking error RMS in delivered pixels, at the latest solve's scale.
+- `drift_arcsec`: root mean square of the drifts between those errors, in arcseconds per sub, after taking out the gaps' steps; present with the error RMS.
+- `drift_px`: the same drift RMS in delivered pixels, at the latest solve's scale.
 
 `stack.dropped` counts dropped subs by reason: the solving, focus,
 placement, settings, frame, queue and processing reasons listed under

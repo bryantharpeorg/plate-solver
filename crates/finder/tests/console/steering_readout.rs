@@ -281,11 +281,14 @@ async fn stored_drifts_survive_eviction_of_exposure_records() {
     let rig = Rig::new();
     // One in five subs is accepted: ten errors span more than 32 records.
     for index in 0..50 {
-        rig.gap(index, 0.0, 0.0).await;
+        rig.gap(index, if index == 5 { 1.0 } else { 0.0 }, 0.0)
+            .await;
         if index % 5 == 0 {
             rig.accept(index, f64::from(index / 5), 0.0, 1.0);
         }
     }
-    rig.figure("drift_arcsec", 5.0 / 32.5);
+    // The first of nine drifts is zero after a 1 arcsec step; eight are 1.
+    // Its exposure record has been evicted, but its measured drift must remain.
+    rig.figure("drift_arcsec", (8.0_f64 / 9.0).sqrt() * 5.0 / 32.5);
     rig.figure("error_rms_arcsec", (285.0_f64 / 10.0).sqrt());
 }

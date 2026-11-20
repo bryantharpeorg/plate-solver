@@ -229,6 +229,13 @@ struct Taken {
     go_time: f64,
     tracker: Option<Weak<dyn Steered>>,
     sensor: (u32, u32),
+    stepped: Stepped,
+}
+
+struct ReadoutError {
+    error: TrackingError,
+    arcsec_per_px: f64,
+    drift: f64,
 }
 
 #[derive(Default)]
@@ -239,6 +246,7 @@ struct State {
     tracker: Option<Weak<dyn Steered>>,
     holds: usize,
     taken: VecDeque<Taken>,
+    errors: VecDeque<ReadoutError>,
     subs: u64,
     last: Option<ErrorView>,
     far: Option<f64>,
@@ -255,6 +263,61 @@ struct State {
 }
 
 impl State {
+    fn remember_error(&mut self, error: TrackingError, arcsec_per_px: f64, exposure_s: f64) {
+        let drift = self.errors.back().map_or(0.0, |previous| {
+            let elapsed = error.time - previous.error.time;
+            if elapsed <= 0.0 {
+                return 0.0;
+            }
+            let step = self
+                .taken
+                .iter()
+                .filter(|record| {
+                    record.go_time > previous.error.time && record.go_time <= error.time
+                })
+                .fold(Stepped::default(), |sum, record| Stepped {
+                    east_arcsec: sum.east_arcsec + record.stepped.east_arcsec,
+                    north_arcsec: sum.north_arcsec + record.stepped.north_arcsec,
+                });
+            (error.east_arcsec - previous.error.east_arcsec - step.east_arcsec)
+                .hypot(error.north_arcsec - previous.error.north_arcsec - step.north_arcsec)
+                * exposure_s
+                / elapsed
+        });
+        self.errors.push_back(ReadoutError {
+            error,
+            arcsec_per_px,
+            drift,
+        });
+        if self.errors.len() > 10 {
+            self.errors.pop_front();
+        }
+    }
+
+    fn readout(&self) -> Option<(f64, f64, f64)> {
+        let n = self.errors.len();
+        if n < 2 {
+            return None;
+        }
+        let error = (self
+            .errors
+            .iter()
+            .map(|entry| entry.error.east_arcsec.powi(2) + entry.error.north_arcsec.powi(2))
+            .sum::<f64>()
+            / n as f64)
+            .sqrt();
+        // The window's first error has no predecessor inside the window.
+        let drift = (self
+            .errors
+            .iter()
+            .skip(1)
+            .map(|entry| entry.drift.powi(2))
+            .sum::<f64>()
+            / (n - 1) as f64)
+            .sqrt();
+        Some((error, drift, self.errors.back()?.arcsec_per_px))
+    }
+
     fn remember(&mut self, taken: Taken) {
         self.taken.push_back(taken);
         if self.taken.len() > EXPOSURES_KEPT {
@@ -309,6 +372,7 @@ impl Steering {
             state.asked = Some(ask);
         }
         let mut released_for_limit = false;
+        let mut stepped = Stepped::default();
         loop {
             let source = self.state.lock().expect("steering state").source.clone();
             let mut tracker = source.and_then(|source| source());
@@ -348,7 +412,11 @@ impl Steering {
                 drop(tracker);
                 loop {
                     tokio::select! {
-                        _ = &mut answer => break,
+                        step = &mut answer => {
+                            stepped.east_arcsec += step.east_arcsec;
+                            stepped.north_arcsec += step.north_arcsec;
+                            break;
+                        },
                         _ = sleep(POLL) => {
                             let current = weak.as_ref().and_then(Weak::upgrade);
                             self.read_steady(current.as_deref());
@@ -398,6 +466,7 @@ impl Steering {
                 go_time,
                 tracker: tracker.as_ref().map(Arc::downgrade),
                 sensor: ask.sensor,
+                stepped,
             });
             return Go {
                 exposure_s,
@@ -518,6 +587,7 @@ impl Steering {
         } else {
             tracker.steer(error);
             let mut state = self.state.lock().expect("steering state");
+            state.remember_error(error, solve.arcsec_per_px, frame.exposure_s);
             state.subs += 1;
             state.last = Some(ErrorView {
                 time: error.time,
@@ -534,6 +604,7 @@ impl Steering {
             state.taken.clear();
             state.subs = 0;
             state.last = None;
+            state.errors.clear();
             state.far = None;
             state.held = None;
             state.asked = None;
@@ -553,6 +624,7 @@ impl Steering {
             let mut state = self.state.lock().expect("steering state");
             state.subs = 0;
             state.last = None;
+            state.errors.clear();
             state.tracker.clone()
         };
         if let Some(tracker) = tracker.and_then(|weak| weak.upgrade()) {
@@ -620,6 +692,7 @@ impl Steering {
     pub fn view_for(&self, ask: Option<ExposureAsk>) -> Option<SteeringView> {
         let (source, used, asked, set_point, mut view) = {
             let state = self.state.lock().expect("steering state");
+            let readout = state.readout();
             (
                 state.source.clone(),
                 state.used,
@@ -644,6 +717,10 @@ impl Steering {
                     waiting: state.waiting,
                     pause: state.pause.filter(|_| state.waiting),
                     dropped_not_steady: state.dropped_not_steady,
+                    error_rms_arcsec: readout.map(|(error, _, _)| error),
+                    error_rms_px: readout.map(|(error, _, scale)| error / scale),
+                    drift_arcsec: readout.map(|(_, drift, _)| drift),
+                    drift_px: readout.map(|(_, drift, scale)| drift / scale),
                 },
             )
         };
@@ -725,4 +802,14 @@ pub struct SteeringView {
     pub pause: Option<&'static str>,
     /// This stack's drops, retained after release and reset by the next Hold.
     pub dropped_not_steady: u64,
+    /// RMS of the last ten tracking errors, once at least two have arrived.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_rms_arcsec: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_rms_px: Option<f64>,
+    /// RMS drift during a sub, from pairs within the same last-ten window.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub drift_arcsec: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub drift_px: Option<f64>,
 }

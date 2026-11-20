@@ -14,6 +14,7 @@ import { CalibrationBlock } from "./CalibrationBlock";
 import { FocusBlock } from "./FocusBlock";
 import { ImagingSolveBlock } from "./ImagingSolveBlock";
 import { StackBlock } from "./StackBlock";
+import { SteeringBlock } from "./SteeringBlock";
 
 // The words of each state that is not ready (031 US7-S2).
 const NOT_READY: Record<string, string> = {
@@ -294,6 +295,7 @@ export function ImagingPage({ night, onBack }: { night: boolean; onBack: () => v
           <FocusBlock view={view} refresh={refresh} />
           {view.calibration && <CalibrationBlock calibration={view.calibration} onChange={refresh} />}
           <StackBlock view={view} night={night} onChange={refresh} />
+          <SteeringBlock view={view} onChange={refresh} />
         </>
       )}
     </main>

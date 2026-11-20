@@ -15,6 +15,7 @@ const DROPPED: [keyof StackDropped, string][] = [
   ["unreadable", "unreadable"],
   ["behind", "behind"],
   ["unprocessed", "unprocessed"],
+  ["not_steady", "while the mount was not steady"],
 ];
 const MISSING = { dark: "a master dark", flat: "a master flat", bad_pixels: "a bad-pixel map" };
 
@@ -57,9 +58,9 @@ export function StackBlock({ view, night, onChange }: { view: ImagingView; night
   const apply = () =>
     postImagingStack({ gains: [Number(draft[0]), Number(draft[1]), Number(draft[2])], stretch: Number(draft[3]) });
   const running = stack?.state === "stacking";
-  const dropped = stack ? DROPPED.reduce((sum, [key]) => sum + stack.dropped[key], 0) : 0;
+  const dropped = stack ? DROPPED.reduce((sum, [key]) => sum + (stack.dropped[key] ?? 0), 0) : 0;
   const parts = stack
-    ? DROPPED.filter(([key]) => stack.dropped[key] > 0)
+    ? DROPPED.filter(([key]) => (stack.dropped[key] ?? 0) > 0)
         .map(([key, words]) => `${stack.dropped[key]} ${words}`)
         .join(", ")
     : "";
