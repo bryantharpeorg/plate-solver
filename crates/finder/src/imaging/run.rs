@@ -5,9 +5,23 @@
 
 pub mod script;
 
-use std::{collections::BTreeMap, future::Future, pin::Pin, sync::Arc, time::Duration};
+use std::{
+    collections::BTreeMap,
+    future::Future,
+    pin::Pin,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use serde::{Deserialize, Serialize};
+use tokio::{
+    sync::{watch, Mutex as AsyncMutex},
+    task::JoinHandle,
+    time::{self, Instant},
+};
+
+use super::Refusal;
+use crate::session::Clock;
 
 /// How often a run reads the mount and the stack.
 pub const POLL: Duration = Duration::from_millis(250);
@@ -393,4 +407,674 @@ pub fn label(name: &str) -> String {
 pub fn run_id(started_at: f64, name: &str) -> String {
     let (_, utc) = crate::imaging::fits::utc(started_at);
     format!("{}Z-{}", utc[..19].replace(':', "-"), label(name))
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize)]
+pub struct SubCounts {
+    pub stacked: u64,
+    pub dropped: BTreeMap<String, u64>,
+}
+
+/// `reading` and `record` are skipped while `None`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct FocusNote {
+    pub verdict: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reading: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub record: Option<f64>,
+    pub unit: &'static str,
+}
+
+impl From<FocusCheck> for FocusNote {
+    fn from(check: FocusCheck) -> Self {
+        Self {
+            verdict: check.verdict.as_str(),
+            reading: check.reading,
+            record: check.record,
+            unit: check.unit.as_str(),
+        }
+    }
+}
+
+impl FocusNote {
+    fn sentence(&self) -> String {
+        let reading = |value| match self.unit {
+            "arcsec" => format!("{value:.1}″"),
+            _ => format!("{value:.1} px"),
+        };
+        match (self.verdict, self.reading, self.record) {
+            ("slightly_soft", Some(value), Some(record)) => format!(
+                "Focus is slightly soft: stars are {} across against a record of {}.",
+                reading(value),
+                reading(record)
+            ),
+            ("slightly_soft", _, _) => "Focus is slightly soft.".into(),
+            ("clearly_out", Some(value), Some(record)) => format!(
+                "Focus is clearly out: stars are {} across against a record of {}.",
+                reading(value),
+                reading(record)
+            ),
+            ("clearly_out", Some(value), None) => {
+                format!("Focus is clearly out: stars are {} across.", reading(value))
+            }
+            ("clearly_out", None, _) => "Focus is clearly out.".into(),
+            ("unmeasurable", _, _) => "Focus could not be measured: too few stars.".into(),
+            ("no_record", _, _) => "There is no focus record for this camera yet.".into(),
+            _ => String::new(),
+        }
+    }
+
+    fn pause_message(&self, failure: Option<&Failure>) -> String {
+        if let Some(failure) = failure.filter(|failure| !matches!(failure, Failure::NotSolved(_))) {
+            return format!(
+                "The focus check did not finish: {}. Check the imaging camera, then check focus again or go on anyway.",
+                failure.words()
+            );
+        }
+        let advice = match self.verdict {
+            "unmeasurable" => "Check for cloud or dew, then check focus again or go on anyway.",
+            "no_record" => "Focus with the focus aid, then check focus again or go on anyway.",
+            _ => "Turn the focuser while watching the focus aid below, then check focus again or go on anyway.",
+        };
+        format!("{} {advice}", self.sentence())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct CentringNote {
+    pub tries: u32,
+    pub offset_arcsec: f64,
+    pub tolerance_arcsec: f64,
+}
+
+/// `saved`: the run started a stack and `stack.stop` answered `Ok`. `track_on`:
+/// Track was on at the ending and has been ever since.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct EndedNote {
+    pub reason: &'static str,
+    pub at: f64,
+    pub message: String,
+    pub saved: bool,
+    pub track_on: bool,
+}
+
+/// A warning a run keeps. Later stories reach the remaining variants.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Warning {
+    SlightlySoft(FocusCheck),
+    CheckUnfinished(String),
+    WentOnAnyway,
+    AidNotOpened(String),
+    StackUnclean(String),
+    SubsKept,
+    RecordUnsaved(String),
+    OffCentre { offset_arcsec: f64, measured: bool },
+    TrackerNotSteady,
+}
+
+impl Warning {
+    pub fn words(&self, name: &str) -> String {
+        match self {
+            Self::SlightlySoft(check) => FocusNote::from(*check).sentence(),
+            Self::CheckUnfinished(words) => format!("The focus check did not finish: {words}."),
+            Self::WentOnAnyway => {
+                "Focus was not checked again: the observer went on anyway.".into()
+            }
+            Self::AidNotOpened(words) => format!("The focus aid could not be opened: {words}."),
+            Self::StackUnclean(words) => format!("The stack did not end cleanly: {words}."),
+            Self::SubsKept => "The subs were kept: nothing was stacked.".into(),
+            Self::RecordUnsaved(words) => format!("The run's record could not be saved: {words}."),
+            Self::OffCentre {
+                offset_arcsec,
+                measured,
+            } => {
+                let offset = offset_words(*offset_arcsec);
+                let after = if *measured {
+                    "after 3 tries"
+                } else {
+                    "and no new aim point could be measured"
+                };
+                let steering = if *offset_arcsec <= crate::imaging::steering::FAR_ARCSEC {
+                    "the stack's steering will bring it in"
+                } else {
+                    "it is stacked where it is"
+                };
+                format!("{name} is {offset} from the sensor's centre {after}; {steering}.")
+            }
+            Self::TrackerNotSteady => "The tracker was not steady during the focus check.".into(),
+        }
+    }
+}
+
+fn offset_words(offset_arcsec: f64) -> String {
+    if offset_arcsec < 600.0 {
+        format!("{offset_arcsec:.0}″")
+    } else {
+        format!("{:.1}′", offset_arcsec / 60.0)
+    }
+}
+
+/// `run` in the imaging view. Absent values and empty warnings are omitted;
+/// `settings.subs` remains null when no number was asked for.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[non_exhaustive]
+pub struct RunView {
+    pub id: String,
+    pub state: &'static str,
+    pub by: &'static str,
+    pub target: RunTarget,
+    pub started_at: f64,
+    pub elapsed_s: f64,
+    pub settings: RunSettings,
+    pub subs: SubCounts,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub focus: Option<FocusNote>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub centring: Option<CentringNote>,
+    /// Console Unix seconds at which the stack started.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stacking_since: Option<f64>,
+    /// `stacking_since` plus the requested duration.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit_at: Option<f64>,
+    /// Console Unix seconds; only present during a focus pause (041).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pause_ends_at: Option<f64>,
+    pub message: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ended: Option<EndedNote>,
+    /// Relative to the imaging folder.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
+}
+
+impl RunView {
+    fn state_message(&self, focus_failure: Option<&Failure>, aim_moved: bool) -> String {
+        let name = &self.target.name;
+        match self.state {
+            "slewing" => format!("Slewing to {name}."),
+            "tracking" => {
+                format!("Tracking {name}. Waiting for the mount to settle; nothing to do.")
+            }
+            "first_frame" => "Taking a first imaging frame.".into(),
+            "focus_check" => "Checking focus.".into(),
+            "focus_pause" => self
+                .focus
+                .as_ref()
+                .map_or_else(String::new, |focus| focus.pause_message(focus_failure)),
+            "solving" => "Solving an imaging frame.".into(),
+            "centring" => self.centring.as_ref().map_or_else(String::new, |centre| {
+                let offset = offset_words(centre.offset_arcsec);
+                if aim_moved {
+                    format!(
+                        "Centring {name}: {offset} from the sensor's centre, try {} of 3.",
+                        centre.tries
+                    )
+                } else {
+                    format!(
+                        "Centring {name}: {offset} from the sensor's centre, no new aim point yet."
+                    )
+                }
+            }),
+            "stacking" => format!(
+                "Stacking {name}: {} stacked, {} dropped.",
+                self.subs.stacked,
+                self.subs.dropped.values().sum::<u64>()
+            ),
+            "paused_by_tracker" => format!(
+                "Exposures paused: {} stacked so far. They resume by themselves.",
+                self.subs.stacked
+            ),
+            "ended" => self
+                .ended
+                .as_ref()
+                .map_or_else(String::new, |ended| ended.message.clone()),
+            _ => String::new(),
+        }
+    }
+}
+
+/// Only the latest run is shared with its task. Part calls and awaits always
+/// happen outside this mutex, since a part may itself read the imaging view.
+struct ActiveRun {
+    view: RunView,
+    started: Instant,
+    finished: Option<Instant>,
+    stop: watch::Sender<bool>,
+    done: Arc<watch::Sender<bool>>,
+    focus_failure: Option<Failure>,
+    aim_moved: bool,
+}
+
+/// Carries one imaging run through the five injected parts.
+pub struct Runner {
+    steps: Steps,
+    clock: Arc<dyn Clock>,
+    starting: AsyncMutex<()>,
+    inner: Arc<Mutex<Option<ActiveRun>>>,
+    task: Mutex<Option<JoinHandle<()>>>,
+}
+
+impl Drop for Runner {
+    fn drop(&mut self) {
+        if let Some(task) = self.task.get_mut().unwrap().take() {
+            task.abort();
+        }
+    }
+}
+
+impl Runner {
+    pub fn new(steps: Steps, clock: Arc<dyn Clock>) -> Arc<Self> {
+        Arc::new(Self {
+            steps,
+            clock,
+            starting: AsyncMutex::new(()),
+            inner: Arc::new(Mutex::new(None)),
+            task: Mutex::new(None),
+        })
+    }
+
+    /// Check, take the lease, ask Track, and start the run's task.
+    pub async fn start(self: &Arc<Self>, request: RunRequest, by: By) -> Result<RunView, Refusal> {
+        if request
+            .subs
+            .is_some_and(|subs| !(1..=MAX_SUBS).contains(&subs))
+        {
+            return Err(Refusal::bad_request(
+                "subs must be a whole number from 1 to 100000",
+            ));
+        }
+        if request.duration_s.is_some_and(|duration| {
+            !duration.is_finite() || !(1.0..=MAX_DURATION_S).contains(&duration)
+        }) {
+            return Err(Refusal::bad_request(
+                "duration_s must be a number from 1 to 43200",
+            ));
+        }
+
+        let _starting = self.starting.lock().await;
+        let running = self
+            .inner
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|run| run.view.ended.is_none());
+        if running {
+            return Err(Refusal::conflict("an imaging run is already running"));
+        }
+        self.steps.camera.ready().map_err(Refusal::conflict)?;
+        self.steps.solver.ready().map_err(Refusal::conflict)?;
+        let target = self.steps.mount.target().map_err(Refusal::conflict)?;
+        self.steps.camera.hold().map_err(Refusal::conflict)?;
+        if let Err(words) = self.steps.mount.point(by).await {
+            self.steps.camera.release();
+            return Err(Refusal::conflict(words));
+        }
+
+        let started_at = self.clock.now();
+        let started = Instant::now();
+        let mut view = RunView {
+            id: run_id(started_at, &target.name),
+            state: "slewing",
+            by: by.as_str(),
+            target,
+            started_at,
+            elapsed_s: 0.0,
+            settings: RunSettings {
+                subs: request.subs,
+                duration_s: request.duration_s.unwrap_or(DEFAULT_DURATION_S),
+                keep_subs: request.keep_subs.unwrap_or(true),
+            },
+            subs: SubCounts::default(),
+            focus: None,
+            centring: None,
+            stacking_since: None,
+            limit_at: None,
+            pause_ends_at: None,
+            message: String::new(),
+            warnings: Vec::new(),
+            ended: None,
+            folder: None,
+        };
+        view.message = view.state_message(None, true);
+        let (stop, stopped) = watch::channel(false);
+        let (done, _) = watch::channel(false);
+        *self.inner.lock().unwrap() = Some(ActiveRun {
+            view: view.clone(),
+            started,
+            finished: None,
+            stop,
+            done: Arc::new(done),
+            focus_failure: None,
+            aim_moved: true,
+        });
+        // The task owns only the inner state and the parts, never the Runner.
+        let task = RunTask {
+            steps: self.steps.clone(),
+            clock: self.clock.clone(),
+            inner: self.inner.clone(),
+            stopped,
+            abandoned_check: false,
+            stack_started: false,
+        };
+        *self.task.lock().unwrap() = Some(tokio::spawn(task.run()));
+        Ok(view)
+    }
+
+    /// End the run that is on, then answer its latest view.
+    pub async fn stop(&self) -> Option<RunView> {
+        // A start still asking Track must install its run before we signal it.
+        let starting = self.starting.lock().await;
+        let signals = self.inner.lock().unwrap().as_ref().and_then(|run| {
+            run.view
+                .ended
+                .is_none()
+                .then(|| (run.stop.clone(), run.done.subscribe()))
+        });
+        drop(starting);
+        if let Some((stop, mut done)) = signals {
+            stop.send_replace(true);
+            let _ = done.wait_for(|finished| *finished).await;
+        }
+        self.view()
+    }
+
+    /// Going on from a focus pause is added by 041; until then this refuses.
+    pub fn resume(&self, _anyway: bool) -> Result<RunView, Refusal> {
+        let running = self
+            .inner
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|run| run.view.ended.is_none());
+        Err(Refusal::conflict(if running {
+            "the imaging run is not paused"
+        } else {
+            "no imaging run is running"
+        }))
+    }
+
+    /// The latest run, with elapsed time measured on Tokio's clock.
+    pub fn view(&self) -> Option<RunView> {
+        let (mut view, started, finished, identity) = {
+            let inner = self.inner.lock().unwrap();
+            let run = inner.as_ref()?;
+            (
+                run.view.clone(),
+                run.started,
+                run.finished,
+                run.done.clone(),
+            )
+        };
+        view.elapsed_s = finished
+            .unwrap_or_else(Instant::now)
+            .duration_since(started)
+            .as_secs_f64();
+        if view.ended.as_ref().is_some_and(|ended| ended.track_on) && !self.steps.mount.track_on() {
+            view.ended.as_mut().unwrap().track_on = false;
+            let mut inner = self.inner.lock().unwrap();
+            if let Some(run) = inner
+                .as_mut()
+                .filter(|run| Arc::ptr_eq(&run.done, &identity))
+            {
+                run.view.ended.as_mut().unwrap().track_on = false;
+            }
+        }
+        Some(view)
+    }
+}
+
+struct RunTask {
+    steps: Steps,
+    clock: Arc<dyn Clock>,
+    inner: Arc<Mutex<Option<ActiveRun>>>,
+    stopped: watch::Receiver<bool>,
+    abandoned_check: bool,
+    stack_started: bool,
+}
+
+impl RunTask {
+    fn update(&self, change: impl FnOnce(&mut ActiveRun)) {
+        let mut inner = self.inner.lock().unwrap();
+        change(inner.as_mut().unwrap());
+    }
+
+    fn set_state(&self, state: &'static str) {
+        self.update(|run| {
+            run.view.state = state;
+            run.view.message = run
+                .view
+                .state_message(run.focus_failure.as_ref(), run.aim_moved);
+        });
+    }
+
+    fn warn(&self, warning: Warning) {
+        self.update(|run| {
+            let words = warning.words(&run.view.target.name);
+            if !run.view.warnings.contains(&words) {
+                run.view.warnings.push(words);
+            }
+        });
+    }
+
+    /// Poll the mount even while a part's future is held. Callers put the part
+    /// call inside an async block so stop and motion endings are checked first.
+    async fn guarded<T>(&self, step: impl Future<Output = T>) -> Result<T, Ending> {
+        let mut stopped = self.stopped.clone();
+        let mut poll = time::interval(POLL);
+        tokio::pin!(step);
+        loop {
+            tokio::select! {
+                biased;
+                _ = stopped.wait_for(|stop| *stop) => return Err(Ending::RunStopped),
+                _ = poll.tick() => {
+                    if let MountState::Ended(ending) = self.steps.mount.state() {
+                        return Err(ending);
+                    }
+                }
+                answer = &mut step => return Ok(answer),
+            }
+        }
+    }
+
+    async fn steady(&self, show: Option<(&'static str, &'static str)>) -> Result<(), Ending> {
+        let mut stopped = self.stopped.clone();
+        loop {
+            if *stopped.borrow() {
+                let slewing = self.inner.lock().unwrap().as_ref().unwrap().view.state == "slewing";
+                if slewing {
+                    self.steps.mount.stop().await;
+                    return Err(Ending::Stopped);
+                }
+                return Err(Ending::RunStopped);
+            }
+            match self.steps.mount.state() {
+                MountState::Ended(ending) => return Err(ending),
+                MountState::Tracking { steady: true } => return Ok(()),
+                MountState::Slewing => {
+                    if let Some((slewing, _)) = show {
+                        self.set_state(slewing);
+                    }
+                }
+                MountState::Tracking { steady: false } => {
+                    if let Some((_, tracking)) = show {
+                        self.set_state(tracking);
+                    }
+                }
+            }
+            tokio::select! {
+                biased;
+                _ = stopped.wait_for(|stop| *stop) => {},
+                _ = time::sleep(POLL) => {},
+            }
+        }
+    }
+
+    async fn frame(&self) -> Result<FrameRef, Ending> {
+        self.steady(None).await?;
+        let mut taking = false;
+        let answer = self
+            .guarded(async {
+                taking = true;
+                self.steps.camera.take().await
+            })
+            .await;
+        match answer {
+            Err(ending) => {
+                if taking {
+                    self.steps.camera.abort().await;
+                }
+                Err(ending)
+            }
+            Ok(Ok(frame)) => Ok(frame),
+            Ok(Err(Failure::Stopped)) => Err(Ending::Stopped),
+            Ok(Err(failure)) => Err(Ending::CameraFailed(failure.words().into())),
+        }
+    }
+
+    async fn run(mut self) {
+        let ending = self.procedure().await.unwrap_err();
+        self.end(ending).await;
+    }
+
+    async fn procedure(&mut self) -> Result<(), Ending> {
+        self.steady(Some(("slewing", "tracking"))).await?;
+        self.set_state("first_frame");
+        self.frame().await?;
+
+        self.set_state("focus_check");
+        self.steady(None).await?;
+        self.steps.camera.release();
+        let mut checking = false;
+        let answer = self
+            .guarded(async {
+                checking = true;
+                self.steps.focus.check().await
+            })
+            .await;
+        let check = match answer {
+            Err(ending) => {
+                self.abandoned_check = checking;
+                return Err(ending);
+            }
+            Ok(Ok(check)) => check,
+            Ok(Err(Failure::Stopped)) => return Err(Ending::CheckStopped),
+            Ok(Err(failure)) => {
+                self.warn(Warning::CheckUnfinished(failure.words().into()));
+                self.update(|run| run.focus_failure = Some(failure));
+                FocusCheck {
+                    verdict: Verdict::Unmeasurable,
+                    reading: None,
+                    record: None,
+                    unit: Unit::Px,
+                }
+            }
+        };
+        self.update(|run| run.view.focus = Some(check.into()));
+        self.steps.camera.hold().map_err(Ending::CameraFailed)?;
+
+        self.set_state("solving");
+        let frame = self.frame().await?;
+        let target = self
+            .inner
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .view
+            .target
+            .clone();
+        let centre = match self
+            .guarded(async { self.steps.solver.solve(&frame, &target).await })
+            .await?
+        {
+            Ok(centre) => centre,
+            Err(Failure::Stopped) => return Err(Ending::Stopped),
+            Err(failure) => return Err(Ending::SolverFailing(failure.words().into())),
+        };
+        self.update(|run| {
+            run.aim_moved = centre.aim_moved;
+            run.view.centring = Some(CentringNote {
+                tries: 0,
+                offset_arcsec: centre.offset_arcsec,
+                tolerance_arcsec: centre.tolerance_arcsec,
+            });
+        });
+
+        self.set_state("stacking");
+        self.steps.camera.release();
+        let folder = match self.steps.stack.start(&target).await {
+            Ok(folder) => folder,
+            Err(Failure::Stopped) => return Err(Ending::Stopped),
+            Err(failure) => return Err(Ending::StackFailed(failure.words().into())),
+        };
+        self.stack_started = true;
+        let stacking_since = self.clock.now();
+        self.update(|run| {
+            run.view.folder = Some(folder);
+            run.view.stacking_since = Some(stacking_since);
+            run.view.limit_at = Some(stacking_since + run.view.settings.duration_s);
+        });
+
+        let mut stopped = self.stopped.clone();
+        loop {
+            // Once stacking, the mount's ending takes precedence over a stop
+            // observed at the same poll, including after an unguarded start.
+            if let MountState::Ended(ending) = self.steps.mount.state() {
+                return Err(ending);
+            }
+            if *stopped.borrow() {
+                return Err(Ending::RunStopped);
+            }
+            tokio::select! {
+                biased;
+                _ = stopped.wait_for(|stop| *stop) => {},
+                _ = time::sleep(POLL) => {},
+            }
+        }
+    }
+
+    async fn end(&self, mut ending: Ending) {
+        let (target, settings) = {
+            let inner = self.inner.lock().unwrap();
+            let view = &inner.as_ref().unwrap().view;
+            (view.target.clone(), view.settings.clone())
+        };
+        if self.abandoned_check {
+            self.steps.focus.close_aid().await;
+        }
+        let saved = if self.stack_started {
+            self.steps.stack.stop(settings.keep_subs).await.is_ok()
+        } else {
+            false
+        };
+        self.steps.camera.release();
+        let track_on = self.steps.mount.track_on();
+        if ending == Ending::RunStopped && !track_on {
+            ending = Ending::Stopped;
+        }
+        let at = self.clock.now();
+        let finished = Instant::now();
+        let message = ending.message(&target.name, &settings);
+        let done = {
+            let mut inner = self.inner.lock().unwrap();
+            let run = inner.as_mut().unwrap();
+            run.finished = Some(finished);
+            run.view.elapsed_s = finished.duration_since(run.started).as_secs_f64();
+            run.view.ended = Some(EndedNote {
+                reason: ending.reason(),
+                at,
+                message: message.clone(),
+                saved,
+                track_on,
+            });
+            run.view.state = "ended";
+            run.view.message = message;
+            run.done.clone()
+        };
+        done.send_replace(true);
+    }
 }
