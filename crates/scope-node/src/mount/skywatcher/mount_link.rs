@@ -107,7 +107,7 @@ impl<S: BaudStream + 'static> MountLink<S> {
         let snapshot = self.inner.snapshot.lock().unwrap();
         combined_health(&snapshot.retired_health, &snapshot.health)
     }
-    /// Stale input over every board this link has had, keeping the latest bytes.
+    /// Line events over every board this link has had, keeping the latest stale bytes.
     pub fn line_health(&self) -> LineHealth {
         let snapshot = self.inner.snapshot.lock().unwrap();
         combined_line_health(&snapshot.retired_line_health, &snapshot.line_health)
@@ -166,6 +166,8 @@ fn combined_line_health(retired: &LineHealth, current: &LineHealth) -> LineHealt
             .last_stale
             .clone()
             .or_else(|| retired.last_stale.clone()),
+        unacknowledged_starts: retired.unacknowledged_starts + current.unacknowledged_starts,
+        halted_moves: retired.halted_moves + current.halted_moves,
     }
 }
 

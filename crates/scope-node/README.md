@@ -193,6 +193,31 @@ command about to be sent and those bytes:
 mount stale input before :j1: =111\r
 ```
 
+A missing or garbled motion-start acknowledgement (including a framed reply that
+carries data) is followed by one status read, using the usual five-transmission
+read budget. If that axis is running, the start is accepted and nothing is stopped.
+If it is at rest or its status cannot be read, the command fails and both axes
+are sent the stop. The start itself is never sent again. A refusal or an I/O error
+fails directly, without a status read. An unacknowledged start logs one of:
+
+```text
+mount start :J<axis> not acknowledged (<error>): the axis is running
+mount start :J<axis> not acknowledged (<error>): the axis is not running
+mount start :J<axis> not acknowledged (<error>): its status could not be read
+```
+
+`MountLink::line_health().unacknowledged_starts` counts these starts, whatever the
+status read finds. `halted_moves` counts every failed rate or GoTo command that
+causes the node to send the stop to both axes. Both counts persist across every
+board the link has had, including reconnects and resets. Each failed move logs:
+
+```text
+mount <rate|goto> on axis <axis> failed (<error>): stopping both axes
+```
+
+`RateAxis` and `GotoAxis` still answer the console OK, including when the node has
+handled a failed move by stopping both axes.
+
 ## The imaging camera
 
 An `[imaging]` table adds a deep-sky camera beside the finder camera, for the imaging
