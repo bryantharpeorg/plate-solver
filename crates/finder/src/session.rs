@@ -913,6 +913,14 @@ impl Session {
             .and_then(|t| t.tracker.clone())
     }
 
+    /// The running tracker as the stack sees it (036): none while Track is
+    /// off, armed or ended.
+    pub fn steered(&self) -> Option<Arc<dyn crate::imaging::steering::Steered>> {
+        self.tracker()
+            .filter(|tracker| tracker.state().state != "off")
+            .map(|tracker| tracker as Arc<dyn crate::imaging::steering::Steered>)
+    }
+
     fn track_target(&self, time: f64, link: &link::LinkManager) -> Result<Target, String> {
         let view = self.snapshot(time);
         if !link.status().borrow().connected || !view.mount.as_ref().is_some_and(|m| m.connected) {
