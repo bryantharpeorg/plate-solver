@@ -1214,7 +1214,7 @@ its strength and fades as more subs arrive. Background matching first
 adds a separate offset to each channel to match the reference sub's
 median, so changing sky brightness does not itself become an outlier.
 
-The eleven dropped-sub reasons are:
+The twelve dropped-sub reasons are:
 
 - `not_solved`: the imaging solver found no solution.
 - `too_few_stars`: the solve or focus reading found too few stars.
@@ -1227,6 +1227,7 @@ The eleven dropped-sub reasons are:
 - `unreadable`: a saved sub lacks needed metadata or its FITS file could not be read.
 - `behind`: the waiting queue was full, so the oldest waiting sub was dropped.
 - `unprocessed`: the stack ended before the sub could be processed.
+- `not_steady`: the tracker was not steady during the sub, which was dropped before its solve (040).
 
 The camera is never kept waiting for processing. At most four saved subs
 wait; `behind` means processing did not keep up, and the newest subs are
@@ -1321,3 +1322,100 @@ milliseconds from taking the sub off the queue through its outcome,
 including solving and calibration. The picture the worker makes after
 that sub is not included. Read `behind` too: it exposes processing that
 cannot keep pace with the camera.
+
+## Tracking steered by the subs
+
+On a mount whose field turns as it tracks, a stack with Track on uses each
+accepted sub's tracking error at the set point to correct the tracker. The
+subs steer instead of the finder camera; the finder camera still feeds the
+pointing model. Corrections happen only in the gap between exposures. A gap
+steps out half the error when it is two counts or more, and takes 0.3 of the
+drift rate out of the rate. The settings `step_share` and `rate_share` tune
+those shares in the field. An error arrives a sub or more late, so the
+tracker judges it against corrections made since it was measured. One gap
+changes a rate by at most 0.1″/s; a pair of subs with a large step between
+them changes it by nothing. A gap steps at most 30″ on the sky. A correction
+never reverses an axis. A step against its motion is at most its own rate
+times half a second per gap, so an error in that direction leaves slowly.
+
+The tracker's own corrections steer again when the stack stops, when the
+switch is turned off (at once, during a stack too), after eight gaps in a
+row without an accepted sub, while the tracker is not steady, or when the
+stack began more than 3′ from the set point. After eight empty gaps its
+own corrections keep steering until a sub is accepted, applied only as
+steps in the stack's gaps; the rate stays as the subs left it, so no
+correction changes the rate during an exposure. Every gap without an
+accepted sub counts, whether a sub was dropped as `behind`, `settings`,
+`frame_failed`, `unreadable` or `solver_failed`, or is still being solved.
+A console needing more than eight sub lengths to accept one sub therefore
+takes no drift out of the rate. Turning the switch off lets the finder
+camera correct as before, during exposures too.
+
+A stack whose first tracking error exceeds 3′ is not steered at all. The
+finder camera's aim point and the sensor's centre disagree by more than
+Track's own push threshold: steering the subs could look like a push
+nobody made. Centre the target, or turn Track off and on to apply the
+measured aim point, then start a new stack.
+
+The cap keeps corner stars within the chosen smear, 6 px by default. Before
+the first sub, the shortest limit in the hour ahead decides the exposure:
+the observer's setting is halved until it fits, never below 1 s or the
+camera's shortest exposure. That exposure is held because all subs of a
+stack share one exposure and a master dark matches one. The stack sets the
+console's exposure setting through its own camera lease; the setting
+cannot be edited while the stack holds the camera. It puts the observer's
+setting back before releasing the camera as it ends. If the initial change
+is refused, the stack ends with reason `camera` without taking a sub. A
+refused restoration leaves the stack's exposure setting in place and
+changes nothing else about the ending.
+
+`over_limit` means the current limit has fallen below the exposure held.
+The stack keeps running until that limit falls under half the held
+exposure; then it waits, letting the tracker steer on its own, until the
+limit rises again. `would_take_s` says what a stack started now would
+hold. A stack begun while the limit was low may hold much less than that.
+
+Before every exposure the stack also waits for the tracker to be steady.
+It is not steady before its first rates, during a take-up, during a first
+reversal's backlash measurement and the keyhole pass, and for 2 s of
+settling after the first rates, a take-up and the keyhole pass. It is also
+not steady while the telescope is moved by hand, until Track follows the
+push or it comes back, for the second in which the tracker finds an axis
+stopped, and after tracking ends. A sub that crosses such a time is dropped
+as `not_steady` before its solve. The scope node stops both axes when a
+rate command fails and logs `mount command failed`. The console is not
+told of this failure; the tracker can only notice a second later.
+
+The imaging view's `steering` part carries these keys; optional keys are
+absent until known:
+
+- `source`: `subs` while tracking errors steer, `tracker` while the tracker's own corrections do (no stack, switch off, a stack begun too far out, or no sub accepted in the last eight gaps), or `none` while nothing tracks.
+- `subs`: tracking errors used since the tracker was last let go.
+- `last`: the newest tracking error, with `east_arcsec`, `north_arcsec` and `time` in Unix seconds at the sub's mid-exposure.
+- `holding`: a stack holds the steering. With `source` `tracker`, `on` true and no `far_arcsec`, no sub has been accepted lately.
+- `far_arcsec`: present while a stack is not steered because it began this far from its set point.
+- `smear_px`: the corner smear setting, from 0.1 to 20 px, default 6.
+- `on`: whether the subs steer, default true. Off still caps, pauses and drops subs that cross a time not steady.
+- `step_share`: the share of an error stepped out in a gap, from 0 to 1, default 0.5.
+- `rate_share`: the share of drift taken out of the rate, from 0 to 1, default 0.3.
+- `exposure_s`: the exposure the stack holds, in seconds.
+- `limited`: whether that exposure was shortened when the stack began.
+- `longest_exposure_s`: the longest exposure that keeps corner stars within the smear now, or `no limit`; absent while nothing tracks.
+- `over_limit`: whether the current limit is under the exposure held.
+- `would_take_s`: the exposure a stack started now would hold.
+- `steady`: false when the stack waits for the tracker to be steady.
+- `waiting`: true while the stack waits before an exposure, for the tracker or its limit.
+- `pause`: while waiting, the tracker's reason in one word: `starting`, `reversing`, `measuring`, `overhead`, `pushed`, `stalled`, or `limit` while waiting for the longest exposure to rise. Other trackers may give other words.
+- `dropped_not_steady`: this stack's subs dropped because the tracker was not steady during them, equal to `stack.dropped.not_steady`; retained after stop and reset for the next stack.
+
+`stack.dropped` counts dropped subs by reason: the solving, focus,
+placement, settings, frame, queue and processing reasons listed under
+Live stack, plus `not_steady` for a sub taken across a pause or another
+time the tracker was not steady. Such a sub costs no solve and does not
+replace the stack's last solved sub.
+
+Drift per sub includes the scatter between two solves, so it does not read
+0 on a real sky. All four steering settings are run-only, set with
+`PUT /api/imaging/steering`; restarting the console restores 6 px, on,
+0.5 and 0.3. Guiding from the imaging camera, deferred in 015, is now part
+of tracking through the accepted subs.
