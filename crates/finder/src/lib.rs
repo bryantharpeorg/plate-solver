@@ -49,6 +49,9 @@
 //! * DELETE /api/imaging/stack: no body; stop the live stack and save it as stack.json, and with a sub stacked stack.fits and stack.png.
 //! * GET /api/imaging/stack/preview.jpg: the stack's latest picture as a colour JPEG at most 1920 wide.
 //! * PUT /api/imaging/steering: {"on":true|false,"smear_px":N,"step_share":N,"rate_share":N}, any of them; whether the subs steer the tracker, the corner smear that caps the exposure, and the two shares of the control law.
+//! * POST /api/imaging/run: {"subs":N,"duration_s":S,"keep_subs":true}, each optional; start an imaging run on the session's target.
+//! * DELETE /api/imaging/run: no body; end the imaging run and save its stack. It stops the mount only while the run still slews.
+//! * POST /api/imaging/run/continue: {"anyway":false} checks focus again, {"anyway":true} goes on; from a focus pause only.
 //!
 //! A fresh session has no site, target or pointing and a 15° minimum altitude. Site
 //! coordinates are `lat_deg` (±90°) and `lon_deg` (±180°, east positive); the minimum

@@ -93,6 +93,12 @@ pub struct ImagingView {
     /// Tracking steered by the subs, from the steering's first use (036).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub steering: Option<steering::SteeringView>,
+    /// The latest imaging run, in every imaging state (037).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run: Option<run::RunView>,
+    /// The newest unfinished run record's relative folder until the first start.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unfinished_run: Option<String>,
 }
 
 impl ImagingView {
@@ -111,6 +117,8 @@ impl ImagingView {
             calibration: None,
             stack: None,
             steering: None,
+            run: None,
+            unfinished_run: None,
         }
     }
 }
@@ -409,6 +417,8 @@ pub struct Imaging {
     calibration: OnceLock<Weak<Calibration>>,
     /// Weak because the stacker owns this imaging state (035).
     stack: OnceLock<Weak<stack::service::Stacker>>,
+    /// Weak because a runner's parts may own this imaging state (037).
+    run: OnceLock<Weak<run::Runner>>,
     steering: Arc<steering::Steering>,
 }
 
@@ -449,6 +459,7 @@ impl Imaging {
             link,
             calibration: OnceLock::new(),
             stack: OnceLock::new(),
+            run: OnceLock::new(),
         })
     }
 
@@ -470,6 +481,11 @@ impl Imaging {
     /// Let every view carry the stack (035). The first call wins.
     pub(crate) fn attach_stack(&self, stacker: &Arc<stack::service::Stacker>) {
         let _ = self.stack.set(Arc::downgrade(stacker));
+    }
+
+    /// Let every view carry the run (037). The first call wins.
+    pub(crate) fn attach_run(&self, runner: &Arc<run::Runner>) {
+        let _ = self.run.set(Arc::downgrade(runner));
     }
 
     /// `GET /api/imaging`, and `imaging` in the session. Outside `ready` the view
@@ -518,6 +534,8 @@ impl Imaging {
             calibration: None,
             stack: None,
             steering: None,
+            run: None,
+            unfinished_run: None,
         };
         drop(held);
         // The finished view includes the relation's angle; no imaging lock is
@@ -542,6 +560,10 @@ impl Imaging {
                 binning: settings.binning,
             });
         view.steering = self.steering.view_for(ask);
+        if let Some(runner) = self.run.get().and_then(Weak::upgrade) {
+            view.run = runner.view();
+            view.unfinished_run = runner.unfinished();
+        }
         view
     }
 

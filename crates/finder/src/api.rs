@@ -115,6 +115,7 @@ pub struct AppState {
     live: Option<Arc<Live>>,
     recordings: Option<Arc<Recorder>>,
     imaging: Option<Arc<crate::imaging::Imaging>>,
+    imaging_runner: Option<Arc<crate::imaging::run::Runner>>,
     calibration: Option<Arc<crate::imaging::calibration::service::Calibration>>,
     stack: Option<Arc<crate::imaging::stack::service::Stacker>>,
     mount_monitor: Option<Arc<crate::live::MountMonitor>>,
@@ -152,6 +153,7 @@ impl AppState {
             live: None,
             recordings: None,
             imaging: None,
+            imaging_runner: None,
             calibration: None,
             stack: None,
             mount_monitor: None,
@@ -361,6 +363,26 @@ impl AppState {
             self.calibration = Some(calibration);
         }
         self
+    }
+
+    /// Give the console its imaging run parts (037). Call after `with_imaging`;
+    /// without imaging it changes nothing.
+    pub fn with_imaging_run_steps(mut self, steps: crate::imaging::run::Steps) -> Self {
+        if let Some(imaging) = &self.imaging {
+            let runner = crate::imaging::run::Runner::with_folder(
+                steps,
+                self.clock.clone(),
+                imaging.root().to_path_buf(),
+            );
+            imaging.attach_run(&runner);
+            self.imaging_runner = Some(runner);
+        }
+        self
+    }
+
+    /// The owner of the console's imaging runs, when it has one.
+    pub fn imaging_runner(&self) -> Option<Arc<crate::imaging::run::Runner>> {
+        self.imaging_runner.clone()
     }
 
     /// The console's imaging camera, when it takes imaging frames.
