@@ -57,6 +57,7 @@ struct Mechanics {
     axes: [Motor; 2],
     config: MountConfig,
     rate_error: f64,
+    count_steps: bool,
     last_s: f64,
     push: [f64; 2],
 }
@@ -94,18 +95,24 @@ impl Motor {
         }
     }
 
-    fn travel(&mut self, distance: f64, backlash: f64) {
+    fn travel(&mut self, distance: f64, backlash: f64, count_steps: bool) {
         self.position += distance;
         self.drive += distance * self.travel_scale;
+        let drive = if count_steps {
+            let step = 360.0 / f64::from(COUNTS_PER_REVOLUTION);
+            (self.drive / step).floor() * step
+        } else {
+            self.drive
+        };
         self.tube = self
             .tube
-            .clamp(self.drive - backlash / 2.0, self.drive + backlash / 2.0);
+            .clamp(drive - backlash / 2.0, drive + backlash / 2.0);
     }
 
-    fn advance(&mut self, mut seconds: f64, backlash: f64) {
+    fn advance(&mut self, mut seconds: f64, backlash: f64, count_steps: bool) {
         while seconds > 0.0 {
             let Some(segment) = self.segments.front() else {
-                self.travel(self.rate * seconds, backlash);
+                self.travel(self.rate * seconds, backlash, count_steps);
                 break;
             };
             let elapsed = seconds.min(segment.remaining_s);
@@ -113,6 +120,7 @@ impl Motor {
             self.travel(
                 self.rate * elapsed + acceleration * elapsed * elapsed / 2.0,
                 backlash,
+                count_steps,
             );
             self.rate += acceleration * elapsed;
             seconds -= elapsed;
@@ -123,7 +131,7 @@ impl Motor {
                 self.segments.pop_front();
                 if self.segments.is_empty() {
                     if let Some(target) = self.target.take() {
-                        self.travel(target - self.position, backlash);
+                        self.travel(target - self.position, backlash, count_steps);
                     }
                 }
             }
@@ -200,7 +208,7 @@ impl Mechanics {
         let seconds = now - self.last_s;
         assert!(seconds >= 0.0, "mount clock must be monotonic");
         for axis in &mut self.axes {
-            axis.advance(seconds, self.config.backlash_deg);
+            axis.advance(seconds, self.config.backlash_deg, self.count_steps);
         }
         self.last_s = now;
     }
@@ -245,6 +253,7 @@ impl SimMount {
                 axes: [Motor::new(), Motor::new()],
                 config,
                 rate_error: 0.0,
+                count_steps: false,
                 last_s,
                 push: [0.0; 2],
             })),
@@ -293,6 +302,19 @@ impl SimMount {
         let mut inner = self.inner.lock().unwrap();
         inner.advance(self.clock.node_now());
         inner.axes[axis.index()].slip = degrees;
+    }
+
+    /// Make each axis's tube follow its drive in whole counts, as a real
+    /// controller's reference does in slow motion, or smoothly again.
+    /// False when built.
+    pub fn set_count_steps(&self, on: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.advance(self.clock.node_now());
+        inner.count_steps = on;
+    }
+
+    pub fn count_steps(&self) -> bool {
+        self.inner.lock().unwrap().count_steps
     }
 
     /// Set the fractional error on subsequent rate commands to either axis.
