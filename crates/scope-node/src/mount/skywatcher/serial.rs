@@ -41,6 +41,19 @@ impl BaudStream for Serial {
         termios::tcflush(&self.fd, QueueSelector::IOFlush)?;
         Ok(())
     }
+    fn discard_input(&mut self) -> io::Result<Vec<u8>> {
+        let mut bytes = [0; 256];
+        let mut count = 0;
+        while count < bytes.len() {
+            match rustix::io::read(&self.fd, &mut bytes[count..]) {
+                Ok(0) | Err(rustix::io::Errno::AGAIN) => break,
+                Ok(read) => count += read,
+                Err(rustix::io::Errno::INTR) => continue,
+                Err(error) => return Err(error.into()),
+            }
+        }
+        Ok(bytes[..count].to_vec())
+    }
     async fn read_byte(&mut self) -> io::Result<u8> {
         let mut byte = [0];
         if retry(|| rustix::io::read(&self.fd, &mut byte)).await? == 0 {
@@ -76,6 +89,27 @@ async fn retry<T>(mut operation: impl FnMut() -> rustix::io::Result<T>) -> io::R
 mod tests {
     use super::*;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    // US1-S8: exact peer-written bytes are the oracle; no timing tolerance.
+    #[tokio::test]
+    async fn discard_input_is_nonblocking_bounded_and_leaves_eof_to_read_byte() {
+        let (left, right) = std::os::unix::net::UnixStream::pair().unwrap();
+        left.set_nonblocking(true).unwrap();
+        right.set_nonblocking(true).unwrap();
+        let mut serial = Serial { fd: left.into() };
+        let mut peer = tokio::net::UnixStream::from_std(right).unwrap();
+        peer.write_all(b"=111\r=\r").await.unwrap();
+        assert_eq!(serial.discard_input().unwrap(), b"=111\r=\r");
+        assert!(serial.discard_input().unwrap().is_empty());
+        peer.write_all(&[b'='; 300]).await.unwrap();
+        assert_eq!(serial.discard_input().unwrap(), vec![b'='; 256]);
+        assert_eq!(serial.discard_input().unwrap(), vec![b'='; 44]);
+        peer.write_all(b"=\r").await.unwrap();
+        assert_eq!(serial.read_byte().await.unwrap(), b'=');
+        assert_eq!(serial.read_byte().await.unwrap(), b'\r');
+        drop(peer);
+        assert!(serial.discard_input().unwrap().is_empty());
+    }
 
     #[tokio::test]
     async fn nonblocking_bytes_and_disconnect_without_a_serial_device() {

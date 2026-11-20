@@ -38,6 +38,15 @@ pub struct MountHealth {
     pub goto_path: [Option<GotoPath>; 2],
 }
 
+/// What the serial line did that the console is not told.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct LineHealth {
+    /// Transmissions preceded by input left over from an earlier exchange.
+    pub stale_replies: u64,
+    /// The last such bytes, escaped as `MountHealth::last_invalid` is.
+    pub last_stale: Option<String>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Firmware {
     pub major: u8,
@@ -456,6 +465,14 @@ impl<S: BaudStream> SkyWatcher<S> {
     /// Health accumulated on this board since its connect sequence.
     pub async fn health(&self) -> MountHealth {
         self.protocol.lock().await.health.clone()
+    }
+    /// Stale input accumulated on this board since its connect sequence.
+    pub async fn line_health(&self) -> LineHealth {
+        let (stale_replies, last_stale) = self.protocol.lock().await.transport.stale();
+        LineHealth {
+            stale_replies,
+            last_stale,
+        }
     }
     /// The init bit from the last full state read; none before a read or on failure.
     pub async fn initialised(&self, axis: Axis) -> Option<bool> {

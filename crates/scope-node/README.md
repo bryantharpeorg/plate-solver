@@ -175,6 +175,24 @@ Health counts persist across reconnects and resets; the latest invalid bytes and
 each axis's previous path remain until a new board reports replacements. A motion
 start (`:J`) is always sent once, even when its acknowledgement is lost.
 
+Before every transmission, including retries and Stop, the node reads out the
+reply still owed by an exchange cut short by a timeout, an abandoned read or Stop.
+It waits only for what remains of that exchange's own 300 ms, then discards input
+that has already arrived without waiting. Stop pays the same bounded wait before
+sending its first command. A retry behind an exchange whose read-out found no reply
+stays open after reading a line, for one more reply to the retry's own 300 ms
+deadline (FR-016). After a reply lost outright, whatever is sent next therefore
+waits until 300 ms after the answered retry was sent, even though no second reply
+will arrive. This extra wait is paid once; it does not keep the next exchange open.
+Transmissions preceded by stale input are counted in
+`MountLink::line_health().stale_replies`, summed across reconnects; `last_stale`
+keeps the latest bytes in order, escaped, until replaced. Each event logs the
+command about to be sent and those bytes:
+
+```text
+mount stale input before :j1: =111\r
+```
+
 ## The imaging camera
 
 An `[imaging]` table adds a deep-sky camera beside the finder camera, for the imaging
