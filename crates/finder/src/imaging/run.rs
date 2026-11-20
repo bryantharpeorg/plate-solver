@@ -3,6 +3,7 @@
 //! part for Track, and asks nothing of the mount when it ends, but a Stop when it is
 //! stopped while it still slews.
 
+pub mod console;
 pub mod script;
 pub mod store;
 

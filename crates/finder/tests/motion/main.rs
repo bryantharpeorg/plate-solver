@@ -6,6 +6,7 @@
 mod support;
 
 mod goto;
+mod imaging_run;
 mod imaging_track;
 mod model;
 mod mount_calls;
