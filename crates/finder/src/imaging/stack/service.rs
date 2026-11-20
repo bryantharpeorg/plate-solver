@@ -25,7 +25,8 @@ use crate::{
             HintSource, ImagingSolve, ImagingSolver, Region, SolveError, SolveFrame, SolveHint,
         },
         solving::{self, Ask},
-        Imaging, ImagingView, Lease, Refusal,
+        steering::{ExposureAsk, Verdict},
+        Imaging, ImagingView, Lease, Refusal, SettingsEdit,
     },
     session::Clock,
 };
@@ -92,6 +93,7 @@ pub struct Dropped {
     pub unreadable: u32,
     pub behind: u32,
     pub unprocessed: u32,
+    pub not_steady: u32,
 }
 
 impl Dropped {
@@ -107,6 +109,7 @@ impl Dropped {
             + self.unreadable
             + self.behind
             + self.unprocessed
+            + self.not_steady
     }
 
     fn count(&mut self, outcome: &str) {
@@ -120,6 +123,7 @@ impl Dropped {
             "settings" => &mut self.settings,
             "unreadable" => &mut self.unreadable,
             "unprocessed" => &mut self.unprocessed,
+            "not_steady" => &mut self.not_steady,
             _ => unreachable!("an outcome supplied by the worker"),
         };
         *count += 1;
@@ -766,73 +770,137 @@ impl Stacker {
         true
     }
 
-    async fn take_subs(&self, lease: Lease, waiting: Arc<Notify>, stopping: watch::Receiver<bool>) {
-        let mut failed = 0;
-        loop {
-            if *stopping.borrow() {
-                return;
-            }
-            // The gap before an exposure: 036 can wait here under this lease.
-            let view = match lease.take("sub").await {
-                Ok(view) => view,
-                Err(refusal) => {
-                    self.end("camera", Some(refusal.message));
+    async fn take_subs(
+        &self,
+        lease: Lease,
+        waiting: Arc<Notify>,
+        mut stopping: watch::Receiver<bool>,
+    ) {
+        let steering = self.imaging.steering();
+        let _hold = steering.hold();
+        let view = self.imaging.view();
+        // A camera that stopped being ready has no ask; its take below refuses.
+        let ask = match (&view.camera, &view.settings) {
+            (Some(camera), Some(settings)) => Some((
+                settings.exposure_ms,
+                ExposureAsk {
+                    wanted_s: settings.exposure_ms / 1000.0,
+                    shortest_s: camera.exposure_ms.min / 1000.0,
+                    sensor: (camera.width, camera.height),
+                    roi: Region::from(settings.roi),
+                    binning: settings.binning,
+                },
+            )),
+            _ => None,
+        };
+        let mut first = true;
+        let mut restore_ms = None;
+        async {
+            let mut failed = 0;
+            loop {
+                if *stopping.borrow() {
                     return;
                 }
-            };
-            let Some(frame) = view.frame else {
-                self.end("camera", Some(state_words(&view)));
-                return;
-            };
-            // Stop's abort may have run just before this take created its frame.
-            if *stopping.borrow() {
-                self.imaging.abort().await;
-            }
-            let frame = self.imaging.ended(frame.id).await;
-            match frame.state {
-                "saved" => {
-                    failed = 0;
-                    {
-                        let mut counts = self.counts.lock().expect("stack counts");
-                        let run = counts.as_mut().expect("the taking stack");
-                        run.view.taken += 1;
-                        run.subs.push(Sub::new(&frame, &run.view.id, "unprocessed"));
-                        if run.waiting.len() == QUEUE_SUBS {
-                            let behind = run.waiting.pop_front().expect("a full queue");
-                            run.subs
-                                .iter_mut()
-                                .rev()
-                                .find(|sub| sub.frame_id == behind.id)
-                                .expect("a taken sub")
-                                .outcome = "behind";
-                            run.view.dropped.behind += 1;
+                if let Some((observer_ms, ask)) = ask {
+                    let go = tokio::select! {
+                        biased;
+                        _ = stopping.wait_for(|stopping| *stopping) => return,
+                        go = steering.before_exposure(ask) => go,
+                    };
+                    if first {
+                        first = false;
+                        let wanted_ms = go.exposure_s * 1000.0;
+                        if (wanted_ms - observer_ms).abs() > 0.0005 {
+                            let edit = SettingsEdit {
+                                exposure_ms: Some(wanted_ms),
+                                ..Default::default()
+                            };
+                            match lease.set(edit).await {
+                                Ok(_) => restore_ms = Some(observer_ms),
+                                Err(refusal) => {
+                                    self.end(
+                                        "camera",
+                                        Some(format!(
+                                            "the exposure could not be set to {wanted_ms} ms: {}",
+                                            refusal.message
+                                        )),
+                                    );
+                                    return;
+                                }
+                            }
                         }
-                        run.waiting.push_back(frame);
-                        run.view.queued = run.waiting.len() as u32;
                     }
-                    waiting.notify_one();
                 }
-                "failed" => {
-                    {
-                        let mut counts = self.counts.lock().expect("stack counts");
-                        let run = counts.as_mut().expect("the taking stack");
-                        run.subs
-                            .push(Sub::new(&frame, &run.view.id, "frame_failed"));
-                        run.view.taken += 1;
-                        run.view.dropped.frame_failed += 1;
-                    }
-                    failed += 1;
-                    if failed == FAILED_IN_A_ROW {
-                        self.end("camera", frame.error);
+                let view = match lease.take("sub").await {
+                    Ok(view) => view,
+                    Err(refusal) => {
+                        self.end("camera", Some(refusal.message));
                         return;
                     }
-                }
-                "aborted" => {
-                    self.end("stopped", None);
+                };
+                let Some(frame) = view.frame else {
+                    self.end("camera", Some(state_words(&view)));
                     return;
+                };
+                // Stop's abort may have run just before this take created its frame.
+                if *stopping.borrow() {
+                    self.imaging.abort().await;
                 }
-                _ => unreachable!("Imaging::ended answers an ended frame"),
+                let frame = self.imaging.ended(frame.id).await;
+                match frame.state {
+                    "saved" => {
+                        failed = 0;
+                        {
+                            let mut counts = self.counts.lock().expect("stack counts");
+                            let run = counts.as_mut().expect("the taking stack");
+                            run.view.taken += 1;
+                            run.subs.push(Sub::new(&frame, &run.view.id, "unprocessed"));
+                            if run.waiting.len() == QUEUE_SUBS {
+                                let behind = run.waiting.pop_front().expect("a full queue");
+                                run.subs
+                                    .iter_mut()
+                                    .rev()
+                                    .find(|sub| sub.frame_id == behind.id)
+                                    .expect("a taken sub")
+                                    .outcome = "behind";
+                                run.view.dropped.behind += 1;
+                            }
+                            run.waiting.push_back(frame);
+                            run.view.queued = run.waiting.len() as u32;
+                        }
+                        waiting.notify_one();
+                    }
+                    "failed" => {
+                        {
+                            let mut counts = self.counts.lock().expect("stack counts");
+                            let run = counts.as_mut().expect("the taking stack");
+                            run.subs
+                                .push(Sub::new(&frame, &run.view.id, "frame_failed"));
+                            run.view.taken += 1;
+                            run.view.dropped.frame_failed += 1;
+                        }
+                        failed += 1;
+                        if failed == FAILED_IN_A_ROW {
+                            self.end("camera", frame.error);
+                            return;
+                        }
+                    }
+                    "aborted" => {
+                        self.end("stopped", None);
+                        return;
+                    }
+                    _ => unreachable!("Imaging::ended answers an ended frame"),
+                }
             }
+        }
+        .await;
+        // Restore before the task's lease drops, on every way out of the loop.
+        if let Some(ms) = restore_ms.take() {
+            let edit = SettingsEdit {
+                exposure_ms: Some(ms),
+                ..Default::default()
+            };
+            let _ = lease.set(edit).await;
         }
     }
 
@@ -1032,6 +1100,10 @@ impl Worker {
                 self.stacker
                     .imaging
                     .note_solve(&accepted.frame, sub.id, &accepted.solve);
+                self.stacker
+                    .imaging
+                    .steering()
+                    .accepted(&accepted.frame, &accepted.solve);
                 if display {
                     let id = self.stacker.view().expect("the working stack").id;
                     self.stacker.make_picture(&id).await;
@@ -1066,6 +1138,9 @@ impl Worker {
             start,
             exposure_s: sub.exposure_ms / 1000.0,
         };
+        if let Verdict::Drop(reason) = self.stacker.imaging.steering().check(&frame) {
+            return Err(reason);
+        }
         let settings = SubSettings {
             width,
             height,

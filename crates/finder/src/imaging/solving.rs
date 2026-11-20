@@ -458,6 +458,9 @@ impl Imaging {
         session: Arc<Session>,
         live: Option<Arc<crate::live::Live>>,
     ) {
+        let source_session = session.clone();
+        self.steering()
+            .set_source(Arc::new(move || source_session.steered()));
         let history = live.map(|live| {
             tokio::spawn(history(
                 live,
