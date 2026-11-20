@@ -47,6 +47,8 @@ pub const DEFAULT_EXPOSURE_MS: f64 = 1000.0;
 pub const CALL_WAIT: Duration = Duration::from_secs(5);
 /// The limit on the call a settings change waits for.
 pub const SET_WAIT: Duration = Duration::from_secs(30);
+/// The limit on the node's answer to the abort of an exposure (043).
+pub const ABORT_WAIT: Duration = Duration::from_secs(5);
 
 /// The words of a call that ran out of `CALL_WAIT`.
 const NO_ANSWER: &str = "the scope node did not answer within 5 s";
@@ -763,6 +765,8 @@ impl Imaging {
     /// the frame `aborted` when the node's `Aborted` arrives; a frame still
     /// being received is ended here, its task stopped and its stream dropped.
     /// With nothing in progress nothing changes.
+    /// A call the node fails, or does not answer within `ABORT_WAIT`, ends the
+    /// frame here too, and the call is dropped (043).
     pub async fn abort(&self) -> ImagingView {
         enum Stop {
             /// The exposure is still running on the node.
@@ -797,8 +801,9 @@ impl Imaging {
             }
             Stop::Exposing(mut client, task) => {
                 // The task ends the frame when the node's `Aborted` arrives;
-                // a failed call ends it here.
-                if client.abort().await.is_err() {
+                // a failed call, or one not answered within `ABORT_WAIT`, ends
+                // it here (043).
+                if !matches!(time::timeout(ABORT_WAIT, client.abort()).await, Ok(Ok(()))) {
                     task.abort();
                     self.end_aborted();
                 }
