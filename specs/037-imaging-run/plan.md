@@ -2733,7 +2733,7 @@ second form, and which gained a bullet at 180″ and 150″ for the first). Its 
 settles for 2 s after its first rates, so each wait for a steady tracker is that much
 longer (§ The console's mount part). It is not steady while 038's push reads `moving`,
 which § Risks had as not known. And its stack also waits for its exposure limit to rise,
-with the tracker steady, so the sentence of `paused_by_tracker` names the tracker and no
+with the tracker steady, so the sentence of `paused_by_tracker` names no
 cause (US2-S3). No story, scenario or FR number moved and no scenario was added. In the
 record below US5-S3's assertion gained one clause, and nothing else changed: it is
 65,440 B of the 65,536 a record may be. None of it has been run.
