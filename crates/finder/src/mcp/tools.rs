@@ -13,6 +13,7 @@ use serde_json::{json, Value};
 
 use crate::api;
 use crate::imaging::calibration::service::{CalibrationView, DarksRequest, FlatsRequest};
+use crate::imaging::routes::SteeringEdit;
 use crate::imaging::stack::{display, service::StartRequest};
 use crate::session::SessionEdit;
 use crate::AppState;
@@ -45,6 +46,26 @@ struct StackingArguments {
     focus_gate: Option<bool>,
     gains: Option<Vec<f64>>,
     stretch: Option<f64>,
+}
+
+#[derive(rmcp::schemars::JsonSchema)]
+#[expect(
+    dead_code,
+    reason = "schema only; SteeringEdit parses the actual arguments"
+)]
+struct SteeringArguments {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "bool")]
+    on: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "f64")]
+    smear_px: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "f64")]
+    step_share: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "f64")]
+    rate_share: Option<f64>,
 }
 
 #[derive(rmcp::schemars::JsonSchema)]
@@ -947,6 +968,23 @@ impl Console {
             }
         }
         result
+    }
+
+    #[tool(description = "Set what steers the tracker during a live stack, as PUT /api/imaging/steering does: on, smear_px, step_share and rate_share, each optional. Read the result in the steering part of get_imaging_camera.",
+        input_schema = rmcp::handler::server::common::schema_for_input::<SteeringArguments>().expect("steering schema"),
+        output_schema = object_schema())]
+    async fn set_steering(&self, arguments: JsonObject) -> CallToolResult {
+        let result = (|| {
+            let edit = serde_json::from_value::<SteeringEdit>(Value::Object(arguments))
+                .map_err(|error| error.to_string())?;
+            let imaging = self
+                .state
+                .imaging()
+                .ok_or_else(|| "this console takes no imaging frames".to_owned())?;
+            let view = crate::imaging::routes::apply_steering(&imaging, edit)?;
+            Ok(serde_json::to_value(view).expect("imaging view JSON"))
+        })();
+        tool_result(result)
     }
 }
 
