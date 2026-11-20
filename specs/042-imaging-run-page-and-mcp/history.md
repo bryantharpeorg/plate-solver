@@ -63,7 +63,9 @@ written for, in the story the probe named.
     region. The other answer sizes the subs as taken: `settings.roi.width` ×
     `settings.roi.height`, each divided by `settings.binning` and rounded up, a binning
     of 0 counting as 1, × 2 bytes; with it a view with binning 0 would no longer read
-    `About Infinity GB`. Not run by the probe.
+    `About Infinity GB`. Not run by the probe. The owner chose the whole sensor on
+    2026-11-20 ("Yes, whole sensor"): the estimate is for planning disk room, so it
+    errs high.
   - R8's count: "sixteen" in `## MCP clients` depends on `main` at landing, so whether
     US11-S3 pins the word is the re-anchoring's choice, as the round said.
 - Q: What of 037's and 041's folds did this trio need? → A: Every name the trio takes
