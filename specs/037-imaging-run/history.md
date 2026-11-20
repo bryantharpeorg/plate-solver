@@ -735,6 +735,13 @@ run.
 | US1's tests of a refused start, a mount that is not steady, a stop, the mount's endings and a dropped runner are written by US2, in US2's test module | Leaving them in US1; a story of its own for the script | US1 was 93.5 % of 64 KiB as probed, and the owner's answers of 2026-11-19 added code to it. Tests can move with no change to the Work Graph, where a new story cannot (spec § Clarifications, the owner's answer 16; § Risks). The move left US1 at 86 %, and the owner then split it as well (the next row). |
 | The run's parts, its words and its script are a story of their own, US12, built before the machine; the view's types and the words made from a run's state stay with the machine, in US1 | US1 as one story of about 56 KB; the script alone as a story; every word and every type in US12, the state's messages and the view among them | The owner's split of 2026-11-19: US1 was estimated at 86 % of 64 KiB with about 50 KB of code, and factory builds have run to 1.35 times their probe build. The cut is by what can be proven without a run. An ending's reason and sentence, the request, `run_id` and the script's contract need none, and US12 asserts them directly. A state's message, a focus sentence and a warning are made from a run's own state, and `RunView` is `#[non_exhaustive]`, so a test outside the crate cannot build one: with those in US12 it would hold code its own tests could not reach, or new public functions written only to be tested, and would be estimated at about 55 KB, 84 %, against 66 % as cut. The script alone would have left the machine with every type, at about 44 KB. The story has the number 12 so that no other id moves, as 035's US11 has. |
 
+Added at the re-anchor of 2026-11-20, for principle V of constitution 1.3.0, which asks a
+plan to name what it looked at and why it turned it down:
+
+| Decision | Rejected | Why |
+|---|---|---|
+| The imaging run is this project's own code, a machine in the console over five parts | Ekos's scheduler and sequencer in KStars (GPL-2.0-or-later) | KStars is a desktop application that would replace the console as the place the run is driven, not a service the console can call. Nothing of it is copied. |
+
 ## Dated notes and probe asides moved out of the trio
 
 Each passage below was in the trio as quoted, with the file it was in before the

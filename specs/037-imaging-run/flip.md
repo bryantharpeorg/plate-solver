@@ -6,38 +6,50 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
 
 041's and 042's flip.md hold these items for their own stories, under the same numbers.
 
-1. **The earlier specs have landed.** Met for `014-goto`, `015-tracking`, `016-mcp`
-   and `017-console-stop-confirm`, and, by 2026-11-19, for `030-imaging-camera-link`,
-   `031-imaging-frames-on-console`, `032-imaging-solve-and-aim-point`,
-   `033-focus-reading-and-aid`, `034-dark-and-flat-frames` and
-   `038-track-follows-a-push`, whose `push` the `pushed_away` ending reads. Not met for
-   `035-live-stack`, which is flipped and being built, and `036-tracking-from-subs`, a
-   draft beside this one.
-   Not met for `040-stack-waits-for-steady`, cut from 036 on 2026-11-20.
-2. **This trio is re-anchored to its seven predecessors after they land.** Not met. Every
-   name in plan.md § What 030 to 036 offer is re-read on `main`, and the last story of each
-   spec that writes a shared file replaces the one named in plan.md § Refinement Record. 030, 031,
-   032 and 034 were reviewed and fixed before this text was written; 033, 035 and 036
-   were drafts then, and have since been reviewed too. Where one of them lands
-   offering something else than the table says, the part that calls it changes, and where it offers nothing that a part needs, the
-   gap goes to the owner before the flip. Thirteen points are known to need that reading, and a fourteenth is
-   closed. Those this spec's own code rests on are here; the rest, which the console's own
-   parts rest on, are in 041's flip.md § Prerequisites 2:
+1. **The earlier specs have landed.** Met: every spec in `depends_on_landed` has landed
+   on `main`, each with its last story's merge. `014-goto` at `a43747f7` (US9, #159),
+   `015-tracking` at `a02dc35b` (US9, #177), `016-mcp` at `bcf37652` (US6, #186),
+   `017-console-stop-confirm` at `c1ed2957` (US4, #206), `030-imaging-camera-link` at
+   `49f8dcd2` (US8, #269), `031-imaging-frames-on-console` at `e9687ce9` (US9, #279),
+   `032-imaging-solve-and-aim-point` at `670ddcf9` (US7, #288),
+   `033-focus-reading-and-aid` at `80f414ff` (US7, #298), `034-dark-and-flat-frames` at
+   `002dbef8` (US8, #309), `035-live-stack` at `52785403` (US10, #321) and
+   `038-track-follows-a-push`, whose `push` the `pushed_away` ending reads, at
+   `1c2b427b` (US3, #260). `036-tracking-from-subs` was flipped to `ready` (`6287c51b`,
+   #325) and landed on 2026-11-20 with its seven stories, #327 to #333, the last US12 at
+   `fc161a54` (#333). `040-stack-waits-for-steady`, cut from 036 on 2026-11-20, was
+   flipped to `ready` (`8b844b30`, #334) and landed the same day with its five stories:
+   US6 at `f1847647` (#336), US10 at `2abc9a6b` (#337), US7 at `dac28058` (#338), US8 at
+   `112b3069` (#339) and US11 at `6d79292b` (#340).
+2. **This trio is re-anchored to its predecessors after they land.** Met on 2026-11-20,
+   on `main` at `6d79292b`, after 040 landed. 030 to 036, 038 and 040 have landed, and
+   the trio is read against their code: every name in plan.md § What 030 to 036 offer
+   was re-read in the landed code, as built, and is cited at its line there; and every
+   shared write in plan.md § Refinement Record that names another spec names the story
+   that last wrote the file on `main` (`git log -1`), all five as the drafts had named
+   them. None of them offers something else than the table says. Those this spec's own
+   code rests on are here, as the landed code has them; the rest, which the console's
+   own parts rest on, are in 041's flip.md § Prerequisites 2:
    - closed: the rule for a folder's name is written once. 035 offers it as the pure
-     function `crate::imaging::stack::service::label`, which its `AppState::target_label`
-     calls, and `run::label` calls it too (plan.md § The parts and the words); US12-S2 holds it
-     to the worked
-     example `NGC 1976` → `NGC-1976`. The re-anchoring re-reads only the function's path;
-   - 040's `Steering::waiting` is true only inside 035's loop; `paused_by_tracker` rests
-     on it. It is also true while the stack waits for its exposure limit to rise, with
+     function `crate::imaging::stack::service::label`
+     (`crates/finder/src/imaging/stack/service.rs:45`), which its
+     `AppState::target_label` calls (`crates/finder/src/api.rs:382`), and `run::label`
+     calls it too (plan.md § The parts and the words); US12-S2 holds it to the worked
+     example `NGC 1976` → `NGC-1976`. Its path is as plan.md names it;
+   - 040's `Steering::waiting` (`crates/finder/src/imaging/steering.rs:512`) is set only
+     inside `Steering::before_exposure`, which only 035's taker awaits
+     (`crates/finder/src/imaging/stack/service.rs:808`); `paused_by_tracker` rests on it.
+     It is also true while the stack waits for its exposure limit to rise, with
      `steering.pause` `limit` and the tracker steady (040 FR-022), so the run's sentence
      for `paused_by_tracker` names no cause, and the run does not read
      `steering.pause` (plan.md § The run's words);
-   - 036's `crate::imaging::steering::FAR_ARCSEC` is public and 180.0, and its steering
-     stands back from a stack whose first tracking error is longer (036 FR-014); the two
-     forms of the warnings for a target stacked off the centre rest on it. 036's list of
-     what this spec reads names the view's `steering.far_arcsec` and not the constant,
-     so the re-anchoring reads the constant's path as it reads `label`'s;
+   - 036's `crate::imaging::steering::FAR_ARCSEC` is public and 180.0
+     (`crates/finder/src/imaging/steering.rs:131`), and its steering stands back from a
+     stack whose first tracking error is longer (036 FR-014,
+     `crates/finder/src/imaging/steering.rs:578`); the two forms of the warnings for a
+     target stacked off the centre rest on it. 036's list of what this spec reads names
+     the view's `steering.far_arcsec` and not the constant; the constant's path is as
+     plan.md names it;
 3. **The lease of the imaging camera exists.** Met in the drafts. Only 041's camera part
    touches it; the five points the re-anchoring reads are in 041's flip.md
    § Prerequisites 3. US1-S2 and US2-S10 of this spec rest on it through the script.
@@ -104,11 +116,10 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
    under the mutation it was written for.
 6. **The plan document, ADR-0002, the glossary's imaging terms and the research note
    are on `main`.** Met by 2026-11-19: all four are on `main`.
-7. **`main` is still as read.** Met on 2026-11-15: every `path:line` here was read at
-   49bb210, and read again at 49bb210 after the audit, when `main` had not moved; no
-   cited line had moved, and `crates/finder/src/targets.rs:39` replaced a citation one
-   line above the `struct` it names. It is re-read at the flip, because 030 to 036
-   change most of the files cited.
+7. **`main` is still as read.** Met on 2026-11-20 by the re-anchoring: every `path:line`
+   in the trio was read by its content on `main` at `6d79292b`, and each that had moved
+   since 49bb210, where the draft read them, now gives its line there. It is read again
+   at the flip if `main` has moved since.
 8. **The real mount.** Not met, and outside the factory: a GoTo to a target and Track
    have not run on the real mount (the plan document, § Before any flip, 4). The spec
    can be built before that; the run is not used at the telescope until it is. The

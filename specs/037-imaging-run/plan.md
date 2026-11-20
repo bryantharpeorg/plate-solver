@@ -34,7 +34,8 @@ stopped while still slewing, and holds no number sized to one telescope.
 **Language/Version**: Rust (MSRV 1.96).
 
 **Primary Dependencies**: nothing new. `finder` already has `tokio` with `sync` and
-`time`, `serde` and `serde_json` (`crates/finder/Cargo.toml:32`), and `rmcp`.
+`time` (`crates/finder/Cargo.toml:33`), `serde` and `serde_json`
+(`crates/finder/Cargo.toml:31`, `crates/finder/Cargo.toml:32`), and `rmcp`.
 
 **Storage**: `run.json` under the console's imaging folder (031: `imaging/` in the state
 folder, or `--imaging-dir`): in the stack's folder, `runs/<stack id>/`, beside 035's
@@ -102,7 +103,7 @@ three routes, in five stories.
 | II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS`, `ergane.yaml` or `playwright.config.ts` is edited. The only edits to existing test files are the `mod` lines spec.md SC-002 names. |
 | III. Tests first, independent expectations | Oracles: for the machine, the words, states and call lists each scenario states, compared with what a scripted stand-in recorded; for the real parts, the simulator's truth (the true aim point, the true centre of the imaging frame, the mount's true motion), the session, and the answers of 031's and 033's own routes. `run.json` and `stack.json` are parsed by the tests themselves. Clocks are injected; virtual time only in tests and `finder --simulate`. |
 | IV. Critical paths | No `unsafe`, no dependency or `Cargo.toml` change, no database-format change, nothing under `proto/`, nothing in `crates/scope-link`. |
-| V. Proven open source first, honest licensing | The finder camera's solver is untouched. The run reaches ASTAP only through 032's solver port; principle V of constitution 1.3.0 allows that. |
+| V. Proven open source first, honest licensing | The imaging run is this project's own code, and principle V of constitution 1.3.0 asks a plan to name what it looked at and why it turned it down. Ekos's scheduler and sequencer in KStars (GPL-2.0-or-later) were looked at and turned down: KStars is a desktop application that would replace the console as the place the run is driven, not a service the console can call (history.md § Decisions and the alternatives rejected). Nothing of it is copied. The finder camera's solver is untouched. The run reaches ASTAP only through 032's solver port; principle V of constitution 1.3.0 allows that. |
 
 ## Project Structure
 
@@ -128,20 +129,19 @@ crates/finder/
 
 ## Interfaces
 
-Everything 030 to 036 create is named as their plan.md gives it in the drafting
-worktree: each of the seven reviewed by a second agent, and all the trios of the series
-audited side by side. All of it is re-read on `main` before the flip (flip.md
-flip.md § Prerequisites 2).
+030 to 036, 038 and 040 have landed, and this trio is read against their code: every
+name below was re-read on `main` at `6d79292b` in the re-anchoring of 2026-11-20, and
+is named as the landed code has it (flip.md § Prerequisites 2).
 
 ### What 030 to 036 offer (read, never written, by this spec)
 
-| What a part needs | From | Name | Where it is written |
+| What a part needs | From | Name | Where it is on `main` |
 |---|---|---|---|
-| why a request was not carried out | 031 | `crate::imaging::Refusal { status, message }` | 031 plan.md § The console's imaging state |
-| the UTC text of a time | 031 | `crate::imaging::fits::utc(unix_s) -> (String, String)` | 031 plan.md § FITS at the console |
-| a target's name as a folder's name takes it | 035 | `crate::imaging::stack::service::label(name: &str) -> String` | 035 spec.md FR-035, US8-S3; 035 plan.md § The stack on the console |
-| the imaging folder | 034 | `Imaging::root()` | 034 plan.md § 031's imaging state |
-| how far from the set point a stack may begin and still be steered | 036 | `crate::imaging::steering::FAR_ARCSEC`, 180.0 | 036 plan.md § The steering; 036 spec.md FR-014 |
+| why a request was not carried out | 031 | `crate::imaging::Refusal { status, message }` | `crates/finder/src/imaging/mod.rs:281` (031's US1), with the constructors `bad_request` and `conflict`, private to `crate::imaging` and so open to `run.rs`, its child |
+| the UTC text of a time | 031 | `crate::imaging::fits::utc(unix_s) -> (String, String)` | `crates/finder/src/imaging/fits.rs:440` (031's US2) |
+| a target's name as a folder's name takes it | 035 | `crate::imaging::stack::service::label(name: &str) -> String` | `crates/finder/src/imaging/stack/service.rs:45` (035's US8); 035 spec.md FR-035, US8-S3 |
+| the imaging folder | 034 | `Imaging::root()` | `crates/finder/src/imaging/mod.rs:453` (034's US4) |
+| how far from the set point a stack may begin and still be steered | 036 | `crate::imaging::steering::FAR_ARCSEC`, 180.0 | `crates/finder/src/imaging/steering.rs:131` (036's US4); 036 spec.md FR-014 |
 
 The rest of what 030 to 038 and 040 offer is read by the console's own parts, which
 `041-imaging-run-on-the-rig` writes.
@@ -372,8 +372,9 @@ pub fn run_id(started_at: f64, name: &str) -> String;
 
 **`label`** is one line, `crate::imaging::stack::service::label(name)`: the pure
 function 035 offers for the rule its stack uses to name its folder, and which 035's
-`AppState::target_label` calls on the session's target (035 plan.md § The stack on the
-console, § The console). The rule is written once, in 035; the machine passes the name
+`AppState::target_label` calls on the session's target
+(`crates/finder/src/imaging/stack/service.rs:45`, `crates/finder/src/api.rs:382`). The
+rule is written once, in 035; the machine passes the name
 it was handed and reads no session, so it stays mount-neutral (§ Plan traps 18). US12-S2
 pins the answer to the worked example `NGC 1976` → `NGC-1976`.
 **`run_id`** takes the second string of 031's `crate::imaging::fits::utc(started_at)`
@@ -790,16 +791,17 @@ stands back from a stack whose first tracking error is longer, and the view then
 constant and writes no 180 of its own, as `label` calls 035's rule. It judges by the
 offset of the run's last solve, before the stack has taken a sub, and 036 by the stack's
 first tracking error, so within a few arcseconds of 180″ the two can fall on different
-sides; the steering's block on the page then says what the steering does (040 plan.md
-§ The page).
+sides; the steering's block on the page then says what the steering does (040's
+`SteeringBlock`, `crates/finder/web/src/components/SteeringBlock.tsx:34`).
 
 **`paused_by_tracker` names no cause.** 040's stack waits before an
 exposure for more than a mount that settles: its view's `steering.pause` has a word for
 a start, a take-up, a measurement, the keyhole pass, a push and a stopped axis, and
 `limit` while the tracker is steady and its exposure limit is under half the exposure
-held (040 FR-021, FR-022). The stack part hands the machine `Steering::waiting()` alone,
-so the run reads no such word, and its one sentence is true of every one of them. 040's
-block, on the same page, shows the sentence of the word.
+held (040 FR-021, FR-022). The stack part hands the machine `Steering::waiting()`
+(`crates/finder/src/imaging/steering.rs:512`) alone, so the run reads no such word, and
+its one sentence is true of every one of them. 040's block, on the same page, shows the
+sentence of the word (`crates/finder/web/src/components/SteeringBlock.tsx:7`).
 
 ### The script (`crates/finder/src/imaging/run/script.rs`, new, US12)
 
@@ -913,13 +915,15 @@ pub unfinished_run: Option<String>,
 pub(crate) fn attach_run(&self, runner: &Arc<run::Runner>);
 ```
 
-It follows 035's `attach_stack` (035 plan.md § 031's imaging state): wherever `Imaging`
-builds the `ImagingView` it answers, after its own lock is released and where 035 sets
-`stack`, it sets `run` from `attached.view()` when a runner is attached and still alive,
+It follows 035's `attach_stack` (`crates/finder/src/imaging/mod.rs:468`).
+`Imaging::view` (`crates/finder/src/imaging/mod.rs:478`) builds the `ImagingView` it
+answers in one place; after its own lock is released, and after 035 sets `stack` and
+036 sets `steering`, the view's last part (`crates/finder/src/imaging/mod.rs:541`), it
+sets `run` from `attached.view()` when a runner is attached and still alive,
 **whatever the view's `state`**, and `unfinished_run` from `attached.unfinished()` in
 the same place. On `main` 034 sets `calibration` there only while the view is
-`ready`; `run` and `unfinished_run`, like 035's `stack`, are set outside that test
-(US3-S5). `ImagingView::off()` has `run` `None`: a console
+`ready`; `run` and `unfinished_run`, like 035's `stack` and 036's `steering`, are set
+outside that test (US3-S5). `ImagingView::off()` has `run` `None`: a console
 without imaging has no runner either. The reference is weak because the runner's parts
 hold the `Arc<Imaging>`. `attached.view()` takes the runner's lock, which is why the
 runner never calls a part while it holds that lock (§ The machine, § Plan traps 23).
@@ -1029,9 +1033,9 @@ pub fn imaging_runner(&self) -> Option<Arc<crate::imaging::run::Runner>>;
 `with_imaging_run_steps` builds `Runner::with_folder(steps, self.clock.clone(),
 imaging.root().to_path_buf())` (`Imaging::root`, 034 US4), calls
 `imaging.attach_run(&runner)` and keeps it. `SessionResponse`
-(`crates/finder/src/api.rs:652`) does not change: its `imaging` is 031's view, which now
-carries `run`. `start_motion` (`crates/finder/src/api.rs:593`) and `stop`
-(`crates/finder/src/api.rs:904`) are already `pub(crate)`.
+(`crates/finder/src/api.rs:799`) does not change: its `imaging` is 031's view, which now
+carries `run`. `start_motion` (`crates/finder/src/api.rs:740`) and `stop`
+(`crates/finder/src/api.rs:1059`) are already `pub(crate)`.
 
 `041-imaging-run-on-the-rig` adds `with_imaging_run` here, and
 `042-imaging-run-page-and-mcp` one line of `start_motion`.
@@ -1049,13 +1053,13 @@ struct ContinueEdit { anyway: bool }
 ```
 
 - `start_run` takes `SessionWrite` and `Result<Json<RunRequest>, JsonRejection>` through
-  `sim_json` (`crates/finder/src/api.rs:570`), so a `Content-Type` other than
+  `sim_json` (`crates/finder/src/api.rs:717`), so a `Content-Type` other than
   `application/json` is 415, a body that is not JSON 400, and JSON of another shape 400.
   Then, with no runner, 409 `this console runs no imaging runs`. Then
   `api::start_motion(&state, "page", "imaging_run", || …)`, whose closure awaits
   `runner.start(request, By::Page)` and turns a `Refusal` into
   `ApiError::new(status, message)`; a refusal leaves the motion record as it was
-  (`crates/finder/src/api.rs:644`). It answers `Json` of the imaging view.
+  (`crates/finder/src/api.rs:791`). It answers `Json` of the imaging view.
 - `stop_run` takes `SessionWrite` and no body: no runner is the same 409; otherwise
   `runner.stop().await`, and the imaging view.
 - `continue_run` takes `SessionWrite` and `Result<Json<ContinueEdit>, JsonRejection>`
@@ -1243,19 +1247,18 @@ story.
 | A console dropped in the middle of a run keeps Track on through something the imaging state of 030 to 036 holds. | 037 adds no delay of its own: a dropped `Runner` aborts its task and lets its parts go (US2-S9). 035's stack holds the session until its take ends, so a test that drops a console while a stack runs waits more than 015's 2 s for the session. A console dropped during a focus pause leaves 033's aid, opened by the run, with no owner. In the binary the state lives until exit, so only tests are touched. |
 | A stop of the run waits up to about 7 s when it arrives during a re-centre. | Said in spec FR-005 and owner decision 14, and asserted on the script (041's US5-S3). The console's Stop does not wait: it stops the mount at once, and the run then ends `stopped`. |
 | The first imaging frame costs an exposure and a transfer the run does not use again. | Owner decision 20 names the two other answers. The first imaging frame is what tells a camera fault from poor focus. |
-| Track left on after an ending is forgotten. | Track's own guards end it at the minimum altitude and at sunrise, and the top bar's Stop stays visible while Track is on (`DESIGN.md:308`). Owner decision 1 is where it changes. |
+| Track left on after an ending is forgotten. | Track's own guards end it at the minimum altitude and at sunrise, and the top bar's Stop stays visible while Track is on (`DESIGN.md:328`). Owner decision 1 is where it changes. |
 | The console exits mid-run and the stacked picture is lost: 035 saves it only when the stack ends. | Said in spec § Edge Cases and the README. `run.json` is refreshed each minute, the subs stay on the disk, and the page says after the restart that the last run did not finish. Saving the stack as it goes is 035's, and is asked of it. |
 
 ## Refinement Record
 
-The re-anchoring (flip.md § Prerequisites 2) is still to do. Until then the record below
-names what the drafts named: its tests are the scenarios, its writes are the files
-§ Project Structure names, and its shared writes name the merge edge that orders two
-stories of this spec on one file, or the story of another spec that last writes the file
-among the drafts as they stood on 2026-11-15, read from each draft's own record, a story
-of 036 that went to 040 when 036 was split being named in 040. Each of those names is
-checked again at the re-anchoring. A test file an earlier story creates does not exist
-yet and cannot be listed as an existing test; what a later story must leave passing in it
+Its tests are the scenarios, its writes are the files § Project Structure names, and
+its shared writes name the merge edge that orders two stories of this spec on one file,
+or the story of another spec that last wrote the file on `main` before this spec does,
+read with `git log -1` at `6d79292b` by the re-anchoring of 2026-11-20: 035's US8 for
+`api.rs`, 036's US5 for `imaging/mod.rs`, `imaging/routes.rs` and `lib.rs`, and 040's
+US8 for the `console` test binary's `main.rs`, each as the drafts had named it. A test
+file an earlier story creates does not exist yet and cannot be listed as an existing test; what a later story must leave passing in it
 is under that story's `preserved_behavior`. The record's `open_questions` are empty
 because the validator refuses a record that holds any; what is not established is in
 § Risks and flip.md, and what the owner must settle is in flip.md. Nothing in this record
@@ -1506,17 +1509,17 @@ stories:
     other_spec: 035-live-stack
     other_story: US8
     disposition: merge_order
-    reason: "037 depends_on_landed 035-live-stack, whose US8 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "037 depends_on_landed 035-live-stack, whose US8 last wrote this file on main (6a519d49, #319)"
   - path: crates/finder/src/imaging/routes.rs
     other_spec: 036-tracking-from-subs
     other_story: US5
     disposition: merge_order
-    reason: "037 depends_on_landed 036-tracking-from-subs, whose US5 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "037 depends_on_landed 036-tracking-from-subs, whose US5 last wrote this file on main (72877199, #332)"
   - path: crates/finder/src/lib.rs
     other_spec: 036-tracking-from-subs
     other_story: US5
     disposition: merge_order
-    reason: "037 depends_on_landed 036-tracking-from-subs, whose US5 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "037 depends_on_landed 036-tracking-from-subs, whose US5 last wrote this file on main (72877199, #332)"
   open_questions: []
  US12:
   tests:
@@ -1560,7 +1563,7 @@ stories:
     other_spec: 036-tracking-from-subs
     other_story: US5
     disposition: merge_order
-    reason: "037 depends_on_landed 036-tracking-from-subs, whose US5 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "037 depends_on_landed 036-tracking-from-subs, whose US5 last wrote this file on main (72877199, #332)"
   - path: crates/finder/src/imaging/run.rs
     other_spec: 037-imaging-run
     other_story: US1
@@ -1570,7 +1573,7 @@ stories:
     other_spec: 040-stack-waits-for-steady
     other_story: US8
     disposition: merge_order
-    reason: "037 depends_on_landed 040-stack-waits-for-steady, whose US8 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "037 depends_on_landed 040-stack-waits-for-steady, whose US8 last wrote this file on main (112b3069, #339)"
   - path: crates/finder/tests/console/main.rs
     other_spec: 037-imaging-run
     other_story: US13

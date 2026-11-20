@@ -7,6 +7,7 @@ depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-con
 # the console's own parts; 042-imaging-run-page-and-mcp its page, MCP tools and README.
 # Depends on 014 to 017, 030 to 036, 038 and 040 having landed. State: draft, re-anchored to
 # `main` before the flip. history.md has how it got here; flip.md what the flip needs.
+# Re-anchored on 2026-11-20 to `main` at `6d79292b`, after 040 landed (#336 to #340).
 ---
 
 # Feature Specification: The Imaging Run
@@ -446,7 +447,7 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_ro
    and `{"anyway":true,"x":1}` answer 400; and that a foreign `Origin` answers 403.
 5. **Given** the scripted console with a run that is stacking, **When** a test sets the
    script's mount to `Ended(Ending::LinkLost)`, makes the simulator unresponsive
-   (`Simulator::set_unresponsive`, `crates/simulator/src/controls.rs:115`) and waits
+   (`Simulator::set_unresponsive`, `crates/simulator/src/controls.rs:117`) and waits
    until the imaging view's `state` is `no_link`, **Then** a committed test asserts that
    the view still carries `run`, with `state` `ended` and `ended.reason` `link_lost`.
 6. **Given** the scripted console with the script holding `take`, **When** a test reads
@@ -995,9 +996,10 @@ Its tests make no `Runner`, and those that await a part run under
 ## Assumptions
 
 - **Earlier features are in place.** Every spec this one names in `depends_on_landed` has
-  landed before it is built (flip.md § Prerequisites 1). Every `path:line` here was read
-  at 49bb210. A file that 030 to 036 create is named without a line, with the spec that
-  creates it.
+  landed (flip.md § Prerequisites 1), and the trio is read against their code. It was
+  re-anchored to that code on 2026-11-20 (flip.md § Prerequisites 2 and 7): every
+  `path:line` here was read by its content on `main` at `6d79292b`, whose line numbers
+  are cited; those the draft held were first read at 49bb210.
 - **Out of scope:**
   - an equatorial mount, meridian flips, dithering and any tracker but 015's as 036
     leaves it; the run is written so that none of them needs a change here;
