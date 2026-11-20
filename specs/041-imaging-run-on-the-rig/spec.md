@@ -1,12 +1,13 @@
 ---
 state: draft
-depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-confirm", "030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "034-dark-and-flat-frames", "035-live-stack", "036-tracking-from-subs", "037-imaging-run", "038-track-follows-a-push", "040-stack-waits-for-steady"]
+depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-confirm", "030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "034-dark-and-flat-frames", "035-live-stack", "036-tracking-from-subs", "037-imaging-run", "038-track-follows-a-push", "040-stack-waits-for-steady", "043-imaging-abort-answers-in-time"]
 # The imaging run, second of three pieces: the console's own mount, camera, focus, solver
 # and stack parts, the centring, the focus gate and its pause, the limits and the stack's
 # own endings, and the whole run in the binary (US4 to US8), on 037-imaging-run's machine.
-# Depends on 014 to 017, 030 to 038 and 040 having landed. State: draft, re-anchored to
+# Depends on 014 to 017, 030 to 038, 040 and 043 having landed. State: draft, re-anchored to
 # `main` after 037 lands and before the flip. history.md has how it got here; flip.md what
 # the flip needs.
+# Re-anchored on 2026-11-20 to `main` at `581be8c3`, after 037 landed (#344 to #348).
 ---
 
 # Feature Specification: The Imaging Run on the Console's Own Parts
@@ -51,7 +52,7 @@ Every scenario shares these definitions unless it says otherwise.
   simulated solver adapter, no aim point) with three changes: the state is built with
   `with_live_solver(Arc::new(crate::support::goto::Stars))` in place of `with_live()`,
   never after it, because each of the two starts a live loop and a GoTo of its own
-  (`crates/finder/src/api.rs:247`), so that a finder solve never leaves the paused
+  (`crates/finder/src/api.rs:293`), so that a finder solve never leaves the paused
   runtime (`crates/finder/tests/support/goto.rs:42`); the session's target is M42; and
   the test waits until the pointing model holds a sync before its steps. Its parts are
   named by each scenario: the console's own from `finder::imaging::run::console`, or
@@ -131,7 +132,7 @@ in US5.
      keeps this scenario true once US5 adds the centring loop;
    - the true offset, read when the test first sees `stacking`, is at most 110″: the
      tolerance and 20″ more, which allows the tracker's 10″ deadband twice over
-     (`crates/finder/src/tracking.rs:31`); and `run.centring.offset_arcsec` is within
+     (`crates/finder/src/tracking.rs:35`); and `run.centring.offset_arcsec` is within
      30″ of that true offset, the deadband three times over;
    - the imaging view's `frame.purpose` read `run` when the test first saw `stacking`;
    - at no sample in the 11.5 s after `track.state` first read `tracking` did
@@ -169,7 +170,7 @@ in US5.
    - after `Simulator::set_unresponsive(true)`, the run ends `link_lost`;
    - after `PUT /api/session` with `{"target":"M45"}`, the run ends `target_changed`
      and `track.state` is still `tracking` with `track.target.messier` `M42`;
-   - after `rig.mount.push_by(0.0, -2.0)` (`crates/simulator/src/mount.rs:269`), down and
+   - after `rig.mount.push_by(0.0, -2.0)` (`crates/simulator/src/mount.rs:278`), down and
      so behind the rising target, while
      the run stacks, the run ends `pushed_away` within 60 s, and `track.state` is still
      `tracking` with `track.push.state` `moving` or `following` (oracle: the session,
@@ -369,7 +370,7 @@ and `cargo nextest run -p finder --locked --test motion imaging_run_centring::`.
      gives 89.8″);
    - the true offset, read when the test first sees `stacking`, is at most the
      tolerance plus 20″, which allows the tracker's 10″ deadband twice over
-     (`crates/finder/src/tracking.rs:31`);
+     (`crates/finder/src/tracking.rs:35`);
    - the session's `aim.source` is `measured` and its `aim` is within 2.0 pixels of the
      true aim point in each axis: the 1.5 pixels 032 allows the same oracle with the
      mount at rest (032 US4-S1), and 0.5 pixel more for the tracker's 10″ deadband,
@@ -783,13 +784,13 @@ runs both; during development,
   console's Stop; the run ends `stopped` (US4-S3).
 - **An MCP client calls `set_tracking` or `goto_target` during a run.** `set_tracking`
   on for the same target changes nothing; off is Stop. `goto_target` is refused with
-  `Track is on`, as it is today (`crates/finder/src/api.rs:613`), but for the seconds
+  `Track is on`, as it is today (`crates/finder/src/api.rs:782`), but for the seconds
   in which a re-centre has Track off (below).
 - **Someone asks for an imaging frame, the focus aid, a set of darks or flats, or a
   stack during a run.** Each is refused. The lease refuses with the name of whoever
   holds the camera then, in 031 US9's words `the imaging camera is held by` and the
   name: the imaging run, the focus aid or the stack (US4-S4, US6-S7). The starts of
-  033, 034 and 035, as drafted, look for an imaging frame in flight only while nobody
+  033, 034 and 035, as they landed, look for an imaging frame in flight only while nobody
   holds the lease, so they too answer with the holder's name while the holder is
   exposing, and never `an exposure is in progress`.
 - **A run is asked for while one of those holds the camera.** The start is refused with
@@ -838,7 +839,7 @@ runs both; during development,
   the old aim point; an aim point 032 held back stays held under the new Track, so the
   next solve asks for another re-centre, and at worst a try is spent. A finder camera
   that gives a live pointing less often than every 5 s is already outside what 015's
-  tracker is built for (`crates/finder/src/tracking.rs:248`).
+  tracker is built for (`crates/finder/src/tracking.rs:339`).
 - **A newly measured aim point while Track is on.** 032 holds it back until Track is
   off, so the tracker never chases it and, since 038, it is never read as a push by
   hand that marks the pointing model's slip (032's FR-036; 032's owner decision 25, which
@@ -1097,9 +1098,11 @@ runs both; during development,
 ## Assumptions
 
 - **Earlier features are in place.** Every spec this one names in `depends_on_landed` has
-  landed before it is built, 037 among them (flip.md § Prerequisites 1). Every
-  `path:line` here was read at 49bb210. A file that 030 to 037 create is named without a
-  line, with the spec that creates it.
+  landed, 037 and 043 among them (flip.md § Prerequisites 1), and the trio is read
+  against their code. It was re-anchored to that code on 2026-11-20 (flip.md
+  § Prerequisites 2 and 7): every `path:line` here was read by its content on `main` at
+  `581be8c3`, whose line numbers are cited; those the draft held were first read at
+  49bb210. A file this spec creates is named without a line.
 - **Out of scope:**
   - an equatorial mount, meridian flips, dithering and any tracker but 015's as 036
     and 040 leave it; the run is written so that none of them needs a change here;

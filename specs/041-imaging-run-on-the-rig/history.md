@@ -212,6 +212,13 @@ that owns it; a story of 036 that went to `040-stack-waits-for-steady` is cited 
 | The time limit counts the clock from the start of stacking, pauses included | Counting only the time the stack is not paused | Its job is to end a forgotten run (spec owner decision 8). An unsteady tracker has no timeout of its own, and spec § Edge Cases tells the two apart. |
 | The console's own mount, camera and solver parts land one story before the loop that re-centres | The loop first, on the script alone; both in one story | US4 proves the parts on the moving mount with runs that need no re-centre and with the mount part alone (US4-S5). US5 then adds the loop, and the wait a re-centre needs, and proves a re-centre end to end. In one story the two passed 64 KiB by the review's estimate; the loop first would have left a story of rig tests with no product code. |
 
+Added at the re-anchor of 2026-11-20, for principle V of constitution 1.3.0, which asks a
+plan to name what it looked at and why it turned it down:
+
+| Decision | Rejected | Why |
+|---|---|---|
+| The run's parts are the console's own code, calling 030 to 036's code in process | Ekos's scheduler and sequencer in KStars (GPL-2.0-or-later), weighed with the run's design in 037's row V | KStars is a desktop application that would replace the console as the place the run is driven, not a service the console can call (037's plan.md § Constitution Check, row V). Nothing of it is copied. |
+
 ## Dated notes and probe asides moved out of the trio
 
 Each passage below was in the trio as quoted, with the file it was in before the

@@ -29,7 +29,8 @@ slewing, and holds no number sized to one telescope.
 **Language/Version**: Rust (MSRV 1.96).
 
 **Primary Dependencies**: nothing new. `finder` already has `tokio` with `sync` and
-`time`, `serde` and `serde_json` (`crates/finder/Cargo.toml:32`), and `rmcp`.
+`time` (`crates/finder/Cargo.toml:33`), `serde` and `serde_json`
+(`crates/finder/Cargo.toml:31`, `crates/finder/Cargo.toml:32`), and `rmcp`.
 
 **Storage**: `run.json` under the console's imaging folder (031: `imaging/` in the state
 folder, or `--imaging-dir`): in the stack's folder, `runs/<stack id>/`, beside 035's
@@ -106,7 +107,7 @@ need its parts, and the binary's line, in five stories.
 | II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS`, `ergane.yaml` or `playwright.config.ts` is edited. The only edits to existing test files are the `mod` lines spec.md SC-002 names. |
 | III. Tests first, independent expectations | Oracles: for the machine, the words, states and call lists each scenario states, compared with what a scripted stand-in recorded; for the real parts, the simulator's truth (the true aim point, the true centre of the imaging frame, the mount's true motion), the session, and the answers of 031's and 033's own routes. `run.json` and `stack.json` are parsed by the tests themselves. Clocks are injected; virtual time only in tests and `finder --simulate`. |
 | IV. Critical paths | No `unsafe`, no dependency or `Cargo.toml` change, no database-format change, nothing under `proto/`, nothing in `crates/scope-link`. |
-| V. Proven open source first, honest licensing | The finder camera's solver is untouched. The run reaches ASTAP only through 032's solver port; principle V of constitution 1.3.0 allows that. |
+| V. Proven open source first, honest licensing | The finder camera's solver is untouched. The run reaches ASTAP only through 032's solver port; principle V of constitution 1.3.0 allows that. The run's design and Ekos's scheduler and sequencer in KStars are weighed in 037's row V, and this spec's parts are the console's own code because they call 030 to 036's code in process. |
 
 ## Project Structure
 
@@ -131,16 +132,18 @@ crates/finder/
 `run.rs`, `script.rs`, `store.rs` and the routes are 037's; the page, the MCP tools and the
 README are `042-imaging-run-page-and-mcp`'s.
 
-## What 037-imaging-run provides (read as landed before the flip)
+## What 037-imaging-run provides (landed, read on `main` at `581be8c3`)
 
-`037-imaging-run` has landed all of this before any story here is built, and no story
-here changes any of it: a test file 037 created is an existing test. 037's plan.md gives
-each item in full, under the section named; the flip re-reads this section against the
-code on `main` (flip.md § Prerequisites 2).
+`037-imaging-run` has landed all of this (#344 to #348), and no story here changes any
+of it: a test file 037 created is an existing test. The trio is read against its code:
+this section was re-read on `main` at `581be8c3` on 2026-11-20 (flip.md § Prerequisites
+2), and each item names where it is in that code. 037's plan.md says why, under the
+section each item names.
 
-**The parts and the words** (`crates/finder/src/imaging/run.rs`; 037's § The parts and
-the words). The five traits and `Steps` are whole, and no story adds a method or a field;
-the console's own parts implement them, as the script does:
+**The parts and the words** (`crates/finder/src/imaging/run.rs`, from `StepFuture` at
+`crates/finder/src/imaging/run.rs:70` to `Steps` at `crates/finder/src/imaging/run.rs:379`;
+037's § The parts and the words). The five traits and `Steps` are whole, and no story adds
+a method or a field; the console's own parts implement them, as the script does:
 
 ```rust
 pub type StepFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -178,7 +181,7 @@ pub enum Ending {
 impl Ending {
     /// Its word in `ENDINGS`. Four variants answer `stopped`.
     pub fn reason(&self) -> &'static str;
-    /// The sentence of 037's plan.md § The run's words. `name` is the target's.
+    /// The sentence of the run's words. `name` is the target's.
     pub fn message(&self, name: &str, settings: &RunSettings) -> String;
 }
 
@@ -319,17 +322,20 @@ pub struct Steps {
 }
 ```
 
-and `POLL`, 250 ms, how often a run reads the mount and the stack; `label(name)`, a
-target's name as a folder's name takes it, which calls 035's
-`crate::imaging::stack::service::label`; and `Ending::reason` and `Ending::message`, with
-every ending's sentence.
+and `POLL`, 250 ms (`crates/finder/src/imaging/run.rs:30`), how often a run reads the
+mount and the stack; `label(name)` (`crates/finder/src/imaging/run.rs:405`), a target's
+name as a folder's name takes it, which calls 035's
+`crate::imaging::stack::service::label`; and `Ending::reason` and `Ending::message`
+(`crates/finder/src/imaging/run.rs:149`), with every ending's sentence.
 
-**The machine** (`run.rs`; 037's § The machine and 037's plan.md § Failed steps and counts in the
-machine). `Runner::new`, `Runner::with_folder`, `start`, `stop`, `resume` and `view` keep
-their signatures. `RunView` is `#[non_exhaustive]` and holds the keys of 037's FR-004,
-`centring`, `pause_ends_at` and `warnings` among them. The latest run lies under one std
-`Mutex` under which no part is called and nothing is awaited (§ Plan traps 23). The task,
-as 037 leaves it for the stories here to change:
+**The machine** (`run.rs`: `Runner` at `crates/finder/src/imaging/run.rs:671`, its
+task's steps at `crates/finder/src/imaging/run.rs:1069` and its ending at
+`crates/finder/src/imaging/run.rs:1209`; 037's § The machine and 037's plan.md § Failed
+steps and counts in the machine). `Runner::new`, `Runner::with_folder`, `start`, `stop`,
+`resume` and `view` keep their signatures. `RunView` is `#[non_exhaustive]` and holds the
+keys of 037's FR-004, `centring`, `pause_ends_at` and `warnings` among them. The latest
+run lies under one std `Mutex` under which no part is called and nothing is awaited
+(§ Plan traps 23). The task, as 037 leaves it for the stories here to change:
 - `guarded(step)` races a step against the stop signal and the mount's ending, read
   every `POLL`; `steady(show)` waits until the mount part reads `Tracking { steady:
   true }`, adding the words of a wait for the tracker to the state's message; `frame()`
@@ -368,7 +374,9 @@ as 037 leaves it for the stories here to change:
 | `stack.start` (037's US2), and `StackProgress::failed` (US7) | `Stopped` | `CameraFailed` | `SaveFailed` | `SolverUnavailable` | `SolverFailing` | `StackFailed` |
 | `mount.repoint` (US5) | `Stopped` | `MountFailed` | `MountFailed` | `MountFailed` | `MountFailed` | `MountFailed` |
 
-- 037's § The run's words is whole from 037's US1, with the words this spec's code first
+- 037's § The run's words is whole from 037's US1 (`Ending::message`, `Warning::words` at
+  `crates/finder/src/imaging/run.rs:520`, and the state's messages at
+  `crates/finder/src/imaging/run.rs:598`), with the words this spec's code first
   reaches: both messages of `centring`; the message of `focus_pause` for each verdict
   that pauses and for a check that did not finish; the warnings for a target stacked off
   the centre, after the last try and after four solves that measured no new aim point,
@@ -376,16 +384,20 @@ as 037 leaves it for the stories here to change:
   anyway, for an aid that could not be opened and for a check twice not steady. A
   warning already in the list is not added again.
 
-**The routes and the record** (037's § The console, 037's plan.md § The routes, 037's plan.md § The record).
+**The routes and the record** (`crates/finder/src/imaging/routes.rs:42`,
+`crates/finder/src/api.rs:370`, `crates/finder/src/imaging/run/store.rs:63`; 037's § The
+console, 037's plan.md § The routes, 037's plan.md § The record).
 `POST /api/imaging/run`, `DELETE /api/imaging/run` and `POST /api/imaging/run/continue`;
-the imaging view's `run` in every state of the view; `AppState::with_imaging_run_steps`
+the imaging view's `run` in every state of the view
+(`crates/finder/src/imaging/mod.rs:98`); `AppState::with_imaging_run_steps`
 and `AppState::imaging_runner`; and `run.json` in the stack's folder once the run
 stacks, holding `ended` and the counts read after the stack stopped. The route starts a
 run inside `api::start_motion` with `page` and `imaging_run`, which holds the motion lock
-around `Runner::start`.
+around `Runner::start` (`crates/finder/src/imaging/routes.rs:368`).
 
-**The script and the fixtures of the scenarios** (`finder::imaging::run::script`;
-037's § The script and 037's spec.md § User Scenarios), which every scripted test here
+**The script and the fixtures of the scenarios** (`finder::imaging::run::script`,
+`Script` at `crates/finder/src/imaging/run/script.rs:57`; 037's § The script and 037's
+spec.md § User Scenarios), which every scripted test here
 uses and no story here writes. A call is listed when it is made, before any hold:
 
 - **The script** is `finder::imaging::run::script::Script` (037's US12): one stand-in for all
@@ -396,7 +408,8 @@ uses and no story here writes. A call is listed when it is made, before any hold
   that is good with a reading and a record of 3.0″; a solve 0″ from the sensor's centre
   with a tolerance of 90″ and a `near_arcsec` of 450″ that moved the aim point; a
   tracker that was steady over any past window; and a stack that starts in the
-  folder `runs/2026-01-16T02-00-10Z-M42`, **the script's stack folder**, and runs with
+  folder `runs/2026-01-16T02-00-10Z-M42`, **the script's stack folder** (`STACK_FOLDER`,
+  `crates/finder/src/imaging/run/script.rs:37`), and runs with
   nothing stacked or dropped until it is stopped. A test changes one answer at a time:
   `set_mount`, `refuse`, `push_frame`, `push_focus`, `push_solve`, `fail_repoint`,
   `fail_open_aid`, `fail_stack_start`, `fail_stack_stop`, `unsteady`, `set_stack` and
@@ -432,11 +445,11 @@ uses and no story here writes. A call is listed when it is made, before any hold
 
 ## Interfaces
 
-Everything 030 to 036, 038, 040 and 043 create is named as their plan.md gives it in the
-drafting worktree, and 037's as its plan.md gives it. The lease of the imaging camera,
-which the plan document's amendment 1 gives 031, is 031's US9; 033, 034 and 035 take the
-same lease. All of it is re-read on `main` before the flip (flip.md § Prerequisites 2
-and 3).
+Everything 030 to 036, 038, 040, 043 and 037 create has landed, and the trio is read
+against their code: each name here was re-read on `main` at `581be8c3` on 2026-11-20
+(flip.md § Prerequisites 2 and 3), and the plans' sections named say why. The lease of
+the imaging camera, which the plan document's amendment 1 gives 031, is 031's US9; 033,
+034 and 035 take the same lease.
 
 ### What 030 to 036, 038, 040 and 043 offer the console's parts (read, never written, by this spec)
 
@@ -452,7 +465,7 @@ and 3).
 | whether a solve moved the aim point | 032 | `SessionView::aim` → `Option<AimView { x, y, source }>`, read before the solve and after it; `Session::held_aim()` → `Option<Aim>`, the measured aim point held back while Track is on, read after it; 032's task hands a measured aim point to `Session::set_measured_aim`, which holds it back while Track is on, before the solve reads `solved` | 032 plan.md § The session (the held aim point), § The relation, § Solving on the console |
 | the focus check, awaited | 033 | `Imaging::focus_start(FocusAsk { check: true, .. })`, `Imaging::focus_ended()` → `FocusView { unit, aid, .. }`, `AidView { check, state, verdict, median, last, reference, ended_reason, error, .. }` | 033 plan.md § The aid on the console, § The focus view |
 | the focus aid, opened and closed | 033 | `Imaging::focus_start(FocusAsk::default())`, `Imaging::focus_stop()` | 033 plan.md § The aid on the console |
-| the live stack | 035 | `AppState::stack()` → `Option<Arc<Stacker>>`; `Stacker::start(StartRequest, Option<&str>)`; `Stacker::stop()` and `Stacker::view()` → `Option<StackView>`, `StackView { state, id, started_at, stacked, dropped, ended_reason, error, save_error, .. }`; `dropped`'s keys `behind` and `unprocessed`, which are not failed subs | 035 plan.md § The stack on the console, 037's plan.md § The console |
+| the live stack | 035 | `AppState::stack()` → `Option<Arc<Stacker>>`; `Stacker::start(StartRequest, Option<&str>)`; `Stacker::stop()` and `Stacker::view()` → `Option<StackView>`, `StackView { state, id, started_at, stacked, dropped, ended_reason, error, save_error, .. }`; `dropped`'s keys `behind` and `unprocessed`, which are not failed subs | 035 plan.md § The stack on the console; `AppState::stack()`, 035's US5, at `crates/finder/src/api.rs:399` |
 | whether the stack waits, for the tracker or for its exposure limit, and the set point | 036, 040 | `Imaging::steering()` → `Steering::set_set_point(None)` (036), `Steering::waiting()` (040) | 036 plan.md § The steering, § The imaging state; 040 plan.md, where it adds `waiting` to the steering |
 | how far from the set point a stack may begin and still be steered | 036 | `crate::imaging::steering::FAR_ARCSEC`, 180.0 | 036 plan.md § The steering; 036 spec.md FR-014 |
 | whether the tracker is steady enough to expose, and was over a past window | 036, 040 | `Session::steered()` → `Option<Arc<dyn Steered>>`; `Steered::steady()`, `Steered::steady_between(start, end)` over console Unix seconds, the trait's (036) and the tracker's answers to both (040 FR-021) | 036 plan.md § The session, § The tracking error and the interface; 040 plan.md, the tracker's two answers |
@@ -493,16 +506,16 @@ and Track's answer; and the tokio instant at which `state` first read 038's push
 `moving`, cleared whenever `state` reads no push.
 
 - **`target`**: `state.session().snapshot(state.clock.now()).target`
-  (`crates/finder/src/session.rs:1002`). None: `Err("no target is selected")`. Else
+  (`crates/finder/src/session.rs:1376`). None: `Err("no target is selected")`. Else
   `RunTarget { id, name: messier or id, ra_deg, dec_deg }`
   (`crates/finder/src/targets.rs:39`). It keeps the id it answers.
-- **`point(by)`**: without `state.goto()` (`crates/finder/src/api.rs:296`),
+- **`point(by)`**: without `state.goto()` (`crates/finder/src/api.rs:438`),
   `Err("no mount is connected")`. Before it asks Track it reads the session's target
   again: none is `Err("no target is selected")`, and an id other than the one `target`
   last answered, when it has answered one, is `Err("the target was changed")`. It reads
   `*goto.stops().borrow()`
   (`crates/finder/src/goto.rs:801`), then awaits `api::start_tracking(&state)`
-  (`crates/finder/src/api.rs:831`), the function the Track route and the MCP
+  (`crates/finder/src/api.rs:1008`), the function the Track route and the MCP
   `set_tracking` call; its error's `message` is the refusal, unchanged. On `Ok` it keeps
   the generation, `by`, and the id it read before it asked, not a new read. When
   Track's own `track.target.id` is then another, because the target was changed while
@@ -562,8 +575,8 @@ and Track's answer; and the tokio instant at which `state` first read 038's push
   The part names two of Track's states, `armed` and `off`, and no other: whatever a
   tracker calls its working states, it is tracking, and whether it is steady is the
   tracker's own answer. The reasons are the tracker's
-  (`crates/finder/src/tracking.rs:61`) and a halted or failed GoTo's, which Track passes
-  on when it ends armed (`crates/finder/src/session.rs:893`,
+  (`crates/finder/src/tracking.rs:84`) and a halted or failed GoTo's, which Track passes
+  on when it ends armed (`crates/finder/src/session.rs:1069`,
   `crates/finder/src/goto.rs:813`, `crates/finder/src/goto.rs:817`,
   `crates/finder/src/goto.rs:848`).
 
@@ -578,9 +591,9 @@ and Track's answer; and the tokio instant at which `state` first read 038's push
   and `FRESH_POLLS`.
   1. The generation differs from the one kept: `Err(Stopped)`.
   2. `repointing` is set; `state.session().stop_tracking().await`
-     (`crates/finder/src/session.rs:950`).
+     (`crates/finder/src/session.rs:1126`).
   3. (US5) It reads the `seq` of the session's pointing
-     (`crates/finder/src/session.rs:463`), then, at most `FRESH_POLLS` times, sleeps
+     (`crates/finder/src/session.rs:566`), then, at most `FRESH_POLLS` times, sleeps
      `POLL` and reads it again. It goes on as soon as the `seq` has changed, and goes
      on all the same when it has not after the last sleep. A generation that has
      changed meanwhile clears `repointing` and is `Err(Stopped)`: that Stop has
@@ -594,7 +607,7 @@ and Track's answer; and the tokio instant at which `state` first read 038's push
      with `tool` `imaging_run` for `page` and `start_imaging_run` for `mcp`;
      `repointing` is cleared, whatever `asked` is.
   5. The generation differs now, whatever `asked` is: `api::stop(&state).await`
-     (`crates/finder/src/api.rs:904`), then `Err(Stopped)`.
+     (`crates/finder/src/api.rs:1081`), then `Err(Stopped)`.
   6. `asked` is `Err(error)`: `Err(Mount(message))`, the error's `message`. Otherwise
      `Ok(())`.
 
@@ -606,7 +619,7 @@ and Track's answer; and the tokio instant at which `state` first read 038's push
 
   **Step 5 comes before `asked` is read.** A Stop that lands while step 4 runs makes
   Track itself answer an error: `Session::start_tracking` answers `stopped` when the
-  session's own generation moved under it (`crates/finder/src/session.rs:854`), and a
+  session's own generation moved under it (`crates/finder/src/session.rs:1027`), and a
   GoTo it was starting answers `the observer stopped it`
   (`crates/finder/src/goto.rs:626`). Read first, either would end the run
   `mount_failed` after the observer pressed Stop. Every real Stop advances GoTo's stop
@@ -615,25 +628,25 @@ and Track's answer; and the tokio instant at which `state` first read 038's push
   stopped again before the part answers. A Stop asked twice is always safe.
 
   **Step 3 is there** because a latest pointing is taken at the aim point in force when
-  its star frame was solved (`crates/finder/src/session.rs:1192`), and while Track is
+  its star frame was solved (`crates/finder/src/session.rs:1605`), and while Track is
   on 032 holds a newly measured aim point back (032's FR-036; 032's owner decision 25,
   which 037's owner decision 26 cites). Right after
   step 2 the pointing the session holds was still taken at the old aim point, and
-  Track's 1′ test (`crates/finder/src/session.rs:845`) would start no GoTo. The first
+  Track's 1′ test (`crates/finder/src/session.rs:1018`) would start no GoTo. The first
   live solve the session records with Track off applies the held aim point before its
   pointing is taken (032 plan.md § The session, the held aim point), so that pointing
   is the first at the new aim point, and Track asked after it brings the target there.
   The `seq` is read after step 2 for that reason: a pointing recorded while Track was
   still on was taken at the old aim point. The wait is a bound in seconds, 5 s at
   `POLL`, and not a count of the finder camera's frames. 015's tracker already expects
-  a live pointing at least every five seconds (`crates/finder/src/tracking.rs:248`), so
+  a live pointing at least every five seconds (`crates/finder/src/tracking.rs:339`), so
   a finder camera slower than that is outside what Track is built for; after the bound
   the part asks Track anyway, Track decides with the pointing it has, the held aim
   point stays held under the new Track, and at worst a try is spent.
 
   **The tracker is handed no step.** While Track is on, live pointings stay taken at
   the aim point Track started from, so 015's tracker, which is handed every one as the
-  target's offset (`crates/finder/src/session.rs:972`), sees no step toward a newly
+  target's offset (`crates/finder/src/session.rs:1154`), sees no step toward a newly
   measured aim point; during step 3 Track is off.
 
   A re-centre therefore takes at most the 5 s of step 3, Track's own wait of up to 2 s
@@ -648,7 +661,7 @@ and Track's answer; and the tokio instant at which `state` first read 038's push
   an axis still reports motion after that, when step 4's Track asks GoTo, GoTo refuses
   with `the mount is already moving` (`crates/finder/src/goto.rs:739`) and the run ends
   `mount_failed` (§ Risks).
-- **`stop`**: `api::stop(&state).await` (`crates/finder/src/api.rs:904`), the console's
+- **`stop`**: `api::stop(&state).await` (`crates/finder/src/api.rs:1081`), the console's
   Stop, its answer ignored. It moves the stop generation, so the next `state()`
   answers `Ended(Stopped)`.
 - **`track_on`**: whether the session's snapshot has a `track` whose `state` is not
@@ -748,7 +761,7 @@ is awaited, so the camera is given back at the moment `release` drops the kept c
    `Err(NotSolved(error))`.
 4. `solved`: the offset is `crate::model::separation(solve.ra_deg, solve.dec_deg,
    target.ra_deg, target.dec_deg) * 3600.0`, the great-circle function Track's own 1′
-   test uses (`crates/finder/src/model.rs:312`). The tolerance is
+   test uses (`crates/finder/src/model.rs:316`). The tolerance is
    `(CENTRE_SHARE * shorter * solve.arcsec_per_px).max(CENTRE_FLOOR_ARCSEC)`, `shorter`
    being the smaller of the `width` and `height` of the imaging view's `frame` when its
    `id` is still `frame.id`, and `CENTRE_FLOOR_ARCSEC` alone otherwise. `near_arcsec`
@@ -1090,7 +1103,7 @@ The parts' clones hold no runner, so there is no cycle; they do hold everything 
 the state, the owner of Track included, for as long as the runner or its task holds
 them. That is what `Runner`'s `Drop` is for (037's plan.md § The machine).
 `crates/finder/src/main.rs` calls it once, after the lines 032 and 033 put after
-`.with_live()` (`crates/finder/src/main.rs:114`), `.with_imaging_solver(…)` and
+`.with_live()` (`crates/finder/src/main.rs:200`), `.with_imaging_solver(…)` and
 `.with_focal_length_mm(…)`, on both the `--simulate` and the real path.
 
 ## Shapes that existing tests pin
@@ -1131,7 +1144,7 @@ These are not changed by any story:
 
 ## Verification (every story, before proposing)
 
-- **The factory gates** (`ergane.yaml` at 49bb210):
+- **The factory gates** (`ergane.yaml` on `main` at `581be8c3`, as at 49bb210):
   - `lint` = `cargo fmt --all --check`,
     `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`,
     `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked`
@@ -1279,8 +1292,8 @@ story.
 
 | Risk | Mitigation |
 |---|---|
-| 033, 035 or 036 lands offering something other than its draft. | The run touches them in three small parts and nowhere else; the states, routes, page and tools do not move. flip.md § Prerequisites 2 re-anchors, and a gap goes to the owner. |
-| 031 lands the lease under other names, words or rules than its US9 gives. | flip.md § Prerequisites 3 lists the five points. Only the camera part's `hold`, `release` and `take` touch it, and seven scenarios, two of which state its refusal word for word. |
+| A later change to 033, 035 or 036 offers something other than they landed with. | The run touches them in three small parts and nowhere else; the states, routes, page and tools do not move. The re-anchoring of 2026-11-20 read them as landed and found nothing different (flip.md § Prerequisites 2). |
+| A later change to 031's lease gives it other names, words or rules than its US9 landed with. | flip.md § Prerequisites 3 lists the five points, read as landed on 2026-11-20. Only the camera part's `hold`, `release` and `take` touch it, and seven scenarios, two of which state its refusal word for word. |
 | The simulator leaves the target just outside 90″, with the true aim point set or after a re-centre, or needs more than three tries. | US4-S1 and US5-S4 assert the bounds against the truth, and owner decisions 2 and 3 are where the numbers change; flip.md § Prerequisites 5 has what probe round 2 measured. |
 | A story's diff passes 64 KiB. | Probe round 2 built the five stories: US4 41,483 B (63.3 %), US5 31,921 B (48.7 %), US6 41,188 B (62.8 %), US7 14,797 B (22.6 %) and US8 31,488 B (48.0 %) as written, against estimates of 40.9, 29.1, 37.4, 14.8 and 28.2 KB from round 1. Factory builds of 036, 039 and 040 ran 0.85 to 1.17 times their probes' diffs, so each story is estimated at 1.17 times its build with the cases the round's fold added, as tests: US4 (41,483 + 4,715) × 1.17 = 54,052 B (82 %), US5 (31,921 + 5,195) × 1.17 = 43,426 B (66 %), US6 (41,188 + 5,708) × 1.17 = 54,868 B (84 %), US7 (14,797 + 2,074) × 1.17 = 19,739 B (30 %) and US8 (31,488 + 406) × 1.17 = 37,316 B (57 %). Each is under owner choice 14's 60 KB, so no story is cut. US4 and US6 are the stories to watch: the scenario of the guards (US4-S4) or US4-S5's cases on the parts alone, and US6-S7's rig cases with their rig, are where a cut by tests would fall. No story drops or shortens a case to get under. |
 | A Stop that lands while a re-centre's Track is being asked is covered by step 5 of `repoint` alone, which no test can reach by itself on the simulator. | Steps 1 and 3 cover the windows either side, and US5-S5 catches step 3's check and step 5 removed together. The field checklist's steps 11 and 14 press Stop during a run. |
@@ -1291,7 +1304,7 @@ story.
 | A target changed in the instant after a re-centre has asked Track again is not seen by step 3a. | Track then goes on with the old target, the next `state()` reads `target_changed` by its second row, and Track is left on the old target, as outside a re-centre. US5-S7's timing rests on the first live pointing with Track off coming within two polls (0.50 s) of it on the simulator. A target set between step 3a and Track's own read of it, two lock waits later, starts Track on the new target: `state()` reads `target_changed` by its second row and Track is left on the new target. No test reaches that window. |
 | With `keep_subs` false, the two conditions under which the stack part removes subs are asserted on the script only, by the warning. | No rig scenario stops a run before its first sub is stacked at a moment a test can fix. |
 | The observer's exposure setting is longer than the tracker's limit, and the run's own imaging frames, which 036 does not cap, trail their corner stars. | A known limit (§ The console's camera and solver parts). The solve's centre, all the run reads, is not moved; a solve that fails for want of stars is counted (037's US2-S2). The README says so and step 8 of the field checklist has the observer look. The other answer is a getter in 036 for the capped exposure, an edit to 036. |
-| A re-centre asks Track again while the mount still reports motion after Track off; GoTo refuses with `the mount is already moving` and the run ends `mount_failed`. | `Session::start_tracking` waits up to 2 s for both axes to rest whenever it replaces a tracker, before it asks GoTo. The field checklist's step 8 watches the first centring. `stop_tracking` itself waits for the mount's acknowledgement of the stop, not for rest (`crates/finder/src/tracking.rs:219`). If the telescope shows it all the same, `repoint` waits, for a counted number of polls, until the session's mount view no longer says the mount is moving (`crates/finder/src/session.rs:508`) before it asks Track; that reads no axis. |
+| A re-centre asks Track again while the mount still reports motion after Track off; GoTo refuses with `the mount is already moving` and the run ends `mount_failed`. | `Session::start_tracking` waits up to 2 s for both axes to rest whenever it replaces a tracker, before it asks GoTo. The field checklist's step 8 watches the first centring. `stop_tracking` itself waits for the mount's acknowledgement of the stop, not for rest (`crates/finder/src/tracking.rs:304`). If the telescope shows it all the same, `repoint` waits, for a counted number of polls, until the session's mount view no longer says the mount is moving (`crates/finder/src/session.rs:611`) before it asks Track; that reads no axis. |
 | The kept subs fill the disk. | The default time limit (037's owner decision 8), the size shown on the start form, `save_failed`, and the reserve the stack part frees before the stack's save. |
 | Subs that are not kept still fill the disk while the run stacks. | Owner decision 22 names the other answer, an edit to 035. |
 | A second client stops or restarts the stack under a run. | The lease refuses a second stack; a stop of the run's own stack from 035's route ends the run `stopped` (US7-S4 on the script, US8-S4 on the rig). A stack another client starts in the instant of the hand-over, which 035's `start` joins and answers `Ok` for, is told from the run's own by its `started_at` and ends the run `stack_failed`, with nothing of that stack stopped or removed. A stack started in the one poll between the run's stack ending and the run's own ending is left running; the run keeps its last counts and its subs (§ The console's stack part). Neither race is run by a test. |
@@ -1300,16 +1313,15 @@ story.
 
 ## Refinement Record
 
-The re-anchoring (flip.md § Prerequisites 2) is still to do. Until then the record below
-names what the drafts named: its tests are the scenarios, its writes are the files
-§ Project Structure names, and its shared writes name the merge edge that orders two
-stories of this spec on one file, or the story of another spec that last writes the file
-among the drafts as they stood on 2026-11-15, read from each draft's own record, a story
-of 036 that went to 040 when 036 was split being named in 040. Each of those names is
-checked again at the re-anchoring. A test file an earlier story creates does not exist
-yet and cannot be listed as an existing test; what a later story must leave passing in it
-is under that story's `preserved_behavior`. The record's `open_questions` are empty
-because the validator refuses a record that holds any; what is not established is in
+The record was re-anchored on 2026-11-20 to `main` at `581be8c3` (flip.md
+§ Prerequisites 2): its tests are the scenarios, its writes are the files § Project
+Structure names, and its shared writes name the merge edge that orders two stories of
+this spec on one file, or the story of another spec that last wrote the file on `main`,
+as `git log -1` reads it at `581be8c3`, with its commit and pull request. A test file an
+earlier story creates does not exist yet and cannot be listed as an existing test; what a
+later story must leave passing in it is under that story's `preserved_behavior`. The
+record's `open_questions` are empty because the validator refuses a record that holds
+any; what is not established is in
 § Risks and flip.md, and what the owner must settle is in flip.md. Nothing in this record
 is an owner approval: those are in flip.md, and flipping to `ready` gives them.
 
@@ -1391,7 +1403,7 @@ stories:
     other_spec: 037-imaging-run
     other_story: US3
     disposition: merge_order
-    reason: "041 depends_on_landed 037-imaging-run, whose 037's US3 last writes this file; re-read at the re-anchoring"
+    reason: "041 depends_on_landed 037-imaging-run, whose US3 last wrote this file on main (581be8c3, #348)"
   - path: crates/finder/src/imaging/run.rs
     other_spec: 041-imaging-run-on-the-rig
     other_story: US5
@@ -1406,7 +1418,7 @@ stories:
     other_spec: 040-stack-waits-for-steady
     other_story: US7
     disposition: merge_order
-    reason: "041 depends_on_landed 040-stack-waits-for-steady, whose US7 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "041 depends_on_landed 040-stack-waits-for-steady, whose US7 last wrote this file on main (dac28058, #338)"
   - path: crates/finder/tests/motion/main.rs
     other_spec: 041-imaging-run-on-the-rig
     other_story: US5
@@ -1509,7 +1521,7 @@ stories:
     other_spec: 037-imaging-run
     other_story: US3
     disposition: merge_order
-    reason: "041 depends_on_landed 037-imaging-run, whose 037's US3 last writes this file; re-read at the re-anchoring"
+    reason: "041 depends_on_landed 037-imaging-run, whose US3 last wrote this file on main (581be8c3, #348)"
   - path: crates/finder/tests/console/main.rs
     other_spec: 041-imaging-run-on-the-rig
     other_story: US6
@@ -1781,16 +1793,16 @@ stories:
     other_spec: 037-imaging-run
     other_story: US3
     disposition: merge_order
-    reason: "041 depends_on_landed 037-imaging-run, whose 037's US3 last writes this file; re-read at the re-anchoring"
+    reason: "041 depends_on_landed 037-imaging-run, whose US3 last wrote this file on main (581be8c3, #348)"
   - path: crates/finder/src/main.rs
     other_spec: 033-focus-reading-and-aid
     other_story: US8
     disposition: merge_order
-    reason: "041 depends_on_landed 033-focus-reading-and-aid, whose US8 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "041 depends_on_landed 033-focus-reading-and-aid, whose US8 last wrote this file on main (9e670694, #296)"
   - path: crates/finder/tests/cli/main.rs
     other_spec: 035-live-stack
     other_story: US8
     disposition: merge_order
-    reason: "041 depends_on_landed 035-live-stack, whose US8 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "041 depends_on_landed 035-live-stack, whose US8 last wrote this file on main (6a519d49, #319)"
   open_questions: []
 ```

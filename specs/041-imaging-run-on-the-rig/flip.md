@@ -4,23 +4,30 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
 
 ## Prerequisites before this spec is flipped to `ready`
 
-1. **The earlier specs have landed.** Met for `014-goto`, `015-tracking`, `016-mcp`
-   and `017-console-stop-confirm`, and, by 2026-11-19, for `030-imaging-camera-link`,
-   `031-imaging-frames-on-console`, `032-imaging-solve-and-aim-point`,
-   `033-focus-reading-and-aid`, `034-dark-and-flat-frames` and
-   `038-track-follows-a-push`, whose `push` the `pushed_away` ending reads. Not met for
-   `035-live-stack`, which is flipped and being built, and `036-tracking-from-subs`, a
-   draft beside this one.
-   Not met for `040-stack-waits-for-steady`, cut from 036 on 2026-11-20,
-   nor for `037-imaging-run`.
-2. **This trio is re-anchored after `037-imaging-run` and its predecessors land.** Not
-   met. Every name in plan.md § What 037-imaging-run provides and § What 030 to 036, 038,
-   040 and 043 offer the console's parts is re-read on `main`, and the last story of each
-   spec that writes a shared file replaces the one named in plan.md § Refinement Record. Where
-   one of them lands offering something else than the plan says, the part that calls it
-   changes, and where it offers nothing that a part needs, the gap goes to the owner
-   before the flip. The points known to need that reading, which the console's own
-   parts rest on:
+1. **The earlier specs have landed.** Met: every spec in `depends_on_landed` has landed
+   on `main`, each with its last story's merge. `014-goto` at `a43747f7` (US9, #159),
+   `015-tracking` at `a02dc35b` (US9, #177), `016-mcp` at `bcf37652` (US6, #186),
+   `017-console-stop-confirm` at `c1ed2957` (US4, #206), `030-imaging-camera-link` at
+   `49f8dcd2` (US8, #269), `031-imaging-frames-on-console` at `e9687ce9` (US9, #279),
+   `032-imaging-solve-and-aim-point` at `670ddcf9` (US7, #288),
+   `033-focus-reading-and-aid` at `80f414ff` (US7, #298), `034-dark-and-flat-frames` at
+   `002dbef8` (US8, #309), `035-live-stack` at `52785403` (US10, #321),
+   `036-tracking-from-subs` at `fc161a54` (US12, #333), `038-track-follows-a-push`,
+   whose `push` the `pushed_away` ending reads, at `1c2b427b` (US3, #260), and
+   `040-stack-waits-for-steady`, cut from 036 on 2026-11-20, at `6d79292b` (US11, #340).
+   `043-imaging-abort-answers-in-time` landed on 2026-11-20 with its one story, US1 at
+   `2ae73c66` (#342), and `037-imaging-run` the same day with its five, #344 to #348, the
+   last US3 at `581be8c3` (#348).
+2. **This trio is re-anchored after `037-imaging-run` and its predecessors land.** Met
+   on 2026-11-20 by the re-anchoring, on `main` at `581be8c3`, after 037 landed. Every
+   name in plan.md § What 037-imaging-run provides and § What 030 to 036, 038, 040 and 043
+   offer the console's parts was re-read in the landed code, and every shared write in
+   plan.md § Refinement Record that names another spec names the story that last wrote
+   the file on `main` (`git log -1`), as the drafts had named them. None of them offers
+   something else than the plan says, and none leaves a part without what it needs. The
+   points the console's own parts rest on were read there too, and hold, all but the one
+   on M42's transit, which is the simulator's behaviour, measured by probe round 2 on its
+   probe code (§ Prerequisites 5) and not read:
    - 033 writes its focus check as taking its own exposures and restoring the settings
      afterwards; the run's first imaging frame and the imaging frame for the solve rest
      on that (037's owner decision 20);
@@ -34,17 +41,19 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
      (037's plan.md § The machine, Ending), and the part calls `Stacker::stop` only while its own
      stack still reads `stacking`, so the point matters for a stack that ends between
      that read and the call (plan.md § The console's stack part);
-   - 043 has landed: `Imaging::abort` answers within `ABORT_WAIT` on a scope node that
-     has stopped answering, so 035's `Stacker::stop` does too, and US8-S6's run ends on
-     a lost link (041-R17). The owner settled R17 on 2026-11-20 with 043, which lands
+   - 043 has landed: met, its one story US1 at `2ae73c66` (#342). `Imaging::abort`
+     answers within `ABORT_WAIT`, 5 s (`crates/finder/src/imaging/mod.rs:52`), on a
+     scope node that has stopped answering (`crates/finder/src/imaging/mod.rs:829`), so
+     035's `Stacker::stop`, which awaits it
+     (`crates/finder/src/imaging/stack/service.rs:596`), does too, and US8-S6's run ends
+     on a lost link (041-R17). The owner settled R17 on 2026-11-20 with 043, which landed
      after 040 and before 037, in place of probe round 2's stand-in, a race of the stop
      against the stack's own `ended` view, which is not folded: the stack part's `stop`
      stays `stacker.stop().await` (plan.md § What 030 to 036, 038, 040 and 043 offer the
      console's parts). 043 covers the camera part's `abort` (US4) too, which awaits the
      same `Imaging::abort` and which the round did not reach on a lost link.
-     `depends_on_landed` gains `043-imaging-abort-answers-in-time` at the re-anchoring,
-     not before: 043's trio is not on `main` yet, and the validator refuses an edge to a
-     spec it cannot find;
+     `depends_on_landed` gained `043-imaging-abort-answers-in-time` at the re-anchoring,
+     once 043's trio was on `main`;
    - 035 writes, when a stack ends, `stack.fits` as three planes of 32-bit reals,
      `stack.png` as an 8-bit RGB picture of the stack's full size, and `stack.json`
      again whole; the stack part's reserve is sized to those three (plan.md § The console's
@@ -81,22 +90,26 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
      the session records with Track off applies it before that pointing is taken
      (032's FR-036). `aim_moved` and the wait of `repoint`'s step 3 rest on all of it
      (plan.md § The console's camera and solver parts, plan.md § The console's mount part).
-3. **The lease of the imaging camera exists.** Met in the drafts, by the audit round in
-   which this trio was revised. The plan document's amendment 1 gives 031's imaging
+3. **The lease of the imaging camera exists.** Met on `main`: 031's US9 landed
+   (`e9687ce9`, #279), and the re-anchoring of 2026-11-20 read the five things below on
+   `581be8c3`, where each holds. The audit round in which this trio was revised had
+   written it into the drafts: the plan document's amendment 1 gives 031's imaging
    state one lease that names its holder, and says each later spec takes and gives it
    back and adds no lock of its own. 031's trio gains it as its US9 (the audit's
    finding A1 on 031), and 034 takes it for a set of darks or flats in place of a check
    of its own (the audit's finding A1 on 034), as 033 and 035 do for the focus aid and
-   the stack; 033's plan already words the refusal as this trio does. 031's plan.md
-   § The camera lease now writes 042's US9 out, and the five things below hold there; this
-   trio is read again against it when 031 lands, for the same five
-   things: the names `Imaging::lease`, `Lease` and `Lease::take`; that a refusal is a
+   the stack; 033's plan already words the refusal as this trio does. The five things,
+   as the landed code has them: the names `Imaging::lease`, `Lease` and `Lease::take`
+   (`crates/finder/src/imaging/mod.rs:761`, `crates/finder/src/imaging/mod.rs:899`,
+   `crates/finder/src/imaging/mod.rs:937`); that a refusal is a
    409 whose words are `the imaging camera is held by {holder}`; that `Lease::take`
    borrows the lease, so that the kept slot and a take in flight can share one
    `Arc<Lease>`; that
    `Imaging::abort`, `ended`, `view` and `solve` stay open to anyone; and that 033's
    check and aid and 035's stack take the lease themselves, as `the focus aid` and
-   `the stack`, which is what the hand-over of 037's owner decision 15 rests on. This
+   `the stack` (`crates/finder/src/imaging/focus/run.rs:28`,
+   `crates/finder/src/imaging/stack/service.rs:35`), which is what the hand-over of
+   037's owner decision 15 rests on. This
    trio does not need 031 to put its lease check before its own check for an imaging
    frame in flight: the camera part asks for the lease first (plan.md § The console's camera and
    solver parts). 037's US1-S2, 037's US2-S10, US4-S2, US4-S4, US4-S6, US6-S7 and
@@ -120,7 +133,8 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
    declared files, and every earlier test file passed unedited; workspace nextest ran
    1239 tests at the base and 1299 after US8. The round found 1 blocking and 30 clarity
    defects, 041-R1 to 041-R31, all folded on 2026-11-20 but the anchors of R15 and R31,
-   which are the re-anchoring's (history.md § Probe round 2 and its fold). Probe round 1,
+   which the re-anchoring of the same day fixed (history.md § Probe round 2 and its fold;
+   § Prerequisites 7). Probe round 1,
    on 2026-11-19, had built the trio as it then stood; what this point said of it is in
    the same section. What round 2 ran:
    - each story's diff against its estimate in plan.md § Risks: US4 41,483 B (63.3 %)
@@ -194,11 +208,13 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
    under the mutation it was written for, US5-S8's in US4's module.
 6. **The plan document, ADR-0002, the glossary's imaging terms and the research note
    are on `main`.** Met by 2026-11-19: all four are on `main`.
-7. **`main` is still as read.** Met on 2026-11-15: every `path:line` here was read at
-   49bb210, and read again at 49bb210 after the audit, when `main` had not moved; no
-   cited line had moved, and `crates/finder/src/targets.rs:39` replaced a citation one
-   line above the `struct` it names. It is re-read at the flip, because 030 to 036
-   change most of the files cited.
+7. **`main` is still as read.** Met on 2026-11-20 by the re-anchoring, on `main` at
+   `581be8c3`: every `path:line` in the trio was read there by its content. Of the 44
+   the draft held, first read at 49bb210 on 2026-11-15, 23 had not moved and 21 had,
+   and those are cited at their lines on `581be8c3`; none was lost. The citations the
+   re-anchoring added name 037's landed code (plan.md § What 037-imaging-run provides),
+   035's `AppState::stack()` and `crates/finder/Cargo.toml`. If `main` moves before the
+   flip, they are read again.
 8. **The real mount.** Not met, and outside the factory: a GoTo to a target and Track
    have not run on the real mount (the plan document, § Before any flip, 4). The spec
    can be built before that; the run is not used at the telescope until it is. The
