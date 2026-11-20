@@ -109,13 +109,13 @@ call is dropped (043)."
 ### `crates/finder/README.md` (US1)
 
 Three places, nothing else:
-- the row of `POST /api/imaging/abort` (`crates/finder/README.md:231`), before "Same-origin
+- the row of `POST /api/imaging/abort` (`crates/finder/README.md:233`), before "Same-origin
   writes only.": "A node that does not answer the abort within 5 s is given up on: the
   frame ends `aborted` and the call answers then.";
-- the row of `DELETE /api/imaging/stack` (`crates/finder/README.md:241`), before "Same-origin
+- the row of `DELETE /api/imaging/stack` (`crates/finder/README.md:243`), before "Same-origin
   writes only.": "On a node that has stopped answering, the abort of the sub in flight is
   given up after 5 s and the stop answers then.";
-- the paragraph on the abort, after "no file written for it." (`crates/finder/README.md:666`),
+- the paragraph on the abort, after "no file written for it." (`crates/finder/README.md:668`),
   wrapped at 80 columns like the paragraph, with the busy words' code span on one line:
   "A node that does not answer `AbortExposure` within 5 s, as over a link that has gone
   quiet, is given up on: the console ends the frame `aborted` itself and drops the call.
@@ -193,24 +193,26 @@ so they hold for both.
 ## Other calls on the stop paths
 
 Every call to the node that a stop, an abort or a stack's end awaits in 031, 033, 034,
-035 and 036's code at fc161a54, for the seat. Only the first is unbounded, and only it
+035 and 036's code at fc161a54, and in what 040 added by 6d79292b, for the seat. Only the first is unbounded, and only it
 is in scope.
 
 | Call | Awaited by | Bound |
 |---|---|---|
 | `AbortExposure` (`crates/finder/src/imaging/mod.rs:801`) | every stop (spec Clarifications) | none; FR-001 |
-| `Expose` and the header (`crates/finder/src/imaging/frames.rs:303`) | `Imaging::ended`, which the stack's taker (`crates/finder/src/imaging/stack/service.rs:791`), the aid (`crates/finder/src/imaging/focus/run.rs:903`, `crates/finder/src/imaging/focus/run.rs:1055`) and the set (`crates/finder/src/imaging/calibration/service.rs:741`) await | twice the exposure plus 150 s (`crates/finder/src/imaging/frames.rs:32`); a stop's abort ends the frame first |
+| `Expose` and the header (`crates/finder/src/imaging/frames.rs:303`) | `Imaging::ended`, which the stack's taker (`crates/finder/src/imaging/stack/service.rs:849`), the aid (`crates/finder/src/imaging/focus/run.rs:903`, `crates/finder/src/imaging/focus/run.rs:1055`) and the set (`crates/finder/src/imaging/calibration/service.rs:741`) await | twice the exposure plus 150 s (`crates/finder/src/imaging/frames.rs:32`); a stop's abort ends the frame first |
 | each chunk (`crates/finder/src/imaging/frames.rs:389`) | the same | 30 s, `CHUNK_WAIT`; a frame `receiving` is ended at once by an abort |
 | `ConfigureImaging` through `Lease::set` (`crates/finder/src/imaging/mod.rs:663`) | the aid's settings put back (`crates/finder/src/imaging/focus/run.rs:1058`) | 30 s, `SET_WAIT`; refused at once once the camera reads `no_link` |
+| `ConfigureImaging` through `Lease::set` | the stack's sub length, set before its first sub and put back at its end (040; `crates/finder/src/imaging/stack/service.rs:818`, `crates/finder/src/imaging/stack/service.rs:903`) | 30 s, `SET_WAIT`; refused at once once the camera reads `no_link`, which on a silent node it does before `ABORT_WAIT` runs out (US1-S6 passes at 5,000 ms with it) |
 | the imaging task's own calls (`crates/finder/src/imaging/mod.rs:985`) | none of the stops | 5 s, `CALL_WAIT` |
 | StopAll (`crates/finder/src/link.rs:384`) | the mount's Stop | 200 ms a try within 2 s |
 
 Not node calls: the stack's worker solves with the console's own solver, and its files
-are written on the blocking pool (`crates/finder/src/imaging/stack/service.rs:563`). The
+are written on the blocking pool (`crates/finder/src/imaging/stack/service.rs:567`). The
 calibration set puts back only the console's own exposure (`crates/finder/src/imaging/calibration/service.rs:404`).
-036's `Steering::before_exposure`, the one await 036 adds before an exposure, has no
-caller in `crates/finder/src` at fc161a54; 040 gives it one, with its own stop
-(040's spec, a stop of the stack ending the wait).
+036's `Steering::before_exposure` (`crates/finder/src/imaging/steering.rs:368`), the one
+await 036 adds before an exposure, is awaited by the stack's taker since 040
+(`crates/finder/src/imaging/stack/service.rs:808`), raced, `biased`, against the stack's
+stop: it is no call to the node, and a stop ends it.
 
 ## What this gives later specs
 
@@ -295,7 +297,7 @@ tests fail (§ What was run and what was read). Then `ABORT_WAIT` and the bound 
 
 ## Verification (every story, before proposing)
 
-- **The factory gates** (`ergane.yaml` at fc161a54):
+- **The factory gates** (`ergane.yaml` at 6d79292b, unchanged since fc161a54):
   - `lint` = `cargo fmt --all --check`,
     `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`,
     `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked`
@@ -311,9 +313,16 @@ tests fail (§ What was run and what was read). Then `ABORT_WAIT` and the bound 
 
 ## Prerequisites before this spec is flipped to `ready`
 
-1. **The earlier specs have landed:** every spec in `depends_on_landed`, all landed at
-   fc161a54, and 040, which the factory is building.
-2. **040 has landed, and `main` is still as read.** Every citation here was read at
+1. **The earlier specs have landed:** met. Every spec in `depends_on_landed` had landed at
+   6d79292b, 040 among them (2026-11-20).
+2. **040 has landed, and `main` is still as read.** Met at 6d79292b, on 2026-11-20: 040
+   is in `depends_on_landed`; the record's `shared_writes` name 040's US11 for the README
+   and 040's US8 for `crates/finder/tests/console/main.rs`, the last to write each, and
+   036's US5 still for `crates/finder/src/imaging/mod.rs`; every citation was re-read at
+   6d79292b, fifteen moved and none changed its meaning; § Other calls on the stop paths
+   gains the two calls 040 added; and the probe's tests and trial fix, put onto
+   6d79292b unchanged, pass with every finder test. What the draft said before 040
+   landed: every citation here was read at
    fc161a54. 040's stories write `crates/finder/README.md` (its US7, US8 and US11),
    `crates/finder/tests/console/main.rs` (US6, US8),
    `crates/finder/src/imaging/stack/service.rs` and `crates/finder/src/mcp/tools.rs`.
@@ -411,12 +420,13 @@ They bind the story.
 | A real node answers an abort later than 5 s, over a weak link, and is given up on: its exposure runs on, and frames asked for before it ends fail. | Owner decision 1. By reading, a healthy node answers in a round trip. The field check times it. |
 | A late abort reaches the node over a real network after the link comes back, and stops a later exposure. | As true on `main`. By reading; owner decision 2's recommendation sends nothing more; the field check looks for it. |
 | The rig's node still sends the frame of an exposure begun before it went silent; a real quiet link does not. | The scenarios assert the abort's answer and the frame's state before the exposure would end (§ The rig and a quiet link). |
-| 040 lands first and moves cited lines in files it writes; until it is named in `depends_on_landed`, nothing orders the two specs' writes. | Prerequisite 2. |
+| 040 landed first and moved cited lines in files both specs write. | Re-anchored at 6d79292b: 040 in `depends_on_landed`, its last writes in `shared_writes`, every citation re-read (Prerequisite 2). |
 | The constitution's rule on shared helpers is read to refuse sibling modules' rigs. | Two existing modules do the same; the story escalates rather than copy the rigs (§ Constitution Check). |
 
 ## Refinement Record
 
-Drafted on 2026-11-20 by a plate-solver spec session against `main` at fc161a54, from
+Drafted on 2026-11-20 by a plate-solver spec session against `main` at fc161a54, and
+re-anchored the same day onto 6d79292b once 040 had landed, from
 041's and 042's second probe rounds, a probe of the fault and a trial fix on `main` that
 day, and a reading of 031's, 033's, 034's, 035's and 039's trios and the constitution.
 Writes come from the task text. Shared writes name the merge edge that orders them, and
@@ -428,7 +438,7 @@ the owner approvals of spec.md are given by the flip.
 
 ```yaml
 version: 1
-reviewed_revision: fc161a54983b9f69edbc26d63cd376e1dd0e6b7c
+reviewed_revision: 6d79292b1bf5e8a2ba33c17ec0058c031f2115a8
 stories:
   US1:
     tests:
@@ -547,19 +557,19 @@ stories:
     no_write_reason: ""
     shared_writes:
       - path: crates/finder/README.md
-        other_spec: 036-tracking-from-subs
-        other_story: US5
+        other_spec: 040-stack-waits-for-steady
+        other_story: US11
         disposition: merge_order
-        reason: "043 depends_on_landed 036, whose US5 last changed the README at fc161a54 (72877199)"
+        reason: "043 depends_on_landed 040, whose US11 last changed the README at 6d79292b"
       - path: crates/finder/src/imaging/mod.rs
         other_spec: 036-tracking-from-subs
         other_story: US5
         disposition: merge_order
-        reason: "043 depends_on_landed 036, whose US5 last changed mod.rs at fc161a54 (72877199)"
+        reason: "043 depends_on_landed 036, whose US5 last changed mod.rs at 6d79292b (72877199)"
       - path: crates/finder/tests/console/main.rs
-        other_spec: 036-tracking-from-subs
-        other_story: US5
+        other_spec: 040-stack-waits-for-steady
+        other_story: US8
         disposition: merge_order
-        reason: "043 depends_on_landed 036, whose US5 last changed the module list at fc161a54 (72877199)"
+        reason: "043 depends_on_landed 040, whose US8 last changed the module list at 6d79292b (112b3069)"
     open_questions: []
 ```

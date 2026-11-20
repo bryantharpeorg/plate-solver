@@ -1,6 +1,6 @@
 ---
 state: draft
-depends_on_landed: ["027-finder-tests-by-system", "030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "034-dark-and-flat-frames", "035-live-stack", "036-tracking-from-subs"]
+depends_on_landed: ["027-finder-tests-by-system", "030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "034-dark-and-flat-frames", "035-live-stack", "036-tracking-from-subs", "040-stack-waits-for-steady"]
 # Drafted 2026-11-20 against `main` at fc161a54 (fc161a54983b9f69edbc26d63cd376e1dd0e6b7c),
 # at the owner's ask the same day ("Yes, draft 043"), from 041's second probe round
 # (041-R17), 042's (042-R3) and a probe of that day on `main`: tests of the fault and a
@@ -9,9 +9,9 @@ depends_on_landed: ["027-finder-tests-by-system", "030-imaging-camera-link", "03
 # alone: the claims about `main` and the fix held exactly, it found no blocking defect,
 # and its seven clarity defects (043-R1 to R7) are folded here, US1-S3's second abort
 # now 3 s after the silence and US1-S4 the round's case for a call left running.
-# Every `path:line` here was read at fc161a54. 040, which the
-# factory is building, writes two files this spec writes; its trio is not on `main`, so
-# it cannot be named here yet (plan.md § Prerequisites 2). State: draft. The owner settled
+# Re-anchored on 2026-11-20 onto `main` at 6d79292b, once 040 had landed: 040 is named in
+# `depends_on_landed`, every `path:line` here was re-read at 6d79292b, and the probe's
+# tests and fix pass there with every finder test (plan.md § Prerequisites 2). State: draft. The owner settled
 # both owner decisions on 2026-11-20 with the recommended answers ("Yes, take them"), and let
 # the seat flip this spec once 040 has landed and the trio is re-anchored on that `main`
 # with validate and preflight at 0. What rests on a run and what on reading is said
@@ -52,14 +52,14 @@ in time ends the frame `aborted`, as a failed call already does.
   (`crates/finder/src/imaging/frames.rs:316`). A call that is never answered is awaited
   for ever. Every stop in the imaging code awaits this abort:
   - `POST /api/imaging/abort` (`crates/finder/src/imaging/routes.rs:228`);
-  - 035's `Stacker::stop` (`crates/finder/src/imaging/stack/service.rs:592`), and so
+  - 035's `Stacker::stop` (`crates/finder/src/imaging/stack/service.rs:596`), and so
     `DELETE /api/imaging/stack` (`crates/finder/src/imaging/routes.rs:326`) and the MCP
-    tool `set_stacking` with `on` false (`crates/finder/src/mcp/tools.rs:915`); the
+    tool `set_stacking` with `on` false (`crates/finder/src/mcp/tools.rs:936`); the
     stack's taker also aborts a frame it made after a stop
-    (`crates/finder/src/imaging/stack/service.rs:789`);
+    (`crates/finder/src/imaging/stack/service.rs:847`);
   - 033's `Imaging::focus_stop` (`crates/finder/src/imaging/focus/run.rs:449`), and so
     `DELETE /api/imaging/focus` (`crates/finder/src/imaging/routes.rs:278`) and
-    `set_focus_aid` with `on` false (`crates/finder/src/mcp/tools.rs:796`);
+    `set_focus_aid` with `on` false (`crates/finder/src/mcp/tools.rs:817`);
   - 034's `Calibration::remove` of a running set
     (`crates/finder/src/imaging/calibration/service.rs:264`), and so
     `DELETE /api/imaging/calibration/{id}`; and the set's own frame after a stop
@@ -150,7 +150,7 @@ is a design call with a cost to a node that answers slowly.
    exposure runs to its full length. A frame asked for before it ends fails with
    `the exposure failed: an exposure is already in progress`; a stack started then
    counts such frames as `frame_failed` and ends `camera` after three in a row
-   (`FAILED_IN_A_ROW`, `crates/finder/src/imaging/stack/service.rs:35`; by reading). A
+   (`FAILED_IN_A_ROW`, `crates/finder/src/imaging/stack/service.rs:36`; by reading). A
    node that answers within the bound is waited for as today (US1-S5). By reading, not
    run: the INDI adapter answers an abort once its abort switch is written
    (`crates/scope-node/src/imaging/indi/mod.rs:1089`), so a healthy link answers in a
@@ -374,11 +374,11 @@ development, `cargo nextest run -p finder --locked --test console imaging_abort_
   `CALL_WAIT`, `SET_WAIT` and the link's heartbeat and silence. No file under
   `crates/finder/src` but `crates/finder/src/imaging/mod.rs` SHALL be written.
 - **FR-005**: `crates/finder/README.md` SHALL say, in the row of
-  `POST /api/imaging/abort` (`crates/finder/README.md:231`), that a node that does not
+  `POST /api/imaging/abort` (`crates/finder/README.md:233`), that a node that does not
   answer the abort within 5 s is given up on and the frame ends `aborted` then; in the
-  paragraph on the abort (`crates/finder/README.md:662`), that too, that the node's
+  paragraph on the abort (`crates/finder/README.md:664`), that too, that the node's
   exposure may run on, and that a frame asked for before it ends fails with the busy
-  words; and in the row of `DELETE /api/imaging/stack` (`crates/finder/README.md:241`)
+  words; and in the row of `DELETE /api/imaging/stack` (`crates/finder/README.md:243`)
   that on a node that has stopped answering the stop answers after 5 s.
 
 ### Key Entities
@@ -406,8 +406,7 @@ development, `cargo nextest run -p finder --locked --test console imaging_abort_
 ## Assumptions
 
 - **Earlier features are in place.** Every spec in `depends_on_landed` has landed, and
-  so has 040, which is named there once its trio is on `main`. Every citation here was
-  read at fc161a54 (plan.md § Prerequisites 2).
+  040 among them. Every citation here was read at 6d79292b (plan.md § Prerequisites 2).
 - **The rig stands for a node that has stopped answering.** `set_unresponsive(true)`
   holds every call the node is sent, as a node off the network does, but lets an
   exposure already started run on and send its frame (plan.md § The rig and a quiet

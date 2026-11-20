@@ -5,9 +5,9 @@ description: "Task list for 043-imaging-abort-answers-in-time: An Imaging Abort 
 # Tasks: An Imaging Abort Answers in Time
 
 **Prerequisites** (plan.md § Prerequisites):
-- every spec in `depends_on_landed` has landed on `main`: met at fc161a54;
+- every spec in `depends_on_landed` has landed on `main`: met at 6d79292b;
 - 040 has landed and is named in `depends_on_landed`, and every citation has been re-read
-  on that `main`: not yet met, 040 is being built;
+  on that `main`: met at 6d79292b;
 - the owner decisions in spec.md are settled: met, on 2026-11-20;
 - no operator-staged file is needed.
 
