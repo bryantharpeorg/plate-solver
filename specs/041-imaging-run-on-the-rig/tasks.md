@@ -81,7 +81,7 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
   `SimMount`. Add helpers for the true offset and for "at rest for 10 s" as spec.md
   § User Scenarios defines them. Write failing tests for a run that needs no re-centre,
   with the tolerance exactly 90.0, `slewing` read while Track is `armed`, nothing
-  later than `tracking` read in the 11 s after Track first read `tracking`, and the
+  later than `tracking` read in the 11.5 s after Track first read `tracking`, and the
   imaging frame's purpose `run` (US4-S1), and for the refusals of a start with the lease
   given back, an unresponsive scope node among them (US4-S2).
 - [ ] T017 [US4] Add failing tests to that file for Stop while stacking (US4-S3), the

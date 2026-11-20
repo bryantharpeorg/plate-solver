@@ -1322,7 +1322,7 @@ stories:
   - path: crates/finder/tests/motion/imaging_run.rs
     status: new
     disposition: add
-    assertion: "on the simulator with the true aim point set a run reaches stacking with no try, the tolerance exactly 90.0, its solved offset inside the tolerance and within 30 arcseconds of the true offset, the true offset at most 110 arcseconds, the run reading slewing at every sample at which Track read armed and nothing later than tracking in the 11 s after Track first read tracking, its imaging frame's purpose run, Track never leaving tracking, and the motion record reading page and imaging_run"
+    assertion: "on the simulator with the true aim point set a run reaches stacking with no try, the tolerance exactly 90.0, its solved offset inside the tolerance and within 30 arcseconds of the true offset, the true offset at most 110 arcseconds, the run reading slewing at every sample at which Track read armed and nothing later than tracking in the 11.5 s after Track first read tracking, its imaging frame's purpose run, Track never leaving tracking, and the motion record reading page and imaging_run"
     decision: "spec.md:US4-S1"
   - path: crates/finder/tests/motion/imaging_run.rs
     status: new

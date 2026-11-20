@@ -135,7 +135,9 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
      - US4-S1, with the true aim point set: the true offset at `stacking` 4.549″, 105.5″
        inside its 110″; the solved offset 0.072″ from it, inside 30″; the tolerance
        exactly 90.0. The first state after `tracking` came 12.1 s after it, which left
-       the window of 9.5 s 2.6 s loose; it is now 11 s, 1.1 s inside (R1);
+       the window of 9.5 s 2.6 s loose; it is now 11.5 s, 0.6 s inside, so that a reach
+       of 9 s, whose first frame would come at 11.1 s, fails it too (R1, the owner's
+       answer of 2026-11-20);
      - US4-S4: `pushed_away` 5.5 s after the push, 54.5 s inside its 60 s, the one bound
        round 1 did not time; a push that kept moving ended the run 10.4 s after its
        first push, inside the fold's 10 s to 15 s (R2); near the transit, `tracking` held

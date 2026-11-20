@@ -18,7 +18,7 @@ the story the probe named.
 
 | Defect | What it found | Where it went |
 |---|---|---|
-| 041-R1 | US4-S1's window of 9.5 s did not pin 032's 10 s reach: the first frame came 12.1 s after `tracking`, and a reach of 8 s survived (A15) | US4-S1's bullet, T016 and the record: 11 s, with the throwaway's words |
+| 041-R1 | US4-S1's window of 9.5 s did not pin 032's 10 s reach: the first frame came 12.1 s after `tracking`, and a reach of 8 s survived (A15) | US4-S1's bullet, T016 and the record: 11.5 s (the owner's answer, below), with the throwaway's words |
 | 041-R2 | Nothing pinned `PUSH_GRACE` from above: a grace of 60 s survived (A6) | a US4-S4 case, a push that keeps moving ends the run 10 s to 15 s after it; T017; the record |
 | 041-R3 | No scenario changed the target between `target` and `point` (A18) | a US4-S5 case, `point` refuses with `the target was changed`; T017; the record |
 | 041-R4 | The `track.target.id` clause of `state`'s second row was unpinned (A2) | a US4-S5 case, Track turned to another target reads `target_changed`; T017; the record |
@@ -37,7 +37,7 @@ the story the probe named.
 | 041-R17 | Blocking. 035's `Stacker::stop` awaits 031's `Imaging::abort`, which a scope node that has stopped answering never answers, so US8-S6's run never finished its ending; the camera part's abort (US4) awaits the same call, not verified | settled by the owner with 043, which covers the camera part's abort as well (below): flip.md § Prerequisites 2 and plan.md § What 030 to 036, 038, 040 and 043 offer; the stand-in not folded |
 | 041-R18 | US7's reads fell on the run's 250 ms poll, so limits 0.6 s short survived (L7, L26) | US7-S2, US7-S3, US7-S6 and US7-S8 read 0.6 s off a whole second; T030; the record |
 | 041-R19 | T030 and T033 called three tests failing that pass before the code: US7-S5, US7-S9 and US8-S9 | T030 and T033 |
-| 041-R20 | § Risks said no `save_error` is reached on the rig; a read-only stack folder reaches it (S11, S23) | plan.md § Risks; the two cases are the owner's (below) |
+| 041-R20 | § Risks said no `save_error` is reached on the rig; a read-only stack folder reaches it (S11, S23) | plan.md § Risks; the two cases are not added (the owner's answer, below) |
 | 041-R21 | The focus part's `SolverUnavailable` row was unreached (P7) | a US6-S7 case on a rig with no imaging solver; T026; the record |
 | 041-R22 | Four stated rules of the repeat and of a pause's words were unpinned (F9, F11, F17, F20) | three US6-S8 cases and one US6-S10 case; T026; the record |
 | 041-R23 | `pause_ends_at` cleared at a resume was unpinned, and at an ending unstated (F21, F27) | plan.md § The focus gate in the machine, step 3; US6-S2, US6-S3 and US6-S5; T025, T027; the record |
@@ -85,19 +85,22 @@ the story the probe named.
 
   Every story is at or under 60,000 B. US6 and US4 are the stories to watch, at 84 % and
   82 % of 64 KiB.
-- Q: Which choices did the round leave to the owner? → A: Four, none folded past what
-  the probe ran:
-  - R1: the window is 11 s, the case the probe ran. 11.5 s would also catch a reach of
-    9 s, whose first frame would come at 11.1 s, with 0.6 s of margin; not run.
+- Q: Which choices did the round leave to the owner? → A: Four. The owner took the seat's recommendation for each on 2026-11-20 ("Yes, take them").
+  - R1: 11.5 s, which also catches a reach of 9 s, whose first frame would come at
+    11.1 s, with 0.6 s of margin. The probe's case ran with 11 s; the bound is the only
+    change.
   - R20: two US8 cases for a `save_error`, a stack folder made read-only while the run
     stacks, stopped once from the run and once from 035's route. They do not hold for a
     test run as root. With both, US8's estimate is (31,894 + 1,881) × 1.17 = 39,517 B.
+    Not added: a builder or CI run as root would fail them.
   - R25: the fold took the plan's sentence, option (b). Option (a), a `Step::OpenAid` in
     037's script and a US6-S9 case, is an edit to 037's file, and no probe ran it.
+    Option (b) stands.
   - R26: the fold says a check that did not finish is not repeated, which is what the
     trio's rule already said and what the probe built. The other answer, repeating one
     that did not finish with `NotSolved`, since stars trailed by an unsteady tracker are
-    a likely cause of 033's `no_region`, is a change of rule.
+    a likely cause of 033's `no_region`, is a change of rule. The rule stands: a check
+    that did not finish is not repeated.
 - Q: What of 037's own fold did this trio need? → A: Every name the trio takes from 037
   was read against 037's folded trio (`specs/037-ready`, bcf0fdfd). `Warning` is now a
   public enum with `words` (037-R1); nothing here names it, and the tests still type

@@ -134,7 +134,7 @@ in US5.
      (`crates/finder/src/tracking.rs:31`); and `run.centring.offset_arcsec` is within
      30″ of that true offset, the deadband three times over;
    - the imaging view's `frame.purpose` read `run` when the test first saw `stacking`;
-   - at no sample in the 11 s after `track.state` first read `tracking` did
+   - at no sample in the 11.5 s after `track.state` first read `tracking` did
      `run.state` read anything but `slewing` or `tracking`: the mount part reads steady
      only once 040's tracker has settled and then been steady for the whole of 032's
      fit reach, 10 s at the simulator's exposure of 1 s (FR-019; 12.1 s on the
