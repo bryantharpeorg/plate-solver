@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["014-goto", "015-tracking", "017-console-stop-confirm", "024-mount-link-recovery", "027-finder-tests-by-system", "030-imaging-camera-link", "038-track-follows-a-push"]
 # Drafted 2026-11-19 against `main` at 6e506ec6 (6e506ec6864fcaa5d5474a203357481dedc5ae81),
 # at the owner's ask the same day ("Yes, draft 039"), from two probes of that day: a
@@ -16,9 +16,10 @@ depends_on_landed: ["014-goto", "015-tracking", "017-console-stop-confirm", "024
 # left, FR-016 with FR-002 as it now reads: both gates passed, every value the scenarios
 # assert came out as written, US1-S15 among them, and so did every cost of FR-016 the
 # text named. It found one cost more, now named, and no blocking defect; its five
-# clarity defects are folded here. It is still a draft, and the flip to `ready` is the
-# owner's. What rests on a run and what on reading is said where it is used
-# (Clarifications; plan.md § What was run and what was read).
+# clarity defects are folded here. The owner flipped it to `ready` on 2026-11-20 ("yes",
+# asked with the costs of FR-016 that approval 7 names), which gives the owner approvals.
+# What rests on a run and what on reading is said where it is used (Clarifications;
+# plan.md § What was run and what was read).
 ---
 
 # Feature Specification: The Mount's Replies Stay in Step
@@ -27,7 +28,7 @@ depends_on_landed: ["014-goto", "015-tracking", "017-console-stop-confirm", "024
 
 **Created**: 2026-11-19
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: Two faults in the scope node's Sky-Watcher mount adapter, both confirmed on
 the emulator on 2026-11-19. First, when the acknowledgement of a motion start (`:J`) is
@@ -312,8 +313,8 @@ the text of 1 to 5 is otherwise kept as it was drafted.
 
 ## Owner approvals
 
-Flipping this spec to `ready` would approve the answer to every owner decision above, and
-the following. Each is named in the FR that makes it. No existing test, golden or CI
+Flipping this spec to `ready` approves the answer to every owner decision above, and the
+following; the owner flipped it on 2026-11-20. Each is named in the FR that makes it. No existing test, golden or CI
 file changes but for the one line of approval 5 and the one added function of approval 6.
 
 1. **Stop, like every command, may wait for an abandoned reply**, at most until 300 ms
