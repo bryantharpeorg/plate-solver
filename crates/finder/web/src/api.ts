@@ -296,6 +296,7 @@ export interface ImagingView {
   focus?: ImagingFocus;
   calibration?: ImagingCalibration;
   stack?: StackView;
+  steering?: ImagingSteering;
 }
 
 // The calibration library and sets of darks or flats in the imaging view (034).
@@ -361,6 +362,7 @@ export interface StackDropped {
   unreadable: number;
   behind: number;
   unprocessed: number;
+  not_steady?: number;
 }
 
 export interface StackView {
@@ -387,6 +389,32 @@ export interface StackStart {
   focus_gate?: boolean;
   gains?: [number, number, number];
   stretch?: number;
+}
+
+// Tracking steered by the subs, carried by the imaging and session views (040).
+export interface ImagingSteering {
+  smear_px: number;
+  on: boolean;
+  step_share: number;
+  rate_share: number;
+  source: "subs" | "tracker" | "none";
+  holding: boolean;
+  steady: boolean;
+  waiting: boolean;
+  pause?: string;
+  subs: number;
+  dropped_not_steady: number;
+  far_arcsec?: number;
+  last?: { time: number; east_arcsec: number; north_arcsec: number };
+  exposure_s?: number;
+  limited: boolean;
+  over_limit: boolean;
+  longest_exposure_s?: number | "no limit";
+  would_take_s?: number;
+  error_rms_arcsec?: number;
+  error_rms_px?: number;
+  drift_arcsec?: number;
+  drift_px?: number;
 }
 
 // An imaging solve and what the console keeps between the two cameras, as
@@ -554,6 +582,26 @@ export async function putImagingSettings(edit: ImagingSettingsEdit): Promise<Ima
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(edit),
+    }),
+  );
+}
+
+export async function putImagingSteering(edit: {
+  on: boolean;
+  smear_px: number;
+  step_share: number;
+  rate_share: number;
+}): Promise<ImagingView> {
+  return json(
+    await fetch("/api/imaging/steering", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        on: edit.on,
+        smear_px: edit.smear_px,
+        step_share: edit.step_share,
+        rate_share: edit.rate_share,
+      }),
     }),
   );
 }
