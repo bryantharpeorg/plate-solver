@@ -102,8 +102,9 @@ Stop::Exposing(mut client, task) => {
 
 Dropping the timed-out future drops the call (owner decision 2). The state's lock is not
 held across the await: `stop` is taken under it and the lock released before the
-`match`, as on `main`. The function's doc comment gains: "A call the node fails, or does
-not answer within `ABORT_WAIT`, ends the frame here too, and the call is dropped (043)."
+`match`, as on `main`. The function's doc comment gains, as its last sentence: "A call
+the node fails, or does not answer within `ABORT_WAIT`, ends the frame here too, and the
+call is dropped (043)."
 
 ### `crates/finder/README.md` (US1)
 
@@ -114,7 +115,8 @@ Three places, nothing else:
 - the row of `DELETE /api/imaging/stack` (`crates/finder/README.md:241`), before "Same-origin
   writes only.": "On a node that has stopped answering, the abort of the sub in flight is
   given up after 5 s and the stop answers then.";
-- the paragraph on the abort, after "no file written for it." (`crates/finder/README.md:666`):
+- the paragraph on the abort, after "no file written for it." (`crates/finder/README.md:666`),
+  wrapped at 80 columns like the paragraph, with the busy words' code span on one line:
   "A node that does not answer `AbortExposure` within 5 s, as over a link that has gone
   quiet, is given up on: the console ends the frame `aborted` itself and drops the call.
   The node's exposure may then run on to its end, and a frame asked for before that fails
@@ -139,6 +141,23 @@ fc161a54, in paused time, three times each with the same outcome:
   that kept the node silent for 12 s after the abort's answer, with the same outcome;
 - the Edge Case of the node answering again in the instant the console gave up, once;
 - the nine tests at the probe's tip with both gates' Rust commands (§ Verification).
+
+**Run in probe round 1, on 2026-11-20**, from this trio's text alone, on a branch cut
+from the trio's own commit: the claims above about `main` and the fix, again, with the
+same outcome; and these mutations of the fix, each caught by a scenario:
+- the bound removed, or at 10 s, 4.9 s or 5.2 s: US1-S1, US1-S3, US1-S4 and US1-S7, and
+  at every value but 5.2 s US1-S6, US1-S8 and US1-S9 too;
+- a bound that always waits its full length: US1-S2 and US1-S5;
+- the frame not ended on a timeout: US1-S1, US1-S4 and US1-S6 to US1-S9;
+- the timed-out call left running in a spawned task, and the frame ended on a timeout
+  with its task left running: US1-S4 as it now reads, whose words are those of the
+  round's case that passed three times on the code and failed under both; the first also
+  US1-S1.
+
+Two mutations no scenario catches rest on the diff (§ Read from the diff): an answered
+call that also ends the frame at the console, and the `Receiving` branch waiting too.
+US1-S3's second abort is sent 3 s after the silence, since the console reads `no_link`
+within 3 s and the round saw it at 910 ms.
 
 **Read, not run**:
 - the node's own copy of an abandoned exposure with `save_at_node`, and its frame count
@@ -187,7 +206,7 @@ is in scope.
 | StopAll (`crates/finder/src/link.rs:384`) | the mount's Stop | 200 ms a try within 2 s |
 
 Not node calls: the stack's worker solves with the console's own solver, and its files
-are written on the blocking pool (`crates/finder/src/imaging/stack/service.rs:529`). The
+are written on the blocking pool (`crates/finder/src/imaging/stack/service.rs:563`). The
 calibration set puts back only the console's own exposure (`crates/finder/src/imaging/calibration/service.rs:404`).
 036's `Steering::before_exposure`, the one await 036 adds before an exposure, has no
 caller in `crates/finder/src` at fc161a54; 040 gives it one, with its own stop
@@ -215,9 +234,18 @@ Once 043 has landed, 041 and 042 may rely on these, and need neither probe's sta
 
 - **The README's three places.** No test reads them. Copy them from § Interfaces.
 - **The doc comment of `Imaging::abort`.** Copy it from § Interfaces.
-- **That the call is dropped, not left running** (owner decision 2). US1-S4's busy frame
-  shows that the camera was not told; that the future is dropped rather than detached
-  shows in the diff: no `spawn` around `client.abort()`.
+- **That the call is dropped, not left running** (owner decision 2). US1-S4's frame
+  id+1, asked 4 s after the abort's answer, after the camera's late abort would have
+  landed, fails busy: the call was dropped, not left running. Its view 30 s later still
+  shows frame id+1 and no `frames` folder: the frame's task ended with the call. That the
+  future is dropped rather than detached also shows in the diff: no `spawn` around
+  `client.abort()`.
+- **That an answered call leaves the frame to its task** (FR-002). It shows in the
+  diff: `task.abort()` and `end_aborted` run only when the answer is not `Ok(Ok(()))`.
+  No scenario has a node that answers the abort and then sends no `Aborted` (spec
+  § Assumptions, out of scope).
+- **That a frame `receiving` is stopped at once, as today** (FR-002). It shows in the
+  diff: T002 changes no line of the `Receiving` branch.
 
 ## Shapes that existing tests pin
 
@@ -299,8 +327,13 @@ tests fail (§ What was run and what was read). Then `ABORT_WAIT` and the bound 
    stories merge their rows and `mod` lines over 043's.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
    decisions, § Owner approvals). Both decisions are open.
-4. **Probe builds.** The probe of 2026-11-20 built the story's code and tests from the
-   draft's design; the trio itself has not been probe-built.
+4. **Probe builds.** Met for round 1. The drafting probe of 2026-11-20 built the
+   story's code and tests from the draft's design. Probe round 1, the same day, built
+   US1 from this trio's text alone: seven of nine failed on `main` as T001 says and all
+   nine passed after, on five runs; both gates' Rust commands passed with every existing
+   test unchanged; the diff measured 26,789 B (40.9 % of 65,536 B, 104.5 % of the
+   estimate). It found no blocking defect, and its seven clarity defects are folded
+   here.
 5. **No operator-staged files are needed.**
 
 ## Outside the factory
@@ -335,8 +368,10 @@ They bind the story.
    `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c`. The probe's commits
    measured 25,639 B, 39.1 % of 65,536 B: the test file 16,346 B, the README 6,998 B
    (its rows are single long lines, so each changed row counts twice), `mod.rs` 1,901 B
-   and the `mod` line 394 B. At 1.35 times the probe's, the factor 041's second probe
-   report applies to a factory build, it would be about 34,600 B, 52.8 %.
+   and the `mod` line 394 B. Probe round 1, built from this trio, measured 26,789 B,
+   40.9 %: the test file 17,496 B and the rest to the byte. At 1.35 times the drafting
+   probe's, the factor 041's second probe report applies to a factory build, it would be
+   about 34,600 B, 52.8 %; the folded US1-S4 adds a few lines to the test file.
 3. **A spec fixed mid-epic needs a relaunch.** *Check:* no builder edits
    `specs/043-imaging-abort-answers-in-time/` or `.specify/`.
 4. **The view outside `ready` holds no frame.** On a silent node the abort's answer is
@@ -409,12 +444,12 @@ stories:
       - path: crates/finder/tests/console/imaging_abort_silent.rs
         status: new
         disposition: add
-        assertion: "on a node gone silent, a second abort 1 s after a first that waits answers after 0 to 100 ms with exactly state no_link, and the first after 5,000 to 5,100 ms with exactly state no_link"
+        assertion: "on a node gone silent, a second abort 3 s after a first that waits answers after 0 to 100 ms with exactly state no_link, and the first after 5,000 to 5,100 ms with exactly state no_link"
         decision: "spec.md:US1-S3"
       - path: crates/finder/tests/console/imaging_abort_silent.rs
         status: new
         disposition: add
-        assertion: "on the stand-in rig whose camera aborts 8,000 ms after it is asked, the abort answers after 5,000 to 5,100 ms with state ready and the frame aborted, and a 100 ms frame asked 1 s later fails with the busy words"
+        assertion: "on the stand-in rig whose camera aborts 8,000 ms after it is asked, the abort answers after 5,000 to 5,100 ms with state ready and the frame aborted; a 100 ms frame asked 4 s later fails with the busy words; 30 s later the view's frame is still that frame and no frames folder is made"
         decision: "spec.md:US1-S4"
       - path: crates/finder/tests/console/imaging_abort_silent.rs
         status: new
