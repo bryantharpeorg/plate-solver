@@ -1,4 +1,4 @@
-//! Feed-forward and finder-camera PI tracking, with latched safe endings.
+//! Feed-forward tracking, corrected by the finder camera or steered by the subs, with latched safe endings.
 //!
 //! The caller centres the target before starting. All UTC comes from the console's
 //! injected clock; timers and heartbeat ages use tokio's (pausable) clock.
@@ -6,6 +6,7 @@
 use crate::{
     ephemeris,
     goto::{sun_horizontal, Planner, Wind},
+    imaging::steering::{GapFuture, Steered, Stepped, TrackingError},
     link::{stop_deadline, LinkManager, MountClient},
     model::Model,
     session::{Clock, Site},
@@ -14,11 +15,12 @@ use crate::{
 };
 use scope_link::proto::{Axis, AxisInfo};
 use std::{
+    collections::VecDeque,
     sync::{Arc, Mutex},
     time::Duration,
 };
 use tokio::{
-    sync::{watch, Mutex as AsyncMutex},
+    sync::{oneshot, watch, Mutex as AsyncMutex, Notify},
     task::JoinHandle,
     time::{interval, sleep, timeout, Instant, MissedTickBehavior},
 };
@@ -32,6 +34,22 @@ const DEADBAND_ARCSEC: f64 = 10.0;
 const FORECAST_S: f64 = 30.0 * 60.0;
 const TAKEUP_RATE: f64 = 0.5;
 const KEYHOLE_ALT: f64 = 88.0;
+
+/// Shares of the sub error and measured drift taken out at each gap (036).
+const SUB_STEP_SHARE: f64 = 0.5;
+const SUB_RATE_SHARE: f64 = 0.3;
+/// Maximum offset change in one gap, in arcseconds per second.
+const SUB_RATE_STEP: f64 = 0.1;
+/// The deadband is the larger of two axis counts and one arcsecond on the sky.
+const SUB_DEADBAND_COUNTS: f64 = 2.0;
+const SUB_DEADBAND_FLOOR_ARCSEC: f64 = 1.0;
+/// Maximum displacement on the sky per axis and duration of its rate pulse.
+const SUB_STEP_LIMIT_ARCSEC: f64 = 30.0;
+const SUB_STEP_TIME: Duration = Duration::from_millis(500);
+/// Eight idle gaps outlast the stack's four queued subs and one being solved.
+const STALE_GAPS: u32 = 8;
+/// Corrections remembered for late subs, oldest first.
+const CORRECTIONS: usize = 16;
 
 struct Measurement {
     baseline_deg: f64,
@@ -97,6 +115,42 @@ struct Control {
     /// The target has been replaced by a followed push; the rate loop's next
     /// turn clears it and refreshes every forecast made for the old place.
     followed: bool,
+    /// Counts a turn and the gear directions last left by the rate task.
+    counts: [u32; 2],
+    direction: [f64; 2],
+    /// No gap may claim before the rate task's first rates.
+    settling: bool,
+    pending: Option<TrackingError>,
+    /// Only errors measured after the last followed push may steer.
+    fresh_after: f64,
+    subs: Option<Subs>,
+    /// A stack still holds the tracker, but its errors have gone quiet.
+    lapsed: bool,
+    held: Held,
+    corrections: VecDeque<Correction>,
+    gaps: Vec<oneshot::Sender<Stepped>>,
+}
+
+#[derive(Default)]
+struct Subs {
+    /// Time and axis errors of the last error applied in this claim.
+    previous: Option<(f64, [f64; 2])>,
+    idle: u32,
+}
+
+/// The newest finder proportional step after a lapse, in axis arcseconds.
+/// No integral is held: the offset stays as the subs left it.
+#[derive(Debug, Default, Clone, Copy)]
+struct Held {
+    step: [f64; 2],
+}
+
+struct Correction {
+    /// Console time at the end of the gap.
+    time: f64,
+    /// Actual pulse displacement (axis arcseconds) and offset change (arcsec/s).
+    step: [f64; 2],
+    rate: [f64; 2],
 }
 
 struct Shared {
@@ -108,6 +162,7 @@ struct Shared {
     wind: Mutex<Wind>,
     control: Mutex<Control>,
     cancel: watch::Sender<u64>,
+    wake: Notify,
 }
 
 /// One target's tracking owner. Construct with the session's current pointing
@@ -148,6 +203,7 @@ impl Tracker {
                 wind: Mutex::new(wind),
                 control: Mutex::new(Control::default()),
                 cancel: watch::channel(0).0,
+                wake: Notify::new(),
             }),
             task: AsyncMutex::new(None),
         }
@@ -203,6 +259,8 @@ impl Tracker {
                 return Err("stopped".into());
             }
             *control = Control {
+                counts,
+                settling: true,
                 state: State {
                     state: "tracking",
                     target: Some(target.clone()),
@@ -285,12 +343,99 @@ impl Tracker {
         control.proportional = [0.0; 2];
         control.previous_pointing = None;
         control.state.samples.clear();
+        // Errors measured at the old place, or steps held for it, would steer
+        // back toward it by up to 30 arcseconds a gap (036 FR-011).
+        control.subs = None;
+        control.pending = None;
+        control.lapsed = false;
+        control.held = Held::default();
+        control.fresh_after = self.shared.clock.now();
         Ok(())
+    }
+
+    /// The J2000 place being tracked; `None` when off.
+    pub fn target(&self) -> Option<(f64, f64)> {
+        let control = self.shared.control.lock().unwrap();
+        if control.state.state == "off" {
+            None
+        } else {
+            control.state.target.as_ref().map(|t| (t.ra_deg, t.dec_deg))
+        }
+    }
+
+    /// Hand over a sub's error. Nothing changes until the next gap.
+    pub fn steer(&self, error: TrackingError) {
+        let mut control = self.shared.control.lock().unwrap();
+        if control.state.state != "tracking"
+            || ![error.time, error.east_arcsec, error.north_arcsec]
+                .into_iter()
+                .all(f64::is_finite)
+            || error.time <= control.fresh_after
+        {
+            return;
+        }
+        match &control.subs {
+            Some(subs) if subs.previous.is_some_and(|(time, _)| time >= error.time) => return,
+            Some(_) => {}
+            None if control.lapsed => {}
+            None => return,
+        }
+        if control
+            .pending
+            .is_none_or(|pending| pending.time < error.time)
+        {
+            control.pending = Some(error);
+        }
+    }
+
+    /// Queue the gap now; awaiting the answer keeps no tracker alive.
+    pub fn gap(&self) -> GapFuture {
+        let mut control = self.shared.control.lock().unwrap();
+        if control.state.state == "off" {
+            return Box::pin(async { Stepped::default() });
+        }
+        let (send, receive) = oneshot::channel();
+        control.gaps.push(send);
+        drop(control);
+        self.shared.wake.notify_one();
+        Box::pin(async move { receive.await.unwrap_or_default() })
+    }
+
+    /// Let the finder camera correct again, preserving the learned offset.
+    pub fn release(&self) {
+        let mut control = self.shared.control.lock().unwrap();
+        control.subs = None;
+        control.pending = None;
+        control.lapsed = false;
+        control.held = Held::default();
+    }
+
+    /// Whether tracking errors currently steer the tracker.
+    pub fn steered_by_subs(&self) -> bool {
+        self.shared.control.lock().unwrap().subs.is_some()
     }
 
     /// Use this pointing model for every later rate, forecast and keyhole plan.
     pub fn set_model(&self, model: Model) {
         *self.shared.model.lock().unwrap() = Arc::new(model);
+    }
+}
+
+impl Steered for Tracker {
+    fn target(&self) -> Option<(f64, f64)> {
+        self.target()
+    }
+    fn steer(&self, error: TrackingError) {
+        self.steer(error);
+    }
+    fn gap(&self) -> GapFuture {
+        self.gap()
+    }
+    fn release(&self) {
+        self.release();
+    }
+    fn steered_by_subs(&self) -> bool {
+        self.steered_by_subs()
     }
 }
 
@@ -324,35 +469,42 @@ impl Shared {
             }
             return;
         }
-        let Control {
-            state,
-            previous_pointing,
-            proportional,
-            proportional_until,
-            ..
-        } = &mut *control;
-        // The first solve establishes timing; there is no preceding interval to
-        // integrate. Later solves set the interval over which P removes 60% of
-        // the error. Repeated timestamps must not accumulate an integral.
-        let elapsed = previous_pointing.map(|previous| time - previous);
-        let interval = elapsed.filter(|dt| *dt > 0.0).unwrap_or(1.0);
-        *previous_pointing = Some(time);
-        *proportional = [0.0; 2];
-        *proportional_until = time + interval;
-        if east_arcsec.hypot(north_arcsec) >= DEADBAND_ARCSEC {
-            let target = state.target.as_ref().unwrap();
-            let axis_error = self.axis_error(target, time, east_arcsec, north_arcsec);
-            for i in 0..2 {
-                proportional[i] = -PROPORTIONAL_GAIN * axis_error[i] / interval;
-                if elapsed.is_some_and(|dt| dt > 0.0) {
-                    // Ki = Kp / Ti. Integrating the proportional rate over the
-                    // measured solve interval gives an offset in arcsec/s.
-                    state.tracking_offset[i] = (state.tracking_offset[i]
-                        + proportional[i] * interval / INTEGRAL_TIME_S)
-                        .clamp(-OFFSET_LIMIT, OFFSET_LIMIT);
+        if control.subs.is_none() {
+            let Control {
+                state,
+                previous_pointing,
+                proportional,
+                proportional_until,
+                lapsed,
+                held,
+                ..
+            } = &mut *control;
+            // Preserve 015's timing and PI when no stack holds the tracker.
+            let elapsed = previous_pointing.map(|previous| time - previous);
+            let interval = elapsed.filter(|dt| *dt > 0.0).unwrap_or(1.0);
+            *previous_pointing = Some(time);
+            *proportional = [0.0; 2];
+            *proportional_until = time + interval;
+            held.step = [0.0; 2];
+            if east_arcsec.hypot(north_arcsec) >= DEADBAND_ARCSEC {
+                let target = state.target.as_ref().unwrap();
+                let axis_error = self.axis_error(target, time, east_arcsec, north_arcsec);
+                for i in 0..2 {
+                    if *lapsed {
+                        held.step[i] = -PROPORTIONAL_GAIN * axis_error[i];
+                    } else {
+                        proportional[i] = -PROPORTIONAL_GAIN * axis_error[i] / interval;
+                        if elapsed.is_some_and(|dt| dt > 0.0) {
+                            // Ki = Kp / Ti, integrated over the solve interval.
+                            state.tracking_offset[i] = (state.tracking_offset[i]
+                                + proportional[i] * interval / INTEGRAL_TIME_S)
+                                .clamp(-OFFSET_LIMIT, OFFSET_LIMIT);
+                        }
+                    }
                 }
             }
         }
+        let state = &mut control.state;
         state.samples.retain(|s| time - s.time <= 60.0);
         state.samples.push(PointingError {
             time,
@@ -382,6 +534,12 @@ impl Shared {
         }
         control.proportional = [0.0; 2];
         control.previous_pointing = None;
+        control.subs = None;
+        control.pending = None;
+        control.lapsed = false;
+        control.held = Held::default();
+        control.corrections.clear();
+        control.gaps.clear();
         for (i, measurement) in control.measurement.iter_mut().enumerate() {
             if measurement.take().is_some() {
                 model.motion.crossing(i, false);
@@ -403,7 +561,8 @@ impl Shared {
         )
     }
 
-    fn axis_error(&self, target: &Target, time: f64, east: f64, north: f64) -> [f64; 2] {
+    /// Parallactic angle of J2000 north and apparent altitude, in radians.
+    fn axis_frame(&self, target: &Target, time: f64) -> (f64, f64) {
         let (alt, az) = self.place(target, time);
         // The direction of J2000 north in the horizon tangent plane gives the
         // parallactic angle, including precession of north (as Sync::from_frame
@@ -419,11 +578,16 @@ impl Shared {
         );
         let cross = ((north_az - az + 180.0).rem_euclid(360.0) - 180.0) * alt.to_radians().cos();
         let q = cross.atan2(north_alt - alt);
+        (q, ephemeris::apparent_from_true(alt).to_radians())
+    }
+
+    fn axis_error(&self, target: &Target, time: f64, east: f64, north: f64) -> [f64; 2] {
+        let (q, elevation) = self.axis_frame(target, time);
         let (sin_q, cos_q) = q.sin_cos();
         // North-through-east azimuth reverses the equatorial east direction.
         // Wallace (2002): rotate to cross-elevation/elevation, then divide by cos E.
         [
-            (-cos_q * east + sin_q * north) / ephemeris::apparent_from_true(alt).to_radians().cos(),
+            (-cos_q * east + sin_q * north) / elevation.cos(),
             sin_q * east + cos_q * north,
         ]
     }
@@ -738,6 +902,189 @@ impl Shared {
         }
     }
 
+    /// Serve all live callers together, only from the once-a-second rate task.
+    async fn serve_gaps(&self, movement: &mut MountClient) -> Result<(), String> {
+        let senders: Vec<_> = std::mem::take(&mut self.control.lock().unwrap().gaps)
+            .into_iter()
+            .filter(|sender| !sender.is_closed())
+            .collect();
+        if senders.is_empty() {
+            return Ok(());
+        }
+        let (target, counts, direction, offset, want, changed, applied, held_step) = {
+            let mut control = self.control.lock().unwrap();
+            // Dropping these senders answers zero, including before the first rates.
+            if control.state.state != "tracking" || control.settling {
+                return Ok(());
+            }
+            let target = control.state.target.clone().unwrap();
+            let counts = control.counts;
+            let direction = control.direction;
+            let claimed = control.subs.is_none() && (!control.lapsed || control.pending.is_some());
+            if claimed {
+                control.subs = Some(Subs::default());
+                control.lapsed = false;
+                control.held = Held::default();
+                control.proportional = [0.0; 2];
+                control.proportional_until = 0.0;
+                control.previous_pointing = None;
+            }
+            let (_, elevation) = self.axis_frame(&target, self.clock.now());
+            let sky = [elevation.cos(), 1.0];
+            let deadband = [0, 1].map(|i| {
+                (SUB_DEADBAND_COUNTS * 1_296_000.0 / f64::from(counts[i]))
+                    .max(SUB_DEADBAND_FLOOR_ARCSEC / sky[i])
+            });
+            let limit = sky.map(|scale| SUB_STEP_LIMIT_ARCSEC / scale);
+            let mut want = [0.0; 2];
+            let mut changed = [0.0; 2];
+            let mut applied = None;
+            let mut held_step = false;
+            if control.subs.is_none() {
+                let held = std::mem::take(&mut control.held);
+                held_step = held.step.iter().any(|step| *step != 0.0);
+                want = [0, 1].map(|i| held.step[i].clamp(-limit[i], limit[i]));
+                control.proportional = [0.0; 2];
+                control.proportional_until = 0.0;
+            } else if let Some(error) = control.pending.take() {
+                let t1 = error.time;
+                let a = self.axis_error(&target, t1, error.east_arcsec, error.north_arcsec);
+                let previous = control.subs.as_ref().unwrap().previous;
+                control.subs.as_mut().unwrap().idle = 0;
+                for i in 0..2 {
+                    if let Some((t0, a0)) = previous {
+                        let dt = t1 - t0;
+                        if dt > 0.0 {
+                            let between: f64 = control
+                                .corrections
+                                .iter()
+                                .filter(|c| t0 < c.time && c.time <= t1)
+                                .map(|c| c.step[i])
+                                .sum();
+                            // Offset changes after t0 were absent for this much of
+                            // the measurement. Account for even changes after t1.
+                            let unseen: f64 = control
+                                .corrections
+                                .iter()
+                                .filter(|c| c.time > t0)
+                                .map(|c| c.rate[i] * (c.time.min(t1) - t0))
+                                .sum();
+                            let drift_rate = (a[i] - a0[i] - between + unseen) / dt;
+                            if drift_rate.abs() <= 2.0 * OFFSET_LIMIT
+                                && between.abs() <= 2.0 * deadband[i]
+                            {
+                                let old = control.state.tracking_offset[i];
+                                let new = (old
+                                    - (SUB_RATE_SHARE * drift_rate)
+                                        .clamp(-SUB_RATE_STEP, SUB_RATE_STEP))
+                                .clamp(-OFFSET_LIMIT, OFFSET_LIMIT);
+                                changed[i] = new - old;
+                                control.state.tracking_offset[i] = new;
+                            }
+                        }
+                    }
+                    let after: f64 = control
+                        .corrections
+                        .iter()
+                        .filter(|c| c.time > t1)
+                        .map(|c| c.step[i])
+                        .sum();
+                    let seen = a[i] + after;
+                    if seen.abs() >= deadband[i] {
+                        want[i] = (-SUB_STEP_SHARE * seen).clamp(-limit[i], limit[i]);
+                    }
+                }
+                applied = Some((t1, a));
+            } else if !claimed {
+                let subs = control.subs.as_mut().unwrap();
+                subs.idle += 1;
+                if subs.idle >= STALE_GAPS {
+                    control.subs = None;
+                    control.lapsed = true;
+                    // Last rates have no finder proportional term: leave them in
+                    // force at the lapse itself. Later gaps always refresh both.
+                    return Ok(());
+                }
+            }
+            (
+                target,
+                counts,
+                direction,
+                control.state.tracking_offset,
+                want,
+                changed,
+                applied,
+                held_step,
+            )
+        };
+        let rates = self.rates(&target, counts)?;
+        let base = [0, 1].map(|i| commanded(rates[i], direction[i], offset[i] / 3600.0));
+        let pulsed = [0, 1].map(|i| {
+            commanded(
+                rates[i],
+                direction[i],
+                (offset[i] + want[i] / SUB_STEP_TIME.as_secs_f64()) / 3600.0,
+            )
+        });
+        let pulse = [0, 1].map(|i| pulsed[i] - base[i]);
+        let mut began = [Instant::now(); 2];
+        let has_pulse = pulse.iter().any(|p| *p != 0.0);
+        let model = self.model();
+        if has_pulse {
+            for (i, axis) in AXES.into_iter().enumerate() {
+                model.motion.moving(i, pulsed[i]);
+                movement
+                    .rate_axis(axis, pulsed[i])
+                    .await
+                    .map_err(|_| "link_lost")?;
+                began[i] = Instant::now();
+            }
+            sleep(SUB_STEP_TIME).await;
+        }
+        // Recompute feed-forward after the pulse, retaining its original base
+        // for the displacement: sky motion is not part of the correction.
+        let rates = self.rates(&target, counts)?;
+        let mut step = [0.0; 2];
+        for (i, axis) in AXES.into_iter().enumerate() {
+            let rate = commanded(rates[i], direction[i], offset[i] / 3600.0);
+            model.motion.moving(i, rate);
+            movement
+                .rate_axis(axis, rate)
+                .await
+                .map_err(|_| "link_lost")?;
+            if has_pulse {
+                step[i] = pulse[i] * 3600.0 * began[i].elapsed().as_secs_f64();
+            }
+        }
+        {
+            let mut control = self.control.lock().unwrap();
+            if let (Some(error), Some(subs)) = (applied, control.subs.as_mut()) {
+                subs.previous = Some(error);
+            }
+            if applied.is_some() || held_step {
+                control.corrections.push_back(Correction {
+                    time: self.clock.now(),
+                    step,
+                    rate: changed,
+                });
+                if control.corrections.len() > CORRECTIONS {
+                    control.corrections.pop_front();
+                }
+            }
+        }
+        let (q, elevation) = self.axis_frame(&target, self.clock.now());
+        let (sin_q, cos_q) = q.sin_cos();
+        let x = step[0] * elevation.cos();
+        let answer = Stepped {
+            east_arcsec: -cos_q * x + sin_q * step[1],
+            north_arcsec: sin_q * x + cos_q * step[1],
+        };
+        for sender in senders {
+            let _ = sender.send(answer);
+        }
+        Ok(())
+    }
+
     async fn stop_axis(client: &mut MountClient, axis: Axis) -> Result<(), String> {
         client.rate_axis(axis, 0.0).await.map_err(|_| "link_lost")?;
         loop {
@@ -808,7 +1155,16 @@ impl Shared {
             let mut keyhole_entry = None;
             let mut refresh_at = 0.0;
             loop {
-                second.tick().await;
+                tokio::select! {
+                    biased;
+                    _ = self.wake.notified() => {
+                        if let Err(reason) = self.serve_gaps(&mut movement).await {
+                            return reason;
+                        }
+                        continue;
+                    }
+                    _ = second.tick() => {}
+                }
                 let state = match movement.axis_state(Axis::Azimuth).await {
                     Ok(state) => state,
                     Err(_) => return "link_lost".into(),
@@ -937,21 +1293,15 @@ impl Shared {
                         (p + control.state.tracking_offset[i]) / 3600.0
                     })
                 };
+                self.control.lock().unwrap().direction = direction;
                 for (i, axis) in AXES.into_iter().enumerate() {
-                    // Do not unload a gear on PI noise near a turning point,
-                    // or undo a forecast take-up before the sign actually turns.
-                    let requested = rates[i] + correction[i];
-                    let rate =
-                        if rates[i].signum() != direction[i] || requested * direction[i] < 0.0 {
-                            0.0
-                        } else {
-                            requested
-                        };
+                    let rate = commanded(rates[i], direction[i], correction[i]);
                     model.motion.moving(i, rate);
                     if movement.rate_axis(axis, rate).await.is_err() {
                         return "link_lost".into();
                     }
                 }
+                self.control.lock().unwrap().settling = false;
             }
         };
         let reason = tokio::select! {
@@ -966,5 +1316,16 @@ impl Shared {
             .clone()
             .stop_until_acknowledged(Some(client), stop_deadline())
             .await;
+    }
+}
+
+/// Feed-forward plus an extra rate, or zero instead of unloading an axis's gear.
+/// Inputs and answer are degrees per second.
+fn commanded(rate: f64, direction: f64, extra: f64) -> f64 {
+    let requested = rate + extra;
+    if rate.signum() != direction || requested * direction < 0.0 {
+        0.0
+    } else {
+        requested
     }
 }
