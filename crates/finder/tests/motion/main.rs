@@ -16,6 +16,7 @@ mod night;
 mod recording_raw;
 mod simulate;
 mod steering;
+mod steering_cap;
 mod steering_claim;
 mod steering_gap;
 mod stop;
