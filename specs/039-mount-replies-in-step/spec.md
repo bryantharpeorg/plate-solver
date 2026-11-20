@@ -6,15 +6,18 @@ depends_on_landed: ["014-goto", "015-tracking", "017-console-stop-confirm", "024
 # reading of the scope node's Sky-Watcher adapter and a run of that reading on the
 # emulator, with three trial fixes. Every `path:line` here was read at 6e506ec6 and
 # stands at 52785403, where it was checked on 2026-11-20.
-# Probe-built once, on 2026-11-19: all three stories were built in order from this text
+# Probe round 1, on 2026-11-19: all three stories were built in order from this text
 # as it then stood, passed both gates, and every value the scenarios assert came out as
 # written. The round found no blocking defect and 14 clarity defects, all folded here on
 # 2026-11-20, with six scenarios for requirements no test held. It also ran the Edge
 # Case of a late reply with the retry's own answer behind it, from which FR-016 and its
 # four scenarios come. The owner settled all six owner decisions on 2026-11-20.
-# It is still a draft, and the operator asks the owner before any flip: FR-016 has not
-# been built together with FR-002 as it now reads, and US1-S15 has not been run as it is
-# written. What rests on a run and what on reading is said where it is used
+# Probe round 2, on 2026-11-20, built all three stories again from the text that fold
+# left, FR-016 with FR-002 as it now reads: both gates passed, every value the scenarios
+# assert came out as written, US1-S15 among them, and so did every cost of FR-016 the
+# text named. It found one cost more, now named, and no blocking defect; its five
+# clarity defects are folded here. It is still a draft, and the flip to `ready` is the
+# owner's. What rests on a run and what on reading is said where it is used
 # (Clarifications; plan.md § What was run and what was read).
 ---
 
@@ -130,7 +133,7 @@ and log both.
   device or the real board.
 - Q: What is left for later? → A: The items under "Out of scope" in § Assumptions.
 
-### Session 2026-11-20 (probe round 1 and the owner's answers)
+### Session 2026-11-20 (probe rounds 1 and 2, and the owner's answers)
 
 - Q: What did probe round 1 build? → A: On 2026-11-19, all three stories, in order,
   from this trio as it then stood and the repository alone. Each passed both gates with
@@ -194,28 +197,40 @@ and log both.
 - Q: What does FR-016 cost? → A: The transport cannot tell a late reply from a lost one.
   After a reply that is lost outright, the transmission behind the retry waits until
   300 ms after the retry's frame was sent for a second reply that never comes: a read or
-  a rate call that loses one status reply takes 600 ms where it took 300 (US1-S15). The
-  transmission that pays can be a Stop's. A Stop asked less than 300 ms after such a
-  retry waits to the same moment, and inside a Stop whose own `:K1` acknowledgement is
-  lost and whose second try is answered, `:K2` leaves 300 ms later than it did. A board
-  found at the second baud of discovery pays the wait once at each connect. The 600 ms
-  is the probe's figure; the Stop and connect cases were read from the code in the fold
-  and not run.
-- Q: Does FR-016 keep owner decision 1's bound for Stop? → A: Yes. Stop's first `:K`
-  still leaves no later than 300 ms after the frame of the one exchange it finds open
-  was sent, because FR-016's exchange is read out under FR-001 to its own frame's
-  deadline like any other, and US1-S5's 30 ms and US1-S6's 280 ms were the same in the
-  trial. What changes is which frame that can be: an abandoned one, as before, or a
-  retry answered less than 300 ms earlier.
-- Q: What rests on a run now, and what on reading? → A: Run on the probe's build of the
-  three stories: every value of US1-S1 to US1-S8, US2-S1 to US2-S7 and US3-S1 to
+  a rate call that loses one status reply takes 600 ms where it took 300 (the read:
+  US1-S15; the rate call: probe round 2). The transmission that pays can be a Stop's. A
+  Stop asked while such a read is under way, or less than 300 ms after its retry, waits
+  to the same moment: asked 100 ms into a read that loses its status reply, it answers
+  after 500 ms where it took 200. Inside a Stop whose own `:K1` acknowledgement is lost
+  and whose second try is answered, `:K2` leaves 300 ms later than it did. A board found
+  at the second baud of discovery pays the wait once at each connect, and so does the
+  read-only `probe` bring-up, once, at `:a1`: a connect there takes 1.8 s where it took
+  1.5 s. Probe round 2 ran each of these cases, with FR-016 and FR-002 as they now
+  read, and measured the figures given here.
+- Q: Does FR-016 keep owner decision 1's bound for Stop? → A: Yes, for the exchange open
+  when `:K1` is sent. Stop's first `:K` still leaves no later than 300 ms after that
+  exchange's frame was sent, because FR-016's exchange is read out under FR-001 to its
+  own frame's deadline like any other, and US1-S5's 30 ms and US1-S6's 280 ms were the
+  same in the trial. What changes is which frame that can be: an abandoned one, as
+  before, or a retry answered less than 300 ms earlier. A Stop asked while a read is
+  under way first waits for that read, as on `main`, so its `:K1` can leave more than
+  300 ms after the frame that was open when it was asked: asked 100 ms into a read that
+  loses its status reply, `:K1` left 600 ms after that read's first `:f1`, and 300 ms
+  after its retry. Probe round 2 found the bound held in every Stop it ran.
+- Q: What rests on a run now, and what on reading? → A: Run on probe round 1's build of
+  the three stories: every value of US1-S1 to US1-S8, US2-S1 to US2-S7 and US3-S1 to
   US3-S4, the log lines, US3-S3 with its new wait, and each scenario or step added for
   a requirement no test held, as a case that was not committed. Run in the trial of
   FR-016, which was that build with the rule added and a baud change still closing the
-  exchange: US1-S12 to US1-S14. Read, not run: FR-016 together with FR-002 as it now
-  reads; US1-S15, whose 600 ms the probe's report gives and whose other values are read
-  from the code; FR-016's cost to a Stop and to a connect. Nothing was run on a real
-  serial device or the real board. plan.md § What was run and what was read lists each.
+  exchange: US1-S12 to US1-S14. Run in probe round 2, which built the three stories
+  again from the text that fold left, with FR-016 and FR-002 as they now read: every
+  value of all 29 scenarios in their committed files, US1-S15 among them; both gates;
+  and, as cases, FR-016's cost to a rate call, to a Stop, over a lost link and at a
+  connect at the second baud. Read, not run: nothing of what the scenarios assert or of
+  FR-016's costs. What an Edge Case says by reading, it says there, and plan.md § Read
+  from the diff, not from a test lists what only the diff shows. Nothing was run on a
+  real serial device or the real board. plan.md § What was run and what was read lists
+  each.
 - Q: Was `main` read again? → A: On 2026-11-20, at 52785403. The one commit since
   6e506ec6, 035's US10, touches no file this trio cites, so every `path:line` here
   stands as it was read.
@@ -279,15 +294,18 @@ the text of 1 to 5 is otherwise kept as it was drafted.
    then no longer makes the next read, rate command or GoTo misread (US1-S12 to
    US1-S14, run in the probe's trial of the rule). The cost: after a reply that is lost
    outright, the transmission behind the retry waits until 300 ms after the retry's
-   frame was sent, so such a read or rate call takes 600 ms where it took 300
-   (US1-S15). Decision 1's bound for Stop holds with the rule: Stop's first `:K` leaves
-   no later than 300 ms after the frame of the exchange it finds open was sent. What the
-   rule adds is that this frame can be a retry's. A Stop asked less than 300 ms after an
-   answered retry waits to that retry's deadline, and inside a Stop whose own `:K1`
-   acknowledgement is lost and whose second try is answered, `:K2` leaves 300 ms later
-   than it did. Those two cases of the cost, and two more over a lost link and at
-   connect (Edge Cases), were read from the code in the fold of 2026-11-20 and not run
-   (owner approval 7). Instead: leave the rule out and keep the Edge Case as the probe
+   frame was sent, so such a read or rate call takes 600 ms where it took 300 (the read:
+   US1-S15; the rate call: probe round 2). Decision 1's bound for Stop holds with the
+   rule, for the exchange open when `:K1` is sent: Stop's first `:K` leaves no later than
+   300 ms after that exchange's frame was sent. What the rule adds is that this frame
+   can be a retry's. A Stop asked during such a read or less than 300 ms after its retry
+   waits to that retry's deadline (asked 100 ms into the read, it answers after 500 ms
+   where it took 200), and inside a Stop whose own `:K1` acknowledgement is lost and
+   whose second try is answered, `:K2` leaves 300 ms later than it did. Those cases of
+   the cost, and two more over a lost link and at connect (Edge Cases), were first read
+   from the code in the fold of 2026-11-20; probe round 2 ran each, the Stop during such
+   a read among them, with the figures given here and in the Edge Cases (owner
+   approval 7). Instead: leave the rule out and keep the Edge Case as the probe
    ran it without the rule, where a position read counts one `invalid_replies` and is
    back in step on its own retry, and a rate command fails and stops both axes until
    Track's next refresh.
@@ -314,12 +332,15 @@ file changes but for the one line of approval 5 and the one added function of ap
    there, which is not edited (US1-S8).
 7. **Whatever follows an answered retry may wait for one reply more**, at most until
    300 ms after that retry's frame was sent (FR-016; owner decision 6). Besides the read
-   and the rate call of US1-S15, that covers a Stop asked less than 300 ms after such a
-   retry; `:K2` after a `:K1` that was sent twice; over a lost link, up to 300 ms beyond
-   024's four reply timeouts when the board answered a retry less than 300 ms before
-   the Stop and nothing since; and the first command after discovery at the second baud
-   (Edge Cases). Those four were read from the code in the fold of 2026-11-20 and have
-   not been run.
+   of US1-S15 and the rate call, each 600 ms where it took 300, that covers a Stop asked
+   during such a read or less than 300 ms after its retry (asked 100 ms into the read,
+   500 ms where it took 200); `:K2` after a `:K1` that was sent twice, 300 ms later; over
+   a lost link, up to 300 ms beyond 024's four reply timeouts when the board answered a
+   retry less than 300 ms before the Stop and nothing since (1.5 s where 024 allows
+   1.2 s); and the first command after discovery at the second baud, a connect there
+   taking 1.8 s where it took 1.5 s, and the read-only `probe` bring-up, once, at `:a1`
+   (Edge Cases). Probe round 2 ran each of them, with FR-016 and FR-002 as they now
+   read, and measured those figures.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -737,13 +758,16 @@ pass (tasks.md, T013).
 - **A reply lost outright, and the retry answered.** The transport cannot tell a lost
   reply from a late one, so under FR-016 the transmission behind the retry waits until
   300 ms after the retry's frame was sent for a second reply that never comes: a read or
-  a rate call that loses one status reply takes 600 ms where it took 300 (US1-S15). The
-  same wait falls on a Stop asked less than 300 ms after such a retry, and, inside a
-  Stop whose own `:K1` acknowledgement is lost and whose second try is answered, on
-  `:K2`, which leaves 300 ms later than it did. A board found at the second baud of
-  discovery pays it once at each connect, because the first `:e1` at the new baud is
-  the frame that has just timed out at the old one. The Stop and connect cases were
-  read from the code, not run.
+  a rate call that loses one status reply takes 600 ms where it took 300 (the read:
+  US1-S15; the rate call: probe round 2). The same wait falls on a Stop asked during
+  such a read or less than 300 ms after its retry (asked 100 ms into the read, it
+  answers after 500 ms where it took 200), and, inside a Stop whose own `:K1`
+  acknowledgement is lost and whose second try is answered, on `:K2`, which leaves
+  300 ms later than it did. A board found at the second baud of discovery pays it once
+  at each connect, and so does the read-only `probe` bring-up, once, at `:a1`, because
+  the first `:e1` at the new baud is the frame that has just timed out at the old one:
+  a connect there takes 1.8 s where it took 1.5 s. Probe round 2 ran the Stop and
+  connect cases, each as a case on its build.
 - **A left-over reply of the right length for the same command.** It is taken as the
   answer, as in US1-S1. For a read that is a reading up to 300 ms old.
 - **A move that is over before the status read.** A GoTo of under about 300 counts on the
@@ -770,13 +794,14 @@ pass (tasks.md, T013).
   that same moment (US1-S11).
 - **Stop over a lost link.** The link loses its board only on a read that has ended, so
   `halt_once` finds no abandoned exchange whose 300 ms have not run out, and 024's
-  bound of four reply timeouts, 1.2 s, stands for a board that answers nothing
-  (`crates/scope-node/tests/mount_reset.rs:327`): such a board answers no retry, so
-  FR-016 keeps nothing open. The one exchange `halt_once` can find with time left is a
-  retry that FR-016 kept open at the end of a read less than 300 ms before the Stop.
-  Its first `:K` then waits to that retry's deadline, and if the board has answered
-  nothing since, Stop takes up to 300 ms more than the 1.2 s (owner approval 7). Read
-  from the code, not run.
+  bound of four reply timeouts, 1.2 s, holds for a board that answers nothing, but for
+  one case (`crates/scope-node/tests/mount_reset.rs:327`). A board that answers nothing
+  answers no retry, so FR-016 keeps nothing open. The one exchange `halt_once` can find
+  with time left is a retry that FR-016 kept open at the end of a read less than 300 ms
+  before the Stop. Its first `:K` then waits to that retry's deadline, and if the board
+  has answered nothing since, Stop takes up to 300 ms more than the 1.2 s (owner
+  approval 7). Run in probe round 2: 1.5 s, the first `:K1` 300 ms after the Stop;
+  300 ms on a board that still answers. This relaxes 024's FR-018 in that case alone.
 - **A connect attempt that gives way to Stop on the real device.** The attempt's own
   stream is closed with an exchange possibly open, and its reply may reach the kept
   stream after the flush, since descriptors of one serial device share its input queue.

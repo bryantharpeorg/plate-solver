@@ -187,7 +187,10 @@ async fn clear_line(&mut self, command: u8, axis: u8, next: &[u8]) -> Result<(),
     stale.extend(self.stream.discard_input()?);
     if !stale.is_empty() {
         let escaped = stale.escape_ascii().to_string();
-        eprintln!("mount stale input before :{}{axis}: {escaped}", char::from(command));
+        eprintln!(
+            "mount stale input before :{}{axis}: {escaped}",
+            char::from(command)
+        );
         self.stale_replies += 1;
         self.last_stale = Some(escaped);
     }
@@ -246,7 +249,8 @@ which a scenario or an existing test holds:
   no longer leaves the retry's own reply to answer the next command (US1-S12 to
   US1-S14). After a reply lost outright the wait lasts until 300 ms after the retry's
   frame was sent, and nothing is counted (US1-S15). The probe tried this code on its
-  build, where `set_baud` still closed the exchange and cleared both flags.
+  build, where `set_baud` still closed the exchange and cleared both flags; probe
+  round 2 built it as written here.
 - **Nothing else changes.** No extra transmission, no wait when no exchange is open and
   nothing has arrived. `set_baud` does not touch `open`: the device's flush takes what
   has arrived, and a reply still on its way is read out before the next transmission
@@ -407,11 +411,15 @@ async fn start(&mut self, axis: u8) -> Result<(), Error> {
             Ok(())
         }
         Ok(_) => {
-            eprintln!("mount start :J{axis} not acknowledged ({error}): the axis is not running");
+            eprintln!(
+                "mount start :J{axis} not acknowledged ({error}): the axis is not running"
+            );
             Err(error)
         }
         Err(unreadable) => {
-            eprintln!("mount start :J{axis} not acknowledged ({error}): its status could not be read");
+            eprintln!(
+                "mount start :J{axis} not acknowledged ({error}): its status could not be read"
+            );
             Err(unreadable)
         }
     }
@@ -493,7 +501,7 @@ as it stood that day, each story's scenarios three times with identical output:
 - `discard_input` returning its bytes in all three implementations, `Serial`'s over a
   socket pair (US1-S8);
 - `Line` and `LineHandle` in the library and `clear_line` as one function, as
-  § Interfaces then wrote them, but for the one line rustfmt breaks and the imports
+  § Interfaces then wrote them, but for the lines rustfmt breaks and the imports
   that are now named there;
 - US1-S6's two added assertions, and that US2-S4's call answers after 300 ms;
 - every existing test, unchanged, at every story, and both gates;
@@ -526,23 +534,21 @@ and `mount_identity.rs` passed, 204 tests in all, and no time a scenario asserts
 changed. US1-S12, US1-S13 and US1-S14 are three of its cases. The fourth, a Stop while
 two replies are on their way, still sent `:L1`.
 
-**Read, not run**:
+**Run in probe round 2**, on 2026-11-20, all three stories from this text, with FR-016
+and `set_baud` as on `main`, each story's scenarios three times with identical output:
+every scenario's values, US1-S15 among them; the tests-first failures of T001 and T008;
+both gates; plan trap 21's three changes; and, as cases on the probe branch, FR-016's
+cost to a rate call (600 ms), to a Stop (to 300 ms after the retry, and when asked
+100 ms into a read that loses its status reply, 500 ms where 200; `:K2` at 600 ms), over
+a lost link (1.5 s), and at a connect at the second baud, through `SkyWatcher::connect`,
+`MountLink` and the read-only `probe` bring-up (1.8 s where 1.5). Every existing test
+passed unchanged at every story. Where FR-016 meets FR-002 as it now reads, a Stop over
+a lost link and a connect at the second baud, no existing test times either; both ran
+as cases.
 
-- FR-016 together with FR-002 as it now reads. Each was run, on builds that differ in
-  `set_baud`; no build had both. By reading they meet in two places, a Stop over a lost
-  link less than 300 ms after an answered retry, and discovery at the second baud (spec
-  Edge Cases), and in no existing test: none times a connect at the second baud, and
-  none has a retry answered in the 300 ms before a Stop over a lost link;
-- US1-S15: the probe's report gives the 600 ms, and the exchanges and counters are read
-  from the code;
-- FR-016's cost to a Stop: one asked less than 300 ms after an answered retry, and
-  `:K2` behind a `:K1` that was sent twice;
-- that US1-S9 to US1-S15 fail before T004 is done, and that before T009 US2-S8 passes
-  while US2-S9 and US2-S10 fail (tasks.md T001, T008);
-- the `lint` gate on FR-016's code: its trial ran the tests, not `cargo fmt --check` or
-  clippy;
-- the added scenarios in their committed files: each ran as a case in a file of its
-  own.
+**Read, not run**: nothing that this section listed before probe round 2. One Edge Case
+says what remains by reading (spec Edge Cases, a reply more than 300 ms late), and
+§ Read from the diff, not from a test lists what only the diff shows.
 
 **Not run at all**: a real serial device, the real board, the camera loop, the page; the
 page half of the `test` gate in the probe's builds, whose stories write nothing the page
@@ -588,7 +594,8 @@ change, and what each story does to what they observe:
   (`crates/scope-node/tests/skywatcher.rs:136`) finds its board at the second baud:
   with FR-016 and `set_baud` as on `main`, the command after the first `:e1` that is
   answered waits 300 ms, once. The test asserts the baud attempts and the commands
-  sent, and no time (read, not run). `connection_and_motion_failures`
+  sent, and no time (run in probe round 2: `SkyWatcher::connect` took 1.8 s where it
+  took 1.5 s). `connection_and_motion_failures`
   (`crates/scope-node/tests/skywatcher.rs:324`) still sees `:K2` after a rate that is
   not finite: US2 changes that failure's log line and count, not its stop.
 - **`crates/scope-node/tests/skywatcher_stop.rs`**. 017's halt on a connected board:
@@ -702,14 +709,13 @@ probe saw each of them do on `main`, without US1 and US2.
    `main` moves in those files again, re-read them and re-run the validator.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
    decisions, § Owner approvals). The decisions are met: the owner settled all six on
-   2026-11-20. The approvals are given by the flip. Approval 7 names four cases of
-   FR-016's cost that were read from the code and not run.
-4. **Probe builds.** Met by probe round 1 for the trio as it stood on 2026-11-19: all
-   three stories were built in order from the text, passed both gates and gave every
-   value the scenarios assert. Not met for what the fold of 2026-11-20 then added to
-   US1: FR-016 in one build with `set_baud` as on `main`, and US1-S15 (§ What was run
-   and what was read, "Read, not run"). A build of US1 from this text is the first to
-   run those.
+   2026-11-20. The approvals are given by the flip. Approval 7 names the cases of
+   FR-016's cost, each run in probe round 2 with the figure it gives.
+4. **Probe builds.** Met. Probe round 1 built the trio as it stood on 2026-11-19: all
+   three stories in order from the text, both gates passed, and every value the
+   scenarios assert. Probe round 2 built the text the fold of 2026-11-20 left, FR-016 in
+   one build with `set_baud` as on `main` and US1-S15 among it, with the same result
+   (§ What was run and what was read). Its five clarity defects are folded here.
 5. **No operator-staged files are needed.**
 
 **Outside the factory: the field check.** The emulator cannot show a real line's
@@ -743,13 +749,8 @@ They bind every story.
    diff. *Check:* every Then names a committed test the `test` gate runs.
 2. **One evidence budget.** *Check:* a story's diff stays under 64 KiB, measured with
    `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c`. Measured in probe
-   round 1, each story against its parent: US1 32,894 B, US2 18,367 B, US3 11,180 B.
-   The fold of 2026-11-20 adds, by the size of the cases as the probe ran them: to US1,
-   seven scenarios and US1-S8's last step (about 6.0 KB), FR-016's code less the baud
-   clause (about 0.5 KB) and its README sentences (about 0.4 KB); to US2, three
-   scenarios (about 3.4 KB); to US3, one changed wait. That gives US1 about 39.8 KB,
-   US2 about 21.7 KB and US3 about 11.2 KB. US1 is the largest, at about 61 % of
-   65,536 B.
+   round 2, each story against its parent: US1 40,453 B, US2 21,292 B, US3 11,269 B.
+   US1 is the largest, at 61.7 % of 65,536 B.
 3. **A spec fixed mid-epic needs a relaunch.** *Check:* no builder edits
    `specs/039-mount-replies-in-step/` or `.specify/`.
 4. **An earlier story's test file is an existing test.** *Check:* US2 writes
@@ -814,13 +815,13 @@ They bind every story.
 | Risk | Mitigation |
 |---|---|
 | On the real device a retry's own answer comes more than 300 ms after the retry's frame, or a Stop is asked while two replies are still on their way, and the next command reads a left-over (spec Edge Cases). A rate command in that stretch fails and stops both axes; a Stop in it sends `:L`. | FR-016 closes the case of one late reply, which the probe ran. What is left ends at the first transmission that finds the left-over arrived; every such exchange is counted and logged, and the field check counts them. A count of the replies owed is out of scope. |
-| After a reply lost outright, FR-016 holds whatever follows the answered retry until 300 ms after the retry's frame: a read, a rate call, a Stop, `:K2` inside a Stop, the first command after discovery at the second baud; over a lost link it can add up to 300 ms to 024's 1.2 s (spec Edge Cases). | Owner decision 6 and owner approval 7. The wait is bounded and paid once for each lost reply. How often a real line loses a reply outright is not known. The cases other than the read and the rate call were read from the code, not run. |
+| After a reply lost outright, FR-016 holds whatever follows the answered retry until 300 ms after the retry's frame: a read, a rate call, a Stop, also one asked while a read that loses its status reply is under way (500 ms where 200), `:K2` inside a Stop, the first command after discovery at the second baud and the read-only `probe` bring-up's `:a1`; over a lost link it can add up to 300 ms to 024's 1.2 s (spec Edge Cases). | Owner decision 6 and owner approval 7. The wait is bounded and paid once for each lost reply. How often a real line loses a reply outright is not known. Probe round 2 ran each case: 600 ms for the read and the rate call, 1.5 s for the Stop over a lost link, 1.8 s for a connect at the second baud. |
 | Stop is held up to 300 ms behind a lost reply. | Owner decision 1. It needs Stop to cancel a move part-way and that move's reply to be lost; the console's second attempt is answered. |
 | The real board answers a status read "moving" for an axis whose start it did not take. | Only on the same-direction slow-rate path, where the axis runs the way it was asked (§ The start). |
 | `Serial::discard_input` behaves differently on a tty than on a socket. | It relies on the `AGAIN` `read_byte` already relies on; the field check looks for `mount I/O`. |
 | A status read is trusted after an unacknowledged start while the line is out of step. | US1 lands first; US2 depends on it. |
 | The node's log grows: a line for every stale input. | One line per event, and an event needs an exchange cut short or a late reply: a Stop that cancels a move part-way, a read the console gave up on. |
-| FR-016 and FR-002 as it now reads were each run, never in one build, and US1-S15 was read from the code (§ What was run and what was read). | Prerequisite 4. A build of US1 from this text runs both, with every existing test of `scope-node`. |
+| FR-016 and FR-002 as it now reads meet in two places no existing test times: a Stop over a lost link behind an answered retry, and a connect at the second baud. | Prerequisite 4. Probe round 2 built both in one build with every existing test of `scope-node`, and ran both places as cases: 1.5 s and 1.8 s, as the spec's Edge Cases give them (§ What was run and what was read). |
 
 ## Refinement Record
 
@@ -843,10 +844,22 @@ And it recorded the owner's answers: the recommended one to each of decisions 1 
 and the adoption of FR-016 as decision 6. Sizes are the round's measured ones plus what
 the fold adds (§ Plan traps 2).
 
+**What probe round 2 changed** (folded 2026-11-20). The round built all three stories
+again from the text above, with FR-016 and `set_baud` as on `main`, and no value the
+text asserts changed; every cost of FR-016 the text named was run. The fold took its
+five clarity defects: a Stop asked while a read that loses its status reply is under
+way, named as a cost of FR-016 wherever the costs are listed, with owner decision 1's
+bound stated of the exchange open when `:K1` is sent; `preserved_behavior` and the Edge
+Case of a Stop over a lost link no longer claim more of 024's 1.2 s than holds; three
+log lines of § The transport and § The start written as rustfmt writes them; the record
+of what was run, with nothing left that was read and not run, and plan trap 2's sizes as
+measured; US1-S15 cited for the read alone, and the read-only `probe` bring-up named
+among the connects that pay.
+
 All six owner decisions of spec.md are settled, by the owner, on 2026-11-20, and
 `open_questions` is empty below because none is open. This record itself approves
-nothing: the owner approvals of spec.md are given by the flip. What of this text has
-not been built from it is in § Prerequisites 4.
+nothing: the owner approvals of spec.md are given by the flip. Probe round 2 built the
+text this fold began from (§ Prerequisites 4).
 
 ```yaml
 version: 1
@@ -943,7 +956,7 @@ stories:
       - "Transport::new and Transport::command keep their signatures, and their exchanges and timing when every reply is valid and in time (spec.md FR-008)"
       - "SkyWatcher::connect and its Mount methods keep their signatures (024 FR-004)"
       - "MountHealth, EmulatorConfig, Exchange and Error gain nothing"
-      - "Stop over a lost link costs at most four reply timeouts on a board that answers nothing (024 FR-018)"
+      - "Stop over a lost link costs at most four reply timeouts on a board that answers nothing (024 FR-018), but for up to 300 ms more when the board answered a retry less than 300 ms before the Stop (owner approval 7)"
       - "Transport::set_baud is as on main"
     checks:
       development:

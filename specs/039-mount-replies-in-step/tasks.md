@@ -8,9 +8,9 @@ description: "Task list for 039-mount-replies-in-step: The Mount's Replies Stay 
 - every spec in `depends_on_landed` has landed on `main`: met at 52785403;
 - the owner decisions in spec.md are settled: met, the owner settled all six on
   2026-11-20; its owner approvals are given by the flip;
-- every story has been probe-built from this text: met by probe round 1 for the text as
-  it stood on 2026-11-19; not met for what the fold of 2026-11-20 then added to US1,
-  FR-016 in one build with `set_baud` as on `main`, and US1-S15;
+- every story has been probe-built from this text: met, by probe round 1 for the text as
+  it stood on 2026-11-19, and by probe round 2 on 2026-11-20 for the text the fold of
+  that day left, FR-016 in one build with `set_baud` as on `main` and US1-S15 among it;
 - no operator-staged file is needed.
 
 **Rules for every story:**
