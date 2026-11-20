@@ -129,18 +129,20 @@ crates/finder/
 
 ## Interfaces
 
-030 to 036, 038 and 040 have landed, and this trio is read against their code: every
-name below was re-read on `main` at `6d79292b` in the re-anchoring of 2026-11-20, and
-is named as the landed code has it (flip.md § Prerequisites 2).
+030 to 036, 038, 040 and 043 have landed, and this trio is read against their code: every
+name below was re-read on `main` at `6d79292b` in the re-anchoring of 2026-11-20, carried
+across 043 to `2ae73c66`, and is named as the landed code has it (flip.md § Prerequisites
+2). This spec reads nothing of 043's: 043 bounds `Imaging::abort`, which this spec's own
+code never calls; 041's console parts reach it.
 
 ### What 030 to 036 offer (read, never written, by this spec)
 
 | What a part needs | From | Name | Where it is on `main` |
 |---|---|---|---|
-| why a request was not carried out | 031 | `crate::imaging::Refusal { status, message }` | `crates/finder/src/imaging/mod.rs:281` (031's US1), with the constructors `bad_request` and `conflict`, private to `crate::imaging` and so open to `run.rs`, its child |
+| why a request was not carried out | 031 | `crate::imaging::Refusal { status, message }` | `crates/finder/src/imaging/mod.rs:283` (031's US1), with the constructors `bad_request` and `conflict`, private to `crate::imaging` and so open to `run.rs`, its child |
 | the UTC text of a time | 031 | `crate::imaging::fits::utc(unix_s) -> (String, String)` | `crates/finder/src/imaging/fits.rs:440` (031's US2) |
 | a target's name as a folder's name takes it | 035 | `crate::imaging::stack::service::label(name: &str) -> String` | `crates/finder/src/imaging/stack/service.rs:45` (035's US8); 035 spec.md FR-035, US8-S3 |
-| the imaging folder | 034 | `Imaging::root()` | `crates/finder/src/imaging/mod.rs:453` (034's US4) |
+| the imaging folder | 034 | `Imaging::root()` | `crates/finder/src/imaging/mod.rs:455` (034's US4) |
 | how far from the set point a stack may begin and still be steered | 036 | `crate::imaging::steering::FAR_ARCSEC`, 180.0 | `crates/finder/src/imaging/steering.rs:131` (036's US4); 036 spec.md FR-014 |
 
 The rest of what 030 to 038 and 040 offer is read by the console's own parts, which
@@ -915,10 +917,10 @@ pub unfinished_run: Option<String>,
 pub(crate) fn attach_run(&self, runner: &Arc<run::Runner>);
 ```
 
-It follows 035's `attach_stack` (`crates/finder/src/imaging/mod.rs:468`).
-`Imaging::view` (`crates/finder/src/imaging/mod.rs:478`) builds the `ImagingView` it
+It follows 035's `attach_stack` (`crates/finder/src/imaging/mod.rs:470`).
+`Imaging::view` (`crates/finder/src/imaging/mod.rs:480`) builds the `ImagingView` it
 answers in one place; after its own lock is released, and after 035 sets `stack` and
-036 sets `steering`, the view's last part (`crates/finder/src/imaging/mod.rs:541`), it
+036 sets `steering`, the view's last part (`crates/finder/src/imaging/mod.rs:543`), it
 sets `run` from `attached.view()` when a runner is attached and still alive,
 **whatever the view's `state`**, and `unfinished_run` from `attached.unfinished()` in
 the same place. On `main` 034 sets `calibration` there only while the view is
@@ -1255,9 +1257,9 @@ story.
 Its tests are the scenarios, its writes are the files § Project Structure names, and
 its shared writes name the merge edge that orders two stories of this spec on one file,
 or the story of another spec that last wrote the file on `main` before this spec does,
-read with `git log -1` at `6d79292b` by the re-anchoring of 2026-11-20: 035's US8 for
-`api.rs`, 036's US5 for `imaging/mod.rs`, `imaging/routes.rs` and `lib.rs`, and 040's
-US8 for the `console` test binary's `main.rs`, each as the drafts had named it. A test
+read with `git log -1` at `2ae73c66` by the re-anchoring of 2026-11-20: 035's US8 for
+`api.rs`, 036's US5 for `imaging/routes.rs` and `lib.rs`, and 043's US1 for
+`imaging/mod.rs` and the `console` test binary's `main.rs`. A test
 file an earlier story creates does not exist yet and cannot be listed as an existing test; what a later story must leave passing in it
 is under that story's `preserved_behavior`. The record's `open_questions` are empty
 because the validator refuses a record that holds any; what is not established is in
@@ -1560,20 +1562,20 @@ stories:
   no_write_reason: ""
   shared_writes:
   - path: crates/finder/src/imaging/mod.rs
-    other_spec: 036-tracking-from-subs
-    other_story: US5
+    other_spec: 043-imaging-abort-answers-in-time
+    other_story: US1
     disposition: merge_order
-    reason: "037 depends_on_landed 036-tracking-from-subs, whose US5 last wrote this file on main (72877199, #332)"
+    reason: "037 depends_on_landed 043-imaging-abort-answers-in-time, whose US1 last wrote this file on main (2ae73c66, #342)"
   - path: crates/finder/src/imaging/run.rs
     other_spec: 037-imaging-run
     other_story: US1
     disposition: merge_order
     reason: "US1 depends_on_merged US12, and adds the view, the Runner and its task after what US12 wrote"
   - path: crates/finder/tests/console/main.rs
-    other_spec: 040-stack-waits-for-steady
-    other_story: US8
+    other_spec: 043-imaging-abort-answers-in-time
+    other_story: US1
     disposition: merge_order
-    reason: "037 depends_on_landed 040-stack-waits-for-steady, whose US8 last wrote this file on main (112b3069, #339)"
+    reason: "037 depends_on_landed 043-imaging-abort-answers-in-time, whose US1 last wrote this file on main (2ae73c66, #342)"
   - path: crates/finder/tests/console/main.rs
     other_spec: 037-imaging-run
     other_story: US13

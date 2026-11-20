@@ -1,13 +1,14 @@
 ---
 state: draft
-depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-confirm", "030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "034-dark-and-flat-frames", "035-live-stack", "036-tracking-from-subs", "038-track-follows-a-push", "040-stack-waits-for-steady"]
+depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-confirm", "030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "034-dark-and-flat-frames", "035-live-stack", "036-tracking-from-subs", "038-track-follows-a-push", "040-stack-waits-for-steady", "043-imaging-abort-answers-in-time"]
 # The imaging run, first of three pieces: the run's parts, words and script, the machine
 # with its retries, failures, counts and soft-focus warning, and the routes and the record,
 # all on the scripted parts (US12, US13, US1, US2, US3). 041-imaging-run-on-the-rig gives the run
 # the console's own parts; 042-imaging-run-page-and-mcp its page, MCP tools and README.
-# Depends on 014 to 017, 030 to 036, 038 and 040 having landed. State: draft, re-anchored to
+# Depends on 014 to 017, 030 to 036, 038, 040 and 043 having landed. State: draft, re-anchored to
 # `main` before the flip. history.md has how it got here; flip.md what the flip needs.
-# Re-anchored on 2026-11-20 to `main` at `6d79292b`, after 040 landed (#336 to #340).
+# Re-anchored on 2026-11-20 to `main` at `6d79292b`, after 040 landed (#336 to #340), and
+# carried across 043 to `2ae73c66` (#342) once it landed the same day.
 ---
 
 # Feature Specification: The Imaging Run
@@ -998,8 +999,8 @@ Its tests make no `Runner`, and those that await a part run under
 - **Earlier features are in place.** Every spec this one names in `depends_on_landed` has
   landed (flip.md § Prerequisites 1), and the trio is read against their code. It was
   re-anchored to that code on 2026-11-20 (flip.md § Prerequisites 2 and 7): every
-  `path:line` here was read by its content on `main` at `6d79292b`, whose line numbers
-  are cited; those the draft held were first read at 49bb210.
+  `path:line` here was read by its content on `main` at `6d79292b` and carried across 043
+  to `2ae73c66`, whose line numbers are cited; those the draft held were first read at 49bb210.
 - **Out of scope:**
   - an equatorial mount, meridian flips, dithering and any tracker but 015's as 036
     leaves it; the run is written so that none of them needs a change here;

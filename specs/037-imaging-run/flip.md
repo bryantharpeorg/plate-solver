@@ -20,14 +20,21 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
    `fc161a54` (#333). `040-stack-waits-for-steady`, cut from 036 on 2026-11-20, was
    flipped to `ready` (`8b844b30`, #334) and landed the same day with its five stories:
    US6 at `f1847647` (#336), US10 at `2abc9a6b` (#337), US7 at `dac28058` (#338), US8 at
-   `112b3069` (#339) and US11 at `6d79292b` (#340).
+   `112b3069` (#339) and US11 at `6d79292b` (#340). `043-imaging-abort-answers-in-time`,
+   drafted on 2026-11-20 from 041's second probe round, was flipped to `ready`
+   (`8d171684`, #341) and landed the same day with its one story, US1 at `2ae73c66`
+   (#342).
 2. **This trio is re-anchored to its predecessors after they land.** Met on 2026-11-20,
-   on `main` at `6d79292b`, after 040 landed. 030 to 036, 038 and 040 have landed, and
+   on `main` at `6d79292b`, after 040 landed, and carried across 043 to `2ae73c66` once it
+   landed: 043 changed no name this trio reads, and the constant `ABORT_WAIT` it added
+   near the top of `crates/finder/src/imaging/mod.rs` moved five of the trio's citations
+   two lines down, now cited at their lines there. 030 to 036, 038, 040 and 043 have landed, and
    the trio is read against their code: every name in plan.md § What 030 to 036 offer
    was re-read in the landed code, as built, and is cited at its line there; and every
    shared write in plan.md § Refinement Record that names another spec names the story
-   that last wrote the file on `main` (`git log -1`), all five as the drafts had named
-   them. None of them offers something else than the table says. Those this spec's own
+   that last wrote the file on `main` (`git log -1`): three as the drafts had named them,
+   and `crates/finder/src/imaging/mod.rs` and the `console` test binary's `main.rs` as
+   043's US1, which last wrote both. None of them offers something else than the table says. Those this spec's own
    code rests on are here, as the landed code has them; the rest, which the console's
    own parts rest on, are in 041's flip.md § Prerequisites 2:
    - closed: the rule for a folder's name is written once. 035 offers it as the pure
@@ -118,8 +125,11 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
    are on `main`.** Met by 2026-11-19: all four are on `main`.
 7. **`main` is still as read.** Met on 2026-11-20 by the re-anchoring: every `path:line`
    in the trio was read by its content on `main` at `6d79292b`, and each that had moved
-   since 49bb210, where the draft read them, now gives its line there. It is read again
-   at the flip if `main` has moved since.
+   since 49bb210, where the draft read them, now gives its line there. `main` moved to
+   `2ae73c66` with 043 before the flip, and every citation was carried across 043's diff
+   by its hunks: the five in `crates/finder/src/imaging/mod.rs` moved two lines, the one
+   in the `console` test binary's `main.rs` (line 2) lies above 043's added `mod` line,
+   no cited line was one 043 changed, and no other cited file changed.
 8. **The real mount.** Not met, and outside the factory: a GoTo to a target and Track
    have not run on the real mount (the plan document, § Before any flip, 4). The spec
    can be built before that; the run is not used at the telescope until it is. The

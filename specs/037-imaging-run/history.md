@@ -2,6 +2,28 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
 
 # How 037-imaging-run got here
 
+## The re-anchoring and the flip (2026-11-20)
+
+The trio was re-anchored onto `main` at `6d79292b` once 040 had landed (#336 to #340).
+Of the 20 code citations the draft held at 49bb210, 13 were where they had been, 6 had
+moved and were fixed, and 1 was found again by its content; 14 more were added for code
+that has since landed. Every name the trio takes from 030 to 036 and 040 was read in the
+landed code, and none differs in a way that changes what a story builds. The one wording
+written for the landed code is that US3 sets `run` after 035's `stack` and 036's
+`steering`, the view's last part, as the probe built it. The five shared writes that
+name another spec matched `git log -1`. Principle V's row was added (§ Decisions and
+the alternatives rejected).
+
+043 landed the same day (#342, `2ae73c66`), before this spec was flipped, and the trio
+was carried across it:
+- `043-imaging-abort-answers-in-time` is in `depends_on_landed`;
+- the five citations of `crates/finder/src/imaging/mod.rs` moved two lines down, past
+  043's `ABORT_WAIT`; no cited line was one 043 changed;
+- US12's shared writes of `imaging/mod.rs` and of the `console` test binary's `main.rs`
+  name 043's US1, which last wrote both, where they had named 036's US5 and 040's US8.
+
+This spec reads nothing of 043's.
+
 ## Probe round 2 and its fold (2026-11-20)
 
 Probe round 2 built this piece's four stories, as the split of 2026-11-20 left them,

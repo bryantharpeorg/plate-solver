@@ -58,8 +58,8 @@ has landed and this trio is re-anchored to `main`; no operator-staged file is ne
   setting when that is longer. None of them waits for an exposure to finish (plan.md
   § Plan traps 21).
 - Keep the story's diff under 64 KiB, measured as plan.md § Plan traps 3 says.
-- Every code citation is `path:line` as read on `main` at `6d79292b` in the re-anchoring
-  of 2026-11-20. If a cited line has moved, re-read it rather than guess.
+- Every code citation is `path:line` as it stands on `main` at `2ae73c66`, after the
+  re-anchoring of 2026-11-20. If a cited line has moved, re-read it rather than guess.
 - Add no dependency and change no `Cargo.toml`. Write no `unsafe`. Change nothing under
   `crates/simulator`, `crates/scope-node` or `crates/scope-link`.
 - Do not edit `specs/037-imaging-run/`, `specs/041-imaging-run-on-the-rig/` or
