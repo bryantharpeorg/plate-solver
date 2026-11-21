@@ -808,7 +808,7 @@ where
         .unwrap()
         .as_ref()
         .is_some_and(|m| m.state == "moving");
-    if by == "mcp" && tool == "set_tracking" && direct_move_running {
+    if by == "mcp" && matches!(tool, "set_tracking" | "start_imaging_run") && direct_move_running {
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "a direct axis move is running",

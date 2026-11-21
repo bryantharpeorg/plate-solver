@@ -14,6 +14,7 @@ use serde_json::{json, Value};
 use crate::api;
 use crate::imaging::calibration::service::{CalibrationView, DarksRequest, FlatsRequest};
 use crate::imaging::routes::SteeringEdit;
+use crate::imaging::run::{By, RunRequest};
 use crate::imaging::stack::{display, service::StartRequest};
 use crate::session::SessionEdit;
 use crate::AppState;
@@ -33,6 +34,23 @@ pub(crate) struct Console {
 )]
 struct TargetArguments {
     target: Option<String>,
+}
+
+#[derive(rmcp::schemars::JsonSchema)]
+#[expect(
+    dead_code,
+    reason = "schema only; RunRequest parses the actual arguments"
+)]
+struct ImagingRunArguments {
+    subs: Option<u32>,
+    duration_s: Option<f64>,
+    keep_subs: Option<bool>,
+}
+
+#[derive(serde::Deserialize, rmcp::schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ImagingRunContinueArguments {
+    anyway: bool,
 }
 
 #[derive(rmcp::schemars::JsonSchema)]
@@ -985,6 +1003,91 @@ impl Console {
             Ok(serde_json::to_value(view).expect("imaging view JSON"))
         })();
         tool_result(result)
+    }
+
+    #[tool(description = "Move a real telescope to the session's target and start an imaging run there, as POST /api/imaging/run does: GoTo, tracking, a first imaging frame, a focus check, centring on the imaging camera's sensor, and stacking until it is stopped or reaches a limit. Set the target first with set_target. Answers at once with the run in state slewing; read get_imaging_run every few seconds until state is ended. In state focus_pause the run waits up to 15 minutes for continue_imaging_run.",
+        input_schema = rmcp::handler::server::common::schema_for_input::<ImagingRunArguments>().expect("imaging run schema"),
+        output_schema = object_schema())]
+    async fn start_imaging_run(&self, arguments: JsonObject) -> CallToolResult {
+        let result: Result<Value, String> = async {
+            self.state.limit_move()?;
+            let request = serde_json::from_value::<RunRequest>(Value::Object(arguments.clone()))
+                .map_err(|error| error.to_string())?;
+            let runner = self
+                .state
+                .imaging_runner()
+                .ok_or_else(|| "this console runs no imaging runs".to_owned())?;
+            api::start_motion(&self.state, "mcp", "start_imaging_run", || async {
+                runner
+                    .start(request, By::Mcp)
+                    .await
+                    .map(|_| ())
+                    .map_err(|refusal| api::ApiError::new(refusal.status, refusal.message))
+            })
+            .await
+            .map_err(|error| error.message)?;
+            Ok(serde_json::to_value(runner.view()).expect("imaging run JSON"))
+        }
+        .await;
+        let logged = result.as_ref().map(|run| json!({"run":run}));
+        self.state.log_call(
+            "start_imaging_run",
+            &Value::Object(arguments),
+            logged.as_ref().map_err(|reason| reason.as_str()),
+        );
+        match result {
+            Ok(run) => field_result("run", run),
+            Err(reason) => CallToolResult::error(vec![ContentBlock::text(reason)]),
+        }
+    }
+
+    #[tool(description = "End the imaging run and save its stack, as DELETE /api/imaging/run does. It stops the mount only while the run still slews: call stop for that. Answers once the run has ended, which takes the stack's save and, during a re-centre, up to about 7 s more; with no run on it answers the last run unchanged.",
+        output_schema = object_schema())]
+    async fn stop_imaging_run(&self, arguments: JsonObject) -> CallToolResult {
+        if !arguments.is_empty() {
+            return CallToolResult::error(vec![ContentBlock::text(
+                "stop_imaging_run takes no arguments",
+            )]);
+        }
+        let Some(runner) = self.state.imaging_runner() else {
+            return CallToolResult::error(vec![ContentBlock::text(
+                "this console runs no imaging runs",
+            )]);
+        };
+        field_result(
+            "run",
+            serde_json::to_value(runner.stop().await).expect("imaging run JSON"),
+        )
+    }
+
+    #[tool(description = "Go on from a focus pause of the imaging run, as POST /api/imaging/run/continue does: with anyway false, focus is checked again; with anyway true, the run goes on unchecked. Only valid in state focus_pause. An agent with nobody at the focuser should ask the observer, or pass anyway true.",
+        input_schema = rmcp::handler::server::common::schema_for_input::<ImagingRunContinueArguments>().expect("imaging run continue schema"),
+        output_schema = object_schema())]
+    async fn continue_imaging_run(&self, arguments: JsonObject) -> CallToolResult {
+        let result: Result<Value, String> = (|| {
+            let edit =
+                serde_json::from_value::<ImagingRunContinueArguments>(Value::Object(arguments))
+                    .map_err(|error| error.to_string())?;
+            let runner = self
+                .state
+                .imaging_runner()
+                .ok_or_else(|| "this console runs no imaging runs".to_owned())?;
+            let run = runner
+                .resume(edit.anyway)
+                .map_err(|refusal| refusal.message)?;
+            Ok(serde_json::to_value(run).expect("imaging run JSON"))
+        })();
+        match result {
+            Ok(run) => field_result("run", run),
+            Err(reason) => CallToolResult::error(vec![ContentBlock::text(reason)]),
+        }
+    }
+
+    #[tool(description = "Read the imaging run: state (focus_pause needs continue_imaging_run; ended is final), ended.reason and ended.message once over, warnings, the focus verdict, the centring offset, counts of subs stacked and dropped by reason, limit_at for when the time limit ends it, and its message for the observer. null before the first run.",
+        output_schema = object_schema(), annotations(read_only_hint = true))]
+    async fn get_imaging_run(&self) -> CallToolResult {
+        let run = self.state.imaging_runner().and_then(|runner| runner.view());
+        field_result("run", serde_json::to_value(run).expect("imaging run JSON"))
     }
 }
 
