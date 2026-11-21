@@ -232,7 +232,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = match args.focal_length_mm {
         Some(mm) => state.with_focal_length_mm(mm),
         None => state,
-    };
+    }
+    .with_imaging_run();
 
     let listener = tokio::net::TcpListener::bind(args.listen).await?;
     let bound_addr = listener.local_addr()?;

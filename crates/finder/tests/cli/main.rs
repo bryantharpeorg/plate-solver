@@ -11,6 +11,7 @@ mod imaging;
 mod imaging_focus;
 mod imaging_frames;
 mod imaging_hints;
+mod imaging_run;
 mod imaging_solve;
 mod mount_sky;
 mod mount_sky_night;
