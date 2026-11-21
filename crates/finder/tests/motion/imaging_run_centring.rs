@@ -260,8 +260,15 @@ async fn console_stop_during_centring_wins_and_mount_stays_at_rest() {
     let rig = Rig::new(true).await;
     rig.scripted_centres();
     rig.start().await;
-    rig.wait("/api/imaging", |v| v["run"]["state"] == "centring")
+    let view = rig
+        .wait("/api/imaging", |v| {
+            matches!(
+                v["run"]["state"].as_str(),
+                Some("centring" | "stacking" | "ended")
+            )
+        })
         .await;
+    assert_eq!(view["run"]["state"], "centring", "{view}");
     let stopped = rig.now();
     rig.ok("POST", "/api/stop", Value::Null).await;
     let view = rig
@@ -291,8 +298,15 @@ async fn target_edit_during_centring_does_not_start_track_on_the_new_target() {
     let rig = Rig::new(true).await;
     rig.scripted_centres();
     rig.start().await;
-    rig.wait("/api/imaging", |v| v["run"]["state"] == "centring")
+    let view = rig
+        .wait("/api/imaging", |v| {
+            matches!(
+                v["run"]["state"].as_str(),
+                Some("centring" | "stacking" | "ended")
+            )
+        })
         .await;
+    assert_eq!(view["run"]["state"], "centring", "{view}");
     rig.ok("PUT", "/api/session", json!({"target":"M45"})).await;
     let view = rig
         .wait("/api/imaging", |v| v["run"]["state"] == "ended")
@@ -300,8 +314,10 @@ async fn target_edit_during_centring_does_not_start_track_on_the_new_target() {
     assert_eq!(view["run"]["ended"]["reason"], "target_changed");
     assert_eq!(view["run"]["ended"]["track_on"], false);
     let ended = rig.now();
-    rig.rest_after(ended).await;
-    assert_eq!(rig.get("/api/session").await["track"]["state"], "off");
+    tokio::join!(rig.rest_after(ended), async {
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        assert_eq!(rig.get("/api/session").await["track"]["state"], "off");
+    });
     assert!(!rig
         .script
         .calls()

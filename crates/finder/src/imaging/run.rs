@@ -1121,13 +1121,15 @@ impl RunTask {
             .target
             .clone();
         let mut failures = 0;
-        let centre = loop {
+        let mut tries = 0;
+        let mut idle = 0;
+        loop {
             let frame = self.frame().await?;
-            match self
+            let centre = match self
                 .guarded(async { self.steps.solver.solve(&frame, &target).await })
                 .await?
             {
-                Ok(centre) => break centre,
+                Ok(centre) => centre,
                 Err(Failure::Stopped) => return Err(Ending::Stopped),
                 Err(Failure::Save(words)) => return Err(Ending::SaveFailed(words)),
                 Err(Failure::SolverUnavailable(words)) => {
@@ -1138,17 +1140,54 @@ impl RunTask {
                     if failures == SOLVE_TRIES {
                         return Err(Ending::SolverFailing(failure.words().into()));
                     }
+                    continue;
+                }
+            };
+            failures = 0;
+            self.update(|run| {
+                run.aim_moved = centre.aim_moved;
+                run.view.centring = Some(CentringNote {
+                    tries,
+                    offset_arcsec: centre.offset_arcsec,
+                    tolerance_arcsec: centre.tolerance_arcsec,
+                });
+            });
+            if centre.offset_arcsec <= centre.tolerance_arcsec {
+                break;
+            }
+            if centre.aim_moved && tries < CENTRE_TRIES {
+                tries += 1;
+                idle = 0;
+                self.update(|run| run.view.centring.as_mut().unwrap().tries = tries);
+                self.set_state("centring")?;
+                // Complete the Track off/on hand-over before acting on a stop.
+                // frame() checks it again before asking for another exposure.
+                match self.steps.mount.repoint().await {
+                    Ok(()) => {}
+                    Err(Failure::Stopped) => return Err(Ending::Stopped),
+                    Err(failure) => return Err(Ending::MountFailed(failure.words().into())),
+                }
+                continue;
+            }
+            if !centre.aim_moved {
+                idle += 1;
+                if idle < CENTRE_IDLE {
+                    self.set_state("centring")?;
+                    continue;
                 }
             }
-        };
-        self.update(|run| {
-            run.aim_moved = centre.aim_moved;
-            run.view.centring = Some(CentringNote {
-                tries: 0,
+            if centre.offset_arcsec <= centre.near_arcsec {
+                self.warn(Warning::OffCentre {
+                    offset_arcsec: centre.offset_arcsec,
+                    measured: centre.aim_moved,
+                });
+                break;
+            }
+            return Err(Ending::NotCentred {
                 offset_arcsec: centre.offset_arcsec,
-                tolerance_arcsec: centre.tolerance_arcsec,
+                measured: centre.aim_moved,
             });
-        });
+        }
 
         self.set_state("stacking")?;
         self.steps.camera.release();
@@ -1292,6 +1331,10 @@ impl RunTask {
 pub const FRAME_TRIES: u32 = 3;
 /// Solves in a row that may find no solution before the run ends.
 pub const SOLVE_TRIES: u32 = 3;
+/// Re-centres a run may ask for.
+pub const CENTRE_TRIES: u32 = 3;
+/// Solves in a row, outside the tolerance, that may measure no new aim point.
+pub const CENTRE_IDLE: u32 = 4;
 /// How long the run waits after a failed take before it asks again.
 pub const RETRY_WAIT: Duration = Duration::from_secs(5);
 

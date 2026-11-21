@@ -6,11 +6,11 @@ use std::{
     time::Duration,
 };
 
-use tokio::time::Instant;
+use tokio::time::{self, Instant};
 
 use super::{
     By, Centre, Ending, Failure, FrameRef, FrameSteps, MountState, MountSteps, RunTarget,
-    SolveSteps, StepFuture,
+    SolveSteps, StepFuture, POLL,
 };
 use crate::{
     api,
@@ -23,6 +23,9 @@ use crate::{
 pub const CENTRE_SHARE: f64 = 0.05;
 /// The least centring tolerance, in arcseconds (owner decision 2).
 pub const CENTRE_FLOOR_ARCSEC: f64 = 90.0;
+/// Polls a re-centre waits, at most, after its own Track off, for the finder
+/// camera's next live pointing: 5 s at `POLL`.
+pub const FRESH_POLLS: u32 = 20;
 /// How long 038's push may read `moving` before it ends a run.
 pub const PUSH_GRACE: Duration = Duration::from_secs(10);
 /// Share of the shorter side within which an uncentred target may still be stacked.
@@ -214,6 +217,31 @@ impl MountSteps for ConsoleMount {
             }
             self.memory.lock().unwrap().repointing = true;
             self.state.session().stop_tracking().await;
+            // A pointing recorded with Track on still uses the old aim point.
+            // The first live pointing with Track off applies the held measured
+            // aim before Track decides whether another GoTo is needed.
+            let seq = self
+                .state
+                .session()
+                .snapshot(self.state.clock.now())
+                .pointing
+                .map(|pointing| pointing.seq);
+            for _ in 0..FRESH_POLLS {
+                time::sleep(POLL).await;
+                if self.stopped() {
+                    self.memory.lock().unwrap().repointing = false;
+                    return Err(Failure::Stopped);
+                }
+                let fresh = self
+                    .state
+                    .session()
+                    .snapshot(self.state.clock.now())
+                    .pointing
+                    .map(|pointing| pointing.seq);
+                if fresh != seq {
+                    break;
+                }
+            }
             let target = self.state.session().snapshot(self.state.clock.now()).target;
             let (changed, by) = {
                 let memory = self.memory.lock().unwrap();
