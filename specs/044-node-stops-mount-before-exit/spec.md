@@ -6,8 +6,8 @@ depends_on_landed: ["014-goto", "017-console-stop-confirm", "024-mount-link-reco
 # branch `probe/044` cut from 7164e87f: tests that show the fault, run on `main`'s code,
 # and a trial fix with which they pass, with both gates' Rust commands passing. Every
 # `path:line` here was read at 7164e87f. The owner took the four recommended answers on
-# 2026-11-21 ("Yes, take them"). The trio has not yet been built from its own text
-# (plan.md § Prerequisites). 027's test
+# 2026-11-21 ("Yes, take them"). Probe round 1, the same day, built both stories from
+# this text: 0 blocking and 6 clarity defects (044-R1 to R6), folded that day. 027's test
 # layout is not named: no story writes a finder test. What rests on a run and what on
 # reading is said where it is used (plan.md § What was run and what was read).
 ---
@@ -84,10 +84,12 @@ and exit.
 - Q: What does a call during the stop get? → A: Nothing that moves the mount. The queue
   is closed before the stop begins, so `GotoAxis` and `RateAxis` answer `ABORTED` with
   `mount command discarded by Stop` (`crates/scope-node/src/service.rs:503`), during the
-  stop and after it (US1-S1, US1-S6). Over the network, once serving has ended, the probe
-  saw a call on a client's open channel fail `UNAVAILABLE` and a new connection
-  refused (one exploratory run; US2-S3 asserts only that the call fails and that no
-  motion command reaches the board). In process, after the shutdown, `AxisState` and
+  stop and after it (US1-S1, US1-S6). Over the network, once serving has ended, a call on
+  a client's open channel never reaches the closed queue: it fails, but not `ABORTED`, and
+  no motion command reaches the board (US2-S3). On a channel that also holds a stream,
+  such as `frames`, the call fails only when the node exits, with a transport error; on
+  one that holds none, the probe saw `UNAVAILABLE`, and a new connection refused (one
+  exploratory run each). In process, after the shutdown, `AxisState` and
   `StopAll` still answer, and that `StopAll` sends `:K1` and `:K2` again (one
   exploratory run).
 - Q: Does this change 017 or 024? → A: No requirement's text changes. 017's FR-010 reads:
@@ -120,9 +122,10 @@ and exit.
   module.
 - Q: What rests on a run, and what on reading? → A: Every scenario here was run on the
   probe, with the trial fix of plan.md § Interfaces, three times each with the same
-  outcome; the binary's ones fail on `main`'s code. The stories' own text has not been
-  built. plan.md § What was run and what was read lists each claim. Nothing was run on
-  a real serial device, the real board, a Pi or systemd.
+  outcome; the binary's ones fail on `main`'s code. Probe round 1 then built both
+  stories from this text alone, and every scenario passed as written. plan.md § What was
+  run and what was read lists each claim. Nothing was run on a real serial device, the
+  real board, a Pi or systemd.
 - Q: What is left for later? → A: The items under "Out of scope" in § Assumptions.
 
 ## Owner decisions
@@ -252,7 +255,8 @@ Every scenario shares these definitions.
   `make_raw` and `tcsetattr`. The master is made non-blocking with
   `rustix::io::ioctl_fionbio`. A spawned relay reads the master, writes what it read to
   an `Emulator` built with `EmulatorConfig::default()` on `SystemClock`, and writes the
-  emulator's `discard_input()` back to the master. `handle` is that emulator's handle.
+  emulator's `discard_input()` back to the master. On `EAGAIN` it sleeps 1 ms before it
+  reads again. `handle` is that emulator's handle.
 - **The board says an axis moves** when a stream from
   `handle.reopen(Arc::new(SystemClock))`, sent `:f<axis>\r`, answers five bytes ending
   in `\r` whose third is `1`.
@@ -260,8 +264,10 @@ Every scenario shares these definitions.
   `ScopeNodeMountClient` over it with the `BearerToken` `test-token`; `describe_mount`
   read every 50 ms until it lists axes, for at most 10 s; a spawned task calling
   `heartbeat` on a `ScopeNodeClient` over the same channel every 250 ms until a call
-  fails; `goto_axis(azimuth, 1000000)` and `rate_axis(altitude, 1.0)` answered OK; then
-  1 s, after which the board says both axes move.
+  fails, whose first call has answered before the moves; a `frames` stream on a
+  `ScopeNodeClient` over the same channel, opened before the moves and held unread to
+  the test's end; `goto_axis(azimuth, 1000000)` and `rate_axis(altitude, 1.0)` answered
+  OK; then 1 s, after which the board says both axes move.
 - **Oracles.** The emulator's own record of what the board was sent and answered, the
   board's own word on its axes, the stand-in's record, the process's exit status and
   standard error, the words in these scenarios and paused Tokio time. No expected value
@@ -381,11 +387,11 @@ during development, `cargo nextest run -p scope-node --locked --test exit_stops_
 3. **Given** the setup of US2-S1 and `handle.drop_replies(b'K', 1, 5)`, **When** a
    committed test marks the exchanges, sends SIGTERM, 200 ms later sends SIGINT, 200 ms
    after that calls `goto_axis(altitude, 50000)` on its client, awaits the exit, waits
-   2 s and asks the board about both axes, **Then** it asserts that the call fails; that
-   the node exits with status 0 between 1,400 and 2,500 ms after SIGTERM was sent; that
-   exactly one line of its standard error starts `scope-node: SIG`, and it is
-   `scope-node: SIGTERM: the mount confirmed the stop`; that the exchanges after the
-   mark whose command starts `:K` or `:L` begin with `:K1` five times, `:K2` and `:L1`,
+   2 s and asks the board about both axes, **Then** it asserts that the call fails, and
+   not with `ABORTED`; that the node exits with status 0 between 1,400 and 2,500 ms
+   after SIGTERM was sent; that exactly one line of its standard error starts
+   `scope-node: SIG`, and it is `scope-node: SIGTERM: the mount confirmed the stop`; that
+   the exchanges after the mark whose command starts `:K` or `:L` begin with `:K1` five times, `:K2` and `:L1`,
    and that any after those start `:K`; that no exchange after the mark is a motion
    command; and that the board says neither axis moves.
 4. **Given** the setup of US2-S1 and then `handle.power_off()`, **When** a committed test

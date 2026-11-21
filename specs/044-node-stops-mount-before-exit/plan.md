@@ -229,8 +229,8 @@ rustix = { version = "1.1.4", features = ["pty"] }
 
 In the unit of § Config and systemd, `TimeoutStopSec=10` after `RestartSec=1`
 (`crates/scope-node/README.md:86`). After the sentence that ends `` and to
-`SupplementaryGroups`. `` (`crates/scope-node/README.md:95`), a paragraph of its own,
-with a blank line before and after it:
+`SupplementaryGroups`. `` (`crates/scope-node/README.md:95`), a block of its own, with a
+blank line before and after it; the lines after it then form a paragraph of their own:
 
 ```markdown
 On SIGTERM or SIGINT (`systemctl stop`, `poweroff`, a restart, Ctrl-C) the node stops
@@ -310,11 +310,11 @@ tests ran in a sandbox with its `/dev`: § Prerequisites 4).
 - **The signals are taken before the bind** (FR-002). The binary's tests send a signal
   only once the node accepts a connection; a node that took them later might still pass.
   *Check:* `signal(...)` is the first statement of `serve`.
-- **The exit does not wait** (FR-009). US2-S1 and US2-S2 hold it: their client's open
-  channel would keep a server that waits for every connection from finishing, and the
-  node would not exit within 1 s. US1's tests hold no connection, so in US1's diff it
-  shows only as `std::process::exit`. *Check:* `serve` never awaits `server` after the
-  signal.
+- **The exit does not wait** (FR-009). US2-S1 and US2-S2 hold it: the `frames` stream
+  that moving holds open never ends, so a node that awaited its server's graceful end
+  would not exit within 1 s. An open channel alone does not hold it: tonic's graceful
+  end closes idle connections. US1's tests hold no connection, so in US1's diff it shows
+  only as `std::process::exit`. *Check:* `serve` never awaits `server` after the signal.
 - **The README paragraph and the two rows.** No test reads them. Copy them from
   § Interfaces.
 - **`closed` is set before `stop_all`.** US1-S3 refuses no move, so the order shows only
@@ -409,7 +409,10 @@ with US1 merged; on `main`'s node code all four fail (§ What was run and what w
    inside bubblewrap with the boundary's `--dev /dev`, `--proc /proc` and
    `--unshare-pid`, though not with its whole argument list. If the factory's own run
    still fails, owner decision 4 is answered (b).
-5. **Probe builds.** Not met: no story has been built from this text.
+5. **Probe builds.** Met on 2026-11-21: probe round 1 built US1 and US2 from this text
+   alone, both passing as written, with 0 blocking and 6 clarity defects (044-R1 to
+   R6), folded the same day. R6 replaces R2's `UNAVAILABLE` with "not `ABORTED`":
+   beside the `frames` stream of R1 the late call fails with a transport error.
 6. **No operator-staged files are needed.**
 
 ## Outside the factory
@@ -464,11 +467,12 @@ They bind every story.
    diff. *Check:* every Then names a committed test the `test` gate runs.
 2. **One evidence budget.** *Check:* each story's diff stays under 64 KiB, measured with
    `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c`. Measured on the
-   probe's commits: US1 about 29,100 B, 44.4 % of 65,536 B (the code and docs 10,098 B,
-   its `Cargo.toml` hunk about 890 B, `stop_before_exit.rs` 13,149 B,
-   `exit_on_signal.rs` 4,978 B); US2 about 14,900 B, 22.7 % (`exit_stops_the_mount.rs`
-   14,286 B, its `Cargo.toml` hunk about 610 B). At the 1.35 times a factory build has
-   run over its probe on earlier specs, US1 would be about 39,300 B, 60.0 %.
+   drafting probe's commits: US1 about 29,100 B and US2 about 14,900 B. Probe round 1,
+   built from this text with 044-R1 to R6 in its tests: US1 30,314 B, 46.3 % of
+   65,536 B (the code and docs 10,098 B, its `Cargo.toml` hunk 892 B,
+   `stop_before_exit.rs` 13,990 B, `exit_on_signal.rs` 5,334 B); US2 15,811 B, 24.1 %.
+   At the 1.35 times a factory build has run over its probe on earlier specs, US1 would
+   be about 40,900 B, 62.4 %.
 3. **A spec fixed mid-epic needs a relaunch.** *Check:* no builder edits
    `specs/044-node-stops-mount-before-exit/` or `.specify/`.
 4. **An earlier story's test file is an existing test.** *Check:* US2 writes
@@ -505,7 +509,7 @@ They bind every story.
 |---|---|
 | The factory's gate boundary has no pseudo-terminal, and US2 cannot pass there. | Prerequisite 4 ran US2's tests in a sandbox with the boundary's `/dev`; if the factory's run still fails, owner decision 4 (b) drops US2. |
 | A loaded host stretches the binary's wall-clock bounds: 1 s for an exit with nothing to wait for, 1,400 to 2,500 ms for US2-S3 and 9 s for US2-S4. | Each bound has its tolerance stated; the waits inside them are timer-driven. |
-| US1 at a factory build's usual overrun reaches 60 % of the budget. | It stays well under the 64 KiB refusal (§ Plan traps 2); the test files are the bulk. |
+| US1 at a factory build's usual overrun reaches about 62 % of the budget. | It stays well under the 64 KiB refusal (§ Plan traps 2); the test files are the bulk. |
 | The node exits 1 on every stop while its mount is unplugged, and the unit reads failed. | Owner decision 2. |
 | A console Stop pressed during the shutdown is refused, and the console says the mount may still move. | The node's own stop runs; its line in the journal says how it ended. |
 | The real board takes `:K` differently from the emulator. | The field check. |
@@ -670,17 +674,17 @@ stories:
       - path: crates/scope-node/tests/exit_stops_the_mount.rs
         status: new
         disposition: add
-        assertion: "the binary over the emulator behind a pseudo-terminal, a GoTo on azimuth and a rate on altitude under way, sent SIGTERM: the board says neither axis moves 2 s after the exit; its stop commands after the mark are exactly K1 and K2, each answered; no motion command; exit within 1 s with status 0 and the last line scope-node: SIGTERM: the mount confirmed the stop"
+        assertion: "the binary over the emulator behind a pseudo-terminal, a frames stream held open, a GoTo on azimuth and a rate on altitude under way, sent SIGTERM: the board says neither axis moves 2 s after the exit; its stop commands after the mark are exactly K1 and K2, each answered; no motion command; exit within 1 s with status 0 and the last line scope-node: SIGTERM: the mount confirmed the stop"
         decision: "spec.md:US2-S1"
       - path: crates/scope-node/tests/exit_stops_the_mount.rs
         status: new
         disposition: add
-        assertion: "the binary over the emulator behind a pseudo-terminal, a GoTo on azimuth and a rate on altitude under way, sent SIGINT: the board says neither axis moves 2 s after the exit; its stop commands after the mark are exactly K1 and K2, each answered; no motion command; exit within 1 s with status 0 and the last line scope-node: SIGINT: the mount confirmed the stop"
+        assertion: "the binary over the emulator behind a pseudo-terminal, a frames stream held open, a GoTo on azimuth and a rate on altitude under way, sent SIGINT: the board says neither axis moves 2 s after the exit; its stop commands after the mark are exactly K1 and K2, each answered; no motion command; exit within 1 s with status 0 and the last line scope-node: SIGINT: the mount confirmed the stop"
         decision: "spec.md:US2-S2"
       - path: crates/scope-node/tests/exit_stops_the_mount.rs
         status: new
         disposition: add
-        assertion: "with five K1 replies dropped, SIGTERM, SIGINT 200 ms later and a GoTo 200 ms after that: the GoTo fails; exit with status 0 between 1,400 and 2,500 ms after SIGTERM; exactly one line starts scope-node: SIG and it is the SIGTERM confirmed line; the stop commands begin K1 five times, K2, L1, and any after them start K; no motion command; both axes at rest"
+        assertion: "with five K1 replies dropped, SIGTERM, SIGINT 200 ms later and a GoTo 200 ms after that: the GoTo fails, not ABORTED; exit with status 0 between 1,400 and 2,500 ms after SIGTERM; exactly one line starts scope-node: SIG and it is the SIGTERM confirmed line; the stop commands begin K1 five times, K2, L1, and any after them start K; no motion command; both axes at rest"
         decision: "spec.md:US2-S3"
       - path: crates/scope-node/tests/exit_stops_the_mount.rs
         status: new

@@ -9,7 +9,7 @@ description: "Task list for 044-node-stops-mount-before-exit: The Node Stops the
 - the owner decisions in spec.md are settled: met on 2026-11-21, the recommended answers;
 - the factory's gate boundary gives a test a pseudo-terminal, for US2: met, by a run in a
   sandbox with its `/dev`;
-- every story has been probe-built from this text: not met;
+- every story has been probe-built from this text: met, probe round 1 on 2026-11-21;
 - no operator-staged file is needed.
 
 **Rules for every story:**
