@@ -53,8 +53,12 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
      re-anchoring, once 043's trio was on `main`.
 3. **The lease of the imaging camera exists.** Nothing of this spec touches it
    (041's flip.md § Prerequisites 3).
-4. **The owner decisions are settled and the approvals given** (§ Owner decisions
-   still open, § Owner approvals). Not met: none of this spec's is settled as a whole.
+4. **The owner decisions are settled and the approvals given** (§ Owner decisions,
+   § Owner approvals). Met on 2026-11-20: the decisions are settled as § Owner
+   decisions says, and the flip of that day gives the approvals, under the owner's
+   standing permission for the imaging specs ("You have my permission to move them to
+   ready when needed", 2026-11-19, extended to the split pieces on 2026-11-20: "you can
+   flip things to ready as you get them ready").
 5. **A probe build of every story.** Met on 2026-11-20 by probe round 2, for the trio as
    the split of 2026-11-20 left it. One agent built US9, US10 and US11 on 041's round-2
    probe build (036, 040, 037 and 041's US4 to US8, with 041's stand-in for 041-R17),
@@ -149,14 +153,16 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
    few minutes, and if one of those ends Track, no run outlasts it.
 9. **No operator-staged files are needed.** Met.
 
-## Owner decisions still open
+## Owner decisions
 
 The owner decisions of this spec's stories, 13, 17 and 19, keep the numbers they had in
 the twelve-story trio. Each is a design or taste call the plan document leaves open, but
 for 13, whose recommended answer the plan document now writes into its shared
-interfaces; they stay here, under their numbers, for the owner to settle at the flip.
-None is settled as a whole. A different answer is written into the trio and re-validated
-before the flip, never left to a story.
+interfaces. All three are settled. None was a row of the owner's decisions document,
+whose recommended answers the owner approved on 2026-11-17, so each was left here for the
+flip; the flip of 2026-11-20 takes each one's recommended answer under the owner's
+standing permission for the imaging specs, as 037's and 041's flips took theirs. The
+recommended answer of each is the answer in force.
 
 13. **Where the run block sits on the Imaging page.** Recommended: first, above the
     Camera section, because Start is the page's main action. Instead: last.

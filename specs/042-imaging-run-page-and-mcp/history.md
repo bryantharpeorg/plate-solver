@@ -2,6 +2,36 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
 
 # How 042-imaging-run-page-and-mcp got here
 
+## The re-anchoring and the flip (2026-11-20)
+
+The trio was re-anchored onto `main` at `61b54a47` once 041 had landed (#350 to #354):
+- **Citations.** Of the 31 code citations the draft held at 49bb210, 17 were where they
+  had been and 14 had moved and were fixed: the fourteen probe round 2 found stale,
+  the validator's `crates/finder/README.md:57` among them. 31 more name 037's, 040's
+  and 041's landed code.
+- **Names.** Every name the trio takes from 037 and 041, and from 030 to 036, 038,
+  040 and 043, was read in the landed code. 037's and 041's public items are as their
+  probes built them but for `RECORD_EVERY`, now a constant of the module, which the
+  trio names bare. One difference reached a story's text: the landed
+  `POST /api/imaging/run` reads its body with `serde_json::from_value` (`run_body`),
+  so its 400 is serde's words alone, where the probe's route answered axum's. plan.md
+  had `start_imaging_run` parse its arguments as `set_target` parses its edit, which
+  gives axum's words; the seat changed it to parse them as `run_body` does, so the tool
+  still answers the route's words, as FR-037 and US10-S3 ask. Neither changed.
+- **Shared writes.** Of the ten that name another spec, nine matched `git log -1`; the
+  README's now names 043's US1, which wrote it after 040's US11.
+- **The tool count (042-R8).** `main` has 28 MCP tools, and the README's `## MCP
+  clients` says the imaging camera has twelve; with this spec's four, 32 and sixteen.
+  plan.md § The README says so. No scenario pins the word, and none was changed.
+- **Other edits.** 043 is in `depends_on_landed`. Row V points at 037's, which weighs
+  Ekos's scheduler and sequencer.
+
+The seat flipped the trio to `ready` the same day, under the owner's standing permission
+for the imaging specs (flip.md § Prerequisites 4). Owner decisions 13, 17 and 19 were not
+rows of the owner's decisions document of 2026-11-17, so the flip takes each one's
+recommended answer, as flip.md § Owner decisions says. The owner's answer of 2026-11-20
+to 042-R9 is under § Probe round 2 and its fold.
+
 ## Probe round 2 and its fold (2026-11-20)
 
 Probe round 2 built this piece's three stories, as the split of 2026-11-20 left them, on

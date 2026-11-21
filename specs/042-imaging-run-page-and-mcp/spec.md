@@ -1,12 +1,15 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-confirm", "030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "034-dark-and-flat-frames", "035-live-stack", "036-tracking-from-subs", "037-imaging-run", "038-track-follows-a-push", "040-stack-waits-for-steady", "041-imaging-run-on-the-rig", "043-imaging-abort-answers-in-time"]
 # The imaging run, third of three pieces: the run's block on the Imaging page, four MCP
 # tools and the README's section with its field checklist (US9, US10, US11), over the run
 # that 037-imaging-run and 041-imaging-run-on-the-rig build. Depends on 014 to 017, 030 to
-# 038, 040, 041 and 043 having landed. State: draft, re-anchored to `main` after 041 lands
-# and before the flip. history.md has how it got here; flip.md what the flip needs.
-# Re-anchored on 2026-11-20 to `main` at `61b54a47`, after 041 landed (#350 to #354).
+# 038, 040, 041 and 043 having landed. State: ready. history.md has how it got here;
+# flip.md what the flip needed.
+# Re-anchored on 2026-11-20 to `main` at `61b54a47`, after 041 landed (#350 to #354). The
+# seat flipped it to `ready` that day under the owner's standing permission for the imaging
+# specs, which gives the owner approvals; every owner decision takes the answer written in
+# flip.md.
 ---
 
 # Feature Specification: The Imaging Run on the Page, over MCP and in the README
@@ -15,7 +18,7 @@ depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-con
 
 **Created**: 2026-11-15, as part of `037-imaging-run`; a spec of its own since 2026-11-20
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: `037-imaging-run` and `041-imaging-run-on-the-rig` give the console one
 imaging run, from a chosen target to a saved stack, served over three routes. This spec
