@@ -34,3 +34,5 @@ image = { version = "0.25.1", default-features = false, features = ["jpeg"] }
 plate-solver = { version = "0.1.0", path = "../plate-solver" }
 image = { version = "0.25.1", default-features = false, features = ["png"] }
 tokio = { version = "1.53.1", features = ["test-util"] }
+# A pseudo-terminal for the binary's mount device in tests/exit_stops_the_mount.rs.
+rustix = { version = "1.1.4", features = ["pty"] }
