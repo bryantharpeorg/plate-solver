@@ -297,6 +297,84 @@ export interface ImagingView {
   calibration?: ImagingCalibration;
   stack?: StackView;
   steering?: ImagingSteering;
+  run?: ImagingRun;
+  unfinished_run?: string;
+}
+
+// The console's imaging run (037 and 041), including its latest ending.
+export interface ImagingRun {
+  id: string;
+  state:
+    | "slewing"
+    | "tracking"
+    | "first_frame"
+    | "focus_check"
+    | "focus_pause"
+    | "solving"
+    | "centring"
+    | "stacking"
+    | "paused_by_tracker"
+    | "ended";
+  by: "page" | "mcp";
+  target: { id: string; name: string; ra_deg: number; dec_deg: number };
+  started_at: number;
+  elapsed_s: number;
+  settings: { subs: number | null; duration_s: number; keep_subs: boolean };
+  subs: { stacked: number; dropped: Record<string, number> };
+  focus?: {
+    verdict: "good" | "slightly_soft" | "clearly_out" | "unmeasurable" | "no_record";
+    reading?: number;
+    record?: number;
+    unit: "arcsec" | "px";
+  };
+  centring?: { tries: number; offset_arcsec: number; tolerance_arcsec: number };
+  stacking_since?: number;
+  limit_at?: number;
+  pause_ends_at?: number;
+  message: string;
+  warnings?: string[];
+  ended?: { reason: string; at: number; message: string; saved: boolean; track_on: boolean };
+  folder?: string;
+}
+
+export interface ImagingRunRequest {
+  subs?: number;
+  duration_s?: number;
+  keep_subs?: boolean;
+}
+
+async function imagingRunCall(url: string, init: RequestInit): Promise<ImagingView> {
+  let response: Response;
+  try {
+    response = await fetch(url, init);
+  } catch {
+    throw new Error("The console did not answer. The run itself is not affected; try again.");
+  }
+  return json(response);
+}
+
+export async function postImagingRun(request: ImagingRunRequest): Promise<ImagingView> {
+  return imagingRunCall("/api/imaging/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...(request.subs !== undefined ? { subs: request.subs } : {}),
+      ...(request.duration_s !== undefined ? { duration_s: request.duration_s } : {}),
+      ...(request.keep_subs !== undefined ? { keep_subs: request.keep_subs } : {}),
+    }),
+  });
+}
+
+export async function deleteImagingRun(): Promise<ImagingView> {
+  return imagingRunCall("/api/imaging/run", { method: "DELETE" });
+}
+
+export async function postImagingRunContinue(anyway: boolean): Promise<ImagingView> {
+  return imagingRunCall("/api/imaging/run/continue", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ anyway }),
+  });
 }
 
 // The calibration library and sets of darks or flats in the imaging view (034).

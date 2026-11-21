@@ -774,6 +774,14 @@
       "description": "Built in SteeringBlock.tsx on the Imaging page after the stack block. One status says what steers the tracker, or why exposures are paused; a definition list gives tracking error, drift per sub, exposure, the longest exposure and what a stack started now would take; a form with three number fields, a checkbox and Save tracking settings PUTs /api/imaging/steering. Existing ink, paper and red-only night tokens; no new class.",
       "html": "<section class=\"ds-steering\"><h2>Tracking from the subs</h2><p role=\"status\">Steered by the subs · 12 used</p><dl><dt>Drift per sub</dt><dd>0.6″ · 0.3 px</dd></dl><button>Save tracking settings</button></section>",
       "css": ".ds-steering{color:var(--color-ink)}.ds-steering button{border:1px solid var(--color-ink);background:transparent;color:inherit;min-height:44px}"
+    },
+    {
+      "name": "Imaging run",
+      "kind": "custom",
+      "refersTo": "button",
+      "description": "First on the Imaging page while the camera is ready or a run exists, the idle block offers optional sub and minute limits, Keep every sub, a size estimate and primary Start imaging run, with an alert for an unfinished run. A running block shows the console message, counts, elapsed and stacking times, warnings and MCP attribution, with a five-second second-tap Stop on its own last row and, at a focus pause, a countdown and separate Check focus again and Go anyway row, all buttons disabled while a request is out. An ended block names the reason and saved stack or unsaved subs, as a status for a stop or limit and an alert for other endings or an unsaved stack, with a quiet Track reminder and warnings above the start form.",
+      "html": "<section class=\"ds-imaging-run\"><h2>Imaging run</h2><label>Subs to stack<input type=\"number\"/></label><label>Minutes to stack<input type=\"number\" placeholder=\"120\"/></label><label><input type=\"checkbox\" checked/>Keep every sub</label><p>About 14.6 GB of subs in 120 minutes at the current exposure.</p><button>Start imaging run</button><p role=\"status\">Stacking M42: 12 stacked, 3 dropped.</p><p>12 stacked · 3 dropped (not solved 2, too few stars 1)</p><p>Elapsed 2:05</p><p>Stacking for 1:05 of 120:00</p><p>Started by an MCP client</p><div><button>Check focus again</button><button>Go anyway</button></div><div><button>Stop imaging run</button></div></section>",
+      "css": ".ds-imaging-run{color:var(--color-ink)}.ds-imaging-run input,.ds-imaging-run button{min-height:44px;border:1px solid var(--color-ink);border-radius:0;background:transparent;color:inherit}.ds-imaging-run div{display:flex;flex-wrap:wrap;gap:12px}"
     }
   ],
   "narrative": {
