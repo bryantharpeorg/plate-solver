@@ -4,34 +4,53 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
 
 ## Prerequisites before this spec is flipped to `ready`
 
-1. **The earlier specs have landed.** Met for `014-goto`, `015-tracking`, `016-mcp`
-   and `017-console-stop-confirm`, and, by 2026-11-19, for `030-imaging-camera-link`,
-   `031-imaging-frames-on-console`, `032-imaging-solve-and-aim-point`,
-   `033-focus-reading-and-aid`, `034-dark-and-flat-frames` and
-   `038-track-follows-a-push`, whose `push` the `pushed_away` ending reads. Not met for
-   `035-live-stack`, which is flipped and being built, and `036-tracking-from-subs`, a
-   draft beside this one.
-   Not met for `040-stack-waits-for-steady`, cut from 036 on 2026-11-20,
-   nor for `037-imaging-run` and `041-imaging-run-on-the-rig`.
+1. **The earlier specs have landed.** Met: every spec in `depends_on_landed` has landed
+   on `main`, each with its last story's merge. `014-goto` at `a43747f7` (US9, #159),
+   `015-tracking` at `a02dc35b` (US9, #177), `016-mcp` at `bcf37652` (US6, #186),
+   `017-console-stop-confirm` at `c1ed2957` (US4, #206), `030-imaging-camera-link` at
+   `49f8dcd2` (US8, #269), `031-imaging-frames-on-console` at `e9687ce9` (US9, #279),
+   `032-imaging-solve-and-aim-point` at `670ddcf9` (US7, #288),
+   `033-focus-reading-and-aid` at `80f414ff` (US7, #298), `034-dark-and-flat-frames` at
+   `002dbef8` (US8, #309), `035-live-stack` at `52785403` (US10, #321),
+   `036-tracking-from-subs` at `fc161a54` (US12, #333), `038-track-follows-a-push`,
+   whose `push` the `pushed_away` ending reads, at `1c2b427b` (US3, #260), and
+   `040-stack-waits-for-steady`, cut from 036 on 2026-11-20, at `6d79292b` (US11, #340).
+   `043-imaging-abort-answers-in-time` landed on 2026-11-20 with its one story, US1 at
+   `2ae73c66` (#342); `037-imaging-run` with its five, #344 to #348, the last US3 at
+   `581be8c3` (#348); and `041-imaging-run-on-the-rig` with its five, #350 to #354, the
+   last US8 at `61b54a47` (#354).
 2. **This trio is re-anchored after `037-imaging-run` and `041-imaging-run-on-the-rig`
-   land.** Not met. Every name in plan.md § What 037-imaging-run provides and § What
-   041-imaging-run-on-the-rig provides is re-read on `main`, and the last story of each
-   spec that writes a shared file replaces the one named in plan.md § Refinement Record. Where
-   037 or 041 lands offering something else than those sections say, the story that
-   reads it changes, and a gap goes to the owner before the flip. The point known to
-   need that reading:
-   - 043 has landed: `Imaging::abort` answers within `ABORT_WAIT` on a scope node that
-     has stopped answering, so 041's run's ending finishes on a lost link, and
-     `stop_imaging_run` and `DELETE /api/imaging/run` answer (042-R3). Both wait on
-     `Runner::stop`, which waits for the run's ending, which awaits 041's stack part's
-     `stop`; probe round 2 found that, with 041's stop as its trio writes it, the tool
-     did not answer within 60 s of virtual time on a lost link, and answered 1 s after
-     the node went quiet with 041's round-2 stand-in. The owner settled 041-R17, and
-     042-R3 with it, on 2026-11-20 with 043, so 041's stack part keeps
-     `stacker.stop().await` and no stand-in is folded here either.
-     `depends_on_landed` gains `043-imaging-abort-answers-in-time` at the re-anchoring,
-     not before: 043's trio is not on `main` yet, and the validator refuses an edge to
-     a spec it cannot find.
+   land.** Met on 2026-11-20 by the re-anchoring, on `main` at `61b54a47`, after 041
+   landed. Every name in plan.md § What 037-imaging-run provides and § What
+   041-imaging-run-on-the-rig provides was re-read in the landed code, and every shared
+   write in plan.md § Refinement Record that names another spec names the story that last
+   wrote the file on `main` (`git log -1`): the README's is 043's US1 (`2ae73c66`, #342),
+   which wrote it after 040's US11, and the others are as the drafts named them. Where
+   037 or 041 landed offering something else than those sections said, the sections now
+   say what landed. One of them reached a story's text: `POST /api/imaging/run` reads its
+   body as a JSON object and then as a `RunRequest` with `serde_json::from_value`
+   (`run_body`), so its 400 for an unknown key is serde's words alone, where the probe's
+   route took a `Json<RunRequest>` and answered axum's
+   `Failed to deserialize the JSON body into the target type` before them. plan.md
+   § The MCP tools had `start_imaging_run` parse its arguments the way `set_target`
+   parses its edit, which gives axum's words; it now parses them as `run_body` does, so
+   the tool still answers the route's words, as FR-037 and US10-S3 ask, and neither
+   changed. The point known to need that reading:
+   - 043 has landed: met, its one story US1 at `2ae73c66` (#342). `Imaging::abort`
+     answers within `ABORT_WAIT`, 5 s (`crates/finder/src/imaging/mod.rs:52`), on a
+     scope node that has stopped answering (`crates/finder/src/imaging/mod.rs:829`), so
+     041's run's ending finishes on a lost link, and `stop_imaging_run` and
+     `DELETE /api/imaging/run` answer (042-R3). Both wait on `Runner::stop`, which waits
+     for the run's ending, which awaits 041's stack part's `stop`
+     (`crates/finder/src/imaging/run/console.rs:718`), which awaits 035's `Stacker::stop`
+     and so `Imaging::abort` (`crates/finder/src/imaging/stack/service.rs:596`); probe
+     round 2 found that, with 041's stop as its trio writes it, the tool did not answer
+     within 60 s of virtual time on a lost link, and answered 1 s after the node went
+     quiet with 041's round-2 stand-in. The owner settled 041-R17, and 042-R3 with it, on
+     2026-11-20 with 043, so 041's stack part keeps `stacker.stop().await`
+     (`crates/finder/src/imaging/run/console.rs:734`) and no stand-in is folded here
+     either. `depends_on_landed` gained `043-imaging-abort-answers-in-time` at the
+     re-anchoring, once 043's trio was on `main`.
 3. **The lease of the imaging camera exists.** Nothing of this spec touches it
    (041's flip.md § Prerequisites 3).
 4. **The owner decisions are settled and the approvals given** (§ Owner decisions
@@ -44,7 +63,7 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
    earlier test file passed unedited, 037's and 041's among them; workspace nextest ran
    1299 tests at the base and 1310 after US11, and `npm test` 545 at the base and 558
    after each story. The round found 1 blocking and 9 clarity defects, 042-R1 to
-   042-R10, all folded on 2026-11-20 but the anchors, which are the re-anchoring's
+   042-R10, all folded on 2026-11-20, the anchors by the re-anchoring on `main` at `61b54a47`
    (history.md § Probe round 2 and its fold). Probe round 1, on 2026-11-19, had built
    the trio as it then stood; what this point said of it is in the same section. What
    round 2 ran:
@@ -82,15 +101,17 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
        nextest's 300 s;
    - the seams, and their state:
      - every name the trio takes from 037 and 041 matched the probe's code, and matches
-       their folded trios (037's at bcf0fdfd, 041's at 534691eb). `RECORD_EVERY` is
-       `Runner::RECORD_EVERY`, an associated constant; a run stopped while Track is off
+       their folded trios (037's at bcf0fdfd, 041's at 534691eb). `RECORD_EVERY` was
+       `Runner::RECORD_EVERY` there, an associated constant, and landed as a constant of
+       the module (`crates/finder/src/imaging/run.rs:1494`); a run stopped while Track is off
        ends `Stopped: the mount was stopped.`, now in the README's row of `stopped`
        (R3);
      - 040 → 042: in 040's trio and in the probe's build, 040's US11 last writes
        `tools.rs`, `tests/mcp/main.rs` and the README's tool list, and its
        `set_steering` line follows `get_stack`'s. Folded into plan.md § The README and
-       the Refinement Record (R2); the re-anchoring reads each last writer again once
-       040 has landed;
+       the Refinement Record (R2); the re-anchoring read each last writer again on
+       `main`: 040's US11 last wrote `tools.rs` and `tests/mcp/main.rs`, and 043's US1
+       wrote the README after it;
      - 041 and 035 over 031 → 042: `stop_imaging_run` and the page's Stop hang on a lost
        link without a fix of 041-R17. Settled by 043 (§ Prerequisites 2, R3). No
        scenario of this spec runs a lost link, so its tests pass either way;
@@ -110,11 +131,16 @@ Not given to builders or the judge. Nothing here is a rule; the trio is.
    and failed under the mutant it was written for, in the story it is now in.
 6. **The plan document, ADR-0002, the glossary's imaging terms and the research note
    are on `main`.** Met by 2026-11-19: all four are on `main`.
-7. **`main` is still as read.** Met on 2026-11-15: every `path:line` here was read at
-   49bb210, and read again at 49bb210 after the audit, when `main` had not moved; no
-   cited line had moved, and `crates/finder/src/targets.rs:39` replaced a citation one
-   line above the `struct` it names. It is re-read at the flip, because 030 to 036
-   change most of the files cited.
+7. **`main` is still as read.** Met on 2026-11-20 for what the re-anchoring read: every
+   `path:line` in the trio was read again by its content on `main` at `61b54a47`. Of the
+   31 the draft held, read at 49bb210, 17 were where they had been and 14 had moved and
+   were fixed: the 14 that probe round 2 found stale, the README's line 57 that the
+   validator refused among them. None was lost. 31 more name what 037, 040 and 041
+   landed, in the code, the README and `DESIGN.md`; § Prerequisites 2 cites 043's. The
+   draft's citations were first read at 49bb210 on 2026-11-15, and again there after the
+   audit, when `main` had not moved; no cited line had moved then, and
+   `crates/finder/src/targets.rs:39` replaced a citation one line above the `struct` it
+   names. They are re-read at the flip if `main` has moved.
 8. **The real mount.** Not met, and outside the factory: a GoTo to a target and Track
    have not run on the real mount (the plan document, § Before any flip, 4). The spec
    can be built before that; the run is not used at the telescope until it is. The

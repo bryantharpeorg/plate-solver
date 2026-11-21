@@ -1,11 +1,12 @@
 ---
 state: draft
-depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-confirm", "030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "034-dark-and-flat-frames", "035-live-stack", "036-tracking-from-subs", "037-imaging-run", "038-track-follows-a-push", "040-stack-waits-for-steady", "041-imaging-run-on-the-rig"]
+depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-confirm", "030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "034-dark-and-flat-frames", "035-live-stack", "036-tracking-from-subs", "037-imaging-run", "038-track-follows-a-push", "040-stack-waits-for-steady", "041-imaging-run-on-the-rig", "043-imaging-abort-answers-in-time"]
 # The imaging run, third of three pieces: the run's block on the Imaging page, four MCP
 # tools and the README's section with its field checklist (US9, US10, US11), over the run
 # that 037-imaging-run and 041-imaging-run-on-the-rig build. Depends on 014 to 017, 030 to
-# 038, 040 and 041 having landed. State: draft, re-anchored to `main` after 041 lands and
-# before the flip. history.md has how it got here; flip.md what the flip needs.
+# 038, 040, 041 and 043 having landed. State: draft, re-anchored to `main` after 041 lands
+# and before the flip. history.md has how it got here; flip.md what the flip needs.
+# Re-anchored on 2026-11-20 to `main` at `61b54a47`, after 041 landed (#350 to #354).
 ---
 
 # Feature Specification: The Imaging Run on the Page, over MCP and in the README
@@ -437,9 +438,11 @@ development, `cargo nextest run -p finder --locked --test console imaging_run_do
 ## Assumptions
 
 - **Earlier features are in place.** Every spec this one names in `depends_on_landed` has
-  landed before it is built, 037 and 041 among them (flip.md § Prerequisites 1). Every
-  `path:line` here was read at 49bb210. A file that 030 to 041 create is named without a
-  line, with the spec that creates it.
+  landed, 037, 041 and 043 among them (flip.md § Prerequisites 1), and the trio is read
+  against their code. It was re-anchored to that code on 2026-11-20 (flip.md
+  § Prerequisites 2 and 7): every `path:line` here was read by its content on `main` at
+  `61b54a47`, whose line numbers are cited; those the draft held were first read at
+  49bb210. A file this spec creates is named without a line.
 - **Out of scope:**
   - a `target` argument (037's owner decision 10);
   - listing, fetching or deleting runs through the API, and returning the stacked

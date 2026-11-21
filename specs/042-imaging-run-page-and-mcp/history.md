@@ -151,6 +151,13 @@ that owns it; a story of 036 that went to `040-stack-waits-for-steady` is cited 
 | The README is written by one story, the last | Rows with the routes and tools with the MCP story | Every README line is then asserted by the story that writes it (US11-S3). |
 | The `DESIGN.md` entry and the `design.json` component are asserted by a Vitest test | Unasserted, as the page stories of 030 to 036 leave theirs | `readWebFile` reaches the repository's root from the page's tests (`crates/finder/web/src/test/files.ts:11`), so the story that writes the entry can prove it (US9-S7). |
 
+Added at the re-anchor of 2026-11-20, for principle V of constitution 1.3.0, which asks a
+plan to name what it looked at and why it turned it down:
+
+| Decision | Rejected | Why |
+|---|---|---|
+| The run block, the four MCP tools and the README's section are this project's own, putting the console's own run on its own page, MCP door and README | Ekos's scheduler and sequencer in KStars (GPL-2.0-or-later), weighed with the run's design in 037's row V | KStars is a desktop application that would replace the console as the place the run is driven, not a service the console can call (037's plan.md § Constitution Check, row V). Nothing of it is copied. |
+
 ## Dated notes and probe asides moved out of the trio
 
 Each passage below was in the trio as quoted, with the file it was in before the

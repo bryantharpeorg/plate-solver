@@ -74,7 +74,7 @@ section, in three stories.
 | II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS`, `ergane.yaml` or `playwright.config.ts` is edited. The only edits to existing test files are the `mod` lines spec.md SC-002 names. |
 | III. Tests first, independent expectations | Oracles: for the machine, the words, states and call lists each scenario states, compared with what a scripted stand-in recorded; for the real parts, the simulator's truth (the true aim point, the true centre of the imaging frame, the mount's true motion), the session, and the answers of 031's and 033's own routes. `run.json` and `stack.json` are parsed by the tests themselves. Clocks are injected; virtual time only in tests and `finder --simulate`. |
 | IV. Critical paths | No `unsafe`, no dependency or `Cargo.toml` change, no database-format change, nothing under `proto/`, nothing in `crates/scope-link`. |
-| V. Proven open source first, honest licensing | The finder camera's solver is untouched. The run reaches ASTAP only through 032's solver port; principle V of constitution 1.3.0 allows that. |
+| V. Proven open source first, honest licensing | The finder camera's solver is untouched. The run reaches ASTAP only through 032's solver port; principle V of constitution 1.3.0 allows that. The run block, the four MCP tools and the README's section are this project's own because they put the console's own run on its own page, MCP door and README, the page through the run's three routes and the tools through its `Runner` in process; the run's design and Ekos's scheduler and sequencer in KStars are weighed in 037's row V. |
 
 ## Project Structure
 
@@ -100,14 +100,18 @@ DESIGN.md                                 # US9: the block
 The run's code, its routes and its record are 037's and 041's, and no story here writes
 them.
 
-## What 037-imaging-run provides (read as landed before the flip)
+## What 037-imaging-run provides (landed, read on `main` at `61b54a47`)
 
-`037-imaging-run` has landed all of this before any story here is built, and no story
-here changes any of it: a test file 037 created is an existing test. 037's plan.md gives
-each item in full, under the section named; the flip re-reads this section against the
-code on `main` (flip.md § Prerequisites 2).
+`037-imaging-run` has landed all of this (#344 to #348), and no story here changes any
+of it: a test file 037 created is an existing test. The trio is read against its code:
+this section was re-read on `main` at `61b54a47` on 2026-11-20 (flip.md § Prerequisites
+2), and each item names where it is in that code. 037's plan.md says why, under the
+section each item names.
 
-**The words** (`crates/finder/src/imaging/run.rs`; 037's § The parts and the words,
+**The words** (`crates/finder/src/imaging/run.rs`, from `POLL` at
+`crates/finder/src/imaging/run.rs:31` to `ENDINGS` at `crates/finder/src/imaging/run.rs:51`,
+`RunRequest` at `crates/finder/src/imaging/run.rs:391` and `FRAME_TRIES` at
+`crates/finder/src/imaging/run.rs:1477`; 037's § The parts and the words,
 037's § The run's words and 037's § Failed steps and counts in the machine). 037's § The run's words
 holds every state's message and every ending's sentence, which the page shows as the run
 gives them and the README's tables quote:
@@ -152,11 +156,13 @@ pub const SOLVE_TRIES: u32 = 3;
 pub const RETRY_WAIT: Duration = Duration::from_secs(5);
 ```
 
-`Ending::reason` answers an ending's word in `ENDINGS`, four endings answering `stopped`
-with a sentence each, and `Ending::message` its sentence.
+`Ending::reason` (`crates/finder/src/imaging/run.rs:127`) answers an ending's word in
+`ENDINGS`, four endings answering `stopped` with a sentence each, and `Ending::message`
+(`crates/finder/src/imaging/run.rs:150`) its sentence.
 
-**The view and the runner** (`run.rs`; 037's § The machine). The page's `ImagingRun` in
-§ The page is this view as JSON:
+**The view and the runner** (`run.rs`: `RunView` at `crates/finder/src/imaging/run.rs:566`
+and `Runner` at `crates/finder/src/imaging/run.rs:674`; 037's § The machine). The page's
+`ImagingRun` in § The page is this view as JSON:
 
 ```rust
 #[derive(Debug, Clone, PartialEq, Default, Serialize)]
@@ -285,22 +291,31 @@ second tap, or the page and an MCP client together, cannot turn a check into a
 go-anyway, and a `Go anyway` sent as the limit fires is not answered yes by a run that
 then ends.
 
-**The routes and the imaging view** (037's § The routes,
+**The routes and the imaging view** (`crates/finder/src/imaging/routes.rs:42`,
+`crates/finder/src/imaging/mod.rs:98`, `crates/finder/src/api.rs:403`; 037's § The routes,
 037's § `crates/finder/src/imaging/mod.rs` and 037's § The console).
-`POST /api/imaging/run` takes a `RunRequest` through `sim_json`, so a `Content-Type`
-other than `application/json` is 415 and a body of another shape 400;
+`POST /api/imaging/run` takes a JSON object through `sim_json` and reads it as a
+`RunRequest` with `serde_json::from_value` (`run_body`,
+`crates/finder/src/imaging/routes.rs:347`), so a `Content-Type` other than
+`application/json` is 415, a body that is not an object 400 in axum's words, and an
+object of another shape 400 in serde's own words, with no position;
 `DELETE /api/imaging/run` takes no body and answers once the run has ended;
-`POST /api/imaging/run/continue` takes `{"anyway": bool}`. Each is a `SessionWrite`,
-answers the imaging view, and with no runner is 409 `this console runs no imaging runs`.
-The route starts a run inside `api::start_motion(&state, "page", "imaging_run", …)`. The
-imaging view carries `run` in every state of the view, and `unfinished_run`, the folder of
-the newest record with no `ended`, until the first accepted start; both are skipped when
+`POST /api/imaging/run/continue` takes `{"anyway": bool}`, read the same way. Each is a
+`SessionWrite`, answers the imaging view, and with no runner is 409
+`this console runs no imaging runs`, the start and the continue reading their body first.
+The route starts a run inside `api::start_motion(&state, "page", "imaging_run", …)`
+(`crates/finder/src/imaging/routes.rs:368`). The imaging view carries `run` in every
+state of the view, and `unfinished_run`, the folder of the newest record when that record
+has no `ended`, read as the console starts, until the first accepted start
+(`Runner::unfinished`, `crates/finder/src/imaging/run.rs:716`); both are skipped when
 absent. `AppState::imaging_runner()` answers the runner when the console has one.
 
-**The record** (`crates/finder/src/imaging/run/store.rs`; 037's § The record). `run.json`
+**The record** (`crates/finder/src/imaging/run/store.rs`, written by `Store::write` at
+`crates/finder/src/imaging/run/store.rs:63`; 037's § The record). `run.json`
 lies in the stack's folder, `runs/<stack id>/` under the imaging folder, or in
 `runs/<run id>/` for a run that ends before it stacks; it is refreshed at changes of state,
-at most once a `RECORD_EVERY`, 60 s, while the stacked count rises, and at the ending.
+at most once a `RECORD_EVERY`, 60 s (`crates/finder/src/imaging/run.rs:1494`), while the
+stacked count rises, and at the ending.
 `run.json`, its keys in this order: `format`, `finder` (`CARGO_PKG_VERSION`), `id`,
 `by`, `target`, `started_at`, `started_utc` (`YYYY-MM-DDTHH:MM:SSZ`, from the same
 `fits::utc` string as the id), `settings`, `state`, `events`, `subs`, then `focus`,
@@ -309,8 +324,9 @@ with `track_on` as read at the ending. No `message`, `elapsed_s`, `stacking_sinc
 `limit_at`, `pause_ends_at` or `folder`, and nothing of the site, the node's address or
 its token.
 
-**The script and the fixtures of the scenarios** (`finder::imaging::run::script`;
-037's § The script and 037's spec.md § User Scenarios), which every scripted test here
+**The script and the fixtures of the scenarios** (`finder::imaging::run::script`,
+`Script` at `crates/finder/src/imaging/run/script.rs:57`; 037's § The script and 037's
+spec.md § User Scenarios), which every scripted test here
 uses and no story here writes. A call is listed when it is made, before any hold:
 
 - **The script** is `finder::imaging::run::script::Script` (037's US12): one stand-in for all
@@ -321,7 +337,8 @@ uses and no story here writes. A call is listed when it is made, before any hold
   that is good with a reading and a record of 3.0″; a solve 0″ from the sensor's centre
   with a tolerance of 90″ and a `near_arcsec` of 450″ that moved the aim point; a
   tracker that was steady over any past window; and a stack that starts in the
-  folder `runs/2026-01-16T02-00-10Z-M42`, **the script's stack folder**, and runs with
+  folder `runs/2026-01-16T02-00-10Z-M42`, **the script's stack folder** (`STACK_FOLDER`,
+  `crates/finder/src/imaging/run/script.rs:37`), and runs with
   nothing stacked or dropped until it is stopped. A test changes one answer at a time:
   `set_mount`, `refuse`, `push_frame`, `push_focus`, `push_solve`, `fail_repoint`,
   `fail_open_aid`, `fail_stack_start`, `fail_stack_stop`, `unsteady`, `set_stack` and
@@ -355,20 +372,25 @@ uses and no story here writes. A call is listed when it is made, before any hold
   folder (`Session::with_state_file`), with `with_imaging_run_steps(script.steps())`
   added last. **R** is the child path `imaging` of the test's scratch folder.
 
-## What 041-imaging-run-on-the-rig provides (read as landed before the flip)
+## What 041-imaging-run-on-the-rig provides (landed, read on `main` at `61b54a47`)
 
-`041-imaging-run-on-the-rig` has landed all of this on 037's machine before any story
-here is built, and no story here changes any of it: a test file 041 created is an existing
-test. 041's plan.md gives each item in full, under the section named; the flip re-reads
-this section against the code on `main` (flip.md § Prerequisites 2).
+`041-imaging-run-on-the-rig` has landed all of this on 037's machine (#350 to #354), and
+no story here changes any of it: a test file 041 created is an existing test. The trio is
+read against its code: this section was re-read on `main` at `61b54a47` on 2026-11-20
+(flip.md § Prerequisites 2), and each item names where it is in that code. 041's plan.md
+says why, under the section each item names.
 
-**The binary has a runner** (041's § The console's own parts in the console).
+**The binary has a runner** (`crates/finder/src/api.rs:386`, `crates/finder/src/main.rs:236`;
+041's § The console's own parts in the console).
 `AppState::with_imaging_run()` builds `Steps` from the console's own five parts and calls
 037's `with_imaging_run_steps`; `crates/finder/src/main.rs` calls it on both the
 `--simulate` and the real path. A console without imaging has no runner.
 
-**The counts, waits and names the README gives** (`crates/finder/src/imaging/run.rs` and
-`crates/finder/src/imaging/run/console.rs`; 041's sections of each):
+**The counts, waits and names the README gives** (`crates/finder/src/imaging/run.rs`, from
+`CENTRE_TRIES` at `crates/finder/src/imaging/run.rs:1481` to `NOT_FAILURES` at
+`crates/finder/src/imaging/run.rs:1489`, and `crates/finder/src/imaging/run/console.rs`,
+from `CENTRE_SHARE` at `crates/finder/src/imaging/run/console.rs:27` to `reserve_bytes` at
+`crates/finder/src/imaging/run/console.rs:49`; 041's sections of each):
 
 ```rust
 // console.rs, 041's § The console's mount part
@@ -427,24 +449,26 @@ pub fn reserve_bytes(width: u32, height: u32, binning: u32) -> u64;
 - **The focus pause**: `focus_pause`, its `pause_ends_at` and `Runner::resume(anyway)` in
   a pause, as above (041's § The focus gate in the machine).
 - **The stack part**, whose stop finishes on a scope node that has stopped answering
-  (041-R17; with 043 landed, flip.md § Prerequisites 2): the `.reserve` file in the
+  (041-R17; with 043 landed, flip.md § Prerequisites 2; its `stop` at
+  `crates/finder/src/imaging/run/console.rs:718`): the `.reserve` file in the
   stack's folder while the run stacks,
   `reserve_bytes` long and removed before the stack's save, and the subs removed when
   `keep_subs` is false (041's § The console's stack part and the wiring).
 - **The steering**: the stack part tells the steering of 036 and 040 the set point and
-  reads `Steering::waiting()` for `paused_by_tracker`; the steering's own block on the
+  reads `Steering::waiting()` (`crates/finder/src/imaging/steering.rs:512`) for
+  `paused_by_tracker`; the steering's own block on the
   Imaging page is 040's.
 
 ## Interfaces
 
-Everything 030 to 036, 038 and 040 create is named as their plan.md gives it in the
-drafting worktree, and 037's and 041's as their plan.md give it. All of it is re-read on
-`main` before the flip (flip.md § Prerequisites 2).
+Everything 030 to 038, 040, 041 and 043 create has landed, and the trio is read against
+their code: each name here was re-read on `main` at `61b54a47` on 2026-11-20 (flip.md
+§ Prerequisites 2), and the plans' sections named say why.
 
 ### `start_motion`'s one line (`crates/finder/src/api.rs`, US10)
 
 US10 changes one line of `start_motion`, the refusal of an MCP Track while a direct axis
-move runs (`crates/finder/src/api.rs:623`): `tool == "set_tracking"` becomes
+move runs (`crates/finder/src/api.rs:811`): `tool == "set_tracking"` becomes
 `matches!(tool, "set_tracking" | "start_imaging_run")`.
 
 ### The page (`crates/finder/web/src/`, US9)
@@ -482,7 +506,7 @@ export async function deleteImagingRun(): Promise<ImagingView>;        // fetch(
 export async function postImagingRunContinue(anyway: boolean): Promise<ImagingView>;
 ```
 
-The two posts are written as `postTrack` is (`crates/finder/web/src/api.ts:312`), with
+The two posts are written as `postTrack` is (`crates/finder/web/src/api.ts:750`), with
 `{ method: "POST", headers: { "Content-Type": "application/json" }, body:
 JSON.stringify(…) }`, and each call throws an `Error` with the answer's `error` on a
 refusal. When `fetch` itself rejects, each of the three throws an `Error` with the
@@ -570,8 +594,9 @@ it has a view.
 ### `DESIGN.md` and `.impeccable/design.json` (US9)
 
 After the last imaging entry then in `DESIGN.md` (the Recording entry is at
-`DESIGN.md:350` today, and 030 to 036 and 040 add theirs after it), a plain `###` heading and
-one paragraph. The `>` marks only set the text apart here:
+`DESIGN.md:384`, and 030 to 036 and 040 added theirs after it, the last 040's
+`### Tracking from the subs — built`, at `DESIGN.md:402`), a plain `###` heading and one
+paragraph. The `>` marks only set the text apart here:
 
 > ### Imaging run — built
 > First on the Imaging page, while the imaging camera is ready or a run has been
@@ -606,7 +631,7 @@ that is on, an ended run), and
 ### The MCP tools (`crates/finder/src/mcp/tools.rs`, US10)
 
 Two structs that only describe a tool's input, beside `TargetArguments`
-(`crates/finder/src/mcp/tools.rs:31`):
+(`crates/finder/src/mcp/tools.rs:34`):
 
 ```rust
 #[derive(rmcp::schemars::JsonSchema)]
@@ -617,27 +642,30 @@ struct ImagingRunArguments { subs: Option<u32>, duration_s: Option<f64>, keep_su
 struct ImagingRunContinueArguments { anyway: bool }
 ```
 
-Four tools in the `#[tool_router]` block (`crates/finder/src/mcp/tools.rs:165`), each
-with `output_schema = object_schema()` (`crates/finder/src/mcp/tools.rs:104`). Each
-answer is `field_result("run", …)` (`crates/finder/src/mcp/tools.rs:110`) of the run's
+Four tools in the `#[tool_router]` block (`crates/finder/src/mcp/tools.rs:322`), each
+with `output_schema = object_schema()` (`crates/finder/src/mcp/tools.rs:235`). Each
+answer is `field_result("run", …)` (`crates/finder/src/mcp/tools.rs:241`) of the run's
 view as JSON, or of `null`; each refusal is `CallToolResult::error` with the words.
 
 - `start_imaging_run`, description
   `Move a real telescope to the session's target and start an imaging run there, as POST /api/imaging/run does: GoTo, tracking, a first imaging frame, a focus check, centring on the imaging camera's sensor, and stacking until it is stopped or reaches a limit. Set the target first with set_target. Answers at once with the run in state slewing; read get_imaging_run every few seconds until state is ended. In state focus_pause the run waits up to 15 minutes for continue_imaging_run.`,
   with `input_schema` from `schema_for_input::<ImagingRunArguments>()`, as `set_target`
-  declares its own (`crates/finder/src/mcp/tools.rs:354`). It takes `arguments:
+  declares its own (`crates/finder/src/mcp/tools.rs:511`). It takes `arguments:
   JsonObject`. In this order: `self.state.limit_move()?`
-  (`crates/finder/src/api.rs:305`); the arguments parsed as `RunRequest` the way
-  `set_target` parses its edit, a parse error being the tool's error; no runner, the
+  (`crates/finder/src/api.rs:466`); the arguments parsed as `RunRequest` the way the
+  route's `run_body` parses its body (`crates/finder/src/imaging/routes.rs:347`), with
+  `serde_json::from_value::<RunRequest>(Value::Object(arguments))` and the error's
+  `to_string()`, as `set_stacking` parses its own (`crates/finder/src/mcp/tools.rs:919`),
+  so that a parse error is the tool's error in the route's words; no runner, the
   error `this console runs no imaging runs`; then
   `api::start_motion(&self.state, "mcp", "start_imaging_run", || …)` around
   `runner.start(request, By::Mcp)`, as `goto_target` wraps its start
-  (`crates/finder/src/mcp/tools.rs:216`); it answers `field_result("run", …)` of
+  (`crates/finder/src/mcp/tools.rs:373`); it answers `field_result("run", …)` of
   `runner.view()` read once `start_motion` has answered, and writes that same
   `{"run": …}` object, or the refusal's words, after `->` in its call-log line. It
   writes one call-log line with
   `self.state.log_call("start_imaging_run", …)` whatever the result
-  (`crates/finder/src/api.rs:322`).
+  (`crates/finder/src/api.rs:483`).
 - `stop_imaging_run`, description
   `End the imaging run and save its stack, as DELETE /api/imaging/run does. It stops the mount only while the run still slews: call stop for that. Answers once the run has ended, which takes the stack's save and, during a re-centre, up to about 7 s more; with no run on it answers the last run unchanged.`:
   takes `arguments: JsonObject`; any key is the error
@@ -651,7 +679,7 @@ view as JSON, or of `null`; each refusal is `CallToolResult::error` with the wor
   runner, the same error; a `Refusal` of `runner.resume(anyway)` is the error.
 - `get_imaging_run`, read-only (`annotations(read_only_hint = true)`), description
   `Read the imaging run: state (focus_pause needs continue_imaging_run; ended is final), ended.reason and ended.message once over, warnings, the focus verdict, the centring offset, counts of subs stacked and dropped by reason, limit_at for when the time limit ends it, and its message for the observer. null before the first run.`:
-  takes nothing, as `get_session` does (`crates/finder/src/mcp/tools.rs:347`), and
+  takes nothing, as `get_session` does (`crates/finder/src/mcp/tools.rs:504`), and
   answers the view, or `null` with no runner or no run.
 
 Only `start_imaging_run` is a moving tool. The door needs no change: it stops on `stop`
@@ -666,7 +694,8 @@ US11 is the one story of the run's three specs that writes the README, so that e
 is asserted by the story that writes it (US11-S1 to US11-S3).
 
 Three rows after the last `/api/imaging` row of the `## API` table
-(`crates/finder/README.md:167`):
+(`crates/finder/README.md:216`), on `main` the row of `PUT /api/imaging/steering`
+(`crates/finder/README.md:245`):
 
 ```markdown
 | `POST /api/imaging/run` | JSON with optional `subs` (1 to 100000), `duration_s` (1 to 43200, default 7200) and `keep_subs` (default true). Start an imaging run on the session's target: GoTo, tracking, a first imaging frame, a focus check, centring on the imaging camera's sensor and stacking. Answers 200 with the imaging view, whose `run` says where it has got to; 400 or 409 with a JSON `error`. Same-origin writes only. |
@@ -674,11 +703,12 @@ Three rows after the last `/api/imaging` row of the `## API` table
 | `POST /api/imaging/run/continue` | JSON `{"anyway":false}` or `{"anyway":true}`. From a focus pause, check focus again, or go on unchecked; 409 with a JSON `error` when no run is paused. Same-origin writes only. |
 ```
 
-In `## MCP clients` (`crates/finder/README.md:57`): four lines after `set_steering`'s,
-the last tool 040 adds (040's US11), worded like their neighbours, the first saying
-that `start_imaging_run` moves the telescope, is rate-limited and is logged; and the
-count in the sentence before the list made four higher, in the words that sentence has
-on `main` then.
+In `## MCP clients` (`crates/finder/README.md:62`): four lines after `set_steering`'s
+(`crates/finder/README.md:120`), the last tool 040 added (040's US11), worded like their
+neighbours, the first saying that `start_imaging_run` moves the telescope, is
+rate-limited and is logged; and the count in the sentence before the list made four
+higher, in the words that sentence has on `main` then (`crates/finder/README.md:85`:
+twelve on `61b54a47`, so sixteen).
 
 A section `## An imaging run`, after the last imaging section then there. In prose: what
 a run does, in order; that the imaging camera is held throughout, by the run, the focus
@@ -693,7 +723,8 @@ fourth column headed `What to do next`, what to do next (start again; check focu
 cloud or the aim point first; call `stop`; nothing), the row of `stopped` giving its
 four sentences, each between backticks, and what the mount does after each (the
 run's own stop: Track on; the console's Stop, or a stop of the run while Track is off
-(while it slewed, or once a guard or a lost link had ended Track): at rest; the
+(while it slewed, or once a guard or a lost link had ended Track,
+`crates/finder/src/imaging/run.rs:1434`): at rest; the
 stack or the focus check stopped from its own route, or an aborted sub: Track on), the
 row of `mount_failed` saying that Track or GoTo ended for a reason of its own, a
 guard's among them, whose words the message carries, and that after a re-centre
@@ -804,7 +835,7 @@ These are not changed by any story:
 
 ## Verification (every story, before proposing)
 
-- **The factory gates** (`ergane.yaml` at 49bb210):
+- **The factory gates** (`ergane.yaml` on `main` at `61b54a47`, its gates as at 49bb210):
   - `lint` = `cargo fmt --all --check`,
     `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`,
     `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked`
@@ -876,20 +907,18 @@ story.
 
 ## Refinement Record
 
-The re-anchoring (flip.md § Prerequisites 2) is still to do. Until then the record below
-names what the drafts named: its tests are the scenarios, its writes are the files
-§ Project Structure names, and its shared writes name the merge edge that orders two
-stories of this spec on one file, or the story of another spec that last writes the file
-among the drafts as they stood on 2026-11-15, read from each draft's own record, a story
-of 036 that went to 040 when 036 was split being named in 040. `tools.rs`,
-`tests/mcp/main.rs` and the README name 040's US11, which writes them last in 040's trio
-and in probe round 2's build (042-R2). Each of those names is
-checked again at the re-anchoring. A test file an earlier story creates does not exist
-yet and cannot be listed as an existing test; what a later story must leave passing in it
-is under that story's `preserved_behavior`. The record's `open_questions` are empty
-because the validator refuses a record that holds any; what is not established is in
-§ Risks and flip.md, and what the owner must settle is in flip.md. Nothing in this record
-is an owner approval: those are in flip.md, and flipping to `ready` gives them.
+The record was re-anchored on 2026-11-20 to `main` at `61b54a47` (flip.md
+§ Prerequisites 2): its tests are the scenarios, its writes are the files § Project
+Structure names, and its shared writes name the merge edge that orders two stories of
+this spec on one file, or the story of another spec that last wrote the file on `main`,
+as `git log -1` reads it at `61b54a47`, with its commit and pull request. The README's is
+043's US1, which wrote it after 040's US11, the story 042-R2 named. A test file an earlier
+story creates does not exist yet and cannot be listed as an existing test; what a later
+story must leave passing in it is under that story's `preserved_behavior`. The record's
+`open_questions` are empty because the validator refuses a record that holds any; what
+is not established is in § Risks and flip.md, and what the owner must settle is in
+flip.md. Nothing in this record is an owner approval: those are in flip.md, and flipping
+to `ready` gives them.
 
 ```yaml
 version: 1
@@ -995,27 +1024,27 @@ stories:
     other_spec: 040-stack-waits-for-steady
     other_story: US8
     disposition: merge_order
-    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US8 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US8 last wrote this file on main (112b3069, #339)"
   - path: DESIGN.md
     other_spec: 040-stack-waits-for-steady
     other_story: US8
     disposition: merge_order
-    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US8 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US8 last wrote this file on main (112b3069, #339)"
   - path: crates/finder/web/dist
     other_spec: 040-stack-waits-for-steady
     other_story: US8
     disposition: merge_order
-    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US8 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US8 last wrote this file on main (112b3069, #339)"
   - path: crates/finder/web/src/api.ts
     other_spec: 040-stack-waits-for-steady
     other_story: US8
     disposition: merge_order
-    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US8 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US8 last wrote this file on main (112b3069, #339)"
   - path: crates/finder/web/src/components/ImagingPage.tsx
     other_spec: 040-stack-waits-for-steady
     other_story: US8
     disposition: merge_order
-    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US8 last writes this file in the drafts; re-read at the re-anchoring"
+    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US8 last wrote this file on main (112b3069, #339)"
   open_questions: []
  US10:
   tests:
@@ -1099,17 +1128,17 @@ stories:
     other_spec: 041-imaging-run-on-the-rig
     other_story: US8
     disposition: merge_order
-    reason: "042 depends_on_landed 041-imaging-run-on-the-rig, whose 041's US8 last writes this file; re-read at the re-anchoring"
+    reason: "042 depends_on_landed 041-imaging-run-on-the-rig, whose US8 last wrote this file on main (61b54a47, #354)"
   - path: crates/finder/src/mcp/tools.rs
     other_spec: 040-stack-waits-for-steady
     other_story: US11
     disposition: merge_order
-    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US11 last writes this file with `set_steering`; re-read at the re-anchoring"
+    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US11 last wrote this file on main with `set_steering` (6d79292b, #340)"
   - path: crates/finder/tests/mcp/main.rs
     other_spec: 040-stack-waits-for-steady
     other_story: US11
     disposition: merge_order
-    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US11 last writes this file with `set_steering`; re-read at the re-anchoring"
+    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US11 last wrote this file on main with `mod steering` (6d79292b, #340)"
   open_questions: []
  US11:
   tests:
@@ -1151,14 +1180,14 @@ stories:
   no_write_reason: ""
   shared_writes:
   - path: crates/finder/README.md
-    other_spec: 040-stack-waits-for-steady
-    other_story: US11
+    other_spec: 043-imaging-abort-answers-in-time
+    other_story: US1
     disposition: merge_order
-    reason: "042 depends_on_landed 040-stack-waits-for-steady, whose US11 last writes this file with `set_steering`'s tool line; re-read at the re-anchoring"
+    reason: "042 depends_on_landed 043-imaging-abort-answers-in-time, whose US1 last wrote this file on main with its sentences on the abort (2ae73c66, #342), after 040's US11 wrote `set_steering`'s tool line (6d79292b, #340)"
   - path: crates/finder/tests/console/main.rs
     other_spec: 041-imaging-run-on-the-rig
     other_story: US7
     disposition: merge_order
-    reason: "042 depends_on_landed 041-imaging-run-on-the-rig, whose 041's US7 last writes this file; re-read at the re-anchoring"
+    reason: "042 depends_on_landed 041-imaging-run-on-the-rig, whose US7 last wrote this file on main (8a880e4f, #353)"
   open_questions: []
 ```
