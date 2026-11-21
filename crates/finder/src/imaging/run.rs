@@ -956,17 +956,17 @@ impl RunTask {
         });
     }
 
-    /// Copy the counts and answer whether the stack waits for the tracker. Read
-    /// outside the run's lock: the stack part may read the imaging view.
-    fn read_stack_counts(&self) -> bool {
+    /// Copy the counts and answer the same progress snapshot for judging endings.
+    /// Read outside the run's lock: the stack part may read the imaging view.
+    fn read_stack_counts(&self) -> StackProgress {
         let progress = self.steps.stack.progress();
         self.update(|run| {
             run.view.subs = SubCounts {
                 stacked: progress.stacked,
-                dropped: progress.dropped,
+                dropped: progress.dropped.clone(),
             };
         });
-        progress.waiting_for_tracker
+        progress
     }
 
     fn warn(&self, warning: Warning) {
@@ -1295,6 +1295,7 @@ impl RunTask {
             Err(Failure::NotSolved(words)) => return Err(Ending::SolverFailing(words)),
             Err(failure) => return Err(Ending::StackFailed(failure.words().into())),
         };
+        let stack_started_at = Instant::now();
         self.stack_started = true;
         let stacking_since = self.clock.now();
         self.update(|run| {
@@ -1306,17 +1307,20 @@ impl RunTask {
             run.view.limit_at = Some(stacking_since + run.view.settings.duration_s);
         });
 
-        {
+        let settings = {
             let mut inner = self.inner.lock().unwrap();
-            inner
-                .as_mut()
-                .unwrap()
-                .write_record()
+            let run = inner.as_mut().unwrap();
+            run.write_record()
                 .map_err(|error| Ending::SaveFailed(error.to_string()))?;
-        }
+            run.view.settings.clone()
+        };
         let mut stopped = self.stopped.clone();
+        let mut previous_poll = stack_started_at;
+        let mut quiet = Duration::ZERO;
+        let mut stacked = 0;
+        let mut dropped = BTreeMap::<String, u64>::new();
         loop {
-            let waiting_for_tracker = self.read_stack_counts();
+            let progress = self.read_stack_counts();
             // Once stacking, the mount's ending takes precedence over a stop
             // observed at the same poll, including after an unguarded start.
             if let MountState::Ended(ending) = self.steps.mount.state() {
@@ -1325,7 +1329,52 @@ impl RunTask {
             if *stopped.borrow() {
                 return Err(Ending::RunStopped);
             }
-            self.set_state(if waiting_for_tracker {
+            if let Some(failure) = progress.failed {
+                return Err(match failure {
+                    Failure::Stopped => Ending::Stopped,
+                    Failure::Camera(words) => Ending::CameraFailed(words),
+                    Failure::Save(words) => Ending::SaveFailed(words),
+                    Failure::SolverUnavailable(words) => Ending::SolverUnavailable(words),
+                    Failure::NotSolved(words) => Ending::SolverFailing(words),
+                    failure => Ending::StackFailed(failure.words().into()),
+                });
+            }
+            if !progress.running {
+                return Err(Ending::StackStopped);
+            }
+            if settings
+                .subs
+                .is_some_and(|n| progress.stacked >= u64::from(n))
+            {
+                return Err(Ending::CountLimit);
+            }
+            let now = Instant::now();
+            if now.duration_since(stack_started_at).as_secs_f64() >= settings.duration_s {
+                return Err(Ending::DurationLimit);
+            }
+            if progress.stacked > stacked {
+                quiet = Duration::ZERO;
+                dropped = progress.dropped.clone();
+            } else if !progress.waiting_for_tracker {
+                quiet += now.duration_since(previous_poll);
+            }
+            previous_poll = now;
+            stacked = progress.stacked;
+            if quiet >= NO_SUB_LIMIT {
+                let reasons: Vec<_> = progress
+                    .dropped
+                    .iter()
+                    .filter(|(reason, _)| !NOT_FAILURES.contains(&reason.as_str()))
+                    .filter_map(|(reason, count)| {
+                        let rise = count.saturating_sub(dropped.get(reason).copied().unwrap_or(0));
+                        (rise > 0).then(|| format!("{} {rise}", reason.replace('_', " ")))
+                    })
+                    .collect();
+                if !reasons.is_empty() {
+                    return Err(Ending::SubsFailing(reasons.join(", ")));
+                }
+            }
+            self.set_state(if progress.waiting_for_tracker {
                 "paused_by_tracker"
             } else {
                 "stacking"
@@ -1434,6 +1483,10 @@ pub const CENTRE_TRIES: u32 = 3;
 pub const CENTRE_IDLE: u32 = 4;
 /// How long a focus pause may last.
 pub const FOCUS_PAUSE_LIMIT: Duration = Duration::from_secs(900);
+/// Stacking time with a failed sub and none stacked that ends a run.
+pub const NO_SUB_LIMIT: Duration = Duration::from_secs(600);
+/// Reasons 035 drops a sub for that say the console fell behind, not that a sub failed.
+pub const NOT_FAILURES: [&str; 2] = ["behind", "unprocessed"];
 /// How long the run waits after a failed take before it asks again.
 pub const RETRY_WAIT: Duration = Duration::from_secs(5);
 
