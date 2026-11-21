@@ -306,7 +306,7 @@ describe("US9-S5/S8: an ended run", () => {
       "status",
       "Imaging run stopped. Track is still on. No sub was stacked.",
     ],
-  ] as const)("%s, %i subs, saved %s: %s", (reason, message, stacked, saved, role, words) => {
+  ] as const)("%s: %s (%i stacked, saved %s)", (reason, message, stacked, saved, role, words) => {
     block({
       ...ENDED,
       subs: { stacked, dropped: {} },

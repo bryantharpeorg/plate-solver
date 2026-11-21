@@ -13,6 +13,7 @@ import { useImaging } from "../useImaging";
 import { CalibrationBlock } from "./CalibrationBlock";
 import { FocusBlock } from "./FocusBlock";
 import { ImagingSolveBlock } from "./ImagingSolveBlock";
+import { ImagingRunBlock } from "./ImagingRunBlock";
 import { StackBlock } from "./StackBlock";
 import { SteeringBlock } from "./SteeringBlock";
 
@@ -156,6 +157,7 @@ export function ImagingPage({ night, onBack }: { night: boolean; onBack: () => v
           </a>
         </div>
       </header>
+      {view != null && <ImagingRunBlock view={view} refresh={refresh} />}
       {view != null &&
         view.state !== "ready" &&
         (view.state === "error" ? (
