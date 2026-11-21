@@ -6,7 +6,7 @@ description: "Task list for 044-node-stops-mount-before-exit: The Node Stops the
 
 **Prerequisites** (plan.md § Prerequisites):
 - every spec in `depends_on_landed` has landed on `main`: met at 7164e87f;
-- the owner decisions in spec.md are settled: not met, all four are open;
+- the owner decisions in spec.md are settled: met on 2026-11-21, the recommended answers;
 - the factory's gate boundary gives a test a pseudo-terminal, for US2: met, by a run in a
   sandbox with its `/dev`;
 - every story has been probe-built from this text: not met;

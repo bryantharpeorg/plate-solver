@@ -5,8 +5,9 @@ depends_on_landed: ["014-goto", "017-console-stop-confirm", "024-mount-link-reco
 # at the owner's ask the same day ("Yes, draft 044"), from a probe of that day on the
 # branch `probe/044` cut from 7164e87f: tests that show the fault, run on `main`'s code,
 # and a trial fix with which they pass, with both gates' Rust commands passing. Every
-# `path:line` here was read at 7164e87f. The four owner decisions are open, and the
-# trio has not yet been built from its own text (plan.md § Prerequisites). 027's test
+# `path:line` here was read at 7164e87f. The owner took the four recommended answers on
+# 2026-11-21 ("Yes, take them"). The trio has not yet been built from its own text
+# (plan.md § Prerequisites). 027's test
 # layout is not named: no story writes a finder test. What rests on a run and what on
 # reading is said where it is used (plan.md § What was run and what was read).
 ---
@@ -126,10 +127,10 @@ and exit.
 
 ## Owner decisions
 
-Each is open. The scenarios name the recommended answers; another answer changes their
-numbers or words only.
+The owner took each recommended answer on 2026-11-21 ("Yes, take them"), and the
+scenarios name them. The alternatives are kept below for the record.
 
-1. **The bound's value** (FR-007). *Open.* Recommended: 8 s, with the unit's
+1. **The bound's value** (FR-007). *Settled 2026-11-21: the recommended answer.* Recommended: 8 s, with the unit's
    `TimeoutStopSec=10`. It covers the one adapter's worst case before its own answer, by
    reading: 6 s of stop commands on a board that answers nothing, behind at most 1.5 s
    of a status read in flight (Clarifications), which leaves 0.5 s. The bound then never
@@ -148,7 +149,7 @@ numbers or words only.
      within 2 s, but a stop held by a status read in flight may never send `:K2`, and no
      `:L` is ever sent; or (c) 5 s: `:K1` and `:K2` always reach the wire, and the `:L`
      escalation is cut short.
-2. **The exit status when the stop is not confirmed** (FR-006). *Open.* Recommended: 1,
+2. **The exit status when the stop is not confirmed** (FR-006). *Settled 2026-11-21: the recommended answer.* Recommended: 1,
    for `NotConfirmed` and `TimedOut`; 0 for `Confirmed` and `NoMount`. systemd counts a
    service that exits 1 after its stop as failed (`SuccessExitStatus=`, man
    `systemd.service(5)`), so `systemctl status` and the journal show that the mount may
@@ -158,12 +159,12 @@ numbers or words only.
    always, the line alone telling; or (c) 0 also for a mount that was never connected,
    which needs a mount-neutral way to tell "never connected" from "lost", that the
    `Mount` trait does not have (`crates/scope-node/src/mount/mod.rs:68`).
-3. **A second signal during the stop** (FR-008). *Open.* Recommended: ignored. The stop
+3. **A second signal during the stop** (FR-008). *Settled 2026-11-21: the recommended answer.* Recommended: ignored. The stop
    is the reason for waiting, and the bound already caps it; systemd sends one SIGTERM
    and then SIGKILL at `TimeoutStopSec`. Instead: (b) a second signal ends the node at
    once with its own line and status 1, as many servers treat a second Ctrl-C, which
    lets an impatient hand abandon the stop mid-way.
-4. **The binary's own test with a moving mount** (US2, FR-014). *Open.* Recommended: yes.
+4. **The binary's own test with a moving mount** (US2, FR-014). *Settled 2026-11-21: the recommended answer.* Recommended: yes.
    US2 runs the built binary with the emulator behind a pseudo-terminal, the only test
    in which the shipped serial path stops a moving mount on a signal. It needs rustix's
    `pty` feature in `[dev-dependencies]`: a feature of a crate the node already uses, no

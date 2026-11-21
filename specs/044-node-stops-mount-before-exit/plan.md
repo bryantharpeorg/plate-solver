@@ -400,7 +400,8 @@ with US1 merged; on `main`'s node code all four fail (§ What was run and what w
    If `main` moves in a file § Project Structure names, or in a test § Shapes names,
    re-read them and re-run the validator.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
-   decisions, § Owner approvals). Not met: all four decisions are open.
+   decisions, § Owner approvals). The decisions: met on 2026-11-21, when the owner took
+   the four recommended answers ("Yes, take them"). The approvals are given by the flip.
 4. **The gate boundary gives a test a pseudo-terminal** (US2 only). Met on 2026-11-21.
    US2's tests open `/dev/ptmx` and a device under `/dev/pts`. The `test` gate runs
    inside the factory's boundary, a bubblewrap sandbox that mounts a `/dev` of its own
@@ -517,10 +518,9 @@ tests, 017's, 024's and 039's trios, systemd's man pages and the constitution. W
 come from the task text. Shared writes name the merge edge that orders them, and the
 story that last wrote the same file on `main`.
 
-The four owner decisions of spec.md are open. The record's `open_questions` are empty
-because the validator refuses a record that holds any; the open decisions are in spec
-§ Owner decisions and § Prerequisites 3 and 4 here. This record approves nothing: the
-owner approvals of spec.md are given by the flip.
+The four owner decisions of spec.md were settled on 2026-11-21 with the recommended
+answers (spec § Owner decisions), and the record's `open_questions` are empty. This
+record approves nothing: the owner approvals of spec.md are given by the flip.
 
 ```yaml
 version: 1
