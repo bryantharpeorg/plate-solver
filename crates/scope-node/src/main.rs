@@ -11,10 +11,12 @@ use scope_node::{
     },
     rpicam::RpicamCamera,
     service::NodeService,
+    shutdown::Shutdown,
     synthetic::SyntheticCamera,
     Camera, Settings,
 };
 use std::{path::PathBuf, process::ExitCode, sync::Arc};
+use tokio::signal::unix::{signal, SignalKind};
 
 #[derive(Parser)]
 #[command(about = "Capture and detect stars on the scope node")]
@@ -143,6 +145,9 @@ async fn serve(
     settings: Settings,
     config: &Config,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // Taken before the listener binds, so a signal from then on stops the mount.
+    let mut terminate = signal(SignalKind::terminate())?;
+    let mut interrupt = signal(SignalKind::interrupt())?;
     let clock = Arc::new(SystemClock);
     let mount: Option<Arc<dyn Mount>> = if let Some(mount) = &config.mount {
         let device = mount.device.clone();
@@ -185,9 +190,28 @@ async fn serve(
         }
         None => service,
     };
-    tonic::transport::Server::builder()
-        .add_routes(service.routes())
-        .serve(config.listen)
-        .await?;
-    Ok(())
+    let (stop_serving, stopped) = tokio::sync::oneshot::channel::<()>();
+    let mut server = tokio::spawn(
+        tonic::transport::Server::builder()
+            .add_routes(service.routes())
+            .serve_with_shutdown(config.listen, async {
+                let _ = stopped.await;
+            }),
+    );
+    let name = tokio::select! {
+        served = &mut server => return Ok(served??),
+        _ = terminate.recv() => "SIGTERM",
+        _ = interrupt.recv() => "SIGINT",
+    };
+    // Take no new call, refuse every move, and stop the mount within the
+    // bound. A later signal is not read: the stop runs to its end or the bound.
+    let _ = stop_serving.send(());
+    let stopped = service.shut_down().await;
+    eprintln!("scope-node: {name}: {stopped}");
+    // Exit here: the server would wait for every open stream, such as the
+    // console's frames, and the runtime for any blocking task still running.
+    std::process::exit(match stopped {
+        Shutdown::NoMount | Shutdown::Confirmed => 0,
+        Shutdown::NotConfirmed | Shutdown::TimedOut => 1,
+    })
 }
