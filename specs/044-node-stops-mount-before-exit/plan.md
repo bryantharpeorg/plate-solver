@@ -396,12 +396,15 @@ with US1 merged; on `main`'s node code all four fail (§ What was run and what w
 ## Prerequisites before this spec is flipped to `ready`
 
 1. **The earlier specs have landed:** every spec in `depends_on_landed`. Met at 7164e87f.
-2. **`main` is still as read.** Every citation here was read at 7164e87f on 2026-11-21.
+2. **`main` is still as read.** Every citation here was read at 7164e87f on 2026-11-21,
+   and `main` was still at 7164e87f at the flip.
    If `main` moves in a file § Project Structure names, or in a test § Shapes names,
    re-read them and re-run the validator.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
    decisions, § Owner approvals). The decisions: met on 2026-11-21, when the owner took
-   the four recommended answers ("Yes, take them"). The approvals are given by the flip.
+   the four recommended answers ("Yes, take them"); and the approvals given by the flip
+   of 2026-11-21, which the owner left to the seat once probe round 1 was folded and these
+   checks were met ("Yes, you flip it").
 4. **The gate boundary gives a test a pseudo-terminal** (US2 only). Met on 2026-11-21.
    US2's tests open `/dev/ptmx` and a device under `/dev/pts`. The `test` gate runs
    inside the factory's boundary, a bubblewrap sandbox that mounts a `/dev` of its own

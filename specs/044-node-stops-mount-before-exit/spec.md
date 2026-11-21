@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["014-goto", "017-console-stop-confirm", "024-mount-link-recovery", "030-imaging-camera-link", "039-mount-replies-in-step"]
 # Drafted 2026-11-21 against `main` at 7164e87f (7164e87feb8a98a7a318e1c3ba3a7d5f706f44d8),
 # at the owner's ask the same day ("Yes, draft 044"), from a probe of that day on the
@@ -7,7 +7,9 @@ depends_on_landed: ["014-goto", "017-console-stop-confirm", "024-mount-link-reco
 # and a trial fix with which they pass, with both gates' Rust commands passing. Every
 # `path:line` here was read at 7164e87f. The owner took the four recommended answers on
 # 2026-11-21 ("Yes, take them"). Probe round 1, the same day, built both stories from
-# this text: 0 blocking and 6 clarity defects (044-R1 to R6), folded that day. 027's test
+# this text: 0 blocking and 6 clarity defects (044-R1 to R6), folded that day. The seat
+# flipped it to `ready` on 2026-11-21, `main` still at 7164e87f, under the owner's leave
+# ("Yes, you flip it"), which gives the owner approvals. 027's test
 # layout is not named: no story writes a finder test. What rests on a run and what on
 # reading is said where it is used (plan.md § What was run and what was read).
 ---
@@ -18,7 +20,7 @@ depends_on_landed: ["014-goto", "017-console-stop-confirm", "024-mount-link-reco
 
 **Created**: 2026-11-21
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: The finder is moving to a Pi behind a UPS, and a power-loss service will shut
 the Pi down cleanly. Today the scope node has no signal handling: SIGTERM and SIGINT
