@@ -82,7 +82,7 @@ moves the telescope, the guidance block and top bar say
 “Moved by an MCP client · <tool>”. The top bar's Stop is the page's only Stop;
 it stays enabled throughout motion and ends GoTo, direct axis moves and tracking.
 
-The imaging camera has twelve tools of its own, which answer what the page's
+The imaging camera has sixteen tools of its own, which answer what the page's
 Imaging page does:
 
 - `get_imaging_camera` reads the imaging view: the state, the camera's
@@ -118,6 +118,10 @@ Imaging page does:
 - `set_stacking` takes `on` to start or stop the live stack as the page does, with `reject`, `focus_gate`, `gains` and `stretch` on a start, and `gains` and `stretch` on a running stack; it answers the stack's view or the route's refusal as a tool error.
 - `get_stack` reads the stack's state, counts and dropped subs by reason, with its picture as a colour JPEG at most 1024 wide when it has one, or `{"state":"none"}` before any stack.
 - `set_steering` takes any of `on`, `smear_px`, `step_share` and `rate_share`, as `PUT /api/imaging/steering` does, and answers the imaging view or the route's refusal as a tool error.
+- `start_imaging_run` moves the telescope to the session's target and starts an imaging run as `POST /api/imaging/run` does, with optional `subs`, `duration_s` and `keep_subs`; it is rate-limited and logged, and answers at once in `slewing`.
+- `stop_imaging_run` ends the run and saves its stack as `DELETE /api/imaging/run` does; it answers once the run has ended, and stops the mount only while the run still slews. Use `stop` to stop the mount at any time.
+- `continue_imaging_run` takes `anyway`: false checks focus again from `focus_pause`, true goes on unchecked, as `POST /api/imaging/run/continue` does. An MCP client with nobody at the focuser should ask the observer or pass true.
+- `get_imaging_run` reads the run's view, including its state, message, warnings, focus verdict, centring offset, sub counts and ending; it answers null before the first run. Read it every few seconds until `ended`; a `focus_pause` needs `continue_imaging_run` within 15 minutes.
 
 Both taking tools answer a refusal as a tool error with the route's words. On a
 console that takes no imaging frames they answer `this console takes no imaging
@@ -243,6 +247,9 @@ The page uses the API types in `web/src/api.ts`, which mirror the Rust structs i
 | `DELETE /api/imaging/stack` | No body. Stop the live stack and save it; answers 200 with the imaging view once its files are written: `stack.json`, and with a sub stacked `stack.fits` and `stack.png`; `stack.save_error` when they could not be. On a node that has stopped answering, the abort of the sub in flight is given up after 5 s and the stop answers then. Same-origin writes only. |
 | `GET /api/imaging/stack/preview.jpg` | The stack's latest picture, a colour JPEG at most 1920 wide; 404 before there is one. |
 | `PUT /api/imaging/steering` | JSON with any of `on` (true or false), `smear_px` (0.1 to 20), `step_share` and `rate_share` (each 0 to 1). Whether the subs steer the tracker during a stack, how many pixels the field may turn at the corner of a sub in one exposure, and the shares of a tracking error and of a drift that one gap takes out. Answers 200 with the imaging view. Run-only: on, 6 px, 0.5 and 0.3 at every start. Same-origin writes only. |
+| `POST /api/imaging/run` | JSON with optional `subs` (1 to 100000), `duration_s` (1 to 43200, default 7200) and `keep_subs` (default true). Start an imaging run on the session's target: GoTo, tracking, a first imaging frame, a focus check, centring on the imaging camera's sensor and stacking. Answers 200 with the imaging view, whose `run` says where it has got to; 400 or 409 with a JSON `error`. Same-origin writes only. |
+| `DELETE /api/imaging/run` | No body. End the imaging run as `stopped` and save its stack; answers 200 with the imaging view once it has ended. It stops the mount only while the run still slews: `POST /api/stop` stops it at any time, and ends the run too. Same-origin writes only. |
+| `POST /api/imaging/run/continue` | JSON `{"anyway":false}` or `{"anyway":true}`. From a focus pause, check focus again, or go on unchecked; 409 with a JSON `error` when no run is paused. Same-origin writes only. |
 | `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
 | `POST /api/stop` | No body. Always 200, ending tracking, clearing arming and commanding both axes to stop, from any origin, without taking the motion lock. Sends `StopAll` immediately, retrying in its own task with 200 ms per attempt and 50 ms between attempts for a bounded 2 s window, even if the request goes away. Waits for the round and answers exactly `{"stopped":true}` when the scope node answers OK or there is no scope link; otherwise answers `{"stopped":true,"acknowledged":false}`. This means the node did not answer and the mount may still be moving; press Stop again. The MCP tools `stop` and `stop_all` return the same reply. |
 | `POST /api/model/second-sync` | No body. Start the second sync; 200 with `{"started":true}`, or 409 with a JSON `error` naming the refusal. Same-origin writes only. |
@@ -1429,3 +1436,201 @@ Drift per sub includes the scatter between two solves, so it does not read
 `PUT /api/imaging/steering`; restarting the console restores 6 px, on,
 0.5 and 0.3. Guiding from the imaging camera, deferred in 015, is now part
 of tracking through the accepted subs.
+
+## An imaging run
+
+An imaging run goes to the observing session's target with GoTo, waits for
+tracking to settle, takes a first imaging frame, checks focus, centres the
+target on the imaging camera's sensor by solving imaging frames and asking
+Track again, then stacks subs until stopped or a limit is reached. Choose the
+target first; on the Imaging page press `Start imaging run`, or from an MCP
+client call `start_imaging_run` after `set_target`. The camera and the imaging
+solver must be ready, and Track must accept the move under its usual guards.
+
+The imaging camera is held throughout, by the run, the focus aid or the stack
+in turn. A single imaging frame, a focus aid, a set of darks or flats, or a
+stack asked for meanwhile is refused with the holder's name. The run moves
+the mount only by asking Track. It stops the mount only when the run itself
+is stopped while it still slews; after a run, Track is still on unless a
+guard or Stop ended the motion. A run cannot outlast Track.
+
+The state words are the same on the page, in the imaging view's `run` and over
+MCP. In the messages below, angle brackets stand for the target or a reading.
+
+| State | What is happening and what the page says |
+|-------|-----------------------------------------|
+| `slewing` | GoTo is bringing the target to the aim point: `Slewing to <target>.` |
+| `tracking` | Track is on; the run waits for steady motion: `Tracking <target>. Waiting for the mount to settle; nothing to do.` |
+| `first_frame` | A first imaging frame is being taken: `Taking a first imaging frame.` |
+| `focus_check` | The focus check is taking its readings: `Checking focus.` |
+| `focus_pause` | Focus needs the observer, or the check could not finish. The message gives the verdict and advice; the focus aid opens below it, with `Check focus again` and `Go anyway`. |
+| `solving` | Another imaging frame is taken and solved to measure the target's offset and the aim point: `Solving an imaging frame.` |
+| `centring` | Track is asked again using the measured aim point: `Centring <target>: <offset> from the sensor's centre, try <n> of 3.` Without a new aim point it says `no new aim point yet.` |
+| `stacking` | The stack takes subs: `Stacking <target>: <n> stacked, <n> dropped.` |
+| `paused_by_tracker` | The stack waits for steady tracking or a usable exposure limit: `Exposures paused: <n> stacked so far. They resume by themselves.` |
+| `ended` | The run is over. Its message says why, followed by whether anything was stacked and saved, and the folder. A new run starts from the beginning. |
+
+At a focus pause, turn the focuser while watching the aid, then press
+`Check focus again`, or call `continue_imaging_run` with `anyway` false.
+`Go anyway`, or `anyway` true, goes on without another check and keeps a
+warning. Only the first answer to a pause counts. The pause can last at most
+15 minutes; the page shows its time left.
+
+The ending's `reason` is one of the words below. The mount column describes
+the motion at the ending, before a later Stop or guard. Check the page's
+Track indication and the mount itself, especially after a lost link.
+
+| Ending | Meaning | Mount afterwards | What to do next |
+|--------|---------|------------------|-----------------|
+| `stopped` | Four sentences distinguish the source: `Imaging run stopped. Track is still on.` is the run's own stop; `Stopped: the mount was stopped.` is the console's Stop or a stop of the run with Track already off; `Ended: the stack was stopped.` is a stack stopped through its own route or an aborted sub; `Ended: the focus check was stopped.` is a focus check stopped through its own route. | In the same order: Track on; at rest (including a run stopped while slewing, or after a guard or lost link ended Track); Track on; Track on. | Nothing if finished; start a new run to take more. Call `stop` if Track is still on and the mount should rest. |
+| `count_limit` | The requested number of subs has been stacked. | Track on. | Nothing, or start another run; call `stop` to rest the mount. |
+| `duration_limit` | The stacking time limit has been reached. | Track on. | Nothing, or start another run; call `stop` to rest the mount. |
+| `too_low` | The target fell below the minimum altitude. | Track off; mount at rest. | Choose a pointable target and start again. |
+| `sun_up` | The Sun guard ended Track. | Track off; mount at rest. | Wait until the Sun is down before starting again. |
+| `link_lost` | The mount or scope link stopped answering. A link lost while stacking may read `camera_failed` instead. | Track off; the node's watchdog stops the mount when the link is lost. Check that it is at rest. | Check the scope node and the mount's cable, then start again. |
+| `mount_failed` | Track or GoTo ended for a reason of its own, a guard's among them; the message carries its words. | Track ended; after a re-centre that Track refused, Track is off. | Check the mount and the reason in the message, then start again. |
+| `target_changed` | The observing session's target changed during the run. | Track may still be on; it is off when the target changed during a re-centre. | Start a new run for the new target; call `stop` first if the mount should rest. |
+| `pushed_away` | A push by hand settled away from the target or lasted too long. | Track follows where the telescope is left. | Start a new run to return to the target, or call `stop`. |
+| `camera_failed` | The imaging camera failed; the message gives its words. A link lost while stacking may read this or `link_lost`. | Track on unless the lost link or another guard ended it. | Check the camera and scope link, then start again; call `stop` if necessary. |
+| `solver_unavailable` | The imaging solver cannot run. | Track on. | Check ASTAP and its database, then start again; call `stop` to rest the mount. |
+| `solver_failing` | Three imaging frames in a row could not be solved. | Track on. | Check for cloud, dew and focus, then start again; call `stop` if finished. |
+| `save_failed` | The console could not save to its imaging folder or reserve room for the stack's save. | Track unchanged. | Check the disk and saved subs before starting again; call `stop` to rest the mount. |
+| `focus_timeout` | The focus pause was left unanswered for 15 minutes. | Track on. | Check focus and start again when ready, or call `stop`. |
+| `not_centred` | The target is still too far from the sensor's centre after three tries, or four solves measured no new aim point. | Track on. | Check the aim point and exposure settings, then start again; call `stop` if finished. |
+| `subs_failing` | No sub was stacked for 10 minutes of stacking with failed subs. The message lists the reasons. | Track on. | Check the sky for cloud, dew or a tree, then start again; call `stop` if finished. |
+| `stack_failed` | The stack stopped with a failure whose words the message carries. | Track on. | Check the message and saved subs, then start again; call `stop` if finished. |
+
+The page reports the saved stack only when the save succeeded and at least one
+sub was stacked; otherwise it says no sub was stacked, or says the stack was
+not saved and gives the subs' folder. An ending can carry warnings about a
+check skipped, a target stacked off centre, a save that failed or subs kept.
+The line saying Track is still on disappears once Track ends; the `track_on`
+value in the saved record is the value at the ending.
+
+`subs` is an optional whole number from 1 to 100000, counting subs stacked,
+not exposures taken. `duration_s` is from 1 to 43200 seconds and defaults to
+7200 s (two hours). The first limit reached ends the run. Stacking time counts
+on the clock from the start of stacking, including tracker pauses; elapsed
+time on the page counts from the press. `keep_subs` defaults to true.
+
+The run allows three failed takes in a row of its own imaging frames, with
+5 s between retries, and three failed solves in a row. It asks at most three
+centring tries, or gives up after four solves in a row that measure no new
+aim point. Ten minutes of stacking with failed subs and none stacked ends
+the run; a pause by the tracker and subs the console was too far behind to
+process (`behind` and `unprocessed`) do not count towards that failure rule.
+A re-centre waits up to 5 s after its Track off for a fresh finder camera
+pointing. Before every imaging frame of its own, the run waits for the tracker
+to have been steady for 10 s or the imaging exposure, whichever is longer.
+A push by hand has 10 s to spring back; if it settles away, Track follows the
+place left instead and the run ends.
+
+Set the imaging exposure at least as long as the finder camera's exposure,
+so that a finder solve falls inside each imaging frame; without that overlap
+an imaging solve can measure no new aim point. Centring's tolerance is 5% of
+the imaging frame's shorter side at the solved scale, with a floor of 90″.
+If the frame is no longer the current one, the tolerance and the allowed
+near distance both fall back to 90″. After three tries, or four solves in a
+row with no new aim point, a target within a quarter of the frame's shorter
+side is stacked with a warning: within 3′ of the centre the stack's steering
+will bring it in; otherwise it is stacked where it is. A target farther out
+ends the run as `not_centred`.
+
+The run's own imaging frames are taken at the camera's exposure setting.
+Only the stack's subs are capped by the tracker's exposure limit. On an
+alt-az mount, a long setting can therefore trail the corner stars of the
+imaging frames the run solves, even when the stack's subs are short enough.
+Inspect those frames as well as the stack during the first night's checks.
+
+The three routes are `POST /api/imaging/run`, `DELETE /api/imaging/run` and
+`POST /api/imaging/run/continue`. Their MCP tools are `start_imaging_run`,
+`stop_imaging_run` and `continue_imaging_run`; `get_imaging_run` reads the
+latest run or null before the first one. The start takes optional `subs`,
+`duration_s` and `keep_subs`; the continue takes `anyway`, false to check again
+or true to go on unchecked. Read the imaging view or the MCP read tool to
+follow progress; starts answer at once, stops answer after the save.
+
+The run's own `Stop imaging run` button asks for a second tap within 5 s;
+it is disabled while the stack saves. It cannot resume a stopped run.
+`DELETE /api/imaging/run` and `stop_imaging_run` save the stack and leave
+Track alone except while the run still slews. The top bar's Stop,
+`POST /api/stop` and the MCP `stop` stop the mount at any time and end the
+run too; the run then saves its stack. A stop during a re-centre also waits
+for the Track off/on hand-over, up to about 7 s in addition to saving.
+An exposure somebody aborts is a failed take when it is the run's own
+imaging frame; when it is a sub it ends the stack and the run as `stopped`.
+
+`run.json` is in the stack's folder, `runs/<stack id>/` under the console's
+imaging folder, or in `runs/<run id>/` when the run ends before stacking.
+It records `format` (`imaging-run/1`), `finder` (version), `id`, `by` (`page`
+or `mcp`), `target`, `started_at`, `started_utc`, `settings`, `state`,
+`events` (each state's `at` and `state`), `subs` (stacked and dropped by
+reason), and, when present, `focus`, `centring`, `warnings` and `ended`.
+The ending holds `reason`, `at`, `message`, `saved` and `track_on`. The
+record omits the live view's message and elapsed time and contains no site,
+node address or token. It is refreshed at state changes, at most once a
+minute as the stacked count rises, and at the ending.
+
+The stack's folder holds a `.reserve` file while the run stacks, as large
+as the stacked picture's files can be: 15 bytes per binned pixel plus
+16 MiB, about 260 MB for the worked camera's 4944 × 3284 full frame.
+The run removes it before saving the stack. With `keep_subs` false, a
+successful save removes the subs listed in `stack.json` and their solve
+sidecars; it removes nothing when no sub was stacked or the stack ended by
+itself. Copy the stack before leaving the console.
+
+The stacked picture is written only when the stack ends. A console that
+exits mid-run leaves the saved subs in `subs/`, a `run.json` with no `ended`
+that is at most a minute old while stacking, and no stacked picture. The
+page then says the last imaging run did not finish and names the subs'
+folder. The old run cannot be resumed; keep its files and start a new one.
+
+### Field checklist: the first imaging run
+
+1. Before dark, put the imaging camera on the focuser, start the scope node and
+   the console, and check that the Imaging page shows the camera ready; write
+   down the camera and telescope used.
+2. After dark, pair, set the site and wait for the first sync; write down the
+   pointing model's RMS.
+3. Choose a bright target well above the minimum altitude, turn Track on for
+   it and leave it for 30 minutes. Write down whether Track ended and with what
+   reason, since an imaging run cannot outlast Track.
+4. Set the imaging exposure at least as long as the finder camera's exposure,
+   so that a finder solve falls inside each imaging frame, then take one
+   imaging frame by hand and solve it by hand. Write down how long the imaging
+   frame took to arrive, the scale and the time the solve took.
+5. Press `Start imaging run` with 20 subs asked for; write down the start time.
+6. Write down the time from the press to `tracking`, and GoTo's last error.
+7. At the focus check, write down the verdict, the focus reading and the focus
+   record; if the run pauses, turn the focuser and press `Check focus again`.
+8. At centring, write down each try's offset and tolerance, how many tries it
+   took, and whether the telescope stayed still between the first imaging
+   solve and the first re-centre's Track off: a newly measured aim point waits
+   until Track is off. Open the last imaging frame the run solved and write
+   down whether its corner stars are trailed, since the run's own imaging
+   frames are not capped as subs are.
+9. While stacking, write down the subs stacked and dropped by reason after
+   5 minutes, and whether the run was ever paused by the tracker.
+10. Let the run end at its 20 subs; check that Track is still on and the folder
+    holds `run.json` and the stack, and that the subs it lists are on disk.
+    Write down the ending, saved file names and Track state.
+11. Start a second run and press the top bar's Stop while it still slews;
+    check that the mount is at rest and stays there, and that the run ended
+    `stopped`, and write down the message and mount state.
+12. Start a third run and, while it stacks, tap the tube lightly; write down
+    whether the run went on and what the page said.
+13. Still in the third run, hold a hand over the front of the tube for a
+    minute; write down the subs dropped by reason and whether the run went on.
+14. Press the top bar's Stop while the third run stacks; check that the mount
+    is at rest and stays there, and that the run ended `stopped`, and write
+    down the message and saved files.
+15. From an MCP client, call `set_target`, then `start_imaging_run` with
+    `duration_s` set to 300; read `get_imaging_run` until it ends. Write down
+    the ending and saved files, and check that the page said who started it.
+16. Defocus the telescope on purpose and start a fifth run from the MCP
+    client; at the focus pause, refocus and go on with `continue_imaging_run`
+    and `anyway` false. Write down the verdict before and after.
+17. End the fifth run with `stop_imaging_run` while it stacks; check that
+    Track is still on, and write down the ending, Track state and saved files.
+18. Copy the five `run.json` files and this filled-in list into the night's
+    field note, with the paths of the saved stacks.
