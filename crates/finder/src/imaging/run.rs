@@ -18,7 +18,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use tokio::{
-    sync::{watch, Mutex as AsyncMutex},
+    sync::{oneshot, watch, Mutex as AsyncMutex},
     task::JoinHandle,
     time::{self, Instant},
 };
@@ -650,6 +650,8 @@ struct ActiveRun {
     stop: watch::Sender<bool>,
     done: Arc<watch::Sender<bool>>,
     focus_failure: Option<Failure>,
+    /// Present only until this pause is answered, by a resume or by the task.
+    resume: Option<oneshot::Sender<bool>>,
     aim_moved: bool,
     events: Vec<Event>,
     store: Option<Store>,
@@ -788,6 +790,7 @@ impl Runner {
             stop,
             done: Arc::new(done),
             focus_failure: None,
+            resume: None,
             aim_moved: true,
             events: vec![Event {
                 at: started_at,
@@ -804,6 +807,7 @@ impl Runner {
             inner: self.inner.clone(),
             stopped,
             abandoned_check: false,
+            focus_paused: false,
             stack_started: false,
         };
         *self.task.lock().unwrap() = Some(tokio::spawn(task.run()));
@@ -827,19 +831,23 @@ impl Runner {
         self.view()
     }
 
-    /// Going on from a focus pause is added by 041; until then this refuses.
-    pub fn resume(&self, _anyway: bool) -> Result<RunView, Refusal> {
-        let running = self
-            .inner
-            .lock()
-            .unwrap()
-            .as_ref()
-            .is_some_and(|run| run.finished.is_none());
-        Err(Refusal::conflict(if running {
-            "the imaging run is not paused"
-        } else {
-            "no imaging run is running"
-        }))
+    /// Answer the pause once. Taking its sender claims it before the task wakes.
+    pub fn resume(&self, anyway: bool) -> Result<RunView, Refusal> {
+        let resume = {
+            let mut inner = self.inner.lock().unwrap();
+            let run = inner
+                .as_mut()
+                .filter(|run| run.finished.is_none())
+                .ok_or_else(|| Refusal::conflict("no imaging run is running"))?;
+            if run.view.state != "focus_pause" {
+                return Err(Refusal::conflict("the imaging run is not paused"));
+            }
+            run.resume
+                .take()
+                .ok_or_else(|| Refusal::conflict("the imaging run is not paused"))?
+        };
+        let _ = resume.send(anyway);
+        Ok(self.view().unwrap())
     }
 
     /// The latest run, with elapsed time measured on Tokio's clock.
@@ -878,6 +886,7 @@ struct RunTask {
     inner: Arc<Mutex<Option<ActiveRun>>>,
     stopped: watch::Receiver<bool>,
     abandoned_check: bool,
+    focus_paused: bool,
     stack_started: bool,
 }
 
@@ -1067,6 +1076,122 @@ impl RunTask {
         self.end(ending).await;
     }
 
+    /// The camera's lease stays given up through repeats and pauses. Only a
+    /// verdict that would pause can ask about the tracker's past steadiness.
+    async fn focus_gate(&mut self) -> Result<(), Ending> {
+        let mut repeated = false;
+        loop {
+            self.set_state("focus_check")?;
+            self.steady(None).await?;
+            let start = self.clock.now();
+            let mut checking = false;
+            let answer = self
+                .guarded(async {
+                    checking = true;
+                    self.steps.focus.check().await
+                })
+                .await;
+            let end = self.clock.now();
+            let (check, failure) = match answer {
+                Err(ending) => {
+                    self.abandoned_check = checking;
+                    return Err(ending);
+                }
+                Ok(Ok(check)) => (check, None),
+                Ok(Err(Failure::Stopped)) => return Err(Ending::CheckStopped),
+                Ok(Err(Failure::Save(words))) => return Err(Ending::SaveFailed(words)),
+                Ok(Err(Failure::SolverUnavailable(words))) => {
+                    return Err(Ending::SolverUnavailable(words));
+                }
+                Ok(Err(failure)) => {
+                    self.warn(Warning::CheckUnfinished(failure.words().into()));
+                    (
+                        FocusCheck {
+                            verdict: Verdict::Unmeasurable,
+                            reading: None,
+                            record: None,
+                            unit: Unit::Px,
+                        },
+                        Some(failure),
+                    )
+                }
+            };
+            let measured = failure.is_none();
+            self.update(|run| {
+                run.view.focus = Some(check.into());
+                run.focus_failure = failure;
+            });
+            match check.verdict {
+                Verdict::Good => return Ok(()),
+                Verdict::SlightlySoft => {
+                    self.warn(Warning::SlightlySoft(check));
+                    return Ok(());
+                }
+                Verdict::ClearlyOut | Verdict::Unmeasurable
+                    if measured && !self.steps.mount.steady_between(start, end) =>
+                {
+                    if !repeated {
+                        repeated = true;
+                        continue;
+                    }
+                    self.warn(Warning::TrackerNotSteady);
+                }
+                _ => {}
+            }
+            if self.focus_pause().await? {
+                self.warn(Warning::WentOnAnyway);
+                return Ok(());
+            }
+            repeated = false;
+        }
+    }
+
+    async fn focus_pause(&mut self) -> Result<bool, Ending> {
+        let deadline = Instant::now() + FOCUS_PAUSE_LIMIT;
+        let pause_ends_at = self.clock.now() + FOCUS_PAUSE_LIMIT.as_secs_f64();
+        let (resume, mut resumed) = oneshot::channel();
+        self.focus_paused = true;
+        self.update(|run| {
+            run.resume = Some(resume);
+            run.view.pause_ends_at = Some(pause_ends_at);
+        });
+        // Resumes are accepted from this state onward, including during open_aid.
+        self.set_state("focus_pause")?;
+        if let Err(failure) = self.steps.focus.open_aid().await {
+            self.warn(Warning::AidNotOpened(failure.words().into()));
+        }
+        let mut stopped = self.stopped.clone();
+        let mut poll = time::interval(POLL);
+        let answer = loop {
+            let ending = tokio::select! {
+                biased;
+                _ = stopped.wait_for(|stop| *stop) => Ending::RunStopped,
+                anyway = &mut resumed => break Ok(anyway.expect("claimed focus resume")),
+                _ = poll.tick() => {
+                    if let MountState::Ended(ending) = self.steps.mount.state() {
+                        ending
+                    } else {
+                        continue;
+                    }
+                }
+                _ = time::sleep_until(deadline) => Ending::FocusTimeout,
+            };
+            // The same mutex arbitrates a resume and an ending. A resume that
+            // claimed first is acted on even if the limit is ready now too.
+            let claimed = self.inner.lock().unwrap().as_mut().unwrap().resume.take();
+            break if claimed.is_some() {
+                Err(ending)
+            } else {
+                Ok(resumed.await.expect("claimed focus resume"))
+            };
+        };
+        let anyway = answer?;
+        self.steps.focus.close_aid().await;
+        self.focus_paused = false;
+        self.update(|run| run.view.pause_ends_at = None);
+        Ok(anyway)
+    }
+
     async fn procedure(&mut self) -> Result<(), Ending> {
         self.steady(Some(("slewing", "tracking"))).await?;
         self.set_state("first_frame")?;
@@ -1075,39 +1200,7 @@ impl RunTask {
         self.set_state("focus_check")?;
         self.steady(None).await?;
         self.steps.camera.release();
-        let mut checking = false;
-        let answer = self
-            .guarded(async {
-                checking = true;
-                self.steps.focus.check().await
-            })
-            .await;
-        let check = match answer {
-            Err(ending) => {
-                self.abandoned_check = checking;
-                return Err(ending);
-            }
-            Ok(Ok(check)) => check,
-            Ok(Err(Failure::Stopped)) => return Err(Ending::CheckStopped),
-            Ok(Err(Failure::Save(words))) => return Err(Ending::SaveFailed(words)),
-            Ok(Err(Failure::SolverUnavailable(words))) => {
-                return Err(Ending::SolverUnavailable(words));
-            }
-            Ok(Err(failure)) => {
-                self.warn(Warning::CheckUnfinished(failure.words().into()));
-                self.update(|run| run.focus_failure = Some(failure));
-                FocusCheck {
-                    verdict: Verdict::Unmeasurable,
-                    reading: None,
-                    record: None,
-                    unit: Unit::Px,
-                }
-            }
-        };
-        self.update(|run| run.view.focus = Some(check.into()));
-        if check.verdict == Verdict::SlightlySoft {
-            self.warn(Warning::SlightlySoft(check));
-        }
+        self.focus_gate().await?;
         self.steps.camera.hold().map_err(Ending::CameraFailed)?;
 
         self.set_state("solving")?;
@@ -1247,6 +1340,10 @@ impl RunTask {
     }
 
     async fn end(&self, mut ending: Ending) {
+        self.update(|run| {
+            run.resume = None;
+            run.view.pause_ends_at = None;
+        });
         if self.stack_started {
             self.update(|run| {
                 run.view.message = format!("Saving the stack: {} stacked.", run.view.subs.stacked);
@@ -1257,7 +1354,7 @@ impl RunTask {
             let view = &inner.as_ref().unwrap().view;
             (view.target.clone(), view.settings.clone())
         };
-        if self.abandoned_check {
+        if self.abandoned_check || self.focus_paused {
             self.steps.focus.close_aid().await;
         }
         let saved = if self.stack_started {
@@ -1335,6 +1432,8 @@ pub const SOLVE_TRIES: u32 = 3;
 pub const CENTRE_TRIES: u32 = 3;
 /// Solves in a row, outside the tolerance, that may measure no new aim point.
 pub const CENTRE_IDLE: u32 = 4;
+/// How long a focus pause may last.
+pub const FOCUS_PAUSE_LIMIT: Duration = Duration::from_secs(900);
 /// How long the run waits after a failed take before it asks again.
 pub const RETRY_WAIT: Duration = Duration::from_secs(5);
 

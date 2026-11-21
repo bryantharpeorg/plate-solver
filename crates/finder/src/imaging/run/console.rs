@@ -1,5 +1,6 @@
 //! The console's own parts of an imaging run: Track, 031's imaging frames and
-//! lease, and 032's imaging solve. Sky terms only: nothing here knows an axis.
+//! lease, 032's imaging solve and 033's focus check and aid. Sky terms only:
+//! nothing here knows an axis.
 
 use std::{
     sync::{Arc, Mutex},
@@ -9,12 +10,12 @@ use std::{
 use tokio::time::{self, Instant};
 
 use super::{
-    By, Centre, Ending, Failure, FrameRef, FrameSteps, MountState, MountSteps, RunTarget,
-    SolveSteps, StepFuture, POLL,
+    By, Centre, Ending, Failure, FocusCheck, FocusSteps, FrameRef, FrameSteps, MountState,
+    MountSteps, RunTarget, SolveSteps, StepFuture, Unit, Verdict, POLL,
 };
 use crate::{
     api,
-    imaging::{ImagingView, Lease},
+    imaging::{focus::run::FocusAsk, ImagingView, Lease},
     model::separation,
     AppState,
 };
@@ -58,6 +59,13 @@ pub fn camera(state: &AppState) -> Arc<dyn FrameSteps> {
 /// Solve imaging frames with the console's imaging solver.
 pub fn solver(state: &AppState) -> Arc<dyn SolveSteps> {
     Arc::new(ConsoleSolver {
+        state: state.clone(),
+    })
+}
+
+/// Check focus and open or close the aid through 033's own service.
+pub fn focus(state: &AppState) -> Arc<dyn FocusSteps> {
+    Arc::new(ConsoleFocus {
         state: state.clone(),
     })
 }
@@ -481,6 +489,94 @@ impl SolveSteps for ConsoleSolver {
                 near_arcsec,
                 aim_moved,
             })
+        })
+    }
+}
+
+struct ConsoleFocus {
+    state: AppState,
+}
+
+impl FocusSteps for ConsoleFocus {
+    fn check(&self) -> StepFuture<'_, Result<FocusCheck, Failure>> {
+        Box::pin(async move {
+            let imaging = self.state.imaging().expect("console imaging part");
+            imaging
+                .focus_start(FocusAsk {
+                    check: true,
+                    ..Default::default()
+                })
+                .await
+                .map_err(|error| {
+                    if error.message == "this console has no imaging solver" {
+                        Failure::SolverUnavailable(error.message)
+                    } else {
+                        Failure::Other(error.message)
+                    }
+                })?;
+            let view = imaging.focus_ended().await;
+            let (Some(view), Some(aid)) =
+                (view.as_ref(), view.as_ref().and_then(|v| v.aid.as_ref()))
+            else {
+                return Err(Failure::Other("the focus check left no reading".into()));
+            };
+            match aid.ended_reason {
+                Some("done") => Ok(FocusCheck {
+                    verdict: match aid.verdict {
+                        Some("good") => Verdict::Good,
+                        Some("slightly_soft") => Verdict::SlightlySoft,
+                        Some("clearly_out") => Verdict::ClearlyOut,
+                        Some("no_record") => Verdict::NoRecord,
+                        _ => Verdict::Unmeasurable,
+                    },
+                    reading: aid
+                        .median
+                        .map(|median| median.value)
+                        .or_else(|| aid.last.and_then(|last| last.value)),
+                    record: aid.reference.map(|reference| reference.value),
+                    unit: if view.unit == "arcsec" {
+                        Unit::Arcsec
+                    } else {
+                        Unit::Px
+                    },
+                }),
+                Some("stopped") => Err(Failure::Stopped),
+                reason => {
+                    let mut words =
+                        format!("the focus check ended: {}", reason.unwrap_or("failed"));
+                    if let Some(error) = &aid.error {
+                        words.push_str(": ");
+                        words.push_str(error);
+                    }
+                    Err(if reason == Some("no_region") {
+                        Failure::NotSolved(words)
+                    } else {
+                        Failure::Other(words)
+                    })
+                }
+            }
+        })
+    }
+
+    fn open_aid(&self) -> StepFuture<'_, Result<(), Failure>> {
+        Box::pin(async move {
+            self.state
+                .imaging()
+                .expect("console imaging part")
+                .focus_start(FocusAsk::default())
+                .await
+                .map(|_| ())
+                .map_err(|error| Failure::Other(error.message))
+        })
+    }
+
+    fn close_aid(&self) -> StepFuture<'_, ()> {
+        Box::pin(async move {
+            self.state
+                .imaging()
+                .expect("console imaging part")
+                .focus_stop()
+                .await;
         })
     }
 }
