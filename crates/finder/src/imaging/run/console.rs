@@ -1,8 +1,11 @@
 //! The console's own parts of an imaging run: Track, 031's imaging frames and
-//! lease, 032's imaging solve and 033's focus check and aid. Sky terms only:
+//! lease, 032's imaging solve, 033's focus check and aid, and 035's stack. Sky terms only:
 //! nothing here knows an axis.
 
 use std::{
+    fs,
+    io::{self, Write},
+    path::{Component, Path},
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -11,11 +14,11 @@ use tokio::time::{self, Instant};
 
 use super::{
     By, Centre, Ending, Failure, FocusCheck, FocusSteps, FrameRef, FrameSteps, MountState,
-    MountSteps, RunTarget, SolveSteps, StepFuture, Unit, Verdict, POLL,
+    MountSteps, RunTarget, SolveSteps, StackProgress, StackSteps, StepFuture, Unit, Verdict, POLL,
 };
 use crate::{
     api,
-    imaging::{focus::run::FocusAsk, ImagingView, Lease},
+    imaging::{focus::run::FocusAsk, stack::service::StartRequest, ImagingView, Lease},
     model::separation,
     AppState,
 };
@@ -33,6 +36,21 @@ pub const PUSH_GRACE: Duration = Duration::from_secs(10);
 pub const CENTRE_NEAR_SHARE: f64 = 0.25;
 /// The name a run holds the imaging camera's lease under.
 pub const HOLDER: &str = "the imaging run";
+
+/// Bytes per sub pixel in the saved stack: twelve in FITS and three in PNG.
+pub const RESERVE_PER_PIXEL: u64 = 15;
+/// Room for headers, framing, the stack manifest and the run's record.
+pub const RESERVE_MARGIN: u64 = 16 * 1024 * 1024;
+/// Bytes written between yields while reserving room for the stack's save.
+pub const RESERVE_CHUNK: usize = 4 * 1024 * 1024;
+
+/// Reserve for a whole sensor's binned pixels, rounding each side up.
+/// A binning of zero counts as one.
+pub fn reserve_bytes(width: u32, height: u32, binning: u32) -> u64 {
+    let binning = binning.max(1);
+    RESERVE_PER_PIXEL * u64::from(width.div_ceil(binning)) * u64::from(height.div_ceil(binning))
+        + RESERVE_MARGIN
+}
 
 /// Point through the same Track function as the console's route.
 pub fn mount(state: &AppState) -> Arc<dyn MountSteps> {
@@ -67,6 +85,14 @@ pub fn solver(state: &AppState) -> Arc<dyn SolveSteps> {
 pub fn focus(state: &AppState) -> Arc<dyn FocusSteps> {
     Arc::new(ConsoleFocus {
         state: state.clone(),
+    })
+}
+
+/// Stack through 035, with 036/040's steering and room reserved for the save.
+pub fn stack(state: &AppState) -> Arc<dyn StackSteps> {
+    Arc::new(ConsoleStack {
+        state: state.clone(),
+        memory: Mutex::new(StackMemory::default()),
     })
 }
 
@@ -579,4 +605,199 @@ impl FocusSteps for ConsoleFocus {
                 .await;
         })
     }
+}
+
+#[derive(Default)]
+struct StackMemory {
+    id: Option<String>,
+    last: StackProgress,
+}
+
+struct ConsoleStack {
+    state: AppState,
+    memory: Mutex<StackMemory>,
+}
+
+impl StackSteps for ConsoleStack {
+    fn start(&self, target: &RunTarget) -> StepFuture<'_, Result<String, Failure>> {
+        let label = super::label(&target.name);
+        Box::pin(async move {
+            *self.memory.lock().unwrap() = StackMemory::default();
+            let imaging = self.state.imaging().expect("console imaging part");
+            let stacker = self.state.stack().expect("console stack part");
+            imaging.steering().set_set_point(None);
+            let asked_at = self.state.clock.now();
+            let view = stacker
+                .start(StartRequest::default(), Some(&label))
+                .await
+                .map_err(|error| {
+                    if error.message.starts_with("cannot make the stack folder") {
+                        Failure::Save(error.message)
+                    } else {
+                        Failure::Other(error.message)
+                    }
+                })?;
+            if view.started_at < asked_at {
+                return Err(Failure::Other("another stack is already running".into()));
+            }
+            self.memory.lock().unwrap().id = Some(view.id.clone());
+            let folder = imaging.root().join("runs").join(&view.id);
+            let camera = imaging.view();
+            let bytes = camera.camera.map_or(RESERVE_MARGIN, |description| {
+                reserve_bytes(
+                    description.width,
+                    description.height,
+                    camera.settings.map_or(1, |settings| settings.binning),
+                )
+            });
+            if let Err(error) = write_reserve(&folder.join(".reserve"), bytes).await {
+                let _ = fs::remove_file(folder.join(".reserve"));
+                if stacker
+                    .view()
+                    .is_some_and(|own| own.id == view.id && own.state == "stacking")
+                {
+                    stacker.stop().await;
+                }
+                *self.memory.lock().unwrap() = StackMemory::default();
+                return Err(Failure::Save(format!(
+                    "could not reserve room for the stack's save: {error}"
+                )));
+            }
+            Ok(format!("runs/{}", view.id))
+        })
+    }
+
+    fn progress(&self) -> StackProgress {
+        let stacker = self.state.stack().expect("console stack part");
+        let Some(view) = stacker.view() else {
+            return StackProgress::default();
+        };
+        let waiting_for_tracker = self
+            .state
+            .imaging()
+            .expect("console imaging part")
+            .steering()
+            .waiting();
+        let mut memory = self.memory.lock().unwrap();
+        if memory.id.as_deref() != Some(view.id.as_str()) {
+            return StackProgress {
+                running: false,
+                ..memory.last.clone()
+            };
+        }
+        let dropped = serde_json::to_value(&view.dropped)
+            .expect("serializable stack counts")
+            .as_object()
+            .expect("stack dropped counts object")
+            .iter()
+            .filter_map(|(reason, count)| {
+                count
+                    .as_u64()
+                    .filter(|count| *count > 0)
+                    .map(|count| (reason.clone(), count))
+            })
+            .collect();
+        let failed = if view.state != "ended" {
+            None
+        } else if view.ended_reason == Some("camera") {
+            Some(Failure::Camera(view.error.unwrap_or_default()))
+        } else {
+            view.save_error.map(Failure::Save)
+        };
+        let progress = StackProgress {
+            running: view.state == "stacking",
+            stacked: u64::from(view.stacked),
+            dropped,
+            waiting_for_tracker,
+            failed,
+        };
+        memory.last = progress.clone();
+        progress
+    }
+
+    fn stop(&self, keep_subs: bool) -> StepFuture<'_, Result<(), Failure>> {
+        Box::pin(async move {
+            let id = self.memory.lock().unwrap().id.clone();
+            let Some(id) = id else {
+                return Ok(());
+            };
+            let imaging = self.state.imaging().expect("console imaging part");
+            let folder = imaging.root().join("runs").join(&id);
+            // Free the room before asking 035 to write its final files.
+            let _ = fs::remove_file(folder.join(".reserve"));
+            let stacker = self.state.stack().expect("console stack part");
+            let Some(view) = stacker.view().filter(|view| view.id == id) else {
+                return Ok(());
+            };
+            let stopped_here = view.state == "stacking";
+            let view = if stopped_here {
+                stacker.stop().await
+            } else {
+                Some(view)
+            };
+            let Some(view) = view.filter(|view| view.id == id) else {
+                return Ok(());
+            };
+            if let Some(error) = view.save_error {
+                return Err(Failure::Save(error));
+            }
+            if !keep_subs
+                && stopped_here
+                && view.stacked > 0
+                && view.ended_reason == Some("stopped")
+            {
+                remove_subs(&folder)?;
+            }
+            Ok(())
+        })
+    }
+}
+
+async fn write_reserve(path: &Path, mut remaining: u64) -> io::Result<()> {
+    let mut file = fs::File::create(path)?;
+    let zeros = vec![0; RESERVE_CHUNK];
+    while remaining > 0 {
+        let size = remaining.min(RESERVE_CHUNK as u64) as usize;
+        file.write_all(&zeros[..size])?;
+        remaining -= size as u64;
+        if remaining > 0 {
+            tokio::task::yield_now().await;
+        }
+    }
+    Ok(())
+}
+
+fn remove_subs(folder: &Path) -> Result<(), Failure> {
+    let manifest: serde_json::Value = fs::read(folder.join("stack.json"))
+        .and_then(|bytes| serde_json::from_slice(&bytes).map_err(io::Error::other))
+        .map_err(|error| Failure::Other(format!("could not read stack.json: {error}")))?;
+    let subs = manifest["subs"]
+        .as_array()
+        .ok_or_else(|| Failure::Other("could not read stack.json: missing subs array".into()))?;
+    let mut first_error = None;
+    for file in subs.iter().filter_map(|sub| sub["file"].as_str()) {
+        let relative = Path::new(file);
+        if !relative
+            .components()
+            .all(|part| matches!(part, Component::Normal(_)))
+        {
+            first_error.get_or_insert_with(|| {
+                Failure::Other(format!(
+                    "could not remove {file}: path is outside the stack folder"
+                ))
+            });
+            continue;
+        }
+        let sub = folder.join(relative);
+        for path in [sub.clone(), sub.with_extension("solve.json")] {
+            if let Err(error) = fs::remove_file(&path) {
+                if error.kind() != io::ErrorKind::NotFound {
+                    first_error.get_or_insert_with(|| {
+                        Failure::Other(format!("could not remove {}: {error}", path.display()))
+                    });
+                }
+            }
+        }
+    }
+    first_error.map_or(Ok(()), Err)
 }

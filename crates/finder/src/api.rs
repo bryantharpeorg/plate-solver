@@ -380,6 +380,25 @@ impl AppState {
         self
     }
 
+    /// Give the console its own run parts: Track, imaging frames and lease,
+    /// imaging solve, focus check and stack. Call after `with_live`,
+    /// `with_imaging` and `with_imaging_solver`; without imaging it changes nothing.
+    pub fn with_imaging_run(self) -> Self {
+        if self.imaging.is_none() {
+            return self;
+        }
+        use crate::imaging::run::{console, Steps};
+        // Build the parts before keeping the runner, so their state has no runner.
+        let steps = Steps {
+            mount: console::mount(&self),
+            camera: console::camera(&self),
+            focus: console::focus(&self),
+            solver: console::solver(&self),
+            stack: console::stack(&self),
+        };
+        self.with_imaging_run_steps(steps)
+    }
+
     /// The owner of the console's imaging runs, when it has one.
     pub fn imaging_runner(&self) -> Option<Arc<crate::imaging::run::Runner>> {
         self.imaging_runner.clone()

@@ -8,6 +8,7 @@ mod support;
 mod goto;
 mod imaging_run;
 mod imaging_run_centring;
+mod imaging_run_stack;
 mod imaging_track;
 mod model;
 mod mount_calls;
