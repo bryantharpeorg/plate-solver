@@ -24,6 +24,8 @@ struct Command {
 struct State {
     epoch: u64,
     stopping: bool,
+    /// Set for good when the node is shutting down.
+    closed: bool,
     pending: VecDeque<Command>,
 }
 struct Shared {
@@ -62,6 +64,7 @@ impl MountQueue {
             state: Mutex::new(State {
                 epoch: 0,
                 stopping: false,
+                closed: false,
                 pending: VecDeque::new(),
             }),
             changed: watch::channel(0).0,
@@ -92,7 +95,7 @@ impl MountQueue {
         let (reply, received) = oneshot::channel();
         {
             let mut state = self.shared.state.lock().unwrap();
-            if state.stopping {
+            if state.stopping || state.closed {
                 return Err(QueueError::Cancelled);
             }
             if state.pending.len() >= CAPACITY {
@@ -125,6 +128,12 @@ impl MountQueue {
         let confirmed = self.shared.mount.stop_confirmed().await;
         self.shared.state.lock().unwrap().stopping = false;
         confirmed
+    }
+    /// Refuse every later move for good, then stop as `stop_all` does.
+    /// Returns whether the adapter confirmed the stop.
+    pub async fn close(&self) -> bool {
+        self.shared.state.lock().unwrap().closed = true;
+        self.stop_all().await
     }
 }
 

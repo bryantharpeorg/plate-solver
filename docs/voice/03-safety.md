@@ -174,7 +174,8 @@ The rule is a condition, not an event. It's checked before the motion call, on e
 | Page's renderer crashes, console fine | Nobody | **Runs to its end** under console guards. A nudge ends by itself | Continues | Gone | **The tick stops.** Use the phone's Stop. See Q5 |
 | Surface sleeps, or the console dies | Scope node watchdog | Axes stop within 1 s, unproven for sleep | Axes stop | Gone | The tick stops |
 | Scope link lost, node still running | Console, then the node's watchdog | "halted by a lost link" (existing), axes stop within 1 s | Ended (existing) | Refused by the console | Narrated from the console's reason |
-| Scope node or Pi dies | Console | **May keep moving.** A GoTo leg runs to its end, and Track's rate continues | May keep moving | Refused by the console | "The scope node isn't answering. The telescope may still be moving." Use the power switch |
+| Scope node or Pi dies: a crash, a kill or a power cut | Console | **May keep moving.** A GoTo leg runs to its end, and Track's rate continues | May keep moving | Refused by the console | "The scope node isn't answering. The telescope may still be moving." Use the power switch |
+| Scope node stopped, or the Pi shut down: SIGTERM or SIGINT | Scope node | Axes stopped before the node exits; it waits up to 8 s for the mount to confirm, and its last line says whether it did | Axes stopped | Refused by the console | Same as the row above: the console sees the node go |
 | Console restarts | Page | Stopped by the watchdog | Stopped by the watchdog | Cancelled | "I can't reach the console." |
 
 **Local speech** uses the browser's built-in voices (`speechSynthesis`), and must choose one marked `localService`, since Edge's online voices fail exactly when the link is down. This is the one exception to speech running on the voice host, and it's used only for these failure sentences.
