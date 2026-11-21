@@ -1,5 +1,11 @@
 # Project Context — Plate Solver (Rust)
 
+> **Historical.** This is the first-generation project context, kept for its numeric
+> conventions and as history. The mobile and UniFFI plans here were not pursued. Features from
+> 012 on are specified in [`specs/`](../specs/); `changes/feat-12` to `feat-16` were converted
+> to `specs/012`–`016` on 2026-10-28. For the system as it is now, start at
+> [`docs/README.md`](../docs/README.md).
+
 > This file is OpenSpec project context for the **plate-solver** repository: a from-scratch
 > **Rust** reimplementation of the tetra3/cedar "lost-in-space" star-field plate-solving
 > system, delivered to consumers over **gRPC** and embeddable on **mobile** (iOS/Android).
