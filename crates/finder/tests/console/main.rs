@@ -34,6 +34,7 @@ mod imaging_lease;
 mod imaging_preview;
 mod imaging_relation;
 mod imaging_run;
+mod imaging_run_centring;
 mod imaging_run_routes;
 mod imaging_run_script;
 mod imaging_run_steps;
