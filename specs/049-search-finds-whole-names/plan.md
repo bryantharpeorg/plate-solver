@@ -7,17 +7,19 @@ escalates rather than re-deciding it.
 
 ## Summary
 
-`Catalog::search` stops comparing the whole query with each word of a common name. It
-splits the trimmed, lowercased query on whitespace, and a common name matches when each
-query word begins one of the name's words, in any order (spec owner decision 1). For a
-query of one word that is today's rule, so every such query finds what it did. The exact
+`Catalog::search` stops comparing the whole query with each word of a common name. A
+private `match_words` makes the words of the query and of each name alike: lowercased,
+without apostrophes (`'` and `’`), split at whitespace and hyphens. A common name
+matches when each query word begins one of the name's words, in any order (spec owner
+decisions 1 and 2), and a query with no word matches no name. A query of one word finds
+at least what it did, and more only through a name's hyphen or apostrophe. The exact
 id, the order by magnitude and the limit are as they are. `targets::search`'s doc comment
 says the rule. `GET /api/targets` and the MCP tool `search_targets` answer through the
 same function, so both find "Orion Nebula" with no change of their own.
 
-One story: the rule, its doc comment, seven unit tests after the last test of the module
-that holds 012's search tests, and one test module at the MCP door that asks the route
-and the tool alike.
+One story: the rule, `match_words`, its doc comment, nine unit tests after the last test
+of the module that holds 012's search tests, and one test module at the MCP door that
+asks the route and the tool alike.
 
 ## Technical Context
 
@@ -28,10 +30,10 @@ and the tool alike.
 **Storage**: none.
 
 **Testing**:
-- The unit tests of `crates/finder/src/targets.rs` (US1-S1 to US1-S7), seven new
-  `#[test]` functions after the module's last one, with the extract the module's tests
-  already read (`EXTRACT`, `crates/finder/src/targets.rs:239`). US1-S4 parses a catalog
-  of its own with the private `Catalog::parse`, as 012's
+- The unit tests of `crates/finder/src/targets.rs` (US1-S1 to US1-S7, US1-S9 and
+  US1-S10), nine new `#[test]` functions after the module's last one, with the extract
+  the module's tests already read (`EXTRACT`, `crates/finder/src/targets.rs:239`).
+  US1-S4 parses a catalog of its own with the private `Catalog::parse`, as 012's
   `exact_ids_precede_brighter_name_matches_and_nonexistent_rows_are_excluded`
   (`crates/finder/src/targets.rs:427`) does, so these are unit tests.
 - `crates/finder/tests/mcp/target_words.rs` (new), one `#[tokio::test]` through
@@ -57,7 +59,7 @@ one `mod` line.
 |---|---|
 | I. Agreeing with cedar is correctness | Nothing touches the solver, star detection or `crates/math-core`. The expectations are read from the pinned OpenNGC extract, the catalog's own source, and from 012's rule as its FR-007 words it. |
 | II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. The new unit tests are new functions after the module's last; 012's search tests and 016's search-tool test pass unchanged (§ Shapes that existing tests pin). |
-| III. Tests first, independent expectations | Every expected list is written in the test from the extract's rows, or computed by the test from the extract's text (US1-S5 to US1-S7) by 012's documented rule, never by calling `search`; `targets::find` and `targets::all`, unchanged by FR-003, name the object a row or id stands for. The tool is held to the route's own answer. Five of the eight scenarios fail on `main`'s code; the three that pass there pin what must not change (§ What was run and what was read). |
+| III. Tests first, independent expectations | Every expected list is written in the test from the extract's rows, or computed by the test from the extract's text (US1-S5 to US1-S7), US1-S6's lower bound by 012's documented rule and its gains written as literals, never by calling `search`; `targets::find` and `targets::all`, unchanged by FR-003, name the object a row or id stands for. The tool is held to the route's own answer. Seven of the ten scenarios fail on `main`'s code; the three that pass there pin what must not change (§ What was run and what was read). |
 | IV. Critical paths | None is touched: no `Cargo.toml` or `Cargo.lock` change, no `unsafe`, nothing under `proto/`, no `build.rs`. |
 | V. Proven open source first, honest licensing | Considered by name and not tried: a full-text index (`tantivy`), fuzzy matchers (`nucleo`, `fuzzy-matcher`) and edit distance (`strsim`). Each is a new dependency for a rule of a few lines over 182 names, and fuzzy matching would change what a word of one finds, against spec owner decision 1 (e). No reused code, no new license. |
 
@@ -65,7 +67,7 @@ one `mod` line.
 
 ```text
 crates/finder/
-├── src/targets.rs                           # US1: the rule in Catalog::search; search's doc comment; seven unit tests
+├── src/targets.rs                           # US1: the rule in Catalog::search; match_words; search's doc comment; nine unit tests
 └── tests/mcp/
     ├── main.rs                              # US1: mod target_words;
     └── target_words.rs                      # US1, new
@@ -80,47 +82,67 @@ In `Catalog::search` (`crates/finder/src/targets.rs:164`), the filter
 
 ```rust
         // Each query word must begin a word of the same common name, in any order.
-        let terms: Vec<_> = query.split_whitespace().collect();
+        let terms = match_words(&query);
         let mut matches: Vec<_> = self
             .objects
             .iter()
             .filter(|object| {
                 exact.is_some_and(|exact| std::ptr::eq(*object, exact))
-                    || object.common_names.iter().any(|name| {
-                        let name = name.to_lowercase();
-                        terms
-                            .iter()
-                            .all(|term| name.split_whitespace().any(|word| word.starts_with(term)))
-                    })
+                    || (!terms.is_empty()
+                        && object.common_names.iter().any(|name| {
+                            let words = match_words(name);
+                            terms.iter().all(|term| {
+                                words.iter().any(|word| word.starts_with(term.as_str()))
+                            })
+                        }))
             })
             .collect();
 ```
 
-The trim, the lowercase, the empty and zero-limit answers, the exact id, the sort and the
-truncation are unchanged. The doc comment of `pub fn search`
+Before `fn catalog()` (`crates/finder/src/targets.rs:201`):
+
+```rust
+/// The words a common name or a query is matched by: lowercased, without apostrophes
+/// (straight or curly), split at whitespace and hyphens.
+fn match_words(text: &str) -> Vec<String> {
+    text.to_lowercase()
+        .replace(['\'', '\u{2019}'], "")
+        .split(|c: char| c.is_whitespace() || c == '-')
+        .filter(|word| !word.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+```
+
+The trim, the lowercase, the empty and zero-limit answers, the exact id (looked up from
+the trimmed, lowercased query, before `match_words`), the sort and the truncation are
+unchanged. The doc comment of `pub fn search`
 (`crates/finder/src/targets.rs:222` to `:225`) becomes:
 
 ```rust
 /// Exact ids first, then common names in brightness order.
 ///
 /// A common name matches when each word of the query begins one of its words, in any
-/// order. Matching ignores case. Objects without a magnitude come last; canonical id
-/// breaks equal-magnitude ties. At most `limit` objects are returned, with no duplicates.
+/// order. Words are split at spaces and hyphens, and apostrophes and case are ignored.
+/// Objects without a magnitude come last; canonical id breaks equal-magnitude ties. At
+/// most `limit` objects are returned, with no duplicates.
 ```
 
 The unit tests follow the module's last test,
 `every_source_object_is_reachable_by_its_raw_and_canonical_id`
 (`crates/finder/src/targets.rs:454`), with one helper of their
 own that maps a search's objects to their ids. US1-S6's queries are built from the
-extract's `common_names` column split on commas and spaces, each word lowercased and cut
-after each of its characters.
+extract's `common_names` column split on commas and spaces, as 012's rule reads words,
+each word lowercased and cut after each of its characters; its oracle is 012's rule on
+the extract's rows, as a lower bound, and the gains spec.md lists, written as literals
+in a `match` on the query.
 
 ### `crates/finder/tests/mcp/target_words.rs` (US1)
 
 A module comment naming its oracles (the extract's common names, with the ids written in
-the test, and the route's JSON), then one `#[tokio::test]` that builds the console app
+the test, and the route's JSON), then one `#[tokio::test]` that builds the console router
 with `support::mcp::app(support::mcp::state(), "127.0.0.1")` and, for each query of
-US1-S8, sends `GET /api/targets?q=` with the query's spaces as `+` through
+US1-S8, sends `GET /api/targets?q=` with the query encoded as spec.md gives it through
 `support::mcp::send`, reads it with `support::mcp::body`, and sends
 `support::mcp::call("search_targets", json!({"q": query}))`. It uses only
 `crate::support::mcp`, `axum`, and `serde_json`.
@@ -133,41 +155,55 @@ Nothing else changes.
 
 ## What was run and what was read
 
-**Run on 2026-11-21, before the draft**, on the branch `probe/049` cut from `main` at
-b7e983a0, three times each with the same outcome unless said:
+**Run on 2026-11-21**, on the branch `probe/049` cut from `main` at b7e983a0, three
+times each with the same outcome unless said. The probe's tip, 1b0c4799, holds the ten
+scenarios' tests as spec.md gives them and the trial fix of § Interface, for owner
+decisions 1 (a) and 2 (b); its earlier commits, up to de91586c, held the draft's
+decision 2 (a), whitespace words only, and eight scenarios.
 
 - a first probe test on `main`'s code: `Orion Nebula`, `Great Orion Nebula`,
   `orion neb`, `Ring Nebula`, `Whirlpool Galaxy`, `Double Cluster` and
   `North America Nebula` each found nothing (all seven once; `Orion Nebula`, which the
   first version stopped at, twice);
-- the eight scenarios' tests as spec.md gives them (de91586c, after the reviews added
-  `orion o` to US1-S3 and `orion neb` to US1-S1), on `main`'s search code, that is with
-  `main`'s filter in place of the trial fix's: US1-S1, US1-S3, US1-S4, US1-S5 and US1-S8
-  fail; US1-S2, US1-S6 and US1-S7 pass, as they must, since `main` finds no name for any
-  query of several words, finds the same as the rule for one word, and finds an id with
-  a space alone; 012's ten unit tests of the module pass;
-- the same tests with the trial fix of § Interface (de91586c): all eight pass, and the
-  module's ten other unit tests pass unchanged;
-- with the fix, both gates' Rust commands, at 40cd6f70, at 0f28f0dd and at de91586c,
-  once each: `lint`'s four and `test`'s two, every test of the workspace passing (1,431
-  under nextest), and the doctests;
-- six mutations of the rule, each once: five at 40cd6f70 on the unit tests only (so
-  US1-S8 was not run under them), and one at 0f28f0dd with US1-S8. The words in the
-  name's order (US1-S1 and US1-S3 fail), any query word rather than each (US1-S1 to
-  US1-S4 and US1-S7 fail), a substring of the name (US1-S2, US1-S3, US1-S4, US1-S6 and
-  012's `search_uses_name_word_prefixes_and_orders_by_magnitude_with_unknowns_last`
-  fail), the words next to each other in order (US1-S1 and US1-S3 fail), and the words
-  from all of an object's names together (US1-S2 and US1-S3 fail), at 40cd6f70; and, at
+- the tip's tests with `main`'s filter in place of the fix's: US1-S1, US1-S3, US1-S4,
+  US1-S5, US1-S6, US1-S8 and US1-S9 fail; US1-S2, US1-S7 and US1-S10 pass, as they
+  must, since `main` finds no name for any query of several words, finds an id with a
+  space alone, and finds nothing for `-` or `'`; 012's ten unit tests of the module
+  pass;
+- the tip's tests with the fix: all ten pass, and the module's ten other unit tests
+  pass unchanged;
+- with the fix, both gates' Rust commands, once at 1b0c4799 (and before, under decision
+  2 (a), at 40cd6f70, 0f28f0dd and de91586c): `lint`'s four and `test`'s two, every test
+  of the workspace passing (1,433 under nextest at 1b0c4799), and the doctests;
+- four mutations of the words at 1b0c4799, each once, with US1-S8: decision 2 (a)'s
+  whitespace words (US1-S6, US1-S8 and US1-S9 fail); no guard for a query with no word
+  (US1-S10 fails, alone); names split and stripped but not queries (US1-S5, US1-S6,
+  US1-S8 and US1-S9 fail); only the straight apostrophe dropped (US1-S8 and US1-S9
+  fail);
+- six mutations of decision 1's rule, under decision 2 (a), each once: five at 40cd6f70
+  on the unit tests only (so US1-S8 was not run under them), and one at 0f28f0dd with
+  US1-S8. The words in the name's order (US1-S1 and US1-S3 fail), any query word rather
+  than each (US1-S1 to US1-S4 and US1-S7 fail), a substring of the name (US1-S2,
+  US1-S3, US1-S4, US1-S6 and 012's
+  `search_uses_name_word_prefixes_and_orders_by_magnitude_with_unknowns_last` fail),
+  the words next to each other in order (US1-S1 and US1-S3 fail), and the words from
+  all of an object's names together (US1-S2 and US1-S3 fail), at 40cd6f70; and, at
   0f28f0dd, each query word beginning a different name word, owner decision 1 (f)
   (US1-S3's `orion o` fails, alone; the other 17 tests, US1-S8 among them, pass).
 
 **Computed from the extract, before the draft**, by a model of the rules written apart
 from the code (the probe's notes):
 - 182 common names on 13,372 objects, counted once per row (175 distinct); 951 distinct
-  prefixes of their words; under each of owner decision 1's (a), (b) and (c), every one
-  of the 951 finds the same objects as today, and every full name finds its object;
+  prefixes of their whitespace words; with whitespace words, under each of owner
+  decision 1's (a), (b) and (c), every one of the 951 finds the same objects as today,
+  and every full name finds its object;
+- with decision 2 (b)'s words: every one of the 951 finds at least what it found, the 11
+  of US1-S6 find more, and 44 one-word queries that found nothing find an object (the
+  917 distinct prefixes of the new words hold them); US1-S1 to US1-S5 and US1-S7 answer
+  as with whitespace words; splitting names but not queries loses 25 full names; and,
+  with no guard, `-` and `'` match all 152 named objects;
 - none of the 13,372 canonical ids or the 110 Messier ids written with a space (13,482
-  queries) finds any name under (a), (b) or (c);
+  queries) finds any name under (a), (b) or (c), with either decision 2 answer's words;
 - of the 312 queries made of two of a name's words in its order (285 distinct), (a)
   and (b) answer alike for all but `cluster 3` (spec owner decision 1 (b));
 - under (f), each query word beginning a different name word, all 182 full names find
@@ -179,7 +215,8 @@ from the code (the probe's notes):
 - under (a), `C 30` and `C 3`, which are no ids of the catalog, find NGC 2070, and
   NGC 2070 and NGC 1049; none of the 651 duplicate aliases written with a space finds a
   name;
-- 5 names hold a hyphen and 20 an apostrophe; no name word starts `tie` or `cats`.
+- 5 names hold a hyphen and 20 an apostrophe; no whitespace word of a name starts
+  `tie` or `cats`.
 
 **Read, not run**:
 - that the page sends the trimmed query as typed, a space as `+`
@@ -197,7 +234,8 @@ the factory's gate boundary itself.
 
 - **The doc comment** of `targets::search` says the rule (FR-002).
 - **Nothing else changes** (FR-003): the diff holds the three files of § Project
-  Structure, and in `targets.rs` only the filter, the doc comment and the new tests.
+  Structure, and in `targets.rs` only the filter, `match_words`, the doc comment and the
+  new tests. `match_words` is private.
 
 ## Shapes that existing tests pin
 
@@ -208,7 +246,8 @@ beside the change, and what the story does to what they observe:
   `search_uses_name_word_prefixes_and_orders_by_magnitude_with_unknowns_last`
   (`crates/finder/src/targets.rs:384`) searches single words only (`NEBULA`'s 60
   objects and their order, `cork`, `orion`, `romeda`, `qqq`, a blank query, a zero
-  limit, `M31`, `ngc0651`): unchanged.
+  limit, `M31`, `ngc0651`); none of them is a word decision 2 changes (`NEBULA` still
+  finds 60, NGC 3372 first): unchanged.
   `exact_ids_precede_brighter_name_matches_and_nonexistent_rows_are_excluded`
   (`crates/finder/src/targets.rs:427`) searches `m31`, `ic1` and `ngc5` on its own
   catalog: single words, unchanged. The other eight test `find`, `all` and the parse.
@@ -237,18 +276,20 @@ beside the change, and what the story does to what they observe:
 | Decision | Rejected | Why |
 |---|---|---|
 | Each query word begins a word of one name, any order | In order; next to each other; across names; substring or fuzzy; distinct words | Spec owner decision 1. |
-| A word is what lies between spaces | Also split at hyphens and drop apostrophes | Spec owner decision 2: it would change what a word of one finds. |
+| Names and queries alike lose `'` and `’` and split at whitespace and `-` | Leave them inside words; split names only | Spec owner decision 2 (b). Splitting names only would lose 25 full names (US1-S5). |
+| A query with no word matches no name | Let `all` over no words match | `-` or `'` would answer every one of the 152 named objects (US1-S10, run as a mutation). |
+| One private `match_words` for names and queries | Words kept in `Target` at parse | `Target` is serialized into every search answer, so a field would change the route's JSON; 182 names make a split per search cheap. |
 | Change only `Catalog::search` | A second search for queries with a space; a change in `api::search` | One rule serves both doors and every query; for one word it is today's. |
 | Unit tests in the module of 012's search tests, after its last test | A `console/` module for them | US1-S4 needs the private `Catalog::parse`, and the rest sit with the tests of the same function. |
 | One `mcp/` module that asks the route and the tool | A `console/` module for the route and an `mcp/` module for the tool | The MCP app answers both, as `session_tools.rs` already compares them; one module, one `mod` line. |
 | A new module | New cases in `session_tools.rs` or `console/targets.rs` | Existing tests are not edited (constitution II). |
 | 047 in `depends_on_landed` | `concurrent` with 047's US3; dropping US1-S8 so the story need not wait (spec owner decision 3) | 047's US3 and this story each add a line to `crates/finder/tests/mcp/main.rs`; 047 was dispatched before this draft. Without US1-S8 no test sends a query of several words through the route and the tool. 042 is named because its US10 last changed that file on `main`. |
-| One story | Two | About 16 % of 65,536 B (§ Plan traps 2). |
+| One story | Two | About 21 % of 65,536 B (§ Plan traps 2). |
 
 ## User Story 1 - A name of several words finds its object
 
-Tests first: the seven unit tests in `targets.rs` and `tests/mcp/target_words.rs` with its
-`mod` line. Then the filter and the doc comment in `targets.rs`.
+Tests first: the nine unit tests in `targets.rs` and `tests/mcp/target_words.rs` with its
+`mod` line. Then the filter, `match_words` and the doc comment in `targets.rs`.
 
 ## Verification (every story, before proposing)
 
@@ -280,13 +321,10 @@ Tests first: the seven unit tests in `targets.rs` and `tests/mcp/target_words.rs
    landed, it, not 042's US10, last wrote `mcp/main.rs`: drop the 042 entry of
    § Refinement Record's `shared_writes`, and 042 from `depends_on_landed`.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
-   decisions, § Owner approvals). Not met: all three decisions are open. Under decision
-   3 (b), the `mcp/main.rs` entry for 047's US3 becomes `concurrent` with its reason,
-   which the validator reports as an advisory, and 047 leaves `depends_on_landed`; no
-   `concurrent_with` is declared, since the validator takes only this spec's own stories
-   there, and the passages that say 049 waits for 047 are rewritten (spec owner decision
-   3 (b)); under (c), US1-S8, both `mcp/` writes, their shared writes and 042 and 047
-   leave the trio.
+   decisions, § Owner approvals). Decisions met on 2026-11-21: the owner answered 1 (a),
+   2 (b) and 3 (a) ("1. Agree 2. No hyphens or apostrophes require. 3. Ok"), and the
+   trio is written for them. The approvals are given by the flip, which is the
+   owner's.
 4. **Probe builds.** Not met: no builder has built the story from this text alone. The
    drafting probe built it with the trial fix (§ What was run and what was read).
 
@@ -316,18 +354,18 @@ They bind every story.
    diff. *Check:* every Then names a committed test the `test` gate runs.
 2. **One evidence budget.** *Check:* the story's diff stays under 64 KiB, measured with
    `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c`. Measured on the
-   drafting probe's net diff from b7e983a0 at de91586c: 10,547 B, 16.1 % of 65,536 B
-   (`targets.rs` 8,175 B, the two `mcp/` files 2,372 B). At the 1.35 times a factory
-   build has run over its probe on earlier specs, about 14,200 B, 21.7 %.
+   drafting probe's net diff from b7e983a0 at 1b0c4799: 13,614 B, 20.8 % of 65,536 B
+   (`targets.rs` 11,176 B, the two `mcp/` files 2,438 B). At the 1.35 times a factory
+   build has run over its probe on earlier specs, about 18,400 B, 28.0 %.
 3. **A spec fixed mid-epic needs a relaunch.** *Check:* no builder edits
    `specs/049-search-finds-whole-names/` or `.specify/`.
 4. **An oracle copied from the code proves nothing.** *Check:* every expected list is a
    literal in the test, or computed in the test from `EXTRACT`'s text, with
    `targets::find` or `targets::all` naming the object a row or id stands for; no test
    calls `search` or `Catalog::search` for an expected value.
-5. **A negative assertion passes when nothing happens.** US1-S2, US1-S6 and US1-S7 pass
-   on `main`'s code. *Check:* US1-S1, US1-S3, US1-S4, US1-S5 and US1-S8 assert objects
-   that are found, and fail on `main`.
+5. **A negative assertion passes when nothing happens.** US1-S2, US1-S7 and US1-S10
+   pass on `main`'s code. *Check:* US1-S1, US1-S3 to US1-S6, US1-S8 and US1-S9 assert
+   objects that are found, and fail on `main`.
 6. **Existing tests are not edited.** *Check:* the diff of `targets.rs` below
    `#[cfg(test)]` only adds lines after the module's last test; `session_tools.rs` and
    `console/targets.rs` are not in the diff.
@@ -345,8 +383,8 @@ They bind every story.
 | Risk | Mitigation |
 |---|---|
 | A new OpenNGC extract changes the counts and lists. | US1-S5 and US1-S6 assert their counts, 182 and 951, so a new extract fails them by name; re-read the lists from it. |
-| The owner takes another answer to decision 1. | Under (b), each word beginning a later name word, US1-S1's `nebula orion`, US1-S3's `cluster s` and `orion o` find nothing; under (c), also US1-S3's `little nebula` at both limits; under (d), US1-S2's `barbell cork` finds NGC 650 and US1-S3's `cluster s` adds NGC 6705; under (f), only `orion o` finds nothing. Those expectations and the rule's few lines change. (e) would fail 012's `romeda` assertion (`crates/finder/src/targets.rs:416`), an existing test, and needs the owner's approval to edit it; as the substring mutation showed, US1-S2, US1-S3, US1-S4 and US1-S6 change too. |
-| The owner takes decision 2 (b). | Names and queries are both split at hyphens and stripped of apostrophes (names alone would lose 25 full names in US1-S5). A query of one word then changes: `tie` finds NGC 40, and 11 of today's 951 prefixes find other objects. So FR-001 (its word and its one-word clause), SC-004, owner approval 1 (which then also approves a change to 012's FR-007 for one word), the one-word Edge Case, the Key Entities, and US1-S6's oracle and its count (917) change. |
+| A keyboard types an apostrophe or a dash the rule does not know, such as `ʼ` (U+02BC) or an en dash. | Only `'`, `’` and `-` are handled (spec § Edge Cases): another mark stays part of a word, and such a query finds what it would today. Voice mode may add more. |
+| A one-word answer surprises an observer, such as `mel` finding PGC 143. | Owner approval 2 names the change; US1-S6 lists every gain over today's prefixes. |
 | An id typed with a space gains a name match on a later extract. | US1-S7 fails by that id; US1-S4 holds that the exact id still comes first. |
 
 ## Refinement Record
@@ -358,9 +396,8 @@ voice design's C5 and the constitution. Writes come from the task text. Shared w
 name the merge edge that orders them, and the story that last wrote the same file on
 `main`, or that will once its epic has landed.
 
-The three owner decisions of spec.md are open. The record's `open_questions` are empty
-because the validator refuses a record that holds any; the open decisions are in spec
-§ Owner decisions and § Prerequisites 3 here. This record approves nothing: the owner
+The owner answered spec.md's three owner decisions on 2026-11-21: 1 (a), 2 (b), 3 (a).
+The record's `open_questions` are empty. This record approves nothing: the owner
 approvals of spec.md are given by the flip.
 
 ```yaml
@@ -397,7 +434,7 @@ stories:
       - path: crates/finder/src/targets.rs
         status: new
         disposition: add
-        assertion: "each of the 951 distinct lowercased prefixes of the extract's common-name words finds, as a set, the rows with a common name having a word that starts with it"
+        assertion: "each of the 951 distinct lowercased prefixes of the extract's common-name words, split at spaces and commas, finds at least the rows with a common name having a word that starts with it, and beyond those exactly: b and bu NGC 3132; fi ESO 270-017; l, m and me PGC 143; l' ESO 56-115, NGC 1980, IC 2944, NGC 6523, NGC 6618, NGC 6818, NGC 650, UGC 5470, PGC 143, NGC 6445, NGC 6369; l'e UGC 5470; le NGC 6705; p NGC 2537; t NGC 40; nothing for the rest"
         decision: "spec.md:US1-S6"
       - path: crates/finder/src/targets.rs
         status: new
@@ -407,8 +444,18 @@ stories:
       - path: crates/finder/tests/mcp/target_words.rs
         status: new
         disposition: add
-        assertion: "on the console router, GET /api/targets with Orion+Nebula, Great+Orion+Nebula, Ring+Nebula, Whirlpool+Galaxy and Double+Cluster answers 200 with exactly NGC 1976, NGC 1976, NGC 6720, NGC 5194 and C 14; search_targets with each query is not an error, its structuredContent is targets set to the route's answer, and its one text block is JSON equal to it"
+        assertion: "on the console router, GET /api/targets with Orion+Nebula, Great+Orion+Nebula, Ring+Nebula, Whirlpool+Galaxy, Double+Cluster and Cat%E2%80%99s+Eye answers 200 with exactly NGC 1976, NGC 1976, NGC 6720, NGC 5194, C 14 and NGC 6543; search_targets with each query is not an error, its structuredContent is targets set to the route's answer, and its one text block is JSON equal to it"
         decision: "spec.md:US1-S8"
+      - path: crates/finder/src/targets.rs
+        status: new
+        disposition: add
+        assertion: "with a limit of 20, bow tie, Bow-Tie and tie give exactly NGC 40; cats eye, cat's eye and cat with U+2019 s eye give exactly NGC 6543; bear paw NGC 2537; eight burst NGC 3132; Wolf Lundmark Melotte and Wolf-Lundmark-Melotte PGC 143; stephans quintet HCG 92"
+        decision: "spec.md:US1-S9"
+      - path: crates/finder/src/targets.rs
+        status: new
+        disposition: add
+        assertion: "-, ', --, U+2019 alone and ' - each find nothing"
+        decision: "spec.md:US1-S10"
       - path: crates/finder/src/targets.rs
         status: existing
         disposition: preserve
@@ -435,7 +482,7 @@ stories:
         assertion: "m42, m8 and m75 at the route answer first with their Messier object, classed pointable, below_horizon and sun_guard, then too_low and no_site as the session changes"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
-      - "a query of one word finds what it found before, in the same order (012 FR-007)"
+      - "a query of one word finds at least what it found before, and more only through a name's hyphen or apostrophe (owner decision 2); the order is 012 FR-007's"
       - "exact ids first, then magnitude with no magnitude last, then canonical id; limit defaults to 20 and is clamped to 1 to 50; an empty q is 400"
       - "targets::find, targets::all, the catalog data, api.rs, mcp/ and the page are unchanged"
     checks:
