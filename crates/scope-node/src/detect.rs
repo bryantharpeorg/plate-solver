@@ -9,6 +9,10 @@ use serde::{Deserialize, Serialize};
 pub struct DetectSettings {
     pub sigma: f64,
     pub noise_estimate: Option<f64>,
+    /// The least noise detection assumes, in 8-bit levels of the detection
+    /// image; absent, cedar-detect's own 0.2.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub noise_floor: Option<f64>,
     pub binning: usize,
     pub normalize_rows: bool,
     pub detect_hot_pixels: bool,
@@ -20,6 +24,7 @@ impl DetectSettings {
         Self {
             sigma: 8.0,
             noise_estimate: None,
+            noise_floor: None,
             binning: 2,
             normalize_rows: true,
             detect_hot_pixels: true,
@@ -36,21 +41,34 @@ impl Default for DetectSettings {
 
 /// The port supplies gray pixels; star-detection supplies brightness order.
 pub fn detect(frame: &GrayFrame, settings: &DetectSettings) -> Vec<Centroid> {
-    star_detection::detect_stars(
-        &frame.pixels,
-        frame.width as usize,
-        frame.height as usize,
-        settings.sigma,
-        settings.binning,
-        settings.normalize_rows,
-        settings.detect_hot_pixels,
-    )
-    .into_iter()
-    .take(200)
-    .map(|s| Centroid {
-        x: s.x,
-        y: s.y,
-        brightness: s.brightness,
-    })
-    .collect()
+    let stars = match settings.noise_floor {
+        None => star_detection::detect_stars(
+            &frame.pixels,
+            frame.width as usize,
+            frame.height as usize,
+            settings.sigma,
+            settings.binning,
+            settings.normalize_rows,
+            settings.detect_hot_pixels,
+        ),
+        Some(noise_floor) => star_detection::detect_stars_with_noise_floor(
+            &frame.pixels,
+            frame.width as usize,
+            frame.height as usize,
+            settings.sigma,
+            settings.binning,
+            settings.normalize_rows,
+            settings.detect_hot_pixels,
+            noise_floor,
+        ),
+    };
+    stars
+        .into_iter()
+        .take(200)
+        .map(|s| Centroid {
+            x: s.x,
+            y: s.y,
+            brightness: s.brightness,
+        })
+        .collect()
 }

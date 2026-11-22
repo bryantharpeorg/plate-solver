@@ -12,4 +12,4 @@ pub mod gray;
 pub mod noise;
 pub mod star;
 
-pub use detect::detect_stars;
+pub use detect::{detect_stars, detect_stars_with_noise_floor};

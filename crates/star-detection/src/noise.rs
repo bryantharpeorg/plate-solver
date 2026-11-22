@@ -6,8 +6,8 @@
 //! applied so the detection threshold never collapses to zero on black-clipped
 //! backgrounds.
 
-/// Minimum returned noise level, in ADU.
-const NOISE_FLOOR: f64 = 0.2;
+/// Minimum returned noise level, in ADU: cedar-detect's own floor.
+pub const NOISE_FLOOR: f64 = 0.2;
 
 /// Sigma used for the star-removal cutoff when de-starring each cut's
 /// histogram. This matches the upstream cedar-detect implementation.

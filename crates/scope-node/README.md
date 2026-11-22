@@ -117,6 +117,36 @@ uses the first listed mode unless `mode` names another; a size the camera does n
 is refused. It runs at up to 5 frames/s (slower for a longer shutter).
 This story supplies capture and config; scope-link serving is added by US4.
 
+## Dark skies: the noise floor
+
+On a dark night the node reported 200 detections a frame and none matched; by reading,
+most were noise. A background clipped to 0 leaves too little noise for detection to
+measure, so faint noise points pass its gates. Those counts also drive auto-exposure
+darker: on the simulated dark sky, gain and exposure fell to their least and the live
+solve never came.
+
+`noise_floor` in `[detection]` sets the least noise detection assumes, in the 8-bit
+levels of the frame detection reads (after binning). It is off unless set; when set,
+it must be between 0.2 and 5, inclusive. Start with 0.5 at a dark site:
+
+```toml
+[detection]
+noise_floor = 0.5
+```
+
+`scope-node --config scope-node.toml --check-config` prints it under `[detection]`,
+after `sigma`. A floor below the sky's own noise changes nothing: on the drawn city
+sky, floors of 0.5 and 1 left every centroid unchanged. A town sky's noise on the
+finder camera has not been measured, so leave the floor out in town, or compare star
+counts with and without it.
+
+Setup's **Detection threshold**, in **σ** (sigma), is the no-code option beside the
+floor. With no floor set, on a background clipped to 0, as on the simulated dark sky,
+sigma 20 acts as a floor of 0.5 at sigma 8, and sigma 40 as 1.0. Like a floor of 0.5,
+about 20 to 40 is a starting point at a dark site, and needs no config change. Raising
+sigma costs stars in town: the drawn city frame fell from 30 detections at sigma 8 to
+8 at sigma 20. Set it back to 8 there.
+
 ## The mount link
 
 With `[mount]` configured, the scope node starts and serves the camera even when

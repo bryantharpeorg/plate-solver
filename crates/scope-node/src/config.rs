@@ -310,6 +310,13 @@ impl Config {
         if ![1, 2, 4, 8].contains(&self.detection.binning) {
             return Err(ConfigError("detection.binning must be 1, 2, 4 or 8".into()));
         }
+        if let Some(floor) = self.detection.noise_floor {
+            if !floor.is_finite() || !(0.2..=5.0).contains(&floor) {
+                return Err(ConfigError(
+                    "detection.noise_floor must be between 0.2 and 5".into(),
+                ));
+            }
+        }
         if self.detection.noise_estimate.is_some()
             || self.detection.return_binned
             || !self.detection.use_binned_for_star_candidates
