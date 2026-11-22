@@ -17,19 +17,32 @@ a few milliseconds. From that the system:
 
 You use it from a web page on a phone or laptop, or an AI assistant uses it over MCP.
 
-> **Status: working at one telescope, and looking for feedback.**
->
-> - **Field-proven:** the live finder, push-to and the mount link on a Sky-Watcher 400P (16-inch)
->   GoTo Dobsonian, driven from a Raspberry Pi 3B+ with an Arducam OV5647 finder camera. Track
->   has been used in the field; GoTo runs on the simulator, with no field GoTo on record yet.
-> - **Bench-proven:** a ZWO ASI071MC Pro imaging camera through INDI, including full frames
->   received on that Pi.
-> - **Not yet field-proven:** full imaging runs.
-> - **Planned:** a Raspberry Pi 5 rig, which moves everything onto the telescope.
->
-> [Known-good configurations](docs/hardware.md) has the details and the limits. If you use
-> Cedar, tetra3 or a SynScan mount, I'd especially like to hear how this works on your
-> hardware ([feedback](#feedback-wanted)).
+Its plate solver re-implements [cedar-detect](https://github.com/smroid/cedar-detect) and
+[cedar-solve](https://github.com/smroid/cedar-solve), the star detector and solver behind the
+[Cedar](https://github.com/smroid/cedar-server) electronic finder, which build in turn on ESA's
+[tetra3](https://github.com/esa/tetra3). Their authors deserve the credit for those algorithms
+([prior work](#prior-work)). The rest is this project's own: the scope node, the pointing
+model, GoTo and tracking, the imaging side, the page and the MCP server.
+
+## Status
+
+Working at one telescope, and looking for feedback.
+
+- **Proven at the telescope:** the live finder, push-to and powered moves on the mount's own
+  motors, on a Sky-Watcher 400P (16-inch) GoTo Dobsonian driven from a Raspberry Pi 3B+ with
+  an Arducam OV5647 finder camera, 12 to 14 November 2026
+  ([field report](docs/field/2026-11-13-first-light.md)). Track was used on a later night,
+  20 November, which is not yet written up.
+- **Simulator and CI only:** GoTo to a target, with no field GoTo on record yet, and full
+  imaging runs.
+- **Bench-proven:** a ZWO ASI071MC Pro imaging camera through INDI, including full frames
+  received on that Pi.
+- **Planned:** a Raspberry Pi 5 rig, which moves everything onto the telescope; a hands-free
+  [voice mode](docs/voice/README.md), designed but not built.
+
+[Known-good configurations](docs/hardware.md) has the details and the limits. If you use
+Cedar, tetra3 or a SynScan mount, I'd especially like to hear how this works on your hardware
+([feedback](#feedback-wanted)).
 
 ## What it does
 
@@ -69,7 +82,12 @@ The planned Pi 5 rig runs both programs on the telescope and reaches them over a
 ## Get started
 
 You need Rust 1.96 or later and `protoc` (Debian/Ubuntu: `sudo apt install protobuf-compiler`).
-Run everything from the repository root.
+Run everything from the repository root. To try it, a shallow clone is enough:
+
+```sh
+git clone --depth 1 https://github.com/bryantharpeorg/plate-solver.git
+cd plate-solver
+```
 
 **Solve sample frames** in the console, then open <http://127.0.0.1:8080>:
 
@@ -94,6 +112,21 @@ cargo run --release -p plate-solver --example solve_image -- \
 The [quick start](docs/guide/quick-start.md) walks through all three, including a GoTo and an
 imaging run on the simulator.
 
+### Use it with an AI assistant
+
+The console serves MCP (Streamable HTTP) at `/mcp`, on the page's port. With Claude Code, for
+example:
+
+```sh
+claude mcp add --transport http finder http://localhost:8080/mcp
+```
+
+Every moving tool runs the page's guards, the page says when an MCP client is moving the
+telescope, and the page's Stop ends any motion. MCP calls carry no token. The console listens
+on localhost by default; with `--listen 0.0.0.0:8080`, anyone on your network can move the
+telescope. See [the console manual](docs/guide/console.md) and
+[safety and security](docs/safety-and-security.md#network-exposure).
+
 ## Documentation
 
 | | |
@@ -107,6 +140,7 @@ imaging run on the simulator.
 | [Known-good configurations](docs/hardware.md) | Hardware that has run, its limits, and what else should work. |
 | [Safety and security](docs/safety-and-security.md) | What stops the mount, and what is exposed on the network. |
 | [The plate solver](docs/solver.md) | The command-line solver, pattern databases, and the comparison with cedar. |
+| [First light](docs/field/2026-11-13-first-light.md) | The field report behind the "proven at the telescope" list. |
 
 [`docs/README.md`](docs/README.md) indexes everything else: the crate references, decisions,
 research and specifications.
@@ -151,9 +185,10 @@ Here is what backs it up, and where the gaps are.
 **What is not tested automatically:**
 
 - No real mount or camera runs in CI. Hardware results come from bench and field nights, logged
-  in [known-good configurations](docs/hardware.md).
-- The node does not yet stop the mount when it is shut down
-  ([safety](docs/safety-and-security.md#what-does-not-stop-the-mount-yet)).
+  in [known-good configurations](docs/hardware.md) and the
+  [field report](docs/field/2026-11-13-first-light.md).
+- The node stops the mount when it is stopped or shut down, but a crash or a power cut still
+  ends it without a stop ([safety](docs/safety-and-security.md#what-does-not-stop-the-mount-yet)).
 - The console has no login. It listens only on localhost by default.
 
 ## How this repository is built
@@ -176,8 +211,8 @@ directed by hand. The original v1 is kept at tag `v1-original`.
 
 ## Prior work
 
-This project re-implements published work. Its behaviour was defined by the projects below, and
-their authors deserve the credit for the algorithms.
+The plate solver re-implements published work. Its behaviour was defined by the projects below,
+and their authors deserve the credit for the algorithms.
 
 - **[TETRA](https://github.com/brownj4/Tetra)**: J. Brown, K. Stubis and K. Cahoy,
   ["TETRA: Star Identification with Hash Tables"](https://digitalcommons.usu.edu/smallsat/2017/all2017/124/),
@@ -201,9 +236,9 @@ The imaging side relies on two programs it calls rather than links:
 - **[INDI](https://indilib.org)**, which drives the imaging camera (LGPL-2.1-or-later).
 - **[ASTAP](https://www.hnsky.org/astap.htm)**, which solves imaging frames.
 
-Copies of tetra3, cedar-solve and cedar-detect are vendored in
-[`reference-solutions/`](reference-solutions/) under their own licenses, and CI checks this
-project's answers against them on every pull request.
+Copies of cedar-solve (which carries its own fork of tetra3) and cedar-detect are kept in
+[`reference-solutions/`](reference-solutions/), pinned to upstream commits and under their own
+licenses, and CI checks this project's answers against them on every pull request.
 
 This project is not affiliated with or endorsed by ESA or Steven Rosenthal. Cedar and Cedar Solve
 are trademarks of Steven Rosenthal, named here only to describe where this work comes from.
@@ -218,15 +253,15 @@ are trademarks of Steven Rosenthal, named here only to describe where this work 
 | `crates/database-generation` | Builds pattern databases from star catalogs (Hipparcos, Tycho, BSC5). |
 | `crates/plate-solver` | The solver (`solve_from_centroids`, `solve_from_image`) and the `solve_image` example. |
 | `crates/grpc-service` | The `PlateSolver` gRPC service, as a library. |
-| `crates/scope-link` | The protocol between the console and the scope node, and its token check. |
+| `crates/scope-link` | The protocol between the console and the scope node, its token check and its clock mapping. |
 | `crates/scope-node` | The program on the telescope's Pi: finder camera, mount link and watchdog, imaging relay through INDI. |
 | `crates/simulator` | The simulated finder camera, mount and imaging camera behind `finder --simulate`. |
 | `crates/finder` | The console: web server, embedded React page (`web/`), API, MCP, pointing model, GoTo, Track and imaging. |
 | `specs/` | One specification per feature from 012 on, which the build system builds from. |
 | `openspec/` | The first-generation specifications, PRD and project conventions. |
-| `docs/` | Guides, architecture, decisions (`adr/`), research and CI reports. Start at [`docs/README.md`](docs/README.md). |
+| `docs/` | Guides, architecture, decisions (`adr/`), field reports (`field/`), research and CI reports. Start at [`docs/README.md`](docs/README.md). |
 | `fixtures/` | Recorded captures from real hardware and programs, used as test oracles. |
-| `reference-solutions/` | **The oracle**: vendored tetra3, cedar-solve and cedar-detect, with their sample images and databases. |
+| `reference-solutions/` | **The oracle**: vendored cedar-solve (with its fork of tetra3) and cedar-detect, with their sample images and databases. |
 | `bench/cedar-compare/` | The benchmark against cedar-detect + cedar-solve. |
 | `crates/scope-link/proto/`, `crates/grpc-service/proto/` | The gRPC contracts the build compiles. The root `proto/` holds older copies. |
 | `scripts/`, `.github/workflows/` | CI, coverage and quality scripts. |
@@ -274,19 +309,28 @@ Especially:
 - **Other mounts:** whether the scope node's `--probe-mount` reads your Sky-Watcher motor
   board.
 - **Failed or wrong solves:** the image and the command you ran.
-- **What you would need** to use this with your own telescope.
+- **Your rig:** the mount, finder camera and computer you would run it on, and what stops it
+  working there.
 
 Please open an issue.
 
 ## License
 
-The workspace manifest declares `MIT OR Apache-2.0` for every crate in this repository. The
-license texts are not committed yet, and will be before the first release.
+Licensed under either of
 
-Third-party material keeps its own license:
+- Apache License, Version 2.0 ([`LICENSE-APACHE`](LICENSE-APACHE))
+- MIT license ([`LICENSE-MIT`](LICENSE-MIT))
 
-- the vendored reference implementations in [`reference-solutions/`](reference-solutions/):
-  tetra3 and cedar-solve are Apache-2.0, and cedar-detect is FSL-1.1-MIT;
-- the catalog data and web components embedded in the console, listed in
-  [`crates/finder/THIRD_PARTY_NOTICES.md`](crates/finder/THIRD_PARTY_NOTICES.md) and printed by
-  `finder --licenses`.
+at your option.
+
+The reference implementations vendored in [`reference-solutions/`](reference-solutions/) are not
+covered and keep their own licenses: cedar-solve (with its tetra3 fork) is Apache-2.0, and
+cedar-detect is FSL-1.1-MIT. They are test oracles only; none of their source is built into
+this project's crates. The finder console's binary embeds third-party web packages and catalog
+data, listed in [`crates/finder/THIRD_PARTY_NOTICES.md`](crates/finder/THIRD_PARTY_NOTICES.md)
+and printed by `finder --licenses`.
+[ADR-0003](docs/adr/0003-mit-or-apache-license-references-stay-oracles.md) records the decision.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion
+in this project by you, as defined in the Apache-2.0 license, shall be dual licensed as above,
+without any additional terms or conditions.

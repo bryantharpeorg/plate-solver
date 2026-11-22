@@ -7,6 +7,7 @@
 | [Architecture](architecture.md) | The pieces, where they run, how they talk, what happens on a GoTo or an imaging run, and the planned Raspberry Pi 5 layout. |
 | [Known-good configurations](hardware.md) | The hardware this has run on, what it was shown to do, its limits, and what should work beyond it. |
 | [Safety and security](safety-and-security.md) | What stops the mount, what doesn't yet, and what is exposed on the network. |
+| [First light](field/2026-11-13-first-light.md) | The field report from the rig's first nights under the sky, 12 to 14 November 2026. |
 | [A tour of the console page](console-tour.md) | Every view and control of the web page. |
 | [The plate solver](solver.md) | The solver on its own: the command-line example, building pattern databases, and the comparison with cedar. |
 
@@ -30,7 +31,11 @@ These are the detailed references the manuals link into:
 - [`GLOSSARY.md`](../GLOSSARY.md): the project's terms, such as sync, aim point, sub, stack and
   focus record.
 - [`DESIGN.md`](../DESIGN.md): the page's visual design system, including the night-mode rules.
-- [`docs/adr/`](adr/): architecture decision records.
+- [`docs/adr/`](adr/): decision records. 0001: the console owns pointing and the node drives
+  the axes. 0002: imaging cameras through INDI, with frames relayed and stacked on the console.
+  0003: the MIT OR Apache-2.0 license, with the vendored references kept as test oracles.
+- [`reference-solutions/README.md`](../reference-solutions/README.md): what each vendored
+  reference copy is for, and the upstream commit it matches.
 
 ## How it is checked
 

@@ -9,8 +9,8 @@ so don't skip ahead. It assumes:
 Keep a hand near the mount's power switch for the first hour. Every powered move passes the
 console's guards: the Sun, the minimum altitude (15° by default), cable wind, the mount's range,
 and the watchdog that stops the mount after a second without the console. Read
-[safety and security](../safety-and-security.md) once before you start, especially the part
-about stopping the node.
+[safety and security](../safety-and-security.md) once before you start, especially what still
+leaves the mount moving.
 
 ## Before you leave home
 

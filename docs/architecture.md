@@ -190,12 +190,11 @@ One button on the page, or one MCP tool, starts the same run. The console sequen
   the mount did not confirm it.
 - **Guards.** Every move, from the page or MCP, goes through the same checks: Sun, minimum
   altitude, cable wind, axis range, and a rate limit for MCP.
-- **Known gap.** Today the node has no shutdown handling. If the `scope-node` process stops,
-  for example with `systemctl stop`, a reboot or a crash, the mount can keep moving. Press
-  Stop and wait for the mount to be still before stopping the node, and keep the mount's power
-  switch within reach. Spec 044 (the node stops the mount before it exits) will cover a clean
-  stop, restart or shutdown. It is not built yet, and a crash or a power cut to the Pi will
-  still leave the mount moving.
+- **Stopping the node.** On SIGTERM or SIGINT (`systemctl stop` or `restart`, a reboot or
+  shutdown, Ctrl-C) the node refuses new moves, stops both axes and waits up to 8 s for the
+  mount to confirm before it exits (spec 044).
+- **Known gap.** A crash, `kill -9` or a power cut to the Pi ends the node without a stop, and
+  the mount can keep moving. Keep the mount's power switch within reach.
 
 ## The Raspberry Pi 5 plan (tentative)
 
@@ -274,7 +273,10 @@ each is expected to fix.
 - **The finder camera over INDI** (planned as spec 045). Today the scope node's finder camera
   can only be a CSI module through `rpicam`, or the simulator. Until this lands, the Pi 5 runs
   the existing CSI finder camera.
-- **Stopping the mount when the node is stopped or shut down** (spec 044, not built yet).
+- **Full-size CSI frames on a Pi 5** (spec 046, specified, not built). The Pi 5 pads each
+  frame row to a multiple of 128 bytes, where the node expects the Pi 3B+'s 64, so at the
+  OV5647's 1296 × 972 mode the node stalls with nothing logged. Spec 046 has the node learn
+  the stride from the camera listing.
 - **A power-loss service** that presses Stop through the console and then shuts the Pi down.
 - **Packaged install and deploy scripts.** Building and installing by hand is covered in the
   [scope node manual](guide/scope-node.md). The tooling that installs both programs on the Pi

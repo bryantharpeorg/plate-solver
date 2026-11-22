@@ -13,13 +13,15 @@ This manual takes a Raspberry Pi from a blank card to a running, paired node. Th
 reference for every setting and log line is
 [`crates/scope-node/README.md`](../../crates/scope-node/README.md).
 
-> **Before you start:** read [safety and security](../safety-and-security.md). In particular,
-> stopping the `scope-node` service does not yet stop a moving mount.
+> **Before you start:** read [safety and security](../safety-and-security.md). Stopping the
+> `scope-node` service stops a moving mount first, but a crash or a power cut to the Pi does
+> not.
 
 ## What you need
 
 - **A Raspberry Pi with a 64-bit OS.** The node is proven on a Pi 3 Model B+ running 64-bit
-  Raspberry Pi OS Lite (Debian 13, trixie). See [known-good configurations](../hardware.md).
+  Raspberry Pi OS Lite (Debian 13, trixie). On a Pi 5, full-size CSI frames need spec 046,
+  which is not built yet. See [known-good configurations](../hardware.md).
 - **A good 5 V supply and cable.** A weak micro-USB cable undervolts a Pi 3B+. Check with
   `vcgencmd get_throttled`, where `throttled=0x0` is good.
 - **A finder camera:** a CSI camera module that `rpicam-hello --list-cameras` lists, with a lens
@@ -170,11 +172,16 @@ SupplementaryGroups=video dialout
 ExecStart=/usr/local/bin/scope-node --config /etc/scope-node/config.toml
 Restart=always
 RestartSec=1
+TimeoutStopSec=10
 UMask=0077
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+On `systemctl stop` or `restart`, a reboot or shutdown, the node stops the mount before it
+exits. It waits up to 8 s for the mount to confirm, and `TimeoutStopSec=10` gives it that long
+plus 2 s before systemd kills it. Without the line, systemd waits 90 s.
 
 **For an imaging camera, also write `/etc/systemd/system/indiserver.service`:**
 
@@ -217,7 +224,8 @@ journalctl -u scope-node -f
 
 A healthy node is silent: it logs only problems and mount events. Errors appear as
 `scope-node: <error>`. If you change the config, restart the node with
-`sudo systemctl restart scope-node`, after the mount is still.
+`sudo systemctl restart scope-node`. Its last line before the restart says how the mount's
+stop ended, for example `scope-node: SIGTERM: the mount confirmed the stop`.
 
 INDI has no authentication, so keep port 7624 off untrusted networks. See
 [network exposure](../safety-and-security.md#network-exposure).
@@ -294,6 +302,8 @@ same Pi: give the node `listen = "127.0.0.1:50051"` and pair it as `127.0.0.1:50
 
 - An install script or package. The steps above are the manual equivalent.
 - An aarch64 build in CI.
-- Stopping the mount when the node is stopped or shut down (spec 044, not built yet).
 - USB or INDI finder cameras (planned as spec 045). Today the finder is a CSI module through
   `rpicam`, or the simulator.
+- Full-size CSI frames on a Pi 5 (spec 046, specified, not built). The Pi 5 pads frame rows to
+  a multiple of 128 bytes, and today the node stalls at the OV5647's 1296 × 972 mode with
+  nothing logged.

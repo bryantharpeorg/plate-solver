@@ -84,6 +84,7 @@ SupplementaryGroups=video
 ExecStart=/usr/local/bin/scope-node --config /etc/scope-node/config.toml
 Restart=always
 RestartSec=1
+TimeoutStopSec=10
 UMask=0077
 
 [Install]
@@ -93,6 +94,22 @@ WantedBy=multi-user.target
 Run `sudo systemctl daemon-reload` and `sudo systemctl enable --now scope-node`.
 A node with a `[mount]` table also needs the serial device's `dialout` group: add it to
 `--groups` and to `SupplementaryGroups`.
+
+On SIGTERM or SIGINT (`systemctl stop`, `poweroff`, a restart, Ctrl-C) the node stops
+the mount before it exits. It takes no new call, refuses every move, sends the stop to
+both axes and waits up to 8 s for the mount to confirm it. Its last line on standard
+error says how the stop ended, one of:
+
+- `scope-node: SIGTERM: the mount confirmed the stop`;
+- `scope-node: SIGTERM: the mount did not confirm the stop`;
+- `scope-node: SIGTERM: the mount did not confirm the stop within 8 s`;
+- `scope-node: SIGTERM: no mount to stop`.
+
+SIGINT's line names SIGINT. The node exits 0 when the stop was confirmed or there is no
+mount, and 1 otherwise. A second signal during the stop changes nothing. The unit's
+`TimeoutStopSec=10` leaves systemd's SIGKILL 2 s after the node's bound; without it
+systemd waits 90 s. A crash, `kill -9` or a power cut still ends the node without a stop.
+
 Camera subprocess failures are reported with their stderr; capture retries after one
 second inside the same service process. Settings changes reopen the rpicam subprocess.
 Discovery uses `rpicam-hello --list-cameras -v` for modes and control ranges. Capture

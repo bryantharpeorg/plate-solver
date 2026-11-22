@@ -25,10 +25,11 @@ and indoors testing frames, on an Android phone or a Windows laptop.
 
 The finder console turns one camera frame into where the telescope is pointing, what is in
 and near the field, and what to look at next. It solves still frames (the bundled samples
-or an upload) and the live finder camera, and from that it gives push-to directions, drives
-GoTo and Track, runs an imaging camera through to a live stack, and lets an AI assistant
-steer over MCP. Success: at a glance, and with proof, the user can see where the telescope
-points and what it is doing.
+or an upload) and, paired with the scope node, the finder camera's live stream. From those it
+gives push-to directions, drives GoTo and Track, runs an imaging camera from focus to a live
+stack, and lets an AI assistant steer over MCP. A SkySafari link and voice mode are still to
+come. Success: at a glance, and with proof, the user can see where the telescope points and
+what it is doing.
 
 ## Positioning
 
@@ -45,15 +46,15 @@ closed-loop GoTo, tracking, imaging and AI-steered observing.
   - the console runs in WSL2 on the laptop: it solves, keeps the pointing model, plans moves,
     runs imaging and serves the page and MCP;
   - a scope node (a Raspberry Pi 3B+ riding on the telescope) runs the finder camera (an
-    Arducam OV5647 on its CSI ribbon), a USB cable straight to the mount's motor controller
-    and, through INDI, the imaging camera; it finds the stars in each frame and carries out
-    axis commands;
+    Arducam OV5647 with a 16 mm lens, on its CSI ribbon), a USB cable straight to the mount's
+    motor controller and, through INDI, the imaging camera; it finds the stars in each frame
+    and carries out axis commands;
   - the phone and the laptop open the page, and share one observing session.
 - Planned: a Raspberry Pi 5 on the telescope runs both the console and the scope node, and
   the laptop reaches the page over an SSH tunnel (`docs/architecture.md`).
 - The site is typed once (the laptop has no GPS); time comes from the console's clock.
-- Out of scope for now: SkySafari's link and the mobile app. They will use the same pointing
-  state when they come.
+- Out of scope for now: SkySafari's link, the voice assistant and the mobile app. They will
+  use the same pointing state when they come. AI clients already reach it over MCP.
 
 ## Capabilities and Constraints
 
@@ -67,8 +68,8 @@ closed-loop GoTo, tracking, imaging and AI-steered observing.
   Rules today; AI later.
 - Works offline; online extras (Aladin survey imagery) are optional.
 - The default database covers 10–30° fields; frames from other cameras need a matching one.
-  The finder camera's 16 mm lens gives about 13° × 10°, inside it.
-- Built in four steps (specs 012–015, landed 2026-10-30 to 11-03):
+  The finder camera's 16 mm lens gives 13.0° × 9.8°, inside it.
+- Built in four steps (specs 012–015, landed 2026-10-30 to 11-03; `openspec/project.md` §3):
   1. Targets and push-to, with no hardware: search OpenNGC (Messier, NGC, IC, common names)
      for a target, learn whether it is pointable (above the minimum altitude, default 15°,
      and outside the Sun guard, which is always on), and get "turn clockwise 34° · tilt up
@@ -84,12 +85,14 @@ closed-loop GoTo, tracking, imaging and AI-steered observing.
 - Imaging (030–043): an imaging camera through INDI; every frame saved as FITS, with ASTAP
   solving the subs and any frame asked about; a focus aid, darks and flats, a live stack placed
   sub by sub from each sub's own solve, tracking steered from the subs, and one-button imaging
-  runs. In night mode the imaging pictures (the frame preview and the stack) are red-only with
-  a hold-to-see-colour control, the one exception to the Red Torch Rule.
+  runs from GoTo to a saved stack. In night mode the imaging pictures (the frame preview and
+  the stack) are red-only with a hold-to-see-colour control, the one exception to the Red Torch
+  Rule.
 - A simulated scope node (`finder --simulate`) stands in for the telescope at the desk and in
   CI.
 - Still out: typed RA/Dec, named stars, the Moon and planets as targets; a horizon that varies
-  by direction; SkySafari, the mobile app.
+  by direction; a field derotator (Track reports the longest exposure instead); SkySafari,
+  voice mode, the mobile app.
 
 ## Brand Commitments
 
@@ -100,9 +103,12 @@ None yet. The repository is `plate-solver`; the app is the finder console.
 - 21 cedar sample frames in `reference-solutions/cedar-solve/examples/data/medium_fov/`;
   20 solve at the default threshold, as they do in cedar; `roof.jpg` solves only at 5σ.
 - The benchmark against cedar in `docs/solver.md`, given as ratios from one machine.
-- Field nights on the 400P with the Pi 3B+ rig, and a bench run of the imaging camera
-  (`docs/hardware.md`). A real night frame from the finder camera is in
-  `fixtures/scope-node/`. Never imply results the hardware page does not record.
+- Real-sky results from one rig, 12 to 14 Nov 2026, in `docs/field/2026-11-13-first-light.md`:
+  live solving, push-to by hand and eight small powered moves. Track was used on a later night
+  (20 Nov), and the imaging camera has run on a bench (`docs/hardware.md`). A real night frame
+  from the finder camera is in `fixtures/scope-node/`. Never imply hardware results beyond
+  the field report and the hardware page: no field GoTo to a target is recorded yet, and
+  imaging runs have run only in the simulator.
 
 ## Product Principles
 

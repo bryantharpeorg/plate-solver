@@ -20,7 +20,8 @@ and where it falls short. Status words are strict:
 
 This is the configuration every field night so far has used. It is supported: the finder and
 push-to are field-proven on it, the mount link and its moves are field-proven, and Track has
-been used in the field. No field GoTo is on record yet. The imaging camera works on it too, but USB 2 and the
+been used in the field. No field GoTo is on record yet. The
+[first-light report](field/2026-11-13-first-light.md) records the first three nights. The imaging camera works on it too, but USB 2 and the
 Pi 3B+'s Wi-Fi make full-size imaging frames slow. See [limits](#limits-of-the-budget-rig).
 
 | Part | What was used | How it connects | Configured by | Status |
@@ -49,8 +50,9 @@ about 50° × 38°, is far outside the default database's 10–30°.
   exposure is the other 97%.
 - **Mount.** The node read the board and drove both axes. Eight test moves of up to 1°, slow
   and fast, on both axes, each stopped by itself within 26 encoder counts of its target, about
-  17″.
-- **Tracking.** In the field, the console's tracking readout showed 14–24″ RMS.
+  17″ ([the moves](field/2026-11-13-first-light.md#what-worked)).
+- **Tracking.** On a later night, 20 November, the console's tracking readout showed 14–24″
+  RMS.
 - **Imaging camera.** On the Pi, the node's camera probe described the camera and received full
   frames through INDI, three of three, twice. Exposure, darks, cooling (with 12 V), colour order
   and the probe also passed on a desktop bench, through the same INDI driver.
@@ -100,10 +102,13 @@ how the pieces fit.
 **Not built yet:**
 
 - The ASI120MM Mini cannot be the finder camera until the scope node has a finder adapter
-  for INDI cameras (planned as spec 045). Until then a Pi 5 should be able to run the existing
-  OV5647 on a Pi 5 camera cable, through `rpicam`. That is untested: the node's frame row
-  layout was measured on the 3B+ only.
-- Stopping the mount when the node is stopped or shut down (spec 044, not built yet).
+  for INDI cameras (planned as spec 045). Until then a Pi 5 can run the existing OV5647 on a
+  Pi 5 camera cable, through `rpicam`, with one catch:
+  - The Pi 5 pads each frame row to a multiple of 128 bytes; the node expects the Pi 3B+'s 64.
+    A capture from a Pi 5's camera (`fixtures/scope-node/pi5/`) shows that at 1296 × 972 the
+    node would stall with nothing logged.
+  - Spec 046 has the node learn the stride from the camera listing. It is specified, not built.
+  - Widths that are already a multiple of 128, such as 640, are not affected.
 - A power-loss service that presses Stop and then shuts the Pi down.
 - Install and deploy tooling for the Pi in this repository.
 
@@ -147,6 +152,7 @@ These are reasoned from the code, not tested.
 **Computers**
 
 - **Scope node:** proven on a Pi 3B+ (64-bit OS). It needs `rpicam-apps` for a CSI finder and
-  an INDI server for the imaging camera. A Pi 5 is untested.
+  an INDI server for the imaging camera. It has not run on a Pi 5 yet, and needs spec 046 there
+  for full-size CSI frames.
 - **Console:** proven on Linux under WSL2, and CI runs it on x86-64 Linux. It has been built
   for 64-bit ARM Linux, but has not yet run on a Pi.

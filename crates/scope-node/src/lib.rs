@@ -12,6 +12,7 @@ pub mod mount;
 pub mod preview;
 pub mod rpicam;
 pub mod service;
+pub mod shutdown;
 pub mod synthetic;
 
 pub use camera::{Camera, CameraError, CameraInfo, GrayFrame, RangeError, Settings};

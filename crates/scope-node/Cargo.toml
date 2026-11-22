@@ -10,7 +10,7 @@ description = "Scope node camera adapters, capture and star detection."
 [dependencies]
 star-detection = { version = "0.1.0", path = "../star-detection" }
 scope-link = { version = "0.1.0", path = "../scope-link" }
-tokio = { version = "1.53.1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1.53.1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
 serde = { version = "1.0", features = ["derive"] }
 # Strict TOML configuration; the only newly introduced format dependency.
 toml = { version = "0.9", default-features = false, features = ["parse", "serde", "display"] }
@@ -34,3 +34,5 @@ image = { version = "0.25.1", default-features = false, features = ["jpeg"] }
 plate-solver = { version = "0.1.0", path = "../plate-solver" }
 image = { version = "0.25.1", default-features = false, features = ["png"] }
 tokio = { version = "1.53.1", features = ["test-util"] }
+# A pseudo-terminal for the binary's mount device in tests/exit_stops_the_mount.rs.
+rustix = { version = "1.1.4", features = ["pty"] }

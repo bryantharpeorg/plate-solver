@@ -25,8 +25,8 @@ changes, and never let it claim more than what is enforced.
 
 ## The oracle — what "correct" means
 
-The vendored `reference-solutions/` (tetra3 / cedar-solve / cedar-detect). The parity
-contract: **RA/Dec within a few arcseconds, centroids within ±0.1 px, identical matched
+The vendored `reference-solutions/` (cedar-solve, with its tetra3 fork, and cedar-detect).
+The parity contract: **RA/Dec within a few arcseconds, centroids within ±0.1 px, identical matched
 catalog IDs.** These references were not produced by the code under test, so agreement
 is external validation. Parity is the product's correctness definition, so parity
 scenarios block every PR, not just a nightly run.

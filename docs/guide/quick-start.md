@@ -22,9 +22,11 @@ You do **not** need Node: the web page is built and committed, and it is embedde
 binary.
 
 ```sh
-git clone https://github.com/bryantharpeorg/plate-solver.git
+git clone --depth 1 https://github.com/bryantharpeorg/plate-solver.git
 cd plate-solver
 ```
+
+`--depth 1` skips the repository's history, which you don't need to try it.
 
 Run every command below from the repository root. The console's default pattern database and
 sample frames are found by relative paths, so run it from the root or pass `--db` and

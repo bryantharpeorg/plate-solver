@@ -10,6 +10,24 @@ It re-implements [cedar-detect](https://github.com/smroid/cedar-detect) and
 [tetra3](https://github.com/esa/tetra3). The README's
 [prior work](../README.md#prior-work) section credits them.
 
+## How a solve works
+
+Solving follows tetra3 and cedar-solve:
+
+```mermaid
+flowchart LR
+  frame["Frame"] --> stars["Detect stars: noise,<br/>binning, sub-pixel centroids"]
+  stars --> patterns["4-star patterns<br/>from the brightest"]
+  patterns --> lookup["Edge-ratio hash,<br/>pattern database lookup"]
+  lookup --> verify["Verify against<br/>catalog stars"]
+  verify --> fit["Fit attitude, field<br/>of view and distortion"]
+  fit --> answer["RA, Dec, roll"]
+```
+
+Detection is the `star-detection` crate, the database `pattern-database` (and
+`database-generation` to build one), the shared numerics `math-core`, and the solve itself
+`plate-solver`.
+
 ## Solve an image
 
 ```sh
@@ -39,6 +57,9 @@ files are read.
   levelled, hot pixels rejected).
 - On cedar's 21 sample frames that gives cedar's answer, to within 4.2″, on all 20 frames cedar
   solves.
+- That is looser than the 0.0005″ in [the comparison](#how-it-compares-with-cedar) only
+  because the Rust `image` crate and PIL decode JPEGs slightly differently. Given the same
+  pixels, the answers agree.
 
 **The database must cover your camera's field of view.** The cedar database used above covers
 10–30°, so build one for any other field (below).
