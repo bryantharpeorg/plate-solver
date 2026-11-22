@@ -1,0 +1,54 @@
+Available cameras
+-----------------
+0 : ov5647 [2592x1944 10-bit GBRG] (/base/axi/pcie@1000120000/rp1/i2c@80000/ov5647@36)
+    Modes: 'SGBRG10_CSI2P' : 640x480 [62.50 fps - (16, 0)/2560x1920 crop]
+                             1296x972 [46.34 fps - (0, 0)/2592x1944 crop]
+                             1920x1080 [32.81 fps - (348, 434)/1928x1080 crop]
+                             2592x1944 [15.63 fps - (0, 0)/2592x1944 crop]
+
+    Sensor properties:
+    ------------------
+    ColorFilterArrangement : 2
+    Location : 2
+    Model : ov5647
+    PipelineHandler : rpi/pisp
+    PixelArrayActiveAreas : [ (16, 6)/2592x1944 ]
+    PixelArrayArea : (0, 0)/2624x1956
+    PixelArrayReadableArea : (16, 6)/2592x1944
+    Rotation : 0
+    ScalerCropMaximum : (16, 6)/2592x1944
+    SensorSensitivity : 1.000000
+    SystemDevices : [ 20753, 20754, 20755, 20756, 20757, 20758, 20759, 20740, 20741, 20742, 20743 ]
+    UnitCellSize : 1400x1400
+
+    Available controls for 2592x1944 SGBRG10_CSI2P mode:
+    ----------------------------------------------------
+    AeConstraintMode : [0..3]
+    AeEnable : [false..true]
+    AeExposureMode : [0..3]
+    AeFlickerMode : [0..1]
+    AeFlickerPeriod : [100..1000000]
+    AeMeteringMode : [0..3]
+    AnalogueGain : [1.000000..63.937500]
+    AnalogueGainMode : [0..1]
+    AwbEnable : [false..true]
+    AwbMode : [0..7]
+    Brightness : [-1.000000..1.000000]
+    CnnEnableInputTensor : [false..true]
+    ColourCorrectionMatrix : [0.000000..8.000000]
+    ColourGains : [0.000000..32.000000]
+    ColourTemperature : [100..100000]
+    Contrast : [0.000000..32.000000]
+    ExposureTime : [130..3066985]
+    ExposureTimeMode : [0..1]
+    ExposureValue : [-8.000000..8.000000]
+    FrameDurationLimits : [63965..3067365]
+    HdrMode : [0..4]
+    NoiseReductionMode : [0..4]
+    Saturation : [0.000000..32.000000]
+    ScalerCrop : [(16, 6)/51x39..(16, 6)/2592x1944]
+    Sharpness : [0.000000..16.000000]
+    StatsOutputEnable : [false..true]
+    SyncFrames : [100..100000]
+    SyncMode : [0..2]
+

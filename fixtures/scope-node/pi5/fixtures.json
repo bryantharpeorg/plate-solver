@@ -1,0 +1,56 @@
+{
+  "pipeline_handler": "rpi/pisp",
+  "stride_alignment": 128,
+  "measured_strides": [
+    {
+      "width": 640,
+      "stride": 640
+    },
+    {
+      "width": 1296,
+      "stride": 1408
+    },
+    {
+      "width": 1920,
+      "stride": 1920
+    },
+    {
+      "width": 2592,
+      "stride": 2688
+    },
+    {
+      "width": 1000,
+      "stride": 1024
+    },
+    {
+      "width": 1040,
+      "stride": 1152
+    }
+  ],
+  "stream": {
+    "file": "stream.yuv",
+    "metadata": "stream.json",
+    "format": "yuv420",
+    "width": 1296,
+    "height": 972,
+    "stride": 1408,
+    "frames": 3,
+    "frame_bytes": 2052864,
+    "padding_byte_values": [
+      0
+    ],
+    "sensor_timestamps_ns": [
+      437537643000,
+      437722812000,
+      437907979000
+    ],
+    "exposure_times_us": [
+      19956,
+      19956,
+      19956
+    ]
+  },
+  "listing": {
+    "file": "list-cameras.txt"
+  }
+}
