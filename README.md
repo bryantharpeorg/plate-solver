@@ -17,6 +17,15 @@ a few milliseconds. From that the system:
 
 You use it from a web page on a phone or laptop, or an AI assistant uses it over MCP.
 
+<p align="center">
+  <img src="docs/images/console-day.png" alt="The console in day mode on a laptop: the target M42, on target after one correction, Track on at 6 arcseconds RMS, and the solved field in Orion" width="68%">
+  <img src="docs/images/console-phone-night.png" alt="The same view on a phone in night mode, red on black" width="22%">
+</p>
+
+*The console on the simulator, tracking M42 after an AI assistant sent it there over MCP
+([the session](#use-it-with-an-ai-assistant)). Left, a laptop in day mode; right, a phone in night
+mode.*
+
 Its plate solver re-implements [cedar-detect](https://github.com/smroid/cedar-detect) and
 [cedar-solve](https://github.com/smroid/cedar-solve), the star detector and solver behind the
 [Cedar](https://github.com/smroid/cedar-server) electronic finder, which build in turn on ESA's
@@ -127,6 +136,59 @@ on localhost by default; with `--listen 0.0.0.0:8080`, anyone on your network ca
 telescope. See [the console manual](docs/guide/console.md) and
 [safety and security](docs/safety-and-security.md#network-exposure).
 
+Here is a session with the simulated telescope. The tool calls and replies are real, shortened.
+
+```text
+> What's the telescope pointing at right now? Then take me to the Orion Nebula and keep it
+  tracked.
+
+● finder - get_pointing (MCP)
+  ⎿  {"ra_deg":124.248,"dec_deg":29.685,"alt_deg":45.58,"az_deg":86.27,"source":"live",…}
+
+● It's pointing at RA 8h 17m, Dec +29° 41′, in Cancer, 46° up in the east. The Orion
+  Nebula is M42.
+
+● finder - search_targets (MCP)(q: "M42")
+  ⎿  [{"id":"NGC 1976","messier":"M42","common_names":["Great Orion Nebula","Orion Nebula"],
+      "kind":"Nebula with cluster","mag":4.0,"class":"pointable",…}]
+
+● finder - set_target (MCP)(target: "M42")
+  ⎿  {"target":{"id":"NGC 1976",…},…}
+
+● finder - get_guidance (MCP)
+  ⎿  {"class":"pointable","separation_deg":52.34,"turn_deg":76.08,"tilt_deg":-2.47,…}
+
+● M42 is up and pointable, 52° away. Starting the GoTo.
+
+● finder - goto_target (MCP)
+  ⎿  {"started":true}
+
+● finder - get_session (MCP)
+  ⎿  {"goto":{"state":"done","correction":1,"error_arcsec":16.09,…},…}
+
+● finder - set_tracking (MCP)(on: true)
+  ⎿  {"track":{"state":"armed","wanted":true,…},…}
+
+● finder - get_session (MCP)
+  ⎿  {"track":{"state":"tracking","readout":{"rms_arcsec":8.45,
+      "field_rotation_deg_per_min":0.253}},…}
+
+● You're on M42. The GoTo needed one correction and finished 16″ from the target, and
+  Track is holding it to about 8″ RMS while the field turns 0.25° a minute. Say "stop",
+  or press Stop on the page, to end it.
+```
+
+## Build one
+
+[Parts lists](docs/parts-list.md) has what to buy, rough prices, and how the parts go together.
+
+| Build | For | Status | Parts, about |
+|---|---|---|---|
+| Budget | The live finder, push-to, GoTo and Track, for visual observing: a Pi 3B+, a small camera with a 16 mm lens, and a USB cable to the mount | Proven at the telescope, except GoTo | $255–320 |
+| Imaging | Everything above, plus a cooled imaging camera, a live stack and imaging runs, on a Pi 5 with an SSD and a UPS board | Planned: parts on order | $1,780–2,100 |
+
+Both builds need a Sky-Watcher alt-az GoTo mount. Equatorial mounts are not supported yet.
+
 ## Documentation
 
 | | |
@@ -137,6 +199,7 @@ telescope. See [the console manual](docs/guide/console.md) and
 | [First night at the telescope](docs/guide/first-night.md) | The order of checks, and troubleshooting. |
 | [A tour of the console page](docs/console-tour.md) | Every view and control. |
 | [Architecture](docs/architecture.md) | The pieces, the links and the Pi 5 plan. |
+| [Parts lists](docs/parts-list.md) | What to buy for a budget build or an imaging build, and how it goes together. |
 | [Known-good configurations](docs/hardware.md) | Hardware that has run, its limits, and what else should work. |
 | [Safety and security](docs/safety-and-security.md) | What stops the mount, and what is exposed on the network. |
 | [The plate solver](docs/solver.md) | The command-line solver, pattern databases, and the comparison with cedar. |
