@@ -320,11 +320,12 @@ async fn s7_all_listed_modes_frame_three_synthetic_images_on_both_isps() {
         for (width, height, stride) in modes {
             let stream = Stream::synthetic(width, height, stride, false);
             let mut rig = Rig::new(&format!("s7-{name}-{width}"), &saved_listing(pi5), &stream);
-            for i in 0..3 {
+            assert_eq!(stream.gray.len(), 3);
+            for (i, expected) in stream.gray.iter().enumerate() {
                 let frame = rig.frame().await.unwrap();
                 assert_eq!((frame.width, frame.height), (width, height));
                 assert!(
-                    frame.pixels == stream.gray[i],
+                    frame.pixels == *expected,
                     "{name} {width} frame {i} differs"
                 );
             }
