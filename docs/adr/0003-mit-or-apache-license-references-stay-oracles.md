@@ -9,7 +9,7 @@ Every crate in this workspace, and the finder console's page, is licensed under 
 - **A copyleft license (GPL-3.0 or MPL-2.0).** Rejected for now: it would keep forks of the console open, but it narrows who can build the solver into a product or a finder of their own, and the goal is adoption. This is a choice the owner can revisit before the first release; afterwards it needs every contributor's agreement.
 - **FSL-1.1-MIT for `star-detection` alone**, matching cedar-detect. Rejected: it is needed only if that crate carried cedar-detect's source, which the constitution forbids. One crate under a source-available license would also stop distributions and other projects from taking the workspace as a whole.
 
-## Before the first release
+## Source check
 
-- The owner confirms that no source from `reference-solutions/` was copied into `crates/`, `star-detection` above all. cedar-detect's own comments are quoted in places as the description of the behaviour reproduced (`crates/star-detection/src/detect.rs`), which is fine; its code would not be.
+- On 2026-11-21 the owner confirmed that no source from `reference-solutions/` was copied into `crates/`, `star-detection` included. That crate's comments name the cedar-detect behaviour they reproduce ("as cedar-detect does", for example in `crates/star-detection/src/detect.rs`). They describe behaviour and carry none of cedar-detect's code.
 - Optional, and the owner's call: a courtesy note to Steven Rosenthal, cedar-detect's copyright holder, saying that the crate re-implements his detector under MIT OR Apache-2.0. His license invites contact about its terms, and the README already asks Cedar users for comparisons.
