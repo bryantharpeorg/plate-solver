@@ -72,6 +72,12 @@ rpicam-vid --nopreview --codec yuv420 --mode 1296:972 --width 1296 --height 972
 - It is the width rounded up to a multiple of 64 bytes.
 - Measured: 640 → 640, 1296 → 1344, 1920 → 1920, 1000 → 1024 and 1040 → 1088. The last
   two are scaled sizes, not sensor modes.
+- On the Pi 5 (PiSP, libcamera v0.8.0+rpt20261104, rpicam-apps v1.15.0) it is the width
+  rounded up to a multiple of 128 bytes. Measured on 2026-11-21: 640 → 640, 1296 → 1408,
+  1920 → 1920, 2592 → 2688, and the scaled 1000 → 1024 and 1040 → 1152. Every padding
+  byte, in luma and chroma rows, read 0. `pi5/` holds that capture: its listing, three
+  1296 × 972 frames at stride 1408, their metadata and a `fixtures.json`, made with the
+  capture arguments above.
 
 **The clock.**
 - `SensorTimestamp` could not be told apart from either monotonic clock.
