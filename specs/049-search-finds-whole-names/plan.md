@@ -193,8 +193,8 @@ decision 2 (a), whitespace words only, and eight scenarios.
   0f28f0dd, each query word beginning a different name word, owner decision 1 (f)
   (US1-S3's `orion o` fails, alone; the other 17 tests, US1-S8 among them, pass).
 
-**Computed from the extract**, before the draft unless said, by a model of the rules
-written apart from the code (the probe's notes):
+**Computed from the extract** on 2026-11-21, from the draft to the owner's answers, by a
+model of the rules written apart from the code (the probe's notes):
 - 182 common names on 13,372 objects, counted once per row (175 distinct); 951 distinct
   prefixes of their whitespace words; with whitespace words, under each of owner
   decision 1's (a), (b) and (c), every one of the 951 finds the same objects as today,
@@ -392,7 +392,7 @@ They bind every story.
 |---|---|
 | A new OpenNGC extract changes the counts and lists. | US1-S5 and US1-S6 assert their counts, 182 and 951, so a new extract fails them by name; re-read the lists from it. |
 | A keyboard types an apostrophe or a dash the rule does not know, such as `ʼ` (U+02BC) or an en dash. | Only `'`, `’` and `-` are handled (spec § Edge Cases): another mark stays part of a word, and such a query finds what it would today. Voice mode may add more. |
-| A one-word answer surprises an observer, such as `mel` finding PGC 143, or `b` and `p` each losing one of their first 20 at the default limit. | Owner approval 2 names the change; US1-S6 lists every gain over today's 951 prefixes; the 44 of the 917 prefixes of the new words that now find an object, `mel` among them, and the limit effects were computed, not tested. |
+| A one-word answer surprises an observer, such as `mel` finding PGC 143, or `b` and `p` each losing one of their first 20 at the default limit. | Owner approval 2 names the change; US1-S6 lists every gain over today's 951 prefixes; the 44 of the 917 prefixes of the new words that now find an object, `mel` among them, and the limit effects were computed; of the 44 only `tie` is tested (US1-S9). |
 | An id typed with a space gains a name match on a later extract. | US1-S7 fails by that id; US1-S4 holds that the exact id still comes first. |
 
 ## Refinement Record

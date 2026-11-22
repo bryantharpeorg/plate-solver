@@ -86,12 +86,14 @@ another object in place of one they showed.
   apostrophes, and so does the query: `l'` now finds what `l` finds. Over the 951
   prefixes of every word of the catalog's common names, as 012's rule splits them, every
   one finds at least the objects it found, and 11 find more (US1-S6). Of the 917
-  prefixes of the new words, 44 that found nothing now find an object, such as `tie`,
-  `paw`, `cats` and `melotte` (computed, not tested). At the default limit of 20, two of
-  the 11 each lose one of their first 20 to the object they gain, which sorts ahead: `b`
-  no longer shows UGC 5373 and `p` no longer shows NGC 6357. Below 20 more do (at 10,
-  `b`, `l`, `m` and `t`), and `me`, `le` and `l'` get a new first answer; from a limit
-  of 28 none does (computed, not tested).
+  prefixes of the new words, every name's words as owner decision 2 splits them, 44 that
+  found nothing now find an object, such as `tie`, `paw`, `cats` and `melotte`
+  (computed; of them only `tie` is tested, in US1-S9). At the default limit of 20, two
+  of the 11 each lose one of their first 20 to the object they gain, which sorts ahead.
+  `b` no longer shows UGC 5373, and `p` no longer shows NGC 6357. Other limits differ:
+  at 10, `b`, `l`, `m` and `t` each lose one, and at 5, `bu` and `m`; from a limit of 28
+  none loses one; and at every limit `me`, `le` and `l'` get a new first answer
+  (computed, not tested).
 - Q: Does an id typed with a space change? → A: No, on this catalog. `NGC 224` or `M 42`
   is now also read as two words, `ngc` and `224`, which a common name could hold; none
   of the catalog's 182 common names holds every word of any of its 13,372 canonical ids
@@ -169,16 +171,17 @@ written for those answers; the alternatives are kept below for the record.
    apostrophe. A query of one word changes with it: every one of today's 951 one-word
    prefixes finds at least the objects it found, 11 of them (among them `b`, `m`, `p`
    and `t`) find more (US1-S6), and 44 of the 917 prefixes of the new words, which found
-   nothing, now find an object (computed, not tested). A query's own apostrophe is
-   dropped too, so `l'` finds what `l` finds. At the default limit of 20, two of the 11
-   each lose one of their first 20 to the object they gain, which sorts ahead: `b` no
-   longer shows UGC 5373 and `p` no longer shows NGC 6357. Below 20 more do (at 10, `b`,
-   `l`, `m` and `t`), and `me`, `le` and `l'` get a new first answer; from a limit of 28
-   none does (computed, not tested). A query left with no word, such as `-` or `'`,
+   nothing, now find an object (computed; only `tie` is tested, in US1-S9). A query's
+   own apostrophe is dropped too, so `l'` finds what `l` finds. At the default limit of
+   20, two of the 11 each lose one of their first 20 to the object they gain, which
+   sorts ahead. `b` no longer shows UGC 5373, and `p` no longer shows NGC 6357. Other
+   limits differ: at 10, `b`, `l`, `m` and `t` each lose one, and at 5, `bu` and `m`;
+   from a limit of 28 none loses one; and at every limit `me`, `le` and `l'` get a new
+   first answer (computed, not tested). A query left with no word, such as `-` or `'`,
    finds nothing, as today (US1-S10). The alternatives, kept for the record: (a), the
    draft's recommendation, left them inside words, so `bow tie` and `cats eye` found
-   nothing and no one-word answer changed; splitting names but not queries would lose
-   25 of the 182 names typed in full, `Bow-Tie nebula` among them.
+   nothing and no one-word answer changed; splitting names but not queries would lose 25
+   of the 182 names typed in full, `Bow-Tie nebula` among them.
 3. **When the story may run** (front matter; plan.md § Refinement Record). *Settled
    2026-11-21: the recommended answer (a).* Recommended: (a) after 047 has landed: 047
    stays in `depends_on_landed`, and the shared write of
@@ -217,13 +220,14 @@ file changes.
    (FR-001, owner decision 2), in place of 012's FR-007 second bullet for those words:
    11 of today's 951 one-word prefixes find the objects US1-S6 lists beside what they
    found, `l'` among them, which now finds what `l` finds; and 44 of the 917 prefixes of
-   the new words, which found nothing, find an object (`tie` finds NGC 40; computed, not
-   tested). No one-word query stops matching an object it matched (US1-S6), but a gain
-   that sorts ahead takes a place in the answer: at the default limit of 20, `b` and `p`
-   each lose one of their first 20 to the object they gain, which sorts ahead: `b` no
-   longer shows UGC 5373 and `p` no longer shows NGC 6357. Below 20 more do (at 10, `b`,
-   `l`, `m` and `t`), and `me`, `le` and `l'` get a new first answer; from a limit of 28
-   none does (computed, not tested).
+   the new words, which found nothing, find an object (`tie` finds NGC 40, as US1-S9
+   tests; the rest computed, not tested). No one-word query stops matching an object it
+   matched (US1-S6), but a gain that sorts ahead takes a place in the answer. At the
+   default limit of 20, `b` and `p` each lose one of their first 20 to the object they
+   gain: `b` no longer shows UGC 5373, and `p` no longer shows NGC 6357. Other limits
+   differ: at 10, `b`, `l`, `m` and `t` each lose one, and at 5, `bu` and `m`; from a
+   limit of 28 none loses one; and at every limit `me`, `le` and `l'` get a new first
+   answer (computed, not tested).
 
 ## User Scenarios & Testing *(mandatory)*
 
