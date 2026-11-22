@@ -21,7 +21,7 @@ use tokio::{
     process::{Child, ChildStdout, Command},
     task::JoinHandle,
 };
-use yuv::YuvReader;
+use yuv::{Isp, YuvReader};
 
 /// Run the configured size. A size the camera does not list is refused, not rounded.
 fn choose_mode(info: &mut CameraInfo, mode: CameraMode) -> Result<(), CameraError> {
@@ -50,6 +50,7 @@ fn choose_mode(info: &mut CameraInfo, mode: CameraMode) -> Result<(), CameraErro
 
 pub struct RpicamCamera {
     info: CameraInfo,
+    isp: Isp,
     settings: Settings,
     path: Option<OsString>,
     process: Option<Process>,
@@ -72,8 +73,9 @@ impl RpicamCamera {
         }
         let listing = format!("{}\n{stderr}", String::from_utf8_lossy(&output.stdout));
         let mut info = listing::parse(&listing)?.remove(0);
+        let isp = listing::isp(&listing)?;
         choose_mode(&mut info, mode)?;
-        Self::new(info)
+        Ok(Self::new(info)?.with_isp(isp))
     }
 
     pub fn new(mut info: CameraInfo) -> Result<Self, CameraError> {
@@ -103,11 +105,18 @@ impl RpicamCamera {
         }
         Ok(Self {
             info,
+            isp: Isp::Vc4,
             settings: Settings::default(),
             path: None,
             process: None,
             reopen: false,
         })
+    }
+
+    /// Frame at the row stride `isp` writes; `new` takes the VC4's.
+    pub fn with_isp(mut self, isp: Isp) -> Self {
+        self.isp = isp;
+        self
     }
 
     /// Child-only PATH override, so fixture scripts do not change global test state.
@@ -198,7 +207,7 @@ impl RpicamCamera {
         });
         Ok(Process {
             child,
-            yuv: YuvReader::new(stdout, mode.width, mode.height, yuv::stride(mode.width))?,
+            yuv: YuvReader::new(stdout, mode.width, mode.height, self.isp.stride(mode.width))?,
             metadata: MetadataReader::new(receiver),
             keepalive: Some(keepalive),
             log,
