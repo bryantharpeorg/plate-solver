@@ -30,9 +30,9 @@ depends_on_landed: ["012-targets-and-push-to", "016-mcp", "027-finder-tests-by-s
 find NGC 1976. A common name matches only when one of its words starts with the whole
 query, so no query of two or more words finds any common name. The page's Target search
 and the MCP tool share the search. Make a query of several words find the common name
-that has them all, keep the order of the answers, and keep every query of one word as it
-is. The owner added (owner decision 2): no one should need to type a name's hyphens or
-apostrophes.
+that has them all, keep the order of the answers, and keep what every query of one word
+finds. The owner added (owner decision 2): no one should need to type a name's hyphens or
+apostrophes, which lets some queries of one word find more.
 
 ## Clarifications
 
@@ -67,23 +67,29 @@ apostrophes.
 - Q: Which requirement of 012 does this change? → A: FR-007's second bullet. It reads:
   "then objects with a common-name word that the query begins (any case), brightest
   first, with objects that have no magnitude last"
-  (`specs/012-targets-and-push-to/spec.md:640`). FR-001 here restates it for a query
-  of several words; for a query of one word it says the same, except where a name word
-  is split at a hyphen or loses an apostrophe (owner decision 2). Its other clauses, exact
-  ids first, the default `limit` of 20 clamped to 1 to 50, and the 400 for an empty
-  `q`, are as they are, and so is the code's tie-break by canonical id among equal
-  magnitudes (`crates/finder/src/targets.rs:194`), which FR-007 does not state.
+  (`specs/012-targets-and-push-to/spec.md:640`). FR-001 here restates it for a query of
+  several words; for a query of one word it says the same, except where a hyphen or an
+  apostrophe, in the name or in the query, splits a word or is dropped (owner decision
+  2). Its other clauses, exact ids first, the default `limit` of 20 clamped to 1 to 50,
+  and the 400 for an empty `q`, are as they are, and so is the code's tie-break by
+  canonical id among equal magnitudes (`crates/finder/src/targets.rs:194`), which FR-007
+  does not state.
 - Q: Was this planned before? → A: Yes. The voice-mode design lists it as console change
   C5 (`docs/voice/02-tool-contracts.md:183`): "A multi-word query should match when each
-  of its words begins a word in one common name. Single-word results don't change". Owner
-  decision 1's answer reads it so. Owner decision 2 departs from its last sentence for
-  names with a hyphen or an apostrophe.
-- Q: Does a query of one word change? → A: Only through a hyphen or an apostrophe (owner
-  decision 2). With one word, "each word begins a word" is today's rule, but a name's
-  words are now also split at hyphens and lose their apostrophes. Over the 951 prefixes
-  of every word of the catalog's common names, as 012's rule splits them, every one
-  finds at least what it found, and 11 find more (US1-S6); and 44 one-word queries that
-  found nothing now find an object, such as `tie`, `paw`, `cats` and `melotte`.
+  of its words begins a word in one common name. Single-word results don't change".
+  Owner decision 1's answer reads it so. Owner decision 2 departs from its last sentence
+  where a hyphen or an apostrophe is in the name or the query.
+- Q: Does a query of one word change? → A: Only through a hyphen or an apostrophe, in
+  the name or in the query (owner decision 2). With one word, "each word begins a word"
+  is today's rule, but a name's words are now also split at hyphens and lose their
+  apostrophes, and so does the query: `l'` now finds what `l` finds. Over the 951
+  prefixes of every word of the catalog's common names, as 012's rule splits them, every
+  one finds at least the objects it found, and 11 find more (US1-S6). Of the 917
+  prefixes of the new words, 44 that found nothing now find an object, such as `tie`,
+  `paw`, `cats` and `melotte` (computed, not tested). At the default limit of 20, two of
+  the 11 show one object fewer: `b` no longer shows UGC 5373 and `p` no longer shows NGC
+  6357, each pushed past the 20th place by the object it gains, which sorts ahead of it;
+  at 50 none does.
 - Q: Does an id typed with a space change? → A: No, on this catalog. `NGC 224` or `M 42`
   is now also read as two words, `ngc` and `224`, which a common name could hold; none
   of the catalog's 182 common names holds every word of any of its 13,372 canonical ids
@@ -153,17 +159,23 @@ written for those answers; the alternatives are kept below for the record.
    2026-11-21: (b), the owner's answer, "No hyphens or apostrophes require."* (b): names
    and queries alike are split at hyphens as well as whitespace, and lose their
    apostrophes, the straight `'` and the curly `’` (U+2019) that phone keyboards type.
-   `bow tie`, `Bow-Tie` and `tie` find NGC 40 (`Bow-Tie nebula`); `cats eye`,
-   `cat's eye` and `cat’s eye` find NGC 6543 (`Cat's Eye Nebula`). Of the 182 common
-   names, 5 hold a hyphen (`Bear-Paw`, `Bow-Tie`, `Eight-Burst`, `Fourcade-Figueroa`,
-   `Wolf-Lundmark-Melotte`) and 20 an apostrophe. A query of one word changes with it:
-   every one of today's 951 one-word prefixes finds at least what it found, 11 of them
-   (among them `b`, `m`, `p` and `t`) find more, and 44 one-word queries that found
-   nothing now find an object (US1-S6). A query left with no word, such as `-` or `'`,
-   finds nothing, as today (US1-S10). The alternatives, kept for the record: (a), the
-   draft's recommendation, left them inside words, so `bow tie` and `cats eye` found
-   nothing and no one-word answer changed; splitting names but not queries would lose
-   25 of the 182 names typed in full, `Bow-Tie nebula` among them.
+   The curly `’`, and the rule that a query with no word finds nothing, are the author's
+   reading of (b), which the flip approves. `bow tie`, `Bow-Tie` and `tie` find NGC 40
+   (`Bow-Tie nebula`); `cats eye`, `cat's eye` and `cat’s eye` find NGC 6543
+   (`Cat's Eye Nebula`). Of the 182 common names, 5 hold a hyphen (`Bear-Paw`,
+   `Bow-Tie`, `Eight-Burst`, `Fourcade-Figueroa`, `Wolf-Lundmark-Melotte`) and 20 an
+   apostrophe. A query of one word changes with it: every one of today's 951 one-word
+   prefixes finds at least the objects it found, 11 of them (among them `b`, `m`, `p`
+   and `t`) find more (US1-S6), and 44 of the 917 prefixes of the new words, which found
+   nothing, now find an object (computed, not tested). A query's own apostrophe is
+   dropped too, so `l'` finds what `l` finds. At the default limit of 20, two of the 11
+   show one object fewer: `b` no longer shows UGC 5373 and `p` no longer shows NGC 6357,
+   each pushed past the 20th place by the object it gains, which sorts ahead of it; at
+   50 none does. A query left with no word, such as `-` or `'`, finds nothing, as today
+   (US1-S10). The alternatives, kept for the record: (a), the draft's recommendation,
+   left them inside words, so `bow tie` and `cats eye` found nothing and no one-word
+   answer changed; splitting names but not queries would lose 25 of the 182 names typed
+   in full, `Bow-Tie nebula` among them.
 3. **When the story may run** (front matter; plan.md § Refinement Record). *Settled
    2026-11-21: the recommended answer (a).* Recommended: (a) after 047 has landed: 047
    stays in `depends_on_landed`, and the shared write of
@@ -198,11 +210,14 @@ file changes.
    finds NGC 2070 and NGC 1049 (§ Edge Cases). An observer who types a Caldwell number
    that way gets a wrong object first where today they get nothing. `GET /api/targets`
    and `search_targets` keep their shapes.
-2. **A query of one word finds more where a name has a hyphen or an apostrophe**
+2. **A query of one word finds more where it or a name has a hyphen or an apostrophe**
    (FR-001, owner decision 2), in place of 012's FR-007 second bullet for those words:
    11 of today's 951 one-word prefixes find the objects US1-S6 lists beside what they
-   found, and 44 one-word queries that found nothing find an object (`tie` finds
-   NGC 40). No one-word query loses an object (US1-S6).
+   found, `l'` among them, which now finds what `l` finds; and 44 of the 917 prefixes of
+   the new words, which found nothing, find an object (`tie` finds NGC 40; computed, not
+   tested). No one-word query stops matching an object it matched (US1-S6), but a gain
+   that sorts ahead takes a place in the answer: at the default limit of 20, `b` no
+   longer shows UGC 5373 and `p` no longer shows NGC 6357.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -279,13 +294,13 @@ development, `cargo nextest run -p finder --locked --lib targets::` and
 6. **Given** every prefix of every word of those common names, lowercased, a word being
    what lies between spaces and commas as 012's rule reads them, **When** a committed
    test searches for each with no limit, **Then** it asserts that there are 951 distinct
-   such queries; that each one's ids, as a set, hold the canonical ids of the rows having
-   a common name with a word that starts with the query, compared in lowercase; and that
-   the ids beyond those are exactly these, and none for any other query: for `b` and
-   `bu`, NGC 3132; for `fi`, ESO 270-017; for `l`, `m` and `me`, PGC 143; for `l'`,
-   ESO 56-115, NGC 1980, IC 2944, NGC 6523, NGC 6618, NGC 6818, NGC 650, UGC 5470,
-   PGC 143, NGC 6445 and NGC 6369; for `l'e`, UGC 5470; for `le`, NGC 6705; for `p`,
-   NGC 2537; for `t`, NGC 40.
+   such queries; that each one's ids, as a set, hold the canonical ids of the rows
+   having a common name with a whitespace-separated word, as 012's rule reads it, that
+   starts with the query, compared in lowercase; and that the ids beyond those are
+   exactly these, and none for any other query: for `b` and `bu`, NGC 3132; for `fi`,
+   ESO 270-017; for `l`, `m` and `me`, PGC 143; for `l'`, ESO 56-115, NGC 1980, IC 2944,
+   NGC 6523, NGC 6618, NGC 6818, NGC 650, UGC 5470, PGC 143, NGC 6445 and NGC 6369; for
+   `l'e`, UGC 5470; for `le`, NGC 6705; for `p`, NGC 2537; for `t`, NGC 40.
 7. **Given** every object of `targets::all()`, **When** a committed test searches with no
    limit for its canonical id and, for each object with a Messier id, for that id with a
    space after the `M` (`M 42`), **Then** it asserts that each search's ids are exactly
@@ -310,31 +325,35 @@ development, `cargo nextest run -p finder --locked --lib targets::` and
 
 ### Edge Cases
 
-- **A query of one word** finds at least what it found before. Without a hyphen or an
-  apostrophe it is one query word, so "each query word" is today's word; a name's words
-  are a superset of today's pieces, split further at hyphens and freed of apostrophes,
-  so only those can add objects, and the sort is untouched. US1-S6 checks the objects as
-  sets; 012's tests of `crates/finder/src/targets.rs:384` and
+- **A query of one word** matches at least the objects it matched before. Without a
+  hyphen or an apostrophe it is one query word, so "each query word" is today's word. No
+  match is lost: a query that began a piece of a name, split and stripped as the name
+  is, begins the name's new words. Only a hyphen or an apostrophe, in the name or in the
+  query, can add a match (`l'` finds what `l` finds), and the sort is untouched. US1-S6
+  checks the objects as sets; 012's tests of `crates/finder/src/targets.rs:384` and
   `crates/finder/tests/console/targets.rs:72`, unchanged, check the first result of the
-  queries they name and the brightness order of `NEBULA`'s, and pass with the fix.
-- **Spaces.** The query is trimmed and split on whitespace, so leading, trailing and
-  repeated spaces do not matter (US1-S1's `  Ring   Nebula `). An empty or blank `q` is
-  still refused with 400 before the search (`crates/finder/src/api.rs:1622`).
+  queries they name and the brightness order of `NEBULA`'s, and pass with the fix. A
+  gain can push a match past `limit`: at 20, `b` and `p` each show one object fewer
+  (owner approval 2).
+- **Spaces.** The query is trimmed and split at whitespace and hyphens, so leading,
+  trailing and repeated spaces do not matter (US1-S1's `  Ring   Nebula `). An empty or
+  blank `q` is still refused with 400 before the search
+  (`crates/finder/src/api.rs:1622`).
 - **Two query words may begin the same name word**: `orion o` finds NGC 1976 and then
   IC 434 (`Orion B`) (owner decision 1 (a); US1-S3).
 - **Words from two names of one object** do not combine: `barbell cork` finds nothing,
   though M76 is both the Barbell Nebula and the Cork Nebula (US1-S2).
-- **Hyphens and apostrophes** need not be typed, and may be (owner decision 2;
-  US1-S9): a query is split and stripped as names are, so `bow-tie` and `cat's eye`
-  still find their objects, and `cat eye` still finds NGC 6543. Only the ASCII hyphen
-  `-` splits, and only `'` and `’` are dropped: an en dash or another mark stays part of
-  a word. `l'Ecu` becomes `lecu`, so `lecu` and `l'ecu` find NGC 6705 and `ecu` does
-  not, as today. Read from the rule, not tested, past US1-S9.
+- **Hyphens and apostrophes** need not be typed, and may be (owner decision 2; US1-S9):
+  a query is split and stripped as names are, so `bow-tie` and `cat's eye` still find
+  their objects, and `cat eye` still finds NGC 6543. Only the ASCII hyphen `-` splits,
+  and only `'` and `’` are dropped: an en dash or another mark stays part of a word.
+  `l'Ecu` becomes `lecu`, so `lecu` and `l'ecu` find NGC 6705, and `ecu`, as today, does
+  not. Read from the rule, not tested, past US1-S9.
 - **A query of only hyphens, apostrophes and spaces** has no word and finds no name
   (US1-S10); without that guard every named object would match.
-- **A word freed by a split can surprise**: `mel`, typed toward `Mel 22`, now finds
-  PGC 143 (`Wolf-Lundmark-Melotte`) until a digit makes it an id. Read from the rule,
-  not tested.
+- **A word freed by a split can surprise**: `mel`, typed toward `Mel 22`, now finds PGC
+  143 (`Wolf-Lundmark-Melotte`); `mel 2` finds nothing, and `mel 22` finds Mel 22. `mel`
+  is no prefix of today's words, so US1-S6 does not list it. Computed, not tested.
 - **Equal magnitudes** are ordered by canonical id, as today: `eagle nebula` gives
   IC 4703 before NGC 6611, which is M16 (US1-S3). Both carry the name in OpenNGC.
 - **An id typed with a space whose words a name also holds** would put the exact id
@@ -369,10 +388,11 @@ development, `cargo nextest run -p finder --locked --lib targets::` and
   query as today. The order SHALL stay as it is: exact ids first, then by magnitude with
   no magnitude last (012's FR-007), then by canonical id
   (`crates/finder/src/targets.rs:194`); at most `limit` objects, with no duplicates. A
-  query of one word SHALL find every object 012's rule finds for it.
+  query of one word SHALL match every object 012's rule matches for it, before the limit
+  is applied.
 - **FR-002**: The doc comment of `targets::search` SHALL state the rule of FR-001: exact
   ids first, then common names in which each word of the query begins a word, in any
-  order, with words split at spaces and hyphens and apostrophes and case ignored, in
+  order, with words split at spaces and hyphens, apostrophes and case ignored, in
   brightness order.
 - **FR-003**: Nothing else SHALL change. The story's changes are FR-001's filter, a
   private function that makes the words, and FR-002's doc comment in
@@ -403,10 +423,11 @@ development, `cargo nextest run -p finder --locked --lib targets::` and
   test passes unchanged (plan.md § Shapes that existing tests pin).
 - **SC-003**: Every common name of the catalog, typed in full, finds its object
   (US1-S5), where today every name of two or more words finds nothing.
-- **SC-004**: Every query of one word finds at least what it found before, and more
-  only where a name has a hyphen or an apostrophe (US1-S6); every canonical id and every
-  Messier id written with a space finds its object alone (US1-S7).
-- **SC-005**: A name with a hyphen or an apostrophe is found without them, and with
+- **SC-004**: Every query of one word matches at least the objects it matched before,
+  and more only where the name or the query holds a hyphen or an apostrophe (US1-S6);
+  every canonical id and every Messier id written with a space finds its object alone
+  (US1-S7).
+- **SC-005**: Each name of US1-S9 is found without its hyphens or apostrophes, and with
   them (US1-S9).
 
 ## Assumptions
@@ -439,4 +460,5 @@ US1:
   implements: [FR-001, FR-002, FR-003]
 ```
 
-One story: one function and its doc comment, and their tests (plan.md § Plan traps 2).
+One story: one function's filter, a private function for its words, its doc comment,
+and their tests (plan.md § Plan traps 2).
