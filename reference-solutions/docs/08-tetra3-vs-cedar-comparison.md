@@ -2,7 +2,7 @@
 
 Both implement the same algorithm family (geometric-hash plate solving, doc 01). This
 document is the side-by-side reference: what changed, why, and which variant to copy when
-rebuilding. "tetra3" = `tetra3/tetra3/tetra3.py` (ESA original). "cedar" = `cedar-solve` (the
+rebuilding. "tetra3" = ESA's original [`tetra3/tetra3.py`](https://github.com/esa/tetra3/blob/f9fa2eb9a32a5efc529e2d86f0b59f35b1e9028d/tetra3/tetra3.py) (no longer copied here). "cedar" = `cedar-solve` (the
 Python solver, by Steven Rosenthal) + `cedar-detect` (the Rust detector).
 
 > **Naming trap:** cedar-solve's package is *also* named `tetra3` (drop-in compatible). The

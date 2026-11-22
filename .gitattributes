@@ -5,3 +5,8 @@
 # changed rather than printing them. A rebuilt bundle alone is ~590 KB of patch,
 # more than the factory's judged-diff ceiling.
 crates/finder/web/dist/** -diff linguist-generated=true
+
+# The pinned reference copies are third-party code (reference-solutions/README.md). Keep
+# them out of GitHub's language statistics; reference-solutions/docs/ is this project's own.
+reference-solutions/cedar-solve/** linguist-vendored
+reference-solutions/cedar-detect/** linguist-vendored
