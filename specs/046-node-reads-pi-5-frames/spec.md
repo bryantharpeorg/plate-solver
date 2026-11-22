@@ -6,8 +6,9 @@ depends_on_landed: ["013-live-finder", "044-node-stops-mount-before-exit"]
 # branch `probe/046` cut from 425b9da0: tests that show the fault, run on `main`'s code,
 # and a trial fix with which they pass, with both gates' Rust commands passing. Every
 # `path:line` here was read at 425b9da0. The owner took both recommended answers on
-# 2026-11-21 ("Yes, both"), and the seat may flip it once probe round 1 is folded. The
-# trio has not yet been built from its own text (plan.md § Prerequisites). 044 is named
+# 2026-11-21 ("Yes, both"), and the seat may flip it once probe round 1 is folded. Probe
+# round 1 built the story from this text alone the same day: 0 blocking defects and 6 of
+# clarity, folded here (plan.md § What was run and what was read). 044 is named
 # because the story's binary tests sit beside 044's and run the node 044 last changed.
 # 027's test layout is not named: no story writes a finder test. What rests on a run and
 # what on reading is said where it is used (plan.md § What was run and what was read).
@@ -152,7 +153,7 @@ name them. The alternatives are kept below for the record.
    the operator stages it before the flip, in `fixtures/scope-node/pi5/`, in a fixtures
    PR of its own, as #129 staged 013's: `list-cameras.txt`, `stream.yuv` (three
    1296x972 frames at stride 1408, 6,158,592 B), `stream.json`, a `fixtures.json` that
-   records what they hold (plan.md § Fixtures), and a Pi 5 paragraph in
+   records what they hold (plan.md § Fixtures), and a Pi 5 bullet in
    `fixtures/scope-node/README.md` § The row stride. The repository is public; the
    frames show a blurry indoor corner. A story cannot carry the stream: no builder has
    the bytes, and every fixture is read-only to a story. The real capture is the one
@@ -178,7 +179,7 @@ file changes.
    start, and a frame whose row padding is not 0 is an error the capture loop logs and
    restarts after. Neither happens with either saved capture.
 3. **The operator-staged Pi 5 capture** in `fixtures/scope-node/pi5/` and its README
-   paragraph, under owner decision 2 (plan.md § Prerequisites 3).
+   bullet, under owner decision 2 (plan.md § Prerequisites 3).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -213,15 +214,20 @@ Every scenario shares these definitions.
   with `--config` naming a file under `CARGO_TARGET_TMPDIR` that sets `listen` to a free
   `127.0.0.1` port, `token` to `'test-token'`, `adapter` to `'rpicam'` and `mode` to
   `'1296x972'`; with the fake camera's directory first on the child's `PATH`, standard
-  input and output null, standard error piped and `kill_on_drop`. It is waited on until a
-  TCP connection to its port succeeds, for at most 10 s. **Its first raw frame** is
+  input and output null, standard error piped and `kill_on_drop`, and `TMPDIR` set to the
+  fake camera's directory, so the FIFO folder the node makes there
+  (`crates/scope-node/src/rpicam/mod.rs:332`) is removed with it. Except in US1-S5,
+  whose node exits before it listens, it is waited on until a TCP connection to its port
+  succeeds, for at most 10 s. **Its first raw frame** is
   `raw_frame` on a `ScopeNodeRawClient` over a tonic `Channel` to its address with the
   `BearerToken` `test-token`, awaited for at most 10 s
   (`crates/scope-link/proto/scope_node/v1/scope_node.proto:151`). **Its standard error**
-  is read after the test kills it, or after it exits.
+  is read after the test kills it, or after it exits, or (US1-S9) line by line as it
+  comes.
 - **The adapter rig** is `listing::parse` of a listing, its first camera with
   `active_mode` set to the listed mode of the scenario's size, then
-  `RpicamCamera::new(info)`, `.with_isp(listing::isp(listing))` and `.with_path` of a
+  `RpicamCamera::new(info)` unwrapped, `.with_isp(listing::isp(&listing).unwrap())` and
+  `.with_path` of a
   `PATH` that puts the fake camera's directory first, as
   `crates/scope-node/tests/rpicam.rs:129` builds its camera. **Taking a frame** is
   `next_frame` awaited.
@@ -264,13 +270,14 @@ development, `cargo nextest run -p scope-node --locked --test rpicam_node` and
    asks `Isp::Pisp.stride` for each Pi 5 width and `Isp::Vc4.stride` and `yuv::stride`
    for each Pi 3B+ width, **Then** it asserts that every answer equals the measured
    stride: 640, 1408, 1920, 2688, 1024 and 1152 on the Pi 5.
-4. **Given** five listings: the Pi 5 listing; the Pi 3B+ listing; the Pi 5 listing with
+4. **Given** six listings: the Pi 5 listing; the Pi 3B+ listing; the Pi 5 listing with
    every line holding `PipelineHandler` removed; the Pi 5 listing with
-   `PipelineHandler : rpi/pisp` replaced by `PipelineHandler : rpi/vc4`; and the Pi 5
-   listing with it replaced by `PipelineHandler : rpi/other`, **When** a committed test
-   calls `listing::isp` on each, **Then** it asserts that the first four answer
-   `Isp::Pisp`, `Isp::Vc4`, `Isp::Pisp` and `Isp::Vc4`, and that the fifth fails with
-   the message
+   `PipelineHandler : rpi/pisp` replaced by `PipelineHandler : rpi/vc4`; the Pi 3B+
+   listing followed by the Pi 5 listing from its camera line on, with that line's `0 : `
+   changed to `1 : `; and the Pi 5 listing with `PipelineHandler : rpi/pisp` replaced by
+   `PipelineHandler : rpi/other`, **When** a committed test calls `listing::isp` on each,
+   **Then** it asserts that the first five answer `Isp::Pisp`, `Isp::Vc4`, `Isp::Pisp`,
+   `Isp::Vc4` and `Isp::Vc4`, and that the sixth fails with the message
    `camera listing names the pipeline handler rpi/other, whose row stride the node does not know`.
 5. **Given** the node rig over the fake camera replaying the Pi 5 capture, its
    `rpicam-hello` printing the Pi 5 listing with `PipelineHandler : rpi/pisp` replaced by
@@ -291,20 +298,26 @@ development, `cargo nextest run -p scope-node --locked --test rpicam_node` and
    committed test takes four frames from each, **Then** it asserts that each of the
    first three is the stream's size and equals its frames' gray images in order, and
    that the fourth fails with an error holding `fake-camera-exit`.
-8. **Given** three adapter rigs at 1296x972, each over a fake camera of its own: on the
+8. **Given** four adapter rigs at 1296x972, each over a fake camera of its own: on the
    Pi 5 listing over a synthetic stream at stride 1472; on the Pi 3B+ listing over a
-   synthetic stream at stride 1408; and on the Pi 3B+ listing over a dark synthetic
-   stream at stride 1408, **When** a committed test takes a frame from each, awaited for
-   at most 5 s, **Then** it asserts that each fails within it, the first with an error
-   holding
+   synthetic stream at stride 1408; on the Pi 3B+ listing over a dark synthetic stream
+   at stride 1408; and on the Pi 5 listing over a synthetic stream at stride 1408 whose
+   second frame has byte 1296 of every luma row set to 1, **When** a committed test takes
+   a frame from each of the first three and two frames from the fourth, each awaited for
+   at most 5 s, **Then** it asserts that the first three fail within it, the first with an
+   error holding
    `frame 1 does not fit a 1408-byte row stride at width 1296: its row padding is not 0`
    and the other two with an error holding
-   `frame 1 does not fit a 1344-byte row stride at width 1296: its row padding is not 0`.
+   `frame 1 does not fit a 1344-byte row stride at width 1296: its row padding is not 0`;
+   and that the fourth rig's first frame equals its gray image and its second fails with
+   an error holding
+   `frame 2 does not fit a 1408-byte row stride at width 1296: its row padding is not 0`.
 9. **Given** the node rig over the fake camera replaying the Pi 5 capture with its
    `rpicam-hello` printing the Pi 3B+ listing, and a second over the fake camera
    replaying the Pi 3B+ capture with its own `stream.json` and its `rpicam-hello`
-   printing the Pi 5 listing, **When** a committed test waits 3 s after each accepts a
-   connection and then kills it, **Then** it asserts that a line of the first's standard
+   printing the Pi 5 listing, **When** a committed test reads each one's standard error
+   as it comes, for at most 10 s after it accepts a connection, and then kills it,
+   **Then** it asserts that a line of the first's standard
    error starts
    `camera capture failed: rpicam-vid: frame 1 does not fit a 1344-byte row stride at width 1296: its row padding is not 0`,
    and a line of the second's starts
@@ -319,18 +332,18 @@ development, `cargo nextest run -p scope-node --locked --test rpicam_node` and
   is such a width.
 - **A listing with several cameras.** `listing::isp` reads the first camera's lines, up
   to the next camera's, as `discover` takes the first camera
-  (`crates/scope-node/src/rpicam/mod.rs:74`). Read, not run: neither saved listing has
-  two cameras.
+  (`crates/scope-node/src/rpicam/mod.rs:74`) (US1-S4's fifth listing).
 - **A Pi 5 whose rpicam-apps does not print `PipelineHandler`** is placed by its `/rp1/`
   device path (US1-S4's third listing). Which rpicam-apps release began printing the
   line is not known here: v1.13.0 does not, v1.15.0 does.
 - **A frame refused for its padding.** The adapter stops rpicam-vid, as it does after any
-  failed read: it waits up to 1 s for it to exit and then kills it
-  (`crates/scope-node/src/rpicam/mod.rs:290`), and the capture loop logs
+  failed read: it waits up to 1 s for it to exit, then kills it, and waits up to 1 s
+  more for its standard error (`crates/scope-node/src/rpicam/mod.rs:290`, `:308`), and
+  the capture loop logs
   `camera capture failed: ` and the error and retries after 1 s
   (`crates/scope-node/src/capture.rs:69`). On a camera that keeps failing, the log gains
-  a line every few seconds and the console still gets no frame (US1-S9). Read, not run,
-  past the 3 s of US1-S9.
+  a line every few seconds and the console still gets no frame (US1-S9). The probe saw
+  the first line about 2 s after the node listened. Read, not run, past the first line.
 - **A stream that ends inside a frame** still fails with `early eof`, as today
   (`crates/scope-node/src/rpicam/yuv.rs:46`); 013's
   `subprocess_exit_reports_stderr_and_capture_restarts_without_restarting_service`

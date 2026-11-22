@@ -9,7 +9,8 @@ description: "Task list for 046-node-reads-pi-5-frames: The Node Reads the Pi 5'
 - the Pi 5 capture is on `main` in `fixtures/scope-node/pi5/`, staged by the operator
   under owner decision 2: not met;
 - the owner decisions in spec.md are settled: met on 2026-11-21, the recommended answers;
-- the story has been probe-built from this text: not met.
+- the story has been probe-built from this text: met on 2026-11-21, probe round 1, its
+  defects folded.
 
 **Rules for every story:**
 - Never edit an existing test, golden, fixture, `scripts/ci/`, `.github/`, `deny.toml`,

@@ -245,7 +245,7 @@ of its own, as #129 staged 013's, `fixtures/scope-node/pi5/`:
   ```
 
 and, in `fixtures/scope-node/README.md` § The row stride (`fixtures/scope-node/README.md:71`),
-after its two bullets, a paragraph: on the Pi 5 (PiSP, libcamera v0.8.0+rpt20261104,
+a third bullet after its two: on the Pi 5 (PiSP, libcamera v0.8.0+rpt20261104,
 rpicam-apps v1.15.0) the stride is the width rounded up to a multiple of 128 bytes, with
 the six measured values, the padding 0 in luma and chroma rows, and the folder
 `pi5/` holding the capture. `stream.yuv` holds NUL bytes, so git shows it as binary and
@@ -285,6 +285,17 @@ exactly as § Fixtures gives it, three times each with the same outcome unless s
 - the Pi 5 capture's bytes: 6,158,592 B, three frames of 2,052,864 B; every luma
   padding byte and every chroma padding byte 0; the Pi 3B+ capture the same at 1344.
 
+**Run in probe round 1, on 2026-11-21**, on the branch `probe/046-r1` from 425b9da0, the
+trio and the staged fixture, by a builder that read only the trio: the story built as
+written, its files exactly the Refinement Record's `writes`, with US1-S2 passing and
+US1-S1, US1-S5 and US1-S9 failing before it (US1-S1 by a stall, standard error empty),
+all nine passing after it three times, and both gates' Rust commands passing. Its diff
+was 31,791 B (§ Plan traps 2). Sixteen mutations were run; the four no scenario bit (the
+last camera's lines read, the read not stopping at the next camera, the padding checked
+on the first frame only, the frame count stuck at 1) were bitten by the two cases now in
+US1-S4 and US1-S8. Its timing case saw US1-S9's line about 2 s after the node listened.
+Its six clarity defects are folded here.
+
 **Measured by the seat on the Pi 5, before the probe** (the probe's brief): the strides
 of 640, 1296, 1920 and 2592, and of the scaled 1000 and 1040, from the byte counts of
 3 or 6 frames each; the padding 0; rpicam's `-v 2` log printing no stride; and the
@@ -298,8 +309,8 @@ owner's report that 640x480 gives frames and 1296x972 none.
   and `rpi/pisp` for the Pi 5 and its chip's boards; not checked against a source here;
 - which rpicam-apps release began printing `PipelineHandler`: v1.13.0 (the Pi 3B+
   listing) does not, v1.15.0 (the Pi 5's) does;
-- what the console shows (spec Clarifications), the settings-change reopen, a listing of
-  several cameras, and a camera that keeps failing past US1-S9's 3 s (spec Edge Cases);
+- what the console shows (spec Clarifications), the settings-change reopen, and a camera
+  that keeps failing past US1-S9's first line (spec Edge Cases);
 - that nothing else in the workspace assumes 64, by a search for `stride`, `1344` and a
   64 alignment.
 
@@ -310,13 +321,8 @@ writes nothing the page is built from), and the factory's gate boundary itself.
 ## Read from the diff, not from a test
 
 - **`yuv::stride` goes through `Isp::Vc4`** (FR-001). US1-S3 holds both answers equal for
-  the measured widths; the body is the diff's.
-- **`listing::isp` reads only the first camera** (FR-002). Neither saved listing has two
-  cameras. *Check:* the loop stops at the next camera's line.
-- **`new` frames at the VC4's stride** (FR-003). 013's
-  `subprocess_exit_reports_stderr_and_capture_restarts_without_restarting_service`
-  builds the camera with `new` over the Pi 3B+ capture and passes unchanged, which holds
-  it for that capture.
+  the measured widths, and `crates/scope-node/tests/rpicam.rs:96` holds the 64; only the
+  routing, as against a second copy of the 64 rule, is the diff's.
 
 ## Shapes that existing tests pin
 
@@ -329,17 +335,18 @@ beside the change, and what the story does to what they observe:
   stride is unchanged, and the capture's padding is all 0, so the padding check passes.
   `subprocess_exit_reports_stderr_and_capture_restarts_without_restarting_service`
   (`crates/scope-node/tests/rpicam.rs:129`) builds the camera with `RpicamCamera::new`,
-  which keeps the VC4's stride, over the same capture: unchanged.
+  which keeps the VC4's stride, over the same capture: unchanged. It holds FR-003's `new`
+  at the VC4's stride for that capture (probe round 1's mutation of `new` failed it).
   `listing_reports_every_saved_sensor_value` (`crates/scope-node/tests/rpicam.rs:69`)
   calls `listing::parse`, which is unchanged.
 - **The unit tests in the three files.** `invalid_geometry_and_partial_frames_are_errors`
   (`crates/scope-node/src/rpicam/yuv.rs:64`) fails a reader on 5 bytes before any
   padding is read; `absent_camera_and_malformed_sensor_are_errors` and `mod.rs`'s three
   `choose_mode` tests touch nothing the story changes. Their text is unchanged.
-- **The node's other binary tests**, `crates/scope-node/tests/cli.rs`,
-  `crates/scope-node/tests/exit_on_signal.rs`, `crates/scope-node/tests/exit_stops_the_mount.rs`
-  and `crates/scope-node/tests/mount_link.rs`, run the `simulated` adapter or exit before
-  discovery (`--check-config` and config refusals): none reaches `discover`.
+- **The node's other binary tests** (every other file under `crates/scope-node/tests/`
+  that starts `CARGO_BIN_EXE_scope-node`, `crates/scope-node/tests/cli.rs` among them)
+  run the `simulated` adapter or exit before discovery (`--check-config` and config
+  refusals): none reaches `discover`.
 - **`crates/scope-node/tests/detect.rs`** reads `fixtures/scope-node/finder-frame.png`,
   which is not touched.
 - **The simulator and the finder** never build an `RpicamCamera`.
@@ -356,7 +363,7 @@ beside the change, and what the story does to what they observe:
 | `with_isp` beside `new` | A new constructor taking the listing | `new` keeps its signature for the existing tests; `discover` is the only caller that reads a listing. |
 | The binary's tests over fake camera programs | In-process tests only | Only the binary runs `discover`, which takes the ISP from the listing; the raw-frame call reads the node's frames byte for byte. |
 | A fake that writes pixels, then metadata | The existing test's fake, which writes them side by side | Only the real order shows the stall the owner saw; the side-by-side fake gives misframed frames instead. |
-| One story | Two | About 41.5 % of 65,536 B as probed (§ Plan traps 2). |
+| One story | Two | About 48.5 % of 65,536 B as probe round 1 built it (§ Plan traps 2). |
 
 Option (c) of owner decision 2, the tests writing the Pi 5 listing from the Pi 3B+'s,
 would test a listing no camera printed; (b) keeps the printed listing and loses the real
@@ -390,12 +397,13 @@ in `yuv.rs`; `listing::isp`; `with_isp`, `discover` and `start` in `mod.rs`.
    If `main` moves in a file § Project Structure names, or in a test § Shapes names,
    re-read them and re-run the validator.
 3. **The Pi 5 capture is on `main`** under owner decision 2 (a): `fixtures/scope-node/pi5/`
-   and the README paragraph of § Fixtures, staged by the operator in a PR of its own.
+   and the README bullet of § Fixtures, staged by the operator in a PR of its own.
    Not met. Under (b), the listing and its `fixtures.json` only; under (c), nothing.
 4. **The owner decisions are settled and the owner approvals given** (spec § Owner
    decisions, § Owner approvals). Decisions met 2026-11-21: the owner took both
    recommended answers ("Yes, both"); the approvals come with the flip.
-5. **Probe builds.** Not met: the trio has not been built from its own text.
+5. **Probe builds.** Met 2026-11-21: probe round 1 built the story from the trio alone,
+   0 blocking defects, 6 of clarity, folded (§ What was run and what was read).
 
 ## Outside the factory
 
@@ -428,7 +436,10 @@ They bind every story.
    drafting probe's commits, with the fixture staged apart: 27,204 B, 41.5 % of 65,536 B
    (the code 6,905 B, `rpicam_node.rs` 9,359 B, `rpicam_stride.rs` 10,940 B). At the
    1.35 times a factory build has run over its probe on earlier specs, about 36,700 B,
-   56.0 %. Were the story to carry the fixture's text files too, 32,677 B, 49.9 %.
+   56.0 %. Were the story to carry the fixture's text files too, 32,677 B, 49.9 %. Probe
+   round 1, built from the trio alone: 31,791 B, 48.5 % (the code 6,905 B,
+   `rpicam_node.rs` 12,220 B, `rpicam_stride.rs` 12,666 B), before US1-S4's sixth
+   listing and US1-S8's fourth rig, a few hundred bytes more.
 3. **A spec fixed mid-epic needs a relaunch.** *Check:* no builder edits
    `specs/046-node-reads-pi-5-frames/` or `.specify/`.
 4. **The fixture is the operator's.** *Check:* nothing under `fixtures/` is in the diff.
@@ -441,7 +452,8 @@ They bind every story.
 7. **A negative assertion passes when nothing happens.** *Check:* US1-S9 asserts a line
    that is there, not the absence of frames; US1-S5 asserts the status and the line.
 8. **The scratch directories must not collide.** *Check:* each fake camera's directory
-   under `CARGO_TARGET_TMPDIR` names its test case and the process id.
+   under `CARGO_TARGET_TMPDIR` names its test case and the process id, and the node's
+   `TMPDIR` is its fake camera's directory.
 9. **An unused helper fails clippy.** *Check:* each test file holds only the helpers its
    own tests use.
 10. **rustdoc denies warnings.** *Check:* no doc comment holds an angle bracket outside
@@ -457,7 +469,7 @@ They bind every story.
 |---|---|
 | A real Pi 5 writes a stride the probe did not see at some mode. | The padding check refuses it with the stride named (US1-S8, US1-S9); the field check reads the journal. |
 | A future camera stack writes non-zero padding, and every frame is refused. | Owner approval 2 says so; the error names the stride and the width. |
-| A loaded host stretches the binary's 10 s, 5 s and 3 s waits. | Each is a bound on a wait that ends as soon as the node answers; none is a duration the test asserts. |
+| A loaded host stretches the binary's 10 s and 5 s waits. | The 10 s and 5 s waits end when the node answers; US1-S9's line comes about 2 s after the node listens, after the adapter's two 1 s waits. None is a duration the test asserts. |
 | Owner decision 2 lands as (b) or (c) after the draft. | Only US1-S1, US1-S6 and US1-S9's rigs change (§ Fixtures). |
 
 ## Refinement Record
@@ -497,7 +509,7 @@ stories:
       - path: crates/scope-node/tests/rpicam_stride.rs
         status: new
         disposition: add
-        assertion: "listing::isp answers Pisp for the Pi 5 listing, Vc4 for the Pi 3B+ listing, Pisp for the Pi 5 listing without its PipelineHandler line, Vc4 for it naming rpi/vc4, and for rpi/other fails with camera listing names the pipeline handler rpi/other, whose row stride the node does not know"
+        assertion: "listing::isp answers Pisp for the Pi 5 listing, Vc4 for the Pi 3B+ listing, Pisp for the Pi 5 listing without its PipelineHandler line, Vc4 for it naming rpi/vc4, Vc4 for the Pi 3B+ listing followed by the Pi 5 listing's camera renumbered 1, and for rpi/other fails with camera listing names the pipeline handler rpi/other, whose row stride the node does not know"
         decision: "spec.md:US1-S4"
       - path: crates/scope-node/tests/rpicam_node.rs
         status: new
@@ -517,12 +529,12 @@ stories:
       - path: crates/scope-node/tests/rpicam_stride.rs
         status: new
         disposition: add
-        assertion: "at 1296x972, within 5 s: the Pi 5 listing over a stream at stride 1472 fails with frame 1 does not fit a 1408-byte row stride at width 1296: its row padding is not 0; the Pi 3B+ listing over a stream at 1408, and over a dark one at 1408, each fail with the same words for a 1344-byte row stride"
+        assertion: "at 1296x972, within 5 s: the Pi 5 listing over a stream at stride 1472 fails with frame 1 does not fit a 1408-byte row stride at width 1296: its row padding is not 0; the Pi 3B+ listing over a stream at 1408, and over a dark one at 1408, each fail with the same words for a 1344-byte row stride; the Pi 5 listing over a stream at 1408 whose second frame has byte 1296 of every luma row set to 1 gives its first frame equal to its gray image and fails the second with frame 2 does not fit a 1408-byte row stride at width 1296: its row padding is not 0"
         decision: "spec.md:US1-S8"
       - path: crates/scope-node/tests/rpicam_node.rs
         status: new
         disposition: add
-        assertion: "the built node over the Pi 5 capture with the Pi 3B+ listing, 3 s after it accepts a connection, has a stderr line starting camera capture failed: rpicam-vid: frame 1 does not fit a 1344-byte row stride at width 1296: its row padding is not 0; over the Pi 3B+ capture with the Pi 5 listing, the same for a 1408-byte row stride"
+        assertion: "the built node over the Pi 5 capture with the Pi 3B+ listing, its stderr read as it comes for at most 10 s after it accepts a connection, has a line starting camera capture failed: rpicam-vid: frame 1 does not fit a 1344-byte row stride at width 1296: its row padding is not 0; over the Pi 3B+ capture with the Pi 5 listing, the same for a 1408-byte row stride"
         decision: "spec.md:US1-S9"
       - path: crates/scope-node/tests/rpicam.rs
         status: existing
