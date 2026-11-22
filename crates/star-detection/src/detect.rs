@@ -5,7 +5,7 @@
 
 use crate::binning::{build_cascade, BinnedImage};
 use crate::centroid::{measure_star, measure_star_scaled};
-use crate::noise::estimate_noise;
+use crate::noise::{estimate_noise, NOISE_FLOOR};
 use crate::star::Star;
 
 /// Detect stars in an 8-bit grayscale image.
@@ -27,6 +27,32 @@ pub fn detect_stars(
     normalize_rows: bool,
     detect_hot_pixels: bool,
 ) -> Vec<Star> {
+    detect_stars_with_noise_floor(
+        image,
+        width,
+        height,
+        sigma,
+        binning,
+        normalize_rows,
+        detect_hot_pixels,
+        NOISE_FLOOR,
+    )
+}
+
+/// [`detect_stars`], with the detection image's noise estimate raised to at
+/// least `noise_floor` 8-bit levels. At or below cedar-detect's own floor,
+/// [`NOISE_FLOOR`], it finds exactly what [`detect_stars`] finds.
+#[allow(clippy::too_many_arguments)]
+pub fn detect_stars_with_noise_floor(
+    image: &[u8],
+    width: usize,
+    height: usize,
+    sigma: f64,
+    binning: usize,
+    normalize_rows: bool,
+    detect_hot_pixels: bool,
+    noise_floor: f64,
+) -> Vec<Star> {
     assert!(
         width * height == image.len(),
         "image length must equal width * height"
@@ -44,7 +70,7 @@ pub fn detect_stars(
         build_cascade(image, width, height, binning, normalize_rows && binning > 1);
 
     // Noise is estimated on the detection (most-binned) image.
-    let noise = estimate_noise(&detection.data, detection.width, detection.height);
+    let noise = estimate_noise(&detection.data, detection.width, detection.height).max(noise_floor);
     let sigma_noise_2 = ((2.0 * sigma * noise + 0.5) as i16).max(2);
     let sigma_noise_3 = ((3.0 * sigma * noise + 0.5) as i16).max(3);
 
