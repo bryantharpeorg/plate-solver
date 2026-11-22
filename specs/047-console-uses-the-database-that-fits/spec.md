@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["013-live-finder", "016-mcp", "020-live-chart-calm", "022-altaz-guidance", "026-mount-sky", "027-finder-tests-by-system", "030-imaging-camera-link", "031-imaging-frames-on-console", "037-imaging-run", "040-stack-waits-for-steady", "041-imaging-run-on-the-rig", "042-imaging-run-page-and-mcp"]
 # Drafted 2026-11-21 against `main` at 425b9da0 (425b9da0, 044 landed), at the owner's ask
 # that day ("mock this up as a spec to get all of this work done"), from a probe of that
@@ -8,7 +8,9 @@ depends_on_landed: ["013-live-finder", "016-mcp", "020-live-chart-calm", "022-al
 # finder test passing. Every `path:line` here was read at 425b9da0. State: draft. The
 # owner took the four recommended answers on 2026-11-21 ("yes"). Probe round 1 built the
 # three stories from this text alone that day (branch `probe/047-r1`, tip `5205ea91`),
-# and its defects 047-R1 to 047-R9 are folded here; the flip is the owner's to give. What
+# and its defects 047-R1 to 047-R9 are folded here. The seat flipped it to `ready` on
+# 2026-11-21, `main` at a5061c15, under the owner's leave ("yes flip it"), which gives the
+# owner approvals. What
 # rests on a run and what on reading is said where it is used
 # (plan.md § What was run and what was read).
 ---
@@ -19,7 +21,7 @@ depends_on_landed: ["013-live-finder", "016-mcp", "020-live-chart-calm", "022-al
 
 **Created**: 2026-11-21
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: The finder console loads exactly one pattern database, given by `--db`. The
 owner may move the finder camera behind a narrow guide scope, about 2.3° by 1.7°, which

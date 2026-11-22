@@ -693,11 +693,14 @@ Tests first: `FieldDatabases.test.tsx`, `healthLine.test.ts` and
 
 1. **The earlier specs have landed:** every spec in `depends_on_landed`. Met at 425b9da0.
 2. **`main` is still as read.** Every citation here was read at 425b9da0 on 2026-11-21.
+   At the flip `main` was at a5061c15, moved since only under `fixtures/scope-node/` and
+   `specs/046-node-reads-pi-5-frames/`, and the validator passed there.
    If `main` moves in a file § Project Structure names, or in a test § Shapes names,
    re-read them and re-run the validator.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
    decisions, § Owner approvals). Decisions met 2026-11-21: the owner took the four
-   recommended answers ("yes"); the approvals come with the flip.
+   recommended answers ("yes"); and the approvals given by the flip of 2026-11-21, which
+   the owner left to the seat once probe round 1 was folded ("yes flip it").
 4. **Probe builds.** Met on 2026-11-21: probe round 1 built the three stories from this
    text alone, and its defects 047-R1 to 047-R9 are folded here (§ What was run and what
    was read).
