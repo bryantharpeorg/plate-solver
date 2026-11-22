@@ -14,6 +14,7 @@ mod calibration_darks;
 mod calibration_flats;
 mod calibration_flats_sim;
 mod calibration_library;
+mod databases;
 mod freshness;
 mod imaging;
 mod imaging_abort_silent;
