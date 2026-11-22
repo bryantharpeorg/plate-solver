@@ -9,7 +9,9 @@ description: "Task list for 049-search-finds-whole-names: Target Search Finds Na
   28f436df;
 - the owner decisions in spec.md are settled: met, 1 (a) and 3 (a) on 2026-11-21 and
   decision 2's rule on 2026-11-22;
-- the story has been probe-built from this text: met on 2026-11-22, in probe round 1;
+- the story has been probe-built from this text: met on 2026-11-22, in probe round 1,
+  from the text as it stood before that round's findings were folded (plan.md
+  § Prerequisites 4);
 - no operator-staged file is needed.
 
 **Rules for every story:**

@@ -167,8 +167,9 @@ US1-S8, sends `GET /api/targets?q=` with the query encoded as spec.md gives it (
 space as `+`) through `support::mcp::send`, reads it with `support::mcp::body`, and
 sends `support::mcp::call("search_targets", json!({"q": query}))`. The route's ids are
 the `id` strings of the elements of its JSON array. The tool's answer is not an error
-when its `result.isError` is not `true`, as
-`crates/finder/tests/mcp/session_tools.rs:41` reads it. It uses only
+when the JSON-RPC reply has no `error` member and its `result.isError` is not `true`,
+as `crates/finder/tests/mcp/session_tools.rs:36` and
+`crates/finder/tests/mcp/session_tools.rs:41` read them. It uses only
 `crate::support::mcp`, `axum`, and `serde_json`.
 
 ### `crates/finder/tests/mcp/main.rs` (US1)
@@ -184,7 +185,9 @@ three times each with the same outcome unless said. The probe's tip, a9211056, h
 ten scenarios' tests as spec.md gives them and the trial fix of § Interface. Its last
 commit added the two cases probe round 1 asked for; the runs on `main`'s search code
 and of the first sixteen wrong variants below were made one commit earlier, at
-1580e503, and the first was repeated once at the tip with the same outcome.
+1580e503, and the first was repeated once at the tip with the same outcome. Of the two
+checks § Interface gives for "not an error", the tip's test of US1-S8 makes the
+`isError` one only; probe round 1's makes both, and passes.
 
 - the tip's tests with `main`'s search code in place of the fix's (everything of
   `targets.rs` above its tests as on `main`): US1-S1, US1-S3, US1-S4, US1-S5, US1-S6,
@@ -401,9 +404,11 @@ comment in `targets.rs`.
    decisions, § Owner approvals). Decisions met: the owner answered 1 (a) and 3 (a) on
    2026-11-21, and chose decision 2's rule on 2026-11-22 ("Rewrite to this"); the trio
    is written for them. The approvals are given by the flip, which is the owner's.
-4. **Probe builds.** Met on 2026-11-22: probe round 1 built US1 from this text alone,
-   with 0 blocking defects and 7 of clarity, folded the same day (§ What was run and
-   what was read).
+4. **Probe builds.** Met on 2026-11-22: probe round 1 built US1 from this trio alone as
+   it stood at be52f8a0, before the round's findings were folded, with 0 blocking
+   defects and 7 of clarity. The fold was made the same day; the test helper's signature
+   and the two cases it added (US1-S1's tab, US1-S2's `bow bow tie`) are the trial
+   build's, and pass there at a9211056 (§ What was run and what was read).
 
 ## Outside the factory
 
@@ -492,7 +497,7 @@ stories:
       - path: crates/finder/src/targets.rs
         status: new
         disposition: add
-        assertion: "with a limit of 20, Orion Nebula, Great Orion Nebula, orion neb, ring NEBULA, Whirlpool Galaxy, Double Cluster, h & chi Persei, North America Nebula, spaced-out Ring Nebula, nebula orion, nebula and orion with a tab between, gr or ne and whirl gal give exactly NGC 1976, NGC 1976, NGC 1976, NGC 6720, NGC 5194, C 14, C 14, NGC 7000, NGC 6720, NGC 1976, NGC 1976, NGC 1976 and NGC 5194"
+        assertion: "with a limit of 20, Orion Nebula, Great Orion Nebula, orion neb, ring NEBULA, Whirlpool Galaxy, Double Cluster, h & chi Persei, North America Nebula, spaced-out Ring Nebula, nebula orion, nebula then a tab then orion as one query, gr or ne and whirl gal give exactly NGC 1976, NGC 1976, NGC 1976, NGC 6720, NGC 5194, C 14, C 14, NGC 7000, NGC 6720, NGC 1976, NGC 1976, NGC 1976 and NGC 5194"
         decision: "spec.md:US1-S1"
       - path: crates/finder/src/targets.rs
         status: new

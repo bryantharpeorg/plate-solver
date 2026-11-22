@@ -75,7 +75,9 @@ query, so no mark and no space has to be typed as the name has it.
   `Double Cluster` and `North America Nebula` each found nothing (run on 2026-11-21 at
   b7e983a0; `targets.rs` has not changed since); with the trial fix of plan.md
   § Interface, each finds its object alone (US1-S1). Every scenario's test was run on
-  both, three times each, at 28f436df (plan.md § What was run and what was read).
+  both, three times each, at 28f436df; the two cases added last, US1-S1's tab and
+  US1-S2's `bow bow tie`, were run on `main`'s code once (plan.md § What was run and
+  what was read).
 - Q: Which requirement of 012 does this change? → A: FR-007's second bullet. It reads:
   "then objects with a common-name word that the query begins (any case), brightest
   first, with objects that have no magnitude last"
@@ -121,9 +123,10 @@ query, so no mark and no space has to be typed as the name has it.
   stories landed by 2026-11-22 (d3f8bd0f, c15937e7, 28f436df), so the wait of owner
   decision 3 is over.
 - Q: What rests on a run, and what on reading? → A: Every scenario was run on the probe
-  three times on `main`'s search code and three times with the trial fix; plan.md
-  § What was run and what was read lists each claim. The page and `finder --simulate`
-  were not run.
+  three times on `main`'s search code and three times with the trial fix, except that
+  the two cases added last (US1-S1's tab and US1-S2's `bow bow tie`) were run on
+  `main`'s search code once; plan.md § What was run and what was read lists each claim.
+  The page and `finder --simulate` were not run.
 - Q: What is left for later? → A: The items under "Out of scope" in § Assumptions.
 
 ## Owner decisions
@@ -285,9 +288,10 @@ development, `cargo nextest run -p finder --locked --lib targets::` and
 1. **Given** the catalog, **When** a committed test searches with a limit of 20 for
    each of `Orion Nebula`, `Great Orion Nebula`, `orion neb`, `ring NEBULA`,
    `Whirlpool Galaxy`, `Double Cluster`, `h & chi Persei`, `North America Nebula`,
-   `  Ring   Nebula `, `nebula orion`, `nebula` and `orion` with a tab (U+0009) between
-   them, `gr or ne` and `whirl gal`, **Then** it asserts that their ids are, in turn,
-   exactly `[NGC 1976]`, `[NGC 1976]`, `[NGC 1976]`, `[NGC 6720]`, `[NGC 5194]`,
+   `  Ring   Nebula `, `nebula orion`, `"nebula\torion"` (one query, written here as a
+   Rust string: a tab, U+0009, between its two words), `gr or ne` and `whirl gal`,
+   **Then** it asserts that the ids of these thirteen queries are, in turn, exactly
+   `[NGC 1976]`, `[NGC 1976]`, `[NGC 1976]`, `[NGC 6720]`, `[NGC 5194]`,
    `[C 14]`, `[C 14]`, `[NGC 7000]`, `[NGC 6720]`, `[NGC 1976]`, `[NGC 1976]`,
    `[NGC 1976]` and `[NGC 5194]`.
 2. **Given** the catalog, **When** a committed test searches with a limit of 20 for each
