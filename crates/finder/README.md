@@ -29,7 +29,7 @@ cargo run --release -p finder -- --db my_camera.npz --samples ~/frames
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--db PATH` | cedar's `default_database.npz` | Pattern database covering your camera's field of view. |
+| `--db PATH` | cedar's `default_database.npz` | Pattern database covering your camera's field of view. Repeat it to hold several (§ Several databases). |
 | `--samples DIR` | cedar's `medium_fov` samples | Folder of frames to offer on the page. |
 | `--listen ADDR` | `127.0.0.1:8080` | Address to serve on. `0.0.0.0:8080` lets other devices connect. |
 | `--state DIR` | `$XDG_STATE_HOME/finder`, otherwise `~/.local/state/finder` | Folder holding the observing session in `session.json`. |
@@ -220,11 +220,43 @@ npm run build   # writes web/dist; commit it with your change
 The page uses the API types in `web/src/api.ts`, which mirror the Rust structs in
 `src/solve.rs` and `src/catalog.rs`. Change both together.
 
+## Several databases
+
+A pattern database covers one range of fields: cedar's covers 10–30°, and a camera behind
+a guide scope sees about 2°, which needs a database built for it from a deeper catalog.
+Give `--db` once for each database the console should hold, in the order it should try
+them:
+
+    finder --db narrow_2deg.npz --db default_database.npz
+
+Every database is loaded when the console starts, and each is named by its file name
+without `.npz`; two with the same name are refused. While a frame has no field estimate,
+on the first frame and after three failed solves in a row, the console tries the
+database in use and then each of the others in the order given, until one solves. It
+then uses the database whose range holds the solved field: the one that solved if it
+does, otherwise the first given that does, otherwise the one that solved. With an estimate it
+solves only with the database in use. So when the lens changes, the next three frames
+fail against the old field, the fourth solves without an estimate, and from the fifth the
+console uses the database that fits the new field. An uploaded frame is tried the same
+way and does not change the database in use.
+
+`GET /api/session`'s `field` names the database in use, its range and why in `database`
+(`only`; `first`, before anything has solved; `field`, the solved field lies in its
+range; or `solved`, it solved a field that lies in no database's range), and lists every
+database in `databases`; `db_min_fov_deg` and `db_max_fov_deg` are the range of the one
+in use. A solve report names in `database` the database that solved the frame, or the
+last one tried. Setup and the home page's last line show them, and MCP's `get_session`
+and `solve_frame` answer the same. With one `--db` the console works as before.
+
+The simulator of `--simulate` and the drawn sky of `--mount-sky` take their stars from the
+first database given. Every database is held in memory: about 115 MB for cedar's, and
+about 1.7 GB for a 2° database built from Tycho (an estimate).
+
 ## API
 
 | Route | Answer |
 |-------|--------|
-| `GET /api/health` | The database's properties and how many samples there are. |
+| `GET /api/health` | The first database's properties, every database's name and properties in `databases`, and how many samples there are. |
 | `GET /api/samples` | The sample frames: `[{name, label}]`. |
 | `GET /api/samples/{name}` | A sample frame's file. `…/thumb` is a 320-pixel JPEG preview. |
 | `POST /api/solve` | Multipart: an `image` file or a `sample` name, and optionally `fov`, `fov_max_error`, `distortion`, `bin`, `sigma`, `stars`, `timeout_ms` (the `solve_image` flags). Answers a `SolveReport`. |
