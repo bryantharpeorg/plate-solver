@@ -394,14 +394,18 @@ in `yuv.rs`; `listing::isp`; `with_isp`, `discover` and `start` in `mod.rs`.
 
 1. **The earlier specs have landed:** every spec in `depends_on_landed`. Met at 425b9da0.
 2. **`main` is still as read.** Every citation here was read at 425b9da0 on 2026-11-21.
+   At the flip `main` was at a7b84f91, moved since only by #364 under `fixtures/`, and the
+   validator passed there.
    If `main` moves in a file § Project Structure names, or in a test § Shapes names,
    re-read them and re-run the validator.
 3. **The Pi 5 capture is on `main`** under owner decision 2 (a): `fixtures/scope-node/pi5/`
    and the README bullet of § Fixtures, staged by the operator in a PR of its own.
-   Not met. Under (b), the listing and its `fixtures.json` only; under (c), nothing.
+   Met on 2026-11-21: #364, merged as a7b84f91. Under (b), the listing and its
+   `fixtures.json` only; under (c), nothing.
 4. **The owner decisions are settled and the owner approvals given** (spec § Owner
    decisions, § Owner approvals). Decisions met 2026-11-21: the owner took both
-   recommended answers ("Yes, both"); the approvals come with the flip.
+   recommended answers ("Yes, both"); and the approvals given by the flip of 2026-11-21,
+   which the owner left to the seat once probe round 1 was folded ("Yes, both").
 5. **Probe builds.** Met 2026-11-21: probe round 1 built the story from the trio alone,
    0 blocking defects, 6 of clarity, folded (§ What was run and what was read).
 

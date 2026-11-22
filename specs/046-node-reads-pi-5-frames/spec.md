@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["013-live-finder", "044-node-stops-mount-before-exit"]
 # Drafted 2026-11-21 against `main` at 425b9da0 (425b9da079f93237368fe6b39c733a33f8b0dc20),
 # at the owner's ask the same day ("Yes, draft it"), from a probe of that day on the
@@ -8,7 +8,9 @@ depends_on_landed: ["013-live-finder", "044-node-stops-mount-before-exit"]
 # `path:line` here was read at 425b9da0. The owner took both recommended answers on
 # 2026-11-21 ("Yes, both"), and the seat may flip it once probe round 1 is folded. Probe
 # round 1 built the story from this text alone the same day: 0 blocking defects and 6 of
-# clarity, folded here (plan.md § What was run and what was read). 044 is named
+# clarity, folded here (plan.md § What was run and what was read). The seat flipped it
+# to `ready` on 2026-11-21, `main` at a7b84f91 with the Pi 5 capture staged (#364), under
+# the owner's leave ("Yes, both"), which gives the owner approvals. 044 is named
 # because the story's binary tests sit beside 044's and run the node 044 last changed.
 # 027's test layout is not named: no story writes a finder test. What rests on a run and
 # what on reading is said where it is used (plan.md § What was run and what was read).
@@ -20,7 +22,7 @@ depends_on_landed: ["013-live-finder", "044-node-stops-mount-before-exit"]
 
 **Created**: 2026-11-21
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: The finder moved to a Raspberry Pi 5. At the node's configured mode,
 1296x972, the console connects but never gets a frame; at 640x480 frames flow. On the Pi
