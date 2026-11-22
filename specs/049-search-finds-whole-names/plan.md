@@ -399,11 +399,15 @@ comment in `targets.rs`.
 2. **`main` is still as read.** Every citation here was read at 28f436df on 2026-11-22,
    after 047 had landed. If `main` has since changed a file § Project Structure or
    § Shapes names, or `crates/finder/src/api.rs` or `crates/finder/web/src/api.ts`,
-   re-read its citations and re-run the validator.
+   re-read its citations and re-run the validator. Met at the flip: `main` was at
+   75cb2c8c, moved since 28f436df only in documents no line here cites and by 048's two
+   stories (its own trio, and the crates `star-detection`, `scope-node`, `simulator`
+   and `plate-solver`), with nothing under `crates/finder` changed.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
    decisions, § Owner approvals). Decisions met: the owner answered 1 (a) and 3 (a) on
    2026-11-21, and chose decision 2's rule on 2026-11-22 ("Rewrite to this"); the trio
-   is written for them. The approvals are given by the flip, which is the owner's.
+   is written for them. The approvals are given by the flip, which the owner approved
+   on 2026-11-22 ("ok, approved. proceed.").
 4. **Probe builds.** Met on 2026-11-22: probe round 1 built US1 from this trio alone as
    it stood at be52f8a0, before the round's findings were folded, with 0 blocking
    defects and 7 of clarity. The fold was made the same day; the test helper's signature

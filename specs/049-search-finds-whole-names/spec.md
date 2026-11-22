@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["012-targets-and-push-to", "016-mcp", "027-finder-tests-by-system", "047-console-uses-the-database-that-fits"]
 # Drafted 2026-11-21 against `main` at b7e983a0, from a fault seen that day while
 # recording a README demo against `finder --simulate`, and re-read on 2026-11-22 against
@@ -9,13 +9,14 @@ depends_on_landed: ["012-targets-and-push-to", "016-mcp", "027-finder-tests-by-s
 # code and a trial fix with which they pass. The owner answered the three owner
 # decisions on 2026-11-21 ("1. Agree 2. No hyphens or apostrophes require. 3. Ok") and,
 # on 2026-11-22, asked for a simpler rule for decision 2 than the draft's first reading
-# of his answer, and chose the one written here ("Rewrite to this"). It stays a draft:
-# flipping it to `ready` is the owner's. 012 and 016 are named because the story
-# changes 012's search and adds a test beside 016's MCP tests; 027 because that test
-# joins the `mcp` test binary 027 laid out; 047 because its US3 last changed
-# `crates/finder/tests/mcp/main.rs`, which the story adds a line to. What rests on a run
-# and what on reading is said where it is used (plan.md § What was run and what was
-# read).
+# of his answer, and chose the one written here ("Rewrite to this"). It was flipped to
+# `ready` on 2026-11-22 with the owner's approval ("ok, approved. proceed."), which
+# gives the three owner approvals; `main` was then at 75cb2c8c. 012 and 016 are named
+# because the story changes 012's search and adds a test beside 016's MCP tests; 027
+# because that test joins the `mcp` test binary 027 laid out; 047 because its US3 last
+# changed `crates/finder/tests/mcp/main.rs`, which the story adds a line to. What rests
+# on a run and what on reading is said where it is used (plan.md § What was run and what
+# was read).
 ---
 
 # Feature Specification: Target Search Finds Names of Several Words
@@ -24,7 +25,7 @@ depends_on_landed: ["012-targets-and-push-to", "016-mcp", "027-finder-tests-by-s
 
 **Created**: 2026-11-21
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: On `finder --simulate`, `search_targets` with `{"q":"Orion Nebula"}` or
 `{"q":"Great Orion Nebula"}` answers `[]`, while `"Orion"`, `"Nebula"` and `"M42"` each
@@ -212,8 +213,8 @@ The scenarios are written for these answers; the alternatives are kept for the r
 ## Owner approvals
 
 Flipping this spec to `ready` approves the answer to every owner decision above, and the
-following. Each is named in the FR that makes it. No existing test, golden, fixture or CI
-file changes.
+following. The owner approved the flip on 2026-11-22 ("ok, approved. proceed."). Each is
+named in the FR that makes it. No existing test, golden, fixture or CI file changes.
 
 1. **The search finds more than it did** (FR-001), in place of 012's FR-007 second
    bullet (`specs/012-targets-and-push-to/spec.md:640`): a query of several words that
