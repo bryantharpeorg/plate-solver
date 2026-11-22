@@ -10,6 +10,7 @@ use pattern_database::{DatabaseProperties, PatternDatabase};
 use std::path::Path;
 use std::sync::{Arc, LazyLock};
 
+mod field;
 mod several;
 
 pub static NARROW: LazyLock<Arc<PatternDatabase>> = LazyLock::new(|| {
