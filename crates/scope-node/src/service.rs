@@ -90,6 +90,8 @@ struct Commands {
 }
 struct Shared {
     info: CameraInfo,
+    /// The node's own detection settings, before any from the console.
+    detection: DetectSettings,
     clock: Arc<dyn NodeClock>,
     commands: Mutex<Commands>,
     frames: broadcast::Sender<proto::StarFrame>,
@@ -168,6 +170,7 @@ impl NodeService {
             .map(|queue| Watchdog::new(clock.clone(), queue.clone()));
         let shared = Arc::new(Shared {
             info,
+            detection: initial.detection.clone(),
             clock,
             commands: Mutex::new(Commands {
                 pending: None,
@@ -404,7 +407,9 @@ fn to_wire(settings: &Settings) -> proto::Settings {
         }),
     }
 }
-fn from_wire(settings: proto::Settings) -> Result<Settings, Status> {
+/// Detection fields the link does not carry, such as the noise floor, stay as
+/// the node's config set them.
+fn from_wire(settings: proto::Settings, base: &DetectSettings) -> Result<Settings, Status> {
     let d = settings.detection.unwrap_or(proto::Detection {
         sigma: 8.0,
         binning: 2,
@@ -429,7 +434,7 @@ fn from_wire(settings: proto::Settings) -> Result<Settings, Status> {
             binning: d.binning as usize,
             normalize_rows: d.normalize_rows,
             detect_hot_pixels: d.detect_hot_pixels,
-            ..DetectSettings::cedar()
+            ..base.clone()
         },
     })
 }
@@ -474,7 +479,7 @@ impl ScopeNode for NodeService {
         request: Request<proto::Settings>,
     ) -> Result<Response<proto::Settings>, Status> {
         self.runtime.shared.controls.ready(false).await;
-        let settings = from_wire(request.into_inner())?;
+        let settings = from_wire(request.into_inner(), &self.runtime.shared.detection)?;
         check_range(&self.runtime.shared.info, &settings)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
         let response = to_wire(&settings);
