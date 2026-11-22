@@ -9,11 +9,12 @@ escalates rather than re-deciding it.
 
 `Catalog::search` stops comparing the whole query with each word of a common name. A
 private `words` makes the words of the query and of each name alike: the pieces between
-spaces, each kept to its letters and digits, lowercased. A private `name_matches` says a
+spaces, lowercased, each kept to its letters and digits. A private `name_matches` says a
 name matches when each query word begins one of the name's words, in any order, or when
 the query's words run together read along the name from the start of one of its words
 (spec owner decisions 1 and 2). A query with no word finds nothing. So no mark and no
-space has to be typed as the name has it, and no mark is named in the code. A query of
+space has to be typed as the name has it, and no mark is named in the code. An id is
+looked up as before, marks and all. A query of
 one word that holds a letter or a digit matches at least the objects it did; five of
 today's 951 one-word prefixes match more, and `&` finds nothing. The exact id, the order
 by magnitude and the limit are as they are. `targets::search`'s doc comment says the
@@ -64,7 +65,7 @@ functions, one new test module, one `mod` line.
 | II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. The new unit tests are new functions after the module's last; 012's search tests and 016's search-tool test pass unchanged (§ Shapes that existing tests pin). |
 | III. Tests first, independent expectations | Every expected list is written in the test from the extract's rows, or computed by the test from the extract's text (US1-S5 to US1-S7), US1-S6's lower bound by 012's documented rule and its gains written as literals, never by calling `search` or its private functions; `targets::find` and `targets::all`, unchanged by FR-003, name the object a row or id stands for. The tool is held to the route's own answer. Eight of the ten scenarios fail on `main`'s code; the two that pass there pin what must not change (§ What was run and what was read). |
 | IV. Critical paths | None is touched: no `Cargo.toml` or `Cargo.lock` change, no `unsafe`, nothing under `proto/`, no `build.rs`. |
-| V. Proven open source first, honest licensing | Considered by name and not tried: a full-text index (`tantivy`), fuzzy matchers (`nucleo`, `fuzzy-matcher`), edit distance (`strsim`) and Unicode folding (`unicode-normalization`, `deunicode`). Each is a new dependency for a rule of a few lines over 182 names, all ASCII, and fuzzy matching would change what a word of one finds, against spec owner decision 1 (e). No reused code, no new license. |
+| V. Proven open source first, honest licensing | Considered by name and not tried: a full-text index (`tantivy`), fuzzy matchers (`nucleo`, `fuzzy-matcher`), edit distance (`strsim`) and Unicode folding (`unicode-normalization`, `deunicode`). Each would be a new direct dependency of `finder` (`strsim` is in `Cargo.lock` already, as another crate's) for a rule of a few lines over 182 names, all ASCII, and fuzzy matching would change what a word of one finds, against spec owner decision 1 (e). No reused code, no new license. |
 
 ## Project Structure
 
@@ -84,7 +85,8 @@ In `Catalog::search` (`crates/finder/src/targets.rs:164`), the check for an empt
 (`crates/finder/src/targets.rs:166`) becomes:
 
 ```rust
-        // Only letters and digits are compared, so a query without any finds nothing.
+        // Names are matched by letters and digits only, and every id holds one, so a
+        // query without any finds nothing.
         let terms = words(&query);
         if terms.is_empty() || limit == 0 {
             return Vec::new();
@@ -110,17 +112,12 @@ and the filter (`crates/finder/src/targets.rs:173` to `:184`) becomes:
 Before `fn catalog()` (`crates/finder/src/targets.rs:201`):
 
 ```rust
-/// The words of `text`, each reduced to its letters and digits, lowercased.
+/// The words of `text`, lowercased, each reduced to its letters and digits.
 fn words(text: &str) -> Vec<String> {
-    let letters = |word: &str| -> String {
-        word.chars()
-            .filter(|c| c.is_alphanumeric())
-            .flat_map(char::to_lowercase)
-            .collect()
-    };
-    text.split_whitespace()
-        .map(letters)
-        .filter(|word| !word.is_empty())
+    text.to_lowercase()
+        .split_whitespace()
+        .map(|word| word.chars().filter(|c| c.is_alphanumeric()).collect())
+        .filter(|word: &String| !word.is_empty())
         .collect()
 }
 
@@ -143,11 +140,11 @@ of `pub fn search` (`crates/finder/src/targets.rs:222` to `:225`) becomes:
 ```rust
 /// Exact ids first, then common names in brightness order.
 ///
-/// Only letters and digits are compared, whatever their case. A common name matches when
-/// each word of the query begins one of its words, in any order, or when the query reads
-/// straight along the name from the start of one of its words. Objects without a
-/// magnitude come last; canonical id breaks equal-magnitude ties. At most `limit` objects
-/// are returned, with no duplicates.
+/// In a common name only letters and digits are compared, whatever their case. A name
+/// matches when each word of the query begins one of its words, in any order, or when
+/// the query reads straight along the name from the start of one of its words. Objects
+/// without a magnitude come last; canonical id breaks equal-magnitude ties. At most
+/// `limit` objects are returned, with no duplicates.
 ```
 
 The unit tests follow the module's last test,
@@ -179,7 +176,7 @@ Nothing else changes.
 ## What was run and what was read
 
 **Run on 2026-11-22**, on the branch `probe/049-letters`, rebased on `main` at 28f436df,
-three times each with the same outcome unless said. The probe's tip, ef075437, holds the
+three times each with the same outcome unless said. The probe's tip, 1580e503, holds the
 ten scenarios' tests as spec.md gives them and the trial fix of § Interface.
 
 - the tip's tests with `main`'s search code in place of the fix's (everything of
@@ -190,9 +187,9 @@ ten scenarios' tests as spec.md gives them and the trial fix of § Interface.
   the module pass;
 - the tip's tests with the fix: all ten pass, and the module's ten other unit tests
   pass unchanged;
-- with the fix, both gates' Rust commands, once at ef075437: `lint`'s four and `test`'s
+- with the fix, both gates' Rust commands, once at 1580e503: `lint`'s four and `test`'s
   two, every test of the workspace passing (1,453 under nextest), and the doctests;
-- fourteen wrong variants of the rule at ef075437, each once, on the module's unit
+- sixteen wrong variants of the rule at 1580e503, each once, on the module's unit
   tests and US1-S8. Each fails at least one scenario:
 
   | Variant | Fails |
@@ -202,9 +199,11 @@ ten scenarios' tests as spec.md gives them and the trial fix of § Interface.
   | A hyphen kept as if a letter | US1-S9 |
   | `'` kept | US1-S6, US1-S8, US1-S9 |
   | `’` kept | US1-S8, US1-S9 |
+  | ASCII letters and digits only | US1-S2 |
   | A name's and a query's words also split at hyphens | US1-S2, US1-S6 |
   | The old check, an empty query only | US1-S10 |
   | Reading along from the name's first word only | US1-S4, US1-S9 |
+  | Reading along over two of the name's words at most | US1-S9 |
   | Reading along from anywhere in the name | US1-S2, US1-S6, and 012's `search_uses_name_word_prefixes_and_orders_by_magnitude_with_unknowns_last` |
   | Any query word rather than each | US1-S1 to US1-S4, US1-S7 to US1-S9 |
   | A query word equal to a name word, not beginning it | US1-S1, US1-S3, US1-S9 |
@@ -234,24 +233,31 @@ written apart from the code (the probe's notes):
   query that reads along a name past the end of a word (`catseye`, `orionn`) does too;
 - how many names find their object when typed some way, with the rule:
 
-  | Typed | Found |
-  |---|---|
-  | As written, in capitals | 182 of 182 |
-  | Marks left out, a hyphen as a space (`bow tie`, `cats eye`) | 26 of 26 |
-  | A hyphen left out (`bowtie`) | 5 of 5 |
-  | The first two words run together (`catseye`) | 173 of 173 |
-  | The words in reverse order | 173 of 173 |
-  | One middle word left out | 64 of 64 |
-  | `'s` left off (`bode galaxy`) | 19 of 19 |
-  | Each word cut to three letters | 171 of 173 |
-  | One word typed as two (`horse head nebula`), for the 8 names tried | 8 of 8 |
+  | Typed | Of | Found |
+  |---|---|---|
+  | As written, in capitals | the 182 names | 182 |
+  | Marks left out, a hyphen as a space (`bow tie`, `cats eye`) | the 26 names with a mark | 26 |
+  | A hyphen left out (`bowtie`) | the 5 names with a hyphen | 5 |
+  | The first two words run together (`catseye`) | the 173 names of two or more words | 173 |
+  | The words in reverse order | the same 173 | 173 |
+  | One middle word left out | the 64 ways to do so in the 55 names of three or more words | 64 |
+  | `'s` left off (`bode galaxy`) | the 19 names with one | 19 |
+  | Each word cut to three letters, a hyphen typed as a space | the same 173 | 171 |
+  | One word typed as two | 8 names tried | 8 |
 
-  The two not found are `bea paw gal` and `eig bur neb`, whose `paw` and `bur` follow a
-  hyphen;
+  Words are those between spaces. The two of the last-but-one row not found are
+  `bea paw gal` and `eig bur neb`, whose `paw` and `bur` follow a hyphen; cut the same
+  way, the two hyphenated names of one word, `fou fig` and `wol lun mel`, find nothing
+  either. The 8 names tried in the last row are Butterfly Cluster, Checkmark Nebula,
+  Cocoon Nebula, Dumbbell Nebula, Fireworks Galaxy, Horsehead Nebula, Sunflower Galaxy
+  and Whirlpool Galaxy, each with its first word typed as two (`horse head nebula`);
 - none of the 13,372 canonical ids or the 110 Messier ids written with a space (13,482
   queries) matches any name, and none of the 651 duplicate aliases written with a space
-  does; `C 30` and `C 3`, which are no ids of the catalog, find NGC 2070, and NGC 2070
-  and NGC 1049;
+  does; of the Caldwell numbers 1 to 109 written `C` and a space, four that are no ids
+  of the catalog find a name: `C 30` NGC 2070, `C 3` NGC 2070 and NGC 1049, and `C 4`
+  and `C 47` NGC 104; `cl 3` finds NGC 2070 and NGC 1049, and `cl 39` nothing;
+- 33 canonical ids hold a mark other than the space, a hyphen, and are found with it
+  only, as on `main` (`eso 56 115` finds nothing); `north american` finds NGC 7000;
 - over the 1,999 beginnings of the 175 distinct names typed a character at a time, no
   added character adds a name match; reading along adds an object to what "each word
   begins a word" finds on two of them, `s n` and `s no`, typed toward `S Nor Cluster`,
@@ -313,7 +319,7 @@ beside the change, and what the story does to what they observe:
   single words: unchanged.
 - **The page's tests.** `crates/finder/web/src/components/TargetSheet.test.tsx` and
   `App.target.test.tsx` answer the search from a mocked fetch; the e2e tests
-  (`crates/finder/web/e2e/goto.spec.ts:61`, `crates/finder/web/e2e/session.spec.ts:27`)
+  (`crates/finder/web/e2e/goto.spec.ts:62`, `crates/finder/web/e2e/session.spec.ts:27`)
   type Messier ids, single words. None changes.
 
 ## Decisions and the alternatives rejected
@@ -321,9 +327,10 @@ beside the change, and what the story does to what they observe:
 | Decision | Rejected | Why |
 |---|---|---|
 | Each query word begins a word of one name, any order | In order; next to each other only; across names; substring or fuzzy; distinct words | Spec owner decision 1. |
-| Only letters and digits are compared, and a query that reads along a name matches it | Marks left inside words; a list of marks, each split at or dropped; reading along alone | Spec owner decision 2. A list handles only the marks it names and changes more one-word answers; reading along alone loses decision 1 (a). |
+| In a common name only letters and digits are compared, and a query that reads along a name matches it | Marks left inside words; a list of marks, each split at or dropped; reading along alone | Spec owner decision 2. A list handles only the marks it names and changes more one-word answers; reading along alone loses decision 1 (a). |
 | A name's words begin after spaces only | Also after hyphens | `bow tie` reads along `Bow-Tie` without it, and words after hyphens changed `b`, `l`, `m`, `p` and `t` (spec owner decision 2 (b)). |
-| `char::is_alphanumeric` and `char::to_lowercase`, as the standard library has them | ASCII only; a folding crate | Every name is ASCII today, and the standard library keeps a later accented name a word; folding accents is out of scope. |
+| `str::to_lowercase` on the whole name or query, then `char::is_alphanumeric`, as the standard library has them | ASCII only; lowercasing character by character; a folding crate | Every name is ASCII today, and the standard library keeps a later accented name a word (US1-S2's `orion é`); the query reaches `words` lowercased as a whole, so names are lowercased the same way; folding accents is out of scope. |
+| Ids are looked up as on `main` | Ids matched by letters and digits too | The lookup is 012's `normalize`, which FR-003 leaves alone; an id typed without its hyphen is out of scope. |
 | A query with no word finds nothing, checked where the empty query is | Let `all` over no words match; look up the exact id first | `-` or `&` would answer every one of the 152 named objects (US1-S10, run as a wrong variant). Every id holds a letter or a digit, so none is lost. |
 | Two private functions, `words` for names and queries alike and `name_matches` | The rule inline in the filter; words kept in `Target` at parse | Inline, the filter nests too deep to read once rustfmt has laid it out. A field would change the shape of the public `Target`, which § Technical Context's Constraints keep, and its JSON unless skipped; 182 names make their words per search cheap. |
 | Change only `Catalog::search` | A second search for queries with a space; a change in `api::search` | One rule serves both doors and every query. |
@@ -377,8 +384,8 @@ Written here and not run.
 
 **A look at the page**, by the owner, once 049 has landed, on `finder --simulate`:
 
-1. Open the Target search and type `Orion Nebula`: NGC 1976 (M42) should be the first
-   row, and the only one.
+1. Open Choose target and type `Orion Nebula` in `Search catalog`: NGC 1976 (M42)
+   should be the first row, and the only one.
 2. Type `Ring Nebula`, `Whirlpool Galaxy` and `Double Cluster`: M57, M51 and C 14.
 3. Type `cats eye`, `bowtie` and `horse head`: NGC 6543, NGC 40 and B 33.
 4. Ask MCP `search_targets` with `{"q":"Great Orion Nebula"}`: NGC 1976.
@@ -398,9 +405,9 @@ They bind every story.
    diff. *Check:* every Then names a committed test the `test` gate runs.
 2. **One evidence budget.** *Check:* the story's diff stays under 64 KiB, measured with
    `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c`. Measured on the
-   drafting probe's net diff from 28f436df at ef075437: 14,727 B, 22.5 % of 65,536 B
-   (`targets.rs` 12,240 B, the two `mcp/` files 2,487 B). At the 1.35 times a factory
-   build has run over its probe on earlier specs, about 19,900 B, 30.3 %.
+   drafting probe's net diff from 28f436df at 1580e503: 14,757 B, 22.5 % of 65,536 B
+   (`targets.rs` 12,270 B, the two `mcp/` files 2,487 B). At the 1.35 times a factory
+   build has run over its probe on earlier specs, about 19,900 B, 30.4 %.
 3. **A spec fixed mid-epic needs a relaunch.** *Check:* no builder edits
    `specs/049-search-finds-whole-names/` or `.specify/`.
 4. **An oracle copied from the code proves nothing.** *Check:* every expected list is a
@@ -460,7 +467,7 @@ stories:
       - path: crates/finder/src/targets.rs
         status: new
         disposition: add
-        assertion: "orion galaxy, andromeda nebula, barbell cork, rion nebula, orion nebulae, tie and tie nebula each find nothing"
+        assertion: "orion galaxy, andromeda nebula, barbell cork, rion nebula, orion nebulae, tie, tie nebula and orion with U+00E9 after a space each find nothing"
         decision: "spec.md:US1-S2"
       - path: crates/finder/src/targets.rs
         status: new
@@ -495,7 +502,7 @@ stories:
       - path: crates/finder/src/targets.rs
         status: new
         disposition: add
-        assertion: "with a limit of 20, bow tie, bowtie and Bow-Tie give exactly NGC 40; cats eye, catseye, cat's eye, cat with U+2019 s eye and cat eye nebula give exactly NGC 6543; bear paw NGC 2537; eight burst NGC 3132; Wolf Lundmark Melotte and Wolf-Lundmark-Melotte PGC 143; stephans quintet HCG 92; bode galaxy NGC 3031; horse head nebula B 33; whirl pool NGC 5194; jewelbox NGC 4755; h chi persei C 14"
+        assertion: "with a limit of 20, bow tie, bowtie and Bow-Tie give exactly NGC 40; cats eye, catseye, catseye nebula, cat's eye, cat with U+2019 s eye and cat eye nebula give exactly NGC 6543; bear paw NGC 2537; eight burst NGC 3132; Wolf Lundmark Melotte and Wolf-Lundmark-Melotte PGC 143; stephans quintet HCG 92; bode galaxy NGC 3031; horse head nebula B 33; whirl pool NGC 5194; jewelbox NGC 4755; h chi persei C 14"
         decision: "spec.md:US1-S9"
       - path: crates/finder/src/targets.rs
         status: new
