@@ -9,10 +9,12 @@ no prior pointing. The finder console uses that to guide a push by hand, drive t
 motors to a target and track it, and run an imaging camera from focus to a saved stack. A
 Raspberry Pi rides on the telescope, a laptop does the maths, and you use it from your phone.
 
-The solver re-implements [cedar-detect](https://github.com/smroid/cedar-detect) and
+Its plate solver re-implements [cedar-detect](https://github.com/smroid/cedar-detect) and
 [cedar-solve](https://github.com/smroid/cedar-solve), the star detector and solver behind the
 [Cedar](https://github.com/smroid/cedar-server) electronic finder, which build in turn on ESA's
-[tetra3](https://github.com/esa/tetra3). See [Prior work](#prior-work).
+[tetra3](https://github.com/esa/tetra3). Their authors deserve the credit for those algorithms
+([Prior work](#prior-work)). The rest is this project's own: the scope node, the pointing model,
+GoTo and tracking, the imaging side, the page and the MCP server.
 
 ## What it does at the telescope
 
@@ -61,7 +63,7 @@ the second sync, tracking, a Stop the mount confirms, and the whole imaging side
 **Designed, not built:** a hands-free [voice mode](docs/voice/README.md).
 
 The solver gives cedar's answers on cedar's sample frames, and runs faster
-([comparison](#how-it-compares-with-cedar)).
+([comparison](#how-the-solver-compares-with-cedars)).
 
 ## Try it without a telescope
 
@@ -173,7 +175,7 @@ endpoint answers only on the console's own machine. With `--listen 0.0.0.0:8080`
 your network can move the telescope. The tool list is in
 [`crates/finder`](crates/finder/README.md#mcp-clients).
 
-## How it compares with Cedar
+## How the solver compares with cedar's
 
 The comparison is against cedar's open-source pipeline, run the way cedar-solve's example script
 runs it: Python decodes each frame, calls `cedar-detect-server` over gRPC with shared memory, then
@@ -270,7 +272,7 @@ Frames are read the way cedar reads them, as in the finder console: color turns 
 weights (`star_detection::gray`), and stars are detected with cedar's settings
 (`DetectParams::cedar()`: 2×2 binning, rows levelled, hot pixels rejected). On cedar's 21 sample
 frames that gives cedar's answer to within 4.2″ on all 20 that cedar solves.
-That is looser than the 0.0005″ [above](#how-it-compares-with-cedar) only because the Rust
+That is looser than the 0.0005″ [above](#how-the-solver-compares-with-cedars) only because the Rust
 `image` crate and PIL decode JPEGs slightly differently: given the same pixels, the answers
 agree.
 
@@ -314,8 +316,8 @@ cargo run --release -p database-generation -- reference-solutions/cedar-solve/te
 
 ## Prior work
 
-This project re-implements published work. Its behaviour was defined by the projects below, and
-their authors deserve the credit for the algorithms.
+The plate solver re-implements published work. Its behaviour was defined by the projects below,
+and their authors deserve the credit for the algorithms.
 
 - **[TETRA](https://github.com/brownj4/Tetra)**: J. Brown, K. Stubis and K. Cahoy,
   ["TETRA: Star Identification with Hash Tables"](https://digitalcommons.usu.edu/smallsat/2017/all2017/124/),
