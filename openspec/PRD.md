@@ -1,5 +1,10 @@
 # PRD — Plate Solver (Rust, mobile, gRPC)
 
+> **Historical.** This first PRD predates the finder console, the scope node and the imaging
+> chain. Its mobile target was not pursued, and later features relaxed some of its limits (the
+> imaging chain solves with a position hint and handles 16-bit FITS). For the system as it is
+> now, start at [`docs/README.md`](../docs/README.md).
+
 _Product Requirements Document. Companion to [`project.md`](./project.md) (shared context,
 conventions, glossary) and the per-feature changes under [`changes/`](./changes/). Status:
 draft for review._

@@ -1,5 +1,11 @@
 # End-to-end audit — does the rewrite solve real images?
 
+> **Historical snapshot, 2026-10-17.** The fix landed the same week, and the parity gate it
+> called for is now the required `e2e-eval` check, with `e2e-canary` proving it can fail. The
+> detection divergence (T1–T3) was fixed in #98 on 2026-10-18; cedar then solves 20 of the 21
+> images from this project's own centroids, as it does from its own. Findings still marked
+> open below were not re-audited.
+
 **Artifact under audit:** `main` @ `a275521`
 **Audit date:** 2026-10-17 · **Reference:** cedar-solve / cedar-detect in `reference-solutions/`
 **Fix:** commit *"Make the solver solve: cedar parity end to end"* (this branch)

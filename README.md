@@ -2,257 +2,106 @@
 
 [![ci](https://github.com/bryantharpeorg/plate-solver/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bryantharpeorg/plate-solver/actions/workflows/ci.yml)
 
-An electronic finder and GoTo controller for a Dobsonian, built on a fast star-field plate
-solver written in Rust. A small camera on the finder scope watches the sky, and each frame is
-solved in a few milliseconds to where the telescope really points, with no star alignment and
-no prior pointing. The finder console uses that to guide a push by hand, drive the mount's own
-motors to a target and track it, and run an imaging camera from focus to a saved stack. A
-Raspberry Pi rides on the telescope, a laptop does the maths, and you use it from your phone.
+An electronic finder, GoTo and imaging controller for an alt-az GoTo telescope, built around a
+fast star-field plate solver written in Rust.
+
+A small camera on the finder scope takes a frame every second or so. Each frame is
+plate-solved to the telescope's actual pointing, with no star alignment and no prior hint, in
+a few milliseconds. From that the system:
+
+- tells you which way to push the telescope;
+- drives the mount to a target and corrects until it is there;
+- tracks the target;
+- runs an imaging camera at the focuser: focus, darks and flats, a live stack that follows the
+  field's rotation, and one-button imaging runs.
+
+You use it from a web page on a phone or laptop, or an AI assistant uses it over MCP.
 
 Its plate solver re-implements [cedar-detect](https://github.com/smroid/cedar-detect) and
 [cedar-solve](https://github.com/smroid/cedar-solve), the star detector and solver behind the
 [Cedar](https://github.com/smroid/cedar-server) electronic finder, which build in turn on ESA's
 [tetra3](https://github.com/esa/tetra3). Their authors deserve the credit for those algorithms
-([Prior work](#prior-work)). The rest is this project's own: the scope node, the pointing model,
-GoTo and tracking, the imaging side, the page and the MCP server.
-
-## What it does at the telescope
-
-[Status](#status) says which of these have been proven under the sky so far.
-
-- **Knows where it points.** Every finder frame is plate-solved to RA/Dec, roll and field of
-  view, with no starting position needed, and the matched catalog stars are drawn on the frame
-  as the proof.
-- **Push-to.** Search a target by Messier, NGC or IC number or common name (from OpenNGC). The
-  page says which way to push, in the observer's own directions, and marks the target and the
-  eyepiece's spot on the live chart. The Sun guard and a minimum altitude are always on.
-- **GoTo with no star alignment.** Every solve is a sync, and a pointing model is fitted from
-  them. GoTo slews on the mount's own motors, solves, and corrects until the target is within 1′
-  of the eyepiece's spot, or halts and says why.
-- **Tracking.** Alt-az rates from the pointing model, corrected by the finder camera's solves
-  and, while stacking, by the subs themselves. A push by hand is followed, not fought. The
-  readout gives the field rotation and the longest exposure for your imaging camera.
-- **Imaging.** An imaging camera through INDI: frames saved as FITS and plate-solved with ASTAP,
-  a focus aid, darks and flats, and a live stack that leaves satellite streaks out. An imaging
-  run goes from GoTo through a focus check and centring to a saved stack on its own.
-- **An AI assistant can drive it.** The console is an [MCP](#use-it-with-an-ai-assistant)
-  server, so a client such as Claude can find targets, GoTo, track and image, under the same
-  guards as the page.
-- **Built for the dark.** The page is made for a phone held in one hand, with a red-only night
-  mode. Every phone and laptop on the network shares one observing session, and the page says
-  when the mount has not confirmed a Stop.
+([prior work](#prior-work)). The rest is this project's own: the scope node, the pointing
+model, GoTo and tracking, the imaging side, the page and the MCP server.
 
 ## Status
 
-Early, and looking for [feedback](#feedback-wanted). There is one rig so far: a 16-inch
-Dobsonian.
+Working at one telescope, and looking for feedback.
 
-**Proven at the telescope**, on 12 to 14 November 2026
-([field report](docs/field/2026-11-13-first-light.md)):
+- **Proven at the telescope:** the live finder, push-to and powered moves on the mount's own
+  motors, on a Sky-Watcher 400P (16-inch) GoTo Dobsonian driven from a Raspberry Pi 3B+ with
+  an Arducam OV5647 finder camera, 12 to 14 November 2026
+  ([field report](docs/field/2026-11-13-first-light.md)). Track was used on a later night,
+  20 November, for about 13 minutes at 14–24″ RMS ([field report](docs/field/2026-11-20-driveway-track.md)).
+- **Simulator and CI only:** GoTo to a target, with no field GoTo on record yet, and full
+  imaging runs.
+- **Bench-proven:** a ZWO ASI071MC Pro imaging camera through INDI, including full frames
+  received on that Pi.
+- **Planned:** a Raspberry Pi 5 rig, which moves everything onto the telescope; a hands-free
+  [voice mode](docs/voice/README.md), designed but not built.
 
-- Live plate solving from the finder camera: a 13.0° × 9.8° field at 17 to 20″ RMS, a frame
-  every 3 s.
-- Push-to by hand with the live guidance, onto the Double Cluster, the Pleiades, M42 and
-  NGC 253.
-- Powered moves on the mount's own motors, sent over MCP: eight single-axis moves of up to 1°,
-  each ending within about 17″ of where it was sent.
+[Known-good configurations](docs/hardware.md) has the details and the limits. If you use
+Cedar, tetra3 or a SynScan mount, I'd especially like to hear how this works on your hardware
+([feedback](#feedback-wanted)).
 
-**Built, and tested in the simulator and CI, but not yet at the telescope:** GoTo to a target,
-the second sync, tracking, a Stop the mount confirms, and the whole imaging side.
+## What it does
 
-**Designed, not built:** a hands-free [voice mode](docs/voice/README.md).
+- **Plate solving.** It gives cedar's answers on cedar's reference frames, and solves about 4×
+  faster as a frame stream ([the solver](docs/solver.md)).
+- **Live finder.** The chart updates with every frame. It shows where the telescope points,
+  the matched stars as proof, what's in the field and what to look at next.
+- **Push-to.** "Turn right 2.7°, tilt down 1.4°" to any of 13,000 objects from OpenNGC.
+- **GoTo with no alignment.** Every solve taken while the mount is still is a sync, and a
+  pointing model is fitted from them.
+  GoTo corrects from fresh solves until it is within 60″.
+- **Tracking.** Rates come from the pointing model, and live solves correct them. A push by
+  hand is followed, not fought.
+- **Imaging.** Any INDI camera. Each frame is saved as FITS, and ASTAP solves the subs and any
+  frame you ask about. The page
+  offers a focus aid, a calibration library and a live stack that is derotated sub by sub.
+  Tracking can be steered from the subs. One button, or one MCP tool, runs the whole sequence.
+- **Safety built in.** One Stop for everything. A watchdog stops the mount when the console goes
+  quiet. Guards cover the Sun, altitude, cable wind and axis range.
+  [Safety and security](docs/safety-and-security.md) also lists what isn't covered yet.
+- **Night mode.** Red on black and dim, with no white flashes.
+- **MCP.** 32 tools let an AI assistant observe and steer through the same guards as the page.
 
-The solver gives cedar's answers on cedar's sample frames, and runs faster
-([comparison](#how-the-solver-compares-with-cedars)).
+## How it fits together
 
-## Try it without a telescope
+Two programs run at night:
 
-The simulator stands in for the telescope. It renders catalog stars through the real camera
-port, star detection, scope link and solver, with a simulated mount and imaging camera, on a
-virtual clock.
+- **`scope-node`** runs on a Raspberry Pi riding on the telescope. It captures finder frames and
+  finds their stars, drives the mount's two axes over USB serial, and relays the imaging
+  camera's frames through INDI.
+- **`finder`** (the console) runs on a laptop today. It solves, keeps the pointing model, plans
+  GoTo, runs Track, and saves, solves and stacks imaging frames. It serves the page and MCP.
 
-You need Rust ([rustup](https://rustup.rs)) and `protoc` (Debian and Ubuntu:
-`sudo apt install protobuf-compiler`, and see [Development](#development)). It has been run on
-Linux, on Ubuntu under WSL2.
+The planned Pi 5 rig runs both programs on the telescope and reaches them over an SSH tunnel.
+[Architecture](docs/architecture.md) has the diagrams, the data flows and the plan.
+
+## Get started
+
+You need Rust 1.96 or later and `protoc` (Debian/Ubuntu: `sudo apt install protobuf-compiler`).
+Run everything from the repository root. To try it, a shallow clone is enough:
 
 ```sh
 git clone --depth 1 https://github.com/bryantharpeorg/plate-solver.git
 cd plate-solver
-cargo run --release -p finder --locked -- --simulate --sim-start 2026-01-16T02:00:00Z
 ```
 
-`--depth 1` skips the repository's history, which you don't need to try it. The first build
-takes a while. Then open <http://127.0.0.1:8080>. `--sim-start` starts the
-virtual night at 02:00 UTC on 16 January, an evening at the simulator's sky, 40° N, 75° W.
-
-1. On Setup, set the site to latitude 40, longitude −75, to match the simulator's sky. The
-   first solved frame after that is the night's first sync.
-2. Choose a target, M42 say. The guidance says which way to push.
-3. Press GoTo, then Track.
-4. On the Imaging page, start an imaging run. It slews, stops for a focus check (go on anyway,
-   or try the focus aid), centres the target on the simulated imaging camera, and stacks.
-
-The simulated night keeps its own session, apart from a real night's. Every flag and route is
-in [`crates/finder`](crates/finder/README.md).
-
-## Your gear
-
-One rig has been used so far. The right-hand column is what another rig needs, from the design;
-none of it has been tried yet.
-
-| Part | The reference rig | What another rig needs |
-|---|---|---|
-| Telescope and mount | Sky-Watcher 400P (16-inch) SynScan GoTo Dobsonian, motor firmware 2.09 | An alt-az mount whose motor controller speaks Sky-Watcher's motor-controller protocol over a USB serial cable. Equatorial mounts are not supported. |
-| Scope node | Raspberry Pi 3B with Raspberry Pi OS Lite 64-bit | A Raspberry Pi with a camera port, on the telescope, within a USB cable of the mount. Build and setup: [`crates/scope-node`](crates/scope-node/README.md). |
-| Finder camera | Arducam OV5647 with a 16 mm lens: a 13.0° × 9.8° field | A camera `rpicam` drives, and a pattern database covering its field. The bundled 10–30° database covers this one; [build one](#build-a-pattern-database) for another field. |
-| Imaging camera | Not yet used under the sky | A camera INDI drives, with INDI on the scope node, and ASTAP with one of its star databases on the console. |
-| Console | A Surface laptop running Ubuntu under WSL2 | A computer on the same network as the scope node; only Linux has been used. The page opens in any phone or laptop browser. |
-
-## How it works
-
-The work is split between two machines ([ADR-0001](docs/adr/0001-console-owns-pointing-scope-node-drives-axes.md),
-[ADR-0002](docs/adr/0002-imaging-cameras-through-indi-frames-relayed-console-stacks.md)):
-
-```mermaid
-flowchart LR
-  subgraph scope["Scope node: a Raspberry Pi on the telescope"]
-    fcam["Finder camera"] --> detect["Star detection"]
-    axes["Mount's motor controller"]
-    indi["INDI and the imaging camera"]
-  end
-  subgraph con["Console: a laptop"]
-    solve["Plate solver"] --> model["Pointing model:<br/>every solve is a sync"]
-    model --> motion["GoTo and Track"]
-    imaging["Imaging: ASTAP solves, focus,<br/>calibration, live stack"]
-    server["Page and MCP server"]
-  end
-  detect -- "star lists, over the scope link" --> solve
-  motion -- "axis commands" --> axes
-  indi -- "imaging frames" --> imaging
-  server --- phone["Phones and laptops"]
-  server --- ai["MCP clients"]
-```
-
-- **The scope node** captures each finder frame, finds its stars and sends only the star list
-  to the console over the scope link, a paired gRPC protocol that maps the two clocks. It
-  carries out the console's axis commands on the mount's motor controller, stops the mount when
-  the link goes quiet, and relays the imaging camera's frames untouched.
-- **The console** solves each star list, keeps the pointing model, and plans and checks every
-  move: the Sun guard, the minimum altitude, cable wind and the mount's range. It closes the
-  loop on GoTo and tracking, and does all the imaging work.
-- **The page and MCP clients** share the console's one observing session.
-
-Solving follows tetra3 and cedar-solve:
-
-```mermaid
-flowchart LR
-  frame["Frame"] --> stars["Detect stars: noise,<br/>binning, sub-pixel centroids"]
-  stars --> patterns["4-star patterns<br/>from the brightest"]
-  patterns --> lookup["Edge-ratio hash,<br/>pattern database lookup"]
-  lookup --> verify["Verify against<br/>catalog stars"]
-  verify --> fit["Fit attitude, field<br/>of view and distortion"]
-  fit --> answer["RA, Dec, roll"]
-```
-
-Detection is the `star-detection` crate, the database `pattern-database` (and
-`database-generation` to build one), the shared numerics `math-core`, and the solve itself
-`plate-solver`.
-
-## Use it with an AI assistant
-
-The console serves MCP (Streamable HTTP) at `/mcp`, on the page's port. A client can read the
-session and the pointing, search targets, GoTo, track, move an axis, take and solve frames, and
-run the imaging side: focus, darks and flats, the live stack and a whole imaging run. With
-Claude Code, for example:
-
-```sh
-claude mcp add --transport http finder-console http://127.0.0.1:8080/mcp
-```
-
-Every moving tool runs the page's guards: the Sun guard, the minimum altitude, cable wind and
-the mount's range, plus the scope link's watchdog. While a client moves the telescope the page
-says so, and the page's Stop ends any motion. MCP calls carry no token, so by default the
-endpoint answers only on the console's own machine. With `--listen 0.0.0.0:8080`, anyone on
-your network can move the telescope. The tool list is in
-[`crates/finder`](crates/finder/README.md#mcp-clients).
-
-## How the solver compares with cedar's
-
-The comparison is against cedar's open-source pipeline, run the way cedar-solve's example script
-runs it: Python decodes each frame, calls `cedar-detect-server` over gRPC with shared memory, then
-solves with cedar-solve. Both sides used the same 21 sample images, the same settings (sigma 8,
-2×2 binning, the brightest 30 stars, no field-of-view hint) and the same 10–30° pattern database.
-
-**Answers.** Both solve 20 of the 21 images. Given the same decoded pixels, they find the same
-stars and return the same solution on all 20: position within 0.0005″, with identical matched
-catalog stars.
-
-**Speed, as a stream of raw camera frames** (one frame at a time, one core):
-
-| Per frame | plate-solver | cedar-detect + cedar-solve |
-|---|---|---|
-| Sustained rate | ≈500 fps | ≈120 fps |
-| Median | 2.4 ms | 5.1 ms |
-| 90th percentile | 3.1 ms | 13.9 ms |
-| Slowest frame | 4.3 ms | 53.8 ms |
-
-Where the difference comes from:
-
-- **Finding stars:** the same algorithm at the same speed (2.4 ms vs 2.5 ms in-process). cedar's
-  pipeline adds about 1.3 ms a frame for the call from Python to the detector over gRPC.
-- **Solving:** about 57× faster (median 0.03 ms vs 1.3 ms). cedar's slowest frames come from here.
-- **Start-up:** 0.4 s vs 2.3 s, mostly Python and NumPy imports. It is paid once per process.
-- **JPEG frames:** about 54 vs 37 fps. Decoding takes around 13 ms a frame on both sides, so the
-  decoder sets the rate; raw frames avoid it.
-
-Limits of these numbers:
-
-- **One machine:** a Snapdragon laptop under WSL2 (arm64). Treat the ratios as more portable than
-  the milliseconds.
-- **Not finder frames:** these are cedar's 10–30° sample images, 0.3–2.1 megapixels.
-- **No hints:** every frame is solved from scratch. A real stream would pass the previous frame's
-  field of view to the next solve, which speeds up both solvers and would likely narrow the gap.
-- **Cedar's components, not the Cedar product:** this measures cedar-detect and cedar-solve as
-  open-source components, not the Cedar product running on its own hardware.
-
-To reproduce, run [`bench/cedar-compare/run.sh`](bench/cedar-compare/); its README covers the
-prerequisites.
-
-## Feedback wanted
-
-Especially:
-
-- **Finder-scope frames:** raw frames or JPEGs from your finder camera, with the camera, the lens
-  or finder, and its field of view, whether they solve or not.
-- **Comparisons with Cedar or tetra3** on your own hardware, particularly a Raspberry Pi.
-- **Failed or wrong solves:** the image and the command you ran.
-- **Your rig:** the mount, finder camera and computer you would run it on, and what stops it
-  working there.
-
-Please open an issue.
-
-## Usage
-
-Everything runs through `cargo` from the repository root. Nothing is installed, and there are no
-release binaries yet. To try the whole console without a telescope, see
-[Try it without a telescope](#try-it-without-a-telescope).
-
-### The finder console, on still frames
+**Solve sample frames** in the console, then open <http://127.0.0.1:8080>:
 
 ```sh
 cargo run --release -p finder
 ```
 
-Open <http://127.0.0.1:8080>, pick one of cedar's sample frames or open your own, and the
-console charts it: where the frame points, with the RA/Dec grid, the matched catalog stars and
-the Messier objects drawn over the frame, then what is near the field and what to look at next.
-It has a red-and-black night mode for the telescope, and a phone on the same network can use it
-(`--listen 0.0.0.0:8080`). See [`crates/finder`](crates/finder/README.md).
+**Run a whole simulated telescope**, with a finder camera, mount and imaging camera:
 
-At the telescope, the console pairs with a scope node on Setup. Build and configure the scope
-node from [`crates/scope-node`](crates/scope-node/README.md).
+```sh
+cargo run --release -p finder -- --simulate --sim-start 2026-01-16T02:00:00Z
+```
 
-### Solve an image
+**Solve one image from the command line:**
 
 ```sh
 cargo run --release -p plate-solver --example solve_image -- \
@@ -260,60 +109,106 @@ cargo run --release -p plate-solver --example solve_image -- \
     reference-solutions/cedar-solve/examples/data/medium_fov/orion_belt.jpg
 ```
 
-```text
-reference-solutions/cedar-solve/examples/data/medium_fov/orion_belt.jpg: MATCH_FOUND  RA 84.0081  Dec -0.7690  Roll 2.54  FOV 10.15 deg  k -0.003  matches 24  RMSE 34"  (26 stars, detect 1 ms, solve 0 ms)
-  sky map: https://aladin.cds.unistra.fr/AladinLite/?target=84.0081%20-0.7690&fov=12
-```
+The [quick start](docs/guide/quick-start.md) walks through all three, including a GoTo and an
+imaging run on the simulator.
 
-RA, Dec, Roll and FOV are in degrees. `k` is the fitted radial distortion (negative is barrel).
-RMSE is the residual over the matched stars, in arcseconds. Pass several images to solve them in
-one run; the database loads once. PNG, JPEG, BMP and PNM files are read.
+### Use it with an AI assistant
 
-Frames are read the way cedar reads them, as in the finder console: color turns gray with PIL's
-weights (`star_detection::gray`), and stars are detected with cedar's settings
-(`DetectParams::cedar()`: 2×2 binning, rows levelled, hot pixels rejected). On cedar's 21 sample
-frames that gives cedar's answer to within 4.2″ on all 20 that cedar solves.
-That is looser than the 0.0005″ [above](#how-the-solver-compares-with-cedars) only because the Rust
-`image` crate and PIL decode JPEGs slightly differently: given the same pixels, the answers
-agree.
-
-The database must cover your camera's field of view. The cedar database used above covers
-10–30°, which takes in the reference rig's 13° finder field. A camera with a narrower or wider
-field needs a database built for it (below).
-
-| Flag | Default | Meaning |
-|------|---------|---------|
-| `--db PATH` | required | Pattern database (`.npz`): one built below, or a cedar/tetra3 database. |
-| `--fov DEG` | none | Horizontal FOV estimate. Leave it off for the first solve: a wrong hint with a tight `--fov-max-error` prevents solving. |
-| `--fov-max-error DEG` | 10 | How far the true FOV may be from `--fov`. |
-| `--distortion K` | 0 | Radial distortion `k` from an earlier solve with the same lens. Speeds up and steadies wide-field solves. |
-| `--bin N` | 2 | Bin the image by 1, 2, 4 or 8 before detection. |
-| `--sigma S` | 8 | Detection significance threshold. |
-| `--stars N` | 30 | Number of brightest detected stars passed to the solver. |
-| `--dark PATH` | none | Dark frame (lens capped, same exposure and gain) subtracted before detection. Removes hot pixels. |
-| `--timeout MS` | 5000 | Solve timeout in milliseconds. |
-| `--json` | off | Print one JSON object per image instead of text. |
-
-### Build a pattern database
+The console serves MCP (Streamable HTTP) at `/mcp`, on the page's port. With Claude Code, for
+example:
 
 ```sh
-cargo run --release -p database-generation -- hip_main.dat hip_30_60.npz --min-fov 30 --max-fov 60
+claude mcp add --transport http finder http://localhost:8080/mcp
 ```
 
-Set `--min-fov` and `--max-fov` (degrees) to bracket your camera's horizontal FOV, and pick a
-catalog deep enough for it. Following tetra3's guidance, the Hipparcos main catalog,
-`hip_main.dat` (53 MB), suits fields down to about 10°, and the Tycho catalog, `tyc_main.dat`,
-down to about 3°. Both are in the CDS catalog
-[I/239](https://cdsarc.cds.unistra.fr/ftp/I/239/). A BSC5 file also works for wide fields. The
-catalog type is detected from the file name (`hip`, `tyc` or `bsc5`), and `--help` lists the
-other options: magnitude limit, proper-motion epoch and pattern density.
+Every moving tool runs the page's guards, the page says when an MCP client is moving the
+telescope, and the page's Stop ends any motion. MCP calls carry no token. The console listens
+on localhost by default; with `--listen 0.0.0.0:8080`, anyone on your network can move the
+telescope. See [the console manual](docs/guide/console.md) and
+[safety and security](docs/safety-and-security.md#network-exposure).
 
-To try it without downloading anything, build from the BSC5 catalog vendored for cedar's tests
-(about a minute, 32 MB) and solve with the result:
+## Documentation
 
-```sh
-cargo run --release -p database-generation -- reference-solutions/cedar-solve/tests/data/bsc5 bsc5_10_30.npz --min-fov 10 --max-fov 30
-```
+| | |
+|---|---|
+| [Quick start](docs/guide/quick-start.md) | Everything on one computer, no hardware. |
+| [Console manual](docs/guide/console.md) | Running the console for a real night: options, pairing, phones, ASTAP, MCP. |
+| [Scope node manual](docs/guide/scope-node.md) | Putting the scope node on a Raspberry Pi. |
+| [First night at the telescope](docs/guide/first-night.md) | The order of checks, and troubleshooting. |
+| [A tour of the console page](docs/console-tour.md) | Every view and control. |
+| [Architecture](docs/architecture.md) | The pieces, the links and the Pi 5 plan. |
+| [Known-good configurations](docs/hardware.md) | Hardware that has run, its limits, and what else should work. |
+| [Safety and security](docs/safety-and-security.md) | What stops the mount, and what is exposed on the network. |
+| [The plate solver](docs/solver.md) | The command-line solver, pattern databases, and the comparison with cedar. |
+| [First light](docs/field/2026-11-13-first-light.md) | The field report behind the "proven at the telescope" list. |
+| [The first Track](docs/field/2026-11-20-driveway-track.md) | The field report from 20 November: Track, the finder's solve rate, and the network and power problems. |
+
+[`docs/README.md`](docs/README.md) indexes everything else: the crate references, decisions,
+research and specifications.
+
+## Can I trust it?
+
+Here is what backs it up, and where the gaps are.
+
+**The solver is checked against cedar on every pull request.**
+
+- CI solves cedar's 21 reference images three ways: from star positions, from pixels, and over
+  gRPC. It compares every answer with cedar's own: identical star IDs within 5″ from star
+  positions, and within 10″ with at least 90% of cedar's stars from pixels and over gRPC.
+- A canary job then re-injects past bugs and nudges the goldens, to prove that gate still fails
+  when it should. See [how correctness is checked](docs/solver.md#how-correctness-is-checked).
+
+**Every change passes required checks before it merges.** There are 14:
+
+- a change-detection job, and a manual brake (the `hold:human` label);
+- formatting, Clippy with warnings as errors, and rustdoc;
+- the minimum Rust version;
+- unused dependencies;
+- `cargo-deny` for advisories, licenses, banned crates and sources;
+- a secret scan of every committed file;
+- the parity gate and its canary;
+- the page's checks: types, unit tests, the committed build matching its source, and browser
+  tests against the release binary, including night-mode pixel checks;
+- the full Rust test suite, on every pull request and again in the merge queue.
+
+[`ENVIRONMENT.md`](ENVIRONMENT.md) says exactly what is enforced.
+
+**The tests:**
+
+- about 1,400 Rust tests, about 590 page unit and component tests, and about 30 browser
+  end-to-end tests;
+- end-to-end tests that drive the console's API against the simulator, through GoTo, tracking,
+  Stop, imaging and MCP;
+- an emulator for the mount's motor-controller protocol;
+- recorded captures: the real finder camera's output, ASTAP's output, and an INDI exchange with
+  INDI's camera simulator.
+
+**What is not tested automatically:**
+
+- No real mount or camera runs in CI. Hardware results come from bench and field nights, logged
+  in [known-good configurations](docs/hardware.md) and the field reports
+  ([first light](docs/field/2026-11-13-first-light.md), [the first Track](docs/field/2026-11-20-driveway-track.md)).
+- The node stops the mount when it is stopped or shut down, but a crash or a power cut still
+  ends it without a stop ([safety](docs/safety-and-security.md#what-does-not-stop-the-mount-yet)).
+- The console has no login. It listens only on localhost by default.
+
+## How this repository is built
+
+Since late October 2026, most of the code has been written by AI coding agents, driven by an
+automated, spec-driven build system (configured by `ergane.yaml`).
+
+1. **Spec.** Each feature starts as a specification in `specs/NNN-name/`: a spec, a plan and a
+   task list.
+2. **Review.** The maintainer reviews it and approves it in a pull request titled
+   `specs NNN: flip … to ready`.
+3. **Build.** The system builds it one user story at a time. Each story lands as its own
+   squash-merged pull request titled `NNN-name/usN`, through the same required checks and merge
+   queue as everything else.
+4. **Ownership.** The maintainer owns the specs, the oracle files listed in
+   [`.github/CODEOWNERS`](.github/CODEOWNERS), and the gates.
+
+Earlier work, from June to October 2026, used the specifications under `openspec/`, and agents
+directed by hand. The original v1 is kept at tag `v1-original`.
 
 ## Prior work
 
@@ -337,6 +232,11 @@ and their authors deserve the credit for the algorithms.
   electronic finder that brings cedar-detect and cedar-solve together, and the closest existing
   system to what this project is for.
 
+The imaging side relies on two programs it calls rather than links:
+
+- **[INDI](https://indilib.org)**, which drives the imaging camera (LGPL-2.1-or-later).
+- **[ASTAP](https://www.hnsky.org/astap.htm)**, which solves imaging frames.
+
 Copies of cedar-solve (which carries its own fork of tetra3) and cedar-detect are kept in
 [`reference-solutions/`](reference-solutions/), pinned to upstream commits and under their own
 licenses, and CI checks this project's answers against them on every pull request.
@@ -354,33 +254,29 @@ are trademarks of Steven Rosenthal, named here only to describe where this work 
 | `crates/database-generation` | Builds pattern databases from star catalogs (Hipparcos, Tycho, BSC5). |
 | `crates/plate-solver` | The solver (`solve_from_centroids`, `solve_from_image`) and the `solve_image` example. |
 | `crates/grpc-service` | The `PlateSolver` gRPC service, as a library. |
-| `crates/scope-link` | The scope link: the paired protocol between the console and the scope node, and its clock mapping. |
-| `crates/scope-node` | The program on the telescope's Pi: finder camera capture and star detection, the mount's motor controller, and the imaging camera through INDI. |
-| `crates/simulator` | The simulated telescope: a catalog-rendered camera with known optics, a mount and an imaging camera, on a virtual clock. |
-| `crates/finder` | The finder console: solving, the pointing model, GoTo, tracking, imaging, the page and the MCP server. The page (React, in `web/`) is built into the binary. |
+| `crates/scope-link` | The protocol between the console and the scope node, its token check and its clock mapping. |
+| `crates/scope-node` | The program on the telescope's Pi: finder camera, mount link and watchdog, imaging relay through INDI. |
+| `crates/simulator` | The simulated finder camera, mount and imaging camera behind `finder --simulate`. |
+| `crates/finder` | The console: web server, embedded React page (`web/`), API, MCP, pointing model, GoTo, Track and imaging. |
+| `specs/` | One specification per feature from 012 on, which the build system builds from. |
+| `openspec/` | The first-generation specifications, PRD and project conventions. |
+| `docs/` | Guides, architecture, decisions (`adr/`), field reports (`field/`), research and CI reports. Start at [`docs/README.md`](docs/README.md). |
+| `fixtures/` | Recorded captures from real hardware and programs, used as test oracles. |
+| `reference-solutions/` | **The oracle**: vendored cedar-solve (with its fork of tetra3) and cedar-detect, with their sample images and databases. |
 | `bench/cedar-compare/` | The benchmark against cedar-detect + cedar-solve. |
-| `openspec/` | The specifications: capability specs, PRD and project conventions. Start at `openspec/project.md` and `openspec/PRD.md`. |
-| `specs/` | Feature specs from 012 on, each a spec, plan and task list. |
-| `proto/` | The gRPC interface contracts (`plate_solver.proto`, `cedar_detect.proto`). |
-| `reference-solutions/` | **The oracle**: vendored tetra3, cedar-solve and cedar-detect, with their sample images and databases. |
-| `scripts/ci/`, `.github/workflows/ci.yml` | CI, including the end-to-end parity gate. |
-| `docs/` | Decision records (`adr/`), field reports (`field/`), plans, research, the voice-mode design (`voice/`) and audits. |
-| `fixtures/` | Captures from the real scope node that tests read. |
-| `.specify/`, `.impeccable/`, `ergane.yaml` | Configuration for the spec, design and build tools the project is developed with. |
-
-## Correctness
-
-"Correct" means agreeing with cedar. CI's `e2e-eval` job solves the 21 sample images in
-`reference-solutions/cedar-solve/examples/data/medium_fov/` from star positions (E1), from pixels
-(E2) and over gRPC (E3), and compares every answer with cedar's. `e2e-canary` proves that gate can
-still fail. [`ENVIRONMENT.md`](ENVIRONMENT.md) lists what CI enforces on `main` and which files
-define "correct".
+| `crates/scope-link/proto/`, `crates/grpc-service/proto/` | The gRPC contracts the build compiles. The root `proto/` holds older copies. |
+| `scripts/`, `.github/workflows/` | CI, coverage and quality scripts. |
 
 ## Development
 
-Building `grpc-service` needs `protoc` (Debian/Ubuntu: `protobuf-compiler`; if it can't find
-`google/protobuf/duration.proto`, also install `libprotobuf-dev`). The finder console's page is
-built with Node in `crates/finder/web`, and its build is committed, so cargo never needs Node.
+You need:
+
+- **Rust 1.96 or later** and **`protoc`**. The console, the scope node and `grpc-service` all
+  compile protocol definitions. If `protoc` can't find `google/protobuf/duration.proto`, also
+  install `libprotobuf-dev`.
+- **Node, only to change the page.** The page is built with Node in `crates/finder/web`, and its
+  build is committed, so cargo never needs Node.
+
 CI runs, among other checks:
 
 ```sh
@@ -391,17 +287,33 @@ cargo test --workspace --locked --doc
 ```
 
 The tests run under [cargo-nextest](https://nexte.st), which runs them in parallel across
-test binaries (`.config/nextest.toml`); `cargo test --workspace --locked` runs the same tests
+test binaries (`.config/nextest.toml`). `cargo test --workspace --locked` runs the same tests
 one binary at a time and needs nothing installed. Test builds are optimized
 (`[profile.test]` in the root `Cargo.toml`) because the simulator's frames are slow without it.
 
-`scripts/coverage.sh` writes browsable coverage reports for the workspace and the page, with
-per-crate tables, to `target/coverage/`. [`docs/coverage.md`](docs/coverage.md) explains
-how to run and read them.
+There are two reports:
 
-`scripts/quality.sh` writes a SonarQube-style code-quality report to `target/quality/`:
-complexity, duplication, lint findings by rule, panic paths, `unsafe` and advisories, with an
-A–E grade per crate and per file. [`docs/quality.md`](docs/quality.md) explains every figure.
+- **Coverage.** `scripts/coverage.sh` writes browsable coverage reports for the workspace and
+  the page, with per-crate tables, to `target/coverage/`. [`docs/coverage.md`](docs/coverage.md)
+  explains how to run and read them.
+- **Code quality.** `scripts/quality.sh` writes a SonarQube-style report to `target/quality/`:
+  complexity, duplication, lint findings by rule, panic paths, `unsafe` and advisories, with an
+  A–E grade per crate and per file. [`docs/quality.md`](docs/quality.md) explains every figure.
+
+## Feedback wanted
+
+Especially:
+
+- **Finder-scope frames:** raw frames or JPEGs from your finder camera, with the camera, the lens
+  or finder, and its field of view, whether they solve or not.
+- **Comparisons with Cedar or tetra3** on your own hardware, particularly a Raspberry Pi.
+- **Other mounts:** whether the scope node's `--probe-mount` reads your Sky-Watcher motor
+  board.
+- **Failed or wrong solves:** the image and the command you ran.
+- **Your rig:** the mount, finder camera and computer you would run it on, and what stops it
+  working there.
+
+Please open an issue.
 
 ## License
 
@@ -413,11 +325,12 @@ Licensed under either of
 at your option.
 
 The reference implementations vendored in [`reference-solutions/`](reference-solutions/) are not
-covered and keep their own licenses: tetra3 and cedar-solve are Apache-2.0, and cedar-detect is
-FSL-1.1-MIT. They are test oracles only; none of their source is built into this project's
-crates. The finder console's binary embeds third-party web packages and catalog data, and
-`finder --licenses` prints their notices. [ADR-0003](docs/adr/0003-mit-or-apache-license-references-stay-oracles.md)
-records the decision.
+covered and keep their own licenses: cedar-solve (with its tetra3 fork) is Apache-2.0, and
+cedar-detect is FSL-1.1-MIT. They are test oracles only; none of their source is built into
+this project's crates. The finder console's binary embeds third-party web packages and catalog
+data, listed in [`crates/finder/THIRD_PARTY_NOTICES.md`](crates/finder/THIRD_PARTY_NOTICES.md)
+and printed by `finder --licenses`.
+[ADR-0003](docs/adr/0003-mit-or-apache-license-references-stay-oracles.md) records the decision.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion
 in this project by you, as defined in the Apache-2.0 license, shall be dual licensed as above,

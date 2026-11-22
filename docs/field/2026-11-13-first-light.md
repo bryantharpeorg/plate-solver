@@ -1,7 +1,7 @@
 # First light: live solving, push-to and the first powered moves
 
 12 to 14 November 2026, the reference rig's first nights under the sky. This is the record the
-README's "Proven on the telescope" list rests on. It leaves out the observing site, network
+README's "Proven at the telescope" list rests on. It leaves out the observing site, network
 addresses and the pairing token.
 
 ## The rig
@@ -9,9 +9,9 @@ addresses and the pairing token.
 | Part | What was used |
 |---|---|
 | Telescope and mount | Sky-Watcher 400P (16-inch) SynScan GoTo Dobsonian. Motor controller firmware 2.09, board 0x99, 9600 baud, 1,980,000 counts per revolution on both axes (5,500 counts per degree). |
-| Scope node | Raspberry Pi 3B, Raspberry Pi OS Lite 64-bit, the static aarch64 `scope-node` built from `main` at `ce80f67`. A Prolific USB-serial adapter to the mount's motor controller. |
+| Scope node | Raspberry Pi 3B+, Raspberry Pi OS Lite 64-bit, the static aarch64 `scope-node` built from `main` at `ce80f67`. A Prolific USB-serial adapter to the mount's motor controller. |
 | Finder camera | Arducam OV5647 with a 16 mm lens at about f/1.5. Mode 1296 × 972, field 13.0° × 9.8°, 36″ a pixel. |
-| Console | `finder` on a Surface laptop under WSL2, with the page open on a phone and the laptop. |
+| Console | `finder` on a Windows-on-ARM laptop under WSL2, with the page open on a phone and the laptop. |
 | Pattern database | cedar's bundled 10–30° database, which covers this 13° field. |
 
 ## What worked
