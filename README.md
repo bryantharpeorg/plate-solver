@@ -76,12 +76,13 @@ You need Rust ([rustup](https://rustup.rs)) and `protoc` (Debian and Ubuntu:
 Linux, on Ubuntu under WSL2.
 
 ```sh
-git clone https://github.com/bryantharpeorg/plate-solver.git
+git clone --depth 1 https://github.com/bryantharpeorg/plate-solver.git
 cd plate-solver
 cargo run --release -p finder --locked -- --simulate --sim-start 2026-01-16T02:00:00Z
 ```
 
-The first build takes a while. Then open <http://127.0.0.1:8080>. `--sim-start` starts the
+`--depth 1` skips the repository's history, which you don't need to try it. The first build
+takes a while. Then open <http://127.0.0.1:8080>. `--sim-start` starts the
 virtual night at 02:00 UTC on 16 January, an evening at the simulator's sky, 40° N, 75° W.
 
 1. On Setup, set the site to latitude 40, longitude −75, to match the simulator's sky. The
@@ -336,9 +337,9 @@ and their authors deserve the credit for the algorithms.
   electronic finder that brings cedar-detect and cedar-solve together, and the closest existing
   system to what this project is for.
 
-Copies of tetra3, cedar-solve and cedar-detect are vendored in
-[`reference-solutions/`](reference-solutions/) under their own licenses, and CI checks this
-project's answers against them on every pull request.
+Copies of cedar-solve (which carries its own fork of tetra3) and cedar-detect are kept in
+[`reference-solutions/`](reference-solutions/), pinned to upstream commits and under their own
+licenses, and CI checks this project's answers against them on every pull request.
 
 This project is not affiliated with or endorsed by ESA or Steven Rosenthal. Cedar and Cedar Solve
 are trademarks of Steven Rosenthal, named here only to describe where this work comes from.
