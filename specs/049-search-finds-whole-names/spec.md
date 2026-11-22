@@ -31,8 +31,9 @@ find NGC 1976. A common name matches only when one of its words starts with the 
 query, so no query of two or more words finds any common name. The page's Target search
 and the MCP tool share the search. Make a query of several words find the common name
 that has them all, keep the order of the answers, and keep what every query of one word
-finds. The owner added (owner decision 2): no one should need to type a name's hyphens or
-apostrophes, which lets some queries of one word find more.
+finds. The owner added (owner decision 2): no one should need to type a name's hyphens
+or apostrophes, which lets some queries of one word find more, and so, at a limit, show
+another object in place of one they showed.
 
 ## Clarifications
 
@@ -87,9 +88,10 @@ apostrophes, which lets some queries of one word find more.
   one finds at least the objects it found, and 11 find more (US1-S6). Of the 917
   prefixes of the new words, 44 that found nothing now find an object, such as `tie`,
   `paw`, `cats` and `melotte` (computed, not tested). At the default limit of 20, two of
-  the 11 show one object fewer: `b` no longer shows UGC 5373 and `p` no longer shows NGC
-  6357, each pushed past the 20th place by the object it gains, which sorts ahead of it;
-  at 50 none does.
+  the 11 each lose one of their first 20 to the object they gain, which sorts ahead: `b`
+  no longer shows UGC 5373 and `p` no longer shows NGC 6357. Below 20 more do (at 10,
+  `b`, `l`, `m` and `t`), and `me`, `le` and `l'` get a new first answer; from a limit
+  of 28 none does (computed, not tested).
 - Q: Does an id typed with a space change? → A: No, on this catalog. `NGC 224` or `M 42`
   is now also read as two words, `ngc` and `224`, which a common name could hold; none
   of the catalog's 182 common names holds every word of any of its 13,372 canonical ids
@@ -169,13 +171,14 @@ written for those answers; the alternatives are kept below for the record.
    and `t`) find more (US1-S6), and 44 of the 917 prefixes of the new words, which found
    nothing, now find an object (computed, not tested). A query's own apostrophe is
    dropped too, so `l'` finds what `l` finds. At the default limit of 20, two of the 11
-   show one object fewer: `b` no longer shows UGC 5373 and `p` no longer shows NGC 6357,
-   each pushed past the 20th place by the object it gains, which sorts ahead of it; at
-   50 none does. A query left with no word, such as `-` or `'`, finds nothing, as today
-   (US1-S10). The alternatives, kept for the record: (a), the draft's recommendation,
-   left them inside words, so `bow tie` and `cats eye` found nothing and no one-word
-   answer changed; splitting names but not queries would lose 25 of the 182 names typed
-   in full, `Bow-Tie nebula` among them.
+   each lose one of their first 20 to the object they gain, which sorts ahead: `b` no
+   longer shows UGC 5373 and `p` no longer shows NGC 6357. Below 20 more do (at 10, `b`,
+   `l`, `m` and `t`), and `me`, `le` and `l'` get a new first answer; from a limit of 28
+   none does (computed, not tested). A query left with no word, such as `-` or `'`,
+   finds nothing, as today (US1-S10). The alternatives, kept for the record: (a), the
+   draft's recommendation, left them inside words, so `bow tie` and `cats eye` found
+   nothing and no one-word answer changed; splitting names but not queries would lose
+   25 of the 182 names typed in full, `Bow-Tie nebula` among them.
 3. **When the story may run** (front matter; plan.md § Refinement Record). *Settled
    2026-11-21: the recommended answer (a).* Recommended: (a) after 047 has landed: 047
    stays in `depends_on_landed`, and the shared write of
@@ -216,8 +219,11 @@ file changes.
    found, `l'` among them, which now finds what `l` finds; and 44 of the 917 prefixes of
    the new words, which found nothing, find an object (`tie` finds NGC 40; computed, not
    tested). No one-word query stops matching an object it matched (US1-S6), but a gain
-   that sorts ahead takes a place in the answer: at the default limit of 20, `b` no
-   longer shows UGC 5373 and `p` no longer shows NGC 6357.
+   that sorts ahead takes a place in the answer: at the default limit of 20, `b` and `p`
+   each lose one of their first 20 to the object they gain, which sorts ahead: `b` no
+   longer shows UGC 5373 and `p` no longer shows NGC 6357. Below 20 more do (at 10, `b`,
+   `l`, `m` and `t`), and `me`, `le` and `l'` get a new first answer; from a limit of 28
+   none does (computed, not tested).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -325,16 +331,18 @@ development, `cargo nextest run -p finder --locked --lib targets::` and
 
 ### Edge Cases
 
-- **A query of one word** matches at least the objects it matched before. Without a
-  hyphen or an apostrophe it is one query word, so "each query word" is today's word. No
-  match is lost: a query that began a piece of a name, split and stripped as the name
-  is, begins the name's new words. Only a hyphen or an apostrophe, in the name or in the
-  query, can add a match (`l'` finds what `l` finds), and the sort is untouched. US1-S6
-  checks the objects as sets; 012's tests of `crates/finder/src/targets.rs:384` and
+- **A query of one word**, one whitespace-separated piece as 012's rule reads it,
+  matches at least the objects it matched before. Without a hyphen or an apostrophe it
+  is one query word, so "each query word" is today's word. No match is lost on this
+  catalog, where no name word begins with a hyphen or an apostrophe: a query that began
+  a piece of a name, split and stripped as the name is, begins the name's new words.
+  Only a hyphen or an apostrophe, in the name or in the query, can add a match (`l'`
+  finds what `l` finds), and the sort is untouched. US1-S6 checks the objects as sets;
+  012's tests of `crates/finder/src/targets.rs:384` and
   `crates/finder/tests/console/targets.rs:72`, unchanged, check the first result of the
   queries they name and the brightness order of `NEBULA`'s, and pass with the fix. A
-  gain can push a match past `limit`: at 20, `b` and `p` each show one object fewer
-  (owner approval 2).
+  gain can push a match past `limit`: at 20, `b` and `p` each lose one of their first 20
+  to it (owner approval 2; computed, not tested).
 - **Spaces.** The query is trimmed and split at whitespace and hyphens, so leading,
   trailing and repeated spaces do not matter (US1-S1's `  Ring   Nebula `). An empty or
   blank `q` is still refused with 400 before the search
@@ -388,8 +396,8 @@ development, `cargo nextest run -p finder --locked --lib targets::` and
   query as today. The order SHALL stay as it is: exact ids first, then by magnitude with
   no magnitude last (012's FR-007), then by canonical id
   (`crates/finder/src/targets.rs:194`); at most `limit` objects, with no duplicates. A
-  query of one word SHALL match every object 012's rule matches for it, before the limit
-  is applied.
+  query of one whitespace-separated piece that has a word SHALL match every object 012's
+  rule matches for it, before the limit is applied.
 - **FR-002**: The doc comment of `targets::search` SHALL state the rule of FR-001: exact
   ids first, then common names in which each word of the query begins a word, in any
   order, with words split at spaces and hyphens, apostrophes and case ignored, in
@@ -427,8 +435,8 @@ development, `cargo nextest run -p finder --locked --lib targets::` and
   and more only where the name or the query holds a hyphen or an apostrophe (US1-S6);
   every canonical id and every Messier id written with a space finds its object alone
   (US1-S7).
-- **SC-005**: Each name of US1-S9 is found without its hyphens or apostrophes, and with
-  them (US1-S9).
+- **SC-005**: Each name of US1-S9 is found without its hyphens or apostrophes (US1-S9),
+  and with them (US1-S5 and US1-S9).
 
 ## Assumptions
 
@@ -460,5 +468,5 @@ US1:
   implements: [FR-001, FR-002, FR-003]
 ```
 
-One story: one function's filter, a private function for its words, its doc comment,
-and their tests (plan.md § Plan traps 2).
+One story: `Catalog::search`'s filter, a private function for its words,
+`targets::search`'s doc comment, and their tests (plan.md § Plan traps 2).

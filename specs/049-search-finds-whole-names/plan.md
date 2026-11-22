@@ -14,10 +14,10 @@ matches when each query word begins one of the name's words, in any order (spec 
 decisions 1 and 2), and a query with no word matches no name. A query of one word
 matches at least the objects it did, and more only through a hyphen or an apostrophe in
 the name or the query (`l'` finds what `l` finds); at the default limit of 20, `b` and
-`p` each show one object fewer. The exact id, the order by magnitude and the limit are
-as they are. `targets::search`'s doc comment says the rule. `GET /api/targets` and the
-MCP tool `search_targets` answer through the same function, so both find "Orion Nebula"
-with no change of their own.
+`p` each lose one of their first 20 to an object they gain. The exact id, the order by
+magnitude and the limit are as they are. `targets::search`'s doc comment says the rule.
+`GET /api/targets` and the MCP tool `search_targets` answer through the same function,
+so both find "Orion Nebula" with no change of their own.
 
 One story: the rule, `match_words`, its doc comment, nine unit tests after the last test
 of the module that holds 012's search tests, and one test module at the MCP door that
@@ -193,19 +193,23 @@ decision 2 (a), whitespace words only, and eight scenarios.
   0f28f0dd, each query word beginning a different name word, owner decision 1 (f)
   (US1-S3's `orion o` fails, alone; the other 17 tests, US1-S8 among them, pass).
 
-**Computed from the extract, before the draft**, by a model of the rules written apart
-from the code (the probe's notes):
+**Computed from the extract**, before the draft unless said, by a model of the rules
+written apart from the code (the probe's notes):
 - 182 common names on 13,372 objects, counted once per row (175 distinct); 951 distinct
   prefixes of their whitespace words; with whitespace words, under each of owner
   decision 1's (a), (b) and (c), every one of the 951 finds the same objects as today,
   and every full name finds its object;
 - with decision 2 (b)'s words: every one of the 951 finds at least the objects it found
-  with no limit, the 11 of US1-S6 find more (at a limit of 20, `b` loses UGC 5373 and
-  `p` NGC 6357 to a gain that sorts ahead; at 50, none loses one), and 44 one-word
-  queries that found nothing find an object (the 917 distinct prefixes of the new words
-  hold them); US1-S1 to US1-S5 and US1-S7 answer as with whitespace words; splitting
-  names but not queries loses 25 full names; and, with no guard, `-` and `'` match all
-  152 named objects;
+  with no limit, the 11 of US1-S6 find more, and 44 of the 917 distinct prefixes of the
+  new words (every name's words as decision 2 (b) splits them), which found nothing, now
+  find an object; queries outside both sets, such as `tie-` or `cats-eye`, can too;
+- after the owner's answers, on 2026-11-21, the limits: at 20, `b` loses UGC 5373 and
+  `p` NGC 6357 to a gain that sorts ahead; at 10, `b`, `l`, `m` and `t` lose one; at any
+  limit, `l'`, `le` and `me` get a new first answer; from 28 on, none of the 951 loses
+  one;
+- with decision 2 (b)'s words, also: US1-S1 to US1-S5 and US1-S7 answer as with
+  whitespace words; splitting names but not queries loses 25 full names; and, with no
+  guard, `-` and `'` match all 152 named objects;
 - none of the 13,372 canonical ids or the 110 Messier ids written with a space (13,482
   queries) finds any name under (a), (b) or (c), with either decision 2 answer's words;
 - of the 312 queries made of two of a name's words in its order (285 distinct), (a)
@@ -280,9 +284,9 @@ beside the change, and what the story does to what they observe:
 | Decision | Rejected | Why |
 |---|---|---|
 | Each query word begins a word of one name, any order | In order; next to each other; across names; substring or fuzzy; distinct words | Spec owner decision 1. |
-| Names and queries alike lose `'` and `’` and split at whitespace and `-` | Leave them inside words; split names only | Spec owner decision 2 (b). Splitting names only would lose 25 full names (US1-S5). |
+| Names and queries alike lose `'` and `’` and split at whitespace and `-` | Leave them inside words; split names only | Spec owner decision 2 (b); `’` and the no-word guard are the author's reading of it. Splitting names only would lose 25 full names (US1-S5). |
 | A query with no word matches no name | Let `all` over no words match | `-` or `'` would answer every one of the 152 named objects (US1-S10, run as a mutation). |
-| One private `match_words` for names and queries | Words kept in `Target` at parse | FR-003 leaves `Target` and the parse unchanged; 182 names make a split per search cheap. |
+| One private `match_words` for names and queries | Words kept in `Target` at parse | A field would change the shape of the public `Target`, which § Technical Context's Constraints keep, and its JSON unless skipped; 182 names make a split per search cheap. |
 | Change only `Catalog::search` | A second search for queries with a space; a change in `api::search` | One rule serves both doors and every query; for one word it is today's, but for hyphens and apostrophes. |
 | Unit tests in the module of 012's search tests, after its last test | A `console/` module for them | US1-S4 needs the private `Catalog::parse`, and the rest sit with the tests of the same function. |
 | One `mcp/` module that asks the route and the tool | A `console/` module for the route and an `mcp/` module for the tool | The MCP app answers both, as `session_tools.rs` already compares them; one module, one `mod` line. |
@@ -388,7 +392,7 @@ They bind every story.
 |---|---|
 | A new OpenNGC extract changes the counts and lists. | US1-S5 and US1-S6 assert their counts, 182 and 951, so a new extract fails them by name; re-read the lists from it. |
 | A keyboard types an apostrophe or a dash the rule does not know, such as `ʼ` (U+02BC) or an en dash. | Only `'`, `’` and `-` are handled (spec § Edge Cases): another mark stays part of a word, and such a query finds what it would today. Voice mode may add more. |
-| A one-word answer surprises an observer, such as `mel` finding PGC 143, or `b` and `p` showing one object fewer at the default limit of 20. | Owner approval 2 names the change; US1-S6 lists every gain over today's 951 prefixes; the 44 new one-word answers, `mel` among them, were computed, not tested. |
+| A one-word answer surprises an observer, such as `mel` finding PGC 143, or `b` and `p` each losing one of their first 20 at the default limit. | Owner approval 2 names the change; US1-S6 lists every gain over today's 951 prefixes; the 44 of the 917 prefixes of the new words that now find an object, `mel` among them, and the limit effects were computed, not tested. |
 | An id typed with a space gains a name match on a later extract. | US1-S7 fails by that id; US1-S4 holds that the exact id still comes first. |
 
 ## Refinement Record
@@ -438,7 +442,7 @@ stories:
       - path: crates/finder/src/targets.rs
         status: new
         disposition: add
-        assertion: "each of the 951 distinct lowercased prefixes of the extract's common-name words, split at spaces and commas, finds at least the rows with a common name having a whitespace-separated word that starts with it, and beyond those exactly: b and bu NGC 3132; fi ESO 270-017; l, m and me PGC 143; l' ESO 56-115, NGC 1980, IC 2944, NGC 6523, NGC 6618, NGC 6818, NGC 650, UGC 5470, PGC 143, NGC 6445, NGC 6369; l'e UGC 5470; le NGC 6705; p NGC 2537; t NGC 40; nothing for the rest"
+        assertion: "with no limit, each of the 951 distinct lowercased prefixes of the extract's common-name words, split at spaces and commas, finds at least the rows with a common name having a whitespace-separated word that starts with it, and beyond those exactly: b and bu NGC 3132; fi ESO 270-017; l, m and me PGC 143; l' ESO 56-115, NGC 1980, IC 2944, NGC 6523, NGC 6618, NGC 6818, NGC 650, UGC 5470, PGC 143, NGC 6445, NGC 6369; l'e UGC 5470; le NGC 6705; p NGC 2537; t NGC 40; nothing for the rest"
         decision: "spec.md:US1-S6"
       - path: crates/finder/src/targets.rs
         status: new
