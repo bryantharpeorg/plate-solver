@@ -367,6 +367,9 @@ pub struct SolveReport {
     pub nearby: Vec<NearbyMark>,
     /// The RA/Dec grid over the frame, when it solved.
     pub grid: Vec<GridLine>,
+    /// The name of the database that solved the frame, or that was tried last (047).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub database: Option<String>,
 }
 
 fn ms(since: Instant) -> f64 {
@@ -459,6 +462,7 @@ fn solve_detected(
         objects: Vec::new(),
         nearby: Vec::new(),
         grid: Vec::new(),
+        database: None,
     };
     let frame = (status == Status::MatchFound)
         .then(|| Frame::from_solution(&solution))

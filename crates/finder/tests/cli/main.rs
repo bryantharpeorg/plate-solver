@@ -6,6 +6,7 @@ mod support;
 
 mod aim;
 mod backlash;
+mod databases;
 mod flags;
 mod imaging;
 mod imaging_focus;
