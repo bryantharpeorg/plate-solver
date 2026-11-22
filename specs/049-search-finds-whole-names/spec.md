@@ -285,14 +285,15 @@ development, `cargo nextest run -p finder --locked --lib targets::` and
 1. **Given** the catalog, **When** a committed test searches with a limit of 20 for
    each of `Orion Nebula`, `Great Orion Nebula`, `orion neb`, `ring NEBULA`,
    `Whirlpool Galaxy`, `Double Cluster`, `h & chi Persei`, `North America Nebula`,
-   `  Ring   Nebula `, `nebula orion`, `gr or ne` and `whirl gal`, **Then** it asserts
-   that their ids are, in turn, exactly `[NGC 1976]`, `[NGC 1976]`, `[NGC 1976]`,
-   `[NGC 6720]`, `[NGC 5194]`, `[C 14]`, `[C 14]`, `[NGC 7000]`, `[NGC 6720]`,
-   `[NGC 1976]`, `[NGC 1976]` and `[NGC 5194]`.
+   `  Ring   Nebula `, `nebula orion`, `nebula` and `orion` with a tab (U+0009) between
+   them, `gr or ne` and `whirl gal`, **Then** it asserts that their ids are, in turn,
+   exactly `[NGC 1976]`, `[NGC 1976]`, `[NGC 1976]`, `[NGC 6720]`, `[NGC 5194]`,
+   `[C 14]`, `[C 14]`, `[NGC 7000]`, `[NGC 6720]`, `[NGC 1976]`, `[NGC 1976]`,
+   `[NGC 1976]` and `[NGC 5194]`.
 2. **Given** the catalog, **When** a committed test searches with a limit of 20 for each
    of `orion galaxy`, `andromeda nebula`, `barbell cork`, `rion nebula`,
-   `orion nebulae`, `tie`, `tie nebula` and `orion é` (with U+00E9), **Then** it asserts
-   that each finds nothing.
+   `orion nebulae`, `tie`, `tie nebula`, `orion é` (with U+00E9) and `bow bow tie`,
+   **Then** it asserts that each finds nothing.
 3. **Given** the catalog, **When** a committed test searches for `cluster s` and
    `little nebula` with a limit of 20, for `little nebula` with a limit of 2, and for
    `eagle nebula` and `orion o` with a limit of 20, **Then** it asserts that their ids
@@ -307,23 +308,26 @@ development, `cargo nextest run -p finder --locked --lib targets::` and
    `M 31` with a limit of 20, **Then** it asserts that the ids are exactly
    `[NGC 1, NGC 2, NGC 4, NGC 3]`.
 5. **Given** every common name of every row of the extract that is neither `Dup` nor
-   `NonEx`, **When** a committed test searches for each name in capitals with no limit
+   `NonEx` (the non-empty pieces of the row's `common_names` column, split at commas),
+   **When** a committed test searches for each name in capitals with no limit
    (`usize::MAX`), **Then** it asserts that each search holds the object `find` gives
    for that row's `name` column, and that there are 182 names, counted once per row they
    appear in (175 of them distinct, which is not asserted).
 6. **Given** every prefix of every word of those common names, lowercased, a word being
    what lies between spaces and commas as 012's rule reads them, **When** a committed
-   test searches with no limit for each prefix that holds a letter or a digit, **Then**
-   it asserts that there are 951 distinct prefixes, 950 of them holding a letter or a
-   digit; that each of the 950's ids, as a set, hold the canonical ids of the rows
-   having a common name with a whitespace-separated word, as 012's rule reads it, that
-   starts with the query, compared in lowercase; and that the ids beyond those are
-   exactly these, and none for any other query: for `l'`, ESO 56-115, NGC 1980, IC 2944,
+   test searches with no limit (`usize::MAX`) for each prefix that holds a letter or a
+   digit, **Then** it asserts that there are 951 distinct prefixes, 950 of them holding
+   a letter or a digit; that, for each of the 950, the set of its ids contains the
+   canonical ids of the rows having a common name with a whitespace-separated word, as
+   012's rule reads it, that starts with the query, compared in lowercase; and that the
+   set holds besides those exactly these ids, and none for any other query: for `l'`,
+   ESO 56-115, NGC 1980, IC 2944,
    NGC 6523, NGC 6618, NGC 6818, NGC 650, UGC 5470, NGC 6445 and NGC 6369; for `l'e`,
    UGC 5470; for `le`, NGC 6705; for `sn` and `sno`, NGC 6087.
 7. **Given** every object of `targets::all()`, **When** a committed test searches with no
-   limit for its canonical id and, for each object with a Messier id, for that id with a
-   space after the `M` (`M 42`), **Then** it asserts that each search's ids are exactly
+   limit (`usize::MAX`) for its canonical id and, for each object with a Messier id, for
+   that id with a space after the `M` (the object's `messier` field, such as `M42`,
+   written `M 42`), **Then** it asserts that each search's ids are exactly
    that object's id.
 8. **Given** the console router, **When** a committed test asks the route and the tool for
    each of `Orion Nebula`, `Great Orion Nebula`, `Ring Nebula`, `Whirlpool Galaxy`,
@@ -357,10 +361,13 @@ development, `cargo nextest run -p finder --locked --lib targets::` and
   queries they name and the brightness order of `NEBULA`'s, and pass with the fix.
 - **Spaces around and between words** do not matter: the query is split at whitespace,
   so leading, trailing and repeated spaces are passed over (US1-S1's
-  `  Ring   Nebula `). An empty or blank `q` is still refused with 400 before the
-  search (`crates/finder/src/api.rs:1658`).
+  `  Ring   Nebula `), and a tab separates words as a space does (US1-S1). An empty or
+  blank `q` is still refused with 400 before the search
+  (`crates/finder/src/api.rs:1658`).
 - **Two query words may begin the same name word**: `orion o` finds NGC 1976 and then
   IC 434 (`Orion B`) (owner decision 1 (a); US1-S3).
+- **A repeated query word is kept**: `bow bow tie` finds nothing, since `tie` begins no
+  word of a name and `bowbowtie` reads along none (US1-S2).
 - **Words from two names of one object** do not combine: `barbell cork` finds nothing,
   though M76 is both the Barbell Nebula and the Cork Nebula (US1-S2). Reading along
   stays within one name too.

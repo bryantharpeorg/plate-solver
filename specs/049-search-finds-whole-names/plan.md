@@ -150,7 +150,8 @@ of `pub fn search` (`crates/finder/src/targets.rs:222` to `:225`) becomes:
 The unit tests follow the module's last test,
 `every_source_object_is_reachable_by_its_raw_and_canonical_id`
 (`crates/finder/src/targets.rs:454`), with one helper of their own that maps a search's
-objects to their ids. US1-S6's queries are built from the extract's `common_names`
+objects to their ids, `fn ids(matches: Vec<&Target>) -> Vec<&str>`. The tests' names
+are the builder's to choose. US1-S6's queries are built from the extract's `common_names`
 column split on commas and spaces, as 012's rule reads words, each word lowercased and
 cut after each of its characters; the test keeps those holding a letter or a digit by
 its own check (`char::is_alphanumeric` on the query's characters, not `words`); its
@@ -164,7 +165,10 @@ the test, and the route's JSON), then one `#[tokio::test]` that builds the conso
 with `support::mcp::app(support::mcp::state(), "127.0.0.1")` and, for each query of
 US1-S8, sends `GET /api/targets?q=` with the query encoded as spec.md gives it (each
 space as `+`) through `support::mcp::send`, reads it with `support::mcp::body`, and
-sends `support::mcp::call("search_targets", json!({"q": query}))`. It uses only
+sends `support::mcp::call("search_targets", json!({"q": query}))`. The route's ids are
+the `id` strings of the elements of its JSON array. The tool's answer is not an error
+when its `result.isError` is not `true`, as
+`crates/finder/tests/mcp/session_tools.rs:41` reads it. It uses only
 `crate::support::mcp`, `axum`, and `serde_json`.
 
 ### `crates/finder/tests/mcp/main.rs` (US1)
@@ -176,8 +180,11 @@ Nothing else changes.
 ## What was run and what was read
 
 **Run on 2026-11-22**, on the branch `probe/049-letters`, rebased on `main` at 28f436df,
-three times each with the same outcome unless said. The probe's tip, 1580e503, holds the
-ten scenarios' tests as spec.md gives them and the trial fix of § Interface.
+three times each with the same outcome unless said. The probe's tip, a9211056, holds the
+ten scenarios' tests as spec.md gives them and the trial fix of § Interface. Its last
+commit added the two cases probe round 1 asked for; the runs on `main`'s search code
+and of the first sixteen wrong variants below were made one commit earlier, at
+1580e503, and the first was repeated once at the tip with the same outcome.
 
 - the tip's tests with `main`'s search code in place of the fix's (everything of
   `targets.rs` above its tests as on `main`): US1-S1, US1-S3, US1-S4, US1-S5, US1-S6,
@@ -187,10 +194,10 @@ ten scenarios' tests as spec.md gives them and the trial fix of § Interface.
   the module pass;
 - the tip's tests with the fix: all ten pass, and the module's ten other unit tests
   pass unchanged;
-- with the fix, both gates' Rust commands, once at 1580e503: `lint`'s four and `test`'s
+- with the fix, both gates' Rust commands, once at a9211056: `lint`'s four and `test`'s
   two, every test of the workspace passing (1,453 under nextest), and the doctests;
-- sixteen wrong variants of the rule at 1580e503, each once, on the module's unit
-  tests and US1-S8. Each fails at least one scenario:
+- eighteen wrong variants of the rule, each once, on the module's unit tests and
+  US1-S8. Each fails at least one scenario:
 
   | Variant | Fails |
   |---|---|
@@ -203,13 +210,28 @@ ten scenarios' tests as spec.md gives them and the trial fix of § Interface.
   | A name's and a query's words also split at hyphens | US1-S2, US1-S6 |
   | The old check, an empty query only | US1-S10 |
   | Reading along from the name's first word only | US1-S4, US1-S9 |
-  | Reading along over two of the name's words at most | US1-S9 |
-  | Reading along from anywhere in the name | US1-S2, US1-S6, and 012's `search_uses_name_word_prefixes_and_orders_by_magnitude_with_unknowns_last` |
+  | Reading along over at most two of the name's words, the first of them included | US1-S9 |
+  | The joined query found anywhere in the joined name, not only from the start of a word | US1-S2, US1-S6, and 012's `search_uses_name_word_prefixes_and_orders_by_magnitude_with_unknowns_last` |
   | Any query word rather than each | US1-S1 to US1-S4, US1-S7 to US1-S9 |
-  | A query word equal to a name word, not beginning it | US1-S1, US1-S3, US1-S9 |
+  | In "each word begins a word" only, a query word equal to a name word, not beginning it | US1-S1, US1-S3, US1-S9 |
   | The words in the name's order (decision 1 (b)) | US1-S1, US1-S3 |
   | Each query word a different name word (decision 1 (f)) | US1-S3 |
   | All of an object's names read as one (decision 1 (d)) | US1-S2, US1-S3 |
+  | Words split at the space character only, not at any whitespace | US1-S1 |
+  | A repeated query word dropped | US1-S2 |
+
+**Run in probe round 1, on 2026-11-22**, on the branch `probe/049-r1` from be52f8a0
+(`main` at 28f436df and this trio as it then stood), by a builder that read only the
+trio: the story built as written, its files exactly the Refinement Record's `writes`.
+§ Interface's four blocks compiled as given, and rustfmt, clippy and rustdoc left them
+as they are. Its tests on the code before the story failed for US1-S1, US1-S3, US1-S4,
+US1-S5, US1-S6, US1-S8, US1-S9 and US1-S10 and passed for US1-S2 and US1-S7; after the
+story all passed three times, and both gates' Rust commands passed (1,453 tests under
+nextest). Its diff was 14,792 B. It re-made the sixteen wrong variants then in the
+table from their descriptions and saw the same scenarios fail in every row. Of fifteen
+more of its own, two were bitten by no scenario, the last two rows above; the cases
+that bite them are now in US1-S1 and US1-S2. It found no blocking defect, and its
+seven defects of clarity (049-R1 to 049-R7) are folded here.
 
 **Run on 2026-11-21**, on the branch `probe/049` at b7e983a0: a first probe test on
 `main`'s code, in which `Orion Nebula`, `Great Orion Nebula`, `orion neb`,
@@ -342,7 +364,7 @@ beside the change, and what the story does to what they observe:
 | One `mcp/` module that asks the route and the tool | A `console/` module for the route and an `mcp/` module for the tool | The MCP app answers both, as `session_tools.rs` already compares them; one module, one `mod` line. |
 | A new module | New cases in `session_tools.rs` or `console/targets.rs` | Existing tests are not edited (constitution II). |
 | 047 in `depends_on_landed` | `concurrent` with 047's US3; dropping US1-S8 so the story need not wait (spec owner decision 3) | 047's US3 and this story each add a line to `crates/finder/tests/mcp/main.rs`. 047 has landed. |
-| One story | Two | About 22 % of 65,536 B (§ Plan traps 2). |
+| One story | Two | About 23 % of 65,536 B (§ Plan traps 2). |
 
 ## User Story 1 - A name of several words finds its object
 
@@ -379,8 +401,9 @@ comment in `targets.rs`.
    decisions, § Owner approvals). Decisions met: the owner answered 1 (a) and 3 (a) on
    2026-11-21, and chose decision 2's rule on 2026-11-22 ("Rewrite to this"); the trio
    is written for them. The approvals are given by the flip, which is the owner's.
-4. **Probe builds.** Not met: no builder has built the story from this text alone. The
-   drafting probe built it with the trial fix (§ What was run and what was read).
+4. **Probe builds.** Met on 2026-11-22: probe round 1 built US1 from this text alone,
+   with 0 blocking defects and 7 of clarity, folded the same day (§ What was run and
+   what was read).
 
 ## Outside the factory
 
@@ -409,10 +432,12 @@ They bind every story.
 1. **Gate evidence or nothing.** The judge credits only gate results and the story's
    diff. *Check:* every Then names a committed test the `test` gate runs.
 2. **One evidence budget.** *Check:* the story's diff stays under 64 KiB, measured with
-   `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c`. Measured on the
-   drafting probe's net diff from 28f436df at 1580e503: 14,757 B, 22.5 % of 65,536 B
-   (`targets.rs` 12,270 B, the two `mcp/` files 2,487 B). At the 1.35 times a factory
-   build has run over its probe on earlier specs, about 19,900 B, 30.4 %.
+   `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c`, where `<base>` is
+   the commit the story starts from, which already holds this trio. Measured on the
+   drafting probe's net diff from 28f436df at a9211056: 14,832 B, 22.6 % of 65,536 B
+   (`targets.rs` 12,345 B, the two `mcp/` files 2,487 B); probe round 1's build
+   measured 14,792 B before its two cases were added. At the 1.35 times a factory build
+   has run over its probe on earlier specs, about 20,000 B, 30.6 %.
 3. **A spec fixed mid-epic needs a relaunch.** *Check:* no builder edits
    `specs/049-search-finds-whole-names/` or `.specify/`.
 4. **An oracle copied from the code proves nothing.** *Check:* every expected list is a
@@ -467,12 +492,12 @@ stories:
       - path: crates/finder/src/targets.rs
         status: new
         disposition: add
-        assertion: "with a limit of 20, Orion Nebula, Great Orion Nebula, orion neb, ring NEBULA, Whirlpool Galaxy, Double Cluster, h & chi Persei, North America Nebula, spaced-out Ring Nebula, nebula orion, gr or ne and whirl gal give exactly NGC 1976, NGC 1976, NGC 1976, NGC 6720, NGC 5194, C 14, C 14, NGC 7000, NGC 6720, NGC 1976, NGC 1976 and NGC 5194"
+        assertion: "with a limit of 20, Orion Nebula, Great Orion Nebula, orion neb, ring NEBULA, Whirlpool Galaxy, Double Cluster, h & chi Persei, North America Nebula, spaced-out Ring Nebula, nebula orion, nebula and orion with a tab between, gr or ne and whirl gal give exactly NGC 1976, NGC 1976, NGC 1976, NGC 6720, NGC 5194, C 14, C 14, NGC 7000, NGC 6720, NGC 1976, NGC 1976, NGC 1976 and NGC 5194"
         decision: "spec.md:US1-S1"
       - path: crates/finder/src/targets.rs
         status: new
         disposition: add
-        assertion: "orion galaxy, andromeda nebula, barbell cork, rion nebula, orion nebulae, tie, tie nebula and orion with U+00E9 after a space each find nothing"
+        assertion: "orion galaxy, andromeda nebula, barbell cork, rion nebula, orion nebulae, tie, tie nebula, orion with U+00E9 after a space and bow bow tie each find nothing"
         decision: "spec.md:US1-S2"
       - path: crates/finder/src/targets.rs
         status: new

@@ -9,7 +9,7 @@ description: "Task list for 049-search-finds-whole-names: Target Search Finds Na
   28f436df;
 - the owner decisions in spec.md are settled: met, 1 (a) and 3 (a) on 2026-11-21 and
   decision 2's rule on 2026-11-22;
-- the story has been probe-built from this text: not yet;
+- the story has been probe-built from this text: met on 2026-11-22, in probe round 1;
 - no operator-staged file is needed.
 
 **Rules for every story:**
@@ -31,8 +31,8 @@ description: "Task list for 049-search-finds-whole-names: Target Search Finds Na
 ### Tests first
 
 - [ ] T001 [US1] In `crates/finder/src/targets.rs`, after the tests module's last test,
-  `every_source_object_is_reachable_by_its_raw_and_canonical_id`, add one helper that
-  maps a search's objects to their ids and one `#[test]` for each of US1-S1 to US1-S7,
+  `every_source_object_is_reachable_by_its_raw_and_canonical_id`, add the one helper
+  plan.md § Interface names, `ids`, and one `#[test]` for each of US1-S1 to US1-S7,
   US1-S9 and US1-S10, with the queries and expected ids spec.md gives. US1-S6 keeps the
   prefixes that hold a letter or a digit by its own check, not by calling `words`. On
   today's search US1-S1, US1-S3, US1-S4, US1-S5, US1-S6, US1-S9 and US1-S10 fail, and
