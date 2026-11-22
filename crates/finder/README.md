@@ -5,8 +5,11 @@ your own) and it shows where the frame points (RA/Dec, the constellation, the fi
 view), the catalog stars it matched drawn on the frame as proof, the Messier objects in and
 near the field, and objects like them that are up now.
 
-It is the start of the electronic finder: the same program will later take the live camera
-stream, talk to SkySafari and the mount, and give an AI assistant the console's actions.
+It is also the electronic finder's console. Paired with a scope node, it solves the finder
+camera's live stream, guides a push to a target, drives the mount for GoTo and tracking, runs
+the imaging camera from focus to a stacked image, and offers the same actions to MCP clients.
+A SkySafari link is not built yet. The [main README](../../README.md#status) says what has been
+proven at the telescope.
 
 ## Run it
 
