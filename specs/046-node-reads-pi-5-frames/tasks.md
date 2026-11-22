@@ -8,7 +8,7 @@ description: "Task list for 046-node-reads-pi-5-frames: The Node Reads the Pi 5'
 - every spec in `depends_on_landed` has landed on `main`: met at 425b9da0;
 - the Pi 5 capture is on `main` in `fixtures/scope-node/pi5/`, staged by the operator
   under owner decision 2: not met;
-- the owner decisions in spec.md are settled: not met, both open;
+- the owner decisions in spec.md are settled: met on 2026-11-21, the recommended answers;
 - the story has been probe-built from this text: not met.
 
 **Rules for every story:**

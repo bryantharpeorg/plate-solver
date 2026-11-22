@@ -5,8 +5,9 @@ depends_on_landed: ["013-live-finder", "044-node-stops-mount-before-exit"]
 # at the owner's ask the same day ("Yes, draft it"), from a probe of that day on the
 # branch `probe/046` cut from 425b9da0: tests that show the fault, run on `main`'s code,
 # and a trial fix with which they pass, with both gates' Rust commands passing. Every
-# `path:line` here was read at 425b9da0. The two owner decisions are open, and the trio
-# has not yet been built from its own text (plan.md § Prerequisites). 044 is named
+# `path:line` here was read at 425b9da0. The owner took both recommended answers on
+# 2026-11-21 ("Yes, both"), and the seat may flip it once probe round 1 is folded. The
+# trio has not yet been built from its own text (plan.md § Prerequisites). 044 is named
 # because the story's binary tests sit beside 044's and run the node 044 last changed.
 # 027's test layout is not named: no story writes a finder test. What rests on a run and
 # what on reading is said where it is used (plan.md § What was run and what was read).
@@ -111,10 +112,10 @@ it cannot frame.
 
 ## Owner decisions
 
-Each is open. The scenarios name the recommended answers; another answer changes the
-scenarios plan.md § Decisions names, and no requirement's intent.
+The owner took each recommended answer on 2026-11-21 ("Yes, both"), and the scenarios
+name them. The alternatives are kept below for the record.
 
-1. **How the node learns the stride** (FR-002, FR-003, FR-004). *Open.* Recommended:
+1. **How the node learns the stride** (FR-002, FR-003, FR-004). *Settled 2026-11-21: the recommended answer.* Recommended:
    (a) the listing names the ISP, and every frame's padding is checked. The node reads
    `PipelineHandler` from the listing it already parses at start (`rpi/vc4` → 64,
    `rpi/pisp` → 128); a listing without that line, from an rpicam-apps that does not
@@ -147,7 +148,7 @@ scenarios plan.md § Decisions names, and no requirement's intent.
      alignment, as an override beside (a) or alone: a new key, which the operator must
      set per Pi; alone, a missing or wrong value misframes as today. (d) (a) without the
      padding check: a stream at another stride stalls silently, as today.
-2. **The Pi 5 capture as a fixture** (US1-S1, US1-S6, US1-S9). *Open.* Recommended: (a)
+2. **The Pi 5 capture as a fixture** (US1-S1, US1-S6, US1-S9). *Settled 2026-11-21: the recommended answer.* Recommended: (a)
    the operator stages it before the flip, in `fixtures/scope-node/pi5/`, in a fixtures
    PR of its own, as #129 staged 013's: `list-cameras.txt`, `stream.yuv` (three
    1296x972 frames at stride 1408, 6,158,592 B), `stream.json`, a `fixtures.json` that

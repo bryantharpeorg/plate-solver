@@ -393,7 +393,8 @@ in `yuv.rs`; `listing::isp`; `with_isp`, `discover` and `start` in `mod.rs`.
    and the README paragraph of § Fixtures, staged by the operator in a PR of its own.
    Not met. Under (b), the listing and its `fixtures.json` only; under (c), nothing.
 4. **The owner decisions are settled and the owner approvals given** (spec § Owner
-   decisions, § Owner approvals). Not met: both decisions are open.
+   decisions, § Owner approvals). Decisions met 2026-11-21: the owner took both
+   recommended answers ("Yes, both"); the approvals come with the flip.
 5. **Probe builds.** Not met: the trio has not been built from its own text.
 
 ## Outside the factory
@@ -468,9 +469,8 @@ Shared writes name the merge edge that orders them, and the story that last wrot
 same file on `main`. `crates/scope-node/src/rpicam/mod.rs` was last changed by #194, not
 a spec's story, and has no entry.
 
-The two owner decisions of spec.md are open. The record's `open_questions` are empty
-because the validator refuses a record that holds any; the open decisions are in spec
-§ Owner decisions and § Prerequisites 3 and 4 here. This record approves nothing: the
+The owner took both of spec.md's recommended answers on 2026-11-21. The record's
+`open_questions` are empty. This record approves nothing: the
 owner approvals of spec.md are given by the flip.
 
 ```yaml
