@@ -24,9 +24,11 @@ and indoors testing frames, on an Android phone or a Surface laptop.
 ## Product Purpose
 
 The finder console turns one camera frame into where the telescope is pointing, what is in
-and near the field, and what to look at next. Today it solves still frames (the bundled
-samples or an upload). It is the program that will later run the live camera, the SkySafari
-link, GoTo control and AI steering. Success now: at a glance, and with proof, the user can
+and near the field, and what to look at next. It solves still frames (the bundled samples
+or an upload) and, paired with the scope node, the finder camera's live stream. From those it
+guides a push, drives GoTo and tracking, and runs the imaging camera from focus to a stacked
+image; MCP clients get the same actions. A SkySafari link and voice mode are still to come.
+Success now: at a glance, and with proof, the user can
 see that the solver works and where a frame points.
 
 ## Positioning
@@ -45,12 +47,12 @@ closed-loop GoTo and AI-steered observing rather than stopping at push-to.
   - the console runs in WSL2 on the Surface: it solves, keeps the pointing model, plans moves
     and serves the page;
   - a scope node (a Raspberry Pi 3B riding on the telescope) runs the finder camera (an
-    Arducam on its CSI ribbon, model still unknown) and a USB cable straight to the mount's
+    Arducam OV5647 with a 16 mm lens, on its CSI ribbon) and a USB cable straight to the mount's
     motor controller; it finds the stars in each frame and carries out axis commands;
   - the phone and the laptop open the page, and share one observing session.
 - The site is typed once (the Surface has no GPS); time comes from the console's clock.
-- Out of scope for now: SkySafari's link, the AI assistant and the mobile app. They will use
-  the same pointing state when they come.
+- Out of scope for now: SkySafari's link, the voice assistant and the mobile app. They will
+  use the same pointing state when they come. AI clients already reach it over MCP.
 
 ## Capabilities and Constraints
 
@@ -64,8 +66,9 @@ closed-loop GoTo and AI-steered observing rather than stopping at push-to.
   Rules today; AI later.
 - Works offline; online extras (Aladin survey imagery) are optional.
 - The default database covers 10–30° fields; frames from other cameras need a matching one.
-  The finder camera's field is probably outside it, so it gets its own database at bring-up.
-- Next, in four steps (specified, not yet built; `openspec/project.md` §3):
+  The finder camera's 13.0° × 9.8° field falls inside it.
+- Built since, in four steps (specs 012 to 015; `openspec/project.md` §3), then MCP (016)
+  and imaging (030 to 043):
   1. Targets and push-to, with no hardware: search OpenNGC (Messier, NGC, IC, common names)
      for a target, learn whether it is pointable (above the minimum altitude, default 15°,
      and outside the Sun guard, which is always on), and get "turn clockwise 34° · tilt up
@@ -77,10 +80,12 @@ closed-loop GoTo and AI-steered observing rather than stopping at push-to.
      and the console drives the 16-inch Dob's two axes in a closed loop to within 1′.
   4. Tracking: pointing-model rates corrected by solves every 1–5 s, with the field rotation
      and longest exposure reported for an imaging camera.
+  5. Imaging: an INDI camera on the scope node, frames solved with ASTAP, a focus aid, darks
+     and flats, a live stack, and an imaging run from GoTo to a saved stack.
 - A simulated scope node (`finder --simulate`) stands in for the telescope at the desk and in
   CI.
 - Still out: typed RA/Dec, named stars, the Moon and planets as targets; a horizon that varies
-  by direction; field derotation; SkySafari, AI, the mobile app.
+  by direction; field derotation; SkySafari, voice mode, the mobile app.
 
 ## Brand Commitments
 
@@ -91,7 +96,9 @@ None yet. The repository is `plate-solver`; the app is the finder console.
 - 21 cedar sample frames in `reference-solutions/cedar-solve/examples/data/medium_fov/`;
   20 solve at the default threshold, as they do in cedar; `roof.jpg` solves only at 5σ.
 - Benchmark numbers in `README.md`, from one Snapdragon laptop under WSL2.
-- No frames from the user's own finder camera yet: never imply real-hardware results.
+- Real-sky results from one rig, 12 to 14 Nov 2026, in `docs/field/2026-11-13-first-light.md`:
+  live solving, push-to by hand and eight small powered moves. Never imply hardware results
+  beyond the field reports: GoTo, Track and imaging have so far run only in the simulator.
 
 ## Product Principles
 
