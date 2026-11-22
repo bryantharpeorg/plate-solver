@@ -6,8 +6,9 @@ depends_on_landed: ["013-live-finder", "016-mcp", "020-live-chart-calm", "022-al
 # day on the branch `probe/047` cut from 425b9da0: the choice rules tried on simulated
 # frames and in the real live loop, and a trial build of all three stories with every
 # finder test passing. Every `path:line` here was read at 425b9da0. State: draft. The
-# owner decisions below are open; the seat reviews this, opens a draft PR and asks the
-# owner before any flip. What rests on a run and what on reading is said where it is used
+# owner took the four recommended answers on 2026-11-21 ("yes"); no probe round has yet
+# built the stories from this text alone, and the flip is the owner's to give. What rests
+# on a run and what on reading is said where it is used
 # (plan.md § What was run and what was read).
 ---
 
@@ -124,10 +125,11 @@ nothing. `--db` given once works as today.
 
 ## Owner decisions
 
-All four are open. Each scenario that depends on one names it, and is written for the
-recommended answer.
+The owner took each recommended answer on 2026-11-21 ("yes"), and the scenarios that
+depend on one name it. The alternatives are kept below for the record.
 
-1. **The choice rule** (FR-009, FR-010). Recommended: (a) **the solved field decides.**
+1. **The choice rule** (FR-009, FR-010). *Settled 2026-11-21: the recommended answer.*
+   Recommended: (a) **the solved field decides.**
    With no field estimate, the database in use, then each of the others in the order
    given, until one solves; then the database whose range holds the solved field: the
    one that solved if it does, otherwise the first given that does, otherwise the one
@@ -152,18 +154,21 @@ recommended answer.
      after the change failed.
    - (d) **one setting naming the database**, the plain switch: the same as giving one
      `--db`, which already works; nothing to build.
-2. **How databases are named on the command line** (FR-001). Recommended: (a) **`--db`
+2. **How databases are named on the command line** (FR-001). *Settled 2026-11-21: the recommended answer.*
+   Recommended: (a) **`--db`
    repeated**, in the order to try them. `--db` given once is today's command, unchanged;
    with none, cedar's database as today; the order is written where the unit is. Instead:
    (b) **`--db-dir FOLDER`**, every `.npz` in a folder in file-name order: the deploy
    drops files in and the order is implicit; or (c) **a list file**, one path a line:
    another file to keep in step with the folder.
-3. **Memory** (FR-001). Recommended: (a) **every database loaded at start.** Estimated
+3. **Memory** (FR-001). *Settled 2026-11-21: the recommended answer.*
+   Recommended: (a) **every database loaded at start.** Estimated
    for the Pi: cedar's about 115 MB and a 2.0–2.6° Tycho database about 1.7 GB, about
    1.8 GB of 8 GB (plan.md § Memory). A switch costs nothing at night. Instead: (b)
    **one at a time**, the others loaded on a switch: the peak is the largest database's
    size plus a load's transient, and every switch stalls the live loop for a load.
-4. **The tests' databases** (FR-019). Recommended: (a) **built in the test** with
+4. **The tests' databases** (FR-019). *Settled 2026-11-21: the recommended answer.*
+   Recommended: (a) **built in the test** with
    `database-generation`'s library, a dev-dependency of the finder (owner approval 1),
    from cedar's stars and the repository's BSC5, once per target directory. Instead: (b)
    **committed fixtures**: the probe's two smaller ones are 1.75 MB and 2.54 MB of

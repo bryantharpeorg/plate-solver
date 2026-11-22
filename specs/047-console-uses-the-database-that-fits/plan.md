@@ -645,7 +645,8 @@ Tests first: `FieldDatabases.test.tsx`, `healthLine.test.ts` and
    If `main` moves in a file § Project Structure names, or in a test § Shapes names,
    re-read them and re-run the validator.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
-   decisions, § Owner approvals). Not met: all four decisions are open.
+   decisions, § Owner approvals). Decisions met 2026-11-21: the owner took the four
+   recommended answers ("yes"); the approvals come with the flip.
 4. **Probe builds.** Not met: no probe round has built the stories from this text alone.
    The trial was built alongside the draft.
 5. **The page half has run once** on the trial or a probe round: `npm test`, the
@@ -758,11 +759,9 @@ database and its generator, 013's and 016's trios and the constitution. Writes c
 the task text. Shared writes name the merge edge that orders them, and the story that
 last wrote the same file on `main`.
 
-The four owner decisions of spec.md are open. The record is written for their
-recommended answers, and its `open_questions` are empty so that the validator checks the
-rest; the decisions stay open in spec.md § Owner decisions until the owner answers them,
-and a different answer reopens US2 (decision 1) or US1 (decisions 2 to 4). This record
-approves nothing: the owner approvals of spec.md are given by the flip.
+The owner took the four recommended answers of spec.md on 2026-11-21. The record's
+`open_questions` are empty. This record approves nothing: the owner approvals of spec.md
+are given by the flip.
 
 ```yaml
 version: 1

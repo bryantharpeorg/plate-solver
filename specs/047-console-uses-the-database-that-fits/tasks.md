@@ -6,7 +6,7 @@ description: "Task list for 047-console-uses-the-database-that-fits: The Console
 
 **Prerequisites** (plan.md § Prerequisites):
 - every spec in `depends_on_landed` has landed on `main`: met at 425b9da0;
-- the owner decisions in spec.md are settled: not met, all four are open;
+- the owner decisions in spec.md are settled: met on 2026-11-21, the recommended answers;
 - every story has been probe-built from this text: not met;
 - the page half has run once: not met;
 - no operator-staged file is needed.
