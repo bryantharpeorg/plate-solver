@@ -163,7 +163,10 @@ impl Catalog {
 
     fn search(&self, query: &str, limit: usize) -> Vec<&Target> {
         let query = query.trim().to_lowercase();
-        if query.is_empty() || limit == 0 {
+        // Names are matched by letters and digits only, and every id holds one, so a
+        // query without any finds nothing.
+        let terms = words(&query);
+        if terms.is_empty() || limit == 0 {
             return Vec::new();
         }
         let exact = self
@@ -175,11 +178,10 @@ impl Catalog {
             .iter()
             .filter(|object| {
                 exact.is_some_and(|exact| std::ptr::eq(*object, exact))
-                    || object.common_names.iter().any(|name| {
-                        name.to_lowercase()
-                            .split_whitespace()
-                            .any(|word| word.starts_with(&query))
-                    })
+                    || object
+                        .common_names
+                        .iter()
+                        .any(|name| name_matches(name, &terms))
             })
             .collect();
         matches.sort_by(|a, b| {
@@ -196,6 +198,26 @@ impl Catalog {
         matches.truncate(limit);
         matches
     }
+}
+
+/// The words of `text`, lowercased, each reduced to its letters and digits.
+fn words(text: &str) -> Vec<String> {
+    text.to_lowercase()
+        .split_whitespace()
+        .map(|word| word.chars().filter(|c| c.is_alphanumeric()).collect())
+        .filter(|word: &String| !word.is_empty())
+        .collect()
+}
+
+/// Whether each of `terms` begins a word of `name`, in any order, or the terms run
+/// together read straight along the name from the start of one of its words.
+fn name_matches(name: &str, terms: &[String]) -> bool {
+    let words = words(name);
+    let typed = terms.concat();
+    let each_begins_a_word = terms
+        .iter()
+        .all(|term| words.iter().any(|word| word.starts_with(term.as_str())));
+    each_begins_a_word || (0..words.len()).any(|from| words[from..].concat().starts_with(&typed))
 }
 
 fn catalog() -> &'static Catalog {
@@ -219,10 +241,13 @@ pub fn find(id: &str) -> Option<&'static Target> {
         .map(|&index| &catalog.objects[index])
 }
 
-/// Exact ids first, then common-name word prefixes in brightness order.
+/// Exact ids first, then common names in brightness order.
 ///
-/// Matching ignores case. Objects without a magnitude come last; canonical id breaks
-/// equal-magnitude ties. At most `limit` objects are returned, with no duplicates.
+/// In a common name only letters and digits are compared, whatever their case. A name
+/// matches when each word of the query begins one of its words, in any order, or when
+/// the query reads straight along the name from the start of one of its words. Objects
+/// without a magnitude come last; canonical id breaks equal-magnitude ties. At most
+/// `limit` objects are returned, with no duplicates.
 pub fn search(query: &str, limit: usize) -> Vec<&'static Target> {
     catalog().search(query, limit)
 }
@@ -464,6 +489,231 @@ mod tests {
             assert!(std::ptr::eq(object, find(&object.id).unwrap()));
             assert_eq!(object.code, fields[1]);
             assert_eq!(object.constellation, fields[4]);
+        }
+    }
+
+    fn ids(matches: Vec<&Target>) -> Vec<&str> {
+        matches
+            .into_iter()
+            .map(|object| object.id.as_str())
+            .collect()
+    }
+
+    #[test]
+    fn whole_names_and_unordered_word_prefixes_find_the_named_object() {
+        // Oracle: the pinned extract's common names; exact ids and order, no tolerance.
+        for (query, expected) in [
+            ("Orion Nebula", "NGC 1976"),
+            ("Great Orion Nebula", "NGC 1976"),
+            ("orion neb", "NGC 1976"),
+            ("ring NEBULA", "NGC 6720"),
+            ("Whirlpool Galaxy", "NGC 5194"),
+            ("Double Cluster", "C 14"),
+            ("h & chi Persei", "C 14"),
+            ("North America Nebula", "NGC 7000"),
+            ("  Ring   Nebula ", "NGC 6720"),
+            ("nebula orion", "NGC 1976"),
+            ("nebula\torion", "NGC 1976"),
+            ("gr or ne", "NGC 1976"),
+            ("whirl gal", "NGC 5194"),
+        ] {
+            assert_eq!(ids(search(query, 20)), [expected], "{query:?}");
+        }
+    }
+
+    #[test]
+    fn words_must_match_within_one_name_from_word_starts() {
+        // Oracle: no single extract name satisfies these queries; no fuzzy matches.
+        for query in [
+            "orion galaxy",
+            "andromeda nebula",
+            "barbell cork",
+            "rion nebula",
+            "orion nebulae",
+            "tie",
+            "tie nebula",
+            "orion é",
+            "bow bow tie",
+        ] {
+            assert!(search(query, 20).is_empty(), "{query:?}");
+        }
+    }
+
+    #[test]
+    fn matching_names_keep_magnitude_order_limits_and_canonical_id_ties() {
+        // Oracle: the extract's names and magnitudes, including equal and absent ones.
+        for (query, limit, expected) in [
+            ("cluster s", 20, vec!["Cl 399", "NGC 6087", "Mel 111"]),
+            ("little nebula", 20, vec!["NGC 6818", "NGC 650", "NGC 6369"]),
+            ("little nebula", 2, vec!["NGC 6818", "NGC 650"]),
+            ("eagle nebula", 20, vec!["IC 4703", "NGC 6611"]),
+            ("orion o", 20, vec!["NGC 1976", "IC 434"]),
+        ] {
+            assert_eq!(ids(search(query, limit)), expected, "{query:?}, {limit}");
+        }
+    }
+
+    #[test]
+    fn spaced_exact_id_precedes_brighter_names_read_from_any_word() {
+        // Independent five-row fixture: exact M31 is faint, one name has no magnitude,
+        // and M 3 must not match M 31. Expected ids and ordering are exact.
+        let extract = [
+            EXTRACT.lines().next().unwrap(),
+            "NGC0001;G;10;20;And;;;;15;M31;Faint Galaxy;",
+            "NGC0002;G;10;20;And;;;;1;;M 31 Bright Galaxy;",
+            "NGC0003;G;10;20;And;;;;;;Galaxy M 31;",
+            "NGC0004;G;10;20;And;;;;3;;Medium M31 Galaxy;",
+            "NGC0005;G;10;20;And;;;;2;;M 3 Galaxy;",
+        ]
+        .join("\n");
+        let catalog = Catalog::parse(&extract);
+        assert_eq!(
+            ids(catalog.search("M 31", 20)),
+            ["NGC 1", "NGC 2", "NGC 4", "NGC 3"]
+        );
+    }
+
+    #[test]
+    fn every_source_common_name_in_capitals_finds_its_object() {
+        // Oracle: raw extract names, counted per row; unchanged find supplies identity.
+        let mut names = 0;
+        for fields in EXTRACT
+            .lines()
+            .skip(1)
+            .map(|row| row.split(';').collect::<Vec<_>>())
+        {
+            if matches!(fields[1], "Dup" | "NonEx") {
+                continue;
+            }
+            let object = find(fields[0]).unwrap();
+            for name in fields[10].split(',').filter(|name| !name.is_empty()) {
+                names += 1;
+                assert!(
+                    ids(search(&name.to_uppercase(), usize::MAX)).contains(&object.id.as_str()),
+                    "{name:?} must find {}",
+                    object.id
+                );
+            }
+        }
+        assert_eq!(names, 182);
+    }
+
+    #[test]
+    fn all_source_word_prefixes_preserve_old_matches_with_only_declared_gains() {
+        // Oracle: 012's whitespace-word prefix rule applied directly to extract text,
+        // plus the spec's exhaustive literal gains. Compare sets exactly, no tolerance.
+        let mut prefixes: HashMap<String, HashSet<&str>> = HashMap::new();
+        for fields in EXTRACT
+            .lines()
+            .skip(1)
+            .map(|row| row.split(';').collect::<Vec<_>>())
+        {
+            if matches!(fields[1], "Dup" | "NonEx") {
+                continue;
+            }
+            let id = find(fields[0]).unwrap().id.as_str();
+            for name in fields[10].split(',').filter(|name| !name.is_empty()) {
+                for word in name.split_whitespace() {
+                    let word = word.to_lowercase();
+                    for (offset, character) in word.char_indices() {
+                        prefixes
+                            .entry(word[..offset + character.len_utf8()].to_string())
+                            .or_default()
+                            .insert(id);
+                    }
+                }
+            }
+        }
+        assert_eq!(prefixes.len(), 951);
+        let queries: Vec<_> = prefixes
+            .iter()
+            .filter(|(query, _)| query.chars().any(char::is_alphanumeric))
+            .collect();
+        assert_eq!(queries.len(), 950);
+        for (query, baseline) in queries {
+            let gains: &[&str] = match query.as_str() {
+                "l'" => &[
+                    "ESO 56-115",
+                    "NGC 1980",
+                    "IC 2944",
+                    "NGC 6523",
+                    "NGC 6618",
+                    "NGC 6818",
+                    "NGC 650",
+                    "UGC 5470",
+                    "NGC 6445",
+                    "NGC 6369",
+                ],
+                "l'e" => &["UGC 5470"],
+                "le" => &["NGC 6705"],
+                "sn" | "sno" => &["NGC 6087"],
+                _ => &[],
+            };
+            let mut expected = baseline.clone();
+            expected.extend(gains.iter().copied());
+            let actual: HashSet<_> = ids(search(query, usize::MAX)).into_iter().collect();
+            assert!(
+                baseline.is_subset(&actual),
+                "lost a 012 match for {query:?}"
+            );
+            assert_eq!(actual, expected, "{query:?}");
+        }
+    }
+
+    #[test]
+    fn every_canonical_and_spaced_messier_id_finds_exactly_its_object() {
+        // Oracle: unchanged all() and its canonical/Messier identities, exact lists.
+        for object in all() {
+            assert_eq!(
+                ids(search(&object.id, usize::MAX)),
+                [object.id.as_str()],
+                "{}",
+                object.id
+            );
+            if let Some(messier) = &object.messier {
+                let query = format!("M {}", messier.strip_prefix('M').unwrap());
+                assert_eq!(
+                    ids(search(&query, usize::MAX)),
+                    [object.id.as_str()],
+                    "{query}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn letters_and_digits_match_across_marks_and_joined_or_split_words() {
+        // Oracle: the extract's marked and compound common names, exact ids.
+        for (query, expected) in [
+            ("bow tie", "NGC 40"),
+            ("bowtie", "NGC 40"),
+            ("Bow-Tie", "NGC 40"),
+            ("cats eye", "NGC 6543"),
+            ("catseye", "NGC 6543"),
+            ("catseye nebula", "NGC 6543"),
+            ("cat's eye", "NGC 6543"),
+            ("cat’s eye", "NGC 6543"),
+            ("cat eye nebula", "NGC 6543"),
+            ("bear paw", "NGC 2537"),
+            ("eight burst", "NGC 3132"),
+            ("Wolf Lundmark Melotte", "PGC 143"),
+            ("Wolf-Lundmark-Melotte", "PGC 143"),
+            ("stephans quintet", "HCG 92"),
+            ("bode galaxy", "NGC 3031"),
+            ("horse head nebula", "B 33"),
+            ("whirl pool", "NGC 5194"),
+            ("jewelbox", "NGC 4755"),
+            ("h chi persei", "C 14"),
+        ] {
+            assert_eq!(ids(search(query, 20)), [expected], "{query:?}");
+        }
+    }
+
+    #[test]
+    fn queries_without_letters_or_digits_find_nothing() {
+        // Oracle: the spec's no-word rule, including the extract's ampersand name.
+        for query in ["-", "'", "--", "’", "' -", "&"] {
+            assert!(search(query, 20).is_empty(), "{query:?}");
         }
     }
 }
