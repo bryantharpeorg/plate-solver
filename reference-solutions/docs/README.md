@@ -98,6 +98,7 @@ instead of cedar-detect, and a simpler database generator and solver.
 ## A note on accuracy
 
 All formulas, constants, and array layouts in these docs were transcribed directly from
-the source (`tetra3/tetra3/tetra3.py`, `cedar-solve/tetra3/tetra3.py`,
-`cedar-detect/src/*.rs`). Where the two Python implementations differ, the difference is
-called out explicitly. Defaults reflect the code as committed in this repo snapshot.
+the source: ESA's original [`tetra3/tetra3.py`](https://github.com/esa/tetra3/blob/f9fa2eb9a32a5efc529e2d86f0b59f35b1e9028d/tetra3/tetra3.py) (no longer copied here),
+`cedar-solve/tetra3/tetra3.py` and `cedar-detect/src/*.rs`. Where the two Python
+implementations differ, the difference is called out explicitly. Defaults reflect the code at
+the upstream commits listed in [`../README.md`](../README.md).
