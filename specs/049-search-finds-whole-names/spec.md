@@ -132,37 +132,43 @@ Each is open. The recommended answer is the one the scenarios are written for.
    - **(f) each query word beginning a different word of the name**: stricter where a
      query reuses a name word. `orion o` finds nothing, where (a) finds NGC 1976 and
      IC 434 (US1-S3). While a name is typed the two almost never differ: of the 1,999
-     prefixes of the 175 distinct names, typed a character at a time, they differ on 3,
-     `chi persei c`, `coalsack c` and `small s`, and on each (a) finds one more object
-     (C 14, C 99 and NGC 292) beside the one being typed. Every full name is answered
-     alike. (a) is recommended as the simpler rule: (f) needs a matching of query words
-     to name words for those few differences.
-2. **Hyphens and apostrophes in names** (§ Edge Cases). *Open.* Recommended: (a)
-   leave them as they are: a word is what lies between spaces, as today. `bow` and
-   `bow-tie` find NGC 40 (`Bow-Tie nebula`), and `bow tie` does not; `cat eye` finds
-   NGC 6543 (`Cat's Eye Nebula`), and `cats eye` does not. Of the 182 common names, 5
-   hold a hyphen (`Bear-Paw`, `Bow-Tie`, `Eight-Burst`, `Fourcade-Figueroa`,
-   `Wolf-Lundmark-Melotte`) and 20 an apostrophe. Weighed against: (b) also split
-   names at hyphens and drop apostrophes, which finds `bow tie` and `cats eye`, but
-   changes what a word of one finds (`tie` would find NGC 40, which it does not today),
-   against C5's "Single-word results don't change". (b) suits voice, where a hyphen is
-   not heard; it can come with voice mode, which already lists C5 among its changes.
+     distinct lowercased prefixes of the 175 distinct names, typed a character at a
+     time, they differ on 3, `chi persei c`, `coalsack c` and `small s`, and on each (a)
+     finds one more object (C 14, C 99 and NGC 292) beside the one being typed; for
+     `small s`, NGC 292 (magnitude 2.3) comes before IC 4715 (4.5), the Small Sgr Star
+     Cloud being typed. Every full name is answered alike. (a) is recommended as the
+     simpler rule: (f) needs a matching of query words to name words for those few
+     differences.
+2. **Hyphens and apostrophes in names** (§ Edge Cases). *Open.* Recommended: (a) leave
+   them as they are: a word is what lies between spaces, as today. `bow` and `bow-tie`
+   find NGC 40 (`Bow-Tie nebula`), and `bow tie` does not; `cat eye` finds NGC 6543
+   (`Cat's Eye Nebula`), and `cats eye` does not. Of the 182 common names, 5 hold a
+   hyphen (`Bear-Paw`, `Bow-Tie`, `Eight-Burst`, `Fourcade-Figueroa`,
+   `Wolf-Lundmark-Melotte`) and 20 an apostrophe. Weighed against: (b) split names and
+   queries alike at hyphens and drop apostrophes from both, which finds `bow tie` and
+   `cats eye`, but changes what a word of one finds: `tie` would find NGC 40, and 11 of
+   today's 951 one-word prefixes (among them `b`, `m`, `p` and `t`) would find other
+   objects, against C5's "Single-word results don't change". Splitting names but not
+   queries would lose 25 of the 182 names typed in full, `Bow-Tie nebula` among them.
+   (b) suits voice, where a hyphen is not heard; it can come with voice mode, which
+   already lists C5 among its changes.
 3. **When the story may run** (front matter; plan.md § Refinement Record). *Open.*
    Recommended: (a) after 047 has landed: 047 stays in `depends_on_landed`, and the
    shared write of `crates/finder/tests/mcp/main.rs` is `merge_order`. 047 was building
-   at b7e983a0 and its US1 landed during the draft; the owner's decisions 1 and 2, and
-   a probe round, come first in any case (plan.md § Prerequisites). No two epics write
-   one file at once, and the re-read of § Prerequisites 2 is done once. Weighed
-   against: (b) `concurrent` with 047's US3: 047 leaves `depends_on_landed`, and the
-   record's entry for `mcp/main.rs` and 047's US3 becomes `concurrent` with its reason,
-   which the validator takes as advisory only ("cross-spec concurrency is advisory only
-   and must be resolved by final release ownership"); the two `mod` lines are not
-   neighbours, so git merges them, but the story could run while 047's US3 is
-   building; or (c) drop US1-S8 and
-   `crates/finder/tests/mcp/`, so the story writes only `targets.rs` and need not wait.
-   No test would then send a query of several words through the route and the tool;
-   016's `crates/finder/tests/mcp/session_tools.rs:59` holds the tool equal to the route
-   for single words only.
+   at b7e983a0 and its US1 landed during the draft; the owner's decisions 1 and 2, and a
+   probe round, come first in any case (plan.md § Prerequisites). No two epics write one
+   file at once, and the re-read of § Prerequisites 2 is done once. Weighed against: (b)
+   `concurrent` with 047's US3: 047 leaves `depends_on_landed`, and the record's entry
+   for `mcp/main.rs` and 047's US3 becomes `concurrent` with its reason, which the
+   validator takes as advisory only ("cross-spec concurrency is advisory only and must
+   be resolved by final release ownership"); the two `mod` lines are not neighbours, so
+   git merges them, but the story could run while 047's US3 is building. Under (b) the
+   passages that say 049 waits for 047 are rewritten too: the front-matter comment, the
+   Q "Why 047", plan.md § Prerequisites 1 and 2 and tasks.md's prerequisites. Or (c)
+   drop US1-S8 and `crates/finder/tests/mcp/`, so the story writes only `targets.rs` and
+   need not wait. No test would then send a query of several words through the route and
+   the tool; 016's `crates/finder/tests/mcp/session_tools.rs:59` holds the tool equal to
+   the route for single words only.
 
 ## Owner approvals
 
@@ -176,7 +182,9 @@ file changes.
    holds every word. No query of one word, no canonical id and no Messier id written
    with a space finds anything else on this catalog (US1-S6, US1-S7). A designation
    with a space that is no id of the catalog can now find names: `C 30` finds NGC 2070
-   (`30 Dor Cluster`), and `C 3` finds NGC 2070 and NGC 1049 (§ Edge Cases).
+   (`30 Dor Cluster`), and `C 3` finds NGC 2070 and NGC 1049 (§ Edge Cases). An
+   observer who types a Caldwell number that way gets a wrong object first where today
+   they get nothing.
    `GET /api/targets` and `search_targets` keep their shapes.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -273,7 +281,8 @@ them; during development, `cargo nextest run -p finder --locked --lib targets::`
   splits into itself alone, so "each query word" is today's one word, and the sort is
   untouched. US1-S6 checks the objects as sets; 012's tests of
   `crates/finder/src/targets.rs:384` and `crates/finder/tests/console/targets.rs:72`,
-  unchanged, check the order for the queries they name.
+  unchanged, check the first result of the queries they name and the brightness order
+  of `NEBULA`'s.
 - **Spaces.** The query is trimmed and split on whitespace, so leading, trailing and
   repeated spaces do not matter (US1-S1's `  Ring   Nebula `). An empty or blank `q` is
   still refused with 400 before the search (`crates/finder/src/api.rs:1622`).
@@ -291,9 +300,12 @@ them; during development, `cargo nextest run -p finder --locked --lib targets::`
   (US1-S7).
 - **A designation typed with a space that is not a catalog id** can now find names
   holding its words: `C 30` finds NGC 2070 (`30 Dor Cluster`), and `C 3` finds NGC 2070
-  and NGC 1049 (`Fornax Dwarf Cluster 3`), where both find nothing today. None of the
-  extract's 651 duplicate aliases, written with a space, finds a name. Read from the
-  extract and the rule, not tested.
+  and NGC 1049 (`Fornax Dwarf Cluster 3`), where both find nothing today. The catalog
+  holds Caldwell ids only for objects without an NGC or IC id (`C 9`, `C 14`, `C 41`,
+  `C 99`); Caldwell 30 and Caldwell 3 are NGC 7331 and NGC 4236 (by reading, not from the
+  extract), which the catalog holds under those ids alone, so `C 30` gives a wrong object
+  first. None of the extract's 651 duplicate aliases, written with a space, finds a
+  name. Read from the extract and the rule, not tested.
 - **The page** sends what is typed as it is typed, trimmed, after each keystroke
   (`crates/finder/web/src/components/TargetSheet.tsx:57`). As a name is typed, a
   query of several words keeps narrowing its name matches: each added word can only

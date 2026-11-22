@@ -284,8 +284,9 @@ Tests first: the seven unit tests in `targets.rs` and `tests/mcp/target_words.rs
    3 (b), the `mcp/main.rs` entry for 047's US3 becomes `concurrent` with its reason,
    which the validator reports as an advisory, and 047 leaves `depends_on_landed`; no
    `concurrent_with` is declared, since the validator takes only this spec's own stories
-   there; under (c), US1-S8,
-   both `mcp/` writes, their shared writes and 042 and 047 leave the trio.
+   there, and the passages that say 049 waits for 047 are rewritten (spec owner decision
+   3 (b)); under (c), US1-S8, both `mcp/` writes, their shared writes and 042 and 047
+   leave the trio.
 4. **Probe builds.** Not met: no builder has built the story from this text alone. The
    drafting probe built it with the trial fix (§ What was run and what was read).
 
@@ -344,8 +345,8 @@ They bind every story.
 | Risk | Mitigation |
 |---|---|
 | A new OpenNGC extract changes the counts and lists. | US1-S5 and US1-S6 assert their counts, 182 and 951, so a new extract fails them by name; re-read the lists from it. |
-| The owner takes another answer to decision 1. | Under (b), each word beginning a later name word, US1-S1's `nebula orion`, US1-S3's `cluster s` and `orion o` find nothing; under (c), also US1-S3's `little nebula` at both limits; under (d), US1-S2's `barbell cork` finds NGC 650 and US1-S3's `cluster s` adds NGC 6705; under (f), only `orion o` finds nothing. Those expectations and the rule's few lines change. (e) would fail 012's `romeda` assertion (`crates/finder/src/targets.rs:416`), an existing test, and needs the owner's approval to edit it. |
-| The owner takes decision 2 (b). | FR-001's word, the Key Entities, and US1-S6's oracle and its 951 change: a name word is then split at hyphens, with apostrophes dropped. |
+| The owner takes another answer to decision 1. | Under (b), each word beginning a later name word, US1-S1's `nebula orion`, US1-S3's `cluster s` and `orion o` find nothing; under (c), also US1-S3's `little nebula` at both limits; under (d), US1-S2's `barbell cork` finds NGC 650 and US1-S3's `cluster s` adds NGC 6705; under (f), only `orion o` finds nothing. Those expectations and the rule's few lines change. (e) would fail 012's `romeda` assertion (`crates/finder/src/targets.rs:416`), an existing test, and needs the owner's approval to edit it; as the substring mutation showed, US1-S2, US1-S3, US1-S4 and US1-S6 change too. |
+| The owner takes decision 2 (b). | Names and queries are both split at hyphens and stripped of apostrophes (names alone would lose 25 full names in US1-S5). A query of one word then changes: `tie` finds NGC 40, and 11 of today's 951 prefixes find other objects. So FR-001 (its word and its one-word clause), SC-004, owner approval 1 (which then also approves a change to 012's FR-007 for one word), the one-word Edge Case, the Key Entities, and US1-S6's oracle and its count (917) change. |
 | An id typed with a space gains a name match on a later extract. | US1-S7 fails by that id; US1-S4 holds that the exact id still comes first. |
 
 ## Refinement Record
