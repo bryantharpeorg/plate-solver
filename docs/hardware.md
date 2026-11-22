@@ -8,6 +8,8 @@ and where it falls short. Status words are strict:
 - **Simulated**: covered by the simulator and the test suite only.
 - **Planned**: chosen but not yet run.
 
+To buy parts for a build, start from the [parts lists](parts-list.md).
+
 ## At a glance
 
 | Configuration | Status | Use it for |

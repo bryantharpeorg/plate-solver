@@ -118,7 +118,9 @@ imaging. With the console running, add it to Claude Code:
 claude mcp add --transport http finder http://localhost:8080/mcp
 ```
 
-Then ask, for example, "what is the telescope pointing at?" or "go to M13 and start tracking".
+Then ask, for example, "what is the telescope pointing at?" or "go to M42 and start tracking".
+(M13 is below the horizon at the `--sim-start` above, and the console would refuse it.) The
+[README](../../README.md#use-it-with-an-ai-assistant) shows a whole session against the simulator.
 Every move goes through the same guards as the page. The **MCP** section in Setup shows the
 address to use from another device.
 
