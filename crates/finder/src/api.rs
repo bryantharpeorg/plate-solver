@@ -75,9 +75,9 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::catalog::{self, SimilarReport};
-use crate::databases::Databases;
+use crate::databases::{Databases, DatabasesSolver};
 use crate::link::{stop_deadline, LinkManager, Transport};
-use crate::live::{DbSolver, Live, Solver};
+use crate::live::{Live, Solver};
 use crate::recording::{RawRefusal, Recorder, Sources, FRAME_LIMIT, MAX_RAW_FRAMES};
 use crate::samples::{self, SampleInfo, Samples};
 use crate::session::{Clock, Session, SessionEdit, SessionError, SessionView, SystemClock};
@@ -302,7 +302,7 @@ impl AppState {
 
     /// Start live solving after setting the session, clock and link.
     pub fn with_live(self) -> Self {
-        let solver = Arc::new(DbSolver(self.db.clone()));
+        let solver = Arc::new(DatabasesSolver(self.databases.clone()));
         self.with_live_solver(solver)
     }
 
@@ -312,17 +312,14 @@ impl AppState {
             .link
             .as_ref()
             .expect("with_live requires with_link first");
-        self.live = Some(Arc::new(Live::start(
+        self.live = Some(Arc::new(Live::start_with_databases(
             self.session.clone(),
             self.clock.clone(),
             link.frames(),
             link.status(),
             solver,
             self.solve_gate.clone(),
-            (
-                f64::from(self.db.properties.min_fov),
-                f64::from(self.db.properties.max_fov),
-            ),
+            self.databases.clone(),
         )));
         self.tracking_owner = Some(Arc::new(self.session.tracking_owner()));
         self.goto = Some(Arc::new(crate::goto::GoTo::new(
