@@ -21,8 +21,10 @@ and where it falls short. Status words are strict:
 This is the configuration every field night so far has used. It is supported: the finder and
 push-to are field-proven on it, the mount link and its moves are field-proven, and Track has
 been used in the field. No field GoTo is on record yet. The
-[first-light report](field/2026-11-13-first-light.md) records the first three nights. The imaging camera works on it too, but USB 2 and the
-Pi 3B+'s Wi-Fi make full-size imaging frames slow. See [limits](#limits-of-the-budget-rig).
+[first-light report](field/2026-11-13-first-light.md) records the first three nights, and the
+[20 November report](field/2026-11-20-driveway-track.md) the first Track. The imaging camera
+works on it too, but USB 2 and the Pi 3B+'s Wi-Fi make full-size imaging frames slow. See
+[limits](#limits-of-the-budget-rig).
 
 | Part | What was used | How it connects | Configured by | Status |
 |---|---|---|---|---|
@@ -51,8 +53,10 @@ about 50° × 38°, is far outside the default database's 10–30°.
 - **Mount.** The node read the board and drove both axes. Eight test moves of up to 1°, slow
   and fast, on both axes, each stopped by itself within 26 encoder counts of its target, about
   17″ ([the moves](field/2026-11-13-first-light.md#what-worked)).
-- **Tracking.** On a later night, 20 November, the console's tracking readout showed 14–24″
-  RMS.
+- **Finder solve rate.** On 20 November, 500 ms exposures solved about two a second, as fast
+  as the exposures came.
+- **Tracking.** On 20 November, Track ran for about 13 minutes, and the console's tracking error
+  read 14–24″ RMS throughout ([the report](field/2026-11-20-driveway-track.md)).
 - **Imaging camera.** On the Pi, the node's camera probe described the camera and received full
   frames through INDI, three of three, twice. Exposure, darks, cooling (with 12 V), colour order
   and the probe also passed on a desktop bench, through the same INDI driver.
@@ -69,7 +73,7 @@ about 50° × 38°, is far outside the default database's 10–30°.
 | **Saving at the node writes to the microSD card** | Each save adds time and wears the card. | Leave "Also keep each imaging frame at the scope node" off on this rig. |
 | **Power** | A weak micro-USB cable undervolts the Pi. Plugging the ASI071 into the Pi caused a short undervoltage. | Use a good 5 V supply and cable. Connect the camera's 12 V before its USB. |
 | **microSD cards** | One card's controller failed. Power at the telescope is the suspected cause. | Keep a spare, flashed card. The Pi 5 rig boots from an SSD instead. |
-| **On-board Wi-Fi range** | From a driveway the Pi 3B+ could not reach a house network that a phone beside it could. | Use a phone hotspot, or a closer access point. A link drop stops the mount after one second, by design. |
+| **On-board Wi-Fi range** | From a driveway the Pi 3B+ could not reach a house network that a phone beside it could ([20 November](field/2026-11-20-driveway-track.md#problems-found-and-what-has-happened-since)). | Use a phone hotspot, or a closer access point. A link drop stops the mount after one second, by design. |
 | **No stacking on the node** | By design ([ADR-0002](adr/0002-imaging-cameras-through-indi-frames-relayed-console-stacks.md)): the Pi 3B+ has under 1 GB of memory. | Stacking runs on the console. |
 
 The imaging camera on this rig is best kept to binned frames and modest sub counts. Full-frame
