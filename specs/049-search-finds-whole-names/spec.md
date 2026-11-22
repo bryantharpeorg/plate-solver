@@ -79,9 +79,10 @@ is.
 - Q: Does an id typed with a space change? → A: No, on this catalog. `NGC 224` or `M 42`
   is now also read as two words, `ngc` and `224`, which a common name could hold; none
   of the catalog's 182 common names holds every word of any of its 13,372 canonical ids
-  or 110 Messier ids written with a space, so each still finds its object alone
-  (US1-S7). The exact id still comes first if one ever did (US1-S4). A designation with
-  a space that is no id of the catalog can now find a name (§ Edge Cases).
+  (all but M40 written with a space) or of its 110 Messier ids written with one, so each
+  still finds its object alone (US1-S7). The exact id still comes first if one ever did
+  (US1-S4). A designation with a space that is no id of the catalog can now find a name
+  (§ Edge Cases).
 - Q: Why 047 in `depends_on_landed`? → A: 047's US3 adds `mod databases;` to
   `crates/finder/tests/mcp/main.rs` (047's plan.md § Refinement Record), and this story
   adds `mod target_words;` to the same file, after `mod steering;`
@@ -122,14 +123,20 @@ Each is open. The recommended answer is the one the scenarios are written for.
      and `great nebula` no longer finds the Great Orion Nebula.
    - **(d) the words from any of an object's common names**: `barbell cork` would find
      M76 by its two names `Barbell Nebula` and `Cork Nebula`. No one types that, and it
-     widens every query a little.
+     widens queries of several words: `cluster s` would add NGC 6705, from
+     `Amas de l'Ecu de Sobieski` and `Wild Duck Cluster`.
    - **(e) substring or fuzzy matching**: `romeda` would find M31, which 012's test
-     holds must find nothing
-     (`crates/finder/src/targets.rs:384`), and a query of one word would change.
-   - **(f) each query word beginning a different word of the name**: `orion o` would
-     find nothing while the name is being typed, where (a) finds NGC 1976 and IC 434
-     (US1-S3). It needs a matching of query words to name words, and no full name of the
-     182 is answered differently.
+     holds must find nothing (`crates/finder/src/targets.rs:416`), so (e) would need an
+     existing test edited, which the constitution's Principle II forbids without the
+     owner's approval; and a query of one word would change.
+   - **(f) each query word beginning a different word of the name**: stricter where a
+     query reuses a name word. `orion o` finds nothing, where (a) finds NGC 1976 and
+     IC 434 (US1-S3). While a name is typed the two almost never differ: of the 1,999
+     prefixes of the 175 distinct names, typed a character at a time, they differ on 3,
+     `chi persei c`, `coalsack c` and `small s`, and on each (a) finds one more object
+     (C 14, C 99 and NGC 292) beside the one being typed. Every full name is answered
+     alike. (a) is recommended as the simpler rule: (f) needs a matching of query words
+     to name words for those few differences.
 2. **Hyphens and apostrophes in names** (§ Edge Cases). *Open.* Recommended: (a)
    leave them as they are: a word is what lies between spaces, as today. `bow` and
    `bow-tie` find NGC 40 (`Bow-Tie nebula`), and `bow tie` does not; `cat eye` finds
@@ -146,10 +153,12 @@ Each is open. The recommended answer is the one the scenarios are written for.
    at b7e983a0 and its US1 landed during the draft; the owner's decisions 1 and 2, and
    a probe round, come first in any case (plan.md § Prerequisites). No two epics write
    one file at once, and the re-read of § Prerequisites 2 is done once. Weighed
-   against: (b) `concurrent` with 047's US3, which the validator takes as advisory only
-   ("cross-spec concurrency is advisory only and must be resolved by final release
-   ownership"); the two `mod` lines are not neighbours, so git merges them, but the
-   story could run while 047's US3 is building; or (c) drop US1-S8 and
+   against: (b) `concurrent` with 047's US3: 047 leaves `depends_on_landed`, and the
+   record's entry for `mcp/main.rs` and 047's US3 becomes `concurrent` with its reason,
+   which the validator takes as advisory only ("cross-spec concurrency is advisory only
+   and must be resolved by final release ownership"); the two `mod` lines are not
+   neighbours, so git merges them, but the story could run while 047's US3 is
+   building; or (c) drop US1-S8 and
    `crates/finder/tests/mcp/`, so the story writes only `targets.rs` and need not wait.
    No test would then send a query of several words through the route and the tool;
    016's `crates/finder/tests/mcp/session_tools.rs:59` holds the tool equal to the route
@@ -161,10 +170,14 @@ Flipping this spec to `ready` approves the answer to every owner decision above,
 following. Each is named in the FR that makes it. No existing test, golden, fixture or CI
 file changes.
 
-1. **The search finds more than it did** (FR-001): a query of several words that found
-   nothing now finds the objects whose common name holds every word. No query of one
-   word, no canonical id and no Messier id written with a space finds anything else on
-   this catalog (US1-S6, US1-S7). `GET /api/targets` and `search_targets` keep their shapes.
+1. **The search finds more than it did** (FR-001), in place of 012's FR-007 second
+   bullet for a query of several words (`specs/012-targets-and-push-to/spec.md:640`): a
+   query of several words that found nothing now finds the objects whose common name
+   holds every word. No query of one word, no canonical id and no Messier id written
+   with a space finds anything else on this catalog (US1-S6, US1-S7). A designation
+   with a space that is no id of the catalog can now find names: `C 30` finds NGC 2070
+   (`30 Dor Cluster`), and `C 3` finds NGC 2070 and NGC 1049 (§ Edge Cases).
+   `GET /api/targets` and `search_targets` keep their shapes.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -176,8 +189,8 @@ Every scenario shares these definitions.
 - **The catalog** is the pinned OpenNGC extract `crates/finder/data/openngc.csv`, as
   compiled into the binary, and **the extract** is that file's text. An object is named
   by its canonical id (`NGC 1976`, `C 14`, `Mel 111`). **A search** is
-  `targets::search(query, limit)`, and **its ids** are its objects' canonical ids, in
-  order.
+  `targets::search(query, limit)`, or, in US1-S4, `Catalog::search` on the catalog the
+  test parses, and **its ids** are its objects' canonical ids, in order.
 - **The console router** is `support::mcp::app(support::mcp::state(), "127.0.0.1")`, as
   `crates/finder/tests/mcp/session_tools.rs:60` builds it: the router in process, with
   the vendored cedar database and the fixed clock. **The route's answer** is
@@ -235,7 +248,7 @@ them; during development, `cargo nextest run -p finder --locked --lib targets::`
 5. **Given** every common name of every row of the extract that is neither `Dup` nor
    `NonEx`, **When** a committed test searches for each name in capitals with no limit
    (`usize::MAX`), **Then** it asserts that each search holds the object `find` gives
-   for that row's `name`, and that there are 182 names, counted once per row they
+   for that row's `name` column, and that there are 182 names, counted once per row they
    appear in (175 of them distinct, which is not asserted).
 6. **Given** every prefix of every word of those common names, lowercased, a word being
    what lies between spaces and commas, **When** a committed test searches for each with
@@ -256,9 +269,11 @@ them; during development, `cargo nextest run -p finder --locked --lib targets::`
 
 ### Edge Cases
 
-- **A query of one word** finds what it found before: the same objects (US1-S6, as
-  sets), in the same order (012's tests of `crates/finder/src/targets.rs:384` and
-  `crates/finder/tests/console/targets.rs:72`, unchanged).
+- **A query of one word** finds what it found before, by construction: trimmed, it
+  splits into itself alone, so "each query word" is today's one word, and the sort is
+  untouched. US1-S6 checks the objects as sets; 012's tests of
+  `crates/finder/src/targets.rs:384` and `crates/finder/tests/console/targets.rs:72`,
+  unchanged, check the order for the queries they name.
 - **Spaces.** The query is trimmed and split on whitespace, so leading, trailing and
   repeated spaces do not matter (US1-S1's `  Ring   Nebula `). An empty or blank `q` is
   still refused with 400 before the search (`crates/finder/src/api.rs:1622`).

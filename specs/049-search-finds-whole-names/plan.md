@@ -151,15 +151,15 @@ b7e983a0, three times each with the same outcome unless said:
 - with the fix, both gates' Rust commands, at 40cd6f70, at 0f28f0dd and at de91586c,
   once each: `lint`'s four and `test`'s two, every test of the workspace passing (1,431
   under nextest), and the doctests;
-- five mutations of the rule, each once, on the unit tests only (so US1-S8 was not run
-  under them): the words in the name's order (US1-S1 and US1-S3 fail), any query word
-  rather than each (US1-S1 to US1-S4 and US1-S7 fail), a substring of the name (US1-S2,
-  US1-S3, US1-S4, US1-S6 and 012's
-  `search_uses_name_word_prefixes_and_orders_by_magnitude_with_unknowns_last` fail), the
-  words next to each other in order (US1-S1 and US1-S3 fail), and the words from all of
-  an object's names together (US1-S2 and US1-S3 fail), at 40cd6f70; and, at 0f28f0dd,
-  each query word beginning a different name word, owner decision 1 (f) (US1-S3's
-  `orion o` fails, alone).
+- six mutations of the rule, each once: five at 40cd6f70 on the unit tests only (so
+  US1-S8 was not run under them), and one at 0f28f0dd with US1-S8. The words in the
+  name's order (US1-S1 and US1-S3 fail), any query word rather than each (US1-S1 to
+  US1-S4 and US1-S7 fail), a substring of the name (US1-S2, US1-S3, US1-S4, US1-S6 and
+  012's `search_uses_name_word_prefixes_and_orders_by_magnitude_with_unknowns_last`
+  fail), the words next to each other in order (US1-S1 and US1-S3 fail), and the words
+  from all of an object's names together (US1-S2 and US1-S3 fail), at 40cd6f70; and, at
+  0f28f0dd, each query word beginning a different name word, owner decision 1 (f)
+  (US1-S3's `orion o` fails, alone; the other 17 tests, US1-S8 among them, pass).
 
 **Computed from the extract, before the draft**, by a model of the rules written apart
 from the code (the probe's notes):
@@ -171,7 +171,11 @@ from the code (the probe's notes):
 - of the 312 queries made of two of a name's words in its order (285 distinct), (a)
   and (b) answer alike for all but `cluster 3` (spec owner decision 1 (b));
 - under (f), each query word beginning a different name word, all 182 full names find
-  what (a) finds, and `orion o` finds nothing where (a) finds NGC 1976 and IC 434;
+  what (a) finds, and `orion o` finds nothing where (a) finds NGC 1976 and IC 434; of
+  the 1,999 prefixes of the 175 distinct names typed a character at a time, (a) and
+  (f) differ on 3, `chi persei c`, `coalsack c` and `small s`, where (a) adds C 14,
+  C 99 and NGC 292;
+- under (d), `barbell cork` finds NGC 650 and `cluster s` adds NGC 6705;
 - under (a), `C 30` and `C 3`, which are no ids of the catalog, find NGC 2070, and
   NGC 2070 and NGC 1049; none of the 651 duplicate aliases written with a space finds a
   name;
@@ -238,7 +242,7 @@ beside the change, and what the story does to what they observe:
 | Unit tests in the module of 012's search tests, after its last test | A `console/` module for them | US1-S4 needs the private `Catalog::parse`, and the rest sit with the tests of the same function. |
 | One `mcp/` module that asks the route and the tool | A `console/` module for the route and an `mcp/` module for the tool | The MCP app answers both, as `session_tools.rs` already compares them; one module, one `mod` line. |
 | A new module | New cases in `session_tools.rs` or `console/targets.rs` | Existing tests are not edited (constitution II). |
-| 047 in `depends_on_landed` | A `merge_order` beside a running epic; dropping US1-S8 so the story need not wait | 047's US3 and this story each add a line to `crates/finder/tests/mcp/main.rs`; 047 was dispatched before this draft. Without US1-S8 no test sends a query of several words through the route and the tool. 042 is named because its US10 last changed that file on `main`. |
+| 047 in `depends_on_landed` | `concurrent` with 047's US3; dropping US1-S8 so the story need not wait (spec owner decision 3) | 047's US3 and this story each add a line to `crates/finder/tests/mcp/main.rs`; 047 was dispatched before this draft. Without US1-S8 no test sends a query of several words through the route and the tool. 042 is named because its US10 last changed that file on `main`. |
 | One story | Two | About 16 % of 65,536 B (§ Plan traps 2). |
 
 ## User Story 1 - A name of several words finds its object
@@ -277,8 +281,10 @@ Tests first: the seven unit tests in `targets.rs` and `tests/mcp/target_words.rs
    § Refinement Record's `shared_writes`, and 042 from `depends_on_landed`.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
    decisions, § Owner approvals). Not met: all three decisions are open. Under decision
-   3 (b), the `mcp/main.rs` entry for 047's US3 becomes `concurrent`, with
-   `concurrent_with` declared, and 047 leaves `depends_on_landed`; under (c), US1-S8,
+   3 (b), the `mcp/main.rs` entry for 047's US3 becomes `concurrent` with its reason,
+   which the validator reports as an advisory, and 047 leaves `depends_on_landed`; no
+   `concurrent_with` is declared, since the validator takes only this spec's own stories
+   there; under (c), US1-S8,
    both `mcp/` writes, their shared writes and 042 and 047 leave the trio.
 4. **Probe builds.** Not met: no builder has built the story from this text alone. The
    drafting probe built it with the trial fix (§ What was run and what was read).
@@ -338,7 +344,8 @@ They bind every story.
 | Risk | Mitigation |
 |---|---|
 | A new OpenNGC extract changes the counts and lists. | US1-S5 and US1-S6 assert their counts, 182 and 951, so a new extract fails them by name; re-read the lists from it. |
-| The owner takes another answer to decision 1. | Under (b), each word beginning a later name word, US1-S1's `nebula orion`, US1-S3's `cluster s` and `orion o` find nothing; under (c), also US1-S3's `little nebula` at both limits; under (f), only `orion o`. Those expectations and the rule's few lines change. |
+| The owner takes another answer to decision 1. | Under (b), each word beginning a later name word, US1-S1's `nebula orion`, US1-S3's `cluster s` and `orion o` find nothing; under (c), also US1-S3's `little nebula` at both limits; under (d), US1-S2's `barbell cork` finds NGC 650 and US1-S3's `cluster s` adds NGC 6705; under (f), only `orion o` finds nothing. Those expectations and the rule's few lines change. (e) would fail 012's `romeda` assertion (`crates/finder/src/targets.rs:416`), an existing test, and needs the owner's approval to edit it. |
+| The owner takes decision 2 (b). | FR-001's word, the Key Entities, and US1-S6's oracle and its 951 change: a name word is then split at hyphens, with apostrophes dropped. |
 | An id typed with a space gains a name match on a later extract. | US1-S7 fails by that id; US1-S4 holds that the exact id still comes first. |
 
 ## Refinement Record
