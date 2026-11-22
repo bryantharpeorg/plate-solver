@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["013-live-finder", "030-imaging-camera-link", "044-node-stops-mount-before-exit"]
 # Drafted 2026-11-22 (UTC) against `main` at b7e983a0, at the owner's ask to review "how
 # you plan to tweak dark sky detection", from a probe of that day on the branch
@@ -32,6 +32,9 @@ depends_on_landed: ["013-live-finder", "030-imaging-camera-link", "044-node-stop
 # US1 last changed the node's README and `main.rs`, the binary these config tests run.
 # 027's test layout is not named: no story writes a finder test. What rests on a run and
 # what on reading, the fold's run among them: plan.md § What was run and what was read.
+# Flipped to `ready` on 2026-11-22 at the owner's ask ("then bring me the flip"); its
+# merge, on the owner's go, gives the owner approvals. `main` had moved to 2ab39799
+# (#360, docs only), which changes no file cited here.
 ---
 
 # Feature Specification: The Node Detects Stars on a Dark Sky
@@ -40,7 +43,7 @@ depends_on_landed: ["013-live-finder", "030-imaging-camera-link", "044-node-stop
 
 **Created**: 2026-11-22
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: At a dark site the finder camera's 1 s frames did not solve: the background
 sat near 0 of 255, the noise estimate collapsed, the node reported 200 detections and
