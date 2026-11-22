@@ -5,7 +5,7 @@
 //! database. The page is a React app in `web/`; its production build (`web/dist/`) is
 //! committed and embedded in the binary, so building the crate never needs Node.
 //!
-//! * `GET /api/health`: the database and how many samples there are.
+//! * `GET /api/health`: the first database, every database, and how many samples there are.
 //! * `GET /api/samples`, `GET /api/samples/{name}`, `GET /api/samples/{name}/thumb`: the
 //!   sample frames, and previews of them.
 //! * `POST /api/solve`: a multipart frame (an `image` file or a `sample` name) and
@@ -85,6 +85,7 @@
 pub mod api;
 pub mod catalog;
 pub mod constellation;
+pub mod databases;
 pub mod ephemeris;
 pub mod grid;
 pub mod link;

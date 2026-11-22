@@ -75,6 +75,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::catalog::{self, SimilarReport};
+use crate::databases::Databases;
 use crate::link::{stop_deadline, LinkManager, Transport};
 use crate::live::{DbSolver, Live, Solver};
 use crate::recording::{RawRefusal, Recorder, Sources, FRAME_LIMIT, MAX_RAW_FRAMES};
@@ -100,6 +101,8 @@ const MAX_SIMILAR: usize = 20;
 #[derive(Clone)]
 pub struct AppState {
     db: Arc<PatternDatabase>,
+    /// Every database, the first being db (047).
+    databases: Arc<Databases>,
     samples: Arc<Samples>,
     /// One solve at a time, upload included: a request takes the gate before its form is
     /// read, so a burst of uploads waits on the network instead of in memory.
@@ -140,6 +143,7 @@ impl AppState {
     /// State over a database another owner keeps too.
     pub fn shared(db: Arc<PatternDatabase>, samples: Samples) -> Self {
         Self {
+            databases: Arc::new(Databases::one(db.clone())),
             db,
             samples: Arc::new(samples),
             solve_gate: Arc::new(Semaphore::new(1)),
@@ -167,6 +171,13 @@ impl AppState {
             axis_move: Arc::new(Mutex::new(None)),
             move_limit: Arc::new(Mutex::new(crate::mcp::limit::MoveLimit::default())),
         }
+    }
+
+    /// Hold these databases. Call before `with_simulation`, `with_mount_sky` and `with_live`.
+    pub fn with_databases(mut self, databases: Databases) -> Self {
+        self.db = databases.first().db.clone();
+        self.databases = Arc::new(databases);
+        self
     }
 
     /// The same state with another limit on how long a request holding the solve gate may
@@ -1283,11 +1294,22 @@ struct Health {
     status: &'static str,
     version: &'static str,
     database: DatabaseInfo,
+    databases: Vec<DatabaseEntry>,
     samples: usize,
 }
 
 #[derive(Serialize)]
 struct DatabaseInfo {
+    catalog: String,
+    stars: usize,
+    patterns: u32,
+    min_fov: f32,
+    max_fov: f32,
+}
+
+#[derive(Serialize)]
+struct DatabaseEntry {
+    name: String,
     catalog: String,
     stars: usize,
     patterns: u32,
@@ -1307,6 +1329,22 @@ async fn health(State(state): State<AppState>) -> Json<Health> {
             min_fov: p.min_fov,
             max_fov: p.max_fov,
         },
+        databases: state
+            .databases
+            .list()
+            .iter()
+            .map(|database| {
+                let p = &database.db.properties;
+                DatabaseEntry {
+                    name: database.name.clone(),
+                    catalog: p.star_catalog.clone(),
+                    stars: database.db.num_stars,
+                    patterns: p.num_patterns,
+                    min_fov: p.min_fov,
+                    max_fov: p.max_fov,
+                }
+            })
+            .collect(),
         samples: state.samples.len(),
     })
 }
@@ -1517,7 +1555,7 @@ pub(crate) async fn solve_upload(
     name: Option<String>,
     options: SolveOptions,
 ) -> Result<SolveReport, ApiError> {
-    let db = state.db.clone();
+    let databases = state.databases.clone();
     let session = state.session.clone();
     let clock = state.clock.clone();
     let report = tokio::task::spawn_blocking(move || {
@@ -1525,7 +1563,8 @@ pub(crate) async fn solve_upload(
         let t = Instant::now();
         let image = solve::decode_gray(&bytes)?;
         let decode = t.elapsed().as_secs_f64() * 1e3;
-        let (mut report, frame) = solve::solve_frame_with_frame(&db, &image, &options);
+        let (mut report, frame, database) = databases.solve_frame(&image, &options);
+        report.database = Some(database);
         if let (Some(frame), Some(pointing)) = (frame, &report.pointing) {
             report.pointing_seq = Some(session.record_pointing(
                 frame,
