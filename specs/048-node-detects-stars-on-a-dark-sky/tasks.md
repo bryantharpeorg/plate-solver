@@ -7,7 +7,8 @@ description: "Task list for 048-node-detects-stars-on-a-dark-sky: The Node Detec
 **Prerequisites** (plan.md § Prerequisites):
 - every spec in `depends_on_landed` has landed on `main`: met at 28f436df;
 - the owner decisions in spec.md are settled: met, all seven answered on 2026-11-22;
-- the stories have been probe-built from this text: not met.
+- the stories have been probe-built from this text: met on 2026-11-22 (probe round 1,
+  at 4ea98bcc; plan.md § What was run).
 
 **Rules for every story:**
 - Never edit an existing test, golden, fixture, `scripts/ci/`, `.github/`, `deny.toml`,
@@ -46,12 +47,15 @@ description: "Task list for 048-node-detects-stars-on-a-dark-sky: The Node Detec
   `solve(field: &Field, centroids: &[Centroid]) -> Option<f64>`. US2's test uses them
   as they are and does not edit the module.
 - [ ] T003 [US1] Create `crates/simulator/tests/dark_sky.rs`, declaring `mod dark;`,
-  with one test for each of US1-S3, US1-S4 and US1-S5, under `#[test]`. US1-S4 and
-  US1-S5 name `noise_floor`, which T006 adds, so until then the file does not build. On
-  `main`'s code the probe saw US1-S3, and US1-S5's solve without a floor, pass.
+  with one test for each of US1-S3, US1-S4 and US1-S5, under `#[test]`. `dark/mod.rs`'s
+  `floor`, US1-S4 and US1-S5 name `noise_floor`, which T006 adds, so until then the file
+  does not build, US1-S3 included. On `main`'s code a copy of the module without `floor`
+  passes US1-S3 and US1-S5's solve.
 - [ ] T004 [US1] Create `crates/scope-node/tests/noise_floor.rs` with the config rig as
   spec.md § User Scenarios defines it, and one test for each of US1-S6 and US1-S7, under
-  `#[test]`. Today `noise_floor` is an unknown key (`invalid noise_floor at line 5`).
+  `#[test]`. US1-S6's `Config::parse` clause names `noise_floor`, which T006 adds, so
+  until then the file does not build; today's binary refuses the key with
+  `scope-node: invalid noise_floor at line 5`.
 
 ### Implementation
 
@@ -81,9 +85,10 @@ description: "Task list for 048-node-detects-stars-on-a-dark-sky: The Node Detec
   gain 1 to 63.9375 and exposure 0.13 to 3066.985 ms, a first automatic frame of 200 ms),
   the node rig (`NodeService::new`, the node's own 200 ms frame interval) and the
   pairing settings as spec.md § User Scenarios defines them, and one test for each of
-  US2-S1 and US2-S2, under `#[tokio::test(start_paused = true)]`. On today's
+  US2-S1, US2-S2 and US2-S3, under `#[tokio::test(start_paused = true)]`. On today's
   `Configure`, US2-S1 passes and US2-S2 fails: pairing resets the floor, and the fourth
-  frame falls to 53 ms. `dark/mod.rs` is US1's and does not change.
+  frame falls to 53 ms. US2-S3 passes too (run three times on `main`'s `service.rs` after the
+  probe round): today's `Configure` already takes the link's four keys, which it guards. `dark/mod.rs` is US1's and does not change.
 
 ### Implementation
 
@@ -100,7 +105,7 @@ description: "Task list for 048-node-detects-stars-on-a-dark-sky: The Node Detec
   no star count (FR-005; plan.md § Interfaces).
 - [ ] T014 [US2] Run the `lint` and `test` gates with every existing test unchanged and
   green, `crates/simulator/tests/node.rs` among them, then commit the green story
-  (FR-005 to FR-009; US2-S1, US2-S2).
+  (FR-005 to FR-009; US2-S1, US2-S2, US2-S3).
 
 ## Execution Order
 

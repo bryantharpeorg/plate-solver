@@ -48,7 +48,7 @@ reach `scope-node`, `scope-link`, `plate-solver`, `pattern-database`, `math-core
 - `crates/simulator/tests/dark_sky.rs` (new, US1): US1-S3 to US1-S5, under `#[test]`.
 - `crates/scope-node/tests/noise_floor.rs` (new, US1): US1-S6 and US1-S7, under
   `#[test]`.
-- `crates/simulator/tests/dark_sky_exposure.rs` (new, US2): US2-S1 and US2-S2, under
+- `crates/simulator/tests/dark_sky_exposure.rs` (new, US2): US2-S1 to US2-S3, under
   `#[tokio::test(start_paused = true)]`.
 - No Vitest or Playwright test: the page is unchanged.
 
@@ -75,7 +75,7 @@ shared module. Neither changes what the console does.
 
 | Principle | How this plan honours it |
 |---|---|
-| I. Agreeing with cedar is correctness | `detect_stars` keeps every result: it calls the new function with `NOISE_FLOOR`, 0.2. `estimate_noise` already returns at least 0.2 (`crates/star-detection/src/noise.rs:91`), so the added `.max(0.2)` changes no value. US1-S1 holds this on cedar's 13 images at two settings, and `crates/star-detection/tests/parity.rs:107` still holds `detect_stars` to cedar-detect's goldens at binning 1. The floor itself is cedar-detect's: it sets `noise_floor = 0.2` because a background "crushed to black" leaves no noise to measure (`reference-solutions/cedar-detect/src/algorithm.rs:992-995`, `reference-solutions/cedar-detect/src/algorithm.rs:1070-1071`). This spec departs from cedar only in letting the config raise that value. The grounds are cedar's own comment, and tetra3's `get_centroids_from_image`, which takes an absolute threshold, `image_th` (`reference-solutions/cedar-solve/tetra3/tetra3.py:2404`, `reference-solutions/cedar-solve/tetra3/tetra3.py:2429`), and notes that a noise-derived threshold needs enough readout bit depth to capture the noise (`reference-solutions/cedar-solve/tetra3/tetra3.py:2425`). The README's 0.5 is the probe's, on a drawn sky. No real camera grounds it, so the floor is off by default and the README calls 0.5 a starting point. |
+| I. Agreeing with cedar is correctness | `detect_stars` keeps every result: it calls the new function with `NOISE_FLOOR`, 0.2. `estimate_noise` already returns at least 0.2 (`crates/star-detection/src/noise.rs:91`), so the added `.max(0.2)` changes no value. US1-S1 holds this on cedar's 13 images at two settings, and `crates/star-detection/tests/parity.rs:107` still holds `detect_stars` to cedar-detect's goldens at binning 1. US1-S1 does not tell 0.2 from 0.3: by inference every reference image's estimate is above 0.3 at both settings, and on the probe a `detect_stars` that passed 0.3 passed US1-S1 and US1-S2's first two frames, and of US1's tests failed only US1-S3. US1-S2's third frame pins 0.2 by cedar's arithmetic, `2·2 = 4` against a gate of 3 at 0.2 and 5 at 0.3 (probe round 1). The floor itself is cedar-detect's: it sets `noise_floor = 0.2` because a background "crushed to black" leaves no noise to measure (`reference-solutions/cedar-detect/src/algorithm.rs:992-995`, `reference-solutions/cedar-detect/src/algorithm.rs:1070-1071`). This spec departs from cedar only in letting the config raise that value. The grounds are cedar's own comment, and tetra3's `get_centroids_from_image`, which takes an absolute threshold, `image_th` (`reference-solutions/cedar-solve/tetra3/tetra3.py:2404`, `reference-solutions/cedar-solve/tetra3/tetra3.py:2429`), and notes that a noise-derived threshold needs enough readout bit depth to capture the noise (`reference-solutions/cedar-solve/tetra3/tetra3.py:2425`). The README's 0.5 is the probe's, on a drawn sky. No real camera grounds it, so the floor is off by default and the README calls 0.5 a starting point. |
 | II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. Every existing test passed unchanged on the probe (§ What was run and what was read). The new tests go in new files. The shared skies go in a new module, not in `crates/simulator/tests/support/mod.rs`. The two alternatives that would need test edits, owner decisions 2 (c) and 5 (b), neither chosen, name their failing tests. |
 | III. Tests first, independent expectations | The oracles are cedar's reference images; cedar's threshold rule written as arithmetic (US1-S2); the stars the test drew and the simulator's true camera direction; `main`'s own `--check-config` output, captured by the probe and written as literals; and the scenarios' words. One is partly the code under test: US1-S1 holds the new function to `detect_stars`, which the same diff rewrites to call it; `parity.rs` pins `detect_stars` to cedar-detect's goldens at binning 1 only (`crates/star-detection/tests/parity.rs:113`), and at binning 2 with row normalisation only `image_parity`'s solve does (`crates/plate-solver/tests/image_parity.rs:152`). No other test takes an expected value from the code under test. The clock for US2 is tokio's paused clock, and the sky camera sleeps each exposure on it. On `main`'s code, the tests that state today's behaviour pass and the rest do not build or fail (§ What was run and what was read). |
 | IV. Critical paths | None is touched: nothing in `crates/math-core`, no `unsafe`, nothing under `proto/` or `crates/grpc-service`, `crates/pattern-database` or `crates/database-generation`, no `Cargo.toml`, `Cargo.lock`, `build.rs` or `.cargo/`. |
@@ -235,9 +235,10 @@ changes.
 and a value that is not a number calls `usage("bad --noise-floor")`. The detection call
 at `crates/plate-solver/examples/solve_image.rs:145` becomes a match: `detect_stars` while it is `None`, and
 `detect_stars_with_noise_floor` with it while it is `Some`, with the other arguments as
-today. Three things gain `[--noise-floor F]` after `[--sigma S]`: the usage line (`crates/plate-solver/examples/solve_image.rs:97`),
-the doc comment's command line, and the doc comment's option list, which describes the
-flag as the scope node's `noise_floor`, left off for cedar's own 0.2. Examples are built
+today. The usage line (`crates/plate-solver/examples/solve_image.rs:97`) gains
+`[--noise-floor F]` after `[--sigma S]`, the doc comment's command line after
+`[--sigma 8]`, and the doc comment's option list an entry for `--noise-floor`, which
+describes the flag as the scope node's `noise_floor`, left off for cedar's own 0.2. Examples are built
 and linted by the gates and never run (§ Read from the diff).
 
 ### The node's README (US2)
@@ -293,7 +294,7 @@ pub const DARK: Sky;                       // sky 0.05, black 2.0, read 2.0, flu
 pub const CITY: Sky;                       // sky 30.0, black 0.0, read 3.0, flux 20.0
 pub struct Field { pub stars: Vec<RenderStar>, pub truth: TrueDirection }
 pub fn field() -> Field;                   // the field below, taken once
-pub fn peak(flux: f64, star: &RenderStar) -> f64;
+pub fn peak(flux: f64, star: &RenderStar) -> f64; // flux · 10^(-0.4 · (magnitude - 6.75)); pass the sky's flux times s
 pub fn drawn(field: &Field, sky: Sky, scale: f64) -> Vec<RenderStar>;   // peak at least 0.5
 pub fn render(field: &Field, sky: Sky, scale: f64, seed: u64) -> Vec<u8>; // the pixels, row-major
 pub fn frame(pixels: Vec<u8>) -> GrayFrame;          // a frame for `detect`, below
@@ -322,7 +323,7 @@ pub fn solve(field: &Field, centroids: &[Centroid]) -> Option<f64>;   // the con
   no light reads 0.
 - **The scale** `s` is the exposure in seconds times the gain. The sky level and the flux
   scale with `s`; `black` and the read noise do not.
-- **A star's peak** is `flux · s · 10^(-0.4 · (magnitude - 6.75))`. **The drawn stars**
+- **A star's peak** is `peak(flux · s, star)`, `flux · s · 10^(-0.4 · (magnitude - 6.75))`. **The drawn stars**
   are the field's stars whose peak is at least 0.5, in the field's order.
 - **The light**: every pixel starts at `sky · s`. Each drawn star with peak `p` adds
   `p · exp(-r² / (2 · 1.2²))` to every pixel `(x, y)` with `x` from `floor(star.x) - 8`
@@ -531,7 +532,7 @@ frames. Once each unless it says otherwise:
 a scratch worktree of the probe's tip adbda24f carrying 28f436df's `crates/finder/**`
 and `Cargo.lock`, so 28f436df plus the stories' files (logs in `probes/048/review-r3/`):
 - **`nextest`**, the whole workspace: 1474 of 1474 passing, round 2's 1452 and the 22
-  print-only `p048_*` tests, 047's finder tests among them. It is now the run behind
+  print-only `p048_*` tests, 047's finder tests among them. Until probe round 1 it was the run behind
   "every existing test passes unchanged with both stories built".
 - **clippy** with `-D warnings`, both doc builds and the doctests: clean; fmt flags only
   the print-only `p048_rerun.rs`, which no story writes.
@@ -556,6 +557,67 @@ changed wording only and ran nothing but the checks. It added commit 174a48dc on
 on a clipped background, "Finding the value" as one rule, the Pi to tune on, the
 database the console reports), which again writes only the README, so no gate rerun is
 needed, and re-measured the README's share of each story (§ Plan traps 2).
+
+**Run in probe round 1** (2026-11-22, UTC), on the branch `probe/048-r1` cut from
+4ea98bcc, this trio committed on 28f436df. A builder built both stories from the trio
+alone, reading nothing of `probe/048` or the reviews, with the gates' `RUSTFLAGS`, in
+commits 09985a75 (US1's tests), a3b74abe (US1), d881930c (US2's tests) and 87d123c3
+(US2). Each story wrote exactly its `writes`, with no test edit, no `Cargo.toml` or
+`Cargo.lock` change and no probe-only commit. Once each unless it says otherwise:
+
+- **US1 before** (its tests at 09985a75 on 4ea98bcc's code): none of its three test
+  files built. `star-detection`'s names `detect_stars_with_noise_floor`; `dark/mod.rs`'s
+  `floor` names `noise_floor`, so US1-S3 did not build either; US1-S6's `Config::parse`
+  clause names it too (T003 and T004 now say so). A copy of the skies without `floor`, on
+  `main`'s code, passed US1-S3 and US1-S5's solve with the figures of § The skies: 172
+  drawn stars, 1,120,187 of 1,259,712 pixels at 0, 200 centroids, 14 true, 8 of the 30
+  brightest, solving within 16.6″; the city frame 30 centroids, within 0.49″. `main`'s
+  binary refused `noise_floor = 1.0` with `scope-node: invalid noise_floor at line 5`,
+  exit 1, and gave today's `[detection]` print for the bare head.
+- **US1 after**, three times: all 7 passed. US1-S4 gave 5 centroids, all true (at 0.5,
+  20, 7 true).
+- **US2 before** (its tests at d881930c on US1's tip): US2-S1 passed; US2-S2 failed on its
+  200 ms clause at the fourth frame, at 53.002 ms.
+- **US2 after**, three times: both passed. US2-S1: gain 16, 4.24, 1.12 and 1 at 200 ms,
+  then 53.0, 14.0, 3.72 and 0.986 ms, every frame at 200, only the first solving.
+  US2-S2: gain from 1 to 14.55 by the sixth frame; the 6th to 12th frames 30 to 37
+  detections, 7 of 7 in 25 to 40; the first solve exactly on the fourth frame, the worst
+  error 15.8″.
+- **The gates at 87d123c3**: `lint`'s four commands clean; `test`'s Rust half, `nextest`
+  1452 of 1452 (the 1443 existing, unchanged, and the 9 new) and the doctests 2 of 2;
+  `cargo-machete` clean; `cargo-deny`, offline, on bans, licenses and sources, ok.
+- **Mutations**, over each story's focused commands (US2's with `simulator`'s `node.rs`):
+  - US1: the new function ignoring its floor, caught by US1-S2 and US1-S4; the floor
+    applied with `min`, by US1-S1, S2, S4 and S5; `detect_stars` passing 0.3, by US1-S3
+    only, and 0.5, by US1-S1 and S3; the node's `detect` dropping the floor, by US1-S4;
+    the range taking 5.5 or 0.1, refusing 5 or 0.2, or unchecked, by US1-S7; the floor
+    never printed, by US1-S6; the node keeping 201 or 199, by US1-S3; `cedar()` setting
+    a floor of 0.5, by US1-S3 and S6.
+  - US2: `Configure` resetting the floor as `main`'s does (N1), or `Shared` holding
+    cedar's detection (N1b), caught by US2-S2; the frame-interval cap removed in
+    `service.rs` or in `exposure.rs` (N3, N3b), by US2-S2's 200 ms clause; `Configure`
+    keeping the node's sigma (N2), only by the existing
+    `preview_request_overrides_limit_and_detection_applies_after_inflight_frame`
+    (`crates/simulator/tests/node.rs:166`, its `Configure` at
+    `crates/simulator/tests/node.rs:198-202`); keeping the node's binning (N2b), by
+    nothing; `solve_image` parsing `--noise-floor` and passing 0.2, or never reading it,
+    by nothing, clippy included (§ Read from the diff).
+- **Three equivalent mutants**: `detect_stars` passing 0.0 (`estimate_noise` already
+  floors at 0.2), no `is_finite()` in the floor's check (the range already refuses NaN
+  and infinities), and `skip_serializing_if` removed (`toml` omits a `None` anyway).
+- **Two throwaway tests**, which the fold of this round adds as scenarios: US1-S2's third
+  frame passed on the built code and failed with `detect_stars` passing 0.3 and with it
+  passing 0.5; US2-S3 passed, failed under N2 and under N2b, and passed under N1, which
+  US2-S2 catches. After the round the same test passed three times on the built code and
+  three times with `crates/scope-node/src/service.rs` as on `main`, so it guards today's
+  behaviour rather than failing first.
+- **The diffs**, with trap 2's command: US1 26,650 B from 4ea98bcc and US2 17,529 B from
+  US1's tip (§ Plan traps 2).
+- **The cites**: all 100 distinct `path:line` cites resolved at 4ea98bcc, whose code is
+  28f436df's.
+- **The verdict**: 0 blocking defects and 8 of clarity, folded here. Not run: the page
+  half of `test`, `cargo-deny`'s advisories (a download), `solve_image` by hand and any
+  hardware.
 
 **Read, not run**:
 - that the dark night's Pi was the 3B+, whose image processor is the VC4, and that 046
@@ -595,9 +657,9 @@ needed, and re-measured the README's share of each story (§ Plan traps 2).
 - cedar-detect's floor and tetra3's threshold (§ Constitution Check);
 - that a 12-bit camera's frames reach detection as 8 bits, through spec 045's adapter
   (the constitution's product limits); 045 is not drafted;
-- every `path:line` in the trio, at 28f436df: each cited line was compared with its
-  text at b7e983a0, and the two that moved were read again; review round 4 resolved all
-  96 there, and the cites the fold of round 4 added were read there.
+- the `path:line` cites the fold of probe round 1 added,
+  `crates/simulator/tests/node.rs:166` and `crates/simulator/tests/node.rs:198-202`, each
+  read at 28f436df; the trio's other cites resolved in probe round 1 (above).
 
 **Not run at all**: a camera, a Pi, a recorded frame of a real sky, the console, the
 page, the page half of the `test` gate (`npm ci` installs packages, and no story writes
@@ -607,16 +669,18 @@ anything the page is built from), and the factory's gate boundary.
 
 - **`solve_image --noise-floor`** (FR-006). Examples are compiled and linted by the gates
   and never run, so the flag, its usage line and its doc lines are the diff's. The probe
-  ran it by hand on its saved frames (§ What was run).
+  ran it by hand on its saved frames (§ What was run). In probe round 1 a `solve_image`
+  that parsed the flag and passed 0.2, or never read it, passed both gates.
 - **The README sections** (FR-004, FR-005).
 - **`exposure.rs` unchanged** (FR-008), and the files FR-009 names untouched: the diff's
   file list.
 
 ## Shapes that existing tests pin
 
-Every existing test passes unchanged with both stories built: review round 3 ran the
-whole of `nextest` at 28f436df with the story files of the probe's adbda24f, 1474 of
-1474, 22 of them the probe's print-only tests (§ What was run). The files beside the
+Every existing test passes unchanged with both stories built: probe round 1 built them
+from this trio alone and ran the whole of `nextest`, 1452 of 1452, the 1443 existing
+unchanged and the 9 new; review round 3 had run 1474 of 1474 at 28f436df with the story
+files of the probe's adbda24f, 22 of them its print-only tests (§ What was run). The files beside the
 change, and what the stories do to what they observe:
 
 - **`crates/star-detection/tests/parity.rs`**: `cedar_detect_parity_on_all_reference_images`
@@ -672,7 +736,7 @@ tests run on a machine without one (run on the probe).
 | Off by default; the README gives 0.5 | (b) a default for rpicam; (c) a default for every adapter, in `DetectSettings::cedar()` | Owner decision 2, answered. (c) fails existing tests, whose edits would need approval (§ What was run); (b) costs faint stars in town unseen, since a city sky's real noise on the OV5647 is not measured. 0.5 is what the README's procedure gives on the probe's frames; US1-S4 uses 1.0 to show the mechanism (spec US1). |
 | Inside `star-detection`, in a new function, with Setup's sigma documented beside it | (b) the node passes an estimate; (c) filter centroids; (d) lift or clip the frame; (e) Setup's sigma, no code, alone | Owner decision 3, answered: (a), with (e) in the README as the no-code option (FR-004). (a) keeps `detect_stars` and parity by construction, and writes `crates/star-detection` beside the scope node; (b), cedar-detect's own caller-supplied `noise_estimate` (`reference-solutions/cedar-detect/src/algorithm.rs:966`), bins twice or exports the cascade; (c) leaves the gates open; (d) changes cedar's input and cannot restore clipped noise. (e): on a background clipped to 0 the estimate is 0.2 and the gates and the perimeter check scale with σ·noise (`crates/star-detection/src/detect.rs:48-49`, `crates/star-detection/src/detect.rs:335`), so sigma 20 acts much as floor 0.5 at sigma 8, and sigma 40 as floor 1.0; on the 1 s dark-sky frame sigma 20 gave 20 detections, 7 true, as floor 0.5 did, and sigma 40 4, all true. On the drawn sky at the node's interval and the camera's listed gain range, sigma 20, 30 and 40 held 15 to 45 detections on the 6th to 12th frames at gains 8.8 to 51.4, 3 to 7 of 7 in 25 to 40, every frame from the fifth or sixth solving; floor 0.5 held 23 to 43 at gains 9.9 to 14.6, 6 or 7 of 7, from the third or fourth (§ What was run, round 2). In town (e) costs stars: sigma 20 drops the drawn city frame from 30 detections to 8, and 30 or 40 leaves it unsolved. The floor adapts by itself, acting only where a sky's own noise is below it, so it left the drawn city sky alone (US1-S5) and needs no change of Setup between sites; a town sky's noise on the finder camera is not measured (decision 2's row), so the README leaves the floor out in town or has the observer compare star counts with and without it (review round 3). |
 | Raise the estimate after `estimate_noise` | Change `estimate_noise`'s floor | `estimate_noise` is public and keeps its signature and results; the floor belongs to the caller. |
-| `Option<f64>`, absent by default | `f64` defaulting to 0.2 | Absent keeps today's print exact (`skip_serializing_if`) and today's `detect_stars` path. |
+| `Option<f64>`, absent by default | `f64` defaulting to 0.2 | Absent keeps today's print exact: `toml` omits a `None` field, as it omits `noise_estimate`. `skip_serializing_if` keeps FR-002's promise for any other serialiser; no test can see it. Absent also keeps today's `detect_stars` path. |
 | `Configure` keeps the node's own keys | Reset to cedar's as today; carry the floor on the link | Owner approval 2. Without it the console's pairing drops the floor (the mutation); the link is a later spec's to change (owner decision 7). |
 | No change to auto-exposure or its cap | (b) hold at the 200-detection cap, treating it as "unknown"; (c) a black-sky guard, no lowering while the estimate sits at 0.2; (d) raise the cap, as a config key or a longer default frame interval; (e) Setup's sigma | Owner decision 5, answered (a). On the drawn sky at the node's 200 ms cap, with floor 0.5, it holds 200 ms, raises gain to 9.9 to 14.6, and every frame from the fourth solves (US2-S2); gain is noiseless there (spec § Assumptions). (b), measured at a 3000 ms interval, fails two existing tests (`crates/scope-node/src/exposure.rs:61`, `crates/scope-node/src/exposure.rs:73`) and holds a dark start on noise (§ What was run); (c) needs `star-detection` to report its estimate; (d) changes `crates/scope-node/src/service.rs:305-313` or the default frame interval (`crates/scope-node/src/service.rs:58`) that many existing tests' nodes run at, and makes the node's frames as slow as its exposure; (e) reaches the band at sigma 20 to 40 on the drawn sky but costs the drawn city sky stars (decision 3's row). |
 | `solve_image --noise-floor` | (b) no tool: the seat replays recorded frames in a probe branch; (c) a node flag that detects a PNG | Owner decision 6, answered. The example already reads a raw frame's PNG and solves it with cedar's settings; it writes a `crates/plate-solver` example beside the scope node. (c) needs PNG decoding in the node's binary and a `Cargo.toml` change, and cannot solve. |
@@ -724,7 +788,10 @@ README's later paragraphs.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
    decisions, § Owner approvals). Met for the decisions: all seven were answered on
    2026-11-22, and approval 3 was approved then; the flip gives the approvals.
-4. **Probe builds.** Not met: no builder has built a story from this trio alone.
+4. **Probe builds.** Met on 2026-11-22: probe round 1 built both stories from this trio
+   alone at 4ea98bcc, every scenario passing on the first build and both gates' Rust
+   commands passing, with 0 blocking defects; its 8 of clarity are folded here
+   (§ What was run).
 
 ## Outside the factory
 
@@ -850,6 +917,14 @@ They bind every story.
      README part about 2,830 and `dark_sky_exposure.rs` 7,368.
    - At the 1.35 times a factory build has run over its probe on earlier specs, US1 is
      about 32,300 B, 49.3 %, and US2 about 22,300 B, 34.1 %: both under 39,321 B.
+   - **Measured in probe round 1**, built from this trio alone: US1 26,650 B from
+     4ea98bcc, 67.8 % of 39,321 B and 1.11 times the estimate above, and US2 17,529 B
+     from US1's tip, 44.6 % of 39,321 B and 1.06 times; the excess is tests
+     (`dark/mod.rs` 7,402, the node's test 4,489, `star-detection`'s 4,243,
+     `dark_sky_exposure.rs` 8,249). The fold of that round adds about 1 KB of test to US2
+     (US2-S3) and a few hundred bytes to US1 (US1-S2's third frame). Even at 1.35 times
+     the measured sizes with those added, US1 is about 36,500 B and US2 about 25,000 B,
+     both under 39,321 B.
 3. **A spec fixed mid-epic needs a relaunch.** *Check:* no builder edits
    `specs/048-node-detects-stars-on-a-dark-sky/` or `.specify/`.
 4. **An oracle copied from the code proves nothing.** *Check:* every expected output,
@@ -860,7 +935,7 @@ They bind every story.
    normalisation only `image_parity`'s solve does (spec § User Scenarios, Oracles). No
    test formats a message for an expected value.
 5. **A negative assertion passes when nothing happens.** *Check:* US1-S2 finds the faint
-   star at 0.7 before asserting none at 1.0. US1-S3 asserts 200 detections and its
+   star at 0.7 before asserting none at 1.0, and the faintest at 0.2 before none at 0.3. US1-S3 asserts 200 detections and its
    zeros before its bounds. US1-S5 asserts the solve before the equality. US2-S1 asserts
    the first frame's 200 centroids, its exposure, gain and solve before asserting that no
    frame from the third solves. Two of US2-S2's clauses cannot fail and prove nothing
@@ -870,7 +945,14 @@ They bind every story.
    on the 200 ms, solve and count clauses: today's `Configure` resets the floor and fails
    the first of them at the fourth frame, at 53.002 ms (§ What was run). US2-S2 does not
    tell a floor of 0.5 from 1.0, and need not: at the camera's listed gain range both
-   pass every clause on the sweep's figures (§ What was run, round 2).
+   pass every clause on the sweep's figures (§ What was run, round 2). Which mutation
+   each catches (probe round 1): US2-S2 a `Configure` that resets the floor as `main`'s
+   does, or a `Shared` holding cedar's detection, and a frame-interval cap removed;
+   US2-S3, which sends sigma 20, binning 4 and both flags off, a `Configure` that keeps
+   the node's sigma or the node's binning, and it passes one that resets the floor.
+   `Configure` keeping the node's sigma is also caught by the existing
+   `preview_request_overrides_limit_and_detection_applies_after_inflight_frame`
+   (`crates/simulator/tests/node.rs:198-202`); keeping its binning only by US2-S3.
 6. **The skies must be drawn exactly.** *Check:* `dark/mod.rs` follows § The skies to
    the draw order. The bounds of US1-S3, US1-S4 and US2 were measured on that model and
    no other; a builder that finds them failing on a model it changed has changed the
@@ -926,10 +1008,11 @@ They bind every story.
 Drafted on 2026-11-22 (UTC) by a plate-solver spec session against `main` at b7e983a0,
 folded the same day after review round 1 and the owner's answers to decisions 4 and 5,
 re-anchored at 28f436df, folded again after review round 2 and the owner's answers to
-decisions 1, 2, 3, 6 and 7, and a third and a fourth time, in wording only, after review
-rounds 3 and 4. It rests on a probe of the fault and a trial fix, rerun in the first
+decisions 1, 2, 3, 6 and 7, a third and a fourth time, in wording only, after review
+rounds 3 and 4, and a fifth after probe round 1, which built both stories from the trio
+alone. It rests on a probe of the fault and a trial fix, rerun in the first
 fold at the node's own frame interval and in the second at the finder camera's listed
-ranges; a reading of the
+ranges; on probe round 1's build, its gates and its mutations; a reading of the
 node's detection, config, service and auto-exposure, of `star-detection` and
 cedar-detect, of 013's and 025's trios and of the constitution. Writes come from the task
 text. Shared writes name the merge edge that orders them, and the story that last wrote
@@ -959,7 +1042,7 @@ stories:
       - path: crates/star-detection/tests/noise_floor.rs
         status: new
         disposition: add
-        assertion: "32x32 frames of 0 at sigma 8, binning 1, no row normalisation, no hot-pixel rejection: levels 3 6 3 at x 15 16 17 of row 10 give one star with detect_stars and with floors 0.2 and 0.7 and none with 1.0; levels 9 18 9 give one star within 0.1 px of (16.5, 10.5) with floor 1.0 and none with 2.5"
+        assertion: "32x32 frames of 0 at sigma 8, binning 1, no row normalisation, no hot-pixel rejection: levels 3 6 3 at x 15 16 17 of row 10 give one star with detect_stars and with floors 0.2 and 0.7 and none with 1.0; levels 9 18 9 give one star within 0.1 px of (16.5, 10.5) with floor 1.0 and none with 2.5; levels 1 2 1 give one star with detect_stars and with floor 0.2 and none with floor 0.3"
         decision: "spec.md:US1-S2"
       - path: crates/simulator/tests/dark_sky.rs
         status: new
@@ -1071,10 +1154,15 @@ stories:
         disposition: add
         assertion: "the node rig with cedar's settings and noise_floor 0.5, the camera at gain 1 while gain is automatic, Configure with the pairing settings then 12 star frames: Configure answers the pairing settings; every frame reports them and is at 200 ms; each frame from the fourth solves within 30 arcsec; each frame from the sixth holds 20 to 50 centroids at a gain above 8; at least 5 of those 7 frames hold 25 to 40"
         decision: "spec.md:US2-S2"
+      - path: crates/simulator/tests/dark_sky_exposure.rs
+        status: new
+        disposition: add
+        assertion: "the node rig with cedar's settings and noise_floor 0.5, the camera at gain 1 while gain is automatic, Configure with exposure and gain absent, sigma 20, binning 4, rows not normalised and hot pixels not rejected, then 3 star frames: Configure answers those settings; the third frame reports them"
+        decision: "spec.md:US2-S3"
       - path: crates/simulator/tests/node.rs
         status: existing
         disposition: preserve
-        assertion: "the node's frames, previews, auto-exposure, fixed controls and settings refusals over the simulator, with Configure filling the keys the link does not carry from cedar's"
+        assertion: "the node's frames, previews, auto-exposure, fixed controls and settings refusals over the simulator, with Configure filling the keys the link does not carry from cedar's, and a Configure's sigma reaching the frames after the one in flight"
         decision: "plan.md:Shapes that existing tests pin"
       - path: crates/scope-node/tests/raw_frame.rs
         status: existing

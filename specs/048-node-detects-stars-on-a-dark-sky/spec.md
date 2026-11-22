@@ -18,6 +18,11 @@ depends_on_landed: ["013-live-finder", "030-imaging-camera-link", "044-node-stop
 # are said to be read, the floor is tuned on the Pi that observes (046 reads the Pi 5).
 # Round 4 reran the validator only; the fold's probe commit is the README's, which no
 # gate reads.
+# Folded a fifth time after probe round 1, which built both stories from this trio alone
+# at 4ea98bcc (the trio committed on 28f436df): every scenario passed on the first build
+# and both gates' Rust commands passed, with 0 blocking defects and 8 of clarity. The
+# fold adds US2-S3 (Configure takes the link's four keys) and a third frame to US1-S2
+# (`detect_stars`'s own floor), each a throwaway the probe ran, and runs no cargo.
 # 047 landed in between and wrote only `crates/finder/**` and one `Cargo.lock` line; no
 # 048 story writes those files or puts a test beside them, so 047 is not in
 # `depends_on_landed` (046's convention); two cites into `crates/finder` moved and are
@@ -113,7 +118,8 @@ left to spec 045 (owner decision 4).
   the four detection keys from the wire and fills the rest from `DetectSettings::cedar()`
   (`crates/scope-node/src/service.rs:407-435`, `crates/scope-node/src/service.rs:432`). A key the link does not carry,
   such as a floor, would be lost the moment the console pairs. The probe's mutation
-  showed it: with the floor reset by Configure, US2-S2 failed.
+  showed it: with the floor reset by Configure, US2-S2 failed; with the node's sigma or
+  binning kept by Configure, US2-S3 failed (probe round 1).
 - Q: What changes, by owner decision? → A: The owner's answers, as the probe built them:
   `noise_floor` in `[detection]`, in 8-bit levels, from 0.2 to 5, off unless set
   (owner decisions 1, 2); the floor applied inside `star-detection` by a new function
@@ -151,6 +157,9 @@ left to spec 045 (owner decision 4).
   second. On `main`'s code, US1-S3 and US1-S5's solve without a floor
   passed, three times each, and with `main`'s `service.rs`, once, US2-S1 passed and US2-S2
   failed: they state today's behaviour. The rest name what `main` lacks and do not build there.
+  Probe round 1 then built both stories from this trio alone, and every scenario passed
+  on the first build; US1-S2's third frame and US2-S3, added in its fold, ran there as
+  throwaway tests on the built code and under the mutations they catch.
   plan.md § What was run and what was read lists each claim. No real camera, recorded
   frame or Pi was used: the dark sky is drawn to show the field's symptoms, not measured.
 
@@ -248,7 +257,8 @@ Every scenario shares these definitions.
 - **A true star** is a centroid within 1.5 px of a star the frame drew.
 - **The console's solve** is `solve_from_centroids` of a frame's 30 brightest centroids
   as `(y, x)`, with no field estimate, 10° field error, 0.01 match radius, 1e-5 match
-  threshold, a 5000 ms timeout, distortion 0 and 0.002 match error, over the bundled
+  threshold, a 5000 ms timeout, distortion 0 and 0.002 match error, the frame's size
+  `(1296, 972)`, over the bundled
   cedar database, as `crates/simulator/tests/sky.rs:69` calls it; **its error** is the
   angle between its RA and Dec and the simulator's true camera direction. A frame
   **solves** when the console's solve finds a match.
@@ -289,12 +299,19 @@ Every scenario shares these definitions.
   (`crates/star-detection/tests/parity.rs:113`); at binning 2 with row normalisation
   nothing pins it directly, only `image_parity`'s solve through it
   (`crates/plate-solver/tests/image_parity.rs:152`) and the existing tests of plan.md
-  § Shapes. Every other expected value comes from outside the code under test. Two of
-  US2-S2's clauses cannot fail: the pairing settings are the node's initial settings'
-  wire form (`crates/scope-node/src/service.rs:395`), so `Configure` answering them and
-  every frame reporting them hold for a `Configure` that does nothing. FR-007 rests on
-  its 200 ms, solve and count clauses; today's `Configure` fails the first of them at
-  the fourth frame (plan.md § Plan traps 5).
+  § Shapes. Nor does US1-S1 pin `detect_stars`'s own floor of 0.2: by inference every
+  reference image's estimate is above 0.3 at both settings, and a `detect_stars` that
+  passed 0.3 passed US1-S1 and US1-S2's first two frames on the probe. US1-S2's third
+  frame pins it by cedar's arithmetic: `2·2 = 4` against the gate
+  `max(2, round(2·σ·noise))`, 3 at 0.2 and 5 at 0.3. Every other expected value comes
+  from outside the code under test. Two of US2-S2's clauses cannot fail: the pairing
+  settings are the node's initial settings' wire form
+  (`crates/scope-node/src/service.rs:395`), so `Configure` answering them and every
+  frame reporting them hold for a `Configure` that does nothing. FR-007 rests on
+  US2-S2's 200 ms, solve and count clauses for the floor kept, and on US2-S3, which
+  sends settings other than the node's own, for the four keys taken from the link;
+  today's `Configure` fails the first of US2-S2's at the fourth frame (plan.md § Plan
+  traps 5).
 
 ### User Story 1 - Detection has a noise floor (Priority: P1)
 
@@ -322,7 +339,7 @@ detection on the 1 s dark-sky frame is a true star, which shows the mechanism ex
 **Acceptance Scenarios**:
 
 1. **Given** each of the 13 images of `crates/star-detection/tests/data/cedar_goldens_bin1_sigma8.json`, read as luma from `reference-solutions/cedar-detect/test_data`, **When** a committed test calls `detect_stars_with_noise_floor` on each at sigma 8 with hot pixels rejected, at binning 1 without row normalisation and at binning 2 with it, with floors 0.0, 0.1 and 0.2, **Then** it asserts that each result equals `detect_stars` at the same settings star for star and in order, and that no `detect_stars` result is empty.
-2. **Given** two 32x32 frames of 0, one with levels 3, 6 and 3 at x 15, 16 and 17 of row 10 and one with 9, 18 and 9 there, **When** a committed test detects each at sigma 8, binning 1, no row normalisation and no hot-pixel rejection, **Then** it asserts that the first gives one star with `detect_stars` and with floors 0.2 and 0.7 and none with floor 1.0, and the second one star within 0.1 px of (16.5, 10.5) with floor 1.0 and none with floor 2.5.
+2. **Given** three 32x32 frames of 0, one with levels 3, 6 and 3 at x 15, 16 and 17 of row 10, one with 9, 18 and 9 there and a third with 1, 2 and 1 there, **When** a committed test detects each at sigma 8, binning 1, no row normalisation and no hot-pixel rejection, **Then** it asserts that the first gives one star with `detect_stars` and with floors 0.2 and 0.7 and none with floor 1.0, the second one star within 0.1 px of (16.5, 10.5) with floor 1.0 and none with floor 2.5, and the third one star with `detect_stars` and with floor 0.2, and none with floor 0.3.
 3. **Given** the dark-sky frame, **When** a committed test detects it with `scope_node::detect::detect` and `DetectSettings::cedar()`, **Then** it asserts that at least 80 % of its pixels are 0, that it gives 200 centroids, that at most 15 of them are true stars, and that at most 10 of its 30 brightest are.
 4. **Given** the dark-sky frame, **When** a committed test detects it with `scope_node::detect::detect` and cedar's settings with `noise_floor` 1.0, **Then** it asserts that it gives at least 4 centroids and that every one is a true star.
 5. **Given** the city frame, **When** a committed test detects it with `scope_node::detect::detect` and cedar's settings, and again with `noise_floor` 0.5 and with 1.0, **Then** it asserts that the console's solve of the first is within 30″ and that the other two results equal the first centroid for centroid.
@@ -340,7 +357,7 @@ and I can find the floor's value from frames I recorded.
 pairing would undo the floor; on the drawn sky the floor is what lets auto-exposure work
 on a black sky.
 
-**Independent Test**: `crates/simulator/tests/dark_sky_exposure.rs` (US2-S1, US2-S2),
+**Independent Test**: `crates/simulator/tests/dark_sky_exposure.rs` (US2-S1 to US2-S3),
 new, with US1's `crates/simulator/tests/dark/mod.rs`. The `test` gate runs it; during
 development, `cargo nextest run -p simulator --locked --test dark_sky_exposure`.
 
@@ -348,6 +365,7 @@ development, `cargo nextest run -p simulator --locked --test dark_sky_exposure`.
 
 1. **Given** the node rig with cedar's settings and the sky camera at gain 16 while gain is automatic, **When** a committed test reads 8 star frames, **Then** it asserts that each holds at least 100 centroids, that the first holds 200 at 200 ms and gain 16 and solves within 30″, that neither gain nor exposure ever rises from one frame to the next, that exposure stays 200 ms while gain is above 1, that the eighth is at gain 1 and under 10 ms, and that no frame from the third solves.
 2. **Given** the node rig with cedar's settings and `noise_floor` 0.5, and the sky camera at gain 1 while gain is automatic, **When** a committed test sends the pairing settings with `Configure` and then reads 12 star frames, **Then** it asserts that `Configure` answers the pairing settings, that every frame reports them and is at 200 ms, that each frame from the fourth solves within 30″, that each frame from the sixth holds 20 to 50 centroids at a gain above 8, and that at least 5 of those 7 frames hold 25 to 40.
+3. **Given** the node rig with cedar's settings and `noise_floor` 0.5, and the sky camera at gain 1 while gain is automatic, **When** a committed test sends `Configure` with exposure and gain absent, sigma 20, binning 4, rows not normalised and hot pixels not rejected, and then reads 3 star frames, **Then** it asserts that `Configure` answers those settings and that the third frame reports them.
 
 ### Edge Cases
 
@@ -369,7 +387,7 @@ development, `cargo nextest run -p simulator --locked --test dark_sky_exposure`.
   was run gives the other seeds. What fails every time on the drawn sky is auto-exposure
   (US2-S1). Not asserted.
 - **The console's Setup sigma** replaces the config's sigma once the console pairs, as
-  today (013 FR-014); the floor stays the config's (FR-007).
+  today (013 FR-014, US2-S3); the floor stays the config's (FR-007, US2-S2).
 - **A config without a floor at a dark site** still drives auto-exposure to its least on
   the drawn sky (US2-S1), as today; the README's floor is the remedy, or Setup's sigma
   (owner decision 3 (e)).
@@ -384,7 +402,7 @@ development, `cargo nextest run -p simulator --locked --test dark_sky_exposure`.
   camera a lower floor may reach gain's top; the README's tuning takes the least floor that works,
   with a fixed longer exposure in Setup as the fallback.
 - **`--check-config` and a star frame**: the first prints the floor (US1-S6), the second
-  does not report it (US2-S2): the link has no field for it (owner decision 7, owner
+  does not report it (US2-S2, US2-S3): the link has no field for it (owner decision 7, owner
   approval 3).
 
 ## Requirements *(mandatory)*
@@ -442,7 +460,8 @@ development, `cargo nextest run -p simulator --locked --test dark_sky_exposure`.
   rejection from the link and keep every other detection key, the floor among them, as
   the node's config set it, so that a floor applies to every frame after the console
   pairs. The link's messages, and the settings a star frame reports, SHALL not change
-  (owner approvals 2, 3).
+  (owner approvals 2, 3). US2-S3 holds the four keys taken from the link, and US2-S2
+  the floor kept.
 - **FR-008**: Auto-exposure SHALL not change: 013's FR-015 and
   `crates/scope-node/src/exposure.rs` stand as they are, and so does its cap (owner
   decision 5).
