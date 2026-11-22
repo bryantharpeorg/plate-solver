@@ -241,6 +241,20 @@ A–E grade per crate and per file. [`docs/quality.md`](docs/quality.md) explain
 
 ## License
 
-The reference implementations vendored in [`reference-solutions/`](reference-solutions/) keep
-their own licenses: tetra3 and cedar-solve are Apache-2.0, and cedar-detect is FSL-1.1-MIT. This
-project's own license will be stated here before its first release.
+Licensed under either of
+
+- Apache License, Version 2.0 ([`LICENSE-APACHE`](LICENSE-APACHE))
+- MIT license ([`LICENSE-MIT`](LICENSE-MIT))
+
+at your option.
+
+The reference implementations vendored in [`reference-solutions/`](reference-solutions/) are not
+covered and keep their own licenses: tetra3 and cedar-solve are Apache-2.0, and cedar-detect is
+FSL-1.1-MIT. They are test oracles only; none of their source is built into this project's
+crates. The finder console's binary embeds third-party web packages and catalog data, and
+`finder --licenses` prints their notices. [ADR-0003](docs/adr/0003-mit-or-apache-license-references-stay-oracles.md)
+records the decision.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion
+in this project by you, as defined in the Apache-2.0 license, shall be dual licensed as above,
+without any additional terms or conditions.
