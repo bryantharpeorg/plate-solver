@@ -6,9 +6,10 @@ depends_on_landed: ["013-live-finder", "016-mcp", "020-live-chart-calm", "022-al
 # day on the branch `probe/047` cut from 425b9da0: the choice rules tried on simulated
 # frames and in the real live loop, and a trial build of all three stories with every
 # finder test passing. Every `path:line` here was read at 425b9da0. State: draft. The
-# owner took the four recommended answers on 2026-11-21 ("yes"); no probe round has yet
-# built the stories from this text alone, and the flip is the owner's to give. What rests
-# on a run and what on reading is said where it is used
+# owner took the four recommended answers on 2026-11-21 ("yes"). Probe round 1 built the
+# three stories from this text alone that day (branch `probe/047-r1`, tip `5205ea91`),
+# and its defects 047-R1 to 047-R9 are folded here; the flip is the owner's to give. What
+# rests on a run and what on reading is said where it is used
 # (plan.md § What was run and what was read).
 ---
 
@@ -113,7 +114,8 @@ nothing. `--db` given once works as today.
   the database in use's (FR-011). 013's FR-037 reads, in part: "The Setup page SHALL show
   the finder camera's solved field of view beside the loaded pattern database's range"
   (`specs/013-live-finder/spec.md:891`); with several, beside the range of the database
-  in use, and its warnings name every range (FR-015). 013's FR-023
+  in use, and its warnings name every range, with no warning within 1° of an end
+  (FR-015). 013's FR-023
   (`specs/013-live-finder/spec.md:824`), the estimate and its three failures, is
   unchanged: the tries happen inside one solve of the live loop. The OpenSpec
   requirement "Serve the console from one binary" says the binary "loads one pattern
@@ -122,6 +124,16 @@ nothing. `--db` given once works as today.
   that needs the owner's OK), the Pi's deploy installing every database, and the field
   check when the camera and the guide scope arrive (plan.md § Outside the factory). None
   is run here.
+
+### Session 2026-11-21 (probe round 1, `probe/047-r1` at `5205ea91`)
+
+- Q: Does Setup warn near the edge of a range with several databases? → A: No, the
+  operator's ruling on probe round 1's 047-R1. The console chooses among the databases,
+  and a fixed 1° margin means nothing for a narrow range: a 2.0–2.6° database would never
+  clear it, every field it holds lying within 1° of an end. With several, Setup warns
+  only after 30 s unsolved or when the solved field lies in no database's range (FR-015;
+  US3-S1 asserts no alert at 5° in narrow's 4.5–7°). With one database the alerts stay
+  today's.
 
 ## Owner decisions
 
@@ -229,7 +241,8 @@ Every scenario shares these definitions.
   simulator's clock as `ConsoleClock`, `with_link` and `with_live()`, in that order.
   **A report** is the next `LiveReport` from `live().subscribe()`, taken
   with `crate::support::live::event`; **the session** is `GET /api/session` read right
-  after it. **The field after the sixth** means `set_optics` is called again after the
+  after it. **The field after the first** means `set_optics` is called again after the
+  first report and before the second is awaited; **the field after the sixth**, after the
   sixth report and before the seventh is awaited. The test runs under
   `#[tokio::test(start_paused = true)]`.
 - **An upload** is `POST /api/solve` through `finder::router` in process, with a
@@ -255,7 +268,7 @@ the console loads both, lists them, and solves a frame I upload with whichever f
 database. Uploads and the health report are where the list first shows.
 
 **Independent Test**: `crates/finder/tests/cli/databases.rs` (US1-S1 to US1-S3) and
-`crates/finder/tests/console/databases/several.rs` (US1-S4 to US1-S7), both new, the
+`crates/finder/tests/console/databases/several.rs` (US1-S4 to US1-S8), both new, the
 second beside the test databases' module `crates/finder/tests/console/databases/mod.rs`,
 new. The `test` gate's
 `cargo nextest run --workspace --all-targets --all-features --locked` runs them; during
@@ -296,6 +309,11 @@ development, `cargo nextest run -p finder --locked --test cli databases::` and
    and `cedar` as given, **When** a committed test uploads a black frame, **Then** it
    asserts that the answer's `status` is `too_few` and its `database` is `narrow`: the
    tries stopped at the first.
+8. **Given** an `AppState` over cedar's database and its samples with narrow and cedar's
+   named `narrow` and `cedar` as given, **When** a committed test uploads
+   `orion_belt.jpg` and then a black frame to that one state, **Then** it asserts that the
+   first answer's `database` is `cedar`, and that the second's `status` is `too_few` and
+   its `database` `narrow`: an upload does not change the database in use.
 
 ---
 
@@ -341,16 +359,17 @@ development, `cargo nextest run -p finder --locked --test console databases::fie
    given, the field after the sixth 5°, **When** a committed test takes sixteen reports,
    each with its session, **Then** it asserts that reports 1 to 6 solved with `cedar`
    at 12 within 0.1, the session naming `cedar` with the reason `field`; that reports 7
-   to 9 did not solve, the session still naming `cedar`; and that reports 10 to 16
-   solved with `narrow` at 5 within 0.1, the session naming `narrow` with the reason
-   `field`.
+   to 9 did not solve, each report's `database` `cedar`, the only one tried, the session
+   still naming `cedar`; and that reports 10 to 16 solved with `narrow` at 5 within 0.1,
+   the session naming `narrow` with the reason `field`.
 6. **Given** the live rig at 5° with cedar's and narrow named `cedar` and `narrow` as
    given, the field after the sixth 12°, **When** a committed test takes sixteen reports,
    each with its session, **Then** it asserts that reports 1 to 6 solved with `narrow` at
    5 within 0.1, the session naming `narrow` with the reason `field`; that reports 7 to 9
-   did not solve, the session still naming `narrow`; that report 10 solved with `narrow`
-   at 12 within 0.1, the session then naming `cedar` with the reason `field`; and that
-   reports 11 to 16 solved with `cedar` at 12 within 0.1.
+   did not solve, each report's `database` `narrow`, the only one tried, the session still
+   naming `narrow`; that report 10 solved with `narrow` at 12 within 0.1, the session then
+   naming `cedar` with the reason `field`; and that reports 11 to 16 solved with `cedar`
+   at 12 within 0.1.
 7. **Given** the live rig at 12° with narrow and cedar's named `narrow` and `cedar` as
    given, narrow first, **When** a committed test takes sixteen reports, each with its
    session, **Then** it asserts that report 1 solved with `narrow` at 12 within 0.1, the
@@ -367,6 +386,13 @@ development, `cargo nextest run -p finder --locked --test console databases::fie
    `field.unsolved_s` is at least 30, for at most 62 reports, **Then** it asserts that
    `unsolved_s` reached 30; that no report solved; that `field.fov_deg` is null; and that
    `field.database` names `mid` with the reason `first`.
+10. **Given** the live rig at 8° with mid and cedar's named `mid` and `cedar` as given,
+    the field after the first 25°, **When** a committed test takes eight reports, each
+    with its session, **Then** it asserts that report 1 solved with `cedar` at 8 within
+    0.1, the session naming `cedar` with the reason `solved`; that reports 2 to 4 did not
+    solve; and that reports 5 to 8 solved with `cedar` at 25 within 0.1, the session
+    naming `cedar` with the reason `field`: mid's range holds 25° too, and the one that
+    solved stays.
 
 ---
 
@@ -435,7 +461,7 @@ runs `src/components/FieldDatabases.test.tsx` (US3-S1 to US3-S5) and
   gate together. Read, not run.
 - **Two databases with overlapping ranges**: the one that solved stays while its range
   holds the field, so the one in use stays while it solves; otherwise the first given
-  whose range holds it. Read from FR-010, not run.
+  whose range holds it (FR-010; US2-S10, mid's 20–30° inside cedar's 10–30°).
 - **A frame with fewer stars than a solve needs** ends the tries at the first database,
   live and uploaded (US1-S7); the three-failure count is 013's, unchanged.
 - **A lens change while an estimate is held** costs the three failures of 013's FR-023
@@ -523,10 +549,10 @@ runs `src/components/FieldDatabases.test.tsx` (US3-S1 to US3-S5) and
   frames with at least 10 stars,
   `Frames with at least 10 stars have not solved for 30 s with any database (RANGES). The camera's field may be outside every range; a database built for the camera's field may be needed.`;
   otherwise, when the solved field lies in no database's range,
-  `The solved field, FIELD°, is outside every database's range (RANGES). A database built for the camera's field may be needed.`;
-  otherwise today's near-edge alert, against the range of the database in use. RANGES is
-  the `Databases:` list without its label. With one database the alerts SHALL be
-  today's.
+  `The solved field, FIELD°, is outside every database's range (RANGES). A database built for the camera's field may be needed.`
+  With several databases there is no near-edge alert: the console chooses among them.
+  RANGES is the `Databases:` list without its label. With one database the alerts SHALL
+  be today's.
 - **FR-016**: MCP's `get_session` and `solve_frame` SHALL answer the keys of FR-005 and
   FR-011, as the routes do; no tool's description or schema changes.
 - **FR-017**: `crates/finder/web/dist` SHALL be the build of the page's source.

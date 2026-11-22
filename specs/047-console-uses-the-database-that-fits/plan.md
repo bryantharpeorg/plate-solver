@@ -51,7 +51,7 @@ of the finder (US1; spec owner approval 1). No new crate, and no npm package.
 - `RUSTFLAGS="-D warnings"`, `--all-features` clippy, rustdoc with warnings denied.
 
 **Scale/Scope**: three stories; one new library module, six changed source files, three
-changed page files and one new, the README, six new test files.
+changed page files and one new, the README, seven new test files.
 
 ## Constitution Check
 
@@ -106,9 +106,11 @@ Cargo.lock                                     # US1: one line
 ### `crates/finder/src/databases.rs` (US1, new; US2 adds the choice)
 
 US1 writes the module as below, with `Reason` holding `Only` and `First` only, and
-without `order`'s estimate, `solved`, `solve_centroids` and `DatabasesSolver`. US2 adds
-`Solved` and `Field`, the estimate in `order`, `solved`, `solve_centroids` and
-`DatabasesSolver`. The probe's trial built it whole, as given here.
+without `order`'s estimate, `solved`, `solve_centroids` and `DatabasesSolver`. US1 writes
+`fn order(&self) -> Vec<usize>` and `solve_frame` calls `self.order()`; US2 adds the
+`estimate` parameter and changes that call to `self.order(None)`. US2 also adds `Solved`
+and `Field`, `solved`, `solve_centroids` and `DatabasesSolver`. The probe's trial built it
+whole, as given here.
 
 ```rust
 //! The pattern databases the console holds, and the one it solves with (047).
@@ -280,9 +282,12 @@ impl Solver for DatabasesSolver {
 }
 ```
 
+A task that panics answers `Cancelled` from an empty solve against the first database,
+with `database` the first's name.
+
 `solved` searches from the database that solved, and the tries begin with the one in
 use, so two databases with overlapping ranges do not trade places while the one in use
-solves (spec Edge Cases).
+solves (spec Edge Cases; US2-S10).
 
 ### `crates/finder/src/solve.rs` (US1)
 
@@ -339,7 +344,8 @@ A `pub(crate) enum Range { Fixed((f64, f64)), Databases(Arc<Databases>) }` repla
 `Incoming`'s `db_range`. `Live::start` keeps its signature
 (`crates/finder/src/live.rs:154`) and calls a private `begin` with `Range::Fixed`;
 `pub fn start_with_databases(session, clock, frames, status, solver, gate, databases:
-Arc<Databases>)` calls it with `Range::Databases`. `begin` is today's body, and after
+Arc<Databases>)` calls it with `Range::Databases`. `start` drops the `mut` on `status`,
+which only `begin` needs; its signature is unchanged. `begin` is today's body, and after
 `report.name = None;` it calls `session.use_database(&range)`, so the report's snapshot
 and the next read name the database chosen for this frame. `DbSolver` is unchanged.
 
@@ -376,9 +382,9 @@ fields. A fixed range therefore serializes exactly as today.
   when `several`, two `quiet` paragraphs, `Database in use: NAME, WORDS` and
   `Databases: RANGES`, RANGES being `NAME MIN–MAX°` joined by `, `. The alert is, in
   order: the 30 s alert, with several the words of FR-015 and with one today's; with
-  several, when no database's range holds `fov_deg`, the outside alert; otherwise
-  today's near-edge alert (`crates/finder/web/src/components/FieldWarning.tsx:7`). The
-  words of FR-013 and FR-015 are copied exactly.
+  several, when no database's range holds `fov_deg`, the outside alert; with one,
+  today's near-edge alert (`crates/finder/web/src/components/FieldWarning.tsx:7`); with
+  several, no near-edge alert. The words of FR-013 and FR-015 are copied exactly.
 - `dist/` is rebuilt with `npm run build`.
 
 ### The README (`crates/finder/README.md`, US3)
@@ -519,29 +525,73 @@ repository.
 - **The test databases** built in the test from a cold target directory, three processes
   at once, each reusing or renaming a whole file.
 
+**Run in probe round 1, 2026-11-21**, on the branch `probe/047-r1` cut at `ffe44ab8`,
+tip `5205ea91`: the three stories built from the trio alone, tests first, one commit of
+tests and one of the story each. The files written are exactly each story's `writes`; no
+probe-only commit. Logs are in the operator's probe folder, not in the repository.
+
+- **US1.** Before: `--test cli databases::` failed US1-S1 and US1-S2 (clap refuses a
+  second `--db`, exit 2, before serving) and passed US1-S3; `--test console databases::`
+  did not compile (`finder::databases` and `with_databases` missing). After: 7 of 7,
+  three focused runs each. `Cargo.lock` gained exactly `"database-generation",` in the
+  finder's list. The test databases built cold are byte-identical to the drafting
+  probe's and match § The test databases' sizes; building narrow alone is about 40 % of a
+  cold focused run, mid 30 %, wide 26 %; three processes building at once left no `.part`
+  file.
+- **US2.** Before: all nine compiled and failed, seven first on the live report's
+  `database`, US2-S3 and US2-S6 on report 1's `NoMatch`, US2-S9 on `field.database`.
+  After: 9 of 9, three runs; US2-S5's and US2-S6's sequences came out exactly as written
+  every run. US2-S9 is about 98 % of the focused run.
+- **US3.** Before: page US3-S1 to S4 failed and S5 passed, `healthLine.test.ts` could not
+  import (S6, S7); MCP US3-S8 and S9 passed on arrival. After: page 7 of 7, MCP 2 of 2,
+  three runs each. The page half: `npm ci --offline --no-audit --no-fund` from the
+  cache, nothing downloaded; `npm run typecheck`, `npm run format:check`, `npm test`
+  (60 files, 592 tests) and `npm run build` passed; `dist` committed and
+  `git status --porcelain -- dist` empty; `CI=1 npm run e2e`, a release build, 32 of 32.
+  The page was built with no near-edge alert with several databases, the ruling on
+  047-R1 that FR-015 now gives; as first written, US3-S1 failed on that alert.
+- **The gates, every story:** `cargo fmt --all --check`, workspace clippy, both rustdoc
+  lines, workspace nextest (1,420, 1,429 and 1,431 tests, all passing) and the doctests;
+  also `cargo-deny --offline check` and cargo-machete, which passed.
+- **Mutations.** Bitten: a duplicate name accepted (US1-S2); `too_few` not ending the
+  tries (US1-S7); health's list sorted by name (US1-S4); `shared`'s database named after
+  its file (US1-S6); FR-010 keeping the one that solved, range or not (US2-S6, S7); the
+  reasons `field` and `solved` swapped (US2-S2, S3, S5 to S8); `db_min_fov_deg` kept as
+  the first database's (US2-S3); the three-failure count reset by a failing try (US2-S5,
+  S6); `Database in use:` shown with one database (US3-S5); `healthLine` always the
+  one-database form (US3-S7); a near-edge alert against the first database's range
+  (US3-S1); `get_session` without `databases` (US3-S8). Survived every finder test, now
+  covered: an upload setting the database in use (US1-S8, 047-R3); every database tried
+  under an estimate (US2-S5's and US2-S6's `the only one tried`, 047-R4); the
+  first given that holds the field taken over the one that solved (US2-S10, 047-R2).
+  Survived and read: the star push reading the database in use, equivalent while US1's
+  never moves (§ Read from the diff, 047-R5).
+- **The new scenarios' words**, US1-S8, US2-S10 and US2-S5's and US2-S6's clauses, ran
+  as throwaways: each passed on the code and failed under its mutation (US2-S6's after
+  the fold, at `5205ea91`).
+- **The diffs** (§ Plan traps 2): US1 30,585 B, US2 24,601 B, US3 19,171 B; all three
+  from `ffe44ab8`, 74,357 B.
+
 **Read, not run**:
-- the page's source and tests (US3-S1 to S7): the probe has no `node_modules`, and
-  installing one is not allowed here, so Vitest, the typecheck, Prettier, the build and
-  Playwright did not run; the trial's page files are written to these words;
-- the workspace-wide `lint` and `test` gates: only the finder's commands above ran;
 - a narrow database built from Tycho, its memory (§ Memory) and the generator's work on
   it (§ Risks);
 - real frames, the ASI120MM, the guide scope, the Pi and its deploy;
-- an upload during a cold start, overlapping ranges, and a restart (spec Edge Cases).
+- an upload during a cold start and a restart (spec Edge Cases).
 
 ## Read from the diff, not from a test
 
-- **The search starts from the database that solved** (FR-010, `solved`). No scenario
-  has overlapping ranges. *Check:* `solved` searches from `index` first.
-- **An upload does not change the database in use** (FR-005). *Check:* `solve_frame`
-  never calls `solved`.
+- **The simulator, the drawn sky and the star push take the first database** (FR-007).
+  No scenario runs `--simulate` or `--mount-sky` with several. *Check:* `with_databases`
+  sets `db` to `databases.first()`, and `with_simulation` and `with_mount_sky` read
+  `self.db` and `sim_push` `state.db`.
 - **The README section and rows.** No test reads them. Copy them from § Interfaces.
 - **`Live::start` is unchanged.** Its callers in the tests hold it (§ Shapes).
 
 ## Shapes that existing tests pin
 
 Every existing test passes unchanged with the three stories' Rust built (run on the
-trial, 970 finder tests). The files beside the change:
+trial, 970 finder tests, and in probe round 1, every workspace test). The files beside
+the change:
 
 - **`crates/finder/tests/console/live/loop_.rs`** and
   **`crates/finder/tests/console/recording.rs`** call `Live::start` with `(10.0, 30.0)`
@@ -579,7 +629,8 @@ trial, 970 finder tests). The files beside the change:
   without `database` or `databases`, and its words stay; `App.test.tsx`'s health
   (`crates/finder/web/src/App.test.tsx:23`) has no `databases`, so the last line stays
   `Database: hip_main, 42,212 stars, fields 10–30°`. No Playwright test reads either
-  (searched). Not run (§ What was run and what was read).
+  (searched). Run in probe round 1: `npm test` and `CI=1 npm run e2e` pass with both
+  unchanged.
 - **US1's test files are existing tests for US2 and US3**, and US2's for US3. US2 adds
   one `mod` line to US1's `crates/finder/tests/console/databases/mod.rs` and no other
   line; US3 writes none of them.
@@ -601,7 +652,7 @@ trial, 970 finder tests). The files beside the change:
 | The name is the file stem, duplicates refused | Number them; use `star_catalog` | Two databases from one catalog are common; a file name is what the user typed. |
 | New keys with one database too | Hide them with one | One shape for every client; owner approval 3. |
 | The test databases under `tests/console/databases/` | A new support file | The layout test lists the support folder. |
-| Three stories | Two | US1 and US2 together measured about 53,000 B, 81 % of 65,536 B, on the trial (§ Plan traps 2). |
+| Three stories | Two | US1 and US2 together measured about 53,000 B, 81 % of 65,536 B, on the trial, and 55,186 B, 84 %, in probe round 1, the two diffs summed (§ Plan traps 2). |
 
 ## User Story 1 - Several databases, uploads and health
 
@@ -647,10 +698,12 @@ Tests first: `FieldDatabases.test.tsx`, `healthLine.test.ts` and
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
    decisions, § Owner approvals). Decisions met 2026-11-21: the owner took the four
    recommended answers ("yes"); the approvals come with the flip.
-4. **Probe builds.** Not met: no probe round has built the stories from this text alone.
-   The trial was built alongside the draft.
+4. **Probe builds.** Met on 2026-11-21: probe round 1 built the three stories from this
+   text alone, and its defects 047-R1 to 047-R9 are folded here (§ What was run and what
+   was read).
 5. **The page half has run once** on the trial or a probe round: `npm test`, the
-   typecheck, Prettier and the build. Not met (§ What was run and what was read).
+   typecheck, Prettier and the build. Met on 2026-11-21 in probe round 1, with
+   `CI=1 npm run e2e` 32 of 32 (§ What was run and what was read).
 6. **No operator-staged files are needed.**
 
 ## Outside the factory
@@ -715,6 +768,10 @@ They bind every story.
    65,536 B), US2 about 22,000 B (34 %), US3 about 17,100 B (26 %); all three together
    69,928 B. At the 1.35 times a factory build has run over its probe on earlier specs,
    US1 would be about 41,900 B (64 %), US2 29,700 B (45 %) and US3 23,100 B (35 %).
+   Measured in probe round 1, each story from its own base and before US1-S8, US2-S10
+   and US2-S5's and US2-S6's clauses were added, which add a little: US1 30,585 B
+   (46.7 %), US2 24,601 B (37.5 %), US3 19,171 B (29.3 %); at 1.35 times, US1 about
+   41,300 B (63 %), US2 33,200 B (51 %) and US3 25,900 B (40 %).
 3. **A spec fixed mid-epic needs a relaunch.** *Check:* no builder edits
    `specs/047-console-uses-the-database-that-fits/` or `.specify/`.
 4. **An earlier story's test file is an existing test.** *Check:* US2 adds one `mod` line
@@ -748,8 +805,7 @@ They bind every story.
 | The generator's work for a 2° Tycho database is large: every lattice field scans every pattern star (`crates/database-generation/src/patterns.rs:76`, `crates/database-generation/src/patterns.rs:81`), about 2.6 million fields by about a million stars, some 10¹² distance checks against about 5 × 10⁹ for cedar's (estimates). | Outside the factory, on the desk machine. A faster enumeration would be a change to `crates/database-generation`, a critical path, and a spec of its own. |
 | A 1.7 GB database takes a while to load at start. | Once per start; the Pi loads it before the console serves. |
 | A test database built at oversampling 20 has gaps a real one would not. | The rig's frames solved on every run; the narrow one is checked only at its own pointing. |
-| US1 at a factory build's usual overrun reaches about 64 % of the budget. | It stays well under the 64 KiB refusal (§ Plan traps 2); the cases are the bulk. |
-| The page half has not run. | Prerequisite 5. |
+| US1 at a factory build's usual overrun reaches about 63 % of the budget. | It stays well under the 64 KiB refusal (§ Plan traps 2); the cases are the bulk. |
 
 ## Refinement Record
 
@@ -759,6 +815,8 @@ database and its generator, 013's and 016's trios and the constitution. Writes c
 the task text. Shared writes name the merge edge that orders them, and the story that
 last wrote the same file on `main`.
 
+Probe round 1 built the three stories from the trio alone on 2026-11-21 (§ What was run
+and what was read); its defects 047-R1 to 047-R9 are folded, adding US1-S8 and US2-S10.
 The owner took the four recommended answers of spec.md on 2026-11-21. The record's
 `open_questions` are empty. This record approves nothing: the owner approvals of spec.md
 are given by the flip.
@@ -804,6 +862,11 @@ stories:
         disposition: add
         assertion: "an upload of a 64 by 64 black PNG over narrow then cedar answers too_few with database narrow: the tries stop at the first"
         decision: "spec.md:US1-S7"
+      - path: crates/finder/tests/console/databases/several.rs
+        status: new
+        disposition: add
+        assertion: "over narrow then cedar with its samples, orion_belt.jpg and then a 64 by 64 black PNG uploaded to one state: the first answers database cedar, the second too_few with database narrow: an upload does not change the database in use"
+        decision: "spec.md:US1-S8"
       - path: crates/finder/tests/console/api.rs
         status: existing
         disposition: preserve
@@ -933,12 +996,12 @@ stories:
       - path: crates/finder/tests/console/databases/field.rs
         status: new
         disposition: add
-        assertion: "cedar then narrow, 12 deg and 5 deg after the sixth report: reports 1 to 6 solve with cedar at 12, in use cedar for field; 7 to 9 do not solve, still cedar; 10 to 16 solve with narrow at 5, in use narrow for field"
+        assertion: "cedar then narrow, 12 deg and 5 deg after the sixth report: reports 1 to 6 solve with cedar at 12, in use cedar for field; 7 to 9 do not solve, each report's database cedar, the only one tried, still cedar; 10 to 16 solve with narrow at 5, in use narrow for field"
         decision: "spec.md:US2-S5"
       - path: crates/finder/tests/console/databases/field.rs
         status: new
         disposition: add
-        assertion: "cedar then narrow, 5 deg and 12 deg after the sixth report: 1 to 6 solve with narrow at 5; 7 to 9 do not solve, still narrow; 10 solves with narrow at 12 and the session then names cedar for field; 11 to 16 solve with cedar at 12"
+        assertion: "cedar then narrow, 5 deg and 12 deg after the sixth report: 1 to 6 solve with narrow at 5, in use narrow for field; 7 to 9 do not solve, each report's database narrow, the only one tried, still narrow; 10 solves with narrow at 12 and the session then names cedar for field; 11 to 16 solve with cedar at 12"
         decision: "spec.md:US2-S6"
       - path: crates/finder/tests/console/databases/field.rs
         status: new
@@ -955,6 +1018,11 @@ stories:
         disposition: add
         assertion: "mid then wide at 12 deg, at most 62 reports: unsolved_s reaches 30; no report solves; fov_deg null; database mid with reason first"
         decision: "spec.md:US2-S9"
+      - path: crates/finder/tests/console/databases/field.rs
+        status: new
+        disposition: add
+        assertion: "mid then cedar at 8 deg and 25 deg after the first report, eight reports: report 1 solves with cedar at 8, in use cedar for solved; 2 to 4 do not solve; 5 to 8 solve with cedar at 25, in use cedar for field: mid's range holds 25 too, and the one that solved stays"
+        decision: "spec.md:US2-S10"
       - path: crates/finder/tests/console/live/loop_.rs
         status: existing
         disposition: preserve

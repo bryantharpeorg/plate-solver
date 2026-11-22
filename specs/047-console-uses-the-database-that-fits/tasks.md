@@ -7,8 +7,10 @@ description: "Task list for 047-console-uses-the-database-that-fits: The Console
 **Prerequisites** (plan.md § Prerequisites):
 - every spec in `depends_on_landed` has landed on `main`: met at 425b9da0;
 - the owner decisions in spec.md are settled: met on 2026-11-21, the recommended answers;
-- every story has been probe-built from this text: not met;
-- the page half has run once: not met;
+- every story has been probe-built from this text: met on 2026-11-21 (probe round 1,
+  its defects folded);
+- the page half has run once: met on 2026-11-21 (probe round 1, `CI=1 npm run e2e`
+  32/32);
 - no operator-staged file is needed.
 
 **Rules for every story:**
@@ -39,22 +41,23 @@ description: "Task list for 047-console-uses-the-database-that-fits: The Console
   `mod several;`, and add `mod databases;` to `crates/finder/tests/console/main.rs` in
   its alphabetical place.
 - [ ] T003 [US1] Create `crates/finder/tests/console/databases/several.rs` with one test
-  for each of US1-S4, US1-S5, US1-S6 and US1-S7, under `#[tokio::test]`. They call
-  `AppState::with_databases` and read `database` and `databases`, which T005 to T007 add.
+  for each of US1-S4, US1-S5, US1-S6, US1-S7 and US1-S8, under `#[tokio::test]`. They
+  call `AppState::with_databases` and read `database` and `databases`, which T005 to T007
+  add.
 - [ ] T004 [US1] Create `crates/finder/tests/cli/databases.rs` with the binary's helper
   (start it with the scenario's `--db` paths, read its start lines and `GET /api/health`)
   and one test for each of US1-S1, US1-S2 and US1-S3, under `#[test]`, and add
-  `mod databases;` to `crates/finder/tests/cli/main.rs` in its alphabetical place. By
-  reading, not run, today's binary refuses a second `--db` (clap), so US1-S1 and US1-S2
-  fail on it.
+  `mod databases;` to `crates/finder/tests/cli/main.rs` in its alphabetical place. Run:
+  today's binary exits 2 with clap's `the argument '--db <DB>' cannot be used multiple times`,
+  so US1-S1 and US1-S2 fail; US1-S3 passes.
 
 ### Implementation
 
 - [ ] T005 [US1] Create `crates/finder/src/databases.rs` with `Database`, `Reason`'s
   `Only` and `First`, `DatabaseView`, `InUseView`, `Databases` with `new`, `one`,
-  `first`, `list`, `views`, `in_use` and `solve_frame` (FR-005, FR-006; plan.md
-  § Interfaces), and add `pub mod databases;` and the health line to
-  `crates/finder/src/lib.rs`.
+  `first`, `list`, `views`, `in_use`, `order` without its estimate and `solve_frame`
+  (FR-005, FR-006; plan.md § Interfaces), and add `pub mod databases;` and the health
+  line to `crates/finder/src/lib.rs`.
 - [ ] T006 [US1] Add `SolveReport::database` in `crates/finder/src/solve.rs` (FR-005).
 - [ ] T007 [US1] In `crates/finder/src/api.rs`, add `AppState`'s `databases`,
   `with_databases`, the health's `databases` and `solve_upload`'s tries (FR-004, FR-005,
@@ -63,7 +66,7 @@ description: "Task list for 047-console-uses-the-database-that-fits: The Console
   every database, print the start lines and build `Databases` (FR-001, FR-002, FR-003).
 - [ ] T009 [US1] Run the `lint` and `test` gates with every existing test unchanged and
   green, then commit the green story (FR-001 to FR-008, FR-019, FR-020; US1-S1, US1-S2,
-  US1-S3, US1-S4, US1-S5, US1-S6, US1-S7).
+  US1-S3, US1-S4, US1-S5, US1-S6, US1-S7, US1-S8).
 
 ## Phase 2: User Story 2 - The live loop uses the database whose range holds the field (Priority: P1)
 
@@ -71,16 +74,19 @@ description: "Task list for 047-console-uses-the-database-that-fits: The Console
 
 - [ ] T010 [US2] Create `crates/finder/tests/console/databases/field.rs` with the live
   rig of spec.md § User Scenarios and one test for each of US2-S1, US2-S2, US2-S3,
-  US2-S4, US2-S5, US2-S6, US2-S7, US2-S8 and US2-S9, under
+  US2-S4, US2-S5, US2-S6, US2-S7, US2-S8, US2-S9 and US2-S10, under
   `#[tokio::test(start_paused = true)]`, and add `mod field;` to
-  `crates/finder/tests/console/databases/mod.rs`, its one changed line. They read the
-  session's `field.database`, which T012 adds; until then they fail.
+  `crates/finder/tests/console/databases/mod.rs`, its one changed line. Run on US1: all
+  nine fail; the live report has no `database`, and the loop solves only with the first
+  database. US2-S10, added after that run, reads report 1's `database` too, so it fails
+  on US1 the same way (by reading).
 
 ### Implementation
 
 - [ ] T011 [US2] In `crates/finder/src/databases.rs`, add `Reason`'s `Solved` and
-  `Field`, the estimate in `order`, `solved`, `solve_centroids` and `DatabasesSolver`
-  (FR-009, FR-010; plan.md § Interfaces).
+  `Field`, the estimate in `order` with `solve_frame`'s call made `self.order(None)`,
+  `solved`, `solve_centroids` and `DatabasesSolver` (FR-009, FR-010; plan.md
+  § Interfaces).
 - [ ] T012 [US2] In `crates/finder/src/live.rs`, add `Range` and
   `Live::start_with_databases`, keeping `Live::start`; in `crates/finder/src/session.rs`,
   add `FieldView`'s and `LiveField`'s `database` and `databases`, `update` and
@@ -88,7 +94,7 @@ description: "Task list for 047-console-uses-the-database-that-fits: The Console
   use them (FR-011, FR-012).
 - [ ] T013 [US2] Run the `lint` and `test` gates with every existing test unchanged and
   green, US1's test files among them, then commit the green story (FR-009 to FR-012;
-  US2-S1, US2-S2, US2-S3, US2-S4, US2-S5, US2-S6, US2-S7, US2-S8, US2-S9).
+  US2-S1, US2-S2, US2-S3, US2-S4, US2-S5, US2-S6, US2-S7, US2-S8, US2-S9, US2-S10).
 
 ## Phase 3: User Story 3 - The page, MCP and the README say which database is in use (Priority: P2)
 
@@ -100,7 +106,7 @@ description: "Task list for 047-console-uses-the-database-that-fits: The Console
 - [ ] T015 [US3] Create `crates/finder/tests/mcp/databases.rs` with one test for each of
   US3-S8, under `#[tokio::test(start_paused = true)]`, and US3-S9, under
   `#[tokio::test]`, and add `mod databases;` to `crates/finder/tests/mcp/main.rs` in its
-  alphabetical place. They pass on arrival with US2 merged.
+  alphabetical place. They pass on arrival with US2 merged (run in probe round 1).
 
 ### Implementation
 
