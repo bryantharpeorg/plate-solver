@@ -1,7 +1,9 @@
 //! The pattern databases the console holds, and the one it solves with (047).
 
+use crate::live::{SolveFuture, Solver};
 use crate::solve::{self, SolveOptions, Status};
 use pattern_database::PatternDatabase;
+use scope_link::proto::StarFrame;
 use serde::Serialize;
 use std::sync::{Arc, Mutex};
 
@@ -41,6 +43,10 @@ pub enum Reason {
     Only,
     /// Nothing has solved yet: it is the first given.
     First,
+    /// It solved the last frame that solved, whose field lies in no database's range.
+    Solved,
+    /// The last solved field lies in its range.
+    Field,
 }
 
 /// A database's name and field range.
@@ -122,12 +128,59 @@ impl Databases {
         }
     }
 
-    /// The order of the tries: the one in use, then the others in the order given.
-    fn order(&self) -> Vec<usize> {
+    /// With an estimate, try the one in use alone; without, try it and then the others
+    /// in the order given.
+    fn order(&self, estimate: Option<f64>) -> Vec<usize> {
         let (index, _) = *self.in_use.lock().expect("databases");
+        if estimate.is_some() {
+            return vec![index];
+        }
         std::iter::once(index)
             .chain((0..self.list.len()).filter(|&i| i != index))
             .collect()
+    }
+
+    /// Keep the one that solved if its range holds the field, else the first given
+    /// that does, else the one that solved.
+    fn solved(&self, index: usize, fov_deg: f64) {
+        if self.list.len() == 1 {
+            return;
+        }
+        let holds = |i: &usize| {
+            let (min, max) = self.list[*i].range();
+            (min..=max).contains(&fov_deg)
+        };
+        let mut in_use = self.in_use.lock().expect("databases");
+        *in_use = std::iter::once(index)
+            .chain(0..self.list.len())
+            .find(holds)
+            .map_or((index, Reason::Solved), |i| (i, Reason::Field));
+    }
+
+    /// The live loop's tries over centroids. Returns the report, its projection and
+    /// the name of the database that solved it, or of the last one tried.
+    pub fn solve_centroids(
+        &self,
+        centroids: &[scope_link::proto::Centroid],
+        size: (usize, usize),
+        options: &SolveOptions,
+    ) -> (solve::SolveReport, Option<crate::sky::Frame>, String) {
+        let mut last = None;
+        for index in self.order(options.fov) {
+            let database = &self.list[index];
+            let (report, frame) = solve::solve_centroids(&database.db, centroids, size, options);
+            if let Some(frame) = frame {
+                self.solved(index, frame.fov_deg());
+                return (report, Some(frame), database.name.clone());
+            }
+            let stop = matches!(report.status, Status::TooFew | Status::Cancelled);
+            last = Some((report, database.name.clone()));
+            if stop {
+                break;
+            }
+        }
+        let (report, name) = last.expect("one database");
+        (report, None, name)
     }
 
     /// An upload's tries: the one in use, then the others, until one solves; a
@@ -138,7 +191,7 @@ impl Databases {
         options: &SolveOptions,
     ) -> (solve::SolveReport, Option<crate::sky::Frame>, String) {
         let mut last = None;
-        for index in self.order() {
+        for index in self.order(None) {
             let database = &self.list[index];
             let (report, frame) = solve::solve_frame_with_frame(&database.db, image, options);
             if frame.is_some() {
@@ -152,5 +205,34 @@ impl Databases {
         }
         let (report, name) = last.expect("one database");
         (report, None, name)
+    }
+}
+
+/// The live loop's solver over every database, on the blocking pool as `DbSolver`
+/// solves. A task that panics answers `Cancelled`, as `DbSolver` does.
+pub struct DatabasesSolver(pub Arc<Databases>);
+
+impl Solver for DatabasesSolver {
+    fn solve(&self, frame: StarFrame, options: SolveOptions) -> SolveFuture<'_> {
+        let databases = self.0.clone();
+        Box::pin(async move {
+            let size = (frame.width as usize, frame.height as usize);
+            let fallback = databases.clone();
+            tokio::task::spawn_blocking(move || {
+                let (mut report, projection, name) =
+                    databases.solve_centroids(&frame.centroids, size, &options);
+                report.database = Some(name);
+                (report, projection)
+            })
+            .await
+            .unwrap_or_else(|_| {
+                let first = fallback.first();
+                let (mut report, _) = solve::solve_centroids(&first.db, &[], size, &options);
+                report.status = Status::Cancelled;
+                report.hint = report.status.hint();
+                report.database = Some(first.name.clone());
+                (report, None)
+            })
+        })
     }
 }

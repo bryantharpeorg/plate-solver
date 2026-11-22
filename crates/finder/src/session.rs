@@ -14,6 +14,7 @@ use tokio::sync::watch;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::ephemeris::{self, Exposure};
+use crate::live::Range;
 use crate::model::{Backlash, Model, ModelView, Sync as ModelSync};
 use crate::pushto::{self, Guidance};
 use crate::sky::{self, Frame, Observer};
@@ -551,12 +552,33 @@ pub struct FieldView {
     pub db_max_fov_deg: f64,
     /// Console seconds of rich frames without a solve.
     pub unsolved_s: f64,
+    /// The database in use, its range and why (047).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub database: Option<crate::databases::InUseView>,
+    /// Every database's name and range, in the order given (047).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub databases: Vec<crate::databases::DatabaseView>,
 }
 #[derive(Clone)]
 struct LiveField {
     fov_deg: Option<f64>,
     range: (f64, f64),
     unsolved_since: Option<f64>,
+    database: Option<crate::databases::InUseView>,
+    databases: Vec<crate::databases::DatabaseView>,
+}
+
+impl LiveField {
+    fn update(&mut self, range: &Range) {
+        match range {
+            Range::Fixed(range) => self.range = *range,
+            Range::Databases(databases) => {
+                let database = databases.in_use();
+                self.range = (database.database.min_fov_deg, database.database.max_fov_deg);
+                self.database = Some(database);
+            }
+        }
+    }
 }
 
 /// The most recent solved frame's pointing, held at its frame time.
@@ -781,6 +803,8 @@ impl Values {
                 unsolved_s: field
                     .unsolved_since
                     .map_or(0.0, |since| (time - since).max(0.0)),
+                database: field.database.clone(),
+                databases: field.databases.clone(),
             }),
             time,
             node: (self.node.is_some() || self.link_status.connected).then(|| {
@@ -1646,15 +1670,32 @@ impl Session {
     }
 
     /// Note receipt, including frames dropped while solving.
-    pub(crate) fn receive_live_frame(&self, stars: usize, time: f64, range: (f64, f64)) {
+    pub(crate) fn receive_live_frame(&self, stars: usize, time: f64, range: &Range) {
         let mut values = self.values.lock().expect("observing session");
-        let field = values.field.get_or_insert(LiveField {
-            fov_deg: None,
-            range,
-            unsolved_since: None,
+        let field = values.field.get_or_insert_with(|| {
+            let mut field = LiveField {
+                fov_deg: None,
+                range: (0.0, 0.0),
+                unsolved_since: None,
+                database: None,
+                databases: match range {
+                    Range::Fixed(_) => Vec::new(),
+                    Range::Databases(databases) => databases.views(),
+                },
+            };
+            field.update(range);
+            field
         });
         if stars >= 10 {
             field.unsolved_since.get_or_insert(time);
+        }
+    }
+
+    /// Refresh the database in use after the frame's tries, before its report snapshot.
+    pub(crate) fn use_database(&self, range: &Range) {
+        let mut values = self.values.lock().expect("observing session");
+        if let Some(field) = &mut values.field {
+            field.update(range);
         }
     }
 
