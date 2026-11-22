@@ -14,12 +14,12 @@ name matches when each query word begins one of the name's words, in any order, 
 the query's words run together read along the name from the start of one of its words
 (spec owner decisions 1 and 2). A query with no word finds nothing. So no mark and no
 space has to be typed as the name has it, and no mark is named in the code. An id is
-looked up as before, marks and all. A query of
-one word that holds a letter or a digit matches at least the objects it did; five of
-today's 951 one-word prefixes match more, and `&` finds nothing. The exact id, the order
-by magnitude and the limit are as they are. `targets::search`'s doc comment says the
-rule. `GET /api/targets` and the MCP tool `search_targets` answer through the same
-function, so both find "Orion Nebula" with no change of their own.
+looked up as before, marks and all. A query of one word that holds a letter or a digit
+matches at least the objects it did; five of today's 951 one-word prefixes match more,
+and `&` finds nothing. The exact id, the order by magnitude and the limit are as they
+are. `targets::search`'s doc comment says the rule. `GET /api/targets` and the MCP tool
+`search_targets` answer through the same function, so both find "Orion Nebula" with no
+change of their own.
 
 One story: the rule, `words`, `name_matches`, the doc comment, nine unit tests after the
 last test of the module that holds 012's search tests, and one test module at the MCP
@@ -255,7 +255,11 @@ written apart from the code (the probe's notes):
   queries) matches any name, and none of the 651 duplicate aliases written with a space
   does; of the Caldwell numbers 1 to 109 written `C` and a space, four that are no ids
   of the catalog find a name: `C 30` NGC 2070, `C 3` NGC 2070 and NGC 1049, and `C 4`
-  and `C 47` NGC 104; `cl 3` finds NGC 2070 and NGC 1049, and `cl 39` nothing;
+  and `C 47` NGC 104;
+- of the 14,462 distinct beginnings of the canonical ids and of the Messier ids written
+  with a space, typed a character at a time, three that found nothing find a name:
+  `cl 3` (NGC 2070 and NGC 1049), `c 4` (NGC 104) and `hc` (C 14); `cl 39` finds
+  nothing;
 - 33 canonical ids hold a mark other than the space, a hyphen, and are found with it
   only, as on `main` (`eso 56 115` finds nothing); `north american` finds NGC 7000;
 - over the 1,999 beginnings of the 175 distinct names typed a character at a time, no
@@ -329,7 +333,7 @@ beside the change, and what the story does to what they observe:
 | Each query word begins a word of one name, any order | In order; next to each other only; across names; substring or fuzzy; distinct words | Spec owner decision 1. |
 | In a common name only letters and digits are compared, and a query that reads along a name matches it | Marks left inside words; a list of marks, each split at or dropped; reading along alone | Spec owner decision 2. A list handles only the marks it names and changes more one-word answers; reading along alone loses decision 1 (a). |
 | A name's words begin after spaces only | Also after hyphens | `bow tie` reads along `Bow-Tie` without it, and words after hyphens changed `b`, `l`, `m`, `p` and `t` (spec owner decision 2 (b)). |
-| `str::to_lowercase` on the whole name or query, then `char::is_alphanumeric`, as the standard library has them | ASCII only; lowercasing character by character; a folding crate | Every name is ASCII today, and the standard library keeps a later accented name a word (US1-S2's `orion é`); the query reaches `words` lowercased as a whole, so names are lowercased the same way; folding accents is out of scope. |
+| `str::to_lowercase` on the whole name or query, then `char::is_alphanumeric`, as the standard library has them | ASCII only; lowercasing character by character; a folding crate | Every name is ASCII today. The standard library keeps a letter outside ASCII a letter, which US1-S2's `orion é` holds for a query; no name has one, so that side is read from the code. The query reaches `words` lowercased as a whole, so names are lowercased the same way (the two ways differ only for `İ` and a final `Σ`; read, not tested). Folding accents is out of scope. |
 | Ids are looked up as on `main` | Ids matched by letters and digits too | The lookup is 012's `normalize`, which FR-003 leaves alone; an id typed without its hyphen is out of scope. |
 | A query with no word finds nothing, checked where the empty query is | Let `all` over no words match; look up the exact id first | `-` or `&` would answer every one of the 152 named objects (US1-S10, run as a wrong variant). Every id holds a letter or a digit, so none is lost. |
 | Two private functions, `words` for names and queries alike and `name_matches` | The rule inline in the filter; words kept in `Target` at parse | Inline, the filter nests too deep to read once rustfmt has laid it out. A field would change the shape of the public `Target`, which § Technical Context's Constraints keep, and its JSON unless skipped; 182 names make their words per search cheap. |
@@ -391,8 +395,9 @@ Written here and not run.
 4. Ask MCP `search_targets` with `{"q":"Great Orion Nebula"}`: NGC 1976.
 
 **The voice design's C5.** Once 049 has landed, C5's row in
-`docs/voice/02-tool-contracts.md:183` describes a change that is done; marking it so is
-the owner's.
+`docs/voice/02-tool-contracts.md:183` describes a change that is done, and its last
+sentence and line 175's "only widens" no longer hold for the queries of spec owner
+approval 2; marking and rewording them is the owner's.
 
 **The Pi.** The console's binary changes, so a Pi kit built after 049 lands carries the
 fix.

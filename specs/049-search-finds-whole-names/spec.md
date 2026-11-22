@@ -31,10 +31,10 @@ depends_on_landed: ["012-targets-and-push-to", "016-mcp", "027-finder-tests-by-s
 find NGC 1976. A common name matches only when one of its words starts with the whole
 query, so no query of two or more words finds any common name. The page's
 `Search catalog` field and the MCP tool share the search. Make a query of several words
-find the common name that has them all, and keep the order of the answers. The owner added (owner decision
-2): no one should need to type a name's hyphens or apostrophes. The rule he chose for
-that compares letters and digits only, so no mark and no space has to be typed as the
-name has it.
+find the common name that has them all, and keep the order of the answers. The owner
+added (owner decision 2): no one should need to type a name's hyphens or apostrophes.
+The rule he chose for that compares only the letters and digits of a name and of the
+query, so no mark and no space has to be typed as the name has it.
 
 ## Clarifications
 
@@ -88,9 +88,10 @@ name has it.
   C5 (`docs/voice/02-tool-contracts.md:183`): "A multi-word query should match when each
   of its words begins a word in one common name. Single-word results don't change".
   Owner decision 1's answer reads it so. Owner decision 2 adds reading along, and
-  departs from C5's last sentence for the six one-word queries of the next answer; for
-  one of them, `&`, it also departs from that section's line that C5 "only widens what
-  a search can find" (`docs/voice/02-tool-contracts.md:175`).
+  departs from C5's last sentence for the six one-word queries of the next answer that
+  find something today, and for those that found nothing and now find an object; for
+  one of the six, `&`, it also departs from that section's line that C5 "only widens
+  what a search can find" (`docs/voice/02-tool-contracts.md:175`).
 - Q: Does a query of one word change? → A: Rarely. A query of one word that holds a
   letter or a digit finds at least what it found (FR-001). Over the 951 prefixes of
   every word of the catalog's common names, as 012's rule splits them, 950 hold a letter
@@ -101,11 +102,11 @@ name has it.
 
   `&`, the one prefix with no letter or digit, finds nothing, where it found C 14
   (US1-S10). A query of one word that found nothing can now find an object where it
-  passes over a mark or a space: `cats`, `bowtie`, `stephans`, `catseye` (US1-S9). No
-  one-letter query changes. At a limit of 5 or more, none of the 950 loses an object it
-  showed; at a limit of 1, `le`, `sn`, `sno` and `l'` show the object they gain, which
-  is brighter, in place of the one they showed; at 2 to 4, `l'` no longer shows
-  NGC 6705, the fifth of its eleven (computed, not tested).
+  passes over a mark or a space: `bowtie` and `catseye` (US1-S9), `cats` and `stephans`
+  (computed). No one-letter query changes. At a limit of 5 or more, none of the 950
+  loses an object it showed; at a limit of 1, `le`, `sn`, `sno` and `l'` show the
+  object they gain, which is brighter, in place of the one they showed; at 2 to 4, `l'`
+  no longer shows NGC 6705, the fifth of its eleven (computed, not tested).
 - Q: Does an id typed with a space change? → A: No, on this catalog. `NGC 224` or `M 42`
   is now also read as two words, `ngc` and `224`, and along a name as `ngc224`; none of
   the catalog's 182 common names matches any of its 13,372 canonical ids (all but M40
@@ -218,8 +219,8 @@ file changes.
    A designation with a space that is no id of the catalog can now find names: `C 30`
    finds NGC 2070 (`30 Dor Cluster`), `C 3` finds NGC 2070 and NGC 1049, and `C 4` and
    `C 47` find NGC 104 (§ Edge Cases). An observer who types one of those four Caldwell
-   numbers that way gets a wrong object first where today they get nothing. `GET /api/targets` and `search_targets` keep their
-   shapes.
+   numbers that way gets a wrong object first where today they get nothing.
+   `GET /api/targets` and `search_targets` keep their shapes.
 2. **Six one-word queries that find something today change** (FR-001, owner decision
    2), in place of 012's FR-007 second bullet for those words. Five of today's 951
    one-word prefixes find one object more, or for `l'` ten (US1-S6): `le` gains
@@ -230,7 +231,11 @@ file changes.
    none of the 950 loses an object it showed; at 1, `le`, `sn`, `sno` and `l'` show a
    gained object in its place, and at 2 to 4 `l'` no longer shows NGC 6705 (computed,
    not tested). A one-word query that found nothing can now find an object where it
-   passes over a mark or a space: `cats`, `bowtie`, `catseye` (US1-S9).
+   passes over a mark or a space: `bowtie` and `catseye` (US1-S9), `cats` (computed).
+3. **Ids keep their marks** (FR-001). This was added after the owner's choice of
+   2026-11-22, whose words named no exception: only common names are matched by
+   letters and digits. An id is looked up as today, so `ESO 56-115` needs its hyphen
+   and `eso 56 115` finds nothing, as today (§ Edge Cases).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -362,9 +367,11 @@ development, `cargo nextest run -p finder --locked --lib targets::` and
 - **Marks** need not be typed, and may be (owner decision 2; US1-S9): any character
   that is not a letter or a digit is passed over, in the name and in the query. `l'Ecu`
   is the word `lecu`, so `lecu` and `l'ecu` find NGC 6705, and `ecu`, as today, does
-  not. A letter with an accent is a letter, and is not the same as the letter without
-  it: `orion é` finds nothing (US1-S2). No name of the catalog has one. Read from the
-  rule, not tested, past US1-S2 and US1-S9.
+  not. A letter with an accent is a letter: in a query it is not passed over, so
+  `orion é` finds nothing (US1-S2). That it is not folded to the letter without it, and
+  that names and queries are lowercased alike, are read from the code, not tested: no
+  name of the catalog has a letter outside ASCII. The rest is read from the rule, not
+  tested, past US1-S9.
 - **Ids keep their marks**, as today: only common names are matched by letters and
   digits, and the exact id is looked up as 012 does. `ESO 56-115` finds its object, and
   `eso 56 115` finds nothing, as today; 33 canonical ids hold a hyphen. Computed.
@@ -401,9 +408,11 @@ development, `cargo nextest run -p finder --locked --lib targets::` and
   matches only narrow: over the 1,999 beginnings of the 175 distinct names, typed a
   character at a time, no added character adds a name match (computed). An exact id
   can still appear as words are added (`ngc` finds nothing, `ngc 1` finds NGC 1), as on
-  `main`, and an id being typed can find names on the way: `cl 3`, typed toward
-  `Cl 399`, finds NGC 2070 and NGC 1049, `cl 39` nothing, and `cl 399` its object
-  (computed). Not run on the page.
+  `main`. An id being typed can now find names on the way. Of the beginnings of every
+  canonical id and of every Messier id written with a space, three do: `cl 3`, typed
+  toward `Cl 399`, finds NGC 2070 and NGC 1049 (`cl 39` finds nothing, and `cl 399` its
+  object); `c 4`, toward `C 41`, finds NGC 104; and `hc`, toward `HCG 92`, finds C 14,
+  reading along `h & chi Persei` (computed). Not run on the page.
 
 ## Requirements *(mandatory)*
 
@@ -415,10 +424,11 @@ development, `cargo nextest run -p finder --locked --lib targets::` and
   common name that the query matches. The words of a query or of a name SHALL be the
   pieces between whitespace of its lowercase form (Rust's `str::to_lowercase`), each
   kept to its letters and digits (the characters for which `char::is_alphanumeric`
-  holds), a piece left with none being no word (owner decision 2). A name SHALL match when each word of the query
-  begins some word of the name, in any order (owner decision 1), or when the query's
-  words, joined with nothing between them, begin the name's words joined the same way
-  from one of the name's words to its last (owner decision 2). A query with no word
+  holds), a piece left with none being no word (owner decision 2). A name SHALL match
+  when each word of the query begins some word of the name, in any order (owner
+  decision 1), or when the query's words, joined with nothing between them, begin the
+  name's words joined the same way from one of the name's words to its last (owner
+  decision 2). A query with no word
   SHALL find nothing. The exact id SHALL still be looked up from the trimmed,
   lowercased query as today. The order SHALL stay as it is: exact ids first, then by
   magnitude with no magnitude last (012's FR-007), then by canonical id
@@ -479,14 +489,14 @@ development, `cargo nextest run -p finder --locked --lib targets::` and
   - the part of a name after a hyphen typed by itself (`tie`, `paw`);
   - ranking by how well a name matches, or Messier objects first on equal magnitude
     (`eagle nebula` keeps IC 4703 before M16);
-  - misspellings and other forms of a word (`orion nebulae`, `witches broom`), and
+  - misspellings and other forms of a word (`andromida galaxy`, `orion nebulae`), and
     star names, the Moon and planets, which 012 left out;
   - ids typed without their marks (`eso 56 115`): the id lookup is 012's, unchanged;
   - marking C5 done in `docs/voice/02-tool-contracts.md`, which is the owner's design
     note (plan.md § Outside the factory).
 - **Outside the factory:** a look at the page's `Search catalog` field on
-  `finder --simulate`, in plan.md § Outside the factory, by the owner. The console's binary changes, so a
-  Pi kit built after 049 lands carries the fix.
+  `finder --simulate`, in plan.md § Outside the factory, by the owner. The console's
+  binary changes, so a Pi kit built after 049 lands carries the fix.
 - **The factory's gates and CI:** the gates are `lint` and `test`, copied in plan.md
   § Verification. CI's jobs run on the pull request and in the merge queue, outside the
   gates the judge sees, so no scenario's Then clause rests on them.
