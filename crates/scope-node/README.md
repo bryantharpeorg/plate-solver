@@ -147,6 +147,51 @@ about 20 to 40 is a starting point at a dark site, and needs no config change. R
 sigma costs stars in town: the drawn city frame fell from 30 detections at sigma 8 to
 8 at sigma 20. Set it back to 8 there.
 
+**The console and recordings.** The console's camera settings (Setup and MCP) set
+exposure, gain and sigma, and leave the floor as the config set it. A star frame does
+not report the floor, and neither does a raw recording's frame line. A recording
+made with a floor set therefore does not say how its centroids were found: note the
+floor beside the recording, or record with it unset.
+
+**The exposure cap.** Auto-exposure on the node never goes above 200 ms with the
+finder camera's 1296x972 mode: its cap is the node's frame interval, 200 ms, or the
+camera mode's frame time when that is longer. On a dark sky with the floor set it
+holds 200 ms and raises gain while it finds fewer than 25 stars, up to the camera's
+top (63.9 on the OV5647). A 200 ms frame may still hold too few stars to solve. The
+fallback is a fixed longer exposure set in Setup, such as the 3000 ms at gain 16
+that solved on a dark night. The drawn sky treats gain as noiseless; its star counts
+are not a promise for a real camera.
+
+**Finding the value.** On a dark night, tune on the Pi the node will observe with,
+and retune if that changes. Leave the floor unset, use the node's observing mode
+(such as `mode = "1296x972"`; `auto` takes the camera's first listed mode), and keep
+the mount still. With the console's
+[`POST /api/record/raw`](../finder/README.md), record a few raw frames at a fixed
+200 ms, the longest auto-exposure reaches, at each of gain 16, gain 32 and the
+camera's top (63.9 on the OV5647), the gains auto-exposure may reach with the floor
+set. Also record a few at a fixed 1000 ms and gain 1.
+
+Replay each `raw-<id>.png` on the console's computer, over the database the console
+reports it uses, trying a few floors:
+
+```sh
+cargo run --release --locked -p plate-solver --example solve_image -- \
+  --db <the-database-the-console-reports> --noise-floor <F> <frame>
+```
+
+Take the least floor at which the 200 ms frames at gain 16 hold tens of stars,
+not hundreds, and solve (on the simulated sky, 1215 with none and 46 at 0.5). If
+they already do with no floor, leave it unset. Then check that the gain-32 and
+top-gain frames, where the camera's own noise is greatest, still solve at that
+floor; if they do not, take the next floor that solves all three. Write the value
+as `[detection]` `noise_floor` in the node's config.
+
+Last, check it live with Setup's exposure and gain automatic: the node's exposure
+holds 200 ms and its gain rises while it finds fewer than 25 stars. If gain reaches
+its top with fewer than 25 stars or the live solve does not hold, lower the floor;
+if the counts then climb back to hundreds, set a fixed longer exposure in Setup
+instead.
+
 ## The mount link
 
 With `[mount]` configured, the scope node starts and serves the camera even when

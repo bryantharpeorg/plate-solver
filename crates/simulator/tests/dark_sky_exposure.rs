@@ -201,12 +201,7 @@ async fn no_floor_lowers_gain_then_exposure_and_loses_the_solve() {
 async fn pairing_keeps_the_floor_and_auto_exposure_finds_the_stars() {
     let mut rig = Rig::new(dark::floor(0.5), 1.0).await;
     let pairing = pairing_settings();
-    let response = rig
-        .client
-        .configure(pairing.clone())
-        .await
-        .unwrap()
-        .into_inner();
+    let response = rig.client.configure(pairing).await.unwrap().into_inner();
     assert_eq!(response, pairing);
     let mut stream = rig.frames().await;
     let mut in_band = 0;
@@ -243,12 +238,7 @@ async fn configure_takes_all_four_detection_keys_from_the_link() {
             detect_hot_pixels: false,
         }),
     };
-    let response = rig
-        .client
-        .configure(requested.clone())
-        .await
-        .unwrap()
-        .into_inner();
+    let response = rig.client.configure(requested).await.unwrap().into_inner();
     assert_eq!(response, requested);
     let mut stream = rig.frames().await;
     next(&mut stream, 1).await;

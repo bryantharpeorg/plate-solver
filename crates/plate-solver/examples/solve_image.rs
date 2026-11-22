@@ -3,7 +3,7 @@
 //! ```text
 //! cargo run --release -p plate-solver --example solve_image -- \
 //!     --db hip_30_60.npz [--fov 50] [--fov-max-error 10] [--distortion -0.08] \
-//!     [--bin 2] [--sigma 8] [--stars 30] [--dark dark.png] [--timeout 5000] [--json] \
+//!     [--bin 2] [--sigma 8] [--noise-floor F] [--stars 30] [--dark dark.png] [--timeout 5000] [--json] \
 //!     frame1.png [frame2.jpg ...]
 //! ```
 //!
@@ -16,6 +16,8 @@
 //!   earlier solve of the same lens. Speeds up and steadies wide-field solves.
 //! * `--dark` — dark frame (lens capped, same exposure/gain) subtracted before
 //!   detection. Removes hot pixels, which the binned detector does not reject.
+//! * `--noise-floor` — the scope node's `noise_floor`, in 8-bit levels of the
+//!   detection image. Leave it off for cedar's own 0.2.
 //!
 //! Frames are read as cedar's pipeline reads them: color turned gray with PIL's weights
 //! (`star_detection::gray`) and stars detected with cedar's settings
@@ -25,7 +27,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use plate_solver::{solve_from_centroids, DetectParams, SolveStatus};
-use star_detection::{detect_stars, gray};
+use star_detection::{detect_stars, detect_stars_with_noise_floor, gray};
 
 struct Args {
     db: String,
@@ -34,6 +36,7 @@ struct Args {
     distortion: f64,
     binning: usize,
     sigma: f64,
+    noise_floor: Option<f64>,
     stars: usize,
     dark: Option<String>,
     timeout: u64,
@@ -50,6 +53,7 @@ fn parse_args() -> Args {
         distortion: 0.0,
         binning: cedar.binning,
         sigma: cedar.sigma,
+        noise_floor: None,
         stars: 30,
         dark: None,
         timeout: 5000,
@@ -75,6 +79,9 @@ fn parse_args() -> Args {
             }
             "--bin" => a.binning = val().parse().unwrap_or_else(|_| usage("bad --bin")),
             "--sigma" => a.sigma = val().parse().unwrap_or_else(|_| usage("bad --sigma")),
+            "--noise-floor" => {
+                a.noise_floor = Some(val().parse().unwrap_or_else(|_| usage("bad --noise-floor")))
+            }
             "--stars" => a.stars = val().parse().unwrap_or_else(|_| usage("bad --stars")),
             "--dark" => a.dark = Some(val()),
             "--timeout" => a.timeout = val().parse().unwrap_or_else(|_| usage("bad --timeout")),
@@ -94,7 +101,7 @@ fn usage(msg: &str) -> ! {
     if !msg.is_empty() {
         eprintln!("error: {msg}");
     }
-    eprintln!("usage: solve_image --db DB.npz [--fov DEG] [--fov-max-error DEG] [--distortion K] [--bin 1|2|4|8] [--sigma S] [--stars N] [--dark DARK] [--timeout MS] [--json] IMAGE...");
+    eprintln!("usage: solve_image --db DB.npz [--fov DEG] [--fov-max-error DEG] [--distortion K] [--bin 1|2|4|8] [--sigma S] [--noise-floor F] [--stars N] [--dark DARK] [--timeout MS] [--json] IMAGE...");
     std::process::exit(2)
 }
 
@@ -142,15 +149,27 @@ fn main() {
         }
 
         let t = Instant::now();
-        let stars = detect_stars(
-            &img,
-            w,
-            h,
-            args.sigma,
-            args.binning,
-            cedar.normalize_rows,
-            cedar.detect_hot_pixels,
-        );
+        let stars = match args.noise_floor {
+            None => detect_stars(
+                &img,
+                w,
+                h,
+                args.sigma,
+                args.binning,
+                cedar.normalize_rows,
+                cedar.detect_hot_pixels,
+            ),
+            Some(floor) => detect_stars_with_noise_floor(
+                &img,
+                w,
+                h,
+                args.sigma,
+                args.binning,
+                cedar.normalize_rows,
+                cedar.detect_hot_pixels,
+                floor,
+            ),
+        };
         let t_detect = t.elapsed().as_secs_f64() * 1e3;
         // The solver wants (y, x); `Star` has named x (column) / y (row).
         let centroids: Vec<(f64, f64)> =
