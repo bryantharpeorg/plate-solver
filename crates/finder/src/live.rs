@@ -1,5 +1,6 @@
 //! The newest-frame live solver, bounded preview history and live reports.
 use crate::{
+    databases::Databases,
     link::LinkStatus,
     pushto::Guidance,
     session::{Clock, MountReading, Session},
@@ -92,6 +93,11 @@ impl Drop for Live {
     }
 }
 
+pub(crate) enum Range {
+    Fixed((f64, f64)),
+    Databases(Arc<Databases>),
+}
+
 // One receiver records receipt before a solve can use the frame. It continues
 // receiving while the gate, clock map or solver is pending.
 struct Incoming {
@@ -100,14 +106,14 @@ struct Incoming {
     session: Arc<Session>,
     clock: Arc<dyn Clock>,
     previews: Arc<Mutex<VecDeque<Preview>>>,
-    db_range: (f64, f64),
+    range: Range,
 }
 impl Incoming {
     fn receive(&mut self) {
         let frame = self.frames.borrow_and_update().clone();
         if let Some(frame) = &frame {
             self.session
-                .receive_live_frame(frame.centroids.len(), self.clock.now(), self.db_range);
+                .receive_live_frame(frame.centroids.len(), self.clock.now(), &self.range);
             if let Some(jpeg) = &frame.preview_jpeg {
                 let mut history = self.previews.lock().expect("preview history");
                 if history.len() == 8 {
@@ -155,10 +161,51 @@ impl Live {
         session: Arc<Session>,
         clock: Arc<dyn Clock>,
         frames: watch::Receiver<Option<StarFrame>>,
-        mut status: watch::Receiver<LinkStatus>,
+        status: watch::Receiver<LinkStatus>,
         solver: Arc<dyn Solver>,
         gate: Arc<Semaphore>,
         db_range: (f64, f64),
+    ) -> Self {
+        Self::begin(
+            session,
+            clock,
+            frames,
+            status,
+            solver,
+            gate,
+            Range::Fixed(db_range),
+        )
+    }
+
+    /// Start the same loop with the databases' names, ranges and selection in the session.
+    pub fn start_with_databases(
+        session: Arc<Session>,
+        clock: Arc<dyn Clock>,
+        frames: watch::Receiver<Option<StarFrame>>,
+        status: watch::Receiver<LinkStatus>,
+        solver: Arc<dyn Solver>,
+        gate: Arc<Semaphore>,
+        databases: Arc<Databases>,
+    ) -> Self {
+        Self::begin(
+            session,
+            clock,
+            frames,
+            status,
+            solver,
+            gate,
+            Range::Databases(databases),
+        )
+    }
+
+    fn begin(
+        session: Arc<Session>,
+        clock: Arc<dyn Clock>,
+        frames: watch::Receiver<Option<StarFrame>>,
+        mut status: watch::Receiver<LinkStatus>,
+        solver: Arc<dyn Solver>,
+        gate: Arc<Semaphore>,
+        range: Range,
     ) -> Self {
         let (reports, _) = broadcast::channel(16);
         let previews = Arc::new(Mutex::new(VecDeque::with_capacity(8)));
@@ -168,7 +215,7 @@ impl Live {
             session: session.clone(),
             clock: clock.clone(),
             previews: previews.clone(),
-            db_range,
+            range,
         };
         let outgoing = reports.clone();
         let history = previews.clone();
@@ -212,6 +259,7 @@ impl Live {
                     return;
                 };
                 report.name = None;
+                session.use_database(&incoming.range);
                 let pointing_seq = solved.and_then(|solved| {
                     estimate = Some(solved.fov_deg());
                     let seq = session.record_live_pointing(solved, time, frame.id);

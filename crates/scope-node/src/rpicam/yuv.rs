@@ -1,9 +1,30 @@
-//! YUV420 framing at the measured 64-byte alignment; discard Y padding and UV.
+//! YUV420 framing at the row stride the ISP writes; discard Y padding and UV.
 use std::io;
 use tokio::io::{AsyncRead, AsyncReadExt};
 
+/// The Raspberry Pi ISP behind the camera, which sets the row stride of
+/// rpicam-vid's YUV420 frames.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Isp {
+    /// VC4, as on the Pi 3B+: rows padded to a multiple of 64 bytes (measured).
+    Vc4,
+    /// PiSP, as on the Pi 5: rows padded to a multiple of 128 bytes (measured).
+    Pisp,
+}
+impl Isp {
+    /// The row stride of a frame `width` pixels wide.
+    pub fn stride(self, width: u32) -> usize {
+        let alignment = match self {
+            Self::Vc4 => 64,
+            Self::Pisp => 128,
+        };
+        (width as usize).div_ceil(alignment) * alignment
+    }
+}
+
+/// The VC4's row stride, measured on the Pi 3B+.
 pub fn stride(width: u32) -> usize {
-    (width as usize).div_ceil(64) * 64
+    Isp::Vc4.stride(width)
 }
 
 pub struct YuvReader<R> {
@@ -12,6 +33,7 @@ pub struct YuvReader<R> {
     height: usize,
     stride: usize,
     bytes: Vec<u8>,
+    frames: u64,
 }
 impl<R: AsyncRead + Unpin> YuvReader<R> {
     pub fn new(reader: R, width: u32, height: u32, stride: usize) -> io::Result<Self> {
@@ -41,6 +63,7 @@ impl<R: AsyncRead + Unpin> YuvReader<R> {
             height: height as usize,
             stride,
             bytes: vec![0; size],
+            frames: 0,
         })
     }
     pub async fn next(&mut self) -> io::Result<Option<Vec<u8>>> {
@@ -48,6 +71,28 @@ impl<R: AsyncRead + Unpin> YuvReader<R> {
             return Ok(None);
         }
         self.reader.read_exact(&mut self.bytes[1..]).await?;
+        self.frames += 1;
+        // rpicam-vid writes 0 in every row's padding, luma and chroma (measured on
+        // both ISPs). Anything else there means the frame is not at this stride.
+        let (width, stride, luma) = (self.width, self.stride, self.stride * self.height);
+        let mut padding = self.bytes[..luma]
+            .chunks_exact(stride)
+            .map(|row| &row[width..])
+            .chain(
+                self.bytes[luma..]
+                    .chunks_exact(stride / 2)
+                    .map(|row| &row[width / 2..]),
+            );
+        if padding.any(|bytes| bytes.iter().any(|&b| b != 0)) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "frame {} does not fit a {stride}-byte row stride at width {width}: \
+                     its row padding is not 0",
+                    self.frames
+                ),
+            ));
+        }
         Ok(Some(
             self.bytes[..self.stride * self.height]
                 .chunks_exact(self.stride)

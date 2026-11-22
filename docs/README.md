@@ -9,6 +9,7 @@
 | [Known-good configurations](hardware.md) | The hardware this has run on, what it was shown to do, its limits, and what should work beyond it. |
 | [Safety and security](safety-and-security.md) | What stops the mount, what doesn't yet, and what is exposed on the network. |
 | [First light](field/2026-11-13-first-light.md) | The field report from the rig's first nights under the sky, 12 to 14 November 2026. |
+| [The first Track](field/2026-11-20-driveway-track.md) | The field report from 20 November 2026: Track, the finder's solve rate, and the network and power problems. |
 | [A tour of the console page](console-tour.md) | Every view and control of the web page. |
 | [The plate solver](solver.md) | The solver on its own: the command-line example, building pattern databases, and the comparison with cedar. |
 

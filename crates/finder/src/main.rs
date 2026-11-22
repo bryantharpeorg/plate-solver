@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use clap::Parser;
+use finder::databases::{Database, Databases};
 use finder::mcp::McpConfig;
 use finder::samples::Samples;
 use finder::session::Session;
@@ -17,12 +18,13 @@ use finder::{router, AppState};
 #[derive(Parser)]
 #[command(version, about)]
 struct Args {
-    /// Pattern database (.npz) covering your camera's field of view.
+    /// Pattern database (.npz) covering your camera's field of view. Repeat it to hold
+    /// several; the console tries them in the order given until one solves.
     #[arg(
         long,
         default_value = "reference-solutions/cedar-solve/tetra3/data/default_database.npz"
     )]
-    db: PathBuf,
+    db: Vec<PathBuf>,
     /// Folder of sample frames to offer.
     #[arg(
         long,
@@ -134,17 +136,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         print!("{THIRD_PARTY_NOTICES}");
         return Ok(());
     }
-    let t = Instant::now();
-    let db = pattern_database::load_from_path(&args.db)
-        .map_err(|e| format!("cannot load the database {}: {e}", args.db.display()))?;
-    eprintln!(
-        "database: {} stars, {} patterns, FOV {}-{} deg, loaded in {:.1} s",
-        db.num_stars,
-        db.properties.num_patterns,
-        db.properties.min_fov,
-        db.properties.max_fov,
-        t.elapsed().as_secs_f64()
-    );
+    let mut list = Vec::new();
+    for path in &args.db {
+        let t = Instant::now();
+        let db = pattern_database::load_from_path(path)
+            .map_err(|e| format!("cannot load the database {}: {e}", path.display()))?;
+        let name = path
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.display().to_string());
+        let label = if args.db.len() == 1 {
+            "database".to_string()
+        } else {
+            format!("database {name}")
+        };
+        eprintln!(
+            "{label}: {} stars, {} patterns, FOV {}-{} deg, loaded in {:.1} s",
+            db.num_stars,
+            db.properties.num_patterns,
+            db.properties.min_fov,
+            db.properties.max_fov,
+            t.elapsed().as_secs_f64()
+        );
+        list.push(Database {
+            name,
+            db: Arc::new(db),
+        });
+    }
+    let databases = Databases::new(list)?;
     let samples = Samples::scan(&args.samples).unwrap_or_else(|e| {
         eprintln!("no samples ({}: {e})", args.samples.display());
         Samples::default()
@@ -173,7 +192,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let session = Session::with_state_file(state_dir.join("session.json"))?;
 
-    let state = AppState::new(db, samples)
+    let state = AppState::shared(databases.first().db.clone(), samples)
+        .with_databases(databases)
         .with_session(session)
         .with_recordings(state_dir.join("recordings"))
         .with_allowed_hosts(args.allow_host);

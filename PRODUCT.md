@@ -104,11 +104,12 @@ None yet. The repository is `plate-solver`; the app is the finder console.
   20 solve at the default threshold, as they do in cedar; `roof.jpg` solves only at 5σ.
 - The benchmark against cedar in `docs/solver.md`, given as ratios from one machine.
 - Real-sky results from one rig, 12 to 14 Nov 2026, in `docs/field/2026-11-13-first-light.md`:
-  live solving, push-to by hand and eight small powered moves. Track was used on a later night
-  (20 Nov), and the imaging camera has run on a bench (`docs/hardware.md`). A real night frame
-  from the finder camera is in `fixtures/scope-node/`. Never imply hardware results beyond
-  the field report and the hardware page: no field GoTo to a target is recorded yet, and
-  imaging runs have run only in the simulator.
+  live solving, push-to by hand and eight small powered moves. Track was used on a later night,
+  20 Nov, for about 13 minutes at 14–24″ RMS (`docs/field/2026-11-20-driveway-track.md`). The
+  imaging camera has run on a bench (`docs/hardware.md`). A real night frame from the finder
+  camera is in `fixtures/scope-node/`. Never imply hardware results beyond the field reports
+  and the hardware page: no field GoTo to a target is recorded yet, and imaging runs have run
+  only in the simulator.
 
 ## Product Principles
 

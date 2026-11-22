@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { getHealth, type FrameSource, type Health, type SolveSettings } from "./api";
+import { healthLine } from "./healthLine";
 import { useCalm } from "./calm";
 import { Chart, DEFAULT_LAYERS, type Layers } from "./components/Chart";
 import { ChartHeader, ChartHeaderPlaceholder } from "./components/ChartHeader";
@@ -291,9 +292,7 @@ export function App() {
             <footer
               className={`pt-5 text-sm text-ink-2 lg:col-span-2 ${session.target ? "lg:row-start-5" : "lg:row-start-4"} lg:pt-0`}
             >
-              {health
-                ? `Database: ${health.database.catalog}, ${health.database.stars.toLocaleString("en-US")} stars, fields ${health.database.min_fov}–${health.database.max_fov}° · finder ${health.version}`
-                : "Finder"}
+              {health ? healthLine(health) : "Finder"}
             </footer>
           </main>
         </>

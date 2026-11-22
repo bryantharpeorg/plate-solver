@@ -1,5 +1,37 @@
 //! Parse rpicam-hello's saved listing; crop sizes are not sensor modes.
+use super::yuv::Isp;
 use crate::{camera::Mode, CameraError, CameraInfo};
+
+fn is_camera(line: &str) -> bool {
+    line.split_once(" : ")
+        .is_some_and(|(index, _)| index.parse::<usize>().is_ok())
+}
+
+/// The ISP behind the listing's first camera. The listing's `PipelineHandler`
+/// names it; a listing without one, from an rpicam-apps that did not print it,
+/// is placed by the sensor's device path, which on a Pi 5 runs through its RP1.
+pub fn isp(listing: &str) -> Result<Isp, CameraError> {
+    let mut lines = listing.lines().map(str::trim).skip_while(|l| !is_camera(l));
+    let camera = lines
+        .next()
+        .ok_or_else(|| CameraError("camera listing contains no cameras or modes".into()))?;
+    for line in lines.take_while(|l| !is_camera(l)) {
+        if let Some(("PipelineHandler", handler)) = line.split_once(" : ") {
+            return match handler.trim() {
+                "rpi/vc4" => Ok(Isp::Vc4),
+                "rpi/pisp" => Ok(Isp::Pisp),
+                other => Err(CameraError(format!(
+                    "camera listing names the pipeline handler {other}, whose row stride the node does not know"
+                ))),
+            };
+        }
+    }
+    Ok(if camera.contains("/rp1/") {
+        Isp::Pisp
+    } else {
+        Isp::Vc4
+    })
+}
 
 fn size(text: &str) -> Option<(u32, u32)> {
     let (width, rest) = text.split_once('x')?;

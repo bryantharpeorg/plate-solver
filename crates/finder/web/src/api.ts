@@ -752,6 +752,12 @@ export interface MountSky {
   night_utc?: string;
 }
 
+export interface DatabaseView {
+  name: string;
+  min_fov_deg: number;
+  max_fov_deg: number;
+}
+
 export interface ObservingSession {
   motion?: SessionMotion;
   track?: SessionTrack;
@@ -776,7 +782,14 @@ export interface ObservingSession {
   imaging?: ImagingView;
   /** How far the live views are turned, degrees counter-clockwise; omitted until set. */
   chart_rotation_deg?: number;
-  field?: { fov_deg: number | null; db_min_fov_deg: number; db_max_fov_deg: number; unsolved_s: number };
+  field?: {
+    fov_deg: number | null;
+    db_min_fov_deg: number;
+    db_max_fov_deg: number;
+    unsolved_s: number;
+    database?: DatabaseView & { reason: "only" | "first" | "solved" | "field" };
+    databases?: DatabaseView[];
+  };
   /** The drawn sky of `--mount-sky`, present only in that mode. */
   mount_sky?: MountSky;
 }
@@ -810,6 +823,14 @@ export interface Health {
   status: string;
   version: string;
   database: { catalog: string; stars: number; patterns: number; min_fov: number; max_fov: number };
+  databases?: {
+    name: string;
+    catalog: string;
+    stars: number;
+    patterns: number;
+    min_fov: number;
+    max_fov: number;
+  }[];
   samples: number;
 }
 

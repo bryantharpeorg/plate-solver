@@ -41,7 +41,7 @@ Working at one telescope, and looking for feedback.
   motors, on a Sky-Watcher 400P (16-inch) GoTo Dobsonian driven from a Raspberry Pi 3B+ with
   an Arducam OV5647 finder camera, 12 to 14 November 2026
   ([field report](docs/field/2026-11-13-first-light.md)). Track was used on a later night,
-  20 November, which is not yet written up.
+  20 November, for about 13 minutes at 14–24″ RMS ([field report](docs/field/2026-11-20-driveway-track.md)).
 - **Simulator and CI only:** GoTo to a target, with no field GoTo on record yet, and full
   imaging runs.
 - **Bench-proven:** a ZWO ASI071MC Pro imaging camera through INDI, including full frames
@@ -204,6 +204,7 @@ Both builds need a Sky-Watcher alt-az GoTo mount. Equatorial mounts are not supp
 | [Safety and security](docs/safety-and-security.md) | What stops the mount, and what is exposed on the network. |
 | [The plate solver](docs/solver.md) | The command-line solver, pattern databases, and the comparison with cedar. |
 | [First light](docs/field/2026-11-13-first-light.md) | The field report behind the "proven at the telescope" list. |
+| [The first Track](docs/field/2026-11-20-driveway-track.md) | The field report from 20 November: Track, the finder's solve rate, and the network and power problems. |
 
 [`docs/README.md`](docs/README.md) indexes everything else: the crate references, decisions,
 research and specifications.
@@ -248,8 +249,8 @@ Here is what backs it up, and where the gaps are.
 **What is not tested automatically:**
 
 - No real mount or camera runs in CI. Hardware results come from bench and field nights, logged
-  in [known-good configurations](docs/hardware.md) and the
-  [field report](docs/field/2026-11-13-first-light.md).
+  in [known-good configurations](docs/hardware.md) and the field reports
+  ([first light](docs/field/2026-11-13-first-light.md), [the first Track](docs/field/2026-11-20-driveway-track.md)).
 - The node stops the mount when it is stopped or shut down, but a crash or a power cut still
   ends it without a stop ([safety](docs/safety-and-security.md#what-does-not-stop-the-mount-yet)).
 - The console has no login. It listens only on localhost by default.
