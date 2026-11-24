@@ -13,7 +13,7 @@ scope-link = { version = "0.1.0", path = "../scope-link" }
 tokio = { version = "1.53.1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
 serde = { version = "1.0", features = ["derive"] }
 # Strict TOML configuration; the only newly introduced format dependency.
-toml = { version = "0.9", default-features = false, features = ["parse", "serde", "display"] }
+toml = { version = "1", default-features = false, features = ["parse", "serde", "display"] }
 # Incremental rpicam JSON metadata (already in the workspace lockfile).
 serde_json = "1.0"
 # SensorTimestamp's epoch, plus safe creation of the private metadata FIFO.
