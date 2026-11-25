@@ -9,6 +9,8 @@ pub enum Adapter {
     #[default]
     Rpicam,
     Simulated,
+    /// 045: a camera of an INDI server, named by the `[indi]` table.
+    Indi,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
 #[serde(untagged)]
@@ -80,6 +82,66 @@ impl fmt::Display for CameraMode {
 #[serde(deny_unknown_fields)]
 pub struct MountConfig {
     pub device: std::path::PathBuf,
+}
+
+/// 045: the finder camera's INDI server and device, for `adapter = "indi"`;
+/// unknown keys are errors.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FinderIndiConfig {
+    #[serde(default)]
+    pub address: Option<SocketAddr>,
+    #[serde(default)]
+    pub device: Option<String>,
+    /// Controls set to these values on each connection, keyed
+    /// `"<property>.<element>"`, as `[imaging]`'s. Empty by default.
+    #[serde(default)]
+    pub neutral: std::collections::BTreeMap<String, f64>,
+}
+
+impl FinderIndiConfig {
+    /// `address`, or 127.0.0.1:7624, INDI's own default port.
+    pub fn address(&self) -> SocketAddr {
+        self.address
+            .unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 7624)))
+    }
+
+    /// `neutral` as `(property, element, value)`, each key split at its first
+    /// `.`, in sorted order. `validate` has refused a key that does not split.
+    pub fn neutral_controls(&self) -> Vec<(String, String, f64)> {
+        self.neutral
+            .iter()
+            .map(|(key, value)| {
+                let (property, element) = key.split_once('.').unwrap_or((key.as_str(), ""));
+                (property.to_string(), element.to_string(), *value)
+            })
+            .collect()
+    }
+
+    /// What `--check-config` prints after `[indi]`: `address`, the default
+    /// included, `device` when set and `neutral` when not empty, as
+    /// `[imaging]` prints them.
+    pub fn printed(&self) -> String {
+        let mut out = format!("address = \"{}\"\n", self.address());
+        if let Some(device) = &self.device {
+            out.push_str(&format!("device = \"{device}\"\n"));
+        }
+        if !self.neutral.is_empty() {
+            let entries = self
+                .neutral
+                .iter()
+                .map(|(key, value)| {
+                    format!(
+                        "\"{}\" = {value}",
+                        key.replace('\\', "\\\\").replace('"', "\\\"")
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            out.push_str(&format!("neutral = {{ {entries} }}\n"));
+        }
+        out
+    }
 }
 
 /// The imaging camera's adapter.
@@ -188,6 +250,9 @@ pub struct Config {
     pub mount: Option<MountConfig>,
     #[serde(default)]
     pub imaging: Option<ImagingConfig>,
+    /// 045: the finder camera's INDI server and device.
+    #[serde(default)]
+    pub indi: Option<FinderIndiConfig>,
 }
 fn default_listen() -> SocketAddr {
     SocketAddr::from(([0, 0, 0, 0], 50051))
@@ -296,6 +361,7 @@ impl Config {
                 return Err(ConfigError("imaging.save_dir must not be empty".into()));
             }
         }
+        self.validate_indi()?;
         if self.token.trim().is_empty() {
             return Err(ConfigError("token must not be empty".into()));
         }
@@ -325,6 +391,62 @@ impl Config {
         }
         Ok(())
     }
+    /// 045: the `[indi]` table only with `adapter = "indi"`, and two INDI
+    /// cameras of one server each on a device named and their own.
+    fn validate_indi(&self) -> Result<(), ConfigError> {
+        if self.adapter != Adapter::Indi {
+            if self.indi.is_some() {
+                return Err(ConfigError(
+                    "the [indi] table applies only to adapter = \"indi\"".into(),
+                ));
+            }
+            return Ok(());
+        }
+        let finder = self.indi.clone().unwrap_or_default();
+        if finder
+            .device
+            .as_ref()
+            .is_some_and(|device| device.is_empty())
+        {
+            return Err(ConfigError("indi.device must not be empty".into()));
+        }
+        for (key, value) in &finder.neutral {
+            match key.split_once('.') {
+                Some((property, element)) if !property.is_empty() && !element.is_empty() => {}
+                _ => {
+                    return Err(ConfigError(format!(
+                        "indi.neutral key {key} must be PROPERTY.ELEMENT"
+                    )))
+                }
+            }
+            if !value.is_finite() {
+                return Err(ConfigError(format!(
+                    "indi.neutral {key} must be a finite number"
+                )));
+            }
+        }
+        let Some(imaging) = self
+            .imaging
+            .as_ref()
+            .filter(|imaging| imaging.adapter == ImagingAdapter::Indi)
+        else {
+            return Ok(());
+        };
+        if imaging.address() != finder.address() {
+            return Ok(());
+        }
+        match (&finder.device, &imaging.device) {
+            (Some(a), Some(b)) if a == b => Err(ConfigError(format!(
+                "indi.device and imaging.device both name {a}: the finder camera and the imaging camera need a device each"
+            ))),
+            (Some(_), Some(_)) => Ok(()),
+            _ => Err(ConfigError(format!(
+                "the finder camera and the imaging camera share the INDI server at {}: set indi.device and imaging.device",
+                finder.address()
+            ))),
+        }
+    }
+
     pub fn settings(&self) -> Settings {
         Settings {
             exposure_ms: self.exposure_ms.value(),
@@ -338,7 +460,7 @@ impl Config {
             Control::Auto => "\"auto\"".into(),
             Control::Fixed(n) => n.to_string(),
         };
-        format!("listen = \"{}\"\ntoken = \"****\"\nadapter = \"{}\"\nmode = \"{}\"\nexposure_ms = {}\ngain = {}\n\n[detection]\n{}", self.listen, match self.adapter { Adapter::Rpicam => "rpicam", Adapter::Simulated => "simulated" }, self.mode, control(self.exposure_ms), control(self.gain), toml::to_string(&self.detection).expect("validated detection serializes"))
+        format!("listen = \"{}\"\ntoken = \"****\"\nadapter = \"{}\"\nmode = \"{}\"\nexposure_ms = {}\ngain = {}\n\n[detection]\n{}", self.listen, match self.adapter { Adapter::Rpicam => "rpicam", Adapter::Simulated => "simulated", Adapter::Indi => "indi" }, self.mode, control(self.exposure_ms), control(self.gain), toml::to_string(&self.detection).expect("validated detection serializes"))
     }
 }
 
