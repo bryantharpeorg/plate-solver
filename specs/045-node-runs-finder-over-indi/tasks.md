@@ -8,8 +8,9 @@ description: "Task list for 045-node-runs-finder-over-indi: The Node Runs the Fi
 - every spec in `depends_on_landed` has landed on `main`: met at be7f3ff6;
 - the owner decisions in spec.md are settled: met, the owner's answers of 2026-11-25
   (spec.md § Clarifications);
-- every story has been probe-built from this text: not met; the drafting probe and the
-  fold of review round 1 built both stories from the seat's own trial, not from this text;
+- every story has been probe-built from this text: met; probe round 1 built both stories
+  from this text alone on 2026-11-25 (branch `probe/045-r1`, tip `49cfed7b`, plus the
+  fold's 31f390ce and 21c62324): 0 blocking and 9 clarity defects, folded here;
 - no operator-staged file is needed under owner decision 7's answer.
 
 **Rules for every story:**
@@ -31,8 +32,9 @@ description: "Task list for 045-node-runs-finder-over-indi: The Node Runs the Fi
 - No test uses a camera, a Pi, a network beyond `127.0.0.1` or a real INDI server, and no
   test signals a process it did not start. Run no tool the gates don't run, and do not set
   `CARGO_TARGET_DIR`.
-- US1's diff has about 160 B of room under 60 % of 65,536 B at the usual overrun
-  (plan.md § Plan traps 2): keep to plan.md § Interfaces, and escalate rather than grow it.
+- Built from this text alone (probe round 1), US1's diff measured 30,690 B and US2's
+  31,019 B, each from its base, under 60 % of 65,536 B, 39,321 B; with the fold's cases,
+  31,804 B and 31,844 B (plan.md § Plan traps 2). Keep to plan.md § Interfaces.
 
 ## Phase 1: User Story 1 - The finder camera is described and framed over INDI (Priority: P1)
 
@@ -41,10 +43,11 @@ description: "Task list for 045-node-runs-finder-over-indi: The Node Runs the Fi
 - [ ] T001 [US1] Create `crates/scope-node/tests/finder_script/mod.rs`, opening with
   `#![allow(dead_code)]`, with the finder camera's device `Finder CCD`, the test clock and
   reading(ms), the finder script, the gain step, the exposures, its own FITS writer, the
-  worked 16-bit frame and the finder rig's camera of spec.md § User Scenarios, built with
-  the stand-in's public builders through `crate::support`.
+  worked 16-bit frame, the 8-bit ramp and an 8-bit frame of v, and the finder rig's
+  camera of spec.md § User Scenarios, built with the stand-in's public builders through
+  `crate::support`.
 - [ ] T002 [US1] Create `crates/scope-node/tests/indi_finder.rs` with `mod finder_script;`
-  and `mod support;`, and one test for each of US1-S1 to US1-S9, under
+  and `mod support;`, and one test for each of US1-S1 to US1-S10, under
   `#[tokio::test(start_paused = true)]`. They name `scope_node::indi_finder::IndiFinder`,
   which T005 adds; until then the file does not build, as on the probe.
 
@@ -62,7 +65,7 @@ description: "Task list for 045-node-runs-finder-over-indi: The Node Runs the Fi
 - [ ] T006 [US1] Run the `lint` and `test` gates with every existing test unchanged and
   green, `crates/scope-node/tests/indi.rs`, `indi_expose.rs` and `indi_settings.rs` among
   them, then commit the green story (FR-001 to FR-006; US1-S1, US1-S2, US1-S3, US1-S4,
-  US1-S5, US1-S6, US1-S7, US1-S8, US1-S9).
+  US1-S5, US1-S6, US1-S7, US1-S8, US1-S9, US1-S10).
 
 ## Phase 2: User Story 2 - The node runs the finder camera over INDI beside the imaging camera (Priority: P1)
 
@@ -74,7 +77,8 @@ description: "Task list for 045-node-runs-finder-over-indi: The Node Runs the Fi
   one test for each of US2-S1 to US2-S9: US2-S1 to US2-S5 under `#[test]`, US2-S6 under
   `#[tokio::test]` and US2-S7 to US2-S9 under `#[tokio::test(start_paused = true)]`. On
   US1 alone the file does not build, since `Adapter::Indi` and `Config::indi` do not
-  exist (by reading; the probe built both stories together, and US1 alone without it).
+  exist (run on probe round 1: `E0599`, no variant `Indi` of `Adapter`, and two `E0609`,
+  no field `indi` on `Config`).
 
 ### Implementation
 

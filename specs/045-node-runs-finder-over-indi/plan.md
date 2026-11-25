@@ -36,13 +36,14 @@ dependencies of the node already. `Cargo.toml` and `Cargo.lock` do not change.
 
 **Testing**:
 - `crates/scope-node/tests/finder_script/mod.rs` (new, US1): the finder script, the gain
-  step, the exposures, the FITS writer, the worked 16-bit frame, the test clock and the
-  finder rig's camera, which both stories' test files use; it starts with
+  step, the exposures, the FITS writer, the worked 16-bit frame, the 8-bit ramp and an
+  8-bit frame of v, the test clock and the finder rig's camera, which both stories' test
+  files use; it starts with
   `#![allow(dead_code)]`, as `crates/scope-node/tests/support/mod.rs:1` does, since each
   file uses a part.
 - `crates/scope-node/tests/indi_finder.rs` (new, US1): the adapter and the client over the
   stand-in server of `crates/scope-node/tests/support/mod.rs`, under paused time, and two
-  cameras on one stand-in (US1-S1 to US1-S9).
+  cameras on one stand-in (US1-S1 to US1-S10).
 - `crates/scope-node/tests/indi_finder_node.rs` (new, US2): the config, the built binary
   under `--check-config`, with no server and over a TCP bridge to the stand-in, and three
   scenarios of the adapter inside the node's service over an in-memory link, under paused
@@ -698,6 +699,39 @@ comments; df2ea0c9, the README's wording of the shared-server rule. Runs:
 - thirteen mutations, listed in § Mutations;
 - df2ea0c9 changed the README alone, after those runs.
 
+**Run by probe round 1, the same day, after the flip**: a builder building both stories
+from this trio alone, on the branch `probe/045-r1` from `79a87345` (`main` at be7f3ff6
+and the trio), with the factory's toolchain and `--locked`, in four commits: 4a04655e
+and 765b1249, US1's tests first and US1; f73f2456 and 49cfed7b, US2's. Runs:
+- before each story its test file did not build, as T002 and T007 say; US2-S7 to US2-S9
+  alone passed on US1's code, `start_s` reading(5300) and reading(4000) exactly;
+- each story's two focused commands three times, every test passing each time;
+  § Interfaces' code compiled and passed as written;
+- at 49cfed7b, the gates' Rust commands: `lint`'s four all passing; workspace nextest
+  1,489 passed, 0 failed, 0 skipped, the 1,463 existing tests unchanged and 26 new;
+  `cargo test --workspace --locked --doc` ok; `cargo-machete` clean, and `cargo-deny`
+  clean with the host's cargo cache `--offline`, the factory's cache lacking one crate;
+- 45 mutations on 765b1249 and 49cfed7b, 35 failing a scenario's test (§ Mutations);
+- the optional run against a real server, in the drafting probe's image with
+  `--network none` and the same two simulators, the tip's node set up from the README
+  section alone:
+  `--check-config` printed `[indi]`; one finder camera exposure a second, a BLOB each and
+  one `CCD_GAIN` vector per connection; with the server stopped 4 s, the node logged
+  `camera capture failed: the exposure failed twice: ...` and the bare reason twice,
+  then one exposure a second again, with no `exposed at gain` line; both tables unnamed,
+  exit 1 with FR-008's text.
+
+It found 0 blocking and 9 clarity defects, 045-R1 to 045-R9, every citation checked at
+`79a87345` and none stale.
+
+**Run in the fold of probe round 1, the same day**, on `probe/045-r1` from 49cfed7b, in
+two commits that change test files only: 31f390ce, US1-S8's unparsed `max` (045-R2) and
+US1-S10 (045-R3); 21c62324, US2-S5's `[imaging]` table and US2-S6's named device
+(045-R5). Runs: each story's test file three times, every test passing each time; five
+mutations, each failing the case written for it (§ Mutations); at 21c62324,
+`cargo fmt --all --check`, clippy and `cargo doc` of `scope-node` with warnings denied,
+every `scope-node` test (239 passing) and its doc tests.
+
 **Read, not run**:
 - the ASI120MM's device name, `ZWO CCD ASI120MM Mini`, from the ASI071's on the bench;
   its gain range of 0–100 and its gain step; RAW8 through `CCD_VIDEO_FORMAT`;
@@ -729,7 +763,8 @@ story writes anything the page is built from), and the factory's gate boundary i
 ## Mutations
 
 Each run once against both new test files on the probe's b2b19ba4, the file restored
-after; every mutation failed at least one scenario's test:
+after, and the last five against their story's test file on `probe/045-r1` at 21c62324
+(the fold of probe round 1); every mutation failed at least one scenario's test:
 
 | Mutation | Scenarios failed |
 | --- | --- |
@@ -746,6 +781,17 @@ after; every mutation failed at least one scenario's test:
 | The binary passing no neutral controls (FR-010) | US2-S6 |
 | An `[indi] neutral` key not checked (FR-007) | US2-S2 |
 | `[indi] neutral` not printed (FR-009) | US2-S4 |
+| An unparsed `max` taken as 0, not kept (FR-001) | US1-S8 |
+| The gain range's maximum not raised to 1 (FR-002) | US1-S10 |
+| A camera with no gain control taken as having one (FR-002, FR-004) | US1-S10 |
+| The finder camera built from `[imaging]`'s address (FR-010) | US2-S5 |
+| The binary passing no device (FR-010) | US2-S6 |
+
+Probe round 1's pass (45 mutations, on 765b1249 and 49cfed7b) left ten alive: the five
+above, each now failing the case added for it, and five that no test can see, in § Read
+from the diff (an unparsed `min` taken as 0, `gray`'s sample-count refusal removed,
+`PURPOSE` another word that chooses a light frame, the binary ignoring `config.mode`,
+the README without `StartLimitIntervalSec=0`).
 
 The draft's pass (ten mutations, on f6c3df0a) is superseded: its "frame's own gain not
 taken" no longer exists, since the fold's rule fails such a frame. In the draft, a first
@@ -760,6 +806,16 @@ a stall within the test.
 - **The failure of FR-004 reaches the journal** through the capture loop's
   `camera capture failed: ` (`crates/scope-node/src/capture.rs:69`): US1-S7 asserts the
   text and US2-S9 the second it costs, and no test reads standard error for it.
+- **An unparsed `min` is kept** (FR-001): the finder script defines the minimum as 0, so
+  kept and taken as 0 look alike; US1-S8's unparsed `max` holds the rule.
+- **`gray`'s refusals** of a sample size other than 8 or 16 bits and of a sample count
+  other than width times height (FR-003): no frame through `IndiCamera` reaches them,
+  since `fits::read` refuses another `BITPIX` (`crates/scope-node/src/imaging/fits.rs:124`)
+  and short data (`crates/scope-node/src/imaging/fits.rs:143`).
+- **The binary passes `config.mode`** (FR-010): no built-node test names a mode; the
+  adapter's refusal of another size is US1-S5's.
+- **The README's `StartLimitIntervalSec=0`** (FR-011): no test reads the README; the
+  section is copied from § Interfaces.
 
 ## Shapes that existing tests pin
 
@@ -812,7 +868,7 @@ files beside the change, and what the stories do to what they observe:
 | `StartLimitIntervalSec=0` on the node's unit | systemd's default limit; waiting at start | Owner decision 8: with the default, a server away for about 5 s at the node's start leaves it failed. The README says so and the Pi's unit carries it. |
 | The client takes a set vector's range | Leave it; a spec of its own | Owner decision 5: 13 lines, both cameras' ranges right on a freshly started device program. |
 | Refuse a colour camera as the finder camera | Treat its mosaic as gray | Detection on a mosaic is not what any test or source grounds; refusing names the mistake of a finder camera pointed at the ASI071. |
-| Two stories, the service scenarios in US2 | One; three; the service scenarios in US1 | One would be about 92.5 % of 65,536 B as probed; two are 44.3 % and 48.3 %, and US1 stays under 60 % at the usual overrun only with the service scenarios in US2 (§ Plan traps 2). |
+| Two stories, the service scenarios in US2 | One; three; the service scenarios in US1 | One would be about 92.5 % of 65,536 B as probed; two are 44.3 % and 48.3 % on the drafting probe, and 48.5 % and 48.6 % built from this text with the fold's cases (§ Plan traps 2). The service scenarios run US1's adapter inside the node's service, which the node serves from US2 on. |
 
 ## User Story 1 - The finder camera is described and framed over INDI
 
@@ -850,8 +906,12 @@ Tests first: `indi_finder_node.rs`, over US1's `finder_script/mod.rs`. Then `con
    decisions, § Owner approvals). Decisions met: the owner answered all eight on
    2026-11-25 at 19:21 UTC, as recommended and as review round 1 amended them (spec
    § Clarifications). The approvals are given by the flip.
-4. **Probe builds.** Waived by the owner's flip of 2026-11-25 ("flip to ready"), made while
-   probe round 1 (a builder building both stories from the trio alone) was still running.
+4. **Probe builds.** Met. The owner flipped the spec on 2026-11-25 ("flip to ready") on the
+   condition that every prerequisite is met; probe round 1 built both stories from this
+   text alone the same day (branch `probe/045-r1`, tip `49cfed7b`, plus the fold's
+   31f390ce and 21c62324): 0 blocking and 9 clarity defects, folded here (§ What was run
+   and what was read). The flip's merge, on the owner's go, gives the owner approvals;
+   `main` still at be7f3ff6.
 5. **Under owner decision 7 (b) only:** the camera's saved definitions are staged by the
    operator. Under (a), nothing is staged.
 
@@ -947,16 +1007,18 @@ They bind every story.
 1. **Gate evidence or nothing.** The judge credits only gate results and the story's
    diff. *Check:* every Then names a committed test the `test` gate runs.
 2. **One evidence budget.** *Check:* the story's diff stays under 64 KiB, measured with
-   `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c`. Measured on the
-   probe's df2ea0c9, each story's files against be7f3ff6: US1 29,009 B, 44.3 % of
-   65,536 B (the client 1,238 B, the adapter 7,445 B, `lib.rs` 334 B, `indi_finder.rs`
-   13,217 B, `finder_script/mod.rs` 6,775 B); US2 31,660 B, 48.3 % (`config.rs`
-   6,860 B, `main.rs` 1,661 B, the README 4,882 B, `indi_finder_node.rs` 18,257 B). At
-   the 1.35 times a factory build has run over its probe on earlier specs, about
-   39,162 B (59.8 %) and 42,741 B (65.2 %): US1 stays under 60 % (39,321 B) by about
-   160 B, and US2 is about 22,800 B under the limit. US1 has no room: a builder that
-   needs more escalates rather than growing it. One story would be about 60,650 B,
-   92.5 %.
+   `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c`; each story is
+   sized under 60 % of 65,536 B, 39,321 B. Measured on the drafting probe's df2ea0c9,
+   each story's files against be7f3ff6: US1 29,009 B, 44.3 % (the client 1,238 B, the
+   adapter 7,445 B, `lib.rs` 334 B, `indi_finder.rs` 13,217 B, `finder_script/mod.rs`
+   6,775 B); US2 31,660 B, 48.3 % (`config.rs` 6,860 B, `main.rs` 1,661 B, the README
+   4,882 B, `indi_finder_node.rs` 18,257 B). Built from this text alone by probe round
+   1, each from its base: US1 30,690 B (46.8 %) and US2 31,019 B (47.3 %), 1.06 and
+   0.98 times the drafting probe's; the 1.35 times a factory build has run over its
+   probe on earlier specs did not happen. With the cases the fold of probe round 1 added
+   (`probe/045-r1` at 21c62324, each story's files): US1 31,804 B (48.5 %), US2
+   31,844 B (48.6 %), each about 7,500 B under 39,321 B. Keep to § Interfaces. One
+   story would be about 60,650 B, 92.5 %.
 3. **A spec fixed mid-epic needs a relaunch.** *Check:* no builder edits
    `specs/045-node-runs-finder-over-indi/` or `.specify/`.
 4. **The stand-in server is an existing test file, and the shared test module is US1's.**
@@ -1024,7 +1086,9 @@ one run against a real `indiserver`), a reading of the node's camera port, servi
 capture loop, auto-exposure, config and binary, the INDI client and its tests, the
 console's uses of a frame's times, 013's, 030's and 048's trios and the constitution.
 Folded the same day with cynical review round 1 and the owner's answers, from the fold's
-commits on the probe (§ What was run and what was read). Writes come from the task text.
+commits on the probe, and then with probe round 1's nine clarity defects, from the
+fold's commits on `probe/045-r1` (§ What was run and what was read). Writes come from
+the task text.
 Shared writes name the merge edge that orders them, and the spec story that last wrote
 the same file on `main`. The two stories share no file: US2 uses US1's shared test
 module and does not write it.
@@ -1078,13 +1142,18 @@ stories:
       - path: crates/scope-node/tests/indi_finder.rs
         status: new
         disposition: add
-        assertion: "IndiCamera describe naming Finder CCD over the finder script gives exposure_ms 0.032 to 2000000; over the finder script whose answer reads min x it gives 0 to 2000000; both scripts play to their end"
+        assertion: "IndiCamera describe naming Finder CCD over the finder script gives exposure_ms 0.032 to 2000000; over the finder script whose answer's max 2000 reads max x it gives 0.032 to 3600000, the defined max kept; both scripts play to their end"
         decision: "spec.md:US1-S8"
       - path: crates/scope-node/tests/indi_finder.rs
         status: new
         disposition: add
-        assertion: "the finder rig naming CCD Simulator over the mono script sent after the colour script's definitions, and the imaging IndiCamera naming ZWO CCD ASI071MC Pro over the colour script sent after the mono script's, each on its own stand-in: a frame and a 1000 ms light exposure made at once both answer 1100 ms after they began, the finder camera's pixels six 7s and the imaging samples six 9s, each description names its own device, and both scripts, whose @ device names their own device, play to their end"
+        assertion: "the finder rig naming CCD Simulator over the mono script, its @ device CCD Simulator put on a line of its own, whose first send block starts with the colour script's first block, and the imaging IndiCamera naming ZWO CCD ASI071MC Pro over the colour script whose first send block starts with the mono script's, each on its own stand-in: a frame and a 1000 ms light exposure made at once both answer 1100 ms after they began, the finder camera's pixels six 7s and the imaging samples six 9s, each description names its own device, and both scripts, whose @ device lines name their own device, play to their end"
         decision: "spec.md:US1-S9"
+      - path: crates/scope-node/tests/indi_finder.rs
+        status: new
+        disposition: add
+        assertion: "two finder rigs naming Finder CCD, one over the finder script at gain 0 with no Gain element in CCD_CONTROLS then an exposure of 1 s with the worked 16-bit frame, one over the finder script whose Gain is 0 of 0-0.5: a frame with default settings from the first; each info gives gain_min 1 and gain_max 1, the frame's gain is 1, and both scripts, the first with no gain step, play to their end"
+        decision: "spec.md:US1-S10"
       - path: crates/scope-node/tests/indi.rs
         status: existing
         disposition: preserve
@@ -1162,12 +1231,12 @@ stories:
       - path: crates/scope-node/tests/indi_finder_node.rs
         status: new
         disposition: add
-        assertion: "the built node on adapter indi with [indi] address a 127.0.0.1 port where nothing listens exits within 5 s with status 1, its last stderr line scope-node: cannot reach the INDI server at 127.0.0.1:<port>: Connection refused (os error 111)"
+        assertion: "the built node on adapter indi with [indi] address a 127.0.0.1 port where nothing listens and [imaging] adapter indi at another such port exits within 5 s with status 1, its last stderr line scope-node: cannot reach the INDI server at 127.0.0.1:<port>: Connection refused (os error 111), port being the [indi] port"
         decision: "spec.md:US2-S5"
       - path: crates/scope-node/tests/indi_finder_node.rs
         status: new
         disposition: add
-        assertion: "the built node at exposure_ms 100 and gain 90 with [indi] neutral CCD_OFFSET.OFFSET 20 over a TCP bridge to the mono script with no timed expect, the neutral vector CCD_OFFSET OFFSET=20 answered, an exposure of 0.1 s answered with the 8-bit ramp and the next exposure expected: Describe gives CCD Simulator, 1280 by 1024, one active mode 1280x1024 at 1 fps, exposure 10 to 3600000, gain 1 to 300; the first star frame within 10 s is 3 by 2, exposure_ms 100, gain 90, end_s 0.1 after start_s within 1e-9; after 1 s and the kill the script, with the neutral vector and no gain vector, plays to its end"
+        assertion: "the built node at exposure_ms 100 and gain 90 with [indi] device CCD Simulator and neutral CCD_OFFSET.OFFSET 20 over a TCP bridge to the mono script whose first send block starts with the colour script's first block, with no timed expect, the neutral vector CCD_OFFSET OFFSET=20 answered, an exposure of 0.1 s answered with the 8-bit ramp and the next exposure expected: Describe gives CCD Simulator, 1280 by 1024, one active mode 1280x1024 at 1 fps, exposure 10 to 3600000, gain 1 to 300; the first star frame within 10 s is 3 by 2, exposure_ms 100, gain 90, end_s 0.1 after start_s within 1e-9; after 1 s and the kill the script, with the neutral vector and no gain vector, plays to its end"
         decision: "spec.md:US2-S6"
       - path: crates/scope-node/tests/indi_finder_node.rs
         status: new

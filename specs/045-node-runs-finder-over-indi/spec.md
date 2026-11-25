@@ -17,10 +17,12 @@ depends_on_landed: ["013-live-finder", "030-imaging-camera-link", "044-node-stop
 # last changed `config.rs` and the node's README; 013 because FR-007 of its spec gains the
 # third adapter. What rests on a run and what on reading is said where it is used
 # (plan.md § What was run and what was read).
-# Flipped to `ready` on 2026-11-25 at the owner's ask ("flip to ready"), while probe
-# round 1 (both stories built from this text alone) was still running, so the owner's ask
-# waives plan.md's prerequisite 4; its merge, on the owner's go, gives the owner
-# approvals. `main` still at be7f3ff6.
+# Flipped to `ready` on 2026-11-25 at the owner's ask ("flip to ready"), on the condition
+# that every prerequisite is met; probe round 1 built both stories from this text alone
+# the same day (branch `probe/045-r1`, tip `49cfed7b`, plus the fold's 31f390ce and
+# 21c62324): 0 blocking and 9 clarity defects, folded here (plan.md § What was run and
+# what was read); its merge, on the owner's go, gives the owner approvals. `main` still
+# at be7f3ff6.
 ---
 
 # Feature Specification: The Node Runs the Finder Camera over INDI
@@ -171,9 +173,11 @@ the console chooses (047).
 - Q: What rests on a run, and what on reading? → A: Every scenario was run on the probe
   with the trial build of plan.md § Interfaces: before the fold both gates' Rust commands
   passed there, and in the fold the node's lint and tests passed at its last commit,
-  which touched the node alone. The lead runs, the real-server run and the fold's runs
-  are listed in plan.md § What was run and what was read. Nothing was run on the
-  ASI120MM, the ASI071, a Pi or `indi_asi_ccd`.
+  which touched the node alone. Probe round 1 then built both stories from this text
+  alone, every scenario's test passing and both gates' Rust commands passing at its tip,
+  and the fold of its defects ran the cases it added. The lead runs, the real-server
+  runs and the folds' runs are listed in plan.md § What was run and what was read.
+  Nothing was run on the ASI120MM, the ASI071, a Pi or `indi_asi_ccd`.
 - Q: What is left for later? → A: The items under "Out of scope" in § Assumptions.
 
 ### Session 2026-11-25 (the owner's answers)
@@ -322,8 +326,9 @@ file changes.
 
 1. **New public API in the node's library** (FR-002, FR-007): the module
    `scope_node::indi_finder` with `IndiFinder`, `gray`, `FRAME_MS` and `PURPOSE`;
-   `config::Adapter::Indi`; `config::FinderIndiConfig` with its `neutral` and
-   `neutral_controls`, and `Config::indi`. No existing signature changes.
+   `config::Adapter::Indi`; `config::FinderIndiConfig` with its `address`, `device` and
+   `neutral` fields and its `address`, `neutral_controls` and `printed` methods, and
+   `Config::indi`. No existing signature changes.
 2. **The imaging camera's description changes on a freshly started ZWO device program**
    (FR-001): its exposure range is the device's answer, 0.032 to 2,000,000 ms on the
    ASI071 by the bench, where it was 0 to 3,600,000 ms.
@@ -347,8 +352,9 @@ Every scenario shares these definitions.
   It is used, not edited.
 - **The shared test module** `crates/scope-node/tests/finder_script/mod.rs` is US1's,
   new: it holds the finder script, the gain step, the exposures, the FITS writer, the
-  worked 16-bit frame, the test clock and the finder rig's camera, which both stories'
-  tests use. US2's test file uses it and does not edit it.
+  worked 16-bit frame, the 8-bit ramp and an 8-bit frame of v, the test clock and the
+  finder rig's camera, which both stories' tests use. US2's test file uses it and does
+  not edit it.
 - **The test clock** reads 1000.0 plus the tokio time elapsed since it was built;
   **reading(ms)** is its reading `ms` milliseconds after. US1's tests and US2-S7 to
   US2-S9 run under `#[tokio::test(start_paused = true)]`.
@@ -361,7 +367,8 @@ Every scenario shares these definitions.
   `setNumberVector` of `CCD_EXPOSURE`, state Ok, whose `oneNumber` is
   `<oneNumber name="CCD_EXPOSURE_VALUE" min="3.2e-05" max="2000" step="1">1</oneNumber>`,
   `CCD_ABORT_EXPOSURE`, `CCD_FRAME` 0, 0, 1280, 960, `CCD_INFO` 1280, 960, 3.75 µm and
-  16 bits, `CCD_CONTROLS` with `Gain` g of 0–100 and `Offset` 10 of 0–100,
+  16 bits, each of these three with the colour-camera script's element names,
+  `CCD_CONTROLS` with `Gain` g of 0–100 and `Offset` 10 of 0–100,
   `CCD_FRAME_TYPE` (`FRAME_LIGHT` On, `FRAME_DARK` Off) and the BLOB `CCD1`; then
   `@ expect after 200 enableBLOB text=Also`.
 - **The gain step g** is `@ expect newNumberVector CCD_CONTROLS Gain=g Offset=10`, then a
@@ -472,12 +479,14 @@ development, `cargo nextest run -p scope-node --locked --test indi_finder`.
    `the finder camera exposed at gain 0, not at the gain 30 sent`, that the third's gain
    is 30, that the stand-in made 2 connections, and that both scripts play to their end.
 8. **Given** two `IndiCamera`s naming `Finder CCD`, one over the finder script at gain 0
-   and one over the finder script at gain 0 whose answer's `min="3.2e-05"` reads
-   `min="x"`, **When** a committed test calls `describe` on each, **Then** it asserts
-   that the first's `exposure_ms` range is 0.032 to 2000000 and the second's 0 to
-   2000000, and that both scripts play to their end.
-9. **Given** a finder rig naming `CCD Simulator` over the mono-camera script whose first
-   `@ send` block starts with the colour-camera script's first block of lines, then
+   and one over the finder script at gain 0 whose answer's `max="2000"` reads
+   `max="x"`, **When** a committed test calls `describe` on each, **Then** it asserts
+   that the first's `exposure_ms` range is 0.032 to 2000000 and the second's 0.032 to
+   3600000, and that both scripts play to their end.
+9. **Given** a finder rig naming `CCD Simulator` over the mono-camera script, its
+   `@ device CCD Simulator` put on a line of its own (`mono()` writes it at the end of its
+   last definition, where the stand-in sends it as text and checks no device), whose
+   first `@ send` block starts with the colour-camera script's first block of lines, then
    `@ expect newNumberVector CCD_EXPOSURE CCD_EXPOSURE_VALUE=1`, 100 ms later `CCD_EXPOSURE`
    Busy and 1 s later an 8-bit frame of 7, and an `IndiCamera` naming
    `ZWO CCD ASI071MC Pro` over its own stand-in playing the colour-camera script whose
@@ -489,6 +498,13 @@ development, `cargo nextest run -p scope-node --locked --test indi_finder`.
    finder camera's pixels are six 7s and the imaging frame's samples six 9s, that the two
    descriptions name their own devices, and that both scripts, each of whose `@ device`
    lines names its own device, play to their end.
+10. **Given** two finder rigs naming `Finder CCD`, one over the finder script at gain 0
+    with no `Gain` element in its `CCD_CONTROLS`, then an exposure of 1 s with the
+    worked 16-bit frame, and one over the finder script at gain 0 whose `Gain` is 0 of
+    0–0.5, **When** a committed test takes a frame with default settings from the first
+    and reads each one's `info`, **Then** it asserts that each reports `gain_min` 1 and
+    `gain_max` 1, that the frame's `gain` is 1, and that both scripts, the first with no
+    gain step, play to their end.
 
 ### User Story 2 - The node runs the finder camera over INDI beside the imaging camera (Priority: P1)
 
@@ -505,9 +521,9 @@ shared test module. The `test` gate's
 `cargo nextest run --workspace --all-targets --all-features --locked` runs it; during
 development, `cargo nextest run -p scope-node --locked --test indi_finder_node`.
 US2-S1 to US2-S6 prove US2's own diff. US2-S7 to US2-S9 run US1's adapter inside the
-node's service, which the node serves from US2 on: they pass on US1 alone, and guard
-at US2's merge what US1 built (US1-S3 and US1-S7 hold the same rules on the adapter
-alone).
+node's service, which the node serves from US2 on: they pass on US1 alone (run on
+probe round 1), and guard at US2's merge what US1 built (US1-S3 and US1-S7 hold the
+same rules on the adapter alone).
 
 **Acceptance Scenarios**:
 
@@ -544,13 +560,17 @@ alone).
    `adapter = "indi"` and
    `\n[indi]\naddress = "127.0.0.1:7624"\ndevice = "Finder CCD"\nneutral = { "CCD_CONTROLS.Offset" = 20 }\n`
    and not `test-token`, and that the second's output holds no `[indi]`.
-5. **Given** the node rig on a config of that head with `adapter = 'indi'` and
-   `[indi] address` a `127.0.0.1` port on which nothing listens, **When** a committed test
+5. **Given** the node rig on a config of that head with `adapter = 'indi'`,
+   `[indi] address` a `127.0.0.1` port on which nothing listens and an `[imaging]` table
+   of `adapter = 'indi'` and `address` another such port, **When** a committed test
    waits for it to exit, **Then** it asserts that it exits within 5 s with status 1 and
    that the last line of its standard error is
-   `scope-node: cannot reach the INDI server at 127.0.0.1:<port>: Connection refused (os error 111)`.
+   `scope-node: cannot reach the INDI server at 127.0.0.1:<port>: Connection refused (os error 111)`,
+   `<port>` being the `[indi]` port.
 6. **Given** a TCP listener on a free `127.0.0.1` port whose one connection the test
-   bridges to the stand-in playing the mono-camera script with its
+   bridges to the stand-in playing the mono-camera script whose first `@ send` block
+   starts with the colour-camera script's first block of lines (no device is checked:
+   `mono()`'s `@ device` line is not a directive), with its
    `@ expect after 200 enableBLOB` made `@ expect enableBLOB`, then
    `@ expect newNumberVector CCD_OFFSET OFFSET=20` answered at once with `CCD_OFFSET`,
    state Ok, `OFFSET` 20, then
@@ -558,9 +578,10 @@ alone).
    `CCD_EXPOSURE` Busy, 100 ms later the 8-bit ramp as the BLOB of `CCD1`, and the next
    `CCD_EXPOSURE_VALUE=0.1`, and the node rig on a config of a free `listen` port, the
    token, `adapter = 'indi'`, `exposure_ms = 100`, `gain = 90` and `[indi]` of `address`
-   that listener and `neutral = { 'CCD_OFFSET.OFFSET' = 20 }`, **When** a committed test
-   calls `Describe` and reads the first star frame over the node's port within 10 s,
-   waits 1 s and kills the node, **Then** it asserts that the description is model
+   that listener, `device = 'CCD Simulator'` and `neutral = { 'CCD_OFFSET.OFFSET' = 20 }`,
+   **When** a committed test calls `Describe` and reads the first star frame over the
+   node's port within 10 s, waits 1 s and kills the node, **Then** it asserts that the
+   description is model
    `CCD Simulator`, 1280 by 1024, one mode of 1280 × 1024 at 1 fps, active, exposure 10
    to 3600000 ms and gain 1 to 300; that the frame is 3 by 2 with `exposure_ms` 100 and
    `gain` 90, its `end_s` 0.1 after its `start_s` within 1e-9; and that the script, which
@@ -597,7 +618,8 @@ alone).
 ### Edge Cases
 
 - **A camera with no gain control** reports gain 1 to 1, is sent no gain, and its frames
-  report gain 1 (FR-002, FR-003). Read, not run.
+  report gain 1 (FR-002 to FR-004, US1-S10); one whose gain range ends below 1 reports
+  1 to 1 (US1-S10).
 - **A camera whose longest exposure is under 1000 ms** takes its longest as the first
   automatic exposure (FR-003). Read, not run.
 - **A fixed gain of 0** stays refused, by the config (`crates/scope-node/src/config.rs:29`)
@@ -665,10 +687,11 @@ alone).
   and as pixels each 16-bit sample's high byte or each 8-bit sample as it is (owner
   decision 1); `pub fn gray` SHALL make those pixels and fail on another sample size or
   a sample count other than width times height.
-- **FR-004**: Before an exposure, when the gain wanted, the settings' gain or with
-  automatic gain the camera's last answered gain limited to the reported range, differs
-  from the camera's last answered gain, the adapter SHALL send it through the imaging
-  port's `apply` and await its answer, whose gain becomes the last answered gain. No frame
+- **FR-004**: Before an exposure of a camera with a gain control, when the gain wanted,
+  the settings' gain or with automatic gain the camera's last answered gain limited to
+  the reported range, differs from the camera's last answered gain, the adapter SHALL
+  send it through the imaging port's `apply` and await its answer, whose gain becomes
+  the last answered gain; a camera without a gain control SHALL be sent no gain. No frame
   SHALL be passed on at a gain the adapter did not send: when the camera has a gain
   control and a frame's gain is not the last answered gain, `next_frame` SHALL fail with
   `the finder camera exposed at gain <g>, not at the gain <s> sent`, and the last
@@ -737,7 +760,7 @@ alone).
   device and sends its star frames at the set or automatic exposure and gain, 16-bit
   samples as their high bytes and 8-bit samples as they are (US1-S1 and US1-S2 for the
   description and the high bytes, US1-S3 and US2-S6 for 8-bit samples, US2-S8 for
-  automatic gain).
+  automatic gain, US1-S10 for a camera with no gain control).
 - **SC-004**: Two INDI cameras of one server are each on their own device or refused
   before the node starts (US2-S3, US1-S9), and the finder camera sends star frames again
   after the server returns, none at a gain the adapter did not send (US1-S7, US2-S7,
