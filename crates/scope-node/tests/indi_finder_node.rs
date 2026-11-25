@@ -494,6 +494,44 @@ async fn s8_automatic_gain_climbs_and_holds_at_the_camera_limit() {
 /// frame retains automatic gain 1 and costs exactly one capture-loop retry.
 #[tokio::test(start_paused = true)]
 async fn s9_automatic_gain_recovers_from_a_server_restart_over_stars() {
+    // US2-S9 needs immediate gain answers and Busy after 200 ms; US1's helpers wait 100 ms for each.
+    fn gain_step(gain: f64) -> String {
+        format!(
+            "@ expect newNumberVector CCD_CONTROLS Gain={gain} Offset=10\n@ send\n{}\n",
+            set_number(
+                DEVICE,
+                "CCD_CONTROLS",
+                "Ok",
+                None,
+                &[("Gain", gain), ("Offset", 10.0)]
+            ),
+        )
+    }
+    fn exposure(seconds: f64, image: &[u8]) -> String {
+        use base64::prelude::{Engine as _, BASE64_STANDARD};
+        let encoded = BASE64_STANDARD.encode(image);
+        light_request(seconds)
+            + &format!(
+                "@ send after 200\n{}\n@ send after {}\n{}\n@ send\n{}\n",
+                set_number(
+                    DEVICE,
+                    "CCD_EXPOSURE",
+                    "Busy",
+                    None,
+                    &[("CCD_EXPOSURE_VALUE", seconds)]
+                ),
+                (seconds * 1000.0) as u64,
+                support::set_blob(DEVICE, "CCD1", "Ok", None, &[("CCD1", ".fits", &encoded)]),
+                set_number(
+                    DEVICE,
+                    "CCD_EXPOSURE",
+                    "Ok",
+                    None,
+                    &[("CCD_EXPOSURE_VALUE", 0.0)]
+                ),
+            )
+    }
+
     // Take the simulated star field before the finder-camera clock starts.
     let field = SyntheticCamera::new(clock()).next_frame().await.unwrap();
     let image = fits(field.width, field.height, 8, &field.pixels);
