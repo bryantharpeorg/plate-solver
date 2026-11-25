@@ -5,6 +5,7 @@ use scope_node::{
     imaging::{
         indi::IndiCamera, probe as imaging_probe, synthetic::SyntheticImagingCamera, ImagingCamera,
     },
+    indi_finder::IndiFinder,
     mount::{
         skywatcher::{probe, serial::Serial, MountLink},
         Mount,
@@ -66,6 +67,12 @@ async fn start(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::load(&args.config)?;
     if args.check_config {
         print!("{}", config.masked());
+        if config.adapter == Adapter::Indi {
+            print!(
+                "\n[indi]\n{}",
+                config.indi.clone().unwrap_or_default().printed()
+            );
+        }
         match &config.mount {
             Some(mount) => print!("\n[mount]\n{}", toml::to_string(mount)?),
             None => println!("\n# no mount configured"),
@@ -89,6 +96,21 @@ async fn start(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         Adapter::Simulated => {
             serve(
                 SyntheticCamera::new(Arc::new(SystemClock)),
+                settings,
+                &config,
+            )
+            .await
+        }
+        Adapter::Indi => {
+            let indi = config.indi.clone().unwrap_or_default();
+            let camera = IndiCamera::tcp(
+                indi.address(),
+                indi.device.clone(),
+                indi.neutral_controls(),
+                Arc::new(SystemClock),
+            );
+            serve(
+                IndiFinder::discover(camera, config.mode).await?,
                 settings,
                 &config,
             )

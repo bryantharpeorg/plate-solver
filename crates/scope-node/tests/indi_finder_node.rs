@@ -129,8 +129,10 @@ fn s3_two_cameras_on_one_indi_server_need_their_own_devices() {
 struct Scratch(PathBuf);
 impl Scratch {
     fn config(name: &str, text: &str) -> Self {
-        let path = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
-            .join(format!("indi-finder-node-{name}-{}.toml", std::process::id()));
+        let path = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!(
+            "indi-finder-node-{name}-{}.toml",
+            std::process::id()
+        ));
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, text).unwrap();
         Self(path)
@@ -180,11 +182,28 @@ impl Node {
                 use std::io::Read;
                 let mut stdout = Vec::new();
                 let mut stderr = Vec::new();
-                self.child.stdout.take().unwrap().read_to_end(&mut stdout).unwrap();
-                self.child.stderr.take().unwrap().read_to_end(&mut stderr).unwrap();
-                return Output { status, stdout, stderr };
+                self.child
+                    .stdout
+                    .take()
+                    .unwrap()
+                    .read_to_end(&mut stdout)
+                    .unwrap();
+                self.child
+                    .stderr
+                    .take()
+                    .unwrap()
+                    .read_to_end(&mut stderr)
+                    .unwrap();
+                return Output {
+                    status,
+                    stdout,
+                    stderr,
+                };
             }
-            assert!(start.elapsed() < limit, "scope-node did not exit within {limit:?}");
+            assert!(
+                start.elapsed() < limit,
+                "scope-node did not exit within {limit:?}"
+            );
             std::thread::sleep(Duration::from_millis(10));
         }
     }
@@ -249,8 +268,12 @@ fn s5_an_unreachable_finder_camera_exits_one_with_its_address() {
 async fn s6_the_built_node_serves_the_named_indi_finder_camera() {
     let colour_script = colour();
     let colour_first = colour_script
-        .split_once("@ send\n").unwrap().1
-        .split_once("\n@ ").unwrap().0;
+        .split_once("@ send\n")
+        .unwrap()
+        .1
+        .split_once("\n@ ")
+        .unwrap()
+        .0;
     // mono()'s device text is attached to an XML line, so no device
     // directive is active: naming the device is proved by its description.
     let script = mono()
@@ -276,39 +299,74 @@ async fn s6_the_built_node_serves_the_named_indi_finder_camera() {
          [indi]\naddress = '{address}'\ndevice = 'CCD Simulator'\nneutral = {{ 'CCD_OFFSET.OFFSET' = 20 }}\n"
     ));
     let mut child = tokio::process::Command::new(env!("CARGO_BIN_EXE_scope-node"))
-        .arg("--config").arg(&config.0)
-        .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped())
-        .kill_on_drop(true).spawn().unwrap();
+        .arg("--config")
+        .arg(&config.0)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
     let (description, frame) = timeout(Duration::from_secs(10), async {
         let channel = loop {
-            assert!(child.try_wait().unwrap().is_none(), "node exited before listening");
+            assert!(
+                child.try_wait().unwrap().is_none(),
+                "node exited before listening"
+            );
             if let Ok(channel) = Channel::from_shared(format!("http://{listen}"))
-                .unwrap().connect().await {
+                .unwrap()
+                .connect()
+                .await
+            {
                 break channel;
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
         };
         let mut client = proto::scope_node_client::ScopeNodeClient::with_interceptor(
-            channel, BearerToken::new("test-token").unwrap(),
+            channel,
+            BearerToken::new("test-token").unwrap(),
         );
-        let description = client.describe(proto::DescribeRequest {}).await.unwrap().into_inner();
-        let frame = client.frames(proto::FramesRequest {}).await.unwrap()
-            .into_inner().message().await.unwrap().unwrap();
+        let description = client
+            .describe(proto::DescribeRequest {})
+            .await
+            .unwrap()
+            .into_inner();
+        let frame = client
+            .frames(proto::FramesRequest {})
+            .await
+            .unwrap()
+            .into_inner()
+            .message()
+            .await
+            .unwrap()
+            .unwrap();
         (description, frame)
-    }).await.expect("description and first star frame within 10 s");
+    })
+    .await
+    .expect("description and first star frame within 10 s");
     assert_eq!(description.model, "CCD Simulator");
     assert_eq!((description.width, description.height), (1280, 1024));
-    let mode = proto::Mode { width: 1280, height: 1024, fps: 1.0 };
+    let mode = proto::Mode {
+        width: 1280,
+        height: 1024,
+        fps: 1.0,
+    };
     assert_eq!(description.modes, vec![mode]);
     assert_eq!(description.active_mode, Some(mode));
-    assert_eq!((description.exposure_min_ms, description.exposure_max_ms), (10.0, 3_600_000.0));
+    assert_eq!(
+        (description.exposure_min_ms, description.exposure_max_ms),
+        (10.0, 3_600_000.0)
+    );
     assert_eq!((description.gain_min, description.gain_max), (1.0, 300.0));
     assert_eq!((frame.width, frame.height), (3, 2));
     assert_eq!((frame.exposure_ms, frame.gain), (100.0, 90.0));
     assert!((frame.end_s - frame.start_s - 0.1).abs() < 1e-9);
     tokio::time::sleep(Duration::from_secs(1)).await;
     child.kill().await.unwrap();
-    timeout(Duration::from_secs(5), bridge).await.unwrap().unwrap();
+    timeout(Duration::from_secs(5), bridge)
+        .await
+        .unwrap()
+        .unwrap();
     scripts.finish().await;
 }
 
@@ -330,14 +388,22 @@ impl ServiceRig {
             memory::serve_routes_on(io, routes).await.unwrap();
         });
         let frames = proto::scope_node_client::ScopeNodeClient::with_interceptor(
-            connect.await.unwrap(), BearerToken::new("test-token").unwrap(),
-        ).frames(proto::FramesRequest {}).await.unwrap().into_inner();
+            connect.await.unwrap(),
+            BearerToken::new("test-token").unwrap(),
+        )
+        .frames(proto::FramesRequest {})
+        .await
+        .unwrap()
+        .into_inner();
         Self { frames, server }
     }
 
     async fn frame(&mut self) -> proto::StarFrame {
         timeout(Duration::from_secs(60), self.frames.message())
-            .await.expect("star frame within 60 s of paused time").unwrap().unwrap()
+            .await
+            .expect("star frame within 60 s of paused time")
+            .unwrap()
+            .unwrap()
     }
 }
 
@@ -346,8 +412,8 @@ impl ServiceRig {
 #[tokio::test(start_paused = true)]
 async fn s7_the_service_recovers_after_three_refused_reconnections() {
     let image = flat(7);
-    let first = finder(0.0) + &gain_step(30.0) + &exposure(0.5, &image)
-        + &light_request(0.5) + "@ close\n";
+    let first =
+        finder(0.0) + &gain_step(30.0) + &exposure(0.5, &image) + &light_request(0.5) + "@ close\n";
     let second = finder(0.0) + &gain_step(30.0) + &exposure(0.5, &image) + &light_request(0.5);
     let scripts = Scripts::new(vec![first, second]);
     let dials = Arc::new(AtomicUsize::new(0));
@@ -359,22 +425,42 @@ async fn s7_the_service_recovers_after_three_refused_reconnections() {
             let connect = connect.clone();
             Box::pin(async move {
                 if (2..=4).contains(&dial) {
-                    Err(io::Error::new(io::ErrorKind::ConnectionRefused, "server away"))
+                    Err(io::Error::new(
+                        io::ErrorKind::ConnectionRefused,
+                        "server away",
+                    ))
                 } else {
                     connect().await
                 }
             })
         }),
-        "127.0.0.1:7624".to_string(), Some(DEVICE.to_string()), Vec::new(), clock(),
+        "127.0.0.1:7624".to_string(),
+        Some(DEVICE.to_string()),
+        Vec::new(),
+        clock(),
     );
-    let camera = IndiFinder::discover(camera, CameraMode::Auto).await.unwrap();
-    let mut rig = ServiceRig::new(camera, Settings {
-        exposure_ms: Some(500.0), gain: Some(30.0), ..Settings::default()
-    }).await;
+    let camera = IndiFinder::discover(camera, CameraMode::Auto)
+        .await
+        .unwrap();
+    let mut rig = ServiceRig::new(
+        camera,
+        Settings {
+            exposure_ms: Some(500.0),
+            gain: Some(30.0),
+            ..Settings::default()
+        },
+    )
+    .await;
     let first = rig.frame().await;
     let second = rig.frame().await;
-    assert_eq!((first.id, first.gain, first.start_s), (1, 30.0, reading(400)));
-    assert_eq!((second.id, second.gain, second.start_s), (2, 30.0, reading(5300)));
+    assert_eq!(
+        (first.id, first.gain, first.start_s),
+        (1, 30.0, reading(400))
+    );
+    assert_eq!(
+        (second.id, second.gain, second.start_s),
+        (2, 30.0, reading(5300))
+    );
     assert_eq!(dials.load(Ordering::SeqCst), 5);
     tokio::time::sleep(Duration::from_millis(100)).await;
     scripts.finish().await;
@@ -392,7 +478,9 @@ async fn s8_automatic_gain_climbs_and_holds_at_the_camera_limit() {
     }
     script += &light_request(1.0);
     let scripts = Scripts::new(vec![script]);
-    let camera = IndiFinder::discover(camera(&scripts, DEVICE), CameraMode::Auto).await.unwrap();
+    let camera = IndiFinder::discover(camera(&scripts, DEVICE), CameraMode::Auto)
+        .await
+        .unwrap();
     let mut rig = ServiceRig::new(camera, Settings::default()).await;
     for gain in [1.0, 4.0, 16.0, 64.0, 100.0] {
         let frame = rig.frame().await;
@@ -409,21 +497,45 @@ async fn s9_automatic_gain_recovers_from_a_server_restart_over_stars() {
     // Take the simulated star field before the finder-camera clock starts.
     let field = SyntheticCamera::new(clock()).next_frame().await.unwrap();
     let image = fits(field.width, field.height, 8, &field.pixels);
-    let first = finder(0.0) + &gain_step(1.0) + &exposure(0.5, &image)
-        + &light_request(0.5) + "@ close\n";
-    let second = finder(0.0) + &exposure(0.5, &image) + &gain_step(1.0)
-        + &exposure(0.5, &image) + &light_request(0.5);
+    let first =
+        finder(0.0) + &gain_step(1.0) + &exposure(0.5, &image) + &light_request(0.5) + "@ close\n";
+    let second = finder(0.0)
+        + &exposure(0.5, &image)
+        + &gain_step(1.0)
+        + &exposure(0.5, &image)
+        + &light_request(0.5);
     let scripts = Scripts::new(vec![first, second]);
-    let camera = IndiFinder::discover(camera(&scripts, DEVICE), CameraMode::Auto).await.unwrap();
-    let mut rig = ServiceRig::new(camera, Settings {
-        exposure_ms: Some(500.0), ..Settings::default()
-    }).await;
+    let camera = IndiFinder::discover(camera(&scripts, DEVICE), CameraMode::Auto)
+        .await
+        .unwrap();
+    let mut rig = ServiceRig::new(
+        camera,
+        Settings {
+            exposure_ms: Some(500.0),
+            ..Settings::default()
+        },
+    )
+    .await;
     let first = rig.frame().await;
     let second = rig.frame().await;
-    assert!(first.centroids.len() >= 25, "{} centroids", first.centroids.len());
-    assert!(second.centroids.len() >= 25, "{} centroids", second.centroids.len());
-    assert_eq!((first.id, first.gain, first.start_s), (1, 1.0, reading(400)));
-    assert_eq!((second.id, second.gain, second.start_s), (2, 1.0, reading(4000)));
+    assert!(
+        first.centroids.len() >= 25,
+        "{} centroids",
+        first.centroids.len()
+    );
+    assert!(
+        second.centroids.len() >= 25,
+        "{} centroids",
+        second.centroids.len()
+    );
+    assert_eq!(
+        (first.id, first.gain, first.start_s),
+        (1, 1.0, reading(400))
+    );
+    assert_eq!(
+        (second.id, second.gain, second.start_s),
+        (2, 1.0, reading(4000))
+    );
     tokio::time::sleep(Duration::from_millis(100)).await;
     scripts.finish().await;
 }

@@ -310,6 +310,77 @@ mount <rate|goto> on axis <axis> failed (<error>): stopping both axes
 `RateAxis` and `GotoAxis` still answer the console OK, including when the node has
 handled a failed move by stopping both axes.
 
+## The finder camera over INDI
+
+`adapter = "indi"` takes the finder camera from an INDI server, as the imaging camera
+does: a mono camera such as ZWO's ASI120MM Mini, through INDI's `indiserver` and the
+camera's device program (`indi_asi_ccd`), which the owner installs and starts on the
+scope node. The node is their client over a TCP socket and links none of them (INDI
+core and the device programs are under LGPL-2.1-or-later). The finder camera and the
+imaging camera may share one server and one device program; each has its own
+connection and its own device.
+
+```toml
+adapter = "indi"
+exposure_ms = 1000       # or "auto"
+gain = 30                # in the camera's own units, or "auto"
+
+[indi]
+address = "127.0.0.1:7624"               # the INDI server; the default
+device = "ZWO CCD ASI120MM Mini"         # the device's name as the server gives it
+neutral = { "CCD_CONTROLS.Offset" = 10 } # optional, set on each connection
+```
+
+The `[indi]` table is optional and applies only to `adapter = "indi"`. With no `device`
+the node takes the first device whose `DRIVER_INTERFACE` has the camera bit. When the
+`[imaging]` table is also `indi` with the same `address`, both tables must name their
+device and the two names must differ; the node refuses to start otherwise. The rule
+compares the two addresses, not the server they reach, so give one server the same
+`address` in both tables. `ZWO CCD ASI120MM Mini` is the name ZWO's device program is
+expected to give the camera, from the `ZWO CCD <model>` it gave the ASI071; run
+`indi_getprop -p 7624` on the scope node to read the name the server really gives it.
+`neutral` sets each control it names on each connection, as `[imaging]`'s does; the
+camera's `Offset` is the one way to lift the star frames' offset level, which the high
+byte below can leave at 0.
+
+The node describes the camera once, when it starts, from the device's own properties:
+its model is the device's name, its one mode the sensor's size, its exposure range the
+device's, and its gain range the device's `Gain` from 1 (the node takes no gain of 0).
+`mode` is `auto` or that size. With the server down, the device missing or a colour
+camera named, the node exits 1 with the reason, and systemd starts it again a second
+later (`Restart=always`, `RestartSec=1`); the mount and the imaging camera are not
+served meanwhile. By default systemd gives up on a unit started 5 times within 10 s,
+so a server away for about 5 s would leave the node stopped until
+`systemctl reset-failed scope-node`. Add this to the `[Unit]` section of the unit
+under Config and systemd, so that systemd keeps starting it:
+
+```ini
+[Unit]
+StartLimitIntervalSec=0
+```
+
+Each star frame is one exposure: the node asks for it, the device program takes it and
+sends it as FITS, and detection reads its 8-bit gray pixels. A 16-bit sample gives its
+high byte (the ASI120MM's 12 bits, shifted up, give their top 8); an 8-bit sample is
+taken as it is. Faint stars are the camera's gain's to bring up: raise `gain`, or leave
+it `auto`. With `exposure_ms = "auto"` the first exposure is 1000 ms and automatic
+exposure goes no longer, the mode reporting 1 frame/s; a fixed exposure may be as long
+as the camera allows. Automatic gain multiplies the camera's own gain, which on these
+cameras is a logarithmic scale: its steps are fine near 1 and coarse near the top, and
+with no star it takes four frames from 1 to 64. A star frame's start is the moment the
+device reports the exposure under way, and its end that plus the exposure.
+
+When the INDI server restarts, an exposure in flight is tried once more a second later
+on a new connection; when that fails too, the node logs `camera capture failed: ` and
+the reason and tries again every second until the server answers. An exposure the
+camera took at a gain other than the one the node sent (the first on a freshly
+started device program, which has its own gain) is not sent as a star frame: the
+node logs it the same way and sends the gain again with the next exposure. The
+imaging camera's exposure in flight is tried once more the same way, but it and the
+exposures after it run at the device program's own settings (on the ASI071, gain 0 and
+the cooler off) until its settings are applied again: on a new connection the node
+sends it only its `neutral` controls.
+
 ## The imaging camera
 
 An `[imaging]` table adds a deep-sky camera beside the finder camera, for the imaging
