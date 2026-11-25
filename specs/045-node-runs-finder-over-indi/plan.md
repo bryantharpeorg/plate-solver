@@ -850,8 +850,8 @@ Tests first: `indi_finder_node.rs`, over US1's `finder_script/mod.rs`. Then `con
    decisions, § Owner approvals). Decisions met: the owner answered all eight on
    2026-11-25 at 19:21 UTC, as recommended and as review round 1 amended them (spec
    § Clarifications). The approvals are given by the flip.
-4. **Probe builds.** Not met: a builder builds both stories from the trio alone (probe
-   round 1) and its defects are folded.
+4. **Probe builds.** Waived by the owner's flip of 2026-11-25 ("flip to ready"), made while
+   probe round 1 (a builder building both stories from the trio alone) was still running.
 5. **Under owner decision 7 (b) only:** the camera's saved definitions are staged by the
    operator. Under (a), nothing is staged.
 

@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["013-live-finder", "030-imaging-camera-link", "044-node-stops-mount-before-exit", "048-node-detects-stars-on-a-dark-sky"]
 # Drafted 2026-11-25 against `main` at be7f3ff6 (be7f3ff686adc431878819f7e30ee56a9c5d48ea),
 # at the owner's ask ("a spec to allow asi120mm to be used with the pi"), from a probe of
@@ -17,6 +17,10 @@ depends_on_landed: ["013-live-finder", "030-imaging-camera-link", "044-node-stop
 # last changed `config.rs` and the node's README; 013 because FR-007 of its spec gains the
 # third adapter. What rests on a run and what on reading is said where it is used
 # (plan.md § What was run and what was read).
+# Flipped to `ready` on 2026-11-25 at the owner's ask ("flip to ready"), while probe
+# round 1 (both stories built from this text alone) was still running, so the owner's ask
+# waives plan.md's prerequisite 4; its merge, on the owner's go, gives the owner
+# approvals. `main` still at be7f3ff6.
 ---
 
 # Feature Specification: The Node Runs the Finder Camera over INDI
@@ -25,7 +29,7 @@ depends_on_landed: ["013-live-finder", "030-imaging-camera-link", "044-node-stop
 
 **Created**: 2026-11-25
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: A ZWO ASI120MM Mini (a 1280 × 960 mono sensor of 3.75 µm pixels, 12 bits, on
 USB 2) replaces the Pi's ribbon camera as the finder camera, on the Pi 5 beside the ZWO
