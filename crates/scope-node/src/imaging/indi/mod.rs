@@ -254,6 +254,19 @@ impl Devices {
                             ) {
                                 number.value = value;
                             }
+                            // 045: a range the answer carries replaces the
+                            // defined one; one that does not parse is kept.
+                            if let Some(number) = child
+                                .attr("name")
+                                .and_then(|name| elements.iter_mut().find(|e| e.name == name))
+                            {
+                                if let Some(min) = child.attr("min").and_then(parse_number) {
+                                    number.min = min;
+                                }
+                                if let Some(max) = child.attr("max").and_then(parse_number) {
+                                    number.max = max;
+                                }
+                            }
                         }
                     }
                 }

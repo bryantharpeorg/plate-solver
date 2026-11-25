@@ -8,6 +8,7 @@ pub mod config;
 pub mod detect;
 pub mod exposure;
 pub mod imaging;
+pub mod indi_finder;
 pub mod mount;
 pub mod preview;
 pub mod rpicam;
