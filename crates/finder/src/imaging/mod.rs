@@ -2,6 +2,7 @@
 //! paired node for `ScopeNodeImaging` alone, the state it keeps and the routes
 //! that read and change it.
 
+pub mod align;
 pub mod astap;
 pub mod calibration;
 pub mod fits;

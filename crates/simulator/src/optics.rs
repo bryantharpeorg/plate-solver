@@ -49,7 +49,8 @@ impl Optics {
 
     fn eyepiece_ray(self) -> UnitVector {
         let (x, y) = self.eyepiece_px;
-        assert!(x >= 0.0 && x < f64::from(self.width) && y >= 0.0 && y < f64::from(self.height));
+        // Any finite pixel: off the frame is an eyepiece the camera does not see (050).
+        assert!(x.is_finite() && y.is_finite());
         self.pinhole().unproject(&[(y, x)])[0].expect("finite eyepiece pixel")
     }
 }
