@@ -163,7 +163,7 @@ One folder of what the console saw between the observer's start and stop: each s
 _Avoid_: capture, log, session
 
 **Raw frame**:
-The 8-bit gray pixels of one star frame, exactly as the scope node's detector read them, saved on request as a PNG next to that frame's line.
+The 8-bit gray pixels of one star frame, exactly as the scope node's detector read them, saved on request as a PNG next to that frame's line, or measured by the finder camera's focus aid.
 _Avoid_: raw (alone), RAW file, full-resolution preview
 
 **Imaging frame**:
@@ -219,7 +219,7 @@ Where an imaging frame points: the J2000 RA and Dec of its centre, the angle of 
 _Avoid_: plate solve (alone), WCS
 
 **Focus reading**:
-The median size of the stars in an imaging frame's focus region, as a half-flux diameter: in arcseconds, or in sensor pixels until the console knows the scale. Smaller is sharper.
+The median size of the stars in an imaging frame's focus region, as a half-flux diameter: in arcseconds, or in sensor pixels until the console knows the scale; for the finder camera, of the stars the scope node found in one of its raw frames, in the finder camera's pixels. Smaller is sharper.
 _Avoid_: focus score, HFD (alone), FWHM
 
 **Focus region**:
@@ -231,7 +231,7 @@ The smallest settled reading this imaging camera has given on this telescope: to
 _Avoid_: best focus, focus target
 
 **Focus aid**:
-A loop of short exposures of the focus region, each with its focus reading, the best so far and the trend, shown while the observer turns the focuser.
+A loop of short exposures of the focus region, or of the finder camera's raw frames beside the live solve, each with its focus reading, the best so far and the trend, shown while the observer turns the focuser.
 _Avoid_: autofocus (there is no motor), focus mode
 
 **Clock offset**:

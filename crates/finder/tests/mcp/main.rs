@@ -8,6 +8,7 @@ mod axis_moves;
 mod calibration;
 mod databases;
 mod endpoint;
+mod finder_focus;
 mod frames;
 mod imaging;
 mod imaging_align;
