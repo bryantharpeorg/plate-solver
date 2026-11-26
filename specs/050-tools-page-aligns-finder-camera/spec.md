@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["013-live-finder", "015-tracking", "016-mcp", "021-chart-orientation", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "035-live-stack", "036-tracking-from-subs", "037-imaging-run", "038-track-follows-a-push", "041-imaging-run-on-the-rig", "042-imaging-run-page-and-mcp", "047-console-uses-the-database-that-fits", "049-search-finds-whole-names"]
 # Drafted 2026-11-25 against `main` at e2eee793, at the owner's ask that day ("a spec to
 # get the finder and the imager roughly aligned, worried about the small FOV and getting
@@ -26,6 +26,10 @@ depends_on_landed: ["013-live-finder", "015-tracking", "016-mcp", "021-chart-ori
 # 037, 041, 042, 047 and 049 because each last changed a file this spec writes (plan.md
 # § Refinement Record). What rests on a run and what on reading is said where it is
 # used (plan.md § What was run and what was read).
+# Flipped to `ready` on 2026-11-26 at the owner's ask ("Flip"), with every prerequisite in
+# plan.md met and none waived: probe round 1 from this text alone (0 blocking) folded and
+# the five-story cut proven on its code; its merge, on the owner's go, gives the owner
+# approvals. `main` still at ea3d6a9b.
 ---
 
 # Feature Specification: The Tools Page Aligns the Finder Camera
@@ -34,7 +38,7 @@ depends_on_landed: ["013-live-finder", "015-tracking", "016-mcp", "021-chart-ori
 
 **Created**: 2026-11-25
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: The finder camera looks through the SVBONY SV165 guide scope's own objective,
 40 mm at f/4 (160 mm), in front of the ZWO ASI120MM Mini (1280 × 960 at 3.75 µm): about
