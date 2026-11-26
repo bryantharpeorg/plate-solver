@@ -10,6 +10,7 @@ mod databases;
 mod endpoint;
 mod frames;
 mod imaging;
+mod imaging_align;
 mod imaging_focus;
 mod imaging_run;
 mod imaging_solve;

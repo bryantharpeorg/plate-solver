@@ -250,6 +250,16 @@ struct FocusTileArguments {
     row: u32,
 }
 
+#[derive(rmcp::schemars::JsonSchema)]
+#[expect(
+    dead_code,
+    reason = "schema only; AlignAsk parses the start arguments after on"
+)]
+struct AlignArguments {
+    on: bool,
+    exposure_ms: Option<f64>,
+}
+
 fn object_schema() -> Arc<JsonObject> {
     Arc::new(json!({"type":"object"}).as_object().unwrap().clone())
 }
@@ -860,6 +870,57 @@ impl Console {
             }
         };
         tool_result(result.await)
+    }
+
+    #[tool(description = "Read the finder alignment: for its last imaging frame, where the imaging camera's centre lies from the finder camera's centre as the finder camera sees it (right_deg and up_deg along its frame, separation_deg on the sky, off its frame too), on_frame, middle, done once the centre has held in the middle for two frames in a row, and aim, the aim point's word for that frame. null before the first start.",
+        output_schema = object_schema(), annotations(read_only_hint = true))]
+    async fn get_finder_alignment(&self, arguments: JsonObject) -> CallToolResult {
+        let result = (|| {
+            let imaging = self
+                .state
+                .imaging()
+                .ok_or_else(|| "this console takes no imaging frames".to_owned())?;
+            if !arguments.is_empty() {
+                return Err("get_finder_alignment takes no arguments".to_owned());
+            }
+            Ok(json!({"align": imaging.view().align}))
+        })();
+        tool_result(result)
+    }
+
+    #[tool(description = "Start or stop the finder alignment, as POST and DELETE /api/imaging/align do: imaging frames under the imaging camera's lease, each solved and paired with the finder camera's live solve. It moves nothing: the observer turns the finder camera's ring screws, with Track off. Read get_finder_alignment every few seconds until done.",
+        input_schema = rmcp::handler::server::common::schema_for_input::<AlignArguments>().expect("finder alignment schema"),
+        output_schema = object_schema())]
+    async fn set_finder_alignment(&self, mut arguments: JsonObject) -> CallToolResult {
+        let result = async {
+            let imaging = self
+                .state
+                .imaging()
+                .ok_or_else(|| "this console takes no imaging frames".to_owned())?;
+            let Some(on) = arguments.get("on").and_then(Value::as_bool) else {
+                return Err("on must be true or false".to_owned());
+            };
+            let view = if on {
+                arguments.remove("on");
+                let ask: crate::imaging::align::AlignAsk =
+                    serde_json::from_value(Value::Object(arguments))
+                        .map_err(|error| error.to_string())?;
+                imaging
+                    .align_start(ask)
+                    .await
+                    .map_err(|refusal| refusal.message)?
+            } else {
+                if arguments.len() > 1 {
+                    return Err(
+                        "set_finder_alignment with on false takes no other argument".to_owned()
+                    );
+                }
+                imaging.align_stop().await
+            };
+            Ok(json!({"align": view.align}))
+        }
+        .await;
+        tool_result(result)
     }
 
     #[tool(description = "List the calibration library's master darks and master flats, the set being taken, and what matches the latest imaging frame.",

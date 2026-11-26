@@ -54,11 +54,11 @@ _Avoid_: GoTo (the whole closed-loop procedure)
 
 **Sync**:
 Tying the mount to the sky with one plate solve: a solved star frame from the scope node together with the mount's axis positions at that moment, taken while both axes are nearly still. Frames uploaded by hand are not syncs.
-_Avoid_: align, alignment
+_Avoid_: align, alignment (alone: the finder alignment turns the finder camera on the tube)
 
 **Pointing model**:
 The fitted relation between the mount's axis positions and where the telescope points on the sky. Every sync refines it, and it replaces the hand controller's star alignment.
-_Avoid_: star alignment, mount model, alignment
+_Avoid_: star alignment, mount model, alignment (alone: see Finder alignment)
 
 **Base tilt**:
 How far, and toward which azimuth, the mount's base is off level (TPoint's AN and AW). Fitted once two syncs lie at least 90° apart in azimuth.
@@ -70,7 +70,7 @@ _Avoid_: offsets, home position
 
 **Zero-point epoch**:
 A stretch of the night over which one set of zero points holds. A slip opens a new one.
-_Avoid_: session, alignment
+_Avoid_: session, alignment (alone: see Finder alignment)
 
 **Fixed terms**:
 The pointing model's terms that belong to the telescope rather than the night (collimation, axis non-perpendicularity, tube flexure, the finder camera's rotation on the tube), kept across nights.
@@ -275,11 +275,11 @@ Moving an axis to an axis position, or at a rate for a set time, asked for by ax
 _Avoid_: raw move, manual slew
 
 **Purpose label**:
-The short word an exposure is asked for with, saying what it is for: `frame` and `probe`, and later `focus`, `dark`, `flat`, `sub` and `run`.
+The short word an exposure is asked for with, saying what it is for: `frame` and `probe`, and later `focus`, `dark`, `flat`, `sub`, `run` and `align`.
 _Avoid_: frame type (that is INDI's), kind
 
 **Lease** (on the imaging camera):
-The console's record of which one of its procedures is taking exposures with the imaging camera: the focus aid, a set of darks or flats, the stack or the imaging run. A second taker is refused with the holder's name. A single imaging frame holds none.
+The console's record of which one of its procedures is taking exposures with the imaging camera: the focus aid, a set of darks or flats, the stack, the imaging run or the finder alignment. A second taker is refused with the holder's name. A single imaging frame holds none.
 _Avoid_: lock, reservation, mutex
 
 **Finder fix**:
@@ -296,7 +296,7 @@ _Avoid_: measure (that is the star measure), sample, calibration
 
 **Relation** (between the cameras):
 What the console keeps between the finder camera and the imaging camera: the scale an imaging solve measured, the aim readings held, and from them the aim point and the imaging angle.
-_Avoid_: alignment, calibration, offset
+_Avoid_: alignment (the finder alignment is the procedure, not what is kept), calibration, offset
 
 **Solve hint**:
 What the console tells the imaging solver before an imaging solve: where to look, how far around it, and how tall the field is, each when known.
@@ -305,6 +305,10 @@ _Avoid_: seed, guess, prior
 **Solve sidecar**:
 The file beside a saved imaging frame that records its imaging solve, or why it failed. The imaging frame's own file is never rewritten.
 _Avoid_: header update, WCS file
+
+**Finder alignment**:
+Imaging frames taken while the observer turns the finder camera's ring screws, with Track off, each showing where the imaging camera's centre lies from the finder camera's centre, also off the finder camera's frame, until it holds in the middle of the frame.
+_Avoid_: relation (that is what the console keeps between the cameras), collimation, calibration
 
 **Focus check**:
 Up to nine imaging frames of the focus region taken without the observer, ended by the first settled reading and a verdict against the focus record.
