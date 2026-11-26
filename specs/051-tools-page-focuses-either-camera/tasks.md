@@ -6,16 +6,16 @@ description: "Task list for 051-tools-page-focuses-either-camera: The Tools Page
 
 **Prerequisites** (plan.md § Prerequisites, each with its evidence there):
 - every spec in `depends_on_landed` has landed on `main`: met at c75a6e76;
-- `main` is still as read: met, c75a6e76 at probe round 1's fold;
-- the owner decisions in spec.md are settled: not met, all ten are open; it waits for
-  the owner's answers at the flip ask;
+- `main` is still as read: met, c75a6e76 at probe round 1's fold and at the flip;
+- the owner decisions in spec.md are settled: met, all ten, decisions 1 to 9 answered
+  (a) and decision 10 (b) on 2026-11-26;
 - every story has been probe-built from this text: met, probe round 1 on
   `probe/051-r1` (0 blocking, 10 clarity defects, folded and proved on its code, tip
   9ef38442);
 - the page half has run once: met on round 1 and its fold (`CI=1 npm run e2e`);
 - no operator-staged file is needed: met;
-- the real optic's night series: waits for the owner's answer to decision 10; under
-  (a), before the flip; under (b), recommended, after the landing.
+- the real optic's night series: met, not a prerequisite; decision 10 answered (b),
+  so it is the first step after the landing.
 
 **Rules for every story:**
 - Never edit an existing test, golden, fixture, `scripts/ci/`, `.github/`, `deny.toml`,

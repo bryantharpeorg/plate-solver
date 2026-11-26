@@ -803,8 +803,8 @@ run); the judge reads it in the diff.
 
 ## Decisions and the alternatives rejected
 
-The ten owner decisions, all open, are in spec.md § Owner decisions, each with its
-recommendation. Below them:
+The ten owner decisions, all settled, are in spec.md § Owner decisions, each answered
+with its recommendation. Below them:
 
 | Decision | Chosen | Rejected |
 |---|---|---|
@@ -862,11 +862,13 @@ rebuilt `dist`.
 1. **The earlier specs have landed:** every spec in `depends_on_landed`. Met: each is
    on `main` at c75a6e76.
 2. **`main` is still as read.** Every citation here was read at c75a6e76. Met: `main`
-   is c75a6e76 at probe round 1's fold. If `main` moves in a file § Project Structure
-   names, or in a test § Shapes names, re-read them and re-run the validator.
+   is c75a6e76 at probe round 1's fold and at the flip. If `main` moves in a file
+   § Project Structure names, or in a test § Shapes names, re-read them and re-run the
+   validator.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
-   decisions, § Owner approvals). Not met: all ten are open; it waits for the owner's
-   answers at the flip ask.
+   decisions, § Owner approvals). Met: decisions 1 to 9 answered (a) and decision 10
+   answered (b) on 2026-11-26 ("Flip"), each the recommendation; the approvals are
+   given by the flip, which is the owner's.
 4. **Probe builds.** A probe round builds the stories from this text alone, and its
    defects are folded. Met: round 1 built the four stories from this text alone on
    `probe/051-r1` (tip 77491a47, every scenario and gate passing, 0 blocking and 10
@@ -876,10 +878,9 @@ rebuilt `dist`.
    and on its fold's (§ What was run and what was read).
 6. **No operator-staged files are needed.** Met: no story reads a file outside the
    repository; the probe's measurements of the owner's frames are not a story.
-7. **The real optic's night series, only if the owner picks decision 10 (a).** It waits
-   for that answer: under (a), § Outside the factory step 1 comes before the flip, and
-   its results are folded here; under (b), recommended, it is the first step after the
-   landing.
+7. **The real optic's night series, only if the owner picks decision 10 (a).** Met: the
+   owner answered (b) on 2026-11-26, so the series is not a prerequisite; it is
+   § Outside the factory step 1, the first step after the landing.
 
 ## Outside the factory
 
@@ -1038,12 +1039,9 @@ from the diff completed, and every gate run again. Writes come from the task tex
 Shared writes name the spec story that last wrote the same file on `main`; within the
 spec, each story's files written by an earlier one are ordered by `depends_on_merged`.
 
-The ten owner decisions of spec.md are open; their questions, options and evidence are
-spec.md § Owner decisions, and this record is written to their recommendations. Its
-`open_questions` are empty so that the validator checks the rest of the record, as
-050's draft did; the draft state and Prerequisite 3 hold readiness until the owner
-answers, and a question left open then goes here. This record approves nothing; the
-flip is the owner's.
+All ten owner decisions of spec.md are settled, each answered with its recommendation
+on 2026-11-26; this record is written to those answers, and its `open_questions` are
+empty. This record approves nothing; the flip is the owner's.
 
 ```yaml
 version: 1

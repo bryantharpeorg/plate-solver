@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["013-live-finder", "016-mcp", "025-frame-capture", "033-focus-reading-and-aid", "047-console-uses-the-database-that-fits", "048-node-detects-stars-on-a-dark-sky", "050-tools-page-aligns-finder-camera"]
 # Drafted 2026-11-26 against `main` at c75a6e76, at the owner's ask of 2026-11-25
 # ("we should probably just generally have some utility pages in the system. another
@@ -10,13 +10,17 @@ depends_on_landed: ["013-live-finder", "016-mcp", "025-frame-capture", "033-focu
 # from this text alone on `probe/051-r1`, cut from 9b139bac (round 1: tip 77491a47,
 # every scenario and gate passing, 0 blocking and 10 clarity defects), whose fold
 # added 1a87ce8a, 9b691e75, d577c82d and 9ef38442 there (tip 9ef38442, every gate
-# passing). Every `path:line` here was read at c75a6e76. State: draft. The ten owner
-# decisions are open, each with a recommendation the scenarios are written to; the flip
-# is the owner's. 025 is named because the aid reads its raw frames; 033 because it
+# passing). Every `path:line` here was read at c75a6e76. The owner answered the ten
+# decisions on 2026-11-26 ("Flip"), each with its recommendation, which the scenarios
+# were already written to. 025 is named because the aid reads its raw frames; 033 because it
 # judges every reading with 033's arithmetic and reuses 033's Focus block; 048 because
 # the aid measures at the stars the scope node's detection finds; 013 for the
 # simulator's finder camera and the live loop; 016 for MCP; 047 and 050 because each last
 # changed a file this spec writes (plan.md § Refinement Record).
+# Flipped to `ready` on 2026-11-26 at the owner's ask ("Flip"), with every prerequisite in
+# plan.md met and none waived: probe round 1 from this text alone (0 blocking) folded and
+# proven on its code; the night series of the real optic is the first step after the
+# landing (decision 10 (b)). `main` still at c75a6e76.
 ---
 
 # Feature Specification: The Tools Page Focuses Either Camera
@@ -25,7 +29,7 @@ depends_on_landed: ["013-live-finder", "016-mcp", "025-frame-capture", "033-focu
 
 **Created**: 2026-11-26
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: The owner focuses the finder camera, a ZWO ASI120MM Mini (1280 × 960 at
 3.75 µm, mono, read as 8-bit by the scope node, 045) behind the SVBONY SV165's own 40 mm
@@ -140,10 +144,18 @@ camera, without building 033's aid twice.
   noise-free stars at σ 0.5 and phase 0 read 1.2332 or 1.2649 px by their place in the
   frame, since float rounding splits or joins equal distances there (run).
 
+### Session 2026-11-26 (the owner's answers)
+
+- Q: How were the ten open decisions answered? → A: Each with its recommendation, by
+  the owner on 2026-11-26 (§ Owner decisions): (a) for decisions 1 to 9 and (b) for
+  decision 10. The scenarios were already written to them.
+
 ## Owner decisions
 
-All ten are open. Each has its options, its evidence and a recommendation; the
-scenarios and the record are written to the recommendations. One general rule is
+All ten are settled by the owner on 2026-11-26, each answered with its recommendation:
+(a) for decisions 1 to 9 and (b) for decision 10. Each keeps its options and its
+evidence; the scenarios and the record were written to the recommendations, so no
+scenario changed for them. One general rule is
 behind decisions 1 to 3 and 7: **the finder camera's aid adds no rule of its own to
 033's arithmetic, takes nothing from the live solve and changes no setting; it asks only
 that the one setting its readings depend on, a fixed exposure and gain, be set on Setup,
@@ -155,7 +167,11 @@ Track, a GoTo or a change of optics, and keeps no record and gives no verdict; 0
 module and its tests are not touched. Its own parts are the measure, the run that feeds
 it and its words.
 
-1. **The finder camera's measure** (FR-002). Recommended (a): **a sub-pixel half-flux
+**Answered on 2026-11-26.** The owner, in reply to the seat's ten recommendations, at
+about 13:24Z: "Flip". Each of decisions 1 to 10 is answered with its recommendation,
+which the scenarios and the record were written to.
+
+1. **The finder camera's measure** (FR-002). Answered (a): **a sub-pixel half-flux
    diameter in circles, the method of SEP's `flux_radius` written fresh**: at the
    centroids of each raw frame's own star frame, the median over at most 15 of the
    brightest stars whose box of 33 × 33 pixels lies inside the frame and holds no other
@@ -198,7 +214,7 @@ it and its words.
    builds would have to share, and second moments weigh the noisy wings most; (f) **a
    size measured by the scope node** and sent on each star frame: the cheapest on the
    link, but a change to the proto and the node, out of this spec's scope.
-2. **Where it is computed, and its cost** (FR-005). Recommended (a): **on the console,
+2. **Where it is computed, and its cost** (FR-005). Answered (a): **on the console,
    one raw frame per reading**: `width × height` bytes on the scope link, 1,228,800 B
    for the ASI120MM's 1280 × 960, and nothing more on the node, which already holds each
    frame's pixels and answers a raw request from them. The measure took 0.23 % of the
@@ -213,7 +229,7 @@ it and its words.
    says where to run the console instead. Instead: (b) **on the scope node**, decision 1's
    (f); (c) **from the preview JPEG**, at most one every 5 s and box-averaged to 640
    pixels.
-3. **One exposure and gain for a run** (FR-004, FR-007, FR-008). Recommended (a): **the
+3. **One exposure and gain for a run** (FR-004, FR-007, FR-008). Answered (a): **the
    start refuses while the session's finder camera exposure or gain is automatic**, 409
    `the finder camera's exposure or gain is automatic: fix both on Setup`, **and a run
    ends `failed`**, `the finder camera's exposure or gain changed during the run`, **when
@@ -235,13 +251,13 @@ it and its words.
    over the session's settings, and a console stopped mid-run leaves it held; (d) **any
    exposure, as the draft had it**: the count then means nothing and the star set moves
    under the reading.
-4. **The imaging camera from Tools** (FR-015). Recommended (a): **033's Focus block
+4. **The imaging camera from Tools** (FR-015). Answered (a): **033's Focus block
    itself**, `FocusBlock` rendered unchanged on Tools when the imaging camera is picked,
    over the Tools page's own imaging view; it stays on the Imaging page too. Built in the
    probe with `FocusBlock.tsx` untouched (run, Vitest and the browser). Instead: (b) **a
    link** to the Imaging page's Focus block, a second place to go; (c) **moving** the
    block to Tools, which changes 033's FR-031 and its tests.
-5. **The display** (FR-014). Recommended (a): **033's lines and words for the finder
+5. **The display** (FR-014). Answered (a): **033's lines and words for the finder
    camera, with the star count, and no record or verdict**: the median as the large
    number in the finder camera's pixels to two decimals; 033's status words with
    "finder camera frames" where 033 says "imaging frames"; `Stars detected` and the
@@ -258,18 +274,18 @@ it and its words.
    one optic; (c) **033's record and verdict for the finder camera**, a second
    `focus.json` and its rules; (d) **the draft's words** ("since the last turn",
    "frames"), two sets of words in one block.
-6. **MCP** (FR-010). Recommended (a): **two tools**, `get_finder_focus` (read-only) and
+6. **MCP** (FR-010). Answered (a): **two tools**, `get_finder_focus` (read-only) and
    `set_finder_focus` (`on`), as 033 and 050 have theirs, since an agent drives a night
    over the tunnel. Instead: (b) **none**; (c) **a `camera` argument on 033's tools**, a
    change to 033's FR-035 and FR-036.
-7. **A change of optics mid-run** (FR-008). Recommended (a): **nothing of its own**:
+7. **A change of optics mid-run** (FR-008). Answered (a): **nothing of its own**:
    the first readings after a spacer are a change by 033's 15 % rule and the run goes
    on; the best so far stays the old optic's until the observer stops and starts again,
    which the README says to do. An optic that moves the focal plane leaves the frames out
    of focus and the live solve failing until refocused (read, not run). Instead: (b)
    **end the run** when the live solve's field width moves more than 5 % from the run's
    first; (c) **start the arithmetic again** on such a move.
-8. **A browser test** (FR-016). Recommended (a): **`e2e/tools-focus.spec.ts` in the
+8. **A browser test** (FR-016). Answered (a): **`e2e/tools-focus.spec.ts` in the
    simulate project**, at 412 by 915, by day and by night, its locators held to the
    block's region, with two list entries in `playwright.config.ts` (owner approval 6). It
    fixes the exposure first through `PUT /api/session`, 200 ms at gain 1, as
@@ -277,11 +293,11 @@ it and its words.
    through `DELETE /api/finder-camera/focus` in its `finally`. The block draws bars, and
    only a browser paints its night colours. Run in the probe, 34 of 34 with it. Instead:
    (b) **none**, Vitest alone.
-9. **The route's name** (FR-004). Recommended (a): **`/api/finder-camera/focus`**.
+9. **The route's name** (FR-004). Answered (a): **`/api/finder-camera/focus`**.
    Instead: (b) `/api/finder/focus`, where "finder" alone is the glossary's _Avoid_ for
    the camera; (c) `/api/focus/finder`.
 10. **Evidence from the real optic** (plan.md § Outside the factory, step 1).
-    Recommended (b): **flip on the simulator and the model, with a through-focus night
+    Answered (b): **flip on the simulator and the model, with a through-focus night
     series of the ASI120MM behind the SV165 as the first step outside the factory**.
     Instead: (a) **that series before the flip**, a plan prerequisite. The series: 5 to 7
     focuser positions through the best, about a twentieth of a turn apart, about 10 raw
