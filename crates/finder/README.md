@@ -146,6 +146,16 @@ The Tools page's finder alignment has two tools:
 On a console that takes no imaging frames both answer `this console takes no
 imaging frames` at once, before reading their arguments.
 
+The Tools page's focus aid for the finder camera has two tools:
+
+- `get_finder_focus` takes no arguments and reads `{"focus": ...}`: the finder
+  camera's focus aid, its readings in the finder camera's pixels, the best so
+  far, the trend and `found`; `focus` is null before the first start.
+- `set_finder_focus` takes `on` and nothing else; it starts or stops the aid as
+  `POST` and `DELETE /api/finder-camera/focus` do and answers `{"focus": ...}`,
+  or the route's refusal as a tool error. It moves nothing and changes no
+  setting: the observer turns the focuser.
+
 ### MCP under WSL2: portproxy or mirrored mode
 
 Under WSL2's default NAT networking, the WSL address listed in Setup is not the
@@ -291,6 +301,9 @@ about 1.7 GB for a 2° database built from Tycho (an estimate).
 | `DELETE /api/imaging/focus` | No body. Stop the focus aid, put the imaging settings back and answer 200 with the imaging view. Same-origin writes only. |
 | `POST /api/imaging/align` | JSON `{}` or `{"exposure_ms": N}`. Start the finder alignment; answers 200 with the imaging view, whose `align` reports it, or 400, 409 or 415 with a JSON `error`. Same-origin writes only. |
 | `DELETE /api/imaging/align` | No body. Stop the finder alignment, put the imaging settings back and answer 200 with the imaging view. Same-origin writes only. |
+| `GET /api/finder-camera/focus` | `{"focus": ...}`: the finder camera's focus aid, null before the first start. |
+| `POST /api/finder-camera/focus` | JSON `{}`. Start the finder camera's focus aid; answers 200 with `{"focus": ...}`, or 400, 409 or 415 with a JSON `error`. Same-origin writes only. |
+| `DELETE /api/finder-camera/focus` | No body. Stop it and answer 200 with `{"focus": ...}`. Same-origin writes only. |
 | `GET /api/imaging/calibration` | The calibration library: `masters`, the `set` being taken, what would `match` the latest imaging frame, and `error` when the library's index is unreadable. |
 | `DELETE /api/imaging/calibration/{id}` | Remove a master dark or master flat and its files, or stop or drop the set with that id. Answers 200 with the calibration object, 404 for an unknown id. Same-origin writes only. |
 | `POST /api/imaging/calibration/darks` | JSON `{"count":N}`, N from 3 to 64. Cover the telescope first. Takes one offset frame and N darks at the settings in force, checks that they are dark, and adds their master dark and its bad-pixel map; progress is `set`. `"anyway":true` takes them whatever the check says. Same-origin writes only. |
@@ -1053,6 +1066,58 @@ the Imaging page. After a change of optics, solve imaging frames on the Imaging
 page until one solves before aligning: the alignment's frames that do not solve
 count no misses, so they never move the field height to its next source, while
 a solve on the Imaging page during a run counts as that page's own.
+
+## Focusing the finder camera
+
+The Tools page's Focus block focuses either camera. For the imaging camera it
+is the Imaging page's Focus block, the same one, under the imaging camera's
+lease (see Focus). For the finder camera it is the finder camera's own focus
+aid: `POST /api/finder-camera/focus` starts it, `DELETE` stops it, and `GET`
+reads it.
+
+Set a fixed exposure and gain for the finder camera on Setup first. The aid
+refuses to start while either is automatic, and a run ends `failed` when the
+frames it measures change exposure or gain: the scope node's automatic
+exposure steps whenever the star count leaves 25 to 40, which turning the
+focuser does, and the star count beside the reading means something only at
+one exposure. After changing either, start the aid again.
+
+It asks the scope node for one raw frame after another (the raw frames of
+recordings, one star frame's pixels each, `width × height` bytes on the scope
+link) and measures each at the stars the node found in that frame: the median
+half-flux diameter, in the finder camera's pixels, of at most 15 of the
+brightest stars whose box of 33 pixels lies inside the frame and holds no
+other star, and whose own pixels are all under 250. Each star's light is
+summed in circles round its centre a fifth of a pixel at a time, so the
+reading follows a star smaller than two pixels and does not jump as a star
+moves across the pixel grid. A frame with fewer than five such stars says
+nothing (`too_few_stars`), and one whose median is above 20 pixels is far out
+(`far_out`), as for the imaging camera. The readings go through the imaging
+camera's own arithmetic: the median of the last three since the last change,
+a reading more than 15% from it as a turn of the focuser, the trend, the best
+so far and `found` once the reading has been far from the best, near it, far
+and near again. Beside the reading the page shows how many stars the node
+detected in that frame.
+
+It does not stop the live solve, which goes on with the same frames; Track
+may stay on, and keeps the stars still. Each reading costs one raw frame on
+the scope link, 1,228,800 bytes for the finder camera's 1280 × 960, so run
+the console beside the scope node on the Pi, as the field kit does: over a
+slower link, such as a phone's hotspot, one raw frame can hold up the link's
+heartbeat until the link drops. It ends `stopped` by a stop, or `failed` with
+the words when the scope node is not connected, cannot send raw frames, sends
+none for 15 s, or changes exposure or gain. Far out of focus the scope node
+finds no stars at all, and the aid says so: turn the focuser slowly through
+its range, watching the live preview, until stars show, then use the aid.
+
+At its sharpest a star may be small enough for the scope node's detection to
+take it for a hot pixel, as cedar-detect itself warns. If the detected count
+falls as the reading reaches its lowest, come back to where the count is
+highest within a tenth of the best: the live solve needs the stars more than
+the last tenth of sharpness. After a change of optics (a spacer, a reducer)
+stop the aid and start it again, since the best so far is the old optic's.
+Sizes are in the finder camera's pixels, which compare exactly for one camera
+behind one optic.
 
 ## Calibration frames
 

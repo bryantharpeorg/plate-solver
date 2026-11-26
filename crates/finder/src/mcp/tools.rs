@@ -260,6 +260,12 @@ struct AlignArguments {
     exposure_ms: Option<f64>,
 }
 
+#[derive(rmcp::schemars::JsonSchema)]
+#[expect(dead_code, reason = "schema only; set_finder_focus reads on itself")]
+struct FinderFocusArguments {
+    on: bool,
+}
+
 fn object_schema() -> Arc<JsonObject> {
     Arc::new(json!({"type":"object"}).as_object().unwrap().clone())
 }
@@ -920,6 +926,50 @@ impl Console {
             Ok(json!({"align": view.align}))
         }
         .await;
+        tool_result(result)
+    }
+
+    #[tool(description = "Read the finder camera's focus aid: the size of the finder camera's stars in its pixels, the median half-flux diameter of the last three readings, the best so far, the trend since the last change, found once the reading has been through focus and back, and the stars the scope node detected in the last frame. null before the first start.",
+        output_schema = object_schema(), annotations(read_only_hint = true))]
+    async fn get_finder_focus(&self, arguments: JsonObject) -> CallToolResult {
+        if !arguments.is_empty() {
+            return CallToolResult::error(vec![ContentBlock::text(
+                "get_finder_focus takes no arguments",
+            )]);
+        }
+        CallToolResult::structured(json!({"focus": self.state.finder_focus().view()}))
+    }
+
+    #[tool(description = "Start or stop the finder camera's focus aid, as POST and DELETE /api/finder-camera/focus do: raw frames of the finder camera measured beside the live solve, which goes on. It moves nothing and changes no setting: the observer turns the finder camera's focuser. The finder camera's exposure and gain must be fixed first, on Setup; a change of either ends the run. Read get_finder_focus every few seconds.",
+        input_schema = rmcp::handler::server::common::schema_for_input::<FinderFocusArguments>().expect("finder camera focus schema"),
+        output_schema = object_schema())]
+    async fn set_finder_focus(&self, arguments: JsonObject) -> CallToolResult {
+        let result = (|| {
+            let Some(on) = arguments.get("on").and_then(Value::as_bool) else {
+                return Err("on must be true or false".to_owned());
+            };
+            if arguments.len() > 1 {
+                return Err("set_finder_focus takes on and nothing else".to_owned());
+            }
+            let focus = self.state.finder_focus();
+            let view = if on {
+                Some(
+                    focus
+                        .start(
+                            self.state.link(),
+                            self.state
+                                .session()
+                                .snapshot(self.state.clock.now())
+                                .camera_settings,
+                            self.state.clock.clone(),
+                        )
+                        .map_err(|refusal| refusal.message)?,
+                )
+            } else {
+                focus.stop()
+            };
+            Ok(json!({"focus": view}))
+        })();
         tool_result(result)
     }
 
