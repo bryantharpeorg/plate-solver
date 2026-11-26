@@ -299,6 +299,53 @@ export interface ImagingView {
   steering?: ImagingSteering;
   run?: ImagingRun;
   unfinished_run?: string;
+  align?: ImagingAlign;
+}
+
+// The finder alignment (050): the imaging centre in the finder camera's frame.
+export interface ImagingAlignCentre {
+  x: number;
+  y: number;
+  finder_width: number;
+  finder_height: number;
+  right_deg: number;
+  up_deg: number;
+  separation_deg: number;
+  on_frame: boolean;
+  middle: boolean;
+}
+
+export interface ImagingAlign {
+  state: "running" | "ended";
+  since: number;
+  exposure_ms: number;
+  frames: number;
+  last?: {
+    frame_id: number;
+    at: number;
+    outcome: "measured" | "not_solved" | "no_live_solve";
+    error?: string;
+    centre?: ImagingAlignCentre;
+    unsolved?: number;
+    aim?: string;
+    done: boolean;
+  };
+  ended?: "stopped" | "failed";
+  error?: string;
+}
+
+export async function postImagingAlign(): Promise<ImagingView> {
+  return json(
+    await fetch("/api/imaging/align", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    }),
+  );
+}
+
+export async function deleteImagingAlign(): Promise<ImagingView> {
+  return json(await fetch("/api/imaging/align", { method: "DELETE" }));
 }
 
 // The console's imaging run (037 and 041), including its latest ending.

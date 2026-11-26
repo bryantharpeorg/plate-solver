@@ -14,6 +14,7 @@ import { Upload } from "./components/Icons";
 import { NextTargets } from "./components/NextTargets";
 import { SetupPage } from "./components/SetupPage";
 import { SurveyView } from "./components/SurveyView";
+import { ToolsPage } from "./components/ToolsPage";
 import { TopBar } from "./components/TopBar";
 import { TargetSheet } from "./components/TargetSheet";
 import { useLastSample, useNight, useSite } from "./settings";
@@ -185,7 +186,16 @@ export function App() {
         </p>
       )}
       {path === "/setup" ? (
-        <SetupPage session={session} mcp={mcp} put={put} onBack={() => navigate("/")} onChange={changed} />
+        <SetupPage
+          session={session}
+          mcp={mcp}
+          put={put}
+          onBack={() => navigate("/")}
+          onTools={() => navigate("/tools")}
+          onChange={changed}
+        />
+      ) : path === "/tools" ? (
+        <ToolsPage session={session} onBack={() => navigate("/")} />
       ) : path === "/imaging" ? (
         <ImagingPage night={night} onBack={() => navigate("/")} />
       ) : (
@@ -305,7 +315,7 @@ export function App() {
         onSettings={setSettings}
         onClose={() => setPicker(false)}
         onPick={(source) => {
-          if (path === "/setup" || path === "/imaging") navigate("/");
+          if (path === "/setup" || path === "/imaging" || path === "/tools") navigate("/");
           open(source);
         }}
       />
