@@ -131,6 +131,21 @@ console that takes no imaging frames they answer `this console takes no imaging
 frames` at once, before reading their arguments; `list_calibration` answers
 `{"masters":[]}` there.
 
+The Tools page's finder alignment has two tools:
+
+- `get_finder_alignment` takes no arguments and reads `{"align": ...}`: the
+  finder alignment's state and its last imaging frame, with where the imaging
+  camera's centre lies from the finder camera's centre, whether it is done and
+  the aim point's word for that frame; `align` is null before the first start.
+- `set_finder_alignment` takes `on`, and with `on` true optionally `exposure_ms`;
+  it starts or stops the finder alignment as `POST` and `DELETE /api/imaging/align`
+  do and answers `{"align": ...}`, or the route's refusal as a tool error. It moves
+  nothing: the observer turns the ring screws, with Track off, and an MCP client
+  says which way.
+
+On a console that takes no imaging frames both answer `this console takes no
+imaging frames` at once, before reading their arguments.
+
 ### MCP under WSL2: portproxy or mirrored mode
 
 Under WSL2's default NAT networking, the WSL address listed in Setup is not the
@@ -274,6 +289,8 @@ about 1.7 GB for a 2° database built from Tycho (an estimate).
 | `POST /api/imaging/solve` | No body. Solve the latest saved imaging frame with the imaging solver; answers 200 with the imaging view, whose `solve` goes from `solving` to `solved` or `failed`, or 409 with a JSON `error`. Same-origin writes only. |
 | `POST /api/imaging/focus` | JSON `{}` or any of `check`, `find`, `tile` (`{col, row}`, each 0 to 2) and `exposure_ms`. Start the focus aid on the focus region, or with `check` a focus check that stops by itself with a verdict; answers 200 with the imaging view, whose `focus.aid` reports it, or 400 or 409 with a JSON `error`. Same-origin writes only. |
 | `DELETE /api/imaging/focus` | No body. Stop the focus aid, put the imaging settings back and answer 200 with the imaging view. Same-origin writes only. |
+| `POST /api/imaging/align` | JSON `{}` or `{"exposure_ms": N}`. Start the finder alignment; answers 200 with the imaging view, whose `align` reports it, or 400, 409 or 415 with a JSON `error`. Same-origin writes only. |
+| `DELETE /api/imaging/align` | No body. Stop the finder alignment, put the imaging settings back and answer 200 with the imaging view. Same-origin writes only. |
 | `GET /api/imaging/calibration` | The calibration library: `masters`, the `set` being taken, what would `match` the latest imaging frame, and `error` when the library's index is unreadable. |
 | `DELETE /api/imaging/calibration/{id}` | Remove a master dark or master flat and its files, or stop or drop the set with that id. Answers 200 with the calibration object, 404 for an unknown id. Same-origin writes only. |
 | `POST /api/imaging/calibration/darks` | JSON `{"count":N}`, N from 3 to 64. Cover the telescope first. Takes one offset frame and N darks at the settings in force, checks that they are dark, and adds their master dark and its bad-pixel map; progress is `set`. `"anyway":true` takes them whatever the check says. Same-origin writes only. |
@@ -982,6 +999,60 @@ back. `cadence_ms` is how long one reading takes, and a forwarding limit makes
 it much longer, so clear the limit while focusing. Once focus is close, choose
 `Find the sharpest tile again` if the region was found while it was still
 well out of focus, and after a change of telescope or collimation.
+
+## Finder alignment
+
+The Tools page, opened from Setup's `Tools` link while a scope node is paired,
+holds utilities used once a setup. Its first is the finder alignment: while the
+observer turns the finder camera's ring screws, it shows where the imaging
+camera's centre lies from the finder camera's centre, as the finder camera sees
+it, also when that is off the finder camera's frame, and says Done once that
+centre has held in the middle of the frame for two frames in a row. It moves
+nothing.
+
+`POST /api/imaging/align` starts it, with the body `{}` or `{"exposure_ms": N}`.
+It holds the imaging camera's lease as `the finder alignment`, remembers the
+exposure, the region of interest and the save setting, and takes one
+whole-sensor imaging frame after another at 500 ms or `exposure_ms`, under the
+purpose label `align`, without a node copy; the binning stays as it is, and
+2 × 2 sends a quarter of the bytes. Each frame's file and solve sidecar go once
+the next frame is saved, but for the last, and not while a solve from the
+Imaging page reads it. Each frame is paired with the finder camera's live solve
+nearest the middle of its exposure, no more than 5 s from it; with none, its
+`outcome` is `no_live_solve` and it is not solved. Otherwise it is solved with
+a hint that names that live solve's centre, a 10° radius and the field height
+an imaging solve would be given; a frame that does not solve says so with the
+solver's words, and the next frame looks again. `align` in the imaging view
+carries `state` (`running` or `ended`), `since`, `exposure_ms`, `frames`, `last`
+and, once ended, `ended` (`stopped` or `failed`) and `error`. A measured frame's
+`last.centre` carries `x` and `y` in the finder camera's pixels, outside the
+frame when the centre is, `right_deg` and `up_deg` along the frame's own rows
+and columns (the chart rotation is not applied), `separation_deg` on the sky,
+`on_frame` and `middle` (within a quarter of the frame's width and height of its
+centre); a frame that did not solve carries `last.unsolved`, how many frames in
+a row have not. `last.done` is true once this frame and the one before it each
+put the centre in the middle. Each solve is offered to the measured aim point as
+`Imaging::note_solve` offers any, and `last.aim` is what that made of it,
+`relation.last.outcome`'s word: `measured` or `replaced` when the aim point took
+this frame's reading, and `set_aside`, `moving`, `no_live_pointing` or
+`off_frame` when it did not, in which case a later imaging solve measures it.
+`DELETE /api/imaging/align` stops it, puts the three settings back and frees
+the camera; it waits for a solve in flight, which ASTAP's limit holds to 120 s.
+It is refused while the camera is not ready, without an imaging solver, while
+it already runs, while Track is on, without a field height, when the finder
+camera has had no live solve for 30 s, during an exposure no lease holds, for an
+exposure outside the camera's range, and while another procedure holds the
+camera, with that procedure's name. Track turned on while it runs ends it,
+`failed`.
+
+Turn Track off first, and back on after: a turned screw moves the pointing the
+console reads, and Track would follow it or drive the mount back. Point the
+telescope at a field of stars both cameras solve. Give the imaging camera's
+field height first: `--focal-length-mm`, or a scale kept by an imaging solve on
+the Imaging page. After a change of optics, solve imaging frames on the Imaging
+page until one solves before aligning: the alignment's frames that do not solve
+count no misses, so they never move the field height to its next source, while
+a solve on the Imaging page during a run counts as that page's own.
 
 ## Calibration frames
 
