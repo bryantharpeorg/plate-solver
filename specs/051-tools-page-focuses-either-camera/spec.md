@@ -6,14 +6,17 @@ depends_on_landed: ["013-live-finder", "016-mcp", "025-frame-capture", "033-focu
 # one for focusing an imaging node (finder or the imager itself)"), from a probe of that
 # day on the branch `probe/051` cut from c75a6e76, and folded the same day through a
 # cynical review (round 1: a blocker, six majors and fourteen minors) with the probe
-# extended to 43c7ef94 (plan.md § What was run and what was read). Every `path:line`
-# here was read at c75a6e76. State: draft. The ten owner decisions are open, each with
-# a recommendation the scenarios are written to; the flip is the owner's. 025 is named
-# because the aid reads its raw frames; 033 because it judges every reading with 033's
-# arithmetic and reuses 033's Focus block; 048 because the aid measures at the stars the
-# scope node's detection finds; 013 for the simulator's finder camera and the live loop;
-# 016 for MCP; 047 and 050 because each last changed a file this spec writes (plan.md
-# § Refinement Record).
+# extended to 43c7ef94 (plan.md § What was run and what was read), then probe-built
+# from this text alone on `probe/051-r1`, cut from 9b139bac (round 1: tip 77491a47,
+# every scenario and gate passing, 0 blocking and 10 clarity defects), whose fold
+# added 1a87ce8a, 9b691e75, d577c82d and 9ef38442 there (tip 9ef38442, every gate
+# passing). Every `path:line` here was read at c75a6e76. State: draft. The ten owner
+# decisions are open, each with a recommendation the scenarios are written to; the flip
+# is the owner's. 025 is named because the aid reads its raw frames; 033 because it
+# judges every reading with 033's arithmetic and reuses 033's Focus block; 048 because
+# the aid measures at the stars the scope node's detection finds; 013 for the
+# simulator's finder camera and the live loop; 016 for MCP; 047 and 050 because each last
+# changed a file this spec writes (plan.md § Refinement Record).
 ---
 
 # Feature Specification: The Tools Page Focuses Either Camera
@@ -96,8 +99,8 @@ camera, without building 033's aid twice.
   (`crates/finder/src/recording.rs:33`, `crates/finder/src/recording.rs:369`,
   `crates/finder/src/recording.rs:371`, `crates/finder/src/recording.rs:377`); or when
   the frames it measures change exposure or gain, or a measure fails (owner decision 3).
-  The silence and the change of exposure are run; the rest are read (plan.md § What was
-  run and what was read).
+  The silence and the changes of exposure and of gain are run; the rest are read
+  (plan.md § What was run and what was read).
 - Q: Can the aid be used by day? → A: No: it measures stars. A rough focus by day on a
   distant object is the owner's, outside this tool (plan.md § Outside the factory).
 
@@ -116,7 +119,7 @@ camera, without building 033's aid twice.
   trimmed a faint star's wings, so it read +24 % from 200 to 1000 ms at one focus (run).
   The folded measure sums every pixel of a star's circle with no cut and moved at most
   3.5 % from half to four times one exposure on the model of this optic, and at most
-  1.7 % from 200 to 1000 ms on the simulator at focus errors 0 to 2 (run). The node's
+  2.3 % from 200 to 1000 ms on the simulator at focus errors 0 to 2 (run). The node's
   automatic exposure still steps by a quarter to four times whenever the star count
   leaves 25 to 40 (`crates/scope-node/src/exposure.rs:26`,
   `crates/scope-node/src/exposure.rs:29`), which turning the focuser does, and the
@@ -128,6 +131,14 @@ camera, without building 033's aid twice.
   lens, about 36″ a pixel); the simulator's are about 30″ a pixel with σ 1.2 px; the
   rest is the review's model of this optic. Owner decision 10 says when a night series
   of the real optic comes.
+
+### Session 2026-11-26 (probe round 1 from this text, folded)
+
+- Q: Where are a star's offsets taken from, and when are two distances one? → A: From
+  the centre of the box's centre pixel, and distances within 10⁻⁹ px of the one before
+  are one (FR-002). Built in cedar's coordinates with exact ties, six identical
+  noise-free stars at σ 0.5 and phase 0 read 1.2332 or 1.2649 px by their place in the
+  frame, since float rounding splits or joins equal distances there (run).
 
 ## Owner decisions
 
@@ -153,18 +164,19 @@ it and its words.
    twice the radius, round the flux-weighted centre of its own pixels, within which the
    box's pixels, less the background and split into 5 × 5 parts, sum to half of what a
    circle one pixel past its farthest own pixel holds. Evidence (run, plan.md § What was
-   run): on drawn stars integrated over each pixel, 1.003 to 1.060 times a Gaussian's own
+   run): on drawn stars integrated over each pixel, 1.002 to 1.060 times a Gaussian's own
    half-flux diameter from σ 1.2 to 3.0 at phases 0, 0.25 and 0.5 of a pixel; at σ 0.5
-   and 0.8 rising with σ at every phase, its phase spread 25 % and 7 % (the draft's: from
-   0 to 2.19 times); the median of 15 stars at random phases rises from σ 0.3 (1.21,
-   1.26, 1.34, 1.50, 1.70 and 2.10 px at σ 0.3, 0.35, 0.4, 0.5, 0.6 and 0.8). On the
+   and 0.8 rising with σ at every phase (1.233, 1.493 and 1.577 px and 2.124, 2.111 and
+   1.984 px at phases 0, 0.25 and 0.5), its phase spread 28 % and 7 % (the draft's: from
+   0 to 2.19 times); the median of 15 stars at random phases rises from σ 0.3 (1.18,
+   1.29, 1.35, 1.52, 1.70 and 2.11 px at σ 0.3, 0.35, 0.4, 0.5, 0.6 and 0.8). On the
    review's model of this optic at a fixed exposure, inside the critical focus zone (0
    and 10 µm) the reading moves 3.3 % and 4.0 % from frame to frame and 033's `Aid`
    settles 38 of 40 frames at each, every frame after the first two (the draft's: 17.1 %
    and 15.5 %, settling 1 and 10), and outside it 1.4 % to 2.2 %, settling 38; it rises
    with the focus error (1.29, 1.35, 1.53, 1.80, 2.19 and 3.06 px at 0, 10, 21, 32, 43
    and 64 µm).
-   On the simulator at 1000 ms, 1.023, 1.015, 1.007 and 0.997 times H(e) at focus errors
+   On the simulator at 1000 ms, 1.021, 1.016, 1.003 and 0.995 times H(e) at focus errors
    0 to 3, 15 stars each. On the owner's eight 3 s frames of 2026-11-09 from the earlier
    finder camera (outside the repository), 3.16 to 3.64 px with 15 stars each, where the
    owner's own script read diameters of 2.42 to 3.12 and ASTAP 3.4 to 4.5. Instead: (b)
@@ -396,35 +408,45 @@ aid has nothing to show and nothing to test.
 **Acceptance Scenarios**:
 
 1. **Given** drawn frames of six stars at the six places at phase 0, 0.25 and 0.5, with
-   σ 1.2, 2.0 and 3.0, **When** a committed test calls `measure` on each with its six
-   centroids, **Then** it asserts that each answers `Sample::Reading` with `stars` 6 and
-   `px` within 8 % of 2·√(2 ln 2)·σ.
+   σ 1.2, 2.0 and 3.0, a drawn frame of six stars at the six places of σ 1.2, 1.6, 2.0,
+   2.4, 2.8 and 3.2, and the σ 3.0 frame at phase 0 again with 2 added to each pixel
+   whose column and row sum to an odd number, so that each star's box edge holds 64
+   pixels of 10 and 64 of 12, **When** a committed test calls `measure` on each with its
+   six centroids, **Then** it asserts that each answers `Sample::Reading` with `stars` 6;
+   that each of the first frames has `px` within 8 % of 2·√(2 ln 2)·σ; that the mixed
+   frame's `px` is within 3 % of the mean of 2·√(2 ln 2)·2.0 and 2·√(2 ln 2)·2.4; and that
+   the last frame's `px` is within 1 % of the σ 3.0 frame's at phase 0.
 2. **Given** a drawn frame of σ 2.0 with the six places, a star at (10.5, 240.5) whose
-   box crosses the frame's edge, two at (400.5, 400.5) and (410.5, 405.5) within 16 px of
-   each other, and one at (300.5, 420.5) of density 250, whose top reaches 255, each with
-   its centroid, and the same frame with, for each of the six stars, a pixel of 200 ten
-   pixels to its right and a pixel of 255 ten pixels below it, neither with a centroid,
-   **When** a committed test calls `measure` on both, **Then** it asserts that each
-   answers `Sample::Reading` with `stars` 6, and that the second's `px` equals the
-   first's within 10⁻⁹.
-3. **Given** a drawn frame of four stars at the first four of the six places, a frame of
-   background 10 alone with no centroid, and a frame of background 10 with five uniform
-   discs of level 60 and radius 15 px at the first five places, **When** a committed
-   test calls `measure` on each, **Then** it asserts that the first answers
-   `Sample::TooFewStars` with `stars` 4, the second `Sample::TooFewStars` with `stars` 0,
-   and the third `Sample::FarOut` with `stars` 5 and `px` within 5 % of 15·√2.
-4. **Given** a simulator as a simulated frame's definition gives it, **When** a committed
-   test reads `finder_focus_error()`, renders with `render` that simulator's stars at
-   1000 ms, gain 1, seed 13 and frame 0 and with `render_with_sigma` at `PSF_SIGMA_PX`,
-   and measures simulated frames at e = 0, 1, 2, 3, −3 and 8, **Then** it asserts that
+   box crosses the frame's edge, a star at (624.5, 240.5) whose box reaches column 640,
+   two at (400.5, 400.5) and (410.5, 405.5) within 16 px of each other, and one at
+   (300.5, 420.5) of density 250, whose top reaches 255, each with its centroid; the same
+   frame with, for each of the six stars, a pixel of 200 ten pixels to its right and a
+   pixel of 255 ten pixels below it; and the same frame with, for each of the six stars,
+   a pixel of 200 eight pixels to its right and a pixel of 255 sixteen pixels below it;
+   none of these pixels with a centroid, **When** a committed test calls `measure` on the
+   three, **Then** it asserts that each answers `Sample::Reading` with `stars` 6, and that
+   the second's `px` and the third's each equal the first's within 10⁻⁹.
+3. **Given** a drawn frame of four stars of σ 2.0 at the first four of the six places, a
+   frame of background 10 alone with no centroid, and a frame of background 10 with five
+   uniform discs at the first five places, each pixel whose centre lies within 15 px of
+   the place at level 60, **When** a committed test calls `measure` on each, **Then** it
+   asserts that the first answers `Sample::TooFewStars` with `stars` 4, the second
+   `Sample::TooFewStars` with `stars` 0, and the third `Sample::FarOut` with `stars` 5
+   and `px` within 5 % of 15·√2.
+4. **Given** a simulator as a simulated frame's definition gives it, **When** a
+   committed test reads `finder_focus_error()`, renders with `render`, before any frame
+   is taken, the 147 stars `field_stars(1000.0, 1.0)` gives at
+   `crate::support::live::START`, at 1000 ms, gain 1, seed 13 and frame 0, and with
+   `render_with_sigma` at `PSF_SIGMA_PX`, measures simulated frames at e = 0, 1, 2, 3,
+   −3 and 8, and then calls `set_finder_focus_error(f64::NAN)`, **Then** it asserts that
    the error reads 0 before any is set and each e after it is set; that `render` gives
    1,584,128 bytes whose FNV-1a 64-bit hash is `0xb1d308b97a09eb40`, the hash of
    c75a6e76's own pixels computed at c75a6e76, and that `render_with_sigma` gives the
    same bytes; that at e = 0 to 3 each answers `Sample::Reading` with `stars` 15 and
    `px` within 10 % of H(e), each larger than the one before; that at e = −3 `px` is
    within 5 % of e = 3's; that at e = 2 a simulated frame at 200 ms reads within 4 % of
-   e = 2's at 1000 ms; and that at e = 8 it answers `Sample::TooFewStars` with fewer
-   than 5 `stars`.
+   e = 2's at 1000 ms; that at e = 8 it answers `Sample::TooFewStars` with fewer than 5
+   `stars`; and that the last call panics.
 5. **Given** `Optics` of 64 × 64 pixels, otherwise the default, and one `RenderStar` at
    (32.5, 32.5) of magnitude 8, **When** a committed test sums, for each of frames 0 to
    63 at 200 ms, gain 1 and seed 13, the pixels `render_with_sigma` draws with the star
@@ -436,7 +458,7 @@ aid has nothing to show and nothing to test.
    centroids, **Then** it asserts that each answers `Sample::Reading` with `stars` 6;
    that at each phase the reading at σ 0.8 is at least 1.1 times the one at σ 0.5, and
    the one at σ 1.2 at least 1.1 times the one at σ 0.8; and that the largest of the
-   three phases' readings is at most 1.3 times the smallest at σ 0.5 and at most 1.1
+   three phases' readings is at most 1.32 times the smallest at σ 0.5 and at most 1.1
    times at σ 0.8.
 
 ### User Story 2 - The finder camera's focus aid runs beside the live solve (Priority: P1)
@@ -482,27 +504,33 @@ gate's nextest command runs it; during development,
    `focus.ended` `stopped`; that the second stop answers 200 with the same `readings` and
    `ended` `stopped`; and that `GET /api/session` reads the `camera_settings` read before
    the start.
-4. **Given** the bare console and the focus rig, live, **When** a committed test sends
-   `POST /api/finder-camera/focus` `{}` to the bare console, and to the rig a foreign
-   write of `POST` and of `DELETE`, `GET /api/finder-camera/focus`, a `POST` of
-   `{"x": 1}`, the body `{}` sent as `Content-Type: text/plain`, then
-   `PUT /api/session` `{"camera_settings": {"exposure_ms": "auto"}}`, a `POST` of `{}`,
-   `PUT /api/session` `{"camera_settings": {"exposure_ms": 500}}`, `{}`, `{}` again, and
-   then stops the node's frames with `controls().stop_frames()`, reading until
-   `focus.state` is `ended`, **Then** it asserts these answers in order: 409
-   `{"error": "the scope node is not connected"}`; 403
-   `{"error": "writes require the console's own origin and an allowed host"}` for each
-   foreign write; 200 `{"focus": null}`; 400; 415; 200; 409
+4. **Given** the bare console, a focus rig whose session was never given camera settings,
+   live, and the focus rig, live, **When** a committed test sends
+   `POST /api/finder-camera/focus` `{}` to the bare console and to the rig without camera
+   settings, and to the focus rig a foreign write of `POST` and of `DELETE`,
+   `GET /api/finder-camera/focus`, a `POST` of `{"x": 1}`, the body `{}` sent as
+   `Content-Type: text/plain`, then `PUT /api/session`
+   `{"camera_settings": {"exposure_ms": "auto"}}`, a `POST` of `{}`, `PUT /api/session`
+   `{"camera_settings": {"exposure_ms": 500}}`, `{}`, `{}` again, then reads the settled
+   reading after 0, stops the node's frames with `controls().stop_frames()`, reads the
+   view 10 s later and reads until `focus.state` is `ended`, **Then** it asserts these
+   answers in order: 409 `{"error": "the scope node is not connected"}`; 409
    `{"error": "the finder camera's exposure or gain is automatic: fix both on Setup"}`;
-   200; 200; 409 `{"error": "the finder camera's focus aid is already running"}`; and
-   that the run ends with `focus.ended` `failed` and `focus.error` exactly
+   403 `{"error": "writes require the console's own origin and an allowed host"}` for
+   each foreign write; 200 `{"focus": null}`; 400; 415; 200; 409
+   `{"error": "the finder camera's exposure or gain is automatic: fix both on Setup"}`;
+   200; 200; 409 `{"error": "the finder camera's focus aid is already running"}`; that
+   10 s after the frames stopped `focus.state` is still `running`; and that the run then
+   ends with `focus.ended` `failed` and `focus.error` exactly
    `no raw frame arrived within 15 s`.
-5. **Given** the focus rig, live, the aid started with `{}` and its settled reading after
-   0 read, **When** a committed test sends `PUT /api/session`
+5. **Given** the focus rig, live, **When** a committed test starts the aid with `{}`,
+   reads its settled reading after 0, sends `PUT /api/session`
    `{"camera_settings": {"exposure_ms": 250}}` and reads until `focus.state` is `ended`,
-   **Then** it asserts that the run ended with `focus.ended` `failed`, `focus.error`
-   exactly `the finder camera's exposure or gain changed during the run` and `readings`
-   at least the settled reading's, and that `GET /api/session` then reads
+   then starts it again with `{}`, reads its settled reading after 0, sends
+   `PUT /api/session` `{"camera_settings": {"gain": 2}}` and reads until `focus.state` is
+   `ended`, **Then** it asserts that each run ended with `focus.ended` `failed`,
+   `focus.error` exactly `the finder camera's exposure or gain changed during the run`
+   and `readings` at least its settled reading's, and that `GET /api/session` then reads
    `camera_settings.exposure_ms` 250.
 
 ### User Story 3 - MCP and the README carry the finder camera's focus aid (Priority: P2)
@@ -522,19 +550,22 @@ nextest command runs it; during development,
 
 1. **Given** the bare console and the MCP rig, **When** a committed test calls, on the
    bare console, `set_finder_focus` with `{"on": true}`, and on the MCP rig
-   `get_finder_focus` with `{}`, `set_finder_focus` with `{}` and with
+   `get_finder_focus` with `{}`, `set_finder_focus` with `{}`, with `{"x": 1}` and with
    `{"on": true, "x": 1}`, `get_finder_focus` with `{"x": 1}`, then, once live,
    `set_finder_focus` with `{"on": true}` twice, `get_finder_focus` until its
-   `focus.median.readings` is 3, `set_finder_focus` with `{"on": false}`, and lists the
-   tools, **Then** it asserts that the bare console's call is a tool error with exactly
-   `the scope node is not connected`; that the rig's first read answers
-   `structuredContent` `{"focus": null}`; that the next three are tool errors with
-   exactly `on must be true or false`, `set_finder_focus takes on and nothing else` and
-   `get_finder_focus takes no arguments`; that the first start's `focus.state` is
-   `running` and the second is a tool error with exactly
-   `the finder camera's focus aid is already running`; that a settled reading is read;
-   that the stop's `focus.ended` is `stopped`; and that the list holds both tools,
-   `get_finder_focus` with `readOnlyHint` true.
+   `focus.median.readings` is 3, `set_finder_focus` with `{"on": false}`, then, after
+   `PUT /api/session` `{"camera_settings": {"gain": "auto"}}`, `set_finder_focus` with
+   `{"on": true}`, and lists the tools, **Then** it asserts that the bare console's call
+   is a tool error with exactly `the scope node is not connected`; that the rig's first
+   read answers `structuredContent` `{"focus": null}`; that the next four are tool errors
+   with exactly `on must be true or false`, `on must be true or false`,
+   `set_finder_focus takes on and nothing else` and `get_finder_focus takes no arguments`;
+   that the first start's `focus.state` is `running` and the second is a tool error with
+   exactly `the finder camera's focus aid is already running`; that a settled reading is
+   read; that the stop's `focus.ended` is `stopped`; that the start after the `PUT` is a
+   tool error with exactly
+   `the finder camera's exposure or gain is automatic: fix both on Setup`; and that the
+   list holds both tools, `get_finder_focus` with `readOnlyHint` true.
 2. **Given** the finder README, **When** a committed test reads
    `crates/finder/README.md`, **Then** it asserts that it still holds
    `The imaging camera has sixteen tools of its own`; that the line
@@ -566,29 +597,33 @@ development, `npm test -- FocusTool` and
 1. **Given** the page rig, **When** a committed test calls `finderStatus` for a running
    aid with no `last`, with a `reading` of 15 stars and three readings held, with a
    `reading` of 9 stars and two held, `settling`, `too_few_stars` with 2 stars of 3
-   detected, `too_few_stars` with 2 stars of 31 detected, and `far_out` of 21.2 px,
+   detected, `too_few_stars` with 2 stars of 31 detected, `far_out` of 21.2 px, and
+   `too_few_stars` with 2 stars of 5 detected,
    **Then** it asserts these texts exactly:
    `Waiting for the first finder camera frame`,
    `Median of the last 3 finder camera frames · 15 stars`,
    `2 of 3 finder camera frames since the last change · 9 stars`,
    `Settling after a change`,
    `No reading: 2 stars measured, and 5 are needed. Far out of focus the stars vanish: turn the focuser slowly until they show.`,
-   `No reading: 2 of the 31 stars detected could be measured, and 5 are needed: the rest are saturated, crowded or at the frame's edge.`
-   and `Far out of focus: stars about 21.20 px across`.
+   `No reading: 2 of the 31 stars detected could be measured, and 5 are needed: the rest are saturated, crowded or at the frame's edge.`,
+   `Far out of focus: stars about 21.20 px across` and
+   `No reading: 2 of the 5 stars detected could be measured, and 5 are needed: the rest are saturated, crowded or at the frame's edge.`
 2. **Given** the page rig with `FocusTool` and no imaging view, `GET` answering
    `{"focus": null}`, **When** a committed test presses
    `Start the finder camera's focus aid`, then renders a running aid with `median` 2.83
    of 3 readings, `last` a reading of 15 stars of 31 detected, `best` 2.7, `trend`
-   `better`, `found` true and `history` `[5.9, 6.1, null, 2.8, 2.83]`, and presses
-   `Stop the finder camera's focus aid`, **Then** it asserts that before the first read
+   `better`, `found` true and `history` `[5.9, 6.1, null, 2.8, 2.83]`, presses
+   `Stop the finder camera's focus aid`, and renders the block again over a running aid
+   whose `history` holds 61 readings, **Then** it asserts that before the first read
    the region `Focus a camera` shows `Reading the finder camera's focus aid.`; that the
    start is `POST /api/finder-camera/focus` with the header
    `Content-Type: application/json` and the body `{}`; that the region shows `2.83 px`,
    the status `Median of the last 3 finder camera frames · 15 stars`,
    `Stars detected 31`, `Best so far 2.70 px`, `Sharper than before the last change`,
    `Passed through focus and came back to the best so far.` and the image
-   `Focus readings of the last 5 finder camera frames` with 4 bars; and that after the
-   stop it shows `The finder camera's focus aid stopped.`
+   `Focus readings of the last 5 finder camera frames` with 4 bars; that after the stop
+   it shows `The finder camera's focus aid stopped.`; and that the block over 61 readings
+   shows the image `Focus readings of the last 60 finder camera frames` with 60 bars.
 3. **Given** the page rig with `FocusTool` over an aid ended `failed` with the error
    `no raw frame arrived within 15 s`, **When** a committed test renders it, **Then** it
    asserts that the alert reads exactly
@@ -598,8 +633,10 @@ development, `npm test -- FocusTool` and
    imaging view whose `focus` has `unit` `px`, **When** a committed test picks
    `Imaging camera` in the select `Camera`, **Then** it asserts that with no view the
    region shows `The imaging camera's focus aid shows here once the imaging camera is ready.`;
-   and that with the view the region holds 033's level-two heading `Focus` and its
-   button `Start focus aid`, and no button `Start the finder camera's focus aid`.
+   and that with the view the region holds 033's level-two heading `Focus`, its button
+   `Start focus aid` and its words
+   `A focus reading is the size of the stars in the focus region: smaller is sharper.`,
+   and no button `Start the finder camera's focus aid`.
 5. **Given** the page rig with `ToolsPage` and no imaging view, **When** a committed test
    renders it, **Then** it asserts that the region `Align the finder camera` comes
    before the region `Focus a camera` in the document, and that the select `Camera`
@@ -607,10 +644,10 @@ development, `npm test -- FocusTool` and
 6. **Given** the simulated console in a 412 by 915 viewport, day mode, **When** a
    committed Playwright test sends `PUT /api/session`
    `{"camera_settings": {"exposure_ms": 200, "gain": 1}}`, opens `/tools`, presses
-   `Start the finder camera's focus aid` in the region `Focus a camera`, takes a
-   full-page screenshot once a reading shows, turns night mode on with the switch
-   `Night mode: red and black`, takes another, picks `Imaging camera` in that region's
-   select `Camera`, picks `Finder camera` again, presses
+   `Start the finder camera's focus aid` in the region `Focus a camera` within 15 s,
+   takes a full-page screenshot once a reading shows, turns night mode on with the
+   switch `Night mode: red and black`, takes another, picks `Imaging camera` in that
+   region's select `Camera`, picks `Finder camera` again, presses
    `Stop the finder camera's focus aid`, and in its `finally` sends
    `DELETE /api/finder-camera/focus`, **Then** it asserts that the `PUT` is answered
    200; that within 20 s the region's status contains
@@ -683,34 +720,38 @@ development, `npm test -- FocusTool` and
   at c75a6e76. Nothing else in `crates/simulator` SHALL change (owner approval 1).
 - **FR-002**: `crates/finder` SHALL gain the module `finder_focus` with
   `pub fn measure(pixels: &[u8], width: u32, height: u32, centroids: &[Centroid]) -> Sample`,
-  033's `Sample`, in cedar's coordinates (pixel column c covers c ≤ x < c + 1). Walking
-  the centroids in order, it SHALL measure a star when its box, the square of side
-  2·`BOX_PX` + 1 (`BOX_PX` 16) centred on the pixel holding the centroid (column ⌊x⌋, row
-  ⌊y⌋), lies inside the frame and no other centroid lies within `BOX_PX` of it in both x
-  and y, and SHALL stop once `STARS_MEASURED` (15) are measured. A star's size SHALL be
-  its half-flux diameter, computed so: the background is the median of the box's 128
-  edge pixels, and the noise 1.4826 times their median absolute deviation, at least 0.5;
-  the star's own pixels are those more than `THRESHOLD_NOISE` (3) noise levels above the
-  background joined, by a side or a corner and through such pixels, to the start pixel,
-  the brightest of the 5 × 5 pixels centred on the box's centre (the first in reading
-  order, top row first and each row left to right, on a tie), and there are none when
-  the start pixel is not above that level; a star none of whose pixels are its own, or
-  one of whose own pixels is at `SATURATED` (250) or above, is not measured; the centre
-  is its own pixels' centroid weighted by their values less the background, each pixel
-  at its own centre; the circle round the centre has a radius `APERTURE_MARGIN_PX` (1)
-  more than the distance from the centre to its farthest own pixel's centre, and at most
-  `BOX_PX` − 1; every pixel of the box, less the background and with no threshold, is
-  split into `SUBPIXELS` × `SUBPIXELS` (5 × 5) equal squares, each carrying a 25th of
-  that value at its own centre, and the squares whose centres lie within the circle (at
-  a distance at most its radius) are kept; their total T, when not above 0, leaves the
-  star unmeasured; for each distinct distance d of a kept square from the centre, E(d) is
-  the sum of the kept squares at d or nearer, and the half-flux radius is where the
-  line through (0, 0) and the points (d, E(d)) in order of d first reaches T/2, read
-  linearly between the two points around it; the size is twice that radius. The reading
-  SHALL be the median of the sizes (of two middle values, their mean): fewer than 033's
-  `MIN_STARS` stars SHALL answer `TooFewStars` with the count, a median above 033's
-  `FAR_OUT_PX` `FarOut` with it and the count, and else `Reading` (owner decision 1;
-  owner approval 2).
+  033's `Sample`, its centroids in cedar's coordinates (pixel column c covers c ≤ x <
+  c + 1). Walking the centroids in order, it SHALL measure a star when its box, the
+  square of side 2·`BOX_PX` + 1 (`BOX_PX` 16) centred on the pixel holding the centroid
+  (column ⌊x⌋, row ⌊y⌋), lies inside the frame and no other centroid lies within
+  `BOX_PX` of it in both x and y, and SHALL stop once `STARS_MEASURED` (15) are
+  measured. A star's size SHALL be its half-flux diameter, computed so: the background
+  is the median of the box's 128 edge pixels (of the two middle values, their mean), and
+  the noise 1.4826 times their median absolute deviation, at least 0.5; the star's own
+  pixels are those more than `THRESHOLD_NOISE` (3) noise levels above the background
+  joined, by a side or a corner and through such pixels, to the start pixel, the
+  brightest of the 5 × 5 pixels centred on the box's centre (the first in reading order,
+  top row first and each row left to right, on a tie), and there are none when the start
+  pixel is not above that level; a star none of whose pixels are its own, or one of
+  whose own pixels is at `SATURATED` (250) or above, is not measured; offsets are taken
+  from the centre of the box's centre pixel: the box pixel at column ⌊x⌋ + i and row
+  ⌊y⌋ + j has its centre at (i, j) and its parts at (i − 0.5 + (a + 0.5)/5, j − 0.5 +
+  (b + 0.5)/5), a and b from 0 to 4; the centre is the star's own pixels' centroid
+  weighted by their values less the background, each pixel at its own centre; the circle
+  round the centre has a radius `APERTURE_MARGIN_PX` (1) more than the distance from the
+  centre to its farthest own pixel's centre, and at most `BOX_PX` − 1; every pixel of
+  the box, less the background and with no threshold, is split into `SUBPIXELS` ×
+  `SUBPIXELS` (5 × 5) equal squares, the parts, each carrying a 25th of that value at
+  its own centre, and the squares whose centres lie within the circle (at a distance at
+  most its radius) are kept; their total T, when not above 0, leaves the star
+  unmeasured; distances within 10⁻⁹ px of the one before are one distance; for each
+  distance d of a kept square from the centre, E(d) is the sum of the kept squares at d
+  or nearer, and the half-flux radius is where the line through (0, 0) and the points
+  (d, E(d)) in order of d first reaches T/2, read linearly between the two points around
+  it; the size is twice that radius. The reading SHALL be the median of the sizes (of
+  two middle values, their mean): fewer than 033's `MIN_STARS` stars SHALL answer
+  `TooFewStars` with the count, a median above 033's `FAR_OUT_PX` `FarOut` with it and
+  the count, and else `Reading` (owner decision 1; owner approval 2).
 - **FR-003**: Nothing else SHALL change in US1: no route, view, page or test of another
   story or spec, and 033's module is used, not changed.
 
@@ -725,8 +766,8 @@ development, `npm test -- FocusTool` and
   read), and refuse, in this order: a run already running, 409
   `the finder camera's focus aid is already running`; a console with no scope link or
   no raw-frame client on it, 409 `the scope node is not connected`; and session camera
-  settings (`GET /api/session`'s `camera_settings`, absent until set) whose
-  `exposure_ms` or `gain` is `auto`, 409
+  settings (`GET /api/session`'s `camera_settings`) whose `exposure_ms` or `gain` is
+  `auto`, or which are absent, the session's default being automatic, 409
   `the finder camera's exposure or gain is automatic: fix both on Setup`. Otherwise it
   SHALL start a run and answer 200 `{"focus": ...}`. `DELETE /api/finder-camera/focus`
   (no body, the same rule) SHALL stop a running run and answer 200 `{"focus": ...}`, the
@@ -896,10 +937,12 @@ US4:
   implements: [FR-013, FR-014, FR-015, FR-016, FR-017]
 ```
 
-Four stories, each under 60 % of 65,536 B (39,321 B) with room for the factory's
-overrun, as the probe's commits measure them (plan.md § Plan traps 2): the measure and
-the simulator's focuser; the run and its routes; MCP, the README and the glossary; the
-page. Each merges after the one before (`depends_on_merged`): US2's run calls US1's
-`measure` and its tests turn US1's focuser; US3's tools start and stop US2's run; the
-page reads US2's view, and its browser test needs US2's routes. Plain `depends_on`
-would order them without putting the earlier code in the later story's base.
+Four stories, each under 60 % of 65,536 B (39,321 B) as probe round 1's commits and its
+fold's measure them, the largest US2 at 53.7 %; at the factory's worst overrun seen,
+1.35 times, US1 and US2 would go over that line, still under 64 KiB (plan.md § Plan
+traps 2): the measure and the simulator's focuser; the run and its routes; MCP, the
+README and the glossary; the page. Each merges after the one before
+(`depends_on_merged`): US2's run calls US1's `measure` and its tests turn US1's focuser;
+US3's tools start and stop US2's run; the page reads US2's view, and its browser test
+needs US2's routes. Plain `depends_on` would order them without putting the earlier code
+in the later story's base.

@@ -6,13 +6,16 @@ description: "Task list for 051-tools-page-focuses-either-camera: The Tools Page
 
 **Prerequisites** (plan.md § Prerequisites, each with its evidence there):
 - every spec in `depends_on_landed` has landed on `main`: met at c75a6e76;
-- the owner decisions in spec.md are settled: not met, all ten are open;
-- every story has been probe-built from this text: not met; the probe of the draft and
-  of its fold built the stories before the text;
-- the page half has run once: met on the probe (`CI=1 npm run e2e`);
+- `main` is still as read: met, c75a6e76 at probe round 1's fold;
+- the owner decisions in spec.md are settled: not met, all ten are open; it waits for
+  the owner's answers at the flip ask;
+- every story has been probe-built from this text: met, probe round 1 on
+  `probe/051-r1` (0 blocking, 10 clarity defects, folded and proved on its code, tip
+  9ef38442);
+- the page half has run once: met on round 1 and its fold (`CI=1 npm run e2e`);
 - no operator-staged file is needed: met;
-- the real optic's night series: only if the owner picks decision 10 (a), before the
-  flip; under (b), recommended, after the landing.
+- the real optic's night series: waits for the owner's answer to decision 10; under
+  (a), before the flip; under (b), recommended, after the landing.
 
 **Rules for every story:**
 - Never edit an existing test, golden, fixture, `scripts/ci/`, `.github/`, `deny.toml`,
@@ -63,9 +66,10 @@ description: "Task list for 051-tools-page-focuses-either-camera: The Tools Page
   width, each as plan.md § Interfaces gives it (FR-001).
 - [ ] T003 [US1] Create `crates/finder/src/finder_focus.rs` with its module doc,
   `STARS_MEASURED`, `BOX_PX`, `SATURATED`, `THRESHOLD_NOISE`, `SUBPIXELS`,
-  `APERTURE_MARGIN_PX` and `measure`, each star's half-flux diameter summed in
-  sub-pixel circles as FR-002 gives it, saturation tested on the star's own pixels
-  (FR-002; plan.md § Interfaces), and add `pub mod finder_focus;` to
+  `APERTURE_MARGIN_PX` and `measure`, each star's half-flux diameter summed in sub-pixel
+  circles as FR-002 gives it, its offsets from the centre of the box's centre pixel and
+  distances within 10⁻⁹ px of the one before one distance, saturation tested on the
+  star's own pixels (FR-002; plan.md § Interfaces), and add `pub mod finder_focus;` to
   `crates/finder/src/lib.rs` after `pub mod ephemeris;`.
 - [ ] T004 [US1] Run the `lint` and `test` gates with every existing test unchanged and
   green, then commit the green story (FR-001 to FR-003; US1-S1, US1-S2, US1-S3, US1-S4,
@@ -79,14 +83,15 @@ description: "Task list for 051-tools-page-focuses-either-camera: The Tools Page
   rig of spec.md § User Scenarios, its session's `camera_settings` fixed at
   `{"exposure_ms": 500, "gain": 1}`, its
   `pub struct Rig { pub app: Router, pub sim: Simulator, pub node: Arc<SimNode> }` and
-  `pub fn rig() -> Rig`, helpers that send a request and read its JSON, wait until a
-  condition holds on `GET /api/finder-camera/focus` (every 100 ms, within 120 s of
-  paused time), wait for live, and read the settled reading after n, and one test for
-  each of US2-S1, US2-S2, US2-S3, US2-S4 and US2-S5 under
-  `#[tokio::test(start_paused = true)]`, and add `mod finder_focus_aid;` to
-  `crates/finder/tests/console/main.rs` in its alphabetical place. On US1 there is no
-  route `/api/finder-camera/focus`, so all five fail: the `GET` answers no
-  `{"focus": null}`, and the `POST`s' empty answers fail the JSON read (run).
+  `pub fn rig() -> Rig`, a rig like it whose session is never given camera settings
+  (US2-S4), helpers that send a request and read its JSON, wait until a condition holds
+  on `GET /api/finder-camera/focus` (every 100 ms, within 120 s of paused time), wait
+  for live, and read the settled reading after n, and one test for each of US2-S1,
+  US2-S2, US2-S3, US2-S4 and US2-S5 under `#[tokio::test(start_paused = true)]`, and add
+  `mod finder_focus_aid;` to `crates/finder/tests/console/main.rs` in its alphabetical
+  place. On US1 there is no route `/api/finder-camera/focus`, so all five fail: the
+  `GET` answers no `{"focus": null}`, and the `POST`s' empty answers fail the JSON read
+  (run).
 
 ### Implementation
 
@@ -153,7 +158,8 @@ description: "Task list for 051-tools-page-focuses-either-camera: The Tools Page
   each on a line of its own after `"**/tools.spec.ts"` (spec owner approval 6). Before
   T015 and T016, `FocusTool.test.tsx` fails to resolve `./FocusTool` and US4-S5 finds
   no region `Focus a camera` (run); US4-S6 times out on the button
-  `Start the finder camera's focus aid` (read, not run).
+  `Start the finder camera's focus aid` (run: it times out at the button within its
+  15 s and is reported there).
 
 ### Implementation
 

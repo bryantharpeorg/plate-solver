@@ -22,12 +22,12 @@ of exposure or gain ends it. The simulator's finder camera gains a focus error, 
 the gates can turn its focuser.
 
 Four stories: the measure and the simulator's focuser; the run, its routes and view;
-MCP, the README and the glossary; the page. Each is under 45 % of 65,536 B on the
-probe's code (§ Plan traps 2). One general rule removes every side effect the owner
-would otherwise approve one by one: **the finder camera's aid adds no rule of its own
-to 033's arithmetic, takes nothing from the live solve and changes no setting; it asks
-only that the exposure and gain be fixed, and ends when they change** (spec.md § Owner
-decisions).
+MCP, the README and the glossary; the page. Each is under 54 % of 65,536 B on probe
+round 1's code with its fold (§ Plan traps 2). One general rule removes every side
+effect the owner would otherwise approve one by one: **the finder camera's aid adds no
+rule of its own to 033's arithmetic, takes nothing from the live solve and changes no
+setting; it asks only that the exposure and gain be fixed, and ends when they change**
+(spec.md § Owner decisions).
 
 ## Technical Context
 
@@ -128,7 +128,8 @@ GLOSSARY.md                                     # US3: Focus reading, Focus aid,
 
 ## Interfaces
 
-The code as it ran on `probe/051` (tip 1efd1bc3). Bodies not given here are the
+The code as it ran on `probe/051` (tip 1efd1bc3), and as probe round 1 built it from
+this text on `probe/051-r1` (tip 9ef38442 with its fold). Bodies not given here are the
 builder's, to these words and the FRs.
 
 ### `crates/simulator` (US1)
@@ -210,28 +211,30 @@ pub const APERTURE_MARGIN_PX: f64 = 1.0;
 pub fn measure(pixels: &[u8], width: u32, height: u32, centroids: &[Centroid]) -> Sample;
 ```
 
-`Centroid` is `scope_link::proto::Centroid`; `Sample`, `MIN_STARS` and `FAR_OUT_PX`
-are 033's (`crates/finder/src/imaging/focus/aid.rs:33`,
+`Centroid` is `scope_link::proto::Centroid`; `Sample`, `MIN_STARS` and `FAR_OUT_PX` are
+033's (`crates/finder/src/imaging/focus/aid.rs:33`,
 `crates/finder/src/imaging/focus.rs:16`, `crates/finder/src/imaging/focus.rs:21`). One
 star's size, as FR-002 gives it, in coordinates relative to the centre of the box's
-centre pixel (column `x.floor()`, row `y.floor()`): the 128 edge pixels' median as
-background; 1.4826 times their median absolute deviation, at least 0.5, as noise; the
-start pixel the brightest of the 5 × 5 round the box's centre, the first in reading
-order on a tie (a strict `>` while walking the rows top to bottom and each row left to
-right), and nothing measured unless it is above background plus three noise levels; an
-8-connected fill from it over the pixels above that level, its own pixels; none
-measured with one of them at `SATURATED` or more; their centroid weighted by value less
-background; the circle's radius the farthest own pixel's centre's distance plus
-`APERTURE_MARGIN_PX`, at most `BOX_PX − 1`; every box pixel whose centre is within the
-radius plus 1 of the centre split into 5 × 5 parts at
+centre pixel (column `x.floor()`, row `y.floor()`; the box pixel `dx` columns and `dy`
+rows from it has its centre at (`dx`, `dy`)): the 128 edge pixels' median, of the two
+middle values their mean, as background; 1.4826 times their median absolute deviation,
+at least 0.5, as noise; the start pixel the brightest of the 5 × 5 round the box's
+centre, the first in reading order on a tie (a strict `>` while walking the rows top to
+bottom and each row left to right), and nothing measured unless it is above background
+plus three noise levels; an 8-connected fill from it over the pixels above that level,
+its own pixels; none measured with one of them at `SATURATED` or more; their centroid
+weighted by value less background; the circle's radius the farthest own pixel's centre's
+distance plus `APERTURE_MARGIN_PX`, at most `BOX_PX − 1`; every box pixel whose centre
+is within the radius plus 1 of the centre split into 5 × 5 parts at
 (`dx − 0.5 + (i + 0.5)/5`, `dy − 0.5 + (j + 0.5)/5`), each carrying its pixel's value
 less background over 25, kept when at most the radius from the centre; the parts sorted
-by distance (`total_cmp`), the parts at exactly equal distances summed together, the
-running sum from 0 at distance 0, and the half-flux radius where it first reaches half
-the kept parts' total, linearly between the distance before and the distance reached;
-twice that radius. The method is SEP's `flux_radius`, sub-pixel apertures read
-linearly, written fresh from that description; no source of SEP's is read or copied
-(Constitution V).
+by distance (`total_cmp`), each part within 10⁻⁹ px of the one before summed with it as
+one distance (in cedar's own coordinates float rounding splits such ties by a star's
+place in the frame), the running sum from 0 at distance 0, and the half-flux radius
+where it first reaches half the kept parts' total, linearly between the distance before
+and the distance reached; twice that radius. The method is SEP's `flux_radius`,
+sub-pixel apertures read linearly, written fresh from that description; no source of
+SEP's is read or copied (Constitution V).
 
 US2 adds:
 
@@ -322,10 +325,12 @@ impl FinderFocus {
 pub(crate) fn routes() -> Router<AppState>; // GET, POST and DELETE /api/finder-camera/focus
 ```
 
-`CameraSettings` is `crate::session::CameraSettings` (`crates/finder/src/session.rs:313`),
-automatic when its `exposure_ms` or `gain` has no `number()`. `start` refuses in FR-004's
-order. The view's fields after each sample are 033's `Aid` answers: `readings` is
-`Aid::readings()`, `last.state` is `Aid::phase()`'s `as_str()`, `median` is
+`CameraSettings` is `crate::session::CameraSettings`
+(`crates/finder/src/session.rs:313`), automatic when its `exposure_ms` or `gain` has no
+`number()`; `None`, settings never set, is the session's default, automatic
+(`crates/finder/src/session.rs:295`), and is refused as automatic. `start` refuses in
+FR-004's order. The view's fields after each sample are 033's `Aid` answers: `readings`
+is `Aid::readings()`, `last.state` is `Aid::phase()`'s `as_str()`, `median` is
 `Aid::median()`, `best`, `trend` (`Trend::as_str()`), `found` and `history` likewise;
 `last.detected` is the paired star frame's centroid count. The run's task holds a `Weak`
 of the `FinderFocus`; a stop aborts it. Its loop: take `link.raw()` (none ends `failed`,
@@ -543,7 +548,8 @@ after `<AlignmentBlock .../>` (`crates/finder/web/src/components/ToolsPage.tsx:2
 `simulate.spec.ts` and `tracking.spec.ts` set (`crates/finder/web/e2e/goto.spec.ts:126`,
 `crates/finder/web/e2e/simulate.spec.ts:284`), and its `finally` sends
 `DELETE /api/finder-camera/focus` through `page.request`, which answers at once whether
-or not a run runs, so a start that never took does not hold the test to its timeout.
+or not a run runs. It presses the start button with a 15 s bound, so a page without the
+block fails at the button, not at the 60 s test timeout (run on US3's page).
 
 ## What was run and what was read
 
@@ -606,16 +612,16 @@ listed in order.
   `render`'s stamp radius 9 at `PSF_SIGMA_PX` (equal pixels), fail nothing (§ Read from
   the diff).
 - **The measure, on data.**
-  - Drawn stars integrated over each pixel, noise-free, six at a time: at σ 1.2, 2.0
-    and 3.0, 1.027 to 1.060, 1.013 to 1.023 and 1.003 to 1.011 times 2·√(2 ln 2)·σ over
-    phases 0 to 0.5 of a pixel (the draft's: 0.950 to 1.119 at σ 1.2 and 2.0); at σ 0.5
-    and 0.8, 1.264, 1.492 and 1.576 px and 2.125, 2.112 and 1.988 px at phases 0, 0.25
-    and 0.5, a spread of 25 % and 7 % (the draft's: 0.647 to 1.414 px and 1.414 to
-    2.000 px, 119 % and 41 %); at σ 0.4, 0.938 to 1.639 times, a spread of 75 %. Fifteen
-    stars at random phases, the median over 20 frames: 1.21, 1.26, 1.34, 1.50, 1.70,
-    2.10, 2.54 and 2.97 px at σ 0.3, 0.35, 0.4, 0.5, 0.6, 0.8, 1.0 and 1.2, varying 0.3 %
-    to 6.1 % from frame to frame (with a margin of 2 px, which reads these noise-free
-    stars within 0.1 % of a margin of 1).
+  - Drawn stars integrated over each pixel, noise-free, six at a time, as the measure
+    rebuilt in probe round 1's fold reads them (below): at σ 1.2, 2.0 and 3.0, 1.024 to
+    1.060, 1.013 to 1.022 and 1.002 to 1.011 times 2·√(2 ln 2)·σ over phases 0 to 0.5 of
+    a pixel (the draft's: 0.950 to 1.119 at σ 1.2 and 2.0); at σ 0.5 and 0.8, 1.233,
+    1.493 and 1.577 px and 2.124, 2.111 and 1.984 px at phases 0, 0.25 and 0.5, a spread
+    of 28 % and 7 % (the draft's: 0.647 to 1.414 px and 1.414 to 2.000 px, 119 % and
+    41 %); at σ 0.4, 0.938 to 1.639 times, a spread of 75 %. Fifteen stars at random
+    phases, the mean over 20 frames of each frame's reading: 1.18, 1.29, 1.35, 1.52,
+    1.70, 2.11, 2.54 and 2.98 px at σ 0.3, 0.35, 0.4, 0.5, 0.6, 0.8, 1.0 and 1.2, varying
+    0.3 % to 7.7 % from frame to frame.
   - The review's model of this optic (40 mm f/4, 3.75 µm, 4.83″ a pixel, 8-bit, shot
     and read noise, 0.15 px of jitter, σ 0.33 px at focus, a fixed exposure giving 29
     detected stars at focus; 40 frames each, the circle's margin 1 px as in the code):
@@ -630,11 +636,11 @@ listed in order.
     3.7 %, 4.5 % and 5.9 % at focus. At one focus, half to four times the exposure moved
     the reading at most 3.5 %. The detected count at that exposure: 29.4, 28.6, 25.8,
     21.0, 16.4 and 8.8.
-  - The simulator's finder camera: 1.023, 1.023, 1.015, 1.007 and 0.997 times H(e) at
-    focus errors 0, 0.5, 1, 2 and 3 at 1000 ms with 15 stars each; at 200 ms 1.022 to
-    0.922 (e = 2: 0.990 against 1.007 at 1000 ms, 1.7 %); detected stars 142 at focus
-    error 0 and 1 and 65 at 3, at 1000 ms, and at most one from focus error 4 (200 and
-    1000 ms) or 5 (500 ms) on.
+  - The simulator's finder camera, as the rebuilt measure reads it: 1.021, 1.029, 1.016,
+    1.003 and 0.995 times H(e) at focus errors 0, 0.5, 1, 2 and 3 at 1000 ms with 15
+    stars each; at 200 ms 1.024 to 0.912 (e = 2: 0.980 against 1.003 at 1000 ms, 2.3 %);
+    detected stars 142 at focus error 0, 141 at 1 and 67 at 3, at 1000 ms, and at most
+    one from focus error 4 (200 and 1000 ms) or 5 (500 ms) on.
   - The owner's eight 3 s frames of 2026-11-09 from the earlier finder camera (outside
     the repository): 3.16 to 3.64 px with 15 stars each; that night's 1 s and 3 s logs
     measured 12.6 and 11.4, and 15.0 and 13.9, stars a frame on average; hot clusters of
@@ -654,6 +660,63 @@ listed in order.
     block are below the detection's line; at σ 0.30 px, 0.24 px; from σ 0.40 px on,
     never.
 
+**Run, probe round 1 from this text** (2026-11-26), on `probe/051-r1`, cut from
+9b139bac (this trio over c75a6e76), each story built from spec.md, plan.md and tasks.md
+alone:
+
+- **The commits.** a946cd3f and 8606f067 (US1's tests and story), af5ff92f and a65202a5
+  (US2's), 531600ac and e9f16660 (US3's), 062e3085 and 77491a47 (US4's, `dist`
+  rebuilt); each story wrote only its `writes`.
+- **Each story's tests fail before it**, as T001, T005, T009 and T013 say; US4-S6, then
+  without its 15 s bound, waited at the button for the whole 60 s test timeout.
+- **The gates** on 77491a47, every one passing: nextest 1,525 of 1,525 (the 1,512
+  existing and the stories' 13), Vitest 605 of 605, `CI=1 npm run e2e` 34 of 34 and the
+  dist check clean; each story's focused commands three times green.
+- **The defects**: 0 blocking and 10 clarity: FR-002's coordinates and exact ties, which
+  made a reading depend on a star's place in the frame (spec.md § Clarifications);
+  claims no scenario tested, in US1-S2, US1-S4, US2-S4, US2-S5, US3-S1, US4-S1, US4-S2
+  and US4-S4; this plan's § Read from the diff left incomplete; and the words of US4-S6,
+  T014 and US1-S3. Each is folded below.
+
+**Run, the fold of probe round 1** (2026-11-26), on `probe/051-r1` over 77491a47:
+
+- **The commits.** 1a87ce8a (US1: `measure`'s offsets from the box's centre pixel and
+  ties within 10⁻⁹ px; US1-S1's six sizes and checkerboard, US1-S2's star at column 640
+  and pixels 8 right and 16 below, US1-S4's NaN and US1-S6's bound of 1.32), 9b691e75
+  (US2-S4's rig without camera settings and its run still running 10 s into silence,
+  US2-S5's change of gain), d577c82d (US3-S1's `{"x": 1}` and automatic gain) and
+  9ef38442 (US4-S1's 2 of 5 detected, US4-S2's 60 bars, US4-S4's paragraph and US4-S6's
+  15 s at the button).
+- **The measure rebuilt.** US1-S6 reads 1.2332, 1.4928 and 1.5766 px at σ 0.5 and
+  2.1242, 2.1110 and 1.9839 px at σ 0.8 at phases 0, 0.25 and 0.5, spreads 1.278 and
+  1.071, as an independent build of FR-002 does; cedar's coordinates with ties within
+  10⁻⁹ px read the same. The spreads at σ 0.5 and 0.8 of the broken builds: whole pixels
+  5.838 and 1.465; the crossing at the nearest part 1.360 and 1.046; ties read part by
+  part 1.360 and 1.071; ties joined at phase 0 and split at 0.25 and 0.5, 1.395 and
+  1.056; cedar's coordinates with exact ties 1.284 and 1.077. So US1-S6's bound at σ 0.5
+  is 1.32, about 3 % from 1.278 and from 1.360, and at σ 0.8 stays 1.1, which only whole
+  pixels exceed. US1-S1's worst reading is 6.0 % of its 8 % (σ 1.2, phase 0.5); its six
+  sizes read 1.3 % of 3 % from their oracle and its checkerboard 0.08 % of 1 % from the
+  plain frame (the lower middle edge value +1.6 %, the upper −2.0 %); US1-S3's discs
+  −1.0 %; US1-S4's reading at e = 2 and 200 ms, 2.3 % of 4 %.
+- **Mutations, each run against its story's tests, each failing a new step.** The six
+  sizes' upper or lower middle, and the box edge's lower or upper middle, fail US1-S1;
+  the edge mean, a margin of 2 px, the circle always 15 px and the box check off by one
+  fail US1-S2; the setter taking NaN, and a frame taken before the render, fail US1-S4;
+  whole pixels, the nearest part and both broken tie rules fail US1-S6; absent settings
+  taken as fixed, and `RAW_WAIT` 5 s, fail US2-S4; a change of gain not checked fails
+  US2-S5; `set_finder_focus` ignoring the session's settings, and its checks swapped,
+  fail US3-S1; the hint at five detected, 600 bars and a look-alike imaging block fail
+  US4-S1, US4-S2 and US4-S4.
+- **US4-S6 on US3's page** (that `dist` built into the release binary): it fails at the
+  button at its 15 s bound and is reported there.
+- **The gates** on 9ef38442, every one passing: `cargo fmt --check`, clippy with
+  `-D warnings`, both `cargo doc` runs, nextest of the whole workspace (1,525 of 1,525),
+  the doc tests, `npm ci --offline`, the typecheck, Prettier, Vitest (605 of 605), the
+  build, the dist check (clean) and `CI=1 npm run e2e` (34 of 34); and each story's
+  focused commands, US2's and US3's three times before their commits.
+- **The sizes**: § Plan traps 2.
+
 **Read, not run:**
 
 - a scope node built before 025 answering `UNIMPLEMENTED`, any other error of the raw
@@ -671,17 +734,33 @@ listed in order.
   hotspot dropping the link;
 - an optic moving the focal plane, so that the frames after it are out of focus;
 - every claim of § Outside the factory, and the real finder camera behind the SV165 at
-  night;
-- US4-S6 timing out on US3's source.
+  night.
 
 ## Read from the diff, not from a test
 
-- FR-002's start pixel, the first in reading order on a tie: taking the last fails no
-  scenario, since no drawn or simulated star ties there. The judge reads it in the diff.
+Each passes every scenario built the other way (probe round 1 and its fold, § What was
+run); the judge reads it in the diff.
+
+- FR-002's start pixel, the first in reading order on a tie: no drawn or simulated star
+  ties there.
 - FR-002's rule that a star whose start pixel is not above the threshold is not
   measured, and the noise floor of 0.5: every star a scenario draws has such a pixel,
   and the drawn frames have no noise.
-- FR-001's stamp radius at `PSF_SIGMA_PX`: a radius of 9 draws the same pixels.
+- FR-002's boundaries: at most `BOX_PX` in the isolation, more than the level for a
+  star's own pixels, `SATURATED` or above, and reaching T/2 at the half-flux crossing.
+- FR-002's offsets and ties: cedar's own coordinates with exact ties read US1-S6's
+  spread at σ 0.5 as 1.284 against the rule's 1.278, too close for a bound (ties read
+  part by part, and the nearest part, read 1.360 and fail it).
+- FR-001's stamp radius: 9 at `PSF_SIGMA_PX` draws the same pixels, and a radius held at
+  8 above it differs only under US1-S5's noise; and `render` calling
+  `render_with_sigma`, since c75a6e76's body kept draws the same pixels.
+- FR-005's pairing: a raw frame measured at the latest kept star frame, or
+  `last.detected` taken from it, since the latest is the raw frame's own in every
+  scenario; and trap 10's watching while the raw frame is on its way.
+- FR-004's order of a running aid before a missing node: no scenario has a run whose
+  link is gone.
+- FR-015's `FocusBlock` itself rather than a copy of its heading, button and words
+  (US4-S4).
 - The README's rows and section and the glossary's entries (FR-011), beyond US3-S2's
   sentences, paragraph and headings.
 - FR-007's mappings of `UNIMPLEMENTED`, another error, a wrong length, the link dropped
@@ -741,7 +820,7 @@ recommendation. Below them:
 | The run's lifetime | a task holding a `Weak`, aborted by a stop | a task holding the state (a stopped run's task keeps it alive) |
 | The defocused simulator | `render_with_sigma`, called by `render` at 1.2 px | a new argument to `render` (an edit of an existing test's call) |
 | The display's history | the page's own bars, 033's drawing with the finder camera's label | importing `FocusBlock`'s `History` (an edit of `FocusBlock.tsx`, FR-017) |
-| The story cut | four stories, US2 the largest at 44.6 % (§ Plan traps 2) | three, with MCP in the run's story (about 72 % at the overrun) |
+| The story cut | four stories, US2 the largest at 53.7 % (§ Plan traps 2) | three, with MCP in the run's story (about 72 % at the overrun) |
 
 ## User Story 1 - The measure and the simulator's focuser
 
@@ -782,20 +861,25 @@ rebuilt `dist`.
 
 1. **The earlier specs have landed:** every spec in `depends_on_landed`. Met: each is
    on `main` at c75a6e76.
-2. **`main` is still as read.** Every citation here was read at c75a6e76. If `main`
-   moves in a file § Project Structure names, or in a test § Shapes names, re-read them
-   and re-run the validator.
+2. **`main` is still as read.** Every citation here was read at c75a6e76. Met: `main`
+   is c75a6e76 at probe round 1's fold. If `main` moves in a file § Project Structure
+   names, or in a test § Shapes names, re-read them and re-run the validator.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
-   decisions, § Owner approvals). Not met: all ten are open.
+   decisions, § Owner approvals). Not met: all ten are open; it waits for the owner's
+   answers at the flip ask.
 4. **Probe builds.** A probe round builds the stories from this text alone, and its
-   defects are folded. Not met: the probe of this draft and of its fold built the
-   stories before the text, and the text was written from it.
-5. **The page half has run once.** Met on the probe (§ What was run and what was read).
+   defects are folded. Met: round 1 built the four stories from this text alone on
+   `probe/051-r1` (tip 77491a47, every scenario and gate passing, 0 blocking and 10
+   clarity defects), and its fold proved each change on that code (tip 9ef38442, every
+   gate passing; § What was run and what was read).
+5. **The page half has run once.** Met: `CI=1 npm run e2e` 34 of 34 on round 1's tip
+   and on its fold's (§ What was run and what was read).
 6. **No operator-staged files are needed.** Met: no story reads a file outside the
    repository; the probe's measurements of the owner's frames are not a story.
-7. **The real optic's night series, only if the owner picks decision 10 (a).** Then
-   § Outside the factory step 1 comes before the flip, and its results are folded here;
-   under (b), recommended, it is the first step after the landing.
+7. **The real optic's night series, only if the owner picks decision 10 (a).** It waits
+   for that answer: under (a), § Outside the factory step 1 comes before the flip, and
+   its results are folded here; under (b), recommended, it is the first step after the
+   landing.
 
 ## Outside the factory
 
@@ -855,13 +939,16 @@ They bind every story.
 2. **One evidence budget.** *Check:* each story's whole diff stays under 60 % of
    65,536 B (39,321 B), measured with
    `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c` from the previous
-   story's tip, on code built from the trio. The probe's code at 1efd1bc3, each story's
-   files diffed alone (the shared `finder_focus.rs` cut at US1's measure, and
-   `console/main.rs` one line each): US1 25,514 B (38.9 %), US2 29,251 B (44.6 %), US3
-   17,767 B (27.1 %) and US4 21,205 B (32.4 %), `dist` about 700 B more. At the 1.35
-   times a factory build has run over its probe on earlier specs: US1 about 34,400 B
-   (52.6 %), US2 about 39,500 B (60.3 %, at the line), US3 about 24,000 B (36.6 %) and
-   US4 about 28,600 B (43.7 %), all far under the 128 KiB refusal.
+   story's tip, on code built from the trio. Probe round 1, built from this text (US1
+   from 9b139bac, each later story from the story before), with each of its fold's
+   commits added to its story: US1 26,350 + 7,627 = 33,977 B (51.8 %), US2 29,952 +
+   5,255 = 35,207 B (53.7 %), US3 19,362 + 1,992 = 21,354 B (32.6 %) and US4 22,161 +
+   3,172 = 25,333 B (38.7 %), `dist` 697 B more. A fold commit counts its context and
+   removed lines; written once, the fold adds about 1,600, 700, 660 and 770 B. At the
+   1.35 times a factory build has run over its probe on earlier specs: US1 about 45,900 B
+   (70.0 %), US2 about 47,500 B (72.5 %), US3 about 28,800 B (44.0 %) and US4 about
+   34,200 B (52.2 %): US1 and US2 over the 60 % line, every story under 64 KiB and far
+   under the 128 KiB refusal.
 3. **A spec fixed mid-epic needs a relaunch.** *Check:* no builder edits
    `specs/051-tools-page-focuses-either-camera/` or `.specify/`.
 4. **An earlier story's test file is an existing test.** *Check:* US2 to US4 write no
@@ -921,22 +1008,22 @@ They bind every story.
 |---|---|
 | The real objective, an achromat, and the real sky differ from the review's model, on which the scatter and settle figures rest. | Owner decision 10 names the night series and the results that would change the design; the code depends on no number of this optic. |
 | At its sharpest, a faint star of under about σ 0.4 px is taken by the node's detection for a hot pixel (cedar-detect's own warning, `reference-solutions/cedar-detect/src/algorithm.rs:89`; the rule at `reference-solutions/cedar-detect/src/algorithm.rs:1178` holds within 0.20 px of a pixel's centre at σ 0.33 px, two fifths of the phases). | The detected count is shown beside the reading; the README and § Outside the factory step 6 say to come back to the highest count within a tenth of the best. The rule's arithmetic run on drawn stars; its effect on the node's detection, read, not run. |
-| The sub-pixel measure spreads each pixel's light evenly over it, so a star much under a pixel reads about 1.2 px and its phase still moves it (25 % at σ 0.5 px between phases 0 and 0.5). | The median of 15 stars at their own phases rises with σ from 0.3 px (§ What was run); US1-S6 bounds the spread at σ 0.5 and 0.8. |
+| The sub-pixel measure spreads each pixel's light evenly over it, so a star much under a pixel reads about 1.2 px and its phase still moves it (28 % at σ 0.5 px between phases 0 and 0.5). | The median of 15 stars at their own phases rises with σ from 0.3 px (§ What was run); US1-S6 bounds the spread at σ 0.5 and 0.8. |
 | Hot pixels the node takes for stars read about 2 px (the earlier camera's dark frames: 2.02 to 2.46 px), close to a focused star. | The median of 15 is held by the stars of a field rich in them; the node's detection (048) and its hot-pixel setting are the live solve's own; the real ASI120MM's frames are read, not run. |
 | The simulator's noise repeats every second frame: a frame's stream starts at the seed plus the frame number times SplitMix64's step, and each draw adds that step (`crates/simulator/src/noise.rs:13`, `crates/simulator/src/noise.rs:19`), so frames n and n + 2 share their noise one draw apart (the review: 16,381 of 16,384 pixels equal). It hides frame-to-frame scatter from US2's tests. | The scatter is measured on the model instead (§ What was run); a follow-up spec fixes the simulator's noise, out of 051's scope (spec.md § Assumptions). |
 | A camera whose frames report a measured exposure or gain, as the rpicam path's metadata does (`crates/scope-node/src/rpicam/metadata.rs:29`, `crates/scope-node/src/rpicam/metadata.rs:30`), could move a hair at fixed settings and end a run. | The finder camera is the ASI120MM through INDI (045), whose frames carry the exposure asked and the gain sent; read, not run. |
 | Raw frames load the scope link beside the star frames. | The console runs beside the node on the Pi (§ Target Platform); one raw frame per reading, the node's own pixels; the link's other frames go on (run on the simulator; the real link's share, read). |
-| A story grows past 60 % in the factory. | The largest measures 44.6 % on the probe's code and about 60.3 % at the worst overrun seen (§ Plan traps 2); the judge refuses only at 128 KiB. |
+| A story grows past 60 % in the factory. | The largest measures 53.7 % on probe round 1's code with its fold, and US1 and US2 about 70 % and 72.5 % at the worst overrun seen (§ Plan traps 2); the judge refuses only at 128 KiB. |
 | The finder camera's raw frames are 8-bit (045), so bright stars saturate early. | Stars with a saturated pixel of their own are left out (FR-002); the page says so with the count, and a shorter fixed exposure gives more unsaturated ones. |
 
 ## Refinement Record
 
 Drafted on 2026-11-26 by the plate-solver operator seat's spec session against `main` at
 c75a6e76, from a probe of that day on `probe/051` (a trial build of the four stories
-with every scenario's test and both gates passing, each story's tests failing before
-it, the measure's candidates measured on the simulator and on the owner's frames, ASTAP
-on the same frames, 033's arithmetic replayed on the owner's logs, and the page measured
-in a browser by day and by night), and a reading of 033's reading, arithmetic and block,
+with every scenario's test and both gates passing, each story's tests failing before it,
+the measure's candidates measured on the simulator and on the owner's frames, ASTAP on
+the same frames, 033's arithmetic replayed on the owner's logs, and the page measured in
+a browser by day and by night), and a reading of 033's reading, arithmetic and block,
 025's raw frames, the node's detection and star frames, 050's Tools page, the
 simulator's finder camera, MCP's tools, the constitution, the glossary and the ADRs.
 Folded the same day through a cynical review's round 1 (a blocker, six majors, fourteen
@@ -944,9 +1031,12 @@ minors), with the probe extended to 1efd1bc3: a sub-pixel measure measured on dr
 frames at three phases, on the review's model of this optic, on the simulator and on the
 owner's frames; one exposure a run; the detected count; a tenth owner decision; and
 every gate, the fails-before and the mutations run again (§ What was run and what was
-read). Writes come from the task text. Shared writes name the spec story that last
-wrote the same file on `main`; within the spec, each story's files written by an earlier
-one are ordered by `depends_on_merged`.
+read). Probe round 1 then built the four stories from this text alone on `probe/051-r1`
+(tip 77491a47: 0 blocking, 10 clarity defects), and its fold added four commits there
+(tip 9ef38442): FR-002's offsets and ties, steps for the claims no scenario held, § Read
+from the diff completed, and every gate run again. Writes come from the task text.
+Shared writes name the spec story that last wrote the same file on `main`; within the
+spec, each story's files written by an earlier one are ordered by `depends_on_merged`.
 
 The ten owner decisions of spec.md are open; their questions, options and evidence are
 spec.md § Owner decisions, and this record is written to their recommendations. Its
@@ -964,22 +1054,22 @@ stories:
       - path: crates/finder/tests/console/finder_focus_measure.rs
         status: new
         disposition: add
-        assertion: "drawn 640 x 480 frames, background 10, each pixel the integral over its square of 200 exp(-r^2/2 sigma^2), six stars at the six places at phase 0, 0.25 and 0.5, sigma 1.2, 2.0 and 3.0, measured with their six centroids: each Sample::Reading with stars 6 and px within 8 % of 2 sqrt(2 ln 2) sigma"
+        assertion: "drawn 640 x 480 frames, background 10, each pixel the integral over its square of 200 exp(-r^2/2 sigma^2), six stars at the six places at phase 0, 0.25 and 0.5, sigma 1.2, 2.0 and 3.0, measured with their six centroids: each Sample::Reading with stars 6 and px within 8 % of 2 sqrt(2 ln 2) sigma; six stars at the six places of sigma 1.2, 1.6, 2.0, 2.4, 2.8 and 3.2: Reading stars 6, px within 3 % of the mean of 2 sqrt(2 ln 2) 2.0 and 2 sqrt(2 ln 2) 2.4; the sigma 3.0 frame at phase 0 with 2 added to each pixel whose column and row sum to an odd number (each box edge 64 pixels of 10 and 64 of 12): Reading stars 6, px within 1 % of the plain frame's"
         decision: "spec.md:US1-S1"
       - path: crates/finder/tests/console/finder_focus_measure.rs
         status: new
         disposition: add
-        assertion: "a drawn sigma 2.0 frame of the six places, a star at (10.5, 240.5) over the edge, two at (400.5, 400.5) and (410.5, 405.5), and one at (300.5, 420.5) of density 250 reaching 255, each with its centroid: Sample::Reading stars 6; the same frame with a pixel of 200 ten pixels right of and a pixel of 255 ten pixels below each of the six stars, no centroid: Reading stars 6, px equal to the first within 1e-9"
+        assertion: "a drawn sigma 2.0 frame of the six places, a star at (10.5, 240.5) over the edge, a star at (624.5, 240.5) whose box reaches column 640, two at (400.5, 400.5) and (410.5, 405.5), and one at (300.5, 420.5) of density 250 reaching 255, each with its centroid: Sample::Reading stars 6; the same frame with a pixel of 200 ten pixels right of and a pixel of 255 ten pixels below each of the six stars, and with a pixel of 200 eight pixels right of and a pixel of 255 sixteen pixels below each, no centroid: each Reading stars 6, px equal to the first within 1e-9"
         decision: "spec.md:US1-S2"
       - path: crates/finder/tests/console/finder_focus_measure.rs
         status: new
         disposition: add
-        assertion: "four drawn stars at the first four places: Sample::TooFewStars stars 4; a frame of background 10 alone and no centroid: TooFewStars stars 0; five uniform discs of level 60 and radius 15 px at the first five places: Sample::FarOut stars 5, px within 5 % of 15 sqrt 2"
+        assertion: "four drawn stars of sigma 2.0 at the first four places: Sample::TooFewStars stars 4; a frame of background 10 alone and no centroid: TooFewStars stars 0; five uniform discs at the first five places, each pixel whose centre lies within 15 px of the place at level 60: Sample::FarOut stars 5, px within 5 % of 15 sqrt 2"
         decision: "spec.md:US1-S3"
       - path: crates/finder/tests/console/finder_focus_measure.rs
         status: new
         disposition: add
-        assertion: "the simulator on DB, Site::default, VirtualClock at START, pushed to alt 50 az 120: finder_focus_error 0, then each e set reads back; render for its stars at 1000 ms gain 1 seed 13 frame 0 is 1584128 bytes with FNV-1a 64 0xb1d308b97a09eb40, c75a6e76's own, and render_with_sigma at PSF_SIGMA_PX the same bytes; SimCamera frames at 1000 ms gain 1 measured at the node's detect with DetectSettings::cedar: e 0, 1, 2, 3 each Reading stars 15 px within 10 % of H(e), each larger than the one before; e 2 at 200 ms within 4 % of e 2 at 1000 ms; e -3 px within 5 % of e 3's; e 8 TooFewStars under 5 stars"
+        assertion: "the simulator on DB, Site::default, VirtualClock at START, pushed to alt 50 az 120: finder_focus_error 0, then each e set reads back; render, before any frame is taken, of the 147 stars field_stars(1000.0, 1.0) gives at START, at 1000 ms gain 1 seed 13 frame 0, is 1584128 bytes with FNV-1a 64 0xb1d308b97a09eb40, c75a6e76's own, and render_with_sigma at PSF_SIGMA_PX the same bytes; SimCamera frames at 1000 ms gain 1 measured at the node's detect with DetectSettings::cedar: e 0, 1, 2, 3 each Reading stars 15 px within 10 % of H(e), each larger than the one before; e 2 at 200 ms within 4 % of e 2 at 1000 ms; e -3 px within 5 % of e 3's; e 8 TooFewStars under 5 stars; set_finder_focus_error(f64::NAN) panics"
         decision: "spec.md:US1-S4"
       - path: crates/finder/tests/console/finder_focus_measure.rs
         status: new
@@ -989,7 +1079,7 @@ stories:
       - path: crates/finder/tests/console/finder_focus_measure.rs
         status: new
         disposition: add
-        assertion: "drawn frames of six stars at the six places at phase 0, 0.25 and 0.5, sigma 0.5, 0.8 and 1.2, each Reading stars 6: at each phase sigma 0.8 at least 1.1 times sigma 0.5 and sigma 1.2 at least 1.1 times sigma 0.8; the largest of the three phases at most 1.3 times the smallest at sigma 0.5 and at most 1.1 times at sigma 0.8"
+        assertion: "drawn frames of six stars at the six places at phase 0, 0.25 and 0.5, sigma 0.5, 0.8 and 1.2, each Reading stars 6: at each phase sigma 0.8 at least 1.1 times sigma 0.5 and sigma 1.2 at least 1.1 times sigma 0.8; the largest of the three phases at most 1.32 times the smallest at sigma 0.5 and at most 1.1 times at sigma 0.8"
         decision: "spec.md:US1-S6"
       - path: crates/finder/tests/motion/tracking/pi_loop.rs
         status: existing
@@ -1068,12 +1158,12 @@ stories:
       - path: crates/finder/tests/console/finder_focus_aid.rs
         status: new
         disposition: add
-        assertion: "POST {} to the bare console 409 the scope node is not connected; to the live rig a foreign write (Host localhost on port 8080, Origin http://elsewhere.example) of POST and of DELETE each 403 writes require the console's own origin and an allowed host; GET 200 focus null; x 1 400; {} as text/plain 415; PUT /api/session exposure_ms auto 200; {} 409 the finder camera's exposure or gain is automatic: fix both on Setup; PUT exposure_ms 500 200; {} 200; {} again 409 the finder camera's focus aid is already running; the node's frames stopped: the run ends with focus.ended failed and focus.error exactly no raw frame arrived within 15 s"
+        assertion: "POST {} to the bare console 409 the scope node is not connected; to a live focus rig whose session was never given camera settings 409 the finder camera's exposure or gain is automatic: fix both on Setup; to the live rig a foreign write (Host localhost on port 8080, Origin http://elsewhere.example) of POST and of DELETE each 403 writes require the console's own origin and an allowed host; GET 200 focus null; x 1 400; {} as text/plain 415; PUT /api/session exposure_ms auto 200; {} 409 the finder camera's exposure or gain is automatic: fix both on Setup; PUT exposure_ms 500 200; {} 200; {} again 409 the finder camera's focus aid is already running; settled after 0, the node's frames stopped: 10 s later focus.state still running, then the run ends with focus.ended failed and focus.error exactly no raw frame arrived within 15 s"
         decision: "spec.md:US2-S4"
       - path: crates/finder/tests/console/finder_focus_aid.rs
         status: new
         disposition: add
-        assertion: "the focus rig, live, started and settled: PUT /api/session camera_settings exposure_ms 250, read until ended: focus.ended failed, focus.error exactly the finder camera's exposure or gain changed during the run, readings at least the settled reading's; GET /api/session camera_settings.exposure_ms 250"
+        assertion: "the focus rig, live, started and settled: PUT /api/session camera_settings exposure_ms 250, read until ended; started again and settled: PUT camera_settings gain 2, read until ended: each run focus.ended failed, focus.error exactly the finder camera's exposure or gain changed during the run, readings at least its settled reading's; GET /api/session camera_settings.exposure_ms 250"
         decision: "spec.md:US2-S5"
       - path: crates/finder/tests/console/imaging_focus_aid.rs
         status: existing
@@ -1125,7 +1215,7 @@ stories:
       - path: crates/finder/tests/mcp/finder_focus.rs
         status: new
         disposition: add
-        assertion: "the bare console: set_finder_focus on true errs exactly the scope node is not connected; the MCP rig, its camera_settings exposure_ms 500 gain 1: get_finder_focus {} structuredContent focus null; set_finder_focus {} errs on must be true or false, on true with x 1 errs set_finder_focus takes on and nothing else, get_finder_focus x 1 errs get_finder_focus takes no arguments; once live on true focus.state running, again errs the finder camera's focus aid is already running; get_finder_focus until focus.median.readings 3; on false focus.ended stopped; tools/list holds both, get_finder_focus readOnlyHint true"
+        assertion: "the bare console: set_finder_focus on true errs exactly the scope node is not connected; the MCP rig, its camera_settings exposure_ms 500 gain 1: get_finder_focus {} structuredContent focus null; set_finder_focus {} and x 1 each err on must be true or false, on true with x 1 errs set_finder_focus takes on and nothing else, get_finder_focus x 1 errs get_finder_focus takes no arguments; once live on true focus.state running, again errs the finder camera's focus aid is already running; get_finder_focus until focus.median.readings 3; on false focus.ended stopped; after PUT /api/session camera_settings gain auto, on true errs the finder camera's exposure or gain is automatic: fix both on Setup; tools/list holds both, get_finder_focus readOnlyHint true"
         decision: "spec.md:US3-S1"
       - path: crates/finder/tests/mcp/finder_focus.rs
         status: new
@@ -1187,12 +1277,12 @@ stories:
       - path: crates/finder/web/src/components/FocusTool.test.tsx
         status: new
         disposition: add
-        assertion: "finderStatus gives exactly: no last, Waiting for the first finder camera frame; a reading of 15 stars with 3 held, Median of the last 3 finder camera frames · 15 stars; 9 stars with 2 held, 2 of 3 finder camera frames since the last change · 9 stars; settling, Settling after a change; too_few_stars with 2 of 3 detected, No reading: 2 stars measured, and 5 are needed. Far out of focus the stars vanish: turn the focuser slowly until they show.; too_few_stars with 2 of 31 detected, No reading: 2 of the 31 stars detected could be measured, and 5 are needed: the rest are saturated, crowded or at the frame's edge.; far_out of 21.2, Far out of focus: stars about 21.20 px across"
+        assertion: "finderStatus gives exactly: no last, Waiting for the first finder camera frame; a reading of 15 stars with 3 held, Median of the last 3 finder camera frames · 15 stars; 9 stars with 2 held, 2 of 3 finder camera frames since the last change · 9 stars; settling, Settling after a change; too_few_stars with 2 of 3 detected, No reading: 2 stars measured, and 5 are needed. Far out of focus the stars vanish: turn the focuser slowly until they show.; too_few_stars with 2 of 31 detected, No reading: 2 of the 31 stars detected could be measured, and 5 are needed: the rest are saturated, crowded or at the frame's edge.; far_out of 21.2, Far out of focus: stars about 21.20 px across; too_few_stars with 2 of 5 detected, No reading: 2 of the 5 stars detected could be measured, and 5 are needed: the rest are saturated, crowded or at the frame's edge."
         decision: "spec.md:US4-S1"
       - path: crates/finder/web/src/components/FocusTool.test.tsx
         status: new
         disposition: add
-        assertion: "FocusTool with no imaging view and GET focus null: before the first read Reading the finder camera's focus aid.; Start the finder camera's focus aid sends POST /api/finder-camera/focus with Content-Type application/json and body {}; a running aid of median 2.83 of 3, last 15 stars of 31 detected, best 2.7, trend better, found true, history [5.9, 6.1, null, 2.8, 2.83] shows 2.83 px, the status Median of the last 3 finder camera frames · 15 stars, Stars detected 31, Best so far 2.70 px, Sharper than before the last change, Passed through focus and came back to the best so far. and the image Focus readings of the last 5 finder camera frames with 4 bars; after Stop the finder camera's focus aid, The finder camera's focus aid stopped."
+        assertion: "FocusTool with no imaging view and GET focus null: before the first read Reading the finder camera's focus aid.; Start the finder camera's focus aid sends POST /api/finder-camera/focus with Content-Type application/json and body {}; a running aid of median 2.83 of 3, last 15 stars of 31 detected, best 2.7, trend better, found true, history [5.9, 6.1, null, 2.8, 2.83] shows 2.83 px, the status Median of the last 3 finder camera frames · 15 stars, Stars detected 31, Best so far 2.70 px, Sharper than before the last change, Passed through focus and came back to the best so far. and the image Focus readings of the last 5 finder camera frames with 4 bars; after Stop the finder camera's focus aid, The finder camera's focus aid stopped.; rendered again over a running aid of 61 readings in history, the image Focus readings of the last 60 finder camera frames with 60 bars"
         decision: "spec.md:US4-S2"
       - path: crates/finder/web/src/components/FocusTool.test.tsx
         status: new
@@ -1202,7 +1292,7 @@ stories:
       - path: crates/finder/web/src/components/FocusTool.test.tsx
         status: new
         disposition: add
-        assertion: "Imaging camera picked in the select Camera: with no view, The imaging camera's focus aid shows here once the imaging camera is ready.; with a view whose focus has unit px, 033's level-two heading Focus and its button Start focus aid, and no button Start the finder camera's focus aid"
+        assertion: "Imaging camera picked in the select Camera: with no view, The imaging camera's focus aid shows here once the imaging camera is ready.; with a view whose focus has unit px, 033's level-two heading Focus, its button Start focus aid and its words A focus reading is the size of the stars in the focus region: smaller is sharper., and no button Start the finder camera's focus aid"
         decision: "spec.md:US4-S4"
       - path: crates/finder/web/src/components/FocusToolPage.test.tsx
         status: new
@@ -1212,7 +1302,7 @@ stories:
       - path: crates/finder/web/e2e/tools-focus.spec.ts
         status: new
         disposition: add
-        assertion: "the simulated console at 412 by 915, day: PUT /api/session camera_settings exposure_ms 200 gain 1 answers 200; /tools, Start the finder camera's focus aid in the region Focus a camera; within 20 s its status contains Median of the last 3 finder camera frames, a two-decimal px number and its readings' image show; scrollWidth at most 412 by day and by night; the day screenshot more than 10000 pixels off night red, the night one 0; Imaging camera picked shows Start focus aid within 15 s; Finder camera again and Stop the finder camera's focus aid, Start the finder camera's focus aid within 15 s; DELETE /api/finder-camera/focus in its finally"
+        assertion: "the simulated console at 412 by 915, day: PUT /api/session camera_settings exposure_ms 200 gain 1 answers 200; /tools, Start the finder camera's focus aid in the region Focus a camera pressed within 15 s; within 20 s its status contains Median of the last 3 finder camera frames, a two-decimal px number and its readings' image show; scrollWidth at most 412 by day and by night; the day screenshot more than 10000 pixels off night red, the night one 0; Imaging camera picked shows Start focus aid within 15 s; Finder camera again and Stop the finder camera's focus aid, Start the finder camera's focus aid within 15 s; DELETE /api/finder-camera/focus in its finally"
         decision: "spec.md:US4-S6"
       - path: crates/finder/web/src/components/FocusBlock.test.tsx
         status: existing
