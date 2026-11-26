@@ -42,6 +42,7 @@ export default defineConfig({
         "**/imaging.spec.ts",
         "**/stack.spec.ts",
         "**/tools.spec.ts",
+        "**/tools-focus.spec.ts",
       ],
     },
     {
@@ -61,6 +62,7 @@ export default defineConfig({
         "**/imaging.spec.ts",
         "**/stack.spec.ts",
         "**/tools.spec.ts",
+        "**/tools-focus.spec.ts",
       ],
       workers: 1,
       use: { baseURL: externalURL ?? simulateURL },
