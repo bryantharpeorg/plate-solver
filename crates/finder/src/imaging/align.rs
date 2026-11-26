@@ -4,16 +4,19 @@
 //! camera's centre, as the finder camera sees it, off its frame too. It moves
 //! nothing. Every solve is offered to 032 through `Imaging::note_solve`.
 
-use std::sync::{Arc, Weak};
+use std::{
+    path::Path,
+    sync::{Arc, Weak},
+};
 
 use math_core::{angular_distance, UnitVector};
 use serde::{Deserialize, Serialize};
-use tokio::task::JoinHandle;
+use tokio::{sync::Notify, task::JoinHandle};
 
 use super::{
     relation::FinderFix,
     solver::{HintSource, ImagingSolver, SolveFrame},
-    solving, Held, Imaging, ImagingView, Lease, Refusal, SettingsEdit,
+    solving, Held, Imaging, ImagingView, Lease, Refusal, RoiEdit, SettingsEdit,
 };
 
 /// The name the finder alignment holds the imaging camera's lease under.
@@ -32,6 +35,10 @@ pub const SEARCH_RADIUS_DEG: f64 = 10.0;
 /// The middle of the finder camera's frame: within this share of its width,
 /// and of its height, of its centre.
 pub const MIDDLE_SHARE: f64 = 0.25;
+/// Done once this many frames in a row put the centre in the middle.
+pub const DONE_FRAMES: u64 = 2;
+/// The words of a start refused, and of a run ended, while Track is on.
+const TRACK_ON: &str = "Track is on; turn it off while the finder camera's screws are turned";
 
 /// Where the imaging camera's centre lies in the finder camera's frame.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
@@ -104,6 +111,12 @@ pub struct AlignLast {
     /// included, did not solve.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unsolved: Option<u64>,
+    /// 032's `relation.last.outcome` for this frame.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aim: Option<String>,
+    /// This frame and the `DONE_FRAMES` - 1 before it each put the centre in
+    /// the middle.
+    pub done: bool,
 }
 
 /// `align` in the imaging view: the latest run, running or ended.
@@ -127,6 +140,7 @@ pub struct AlignView {
 #[derive(Debug, Default)]
 pub(in crate::imaging) struct State {
     run: Option<Run>,
+    ended: Arc<Notify>,
 }
 
 impl State {
@@ -142,6 +156,9 @@ struct Run {
     view: AlignView,
     task: Option<JoinHandle<()>>,
     unsolved: u64,
+    middle: u64,
+    stop: bool,
+    previous: Option<(u64, String)>,
 }
 
 pub(in crate::imaging) fn view(held: &Held) -> Option<AlignView> {
@@ -161,10 +178,23 @@ fn state_refusal(held: &Held) -> Refusal {
     }
 }
 
+/// Read the session with no imaging lock held: its snapshot reads imaging too.
+fn track_on(imaging: &Imaging) -> bool {
+    let session = imaging.state.lock().expect("imaging state").session.clone();
+    session.is_some_and(|session| {
+        session
+            .0
+            .snapshot(imaging.clock.now())
+            .track
+            .is_some_and(|track| track.wanted)
+    })
+}
+
 impl Imaging {
     /// Start the finder alignment: FR-004's refusals in order, the lease
     /// last, then a task taking and solving one imaging frame after another.
     pub async fn align_start(self: &Arc<Self>, ask: AlignAsk) -> Result<ImagingView, Refusal> {
+        let track = track_on(self);
         let exposure_ms = ask.exposure_ms.unwrap_or(ALIGN_EXPOSURE_MS);
         let solver = {
             let held = self.state.lock().expect("imaging state");
@@ -181,6 +211,12 @@ impl Imaging {
                 .is_some_and(|run| run.view.state == "running")
             {
                 return Err(Refusal::conflict("the finder alignment is already running"));
+            }
+            if track {
+                return Err(Refusal::conflict(TRACK_ON));
+            }
+            if held.relation.height_inputs() == (None, None) {
+                return Err(Refusal::conflict("the imaging camera's field height is unknown: start the console with --focal-length-mm, or solve an imaging frame on the Imaging page"));
             }
             if !held
                 .relation
@@ -227,6 +263,9 @@ impl Imaging {
                 },
                 task: None,
                 unsolved: 0,
+                middle: 0,
+                stop: false,
+                previous: None,
             });
         }
         let task = tokio::spawn(run(Arc::downgrade(self), lease, solver, exposure_ms));
@@ -240,6 +279,43 @@ impl Imaging {
             .task = Some(task);
         Ok(self.view())
     }
+
+    /// Stop the alignment, abort its exposure and wait for its solve, settings
+    /// restoration and lease release. With nothing running, change nothing.
+    pub async fn align_stop(&self) -> ImagingView {
+        let signal = {
+            let mut held = self.state.lock().expect("imaging state");
+            match held.align.run.as_mut() {
+                Some(run) if run.view.state == "running" => {
+                    run.stop = true;
+                    Some(held.align.ended.clone())
+                }
+                _ => None,
+            }
+        };
+        if let Some(signal) = signal {
+            self.abort().await;
+            loop {
+                let notified = signal.notified();
+                if !self.align_running() {
+                    break;
+                }
+                notified.await;
+            }
+        }
+        self.view()
+    }
+
+    /// Whether the latest alignment run is still running.
+    pub fn align_running(&self) -> bool {
+        self.state
+            .lock()
+            .expect("imaging state")
+            .align
+            .run
+            .as_ref()
+            .is_some_and(|run| run.view.state == "running")
+    }
 }
 
 async fn run(
@@ -251,7 +327,41 @@ async fn run(
     let Some(imaging) = imaging.upgrade() else {
         return;
     };
-    let error = steps(&imaging, &lease, solver.as_ref(), exposure_ms).await;
+    // Remember exactly the settings this procedure changes. A whole sensor
+    // is restored as None so the camera applies its whole-sensor rules.
+    let remembered = {
+        let held = imaging.state.lock().expect("imaging state");
+        held.settings.as_ref().map(|settings| {
+            let whole = held.camera.as_ref().is_some_and(|camera| {
+                settings.roi.x == 0
+                    && settings.roi.y == 0
+                    && settings.roi.width == camera.width
+                    && settings.roi.height == camera.height
+            });
+            SettingsEdit {
+                exposure_ms: Some(settings.exposure_ms),
+                roi: Some((!whole).then_some(RoiEdit {
+                    x: settings.roi.x,
+                    y: settings.roi.y,
+                    width: settings.roi.width,
+                    height: settings.roi.height,
+                })),
+                save_at_node: Some(settings.save_at_node),
+                ..SettingsEdit::default()
+            }
+        })
+    };
+    let error = if let Some(remembered) = remembered {
+        let error = steps(&imaging, &lease, solver.as_ref(), exposure_ms).await;
+        let restore_error = lease
+            .set(remembered)
+            .await
+            .err()
+            .map(|refusal| refusal.message);
+        error.or(restore_error)
+    } else {
+        Some(state_refusal(&imaging.state.lock().expect("imaging state")).message)
+    };
     // Release outside the lock: Lease::drop takes that lock itself.
     drop(lease);
     let mut held = imaging.state.lock().expect("imaging state");
@@ -259,6 +369,18 @@ async fn run(
     run.view.state = "ended";
     run.view.ended = Some(if error.is_some() { "failed" } else { "stopped" });
     run.view.error = error;
+    held.align.ended.notify_waiters();
+}
+
+fn stop_asked(imaging: &Imaging) -> bool {
+    imaging
+        .state
+        .lock()
+        .expect("imaging state")
+        .align
+        .run
+        .as_ref()
+        .is_some_and(|run| run.stop)
 }
 
 /// Set only the three settings the alignment owns, then take frames until
@@ -281,12 +403,25 @@ async fn steps(
         return Some(refusal.message);
     }
     loop {
+        if stop_asked(imaging) {
+            return None;
+        }
+        if track_on(imaging) {
+            return Some(TRACK_ON.into());
+        }
         let view = match lease.take(PURPOSE).await {
             Ok(view) => view,
             Err(refusal) => return Some(refusal.message),
         };
         let id = view.frame.expect("the frame just taken").id;
+        // A stop can arrive while the take request is still being answered.
+        if stop_asked(imaging) {
+            imaging.abort().await;
+        }
         let frame = imaging.ended(id).await;
+        if stop_asked(imaging) {
+            return None;
+        }
         match frame.state {
             "aborted" => return None,
             "failed" => return Some(frame.error.unwrap_or_default()),
@@ -305,20 +440,32 @@ async fn steps(
             exposure_s: frame.exposure_ms / 1000.0,
         };
         let middle = solve_frame.start + solve_frame.exposure_s / 2.0;
-        let fix = {
+        let (fix, previous) = {
             let mut held = imaging.state.lock().expect("imaging state");
-            held.align
-                .run
-                .as_mut()
-                .expect("the running alignment")
-                .view
-                .frames += 1;
-            held.relation
+            let solving = held
+                .solve
+                .as_ref()
+                .filter(|solve| solve.state == "solving")
+                .map(|solve| solve.frame_id);
+            let run = held.align.run.as_mut().expect("the running alignment");
+            run.view.frames += 1;
+            // Forget a frame held by an Imaging-page solve permanently: both
+            // files stay, including the sidecar that solve may still write.
+            let previous = run
+                .previous
+                .replace((id, file.clone()))
+                .filter(|(id, _)| Some(*id) != solving);
+            let fix = held
+                .relation
                 .fixes()
                 .into_iter()
                 .filter(|fix| (fix.time - middle).abs() <= PAIR_S)
-                .min_by(|a, b| (a.time - middle).abs().total_cmp(&(b.time - middle).abs()))
+                .min_by(|a, b| (a.time - middle).abs().total_cmp(&(b.time - middle).abs()));
+            (fix, previous)
         };
+        if let Some((_, file)) = previous {
+            remove(&imaging.root, &file);
+        }
         let Some(fix) = fix else {
             note(imaging, id, middle, Err(None));
             continue;
@@ -336,7 +483,7 @@ async fn steps(
                 root: &imaging.root,
                 file: &file,
                 frame_id: id,
-                frame: solve_frame,
+                frame: solve_frame.clone(),
                 hint,
                 requested_at: imaging.clock.now(),
             },
@@ -344,13 +491,31 @@ async fn steps(
         .await
         .outcome;
         match outcome {
-            Ok(solve) => note(
-                imaging,
-                id,
-                middle,
-                Ok(centre_of(&fix, solve.ra_deg, solve.dec_deg)),
-            ),
+            Ok(solve) => {
+                imaging.note_solve(&solve_frame, id, &solve);
+                note(
+                    imaging,
+                    id,
+                    middle,
+                    Ok(centre_of(&fix, solve.ra_deg, solve.dec_deg)),
+                );
+            }
             Err(error) => note(imaging, id, middle, Err(Some(error.message().to_string()))),
+        }
+    }
+}
+
+/// Remove only this run's previous frame and its solve sidecar.
+fn remove(root: &Path, file: &str) {
+    let path = root.join(file);
+    for path in [path.with_extension("solve.json"), path] {
+        if let Err(error) = std::fs::remove_file(&path) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                eprintln!(
+                    "finder alignment: could not remove {}: {error}",
+                    path.display()
+                );
+            }
         }
     }
 }
@@ -367,9 +532,21 @@ fn note(
         Err(None) => ("no_live_solve", None, None),
     };
     let mut held = imaging.state.lock().expect("imaging state");
+    let aim = held
+        .relation
+        .view(None, false)
+        .and_then(|view| view.last)
+        .filter(|last| last.frame_id == frame_id)
+        .and_then(|last| serde_json::to_value(last.outcome).ok())
+        .and_then(|value| value.as_str().map(str::to_string));
     let run = held.align.run.as_mut().expect("the running alignment");
     run.unsolved = if outcome == "not_solved" {
         run.unsolved + 1
+    } else {
+        0
+    };
+    run.middle = if centre.is_some_and(|centre| centre.middle) {
+        run.middle + 1
     } else {
         0
     };
@@ -380,5 +557,7 @@ fn note(
         error,
         centre,
         unsolved: (outcome == "not_solved").then_some(run.unsolved),
+        aim,
+        done: run.middle >= DONE_FRAMES,
     });
 }
