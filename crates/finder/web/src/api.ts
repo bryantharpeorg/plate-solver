@@ -649,6 +649,46 @@ export interface ImagingFocusAsk {
 
 export type ImagingSettingsEdit = Partial<Omit<ImagingSettings, "roi">>;
 
+// The finder camera's focus aid (051): sizes in the finder camera's pixels.
+export interface FinderFocus {
+  state: "running" | "ended";
+  since: number;
+  readings: number;
+  cadence_ms?: number;
+  last?: {
+    frame_id: number;
+    state: "reading" | "settling" | "too_few_stars" | "far_out";
+    value?: number;
+    stars: number;
+    detected: number;
+  };
+  median?: { value: number; readings: number };
+  best?: number;
+  trend?: "better" | "worse" | "same";
+  found: boolean;
+  history: (number | null)[];
+  ended?: "stopped" | "failed";
+  error?: string;
+}
+
+export async function getFinderFocus(): Promise<{ focus: FinderFocus | null }> {
+  return json(await fetch("/api/finder-camera/focus"));
+}
+
+export async function postFinderFocus(): Promise<{ focus: FinderFocus | null }> {
+  return json(
+    await fetch("/api/finder-camera/focus", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    }),
+  );
+}
+
+export async function deleteFinderFocus(): Promise<{ focus: FinderFocus | null }> {
+  return json(await fetch("/api/finder-camera/focus", { method: "DELETE" }));
+}
+
 export async function getImaging(): Promise<ImagingView> {
   return json(await fetch("/api/imaging"));
 }

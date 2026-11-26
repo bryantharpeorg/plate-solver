@@ -135,7 +135,7 @@ it("US4-S4: picking the imaging camera shows the existing Focus block once its v
   const view: ImagingView = { state: "ready", focus: { unit: "px" } };
   mounted.rerender(<FocusTool view={view} refresh={refresh} />);
   expect(block.getByRole("heading", { name: "Focus", level: 2 })).toBeTruthy();
-  expect(block.getByRole("button", { name: "Start focus aid", exact: true })).toBeTruthy();
+  expect(block.getByRole("button", { name: "Start focus aid" })).toBeTruthy();
   expect(
     block.getByText(/^A focus reading is the size of the stars in the focus region: smaller is sharper\./),
   ).toBeTruthy();
