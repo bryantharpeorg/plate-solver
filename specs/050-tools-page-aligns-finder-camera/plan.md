@@ -20,10 +20,12 @@ place. A start is refused while Track is on or without a field height, and Track
 on ends a run. It moves nothing; the owner turns the ring screws. The stop puts the
 camera's settings back.
 
-Four stories: the place off the frame and the simulator change that lets a test point
-the imaging camera there; the run, its routes, view, refusals and stop; Done, the
-refusals for Track and a missing field height, the two MCP tools, the README and the
-glossary; and the Tools page with Setup's link.
+Five stories: the place off the frame and the simulator change that lets a test point
+the imaging camera there; the run, its start route, view and refusals; the stop with the
+settings put back and only the last frame kept, Done, and the refusals for Track and a
+missing field height; the two MCP tools, the README and the glossary; and the Tools
+page with Setup's link. The owner chose the live alignment (option A); the seat split
+it into these five for size (§ Plan traps 2).
 
 ## Technical Context
 
@@ -41,20 +43,28 @@ only the last kept (FR-005). Nothing is stored in `session.json`.
   centre frames of the test's own making, and the simulator pointed off the frame
   (US1-S1 to US1-S5), under `#[test]`.
 - `crates/finder/tests/console/imaging_align.rs` (new, US2): the alignment rig with its
-  `Setup` (`live`, `solver`, `imaging`, `focal_mm`, `interval_ms`; the default is the
-  rig), its helpers `rig`, `call`, `wait_until`, `ready`, `last_after`, `start`,
-  `oracle` and `assert_centre`, all `pub`, and US2-S1 to US2-S8 under
-  `#[tokio::test(start_paused = true)]`.
-- `crates/finder/tests/console/imaging_align_aim.rs` (new, US3): US3-S1 to US3-S4, over
+  `pub struct Setup` (`live`, `solver`, `imaging`, `focal_mm`, `interval_ms`, `folder`;
+  the default is the rig; `interval_ms` and `folder` are set only by US3's tests, and
+  `rig` reads both), its `pub struct Rig { pub app: Router, pub sim: Simulator, .. }`
+  and `pub fn rig(e: (f64, f64), setup: Setup) -> Rig`, its helpers `call`,
+  `wait_until`, `ready`, `last_after`, `start`, `oracle` and `assert_centre`, all `pub`,
+  and US2-S1 to US2-S6 under `#[tokio::test(start_paused = true)]`. A private `Rig`
+  fails `private_interfaces` under `-D warnings`, and a `pub` field no US2 test reads
+  fails `dead_code`, so the rig exposes no imaging folder: US3-S1 hands it a folder of
+  the test's own through `Setup::folder` and lists that.
+- `crates/finder/tests/console/imaging_align_stop.rs` (new, US3): US3-S1 and US3-S2,
+  over US2's helpers, used and not edited.
+- `crates/finder/tests/console/imaging_align_aim.rs` (new, US3): US3-S3 to US3-S7, over
   US2's helpers, used and not edited.
-- `crates/finder/tests/motion/imaging_align_track.rs` (new, US3): US3-S5 and US3-S6
+- `crates/finder/tests/motion/imaging_align_track.rs` (new, US3): US3-S8 and US3-S9
   with the Track rig, in the motion binary because Track moves the mount (the console
   binary's doc says no mount moves there).
-- `crates/finder/tests/mcp/imaging_align.rs` (new, US3): US3-S7, with its own rig as the
-  MCP binary's tests build theirs.
+- `crates/finder/tests/mcp/imaging_align.rs` (new, US4): US4-S1, with its own rig as the
+  MCP binary's tests build theirs, and US4-S2, the README read as
+  `crates/finder/tests/console/imaging_run_docs.rs` reads it, under `#[test]`.
 - `crates/finder/web/src/components/AlignmentBlock.test.tsx` and `ToolsPage.test.tsx`
-  (new, US4): US4-S1 to US4-S6 under Vitest; `crates/finder/web/e2e/tools.spec.ts`
-  (new, US4): US4-S7 under Playwright's simulate project.
+  (new, US5): US5-S1 to US5-S6 under Vitest; `crates/finder/web/e2e/tools.spec.ts`
+  (new, US5): US5-S7 under Playwright's simulate project.
 
 **Target Platform**: the console on the Pi or a desktop, the page in a phone's browser.
 
@@ -64,8 +74,8 @@ only the last kept (FR-005). Nothing is stored in `session.json`.
 - `RUSTFLAGS="-D warnings"`, `--all-features` clippy, and rustdoc with warnings denied.
 - No test uses a camera, a mount, ASTAP or the network.
 
-**Scale/Scope**: four stories; one new source module and four changed Rust files, one
-simulator line, five new Rust test files, two new page components and their tests, one
+**Scale/Scope**: five stories; one new source module and four changed Rust files, one
+simulator line, six new Rust test files, two new page components and their tests, one
 browser test, the README section and seven glossary entries.
 
 ## Constitution Check
@@ -75,7 +85,7 @@ browser test, the README section and seven glossary entries.
 | Principle | How this plan honours it |
 |---|---|
 | I. Agreeing with cedar is correctness | Detection and the plate solver are untouched; the finder camera's solves are the live loop's own. The place is gnomonic arithmetic on 032's frame, checked against the simulator's truth; what rests on reading (a camera not ready, an exposure in flight, a failed frame, a solve from the Imaging page during a run) is listed in § What was run and what was read. |
-| II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. `playwright.config.ts` gains two list entries, an owner approval as 035's were. The only edits to existing test files are three `mod` lines (SC-002). The simulator's relaxed assert widens what a test may ask of it and changes no existing test's observation (run: the workspace's 1,483 tests passed on the probe's tip). |
+| II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. `playwright.config.ts` gains two list entries, an owner approval as 035's were. The only edits to existing test files are three `mod` lines (SC-002). The simulator's relaxed assert widens what a test may ask of it and changes no existing test's observation (run: the workspace's 1,490 existing tests passed on round 1's tip and on the re-cut's, beside the alignment's own). |
 | III. Tests first, independent expectations | The oracles are the simulator's eyepiece pixel and the pinhole arithmetic of its finder camera's optics, 1456 × 1088 and 12° wide, the centre frame's own geometry, the drawing's own arithmetic, 031's and 032's words, and the scenarios' words. No test calls `centre_of` or reads the module's constants for an expected value. Time comes from a paused tokio clock and the simulator's virtual clock. |
 | IV. Critical paths | None is touched: no `Cargo.toml` or `Cargo.lock` change, no `unsafe`, nothing under `proto/`, `crates/math-core`, `crates/pattern-database` or `crates/database-generation`, no `build.rs`. `crates/simulator` is not a critical path; its one change is owner approval 1. |
 | V. Proven open source first, honest licensing | The imaging solve is ASTAP's command-line solver behind 032's port, as today, and the gates reach it through the simulated adapter. Looked for, in local sources only: the repository's survey of 2026-11-15, § 5 "Relating two cameras" (`docs/research/2026-11-15-imaging-camera.md:179`), with its sources on StarSense, the Nexus eFinder, PiFinder and Cedar, SharpCap, CCDciel, KStars and N.I.N.A.; the vendored `reference-solutions/` (cedar-detect, cedar-solve); and the installed `astap-cli` package's documents. What exists stores a two-number offset set once by a person who centres a star (`docs/research/2026-11-15-imaging-camera.md:181`), or solves with the imaging camera alone (`docs/research/2026-11-15-imaging-camera.md:186`); none re-measures by itself (`docs/research/2026-11-15-imaging-camera.md:187`), and none pairs two cameras' solves live to guide a physical turn of a finder's screws. The cynical review's own search agreed. What this needs is 032's pairing and projection, which exist here, so nothing is adopted. No copied source, no new licence. |
@@ -85,41 +95,43 @@ browser test, the README section and seven glossary entries.
 ```text
 crates/simulator/src/optics.rs                  # US1: eyepiece_ray asserts a finite pixel
 crates/finder/
-├── README.md                                   # US3: rows, MCP paragraphs, ## Finder alignment
+├── README.md                                   # US4: rows, MCP paragraphs, ## Finder alignment
 ├── src/
-│   ├── imaging/align.rs                        # US1 new: the place; US2: the run; US3: aim, done, refusals
+│   ├── imaging/align.rs                        # US1 new: the place; US2: the run; US3: stop, aim, done, refusals
 │   ├── imaging/mod.rs                          # US1: pub mod align; US2: Held's align, ImagingView's align, Drop
-│   ├── imaging/routes.rs                       # US2: POST and DELETE /api/imaging/align
-│   └── mcp/tools.rs                            # US3: get_finder_alignment, set_finder_alignment
+│   ├── imaging/routes.rs                       # US2: POST /api/imaging/align; US3: DELETE
+│   └── mcp/tools.rs                            # US4: get_finder_alignment, set_finder_alignment
 ├── tests/
 │   ├── console/imaging_align_centre.rs         # US1, new
 │   ├── console/imaging_align.rs                # US2, new
+│   ├── console/imaging_align_stop.rs           # US3, new
 │   ├── console/imaging_align_aim.rs            # US3, new
-│   ├── console/main.rs                         # US1, US2, US3: one mod line each
+│   ├── console/main.rs                         # US1, US2: one mod line each; US3: two
 │   ├── motion/imaging_align_track.rs           # US3, new
 │   ├── motion/main.rs                          # US3: one mod line
-│   ├── mcp/imaging_align.rs                    # US3, new
-│   └── mcp/main.rs                             # US3: one mod line
+│   ├── mcp/imaging_align.rs                    # US4, new
+│   └── mcp/main.rs                             # US4: one mod line
 └── web/
-    ├── playwright.config.ts                    # US4: two list entries
-    ├── e2e/tools.spec.ts                       # US4, new
-    ├── dist/                                   # US4: rebuilt
+    ├── playwright.config.ts                    # US5: two list entries
+    ├── e2e/tools.spec.ts                       # US5, new
+    ├── dist/                                   # US5: rebuilt
     └── src/
-        ├── api.ts                              # US4: the alignment's types and calls
-        ├── App.tsx                             # US4: /tools
+        ├── api.ts                              # US5: the alignment's types and calls
+        ├── App.tsx                             # US5: /tools
         └── components/
-            ├── SetupPage.tsx                   # US4: the Tools link
-            ├── ToolsPage.tsx                   # US4, new
-            ├── ToolsPage.test.tsx              # US4, new
-            ├── AlignmentBlock.tsx              # US4, new
-            └── AlignmentBlock.test.tsx         # US4, new
-GLOSSARY.md                                     # US3: Finder alignment; Lease; Purpose label; four Avoid lines
+            ├── SetupPage.tsx                   # US5: the Tools link
+            ├── ToolsPage.tsx                   # US5, new
+            ├── ToolsPage.test.tsx              # US5, new
+            ├── AlignmentBlock.tsx              # US5, new
+            └── AlignmentBlock.test.tsx         # US5, new
+GLOSSARY.md                                     # US4: Finder alignment; Lease; Purpose label; four Avoid lines
 ```
 
 ## Interfaces
 
-The probe's code, as it ran (`probe/050` at f351c4da). Bodies not given here are the
-builder's, to these words and the FRs.
+The code as it ran: round 1's (`probe/050-r1` at 9709494c) re-cut for five stories
+(`probe/050-r1-split` at 2cb196a6). Bodies not given here are the builder's, to these
+words and the FRs.
 
 ### `crates/simulator/src/optics.rs` (US1)
 
@@ -259,14 +271,18 @@ pub struct AlignView {
 /// What the imaging state holds of the finder alignment. (US2)
 #[derive(Debug, Default)]
 pub(in crate::imaging) struct State {
-    run: Option<Run>,          // view, stop asked, task, the previous saved frame,
-                               // and the counts in a row: unsolved, and middle (US3)
-    ended: Arc<Notify>,        // notified once a run has ended
+    run: Option<Run>,          // view, task, the count in a row unsolved (US2); the
+                               // stop asked, the previous saved frame and the count
+                               // in a row in the middle (US3)
+    ended: Arc<Notify>,        // notified once a run has ended (US3)
 }
 impl State {
     pub(in crate::imaging) fn abort_task(&mut self);   // for Imaging's Drop
 }
 pub(in crate::imaging) fn view(held: &Held) -> Option<AlignView>;
+
+/// 031's words for a camera that is not `ready`, copied from `Imaging::set`. (US2)
+fn state_refusal(held: &Held) -> Refusal;
 
 /// Whether the session's `track` reads `wanted` true, read with no lock held. (US3)
 fn track_on(imaging: &Imaging) -> bool {
@@ -280,8 +296,9 @@ impl Imaging {
     /// FR-004's refusals in order, US3's two among them, the lease last; then the task. (US2)
     pub async fn align_start(self: &Arc<Self>, ask: AlignAsk) -> Result<ImagingView, Refusal>;
     /// FR-007: mark the stop, `self.abort()`, wait on `State::ended` until the
-    /// run has ended; with nothing running, the view. (US2)
+    /// run has ended; with nothing running, the view. (US3)
     pub async fn align_stop(&self) -> ImagingView;
+    /// Whether a run is running. (US3)
     pub fn align_running(&self) -> bool;
 }
 ```
@@ -289,8 +306,10 @@ impl Imaging {
 `align_start` reads `track_on(self)` first, with no lock held; then its checks, under
 one lock, then the lease outside it:
 
-- `held.state != "ready"`: 031's words for the state, as `Imaging::set` gives them
-  (`crates/finder/src/imaging/mod.rs:591` to `crates/finder/src/imaging/mod.rs:601`);
+- `held.state != "ready"`: 031's words for the state, copied into `align.rs` as a
+  private `state_refusal(held: &Held) -> Refusal` from
+  `crates/finder/src/imaging/mod.rs:591` to `crates/finder/src/imaging/mod.rs:601`,
+  since they live inside `Imaging::set` and cannot be called from `align.rs`;
 - no solver: `this console has no imaging solver`;
 - `held.align` running: `the finder alignment is already running`;
 - Track on: `TRACK_ON` (US3);
@@ -305,16 +324,19 @@ one lock, then the lease outside it:
   `exposure_ms {N} is outside the camera's range {min}–{max} ms`;
 - `self.lease(HOLDER)?`.
 
-The task, `run(Weak<Imaging>, Lease, Arc<dyn ImagingSolver>, exposure_ms)`:
-remember the exposure, the ROI (`None` when it is the whole sensor) and
-`save_at_node`; the steps; put the remembered settings back with `lease.set`; drop the
-lease; mark the view `ended`, `stopped` or `failed` with the error; notify. The steps:
-`lease.set` of the exposure, `roi: Some(None)` and `save_at_node: Some(false)`; then,
-until a stop is asked, a check of Track (US3: `if track_on(imaging) { return
-Some(TRACK_ON.into()); }`), one frame (`lease.take(PURPOSE)`, then
-`imaging.ended(id)`; `aborted` or a stop ends the steps with no error, `failed` with the
-frame's error; `frames` counted; the previous saved frame's `.fits` and `.solve.json`
-removed unless 032's `solve` is `solving` it), a `SolveFrame` of it, and:
+The task, `run(Weak<Imaging>, Lease, Arc<dyn ImagingSolver>, exposure_ms)`: in US2,
+the steps, then drop the lease and mark the view `ended`, `stopped` or `failed` with
+the error. US3 wraps the steps: first remember the exposure, the ROI (`None` when it is
+the whole sensor) and `save_at_node`, and after them put the remembered settings back
+with `lease.set`, before the lease is dropped, and notify `State::ended` once the view
+is marked. The steps: `lease.set` of the exposure, `roi: Some(None)` and
+`save_at_node: Some(false)`; then one frame after another (`lease.take(PURPOSE)`, then
+`imaging.ended(id)`; `aborted` ends the steps with no error, `failed` with the frame's
+error; `frames` counted), a `SolveFrame` of it, and the lines below. US3 adds, before
+each frame, the stop's check (a stop asked ends the steps with no error, as it does
+after `imaging.ended`) and Track's (`if track_on(imaging) { return
+Some(TRACK_ON.into()); }`), and, once a frame is counted, the previous saved frame's
+`.fits` and `.solve.json` removed unless 032's `solve` is `solving` it:
 
 ```rust
         // The finder fix nearest the middle of the exposure.
@@ -363,23 +385,26 @@ US1: `pub mod align;`. US2: `Held` gains `align: align::State`
 `None` in the view of a console with no imaging state and `align::view(&held)` in every
 other; `Imaging`'s `Drop` calls `held.align.abort_task()`.
 
-### `crates/finder/src/imaging/routes.rs` (US2)
+### `crates/finder/src/imaging/routes.rs` (US2; US3)
 
-`.route("/api/imaging/align", post(post_align).delete(delete_align))` beside the focus
-aid's. `post_align(State, SessionWrite, Result<Json<AlignAsk>, JsonRejection>)` takes its
-body through `sim_json` (`crates/finder/src/api.rs:766`) as the focus aid's route does,
-so a body that is not JSON answers 415; it answers 409
-`this console takes no imaging frames` without an imaging state, and maps a `Refusal`
-to `ApiError::new(refusal.status, refusal.message)`; `delete_align(State, SessionWrite)`
-answers `Json(imaging.align_stop().await)`.
+US2: `.route("/api/imaging/align", post(post_align))` beside the focus aid's.
+`post_align(State, SessionWrite, Result<Json<AlignAsk>, JsonRejection>)` takes its body
+through `sim_json` (`crates/finder/src/api.rs:766`) as the focus aid's route does, so a
+body that is not JSON answers 415; it answers 409 `this console takes no imaging frames`
+without an imaging state, and maps a `Refusal` to
+`ApiError::new(refusal.status, refusal.message)`. US3: the route gains
+`.delete(delete_align)`; `delete_align(State, SessionWrite)` answers 409
+`this console takes no imaging frames` without an imaging state, else
+`Json(imaging.align_stop().await)`.
 
-### `crates/finder/src/mcp/tools.rs` (US3)
+### `crates/finder/src/mcp/tools.rs` (US4)
 
 `AlignArguments { on: bool, exposure_ms: Option<f64> }`, schema only, as the existing
 schema-only argument structs are; `get_finder_alignment` (`read_only_hint = true`) and
 `set_finder_alignment` as FR-013 words them, each reading `self.state.imaging()` first
 (`this console takes no imaging frames`) and its arguments after, and answering
-`json!({ "align": serde_json::to_value(view.align)? })`. Descriptions:
+`json!({ "align": view.align })` (a `?` on `serde_json::to_value` does not compile there:
+the tools' error is a `String`). Descriptions:
 
 - `get_finder_alignment`: "Read the finder alignment: for its last imaging frame, where
   the imaging camera's centre lies from the finder camera's centre as the finder camera
@@ -392,7 +417,7 @@ schema-only argument structs are; `get_finder_alignment` (`read_only_hint = true
   finder camera's ring screws, with Track off. Read get_finder_alignment every few
   seconds until done."
 
-### The page (`crates/finder/web/src/`, US4)
+### The page (`crates/finder/web/src/`, US5)
 
 - `api.ts`: `ImagingAlignCentre` (the nine keys of `Centre`), `ImagingAlign` (`state`,
   `since`, `exposure_ms`, `frames`, `last?` of `frame_id`, `at`, `outcome`, `error?`,
@@ -426,9 +451,10 @@ schema-only argument structs are; `get_finder_alignment` (`read_only_hint = true
     `unsolved` 3 on,
     ` U frames in a row have not solved: the imaging camera may be more than 10° from the finder camera's centre, the sky may hold too few stars, or the field height may be wrong.`,
     then ` The next frame looks again.`
-  - `Drawing`: a 160-wide SVG with a 12 margin of the frame in the finder camera's aspect
-    (h = 160 · height / width), its middle half dashed, a line from the centre to the
-    imaging centre, a filled dot on the frame and a ring off it, all in `currentColor`.
+  - `Drawing`: an SVG 184 wide: the frame 160 wide at (12, 12), a 12 margin on every
+    side, h = 160 · height / width, in the finder camera's aspect; its middle half
+    dashed, a line from the centre to the imaging centre, a filled dot on the frame and a
+    ring off it, all in `currentColor`.
     The point is held to the edge along the line from the centre: with
     dx = (x − width/2)·160/width and dy = (y − height/2)·h/height,
     t = min(1, 80/|dx|, (h/2)/|dy|) and the point (12 + 80 + t·dx, 12 + h/2 + t·dy).
@@ -440,7 +466,7 @@ schema-only argument structs are; `get_finder_alignment` (`read_only_hint = true
     no button, else the button (`button button-primary`); the status lines, the aim line
     (`quiet`) and the alerts of FR-019.
 
-### The README (`crates/finder/README.md`, US3)
+### The README (`crates/finder/README.md`, US4)
 
 After the paragraph that ends "`list_calibration` answers" … (the MCP section, before
 `### MCP under WSL2`):
@@ -527,7 +553,7 @@ count no misses, so they never move the field height to its next source, while
 a solve on the Imaging page during a run counts as that page's own.
 ```
 
-### The glossary (`GLOSSARY.md`, US3)
+### The glossary (`GLOSSARY.md`, US4)
 
 - **Purpose label**: "…`focus`, `dark`, `flat`, `sub`, `run` and `align`." (was "…`sub`
   and `run`.").
@@ -552,43 +578,66 @@ a solve on the Imaging page during a run counts as that page's own.
 ### What 051 adds to the Tools page
 
 Spec 051's focus aid for the finder camera or the imaging camera adds a block below the
-alignment's: its own component, given `session` (which `ToolsPage` takes from US4 on)
+alignment's: its own component, given `session` (which `ToolsPage` takes from US5 on)
 or `useImaging`'s view, waiting for its own data as `AlignmentBlock` does, a region named
-by its own heading, and its browser checks scoped to that region. US4's files need no
-rework for it: `ToolsPage.tsx` gains one line, and `tools.spec.ts`'s locators are held
-to the alignment's region, so a second status on the page breaks none of them.
+by its own heading, and its browser checks scoped to that region. US5's files need no
+rework for it: `ToolsPage.tsx` gains one line, and `tools.spec.ts`'s locators of the
+alignment are held to the alignment's region, so a second status on the page breaks
+none of them.
 
 ## What was run and what was read
 
-**Run on the probe** (`probe/050`, cut from e2eee793; logs under the operator's probe
-folder, not in the repository). The draft's round: commits 7df72ef5 (the console's
-trial), e35b5b2e (the page's trial) and 89fedd14 (the draft's code split for four
-stories). Round 1, the fold: commits 935a0699 (the fold) and f351c4da (the field-height
-refusal's test moved to US3), on which:
+**Run, round by round** (logs under the operator's probe folder, not in the
+repository).
 
-- every scenario's test (the alignment's Rust tests 20 of 20; Vitest 598 of 598, the two
-  new files among them; Playwright 33 of 33, the new browser test among them), and both
-  gates' commands: `cargo fmt --check`, clippy with `-D warnings`, both `cargo doc` runs,
-  nextest 1,483 of 1,483, the doc tests, `npm ci --offline`, the typecheck, Prettier,
-  Vitest, the build, the dist check (clean) and `CI=1 npm run e2e`;
-- each new or changed FR's check mutated once, each mutation failing its scenario
-  (FR-004's no-imaging 409, FR-005's exposure, sidecar and count in a row, FR-007's
-  abort, FR-010's two frames, FR-011's two Track checks, FR-012, FR-013's order, and the
-  page's drawing, causes line, view gate and night colours);
-- Track: the start refused and a run ended by Track turned on, in the motion binary;
-- the field height: the start refused with none, and every frame `not_solved` with
-  2200 mm;
-- the stop during a 60 s exposure answering within 5 s of paused time;
-- the Tools page by night with no pixel off night red, and its width at 412 px;
-- ASTAP's command-line solver on the saved 0.5° frame (owner decisions 3 and 4, times as
-  shares of the on-target solve at 10°): smeared 7, 15 and 30 px along its rows; a
-  starless frame of its own noise at 10°, 30° and 180°; a field height 20 % high at 10°,
-  30° and 180°;
-- from the draft's round: the off-frame place against the simulator at the eyepiece
-  pixels of US2-S1 to US2-S4, each within 2 px and 0.02°; with the imaging camera 6.6°
-  and 8.5° out, every solve handed to 032 through `Imaging::note_solve` read
-  `off_frame`; ASTAP at hint offsets of 0° to about 130°; the page in Playwright's
-  Chromium at 360, 390 and 412 px wide, a Tools chip in the top bar against Setup's link.
+- **The draft's probe and fold round 1** (`probe/050`, cut from e2eee793): commits
+  7df72ef5 (the console's trial), e35b5b2e (the page's trial), 89fedd14 (the draft's
+  code split for four stories), 935a0699 (the cynical review's fold) and f351c4da (the
+  field-height refusal's test moved to US3). On f351c4da: every scenario's test and
+  both gates' commands (nextest 1,483 of 1,483 at that base); each new or changed FR's
+  check mutated once, each mutation failing its scenario (FR-004's no-imaging 409,
+  FR-005's exposure, sidecar and count in a row, FR-007's abort, FR-010's two frames,
+  FR-011's two Track checks, FR-012, FR-013's order, and the page's drawing, causes
+  line, view gate and night colours); Track's refusal and end in the motion binary; the
+  field height refused with none and every frame `not_solved` at 2200 mm; the stop
+  during a 60 s exposure within 5 s of paused time; the page by night with no pixel off
+  night red, and its width at 412 px; ASTAP's command-line solver on the saved 0.5°
+  frame (owner decisions 3 and 4, times as shares of the on-target solve at 10°):
+  smeared 7, 15 and 30 px along its rows, a starless frame of its own noise at 10°, 30°
+  and 180°, and a field height 20 % high at 10°, 30° and 180°; from the draft's
+  commits, the off-frame place at the eyepiece pixels of US2-S1 to US2-S4 within 2 px
+  and 0.02°, every solve handed to 032 with the imaging camera 6.6° and 8.5° out reading
+  `off_frame`, ASTAP at hint offsets of 0° to about 130°, and the page in Playwright's
+  Chromium at 360, 390 and 412 px wide against a Tools chip in the top bar.
+- **Probe round 1** (`probe/050-r1`, cut from 0e21ddb7, `main` ea3d6a9b and the trio,
+  tip 9709494c): a builder built the four stories of the trio before this fold from its
+  text alone, tests first: 0 blocking and 15 clarity defects (050-R1 to 050-R15), each
+  folded here, in spec.md or in tasks.md. Each story's tests failed before it; every
+  gate `ergane.yaml` names passed after the last (nextest 1,510 of 1,510, the 1,490
+  existing among them; Vitest 598 of 598; Playwright 33 of 33; the dist check clean).
+  Each of its bite checks, one mutation of the code run against the scenarios, bit but
+  for eight: seven claims no scenario read (050-R2 to R6, R14, R15, each then shown by a
+  throwaway that passed on the code and failed under its mutation) and the solving
+  frame's files removed anyway (below, § Read from the diff). Its sizes: US1 9,221 B
+  (14.1 %), US2 40,814 B (62.3 %), US3 42,281 B (64.5 %), US4 26,081 B (39.8 %) and
+  `dist` 697 B more.
+- **This fold's re-cut** (`probe/050-r1-split`, cut from 0e21ddb7): round 1's code
+  rebuilt as one commit per story of the five, by `git checkout <commit> -- <paths>`
+  from `probe/050-r1` and hand edits where a piece moved inside a file, with the seven
+  steps' tests added: US1 80338ccc, US2 570f44a6, US3 3006660b, US4 37e425c8 and US5
+  2cb196a6. For each story, its tests failed before it as tasks.md says, and its
+  focused commands passed after it (three times each; the browser test once alone and
+  once in the gate), with `cargo fmt` and clippy clean (for US5, Prettier and the
+  typecheck); its size, from the previous story's tip, is as § Plan traps 2 gives it.
+  After US5, every gate `ergane.yaml` names passed: `cargo fmt --check`, clippy with
+  `-D warnings`, both `cargo doc` runs, nextest 1,512 of 1,512 (the 1,490 existing and
+  the alignment's 22), the doc tests, `npm ci --offline`, the typecheck, Prettier,
+  Vitest 598 of 598 (the six new among them), the build, the dist check (clean) and
+  `CI=1 npm run e2e` 33 of 33 (`tools.spec.ts` among them). Each of the seven new
+  steps' code was mutated once on the last tip, and each step bit: 050-R4's distorted
+  projection (US1-S3), R2's refusal removed (US2-S6), R3's whole sensor not set
+  (US2-S1), R14's hint place dropped (US3-S6), R15's aim read from any frame (US3-S3),
+  and R5's aim line and R6's first-frame status dropped (US5-S2).
 
 **Read, not run:**
 
@@ -599,7 +648,7 @@ refusal's test moved to US3), on which:
   simulated solver's refusal, read; ASTAP's miss at 12° with a 10° radius, run);
 - the imaging run's, the stack's and the darks' and flats' refusals (031's FR-028); the
   focus aid's is run;
-- `an exposure is in progress` and the refusals of a camera that is not ready;
+- the refusals of a camera that is not ready (031's words, copied);
 - a failed exposure ending the run `failed`, and the console stopping mid-run;
 - a solve from the Imaging page during a run, and the frame it holds kept;
 - a stop waiting for a solve in flight (ASTAP's 120 s limit, read);
@@ -611,19 +660,21 @@ refusal's test moved to US3), on which:
 
 ## Read from the diff, not from a test
 
-- The README's section, rows and paragraphs and the glossary's entries (FR-014): the
-  judge reads them in the diff. The existing docs test of
-  `crates/finder/tests/console/imaging_run_docs.rs:139` still finds "sixteen tools of
-  its own".
-- FR-005's rule that a frame 032's own solve is `solving` keeps its files, and FR-008
-  (nothing but the alignment's own frames written) beyond US2-S7's mount and settings
-  checks.
+- The README's section, rows and paragraphs and the glossary's entries (FR-014), beyond
+  US4-S2's sentence, paragraph and headings: the judge reads them in the diff. The
+  existing docs test of `crates/finder/tests/console/imaging_run_docs.rs:139` still
+  finds "sixteen tools of its own".
+- FR-007's rule that a frame 032's own solve is `solving` keeps its files: the solving
+  frame's files removed anyway survived every scenario in round 1, as said here. FR-008
+  (nothing but the alignment's own frames written) beyond US3-S1's mount, settings and
+  files checks.
 - `ToolsPage`'s `session` prop (FR-017), which no block of this spec reads.
 
 ## Shapes that existing tests pin
 
 - **`ImagingView`'s keys.** `align` is skipped while `None`, so every existing view
-  assertion that reads a whole view passes unchanged (run: nextest 1,483 of 1,483).
+  assertion that reads a whole view passes unchanged (run: nextest 1,490 of 1,490
+  existing on round 1's tip and on the re-cut's).
 - **031's lease words** `the imaging camera is held by {holder}` and the focus aid's
   holder are used as they are; the existing lease tests pass unchanged (run).
 - **032's relation.** `note_solve` is called as FR-037 offers it; 032's tests pass
@@ -635,21 +686,22 @@ refusal's test moved to US3), on which:
   asserts "sixteen tools of its own" (`crates/finder/README.md:88`): the new tools are a
   paragraph of their own, and that sentence is not touched (run).
 - **MCP's tool list.** No existing test counts the tools (run: the MCP binary's tests
-  passed with two more).
+  passed with two more, on both tips).
 - **The motion binary.** One more `mod` line; its other tests pass unchanged (run).
 - **The page.** Setup's header gains a link only with a scope node and an `onTools`
   prop; Setup's existing tests and the night-mode browser tests pass unchanged (run:
-  Vitest 598 of 598, Playwright 33 of 33).
+  Vitest 598 of 598 and Playwright 33 of 33 on round 1's tip and on the re-cut's).
 - **The simulated console's state.** The browser test turns Track off and keeps an
   imaging scale on the shared simulate server, and its alignment measures the aim point;
-  the specs that run after it in that project pass unchanged (run: 33 of 33).
+  the specs that run after it in that project pass unchanged (run: 33 of 33, both
+  tips).
 - **`playwright.config.ts`.** The two entries put `tools.spec.ts` in the simulate project
   only; every other project's files are unchanged (run).
 
 ## Decisions and the alternatives rejected
 
-The ten open owner decisions and the two settled are in spec.md § Owner decisions.
-Below them:
+The twelve owner decisions, all settled, are in spec.md § Owner decisions. Below
+them:
 
 | Decision | Chosen | Rejected |
 |---|---|---|
@@ -663,6 +715,8 @@ Below them:
 | The browser test's field height | a scale kept by one solve through the API first | `--focal-length-mm` in the simulate server's command (an edit to `playwright.config.ts` beyond its two entries), or `--simulate` giving one (a change to `main.rs` and to every simulate test's hints) |
 | The start's live-solve check | the last fix within 30 s (`HINT_AGE_S`) | none (every frame would be `no_live_solve`) |
 | The drawing | held to the frame's edge along the line from its centre, a ring off it | each axis held on its own (off a corner it points tens of degrees wrong), or a wider canvas |
+| The story cut | five stories, each under 60 % of 65,536 B: the stop moved from the run to the story of Done, and MCP, the README and the glossary a story of their own (§ Plan traps 2) | the four of round 1, whose run (62.3 %) and Done (64.5 %) stories passed 60 % and grew with the new steps; a raised budget; a refusal moved instead of the stop (too few bytes) |
+| Where the stop's tests find the imaging folder | `Setup::folder`, a folder of the test's own that `rig` reads, as it reads `interval_ms` | a `pub` field of the rig that no US2 test reads (`dead_code` under `-D warnings`), or a copy of the rig in US3's file |
 
 ## User Story 1 - The place off the frame
 
@@ -670,18 +724,26 @@ Below them:
 
 ## User Story 2 - The run
 
-The routes, the loop, the view, the refusals but Track's and the field height's, the
-count of frames in a row that do not solve, and the stop, over US1's `centre_of`. The
-test file's helpers are `pub`, for US3's test.
+The start's route, the loop, the view, the refusals but Track's and the field
+height's, and the count of frames in a row that do not solve, over US1's `centre_of`.
+A failed frame ends the run; nothing else does until US3. The test file's helpers are
+`pub`, for US3's tests.
 
-## User Story 3 - Done, the night's refusals, MCP and the words
+## User Story 3 - The stop, Done and the night's refusals
 
-`aim` and `done` on `last`, `note_solve` called, the Track and field-height refusals,
-the two tools, the README and the glossary. Its console test uses US2's helpers and does
-not edit US2's file. It takes the field-height refusal from US2, which measured 85 B
-over 60 % of the budget with it (§ Plan traps 2).
+The stop and its route, the settings remembered and put back at every end, only the
+last frame kept (all three moved here from round 1's US2 for size, since US3-S1 and
+US3-S2 are the only scenarios that read them), `aim` and `done` on `last`,
+`note_solve` called, and the Track and field-height refusals. Its console tests use
+US2's helpers and do not edit US2's file. It takes the field-height refusal from US2,
+which measured 85 B over 60 % of the budget with it in the draft's round.
 
-## User Story 4 - The page
+## User Story 4 - MCP and the words
+
+The two tools, the README and the glossary, which round 1 built at 22,884 B of its US3,
+and the README's check (US4-S2).
+
+## User Story 5 - The page
 
 The Tools page, the block, Setup's link, the browser test and the rebuilt `dist`.
 
@@ -703,17 +765,27 @@ The Tools page, the block, Setup's link, the browser test and the rebuilt `dist`
 
 ## Prerequisites before this spec is flipped to `ready`
 
-1. **The earlier specs have landed:** every spec in `depends_on_landed`. Met at ea3d6a9b.
-2. **`main` is still as read.** Every citation here was read at ea3d6a9b on 2026-11-25.
-   If `main` moves in a file § Project Structure names, or in a test § Shapes names,
-   re-read them and re-run the validator.
+1. **The earlier specs have landed:** every spec in `depends_on_landed`. Met: each is
+   on `main` at ea3d6a9b, the base of both probe rounds.
+2. **`main` is still as read.** Every citation here was read at ea3d6a9b. If `main`
+   moves in a file § Project Structure names, or in a test § Shapes names, re-read them
+   and re-run the validator. Met: `main` was ea3d6a9b on 2026-11-26 when this fold ran
+   the validator, and every `path:line` added or touched here was read there.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
-   decisions, § Owner approvals). Not met: two are settled, ten are open.
-4. **Probe builds.** A probe round builds the four stories from this text alone, and its
-   defects are folded. Not met.
-5. **The page half has run once.** Met on the probe: `npm test`, the typecheck,
-   Prettier, the build and `CI=1 npm run e2e` (§ What was run and what was read).
-6. **No operator-staged files are needed.**
+   decisions, § Owner approvals). Met: the optic and the scope on 2026-11-25, and
+   decisions 1 to 10 answered (a) on 2026-11-26 ("Agree with your pending qs btw"); the
+   approvals are given by the flip, which is the owner's.
+4. **Probe builds.** A probe round builds the stories from this text alone, and its
+   defects are folded. Met: round 1 (`probe/050-r1`, tip 9709494c) built the four
+   stories of the trio before this fold from its text alone, 0 blocking and 15 clarity,
+   all folded; the five-story cut was then proven on round 1's code
+   (`probe/050-r1-split`, tip 2cb196a6), each story under 60 % with its tests failing
+   before it and every gate passing after US5 (§ What was run and what was read).
+5. **The page half has run once.** Met on the probes: `npm test`, the typecheck,
+   Prettier, the build, the dist check and `CI=1 npm run e2e`, on round 1's tip and on
+   the re-cut's (§ What was run and what was read).
+6. **No operator-staged files are needed.** Met: no story reads a file outside the
+   repository, and both probe rounds ran from a clean clone with `npm ci --offline`.
 
 ## Outside the factory
 
@@ -757,50 +829,62 @@ They bind every story.
 
 1. **Gate evidence or nothing.** The judge credits only gate results and the story's
    diff. *Check:* every Then names a committed test the `test` gate runs.
-2. **One evidence budget.** *Check:* each story's diff stays under 64 KiB, measured with
-   `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c`. Measured on the
-   probe's f351c4da, split by the files each story writes and the alignment module by
-   its parts: US1 8,605 B (13.1 % of 65,536 B), US2 39,050 B (59.6 %), US3 36,929 B
-   (56.3 %), US4 26,465 B (40.4 %), and `dist` about 700 B more; all four 111,052 B as
-   the probe's five commits stand (`dist` excluded). At the 1.35 times a factory build
-   has run over its probe on earlier specs: US1 11,616 B (17.7 %), US2 52,717 B
-   (80.4 %), US3 49,854 B (76.1 %) and US4 35,727 B (54.5 %), each under the refusal.
-   US2 is the tightest: its test file is at the size it needs, and nothing more may
-   join it.
+2. **One evidence budget.** *Check:* each story's whole diff stays under 60 % of
+   65,536 B (39,321 B), measured with
+   `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c` from the previous
+   story's tip, on code built from the trio. Round 1 built the trio's four stories at
+   US1 9,221 B (14.1 %), US2 40,814 B (62.3 %), US3 42,281 B (64.5 %) and US4 26,081 B
+   (39.8 %), `dist` 697 B more, so the scope was cut into five: the stop, the settings
+   put back and the last-frame rule moved from the run to US3 (the only piece of US2
+   that its own scenarios S7 and S8 alone read, and enough bytes, where a refusal was
+   not), and MCP, the README and the glossary (round 1: 22,884 B) became US4. Round 1's
+   code re-cut for the five, with the seven new steps: US1 9,765 B (14.9 %), US2
+   33,821 B (51.6 %), US3 33,974 B (51.8 %), US4 24,049 B (36.7 %) and US5 26,662 B
+   (40.7 %), `dist` 697 B more; all five 128,271 B (round 1's four: 111,840 B; the
+   seven steps, the README's check, the stop's own file and one more story's diff
+   context make the difference). At the 1.35 times a factory build has run over its
+   probe on earlier specs, the largest is about 45,865 B (70.0 %, US3), under the
+   128 KiB refusal.
 3. **A spec fixed mid-epic needs a relaunch.** *Check:* no builder edits
    `specs/050-tools-page-aligns-finder-camera/` or `.specify/`.
-4. **An earlier story's test file is an existing test.** *Check:* US2, US3 and US4 write
-   no file of an earlier story's tests; US3's console test uses US2's `pub` helpers.
+4. **An earlier story's test file is an existing test.** *Check:* US2 to US5 write no
+   file of an earlier story's tests; US3's console tests use US2's `pub` helpers, and
+   US3-S1 hands the rig its folder through `Setup::folder`.
 5. **No new support file.** *Check:* nothing new under `crates/finder/tests/support/`.
 6. **An oracle copied from the code proves nothing.** *Check:* the tests write the
    pinhole arithmetic, the pixels, the drawing's arithmetic and the words as literals;
    none calls `centre_of` or reads `MIDDLE_SHARE`, `PAIR_S`, `SEARCH_RADIUS_DEG`,
    `ALIGN_EXPOSURE_MS` or `DONE_FRAMES` for an expected value.
 7. **A negative assertion passes when nothing happens.** *Check:* "no `centre`" in
-   US2-S3 and US2-S5 stands beside `outcome` and `state`; "`done` false" in US3-S1 and
-   US3-S2 beside the frame that says true; "no link" in US4-S6 beside the heading
-   awaited; "no button" in US4-S3 beside `Reading the imaging camera.`; the night
-   screenshot's 0 beside the day one's count.
-8. **The frame in flight at a turn was taken before it.** *Check:* US2-S4 and US3-S2 skip
-   one measured frame after each `set_optics`, or read until the condition holds.
+   US2-S3 and US2-S5 stands beside `outcome` and `state`; "`done` false" in US3-S3 and
+   US3-S4 beside the frame that says true; "no `aim`" in US3-S3 beside its `not_solved`
+   outcome; "no link" in US5-S6 beside the heading awaited; "no button" in US5-S3
+   beside `Reading the imaging camera.`; the night screenshot's 0 beside the day one's
+   count.
+8. **The frame in flight at a turn was taken before it.** *Check:* US2-S4 and US3-S4 skip
+   one measured frame after each `set_optics`, or read until the condition holds, as
+   US3-S3 and US3-S6 do.
 9. **The lock is never held across a call into the session.** *Check:* `Imaging::hint`
    and the Track check are called with no lock held, as `Imaging::hint`'s doc says
    (`crates/finder/src/imaging/solving.rs:628`).
 10. **Paused time and the simulator's clock.** *Check:* every Rust test of this spec but
     US1's runs under `start_paused = true`, and every wait is bounded (120 s of paused
     time, 300 s in the motion binary, at most 20 frames read in a loop).
-11. **The dist is rebuilt.** *Check:* US4 commits `crates/finder/web/dist` after
+11. **The dist is rebuilt.** *Check:* US5 commits `crates/finder/web/dist` after
     `npm run build`.
 12. **An unused helper fails clippy.** *Check:* US2's helpers are each used by US2's own
-    tests; US3's files hold only what they use.
+    tests, and `Setup`'s `interval_ms` and `folder`, which only US3's tests set, are read
+    by `rig`; the rig has no `pub` field that no US2 test reads; US3's and US4's files
+    hold only what they use.
 13. **rustdoc denies warnings.** *Check:* no doc comment holds an angle bracket outside
     backticks.
 14. **Each worktree builds on its own.** *Check:* no story sets `CARGO_TARGET_DIR`.
-15. **The README's MCP count is pinned.** *Check:* US3 leaves "sixteen tools of its own"
-    as it is and puts the two tools in their own paragraph.
-16. **The browser test runs on a shared server.** *Check:* US4-S7 turns Track off and
-    keeps a scale itself, and every locator after the page opens is held to the region
-    `Align the finder camera`; its waits stay well under the 60 s test timeout
+15. **The README's MCP count is pinned.** *Check:* US4 leaves "sixteen tools of its own"
+    as it is and puts the two tools in their own paragraph (US4-S2).
+16. **The browser test runs on a shared server.** *Check:* US5-S7 turns Track off and
+    keeps a scale itself, and every locator of the alignment is held to the region
+    `Align the finder camera`; the heading and the night switch are not, being the
+    page's and the top bar's; its waits stay well under the 60 s test timeout
     (`crates/finder/web/playwright.config.ts:29`).
 17. **Playwright's project flag takes `=`.** *Check:* the development command is
     `npx playwright test --project=simulate e2e/tools.spec.ts`; with a space the file
@@ -813,7 +897,7 @@ They bind every story.
 | A 500 ms frame from the real imaging camera holds too few stars, or trails more than the smear tried. | `exposure_ms` names another; § Outside the factory step 5 names the causes. The smear's frame held fainter stars than a 500 ms frame will (read). |
 | A failing frame costs about one solve; a stop waits for it. | The 10° radius bounds it (1.07 times an on-target solve, measured); ASTAP's 120 s limit holds every placed hint. |
 | A solve from the Imaging page during a run counts 032's misses. | The README says so; the alignment keeps the frame that solve reads. |
-| US2 is the largest story, 59.6 % of the budget by the probe. | Its bulk is its test file's eight cases; at the usual overrun it stays under the refusal (§ Plan traps 2). |
+| A story grows past 60 % in the factory. | The five measure 51.8 % (US3, 33,974 B) at most on round 1's code; at the usual overrun the largest stays well under the 128 KiB refusal (§ Plan traps 2). |
 | The real finder camera's frame may be mirrored or rotated in its rings. | Right and up are along the frame as the camera sees it, which turns with the rings and not with the night; Setup's chart rotation is not applied (owner decision 2). |
 
 ## Refinement Record
@@ -826,14 +910,17 @@ focus aid, 038's push check, the simulator's optics, the page's navigation, MCP'
 the constitution, the glossary and the ADRs. Folded the same day, round 1, from a cynical
 review, against `main` at ea3d6a9b, on the probe's commits 935a0699 and f351c4da (every
 gate passing; ASTAP timed on starless, trailed and failing frames; each new or changed
-FR's check mutated once). Writes come from the task text. Shared writes name the spec
-story that last wrote the same file on `main`; within the spec, each story's files
-written by an earlier one are ordered by `depends_on_merged`.
+FR's check mutated once). Folded again on 2026-11-26 from probe round 1
+(`probe/050-r1`, tip 9709494c: four stories built from the trio alone, 0 blocking and
+15 clarity) and the owner's answers, with the scope re-cut into five stories and proven
+on round 1's code (`probe/050-r1-split`, tip 2cb196a6, every gate passing). Writes come
+from the task text. Shared writes name the spec story that last wrote the same file on
+`main`; within the spec, each story's files written by an earlier one are ordered by
+`depends_on_merged`.
 
-Ten owner decisions of spec.md are open and two settled; this record is written to the
-recommended answers, and its `open_questions` are empty only because the spec's `draft`
-state already blocks readiness until the owner answers them. A different answer changes
-this record before any flip. This record approves nothing.
+All twelve owner decisions of spec.md are settled, decisions 1 to 10 answered (a) on
+2026-11-26; this record is written to those answers, and its `open_questions` are
+empty. This record approves nothing; the flip is the owner's.
 
 ```yaml
 version: 1
@@ -854,7 +941,7 @@ stories:
       - path: crates/finder/tests/console/imaging_align_centre.rs
         status: new
         disposition: add
-        assertion: "the centre frame at RA 100 Dec 0, centre_of for RA 108 and RA 96 at Dec 0: the first right_deg -8 and up_deg 0 within 1e-9 deg, x 728 - f tan 8 deg within 1e-6 px, on_frame false; the second right_deg and separation_deg 4 within 1e-9 deg, on_frame true, middle false"
+        assertion: "the centre frame at RA 100 Dec 0, centre_of for RA 108 and RA 96 at Dec 0: the first right_deg -8 and up_deg 0 within 1e-9 deg, x 728 - f tan 8 deg within 1e-6 px, on_frame false; the second right_deg and separation_deg 4 within 1e-9 deg, on_frame true, middle false; with distortion -0.2 at RA 100 Dec 0, centre_of for RA 108 Dec 0 has x 728 - f tan 8 deg within 1e-6 px"
         decision: "spec.md:US1-S3"
       - path: crates/finder/tests/console/imaging_align_centre.rs
         status: new
@@ -911,7 +998,7 @@ stories:
       - path: crates/finder/tests/console/imaging_align.rs
         status: new
         disposition: add
-        assertion: "the alignment rig at (700, 420), ready: POST /api/imaging/align {} answers 200 with align exactly state running, since, exposure_ms 500.0, frames 0; the first measured frame's centre x and y within 2 px of 700 and 420, right_deg up_deg separation_deg within 0.02 deg of the pinhole oracle, finder_width 1456, finder_height 1088, on_frame true; the imaging view's frame purpose align, settings exposure_ms 500.0, roi 0 0 1236 822, save_at_node false"
+        assertion: "the alignment rig at (700, 420), ready, its region set by PUT /api/imaging/settings roi 0 0 618 410 (200): POST /api/imaging/align {} answers 200 with align exactly state running, since, exposure_ms 500.0, frames 0; the first measured frame's centre x and y within 2 px of 700 and 420, right_deg up_deg separation_deg within 0.02 deg of the pinhole oracle, finder_width 1456, finder_height 1088, on_frame true; the imaging view's frame purpose align, settings exposure_ms 500.0, roi 0 0 1236 822, save_at_node false"
         decision: "spec.md:US2-S1"
       - path: crates/finder/tests/console/imaging_align.rs
         status: new
@@ -936,18 +1023,8 @@ stories:
       - path: crates/finder/tests/console/imaging_align.rs
         status: new
         disposition: add
-        assertion: "POST /api/imaging/align: no imaging state 409 this console takes no imaging frames; without the live loop 409 the finder camera has no live solve; without a solver 409 this console has no imaging solver; with all, {} as text/plain 415, exposure_ms 1e9 400 exposure_ms 1000000000 is outside the camera's range 1–3600000 ms, x 1 400; with the focus aid started 409 the imaging camera is held by the focus aid; after it stopped 200, then 409 the finder alignment is already running, and POST /api/imaging/focus and POST /api/imaging/frame each 409 the imaging camera is held by the finder alignment"
+        assertion: "POST /api/imaging/align: no imaging state 409 this console takes no imaging frames; without the live loop 409 the finder camera has no live solve; without a solver 409 this console has no imaging solver; with all, {} as text/plain 415, exposure_ms 1e9 400 exposure_ms 1000000000 is outside the camera's range 1–3600000 ms, x 1 400; after PUT /api/imaging/settings exposure_ms 60000 (200) and POST /api/imaging/frame (200), {} 409 an exposure is in progress; once that frame is saved, with the focus aid started 409 the imaging camera is held by the focus aid; after it stopped 200, then 409 the finder alignment is already running, and POST /api/imaging/focus and POST /api/imaging/frame each 409 the imaging camera is held by the finder alignment"
         decision: "spec.md:US2-S6"
-      - path: crates/finder/tests/console/imaging_align.rs
-        status: new
-        disposition: add
-        assertion: "the alignment rig at (700, 420): DELETE with nothing running 200 with no align; settings exposure 2000, roi 0 0 618 410, save_at_node true; started, three measured frames, DELETE 200 with align.state ended, ended stopped, no error; settings equal the settings answer; the mount's true direction unchanged; exactly two files under frames, one .fits and the .solve.json of the same name; POST /api/imaging/frame then 200"
-        decision: "spec.md:US2-S7"
-      - path: crates/finder/tests/console/imaging_align.rs
-        status: new
-        disposition: add
-        assertion: "the alignment rig at (700, 420), started with exposure_ms 60000; once the frame is purpose align and exposing, DELETE answers within 5 s of paused time, 200, align.ended stopped, align.frames 0, the frame's state aborted"
-        decision: "spec.md:US2-S8"
       - path: crates/finder/tests/console/imaging_focus_aid.rs
         status: existing
         disposition: preserve
@@ -991,46 +1068,51 @@ stories:
     open_questions: []
   US3:
     tests:
-      - path: crates/finder/tests/console/imaging_align_aim.rs
+      - path: crates/finder/tests/console/imaging_align_stop.rs
         status: new
         disposition: add
-        assertion: "the alignment rig at (700, 420), started with exposure_ms 1000: the first measured frame centre.middle true, done false, aim measured; the next measured frame done true; GET /api/session aim.source measured, aim.x within 1.5 px of 700 and aim.y within 1.5 px of 420"
+        assertion: "the alignment rig at (700, 420), its imaging folder the test's own: DELETE with nothing running 200 with no align; settings exposure 2000, roi 0 0 618 410, save_at_node true; started, three measured frames, DELETE 200 with align.state ended, ended stopped, no error; settings equal the settings answer; the mount's true direction unchanged; exactly two files under frames, one .fits and the .solve.json of the same name; POST /api/imaging/frame then 200"
         decision: "spec.md:US3-S1"
-      - path: crates/finder/tests/console/imaging_align_aim.rs
+      - path: crates/finder/tests/console/imaging_align_stop.rs
         status: new
         disposition: add
-        assertion: "the alignment rig at (700, 420), exposure_ms 1000, three measured frames; turned to (-300, 420): a frame with aim off_frame has done false; turned to (900, 700): the frames with centre.middle true, until aim replaced, are exactly set_aside done false, set_aside done true, replaced done true; the session's aim.source measured, aim.x within 1.5 px of 900 and aim.y within 1.5 px of 700"
+        assertion: "the alignment rig at (700, 420), started with exposure_ms 60000; once the frame is purpose align and exposing, DELETE answers within 5 s of paused time, 200, align.ended stopped, align.frames 0, the frame's state aborted"
         decision: "spec.md:US3-S2"
       - path: crates/finder/tests/console/imaging_align_aim.rs
         status: new
         disposition: add
-        assertion: "the alignment rig at (700, 420) with a 3000 ms node frame interval, started with {}: within 20 measured frames one has aim no_live_pointing and done true, its centre x and y within 2 px of 700 and 420, right_deg up_deg separation_deg within 0.02 deg of the pinhole oracle, finder_width 1456, finder_height 1088, on_frame true"
+        assertion: "the alignment rig at (700, 420), started with exposure_ms 1000: the first measured frame centre.middle true, done false, aim measured; the next measured frame done true; GET /api/session aim.source measured, aim.x within 1.5 px of 700 and aim.y within 1.5 px of 420; after those two frames, the screw turned to (-1100, 420), the first not_solved frame has no aim"
         decision: "spec.md:US3-S3"
       - path: crates/finder/tests/console/imaging_align_aim.rs
         status: new
         disposition: add
-        assertion: "the alignment rig at (700, 420) with no focal length: POST /api/imaging/align {} answers 409 the imaging camera's field height is unknown: start the console with --focal-length-mm, or solve an imaging frame on the Imaging page"
+        assertion: "the alignment rig at (700, 420), exposure_ms 1000, three measured frames; turned to (-300, 420): a frame with aim off_frame has done false; turned to (900, 700): the frames with centre.middle true, until aim replaced, are exactly set_aside done false, set_aside done true, replaced done true; the session's aim.source measured, aim.x within 1.5 px of 900 and aim.y within 1.5 px of 700"
         decision: "spec.md:US3-S4"
+      - path: crates/finder/tests/console/imaging_align_aim.rs
+        status: new
+        disposition: add
+        assertion: "the alignment rig at (700, 420) with a 3000 ms node frame interval, started with {}: within 20 measured frames one has aim no_live_pointing and done true, its centre x and y within 2 px of 700 and 420, right_deg up_deg separation_deg within 0.02 deg of the pinhole oracle, finder_width 1456, finder_height 1088, on_frame true"
+        decision: "spec.md:US3-S5"
+      - path: crates/finder/tests/console/imaging_align_aim.rs
+        status: new
+        disposition: add
+        assertion: "the alignment rig at (1300, 544), started with {}, three measured frames read and the session's aim.source measured; the screw turned to (-300, 544): within 20 measured frames one has centre.on_frame false, its centre x and y within 2 px of -300 and 544, right_deg up_deg separation_deg within 0.02 deg of the pinhole oracle (13 deg from the aim point, 8.4 from the finder camera's centre)"
+        decision: "spec.md:US3-S6"
+      - path: crates/finder/tests/console/imaging_align_aim.rs
+        status: new
+        disposition: add
+        assertion: "the alignment rig at (700, 420) with no focal length: POST /api/imaging/align {} answers 409 the imaging camera's field height is unknown: start the console with --focal-length-mm, or solve an imaging frame on the Imaging page"
+        decision: "spec.md:US3-S7"
       - path: crates/finder/tests/motion/imaging_align_track.rs
         status: new
         disposition: add
         assertion: "the Track rig, ready: POST /api/track on true 200, session track.wanted true, then POST /api/imaging/align {} answers 409 Track is on; turn it off while the finder camera's screws are turned"
-        decision: "spec.md:US3-S5"
+        decision: "spec.md:US3-S8"
       - path: crates/finder/tests/motion/imaging_align_track.rs
         status: new
         disposition: add
         assertion: "the Track rig, ready, settings read, the alignment started and align.frames 1; POST /api/track on true 200: align.state ended, ended failed, error exactly Track is on; turn it off while the finder camera's screws are turned; settings equal those read; after POST /api/track on false 200, POST /api/imaging/frame 200"
-        decision: "spec.md:US3-S6"
-      - path: crates/finder/tests/mcp/imaging_align.rs
-        status: new
-        disposition: add
-        assertion: "the bare MCP console: get_finder_alignment x 1 and set_finder_alignment {} each err this console takes no imaging frames; the MCP rig: get_finder_alignment {} answers align null; set_finder_alignment {} errs on must be true or false, on false with exposure_ms errs set_finder_alignment with on false takes no other argument, get_finder_alignment x 1 errs get_finder_alignment takes no arguments; on true answers align.state running, again errs the finder alignment is already running; the read's align.last.centre.x within 2 px of 700; on false answers align.ended stopped; tools/list holds both, get_finder_alignment readOnlyHint true"
-        decision: "spec.md:US3-S7"
-      - path: crates/finder/tests/console/imaging_run_docs.rs
-        status: existing
-        disposition: preserve
-        assertion: "the README's MCP section still says sixteen tools of its own for the imaging camera"
-        decision: "plan.md:Shapes that existing tests pin"
+        decision: "spec.md:US3-S9"
       - path: crates/finder/tests/motion/imaging_track.rs
         status: existing
         disposition: preserve
@@ -1039,26 +1121,75 @@ stories:
     preserved_behavior:
       - "032's note_solve takes the reading as FR-037 says; the kept scale and the misses are unchanged by the alignment"
       - "Track, 038's push check and 032's FR-036 are read, not changed"
-      - "the README's sentence The imaging camera has sixteen tools of its own is unchanged"
+      - "US2's run, start route and refusals are kept; the stop and the put-back wrap them"
     checks:
       development:
-        - "cargo nextest run -p finder --locked --test console --test motion --test mcp -E 'test(imaging_align)'"
-        - "cargo nextest run -p finder --locked --test console -E 'test(docs)'"
+        - "cargo nextest run -p finder --locked --test console --test motion -E 'test(imaging_align)'"
+        - "cargo nextest run -p finder --locked --test console -E 'test(imaging)'"
       handoff: declared_gates
       independent: declared_pipeline
       release:
         - "release owner: the repository owner, through the merge queue's ci.yml jobs and the night of plan.md § Outside the factory"
     writes:
-      - GLOSSARY.md
-      - crates/finder/README.md
       - crates/finder/src/imaging/align.rs
-      - crates/finder/src/mcp/tools.rs
+      - crates/finder/src/imaging/routes.rs
       - crates/finder/tests/console/imaging_align_aim.rs
+      - crates/finder/tests/console/imaging_align_stop.rs
       - crates/finder/tests/console/main.rs
-      - crates/finder/tests/mcp/imaging_align.rs
-      - crates/finder/tests/mcp/main.rs
       - crates/finder/tests/motion/imaging_align_track.rs
       - crates/finder/tests/motion/main.rs
+    no_write_reason: ""
+    shared_writes:
+      - path: crates/finder/src/imaging/routes.rs
+        other_spec: 037-imaging-run
+        other_story: US3
+        disposition: merge_order
+        reason: "050 depends_on_landed 037, whose US3 last changed imaging/routes.rs (581be8c3)"
+      - path: crates/finder/tests/console/main.rs
+        other_spec: 047-console-uses-the-database-that-fits
+        other_story: US1
+        disposition: merge_order
+        reason: "050 depends_on_landed 047, whose US1 last changed console/main.rs (d3f8bd0f)"
+      - path: crates/finder/tests/motion/main.rs
+        other_spec: 041-imaging-run-on-the-rig
+        other_story: US8
+        disposition: merge_order
+        reason: "050 depends_on_landed 041, whose US8 last changed motion/main.rs (61b54a47)"
+    open_questions: []
+  US4:
+    tests:
+      - path: crates/finder/tests/mcp/imaging_align.rs
+        status: new
+        disposition: add
+        assertion: "the bare MCP console: get_finder_alignment x 1 and set_finder_alignment {} each err this console takes no imaging frames; the MCP rig: get_finder_alignment {} answers align null; set_finder_alignment {} errs on must be true or false, on false with exposure_ms errs set_finder_alignment with on false takes no other argument, get_finder_alignment x 1 errs get_finder_alignment takes no arguments; on true answers align.state running, again errs the finder alignment is already running; the read's align.last.centre.x within 2 px of 700; on false answers align.ended stopped; tools/list holds both, get_finder_alignment readOnlyHint true"
+        decision: "spec.md:US4-S1"
+      - path: crates/finder/tests/mcp/imaging_align.rs
+        status: new
+        disposition: add
+        assertion: "crates/finder/README.md read as a file: it still holds The imaging camera has sixteen tools of its own; the line The Tools page's finder alignment has two tools: comes after it and before ### MCP under WSL2, with a list entry each for get_finder_alignment and set_finder_alignment between them; ## Finder alignment comes before ## Calibration frames"
+        decision: "spec.md:US4-S2"
+      - path: crates/finder/tests/console/imaging_run_docs.rs
+        status: existing
+        disposition: preserve
+        assertion: "the README's MCP section still says sixteen tools of its own for the imaging camera"
+        decision: "plan.md:Shapes that existing tests pin"
+    preserved_behavior:
+      - "the README's sentence The imaging camera has sixteen tools of its own is unchanged"
+      - "the imaging camera's existing MCP tools and their words are unchanged"
+    checks:
+      development:
+        - "cargo nextest run -p finder --locked --test mcp -E 'test(imaging_align)'"
+        - "cargo nextest run -p finder --locked --test console -E 'test(docs)'"
+      handoff: declared_gates
+      independent: declared_pipeline
+      release:
+        - "release owner: the repository owner, through the merge queue's ci.yml jobs"
+    writes:
+      - GLOSSARY.md
+      - crates/finder/README.md
+      - crates/finder/src/mcp/tools.rs
+      - crates/finder/tests/mcp/imaging_align.rs
+      - crates/finder/tests/mcp/main.rs
     no_write_reason: ""
     shared_writes:
       - path: GLOSSARY.md
@@ -1081,54 +1212,44 @@ stories:
         other_story: US1
         disposition: merge_order
         reason: "050 depends_on_landed 049, whose US1 last changed mcp/main.rs (ed652f26)"
-      - path: crates/finder/tests/motion/main.rs
-        other_spec: 041-imaging-run-on-the-rig
-        other_story: US8
-        disposition: merge_order
-        reason: "050 depends_on_landed 041, whose US8 last changed motion/main.rs (61b54a47)"
-      - path: crates/finder/tests/console/main.rs
-        other_spec: 047-console-uses-the-database-that-fits
-        other_story: US1
-        disposition: merge_order
-        reason: "050 depends_on_landed 047, whose US1 last changed console/main.rs (d3f8bd0f)"
     open_questions: []
-  US4:
+  US5:
     tests:
       - path: crates/finder/web/src/components/AlignmentBlock.test.tsx
         status: new
         disposition: add
         assertion: "centreLine gives exactly: off the frame, The imaging camera points 6.5° left and 1.0° up ... 6.6° in all, off the finder camera's frame.; on it, 4.7° right and 3.8° down ... 6.0° in all, on the finder camera's frame.; in the middle, 1.4° right and 1.3° down ... 1.9° in all, in the middle of the finder camera's frame. Done once the next frame holds it there.; done, Done: the imaging camera's centre has held in the middle of the finder camera's frame. The imaging camera points 0.2° left and 1.0° up ... 1.1° in all.; aimLine replaced gives The aim point is measured from this frame (replaced). and no_live_pointing gives The aim point is not measured from this frame (no_live_pointing); a later imaging solve measures it."
-        decision: "spec.md:US4-S1"
+        decision: "spec.md:US5-S1"
       - path: crates/finder/web/src/components/AlignmentBlock.test.tsx
         status: new
         disposition: add
-        assertion: "a running alignment's status reads exactly Imaging frame 7 did not solve: the imaging solver found no solution. The next frame looks again.; then frame 9 with unsolved 3 ... 3 frames in a row have not solved: the imaging camera may be more than 10° from the finder camera's centre, the sky may hold too few stars, or the field height may be wrong. The next frame looks again.; then The finder camera had no live solve for imaging frame 10."
-        decision: "spec.md:US4-S2"
+        assertion: "a running alignment with frames 0 and no last: the status reads exactly Taking the first imaging frame.; then Imaging frame 7 did not solve: the imaging solver found no solution. The next frame looks again.; then frame 9 with unsolved 3 ... 3 frames in a row have not solved: the imaging camera may be more than 10° from the finder camera's centre, the sky may hold too few stars, or the field height may be wrong. The next frame looks again.; then The finder camera had no live solve for imaging frame 10.; over a measured frame 2 with aim replaced, the text The aim point is measured from this frame (replaced). is shown"
+        decision: "spec.md:US5-S2"
       - path: crates/finder/web/src/components/AlignmentBlock.test.tsx
         status: new
         disposition: add
         assertion: "with no view: Reading the imaging camera. and no button; Start aligning sends POST /api/imaging/align with Content-Type application/json and body {} and refreshes; a measured centre at (-300, -2000) shows the image The imaging camera's centre off the finder camera's frame with its circle cy 12 and cx 12 + 160 (728 - 1028 544 / 2544) / 1456 within 1e-6; Stop aligning sends DELETE /api/imaging/align and refreshes"
-        decision: "spec.md:US4-S3"
+        decision: "spec.md:US5-S3"
       - path: crates/finder/web/src/components/AlignmentBlock.test.tsx
         status: new
         disposition: add
         assertion: "an alignment ended failed with the error the frame failed: the alert reads exactly The finder alignment stopped: the frame failed. and the button reads Start aligning"
-        decision: "spec.md:US4-S4"
+        decision: "spec.md:US5-S4"
       - path: crates/finder/web/src/components/ToolsPage.test.tsx
         status: new
         disposition: add
         assertion: "App at /setup with a paired scope node: the link Tools leads to /tools with the level-one heading Tools and the button Start aligning; Back to console leads to /"
-        decision: "spec.md:US4-S5"
+        decision: "spec.md:US5-S5"
       - path: crates/finder/web/src/components/ToolsPage.test.tsx
         status: new
         disposition: add
         assertion: "App at /setup with no scope node: once the heading Setup shows, no link named Tools"
-        decision: "spec.md:US4-S6"
+        decision: "spec.md:US5-S6"
       - path: crates/finder/web/e2e/tools.spec.ts
         status: new
         disposition: add
         assertion: "the simulated console at 412 by 915, day, Track off and a scale kept through the API: Setup's Tools link opens /tools with the heading Tools; after Start aligning in the region Align the finder camera its status contains Done: the imaging camera's centre has held in the middle within 20 s, its image The imaging camera's centre on the finder camera's frame is visible, scrollWidth is at most 412; the day screenshot more than 10000 pixels off night red, the night one 0; after Stop aligning, Start aligning shows within 15 s"
-        decision: "spec.md:US4-S7"
+        decision: "spec.md:US5-S7"
       - path: crates/finder/web/src/components/SetupPage.test.tsx
         status: existing
         disposition: preserve

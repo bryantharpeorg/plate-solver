@@ -12,15 +12,20 @@ depends_on_landed: ["013-live-finder", "015-tracking", "016-mcp", "021-chart-ori
 # scenario's test and both gates' commands passing on f351c4da, ASTAP's command-line
 # solver timed on starless, trailed and failing copies of the saved frame, and each new
 # or changed FR's check mutated once. Every `path:line` here was read at ea3d6a9b.
-# State: draft. Two owner decisions are settled (the optic, the live scope) and ten are
-# open; the scenarios and the record are written to the recommended answers. 031 and 032
-# are named because the alignment holds 031's lease and solves through 032's solve and
-# hint and hands each solve to 032's aim point; 033 because a scenario starts its focus
-# aid; 013 and 016 for the live loop and MCP; 015 and 038 because a start is refused
-# while Track is on, for 038's push check; 021, 035, 036, 037, 041, 042, 047 and 049
-# because each last changed a file this spec writes (plan.md § Refinement Record). What
-# rests on a run and what on reading is said where it is used (plan.md § What was run
-# and what was read).
+# Probe round 1 built the four stories from this trio alone on `probe/050-r1` (tip
+# 9709494c): 0 blocking and 15 clarity defects, folded here, in plan.md and in tasks.md.
+# The owner answered the ten open decisions (a) on 2026-11-26. The fold re-cut the scope
+# into five stories for size and rebuilt round 1's code for them on
+# `probe/050-r1-split` (tip 2cb196a6), with the seven steps round 1 found unread, every
+# gate passing and each new step's code mutated once (plan.md § What was run and what
+# was read). State: draft. All twelve owner decisions are settled; the flip is the
+# owner's. 031 and 032 are named because the alignment holds 031's lease and solves
+# through 032's solve and hint and hands each solve to 032's aim point; 033 because a
+# scenario starts its focus aid; 013 and 016 for the live loop and MCP; 015 and 038
+# because a start is refused while Track is on, for 038's push check; 021, 035, 036,
+# 037, 041, 042, 047 and 049 because each last changed a file this spec writes (plan.md
+# § Refinement Record). What rests on a run and what on reading is said where it is
+# used (plan.md § What was run and what was read).
 ---
 
 # Feature Specification: The Tools Page Aligns the Finder Camera
@@ -60,7 +65,11 @@ nothing here.
   README and plan.md § Outside the factory are written for it; the code is
   optic-neutral, as the console already is.
 - Q: A live alignment, or one press per turn of the screws? → A: Settled by the owner:
-  the live alignment of four stories, chosen over a one-press version.
+  the live alignment (option A), chosen over a one-press version; the seat split it
+  into five stories for size (§ Owner decisions).
+- Q: How were the ten open decisions answered? → A: Each (a), the recommendation, by
+  the owner on 2026-11-26 (§ Owner decisions). The scenarios were already written to
+  them.
 - Q: What does the console do today when the two cameras point apart? → A: After an
   imaging solve, 032's `read_aim` (`crates/finder/src/imaging/relation.rs:284`)
   projects the imaging centre through the finder fix inside the exposure nearest its
@@ -145,10 +154,11 @@ nothing here.
 
 ## Owner decisions
 
-Two are settled by the owner; ten are open. Each open one keeps its options, its
-evidence and its recommendation, the smallest design that works; the scenarios and the
-record are written to the recommendations, and a different answer changes them before
-any flip. One general rule is behind decisions 4 to 6: **the alignment adds no rule of
+All twelve are settled by the owner: two on 2026-11-25, and decisions 1 to 10 on
+2026-11-26, each answered (a), the recommendation. Each keeps its options and its
+evidence; the scenarios and the record are written to the answers, which are the
+recommendations they were written to, so no scenario changed for them. One general
+rule is behind decisions 4 to 6: **the alignment adds no rule of
 its own to 032.** It gives every frame the same hint, hands every solve through 032's own
 door (FR-037) and shows 032's own word, so 032's module, its FRs and its tests are not
 touched. Its own words (the place, Done, the refusals) are its own, and are said apart
@@ -161,12 +171,21 @@ from 032's. The candidates were measured on data where they could be (decisions 
   at about 4.8″ a pixel, solved with a narrow Tycho database (047's choice by range); the
   tool is the one that gets the two cameras together, since 032 says only `off_frame`
   beyond about 0.86°. The 16 mm lens's arguments are dropped.
-- **The scope** (owner, 2026-11-25): "the live alignment, as drafted (option A)", four
-  stories chained by `depends_on_merged`, chosen over a one-press version.
+- **The scope** (owner, 2026-11-25): the owner chose the live alignment (option A) over
+  a one-press version. The seat split it into five stories for size, chained by
+  `depends_on_merged` (050-R1): round 1 built its four stories from the trio at US1
+  9,221 B, US2 40,814 B (62.3 % of 65,536 B), US3 42,281 B (64.5 %) and US4 26,081 B,
+  so the stop moved from the run to the next story and MCP, the README and the glossary
+  became a story of their own. Round 1's code re-cut for the five, with the seven new
+  steps, measures US1 9,765 B (14.9 %), US2 33,821 B (51.6 %), US3 33,974 B (51.8 %),
+  US4 24,049 B (36.7 %) and US5 26,662 B (40.7 %, `dist` 697 B more), each under 60 %
+  (39,321 B; plan.md § Plan traps 2).
 
-**Open.**
+**Answered on 2026-11-26.** The owner, in reply to the seat's ten recommendations, at
+about 01:28Z: "Agree with your pending qs btw". Each of decisions 1 to 10 is answered
+(a), the recommendation, which the scenarios and the record were written to.
 
-1. **The page and its link** (FR-017, FR-018). Recommended: (a) **a page named Tools at
+1. **The page and its link** (FR-017, FR-018). Answered (a): **a page named Tools at
    `/tools`, linked from Setup's header** while a scope node is paired, under
    `Back to console`, with one block per utility; 051 adds its block below. Measured in
    the browser on the probe (Playwright's Chromium at 360, 390 and 412 px wide): with a
@@ -180,7 +199,7 @@ from 032's. The candidates were measured on data where they could be (decisions 
    section on Setup**, which leaves 051 no page and makes Setup longer; (e) **a link on
    the Imaging page**, beside the camera it uses, which 051's finder-camera focus block
    would not suit.
-2. **The direction words** (FR-002, FR-019). Recommended: (a) **along the finder
+2. **The direction words** (FR-002, FR-019). Answered (a): **along the finder
    camera's own frame**: `right_deg` and `up_deg` along its rows and columns, as the
    finder camera sees it, with the chart rotation not applied, and `separation_deg` on
    the sky. The rings hold the finder camera, so its frame turns with the screws and not
@@ -193,7 +212,7 @@ from 032's. The candidates were measured on data where they could be (decisions 
    the words of the console's push guidance, but turning against them on an equatorial
    mount; (f) **a zenith arrow** drawn in the block from the session's pointing, beside
    the frame-axis words, one more drawing to keep right.
-3. **Exposure and binning** (FR-005). Recommended: (a) **500 ms unless the request names
+3. **Exposure and binning** (FR-005). Answered (a): **500 ms unless the request names
    `exposure_ms`, the binning left as set.** With Track off a star drifts 15.04″ a second
    at the celestial equator (times cos δ elsewhere). ASTAP solves a prepared copy that
    averages each 2 × 2 Bayer cell of the ASI071's frame
@@ -211,7 +230,7 @@ from 032's. The candidates were measured on data where they could be (decisions 
    exposure set in Setup. Instead: (b) **1000 ms**, more stars and a 14 px trail, which
    solved but slower; (c) **force 2 × 2**, a fourth setting to remember and put back for
    no gain at ASTAP's scale; (d) **2000 ms**, a trail that failed.
-4. **The search radius** (FR-005). Recommended: (a) **one hint for every frame: the
+4. **The search radius** (FR-005). Answered (a): **one hint for every frame: the
    paired finder fix's centre with a 10° radius and the field height 032 would give.**
    Measured with ASTAP on the saved frame (shares of the on-target solve at 10°): a
    solve's time follows the hint's offset, not its radius (on target, 1.0 at 10° and
@@ -225,7 +244,7 @@ from 032's. The candidates were measured on data where they could be (decisions 
    misses an imaging camera 3° to 10° off; (c) **30°**, a failing frame half as long
    again; (d) **a follow mode**, a narrow radius round the last solve once one solves, a
    second rule for no measured gain; (e) **the whole sky**, eleven times as long to fail.
-5. **Done** (FR-010, FR-019). Recommended: (a) **the alignment's own word: the imaging
+5. **Done** (FR-010, FR-019). Answered (a): **the alignment's own word: the imaging
    camera's centre in the middle half of the finder camera's frame** (within a quarter of
    its width and of its height of its centre) **for `DONE_FRAMES`, two, frames in a row,
    with 032's word for the aim point shown beside it** (`measured`, `replaced`,
@@ -247,7 +266,7 @@ from 032's. The candidates were measured on data where they could be (decisions 
    sooner than the third frame in the middle and never from a slow finder camera; (c)
    **on the frame**, where 032 can measure, but at the edge, where a bump puts it off
    again; (d) **a fixed angle**, such as 0.25°, a different job for each optic.
-6. **The `note_solve` handover** (FR-010). Recommended: (a) **every solve through
+6. **The `note_solve` handover** (FR-010). Answered (a): **every solve through
    `Imaging::note_solve`**, 032's FR-037, and `aim` read from 032's
    `relation.last.outcome` for that frame: once the centre is on the frame, 032 measures
    the aim point as from any imaging solve. Run: at the end the session's aim point was
@@ -256,7 +275,7 @@ from 032's. The candidates were measured on data where they could be (decisions 
    solves as 032's route solves**, keeping their scale and counting their misses: a
    change to 032's rules; (d) **the alignment sets the aim point itself** from its own
    pairing, a second aim rule beside 032's.
-7. **Track** (FR-011). Recommended: (a) **a start is refused while Track is on, naming
+7. **Track** (FR-011). Answered (a): **a start is refused while Track is on, naming
    Track, and a run ends `failed` when Track is turned on**, read before every frame;
    the README says to turn Track off while turning the finder camera's screws and back
    on after. Track off costs round stars, which the 500 ms exposure keeps short (decision
@@ -266,7 +285,7 @@ from 032's. The candidates were measured on data where they could be (decisions 
    tracker drives the mount back under the owner's hands, over 5′ the model's slip is
    marked and Track follows the new place, and 032 holds every aim reading back until
    Track is off (the Clarifications above).
-8. **A browser test** (FR-020). Recommended: (a) **`e2e/tools.spec.ts` in the simulate
+8. **A browser test** (FR-020). Answered (a): **`e2e/tools.spec.ts` in the simulate
    project**, at 412 by 915, from Setup's link to Done on the simulated console, by day
    and by night, its locators held to the block's region, Done awaited within 20 s, with
    the page no wider than the viewport: two list entries in `playwright.config.ts`
@@ -275,7 +294,7 @@ from 032's. The candidates were measured on data where they could be (decisions 
    (decisions 7 and 9). The width is what decision 1 measured, and only a browser lays
    the page out or paints its night colours. Instead: (b) **none**, as 042 chose,
    Vitest alone driving the block.
-9. **The field-height refusal** (FR-012). Recommended: (a) **a start is refused while
+9. **The field-height refusal** (FR-012). Answered (a): **a start is refused while
    the hint would carry no field height** (`Relation::height_inputs()` answers neither a
    scale nor a focal length, `crates/finder/src/imaging/relation.rs:648`), naming what to
    give: `--focal-length-mm`, or a solve on the Imaging page. Without one ASTAP failed
@@ -283,7 +302,7 @@ from 032's. The candidates were measured on data where they could be (decisions 
    is held to 120 s (`SOLVE_LIMIT`, `crates/finder/src/imaging/astap.rs:22`), which is
    also how long a stop waits for a solve in flight (FR-007). Instead: (b) **the README
    alone**, frames that never solve until the owner reads it.
-10. **The tool's name** (FR-014). Recommended: (a) **Finder alignment**, the owner's own
+10. **The tool's name** (FR-014). Answered (a): **Finder alignment**, the owner's own
     word ("roughly aligned"), with the bare word marked in the four _Avoid_ entries that
     hold it: Sync's "align, alignment (alone: the finder alignment turns the finder camera
     on the tube)", Pointing model's and Zero-point epoch's "alignment (alone: see Finder
@@ -341,13 +360,14 @@ Every scenario shares these definitions.
   of time 0 and frame id 1 whose frame is `Frame::from_solution` of a solution at RA α
   and Dec δ, roll 0, with `PinholeCamera::new(1456.0, 1088.0, 12° in radians)`, as
   032's tests build theirs (`crates/finder/tests/console/imaging_relation.rs:248`):
-  north up and east left. **f** is 728 / tan 6°, the finder camera's focal length in
-  pixels.
+  north up and east left; its solution's `distortion` is none unless the scenario names
+  one. **f** is 728 / tan 6°, the finder camera's focal length in pixels.
 - **The pinhole oracle of a pixel (x, y)** is right = atan((x − 728) / f),
   up = atan((544 − y) / f) and all = atan(hypot(x − 728, 544 − y) / f), in degrees. For
   the pixels used: (700, 420) is −0.23°, 1.03° and 1.05°; (−60, 420) is −6.49°, 1.03°
   and 6.57°; (−300, 420) is −8.44°, 1.03° and 8.50°; (1800, 100) is 8.80°, 3.67° and
-  9.51°; (900, 700) is 1.42°, −1.29° and 1.92°; (−1100, 420) is 14.8° in all.
+  9.51°; (900, 700) is 1.42°, −1.29° and 1.92°; (1300, 544) is 4.72°, 0° and 4.72°;
+  (−300, 544) is −8.44°, 0° and 8.44°; (−1100, 420) is 14.8° in all.
 - **The alignment rig at e** is the simulator over `crate::support::live::DB` with
   `Site::default()` on a `VirtualClock` from `crate::support::live::START`, a mount
   connected and pushed to altitude 50° and azimuth 120°, and `set_optics` with
@@ -358,7 +378,8 @@ Every scenario shares these definitions.
   longitude as its site; and `AppState::shared` over that database with `with_session`,
   `with_clock` of the simulator's clock, `with_link`, `with_live()` (left out where the
   scenario says **without the live loop**), `with_imaging` of a folder under a
-  `crate::support::Scratch` (left out where it says **with no imaging state**),
+  `crate::support::Scratch`, the test's own where it reads the folder's files (left out
+  where it says **with no imaging state**),
   `with_imaging_solver` of the simulated imaging solver over the simulator (left out
   where it says **without a solver**) and `with_focal_length_mm(1800.0)` (2200.0 where
   it says so, left out where it says **with no focal length**), served by
@@ -393,7 +414,8 @@ Every scenario shares these definitions.
   FR-016), each answered 200 and the solve `solved` within 15 s.
 - **Oracles.** The simulator's eyepiece pixel, which is where its imaging camera points in
   the finder camera's frame, and the pinhole oracle above; the centre frame's own
-  arithmetic and the drawing's (160 wide, a 12 margin); 031's and 032's words; and the
+  arithmetic and the drawing's (an SVG 184 wide, the frame 160 wide at (12, 12)); 031's
+  and 032's words; and the
   words of these scenarios. No expected value comes from the code under test: no test
   calls `centre_of` or reads `MIDDLE_SHARE`, `PAIR_S`, `SEARCH_RADIUS_DEG`,
   `ALIGN_EXPOSURE_MS` or `DONE_FRAMES` for an expected value.
@@ -427,7 +449,9 @@ it; during development,
    for RA 108° and for RA 96°, both at Dec 0°, **Then** it asserts that the first's
    `right_deg` is −8 and `up_deg` 0 within 10⁻⁹°, its `x` 728 − f·tan 8° within
    10⁻⁶ px and its `on_frame` false, and that the second's `right_deg` and
-   `separation_deg` are 4 within 10⁻⁹°, its `on_frame` true and its `middle` false.
+   `separation_deg` are 4 within 10⁻⁹°, its `on_frame` true and its `middle` false;
+   and, for the frame at (100°, 0°) with roll 0, fov 12° and `distortion` −0.2, that
+   `centre_of` for RA 108° and Dec 0° has `x` 728 − f·tan 8° within 10⁻⁶ px.
 4. **Given** the centre frame at (100°, 20°), **When** a committed test calls
    `centre_of` for RA 280° and Dec −20°, the point behind the camera, **Then** it
    asserts that the answer is `None`.
@@ -441,10 +465,10 @@ it; during development,
 
 As the owner, I start the finder alignment and it takes imaging frames one after another,
 each solved and paired with the finder camera's live solve, and shows where the imaging
-camera's centre lies from the finder camera's centre while I turn the ring screws, until
-I stop it, when it puts the imaging camera's settings back.
+camera's centre lies from the finder camera's centre while I turn the ring screws.
 
-**Why this priority**: It is the tool.
+**Why this priority**: It is the tool. Its stop is US3's, for size (plan.md § Plan
+traps 2).
 
 **Independent Test**: `crates/finder/tests/console/imaging_align.rs`, new. The `test`
 gate's nextest command runs it; during development,
@@ -452,7 +476,9 @@ gate's nextest command runs it; during development,
 
 **Acceptance Scenarios**:
 
-1. **Given** the alignment rig at (700, 420), ready, **When** a committed test sends
+1. **Given** the alignment rig at (700, 420), ready, its region set by
+   `PUT /api/imaging/settings` `{"roi": {"x": 0, "y": 0, "width": 618, "height": 410}}`
+   (200), **When** a committed test sends
    `POST /api/imaging/align` with `{}` and reads the first measured frame after 0,
    **Then** it asserts that the answer is 200 whose `align` is exactly `state`
    `running`, `since`, `exposure_ms` 500.0 and `frames` 0; that the frame's `centre`
@@ -494,13 +520,37 @@ gate's nextest command runs it; during development,
    `{"error": "this console has no imaging solver"}`; with all, the body `{}` sent as
    `Content-Type: text/plain` 415, `{"exposure_ms": 1e9}` 400
    `{"error": "exposure_ms 1000000000 is outside the camera's range 1–3600000 ms"}` and
-   `{"x": 1}` 400; with the focus aid started by `POST /api/imaging/focus` `{}` (200),
+   `{"x": 1}` 400; after `PUT /api/imaging/settings` `{"exposure_ms": 60000}` (200) and
+   `POST /api/imaging/frame` (200), `{}` 409
+   `{"error": "an exposure is in progress"}`; once that frame reads `saved`, with the
+   focus aid started by `POST /api/imaging/focus` `{}` (200),
    409 `{"error": "the imaging camera is held by the focus aid"}`; with the focus aid
    stopped (200), `{}` 200, and then a second `{}` 409
    `{"error": "the finder alignment is already running"}`, and
    `POST /api/imaging/focus` `{}` and `POST /api/imaging/frame` each 409
    `{"error": "the imaging camera is held by the finder alignment"}`.
-7. **Given** the alignment rig at (700, 420), ready, **When** a committed test sends
+
+### User Story 3 - The alignment stops and puts the camera back, says Done, and refuses Track and a missing field height (Priority: P2)
+
+As the owner, I stop the finder alignment and find the imaging camera's settings as I
+left them and only its last frame kept; I am told Done when the imaging camera's centre
+has held in the middle of the finder camera's frame, with what the aim point made of
+the frame beside it; and the alignment will not run with Track on or without a field
+height.
+
+**Why this priority**: The alignment runs without a stop and without Done; the stop and
+Done are what make it a tool that ends, and the two refusals keep a night from going
+wrong.
+
+**Independent Test**: `crates/finder/tests/console/imaging_align_stop.rs`,
+`crates/finder/tests/console/imaging_align_aim.rs` and
+`crates/finder/tests/motion/imaging_align_track.rs`, new. The `test` gate's nextest
+command runs them; during development,
+`cargo nextest run -p finder --locked --test console --test motion -E 'test(imaging_align)'`.
+
+**Acceptance Scenarios**:
+
+1. **Given** the alignment rig at (700, 420), ready, **When** a committed test sends
    `DELETE /api/imaging/align` with nothing running, sets
    `PUT /api/imaging/settings` `{"exposure_ms": 2000, "roi": {"x": 0, "y": 0, "width": 618, "height": 410}, "save_at_node": true}`,
    reads the mount's true direction, starts the alignment, reads three measured frames,
@@ -511,40 +561,22 @@ gate's nextest command runs it; during development,
    is unchanged, that exactly two files are left under the imaging folder's `frames`, one
    `.fits` and the `.solve.json` of the same name beside it, and that
    `POST /api/imaging/frame` then answers 200.
-8. **Given** the alignment rig at (700, 420), ready, the alignment started with
+2. **Given** the alignment rig at (700, 420), ready, the alignment started with
    `{"exposure_ms": 60000}`, **When** a committed test waits until the imaging view's
    frame has `purpose` `align` and `state` `exposing` and sends
    `DELETE /api/imaging/align`, **Then** it asserts that the answer comes within 5 s of
    paused time, before the 60 s exposure would end, and is 200 with `align.ended`
    `stopped` and `align.frames` 0, and that the imaging view's frame reads `state`
    `aborted`.
-
-### User Story 3 - The alignment says Done, refuses Track and a missing field height, and MCP and the README carry it (Priority: P2)
-
-As the owner, I am told Done when the imaging camera's centre has held in the middle of
-the finder camera's frame, with what the aim point made of the frame beside it; the
-alignment will not run with Track on or without a field height; an MCP client can run
-the same alignment for me; and the README says how.
-
-**Why this priority**: The alignment works without Done; Done is what makes it a tool
-that ends, and the two refusals keep a night from going wrong.
-
-**Independent Test**: `crates/finder/tests/console/imaging_align_aim.rs`,
-`crates/finder/tests/motion/imaging_align_track.rs` and
-`crates/finder/tests/mcp/imaging_align.rs`, new. The `test` gate's nextest command runs
-them; during development,
-`cargo nextest run -p finder --locked --test console --test motion --test mcp -E 'test(imaging_align)'`.
-
-**Acceptance Scenarios**:
-
-1. **Given** the alignment rig at (700, 420), ready, the alignment started with
+3. **Given** the alignment rig at (700, 420), ready, the alignment started with
    `{"exposure_ms": 1000}` so that a finder fix falls inside every exposure, **When** a
    committed test reads the first measured frame after 0 and the measured frame after
    it, **Then** it asserts that the first has `centre.middle` true, `done` false and
-   `aim` `measured`, that the second has `done` true, and that `GET /api/session` reads
+   `aim` `measured`, that the second has `done` true, that `GET /api/session` reads
    `aim.source` `measured` with `aim.x` within 1.5 px of 700 and `aim.y` within 1.5 px
-   of 420.
-2. **Given** the alignment rig at (700, 420), ready, the alignment started with
+   of 420, and that, after those two frames, the screw turned to (−1100, 420), the
+   first `not_solved` frame has no `aim`.
+4. **Given** the alignment rig at (700, 420), ready, the alignment started with
    `{"exposure_ms": 1000}` and three measured frames read, **When** a committed test
    turns a screw to (−300, 420), reads measured frames until one has `aim` `off_frame`,
    then turns a screw to (900, 700) and reads measured frames, keeping the `aim` and
@@ -553,29 +585,53 @@ them; during development,
    kept are exactly `set_aside` with `done` false, `set_aside` with `done` true and
    `replaced` with `done` true, and that `GET /api/session` reads `aim.source`
    `measured` with `aim.x` within 1.5 px of 900 and `aim.y` within 1.5 px of 700.
-3. **Given** the alignment rig at (700, 420) whose node's frame interval is 3000 ms, six
+5. **Given** the alignment rig at (700, 420) whose node's frame interval is 3000 ms, six
    times the 500 ms exposure, ready, **When** a committed test starts the alignment with
    `{}` and reads measured frames, at most 20, until one has `aim` `no_live_pointing` and
    `done` true, **Then** it asserts that such a frame comes, and that its `centre` has
    `x` and `y` within 2 px of 700 and 420, `right_deg`, `up_deg` and `separation_deg`
    within 0.02° of the pinhole oracle, `finder_width` 1456, `finder_height` 1088 and
    `on_frame` true.
-4. **Given** the alignment rig at (700, 420) with no focal length, ready, **When** a
+6. **Given** the alignment rig at (1300, 544), ready, the alignment started with `{}`
+   and three measured frames read, the session's `aim.source` `measured`, **When** a
+   committed test turns the screw to (−300, 544) and reads measured frames, at most 20,
+   until one has `centre.on_frame` false, **Then** it asserts that `GET /api/session`
+   read `aim.source` `measured` before the turn, and that a measured frame with
+   `centre.on_frame` false has its `centre` at (−300, 544) as US2-S1 checks it: 13°
+   from the aim point, 8.4° from the finder camera's centre, so that only a hint at the
+   paired fix's centre finds it within 10°.
+7. **Given** the alignment rig at (700, 420) with no focal length, ready, **When** a
    committed test sends `POST /api/imaging/align` with `{}`, **Then** it asserts that the
    answer is 409
    `{"error": "the imaging camera's field height is unknown: start the console with --focal-length-mm, or solve an imaging frame on the Imaging page"}`.
-5. **Given** the Track rig, ready, **When** a committed test sends `POST /api/track`
+8. **Given** the Track rig, ready, **When** a committed test sends `POST /api/track`
    with `{"on": true}` (200), waits until `GET /api/session` reads `track.wanted` true
    and sends `POST /api/imaging/align` with `{}`, **Then** it asserts that the answer is
    409 `{"error": "Track is on; turn it off while the finder camera's screws are turned"}`.
-6. **Given** the Track rig, ready, its imaging view read, the alignment started with
+9. **Given** the Track rig, ready, its imaging view read, the alignment started with
    `{}` (200) and `align.frames` 1 read, **When** a committed test sends
    `POST /api/track` with `{"on": true}` (200) and waits until `align.state` is `ended`,
    **Then** it asserts that `align.ended` is `failed` with `align.error` exactly
    `Track is on; turn it off while the finder camera's screws are turned`, that the
    imaging view's `settings` equal those read before the start, and that after
    `POST /api/track` with `{"on": false}` (200) `POST /api/imaging/frame` answers 200.
-7. **Given** the bare MCP console and the MCP rig, **When** a committed test calls, on
+
+### User Story 4 - MCP and the README carry the finder alignment (Priority: P2)
+
+As the owner, an MCP client can run the same alignment for me, and the README and the
+glossary say how and name it.
+
+**Why this priority**: The routes and the page work without MCP and the words; they are
+how an agent and a reader find the tool.
+
+**Independent Test**: `crates/finder/tests/mcp/imaging_align.rs`, new. The `test` gate's
+nextest command runs it; during development,
+`cargo nextest run -p finder --locked --test mcp -E 'test(imaging_align)'` and
+`cargo nextest run -p finder --locked --test console -E 'test(docs)'`.
+
+**Acceptance Scenarios**:
+
+1. **Given** the bare MCP console and the MCP rig, **When** a committed test calls, on
    the bare console, `get_finder_alignment` with `{"x": 1}` and `set_finder_alignment`
    with `{}`, and on the MCP rig `get_finder_alignment` with `{}`, then
    `set_finder_alignment` with `{}` and with `{"on": false, "exposure_ms": 5}` and
@@ -592,8 +648,15 @@ them; during development,
    `the finder alignment is already running`; that the read's `align.last.centre.x` is
    within 2 px of 700; that the stop's `align.ended` is `stopped`; and that the list
    holds both tools, `get_finder_alignment` with `readOnlyHint` true.
+2. **Given** the finder README, **When** a committed test reads
+   `crates/finder/README.md`, **Then** it asserts that it still holds
+   `The imaging camera has sixteen tools of its own`, that the line
+   `The Tools page's finder alignment has two tools:` comes after it and before
+   `### MCP under WSL2`, with a list entry for each of `get_finder_alignment` and
+   `set_finder_alignment` between them, and that the heading `## Finder alignment` comes
+   before `## Calibration frames`.
 
-### User Story 4 - The Tools page holds the finder alignment (Priority: P2)
+### User Story 5 - The Tools page holds the finder alignment (Priority: P2)
 
 As the owner, at the telescope with a phone, I open Tools from Setup, start the finder
 alignment, read which way and how far the imaging camera points and see it drawn against
@@ -624,14 +687,19 @@ development, `npm test -- AlignmentBlock ToolsPage` and
    `no_live_pointing`,
    `The aim point is not measured from this frame (no_live_pointing); a later imaging solve measures it.`
 2. **Given** the page rig with `AlignmentBlock` over a running alignment, **When** a
-   committed test renders its last frame as `not_solved` frame 7 with the error
-   `the imaging solver found no solution`, then as `not_solved` frame 9 with the same
-   error and `unsolved` 3, and then as `no_live_solve` frame 10, **Then** it asserts
-   that the status reads exactly
+   committed test renders it first with `frames` 0 and no `last`, then its last frame
+   as `not_solved` frame 7 with the error `the imaging solver found no solution`, then
+   as `not_solved` frame 9 with the same error and `unsolved` 3, then as
+   `no_live_solve` frame 10, and then as a measured frame 2 with `aim` `replaced` and
+   `done` true, **Then** it asserts that first over a running alignment with `frames` 0
+   and no `last`, the status reads exactly `Taking the first imaging frame.`; that it
+   then reads exactly
    `Imaging frame 7 did not solve: the imaging solver found no solution. The next frame looks again.`,
    then
    `Imaging frame 9 did not solve: the imaging solver found no solution. 3 frames in a row have not solved: the imaging camera may be more than 10° from the finder camera's centre, the sky may hold too few stars, or the field height may be wrong. The next frame looks again.`,
-   and then `The finder camera had no live solve for imaging frame 10.`
+   and then `The finder camera had no live solve for imaging frame 10.`; and, over a
+   measured frame 2 with `aim` `replaced`, that the text
+   `The aim point is measured from this frame (replaced).` is shown.
 3. **Given** the page rig with `AlignmentBlock` rendered first with no imaging view and
    then over a ready camera with no alignment, **When** a committed test presses
    `Start aligning`, renders a running alignment whose last frame is measured at the
@@ -672,10 +740,10 @@ development, `npm test -- AlignmentBlock ToolsPage` and
 ### Edge Cases
 
 - **Track on.** A start is refused with Track's words, and Track turned on mid-run ends
-  the run `failed` before its next frame (US3-S5, US3-S6). The README says to turn Track
+  the run `failed` before its next frame (US3-S8, US3-S9). The README says to turn Track
   off while turning the screws and back on after.
 - **No field height.** A start is refused, naming `--focal-length-mm` and a solve on the
-  Imaging page (US3-S4). A wrong one makes every frame `not_solved` (US2-S3).
+  Imaging page (US3-S7). A wrong one makes every frame `not_solved` (US2-S3).
 - **Another holder of the camera** (an imaging run, the stack, the focus aid, a set of
   darks or flats) refuses the start with its name (US2-S6 for the focus aid; the others
   by 031's FR-028, read). While the alignment runs, each of them, a frame and the
@@ -685,24 +753,26 @@ development, `npm test -- AlignmentBlock ToolsPage` and
   solves the alignment's latest frame with 032's own hint and rules: a miss there counts
   as 032's, and three move the field height to its next source, which the alignment's
   next frames then get. The alignment does not remove a frame while 032's solve is
-  `solving` it (FR-005), and leaves that frame's files in place. Read, not run.
-- **A frame in flight with no lease** refuses the start with `an exposure is in progress`,
-  and a camera that is not ready with 031's own words (`the scope node is not connected`
-  and the rest, `crates/finder/src/imaging/mod.rs:591`). Read, not run.
+  `solving` it (FR-007), and leaves that frame's files in place. Read, not run.
+- **A frame in flight with no lease** refuses the start with `an exposure is in progress`
+  (US2-S6), and a camera that is not ready with 031's own words
+  (`the scope node is not connected` and the rest,
+  `crates/finder/src/imaging/mod.rs:591`; read, not run).
 - **A frame that does not solve** (clouds, too few stars, more than 10° out, a wrong field
   height) is `not_solved` with the solver's words, counts no miss and changes no field
   height (032's FR-037); `last.unsolved` counts them in a row, and from the third the
-  block names the causes (US2-S3, US4-S2).
+  block names the causes (US2-S3, US5-S2).
 - **A stop during a solve** waits for the solve to end; ASTAP holds a placed hint to
-  120 s (owner decision 9). A stop during an exposure aborts it (US2-S8).
+  120 s (owner decision 9). A stop during an exposure aborts it (US3-S2).
 - **A bumped finder camera mid-run** is a turned screw: the next frames follow (US2-S4),
   Done waits for two frames in the middle, and 032 sets its readings aside until it
-  replaces them (US3-S2).
+  replaces them (US3-S4). The hint stays at the paired fix's centre, so a frame far
+  from a measured aim point still solves (US3-S6).
 - **A slow finder camera.** The place needs a finder fix within 5 s of the frame's
   middle; 032's reading needs one inside the exposure, so 032 may say
-  `no_live_pointing` while the alignment says Done (US3-S3).
-- **A failed exposure** ends the run `failed` with the frame's error, the settings put
-  back and the camera freed (FR-007). Read, not run.
+  `no_live_pointing` while the alignment says Done (US3-S5).
+- **A failed exposure** ends the run `failed` with the frame's error (FR-005), the
+  settings put back and the camera freed (FR-007). Read, not run.
 - **The console stops mid-run**: the run is in memory and is not resumed; the imaging
   settings are the alignment's until set again. Read, not run.
 - **A frame picked from the top bar while on Tools** opens the console's page, as from
@@ -753,11 +823,10 @@ development, `npm test -- AlignmentBlock ToolsPage` and
   `Imaging::lease("the finder alignment")`, refused with
   `the imaging camera is held by <holder>`. It SHALL then answer 200 with the imaging
   view, its `align` running (owner approvals 2 and 3).
-- **FR-005**: The run SHALL remember the imaging camera's exposure, region of interest
-  and `save_at_node`; set, through the lease, the exposure to `exposure_ms` or
+- **FR-005**: The run SHALL set, through the lease, the exposure to `exposure_ms` or
   `ALIGN_EXPOSURE_MS` (500), the whole sensor and `save_at_node` false, leaving the
   binning as it is; and then take one imaging frame after another under the purpose
-  label `PURPOSE` (`align`) until stopped. Each saved frame SHALL be paired with the
+  label `PURPOSE` (`align`). Each saved frame SHALL be paired with the
   finder fix whose time lies nearest the middle of its exposure, no more than `PAIR_S`
   (5 s) from it; with none, the frame's `outcome` SHALL be `no_live_solve` and it SHALL
   not be solved. Otherwise it SHALL be solved with 032's `solve_frame` and a hint of
@@ -765,29 +834,35 @@ development, `npm test -- AlignmentBlock ToolsPage` and
   the field height `Imaging::hint` gives the frame; a solve SHALL give `outcome`
   `measured` and the `centre` of `centre_of` for the solved centre, and a failed solve
   `outcome` `not_solved` with the solver's error message as `error` and `unsolved`, the
-  frames in a row, this one included, that have not solved. The previous frame's
-  `.fits` file and its `.solve.json` sidecar SHALL be removed once the next frame is
-  saved, so that only the last is kept, unless 032's own solve (`Imaging::solve`) is
-  `solving` that frame, when both stay (owner decisions 3 and 4).
+  frames in a row, this one included, that have not solved. A frame that fails SHALL
+  end the run, `ended` `failed` with that frame's error as `error`, and drop the lease
+  (owner decisions 3 and 4).
 - **FR-006**: The imaging view SHALL gain `align`, absent until the first start in this
   process and then the latest run's: `state` (`running` or `ended`), `since` (console
   Unix seconds), `exposure_ms`, `frames` (the frames saved), and, once there is one,
   `last` of `frame_id`, `at` (the middle of its exposure), `outcome`, and `error` with
   `unsolved`, or `centre`, as FR-005 gives; once ended, `ended` (`stopped` or `failed`)
   and, when failed, `error`. Every other key of the imaging view SHALL stay as it is.
-- **FR-007**: `DELETE /api/imaging/align` (no body) SHALL stop the run: mark it stopped,
-  abort the exposure in flight, wait until the run has ended (a solve in flight ends
-  first), its three settings put back through the lease and the lease dropped, and
-  answer 200 with the imaging view, `align.ended` `stopped`. With nothing running it
-  SHALL answer 200 with the view unchanged. A frame that fails SHALL end the run the
-  same way with `ended` `failed` and that frame's error as `error`.
-- **FR-008**: The alignment SHALL never move the mount, change the session's pointing,
-  target or settings, or write anything but its own imaging frames and their sidecars.
 - **FR-009**: Nothing else SHALL change in US2: 031's lease, frames, settings and words,
   032's solve, hint and relation, the focus aid, and every existing test, US1's among
-  them.
+  them; US2 has no stop route.
 
-**Done, the night's refusals, MCP and the words** (US3):
+**The stop, Done and the night's refusals** (US3):
+
+- **FR-007**: The run SHALL remember the imaging camera's exposure, region of interest
+  and `save_at_node` before it sets them, and every end of a run, stopped or failed,
+  SHALL put those three back through the lease before the lease is dropped.
+  `DELETE /api/imaging/align` (no body) SHALL stop the run: mark it stopped, abort the
+  exposure in flight, wait until the run has ended (a solve in flight ends first), its
+  settings put back and the lease dropped, and answer 200 with the imaging view,
+  `align.ended` `stopped`. With nothing running it SHALL answer 200 with the view
+  unchanged, and on a console with no imaging state 409
+  `this console takes no imaging frames`. The previous frame's `.fits` file and its
+  `.solve.json` sidecar SHALL be removed once the next frame is saved, so that only the
+  last is kept, unless 032's own solve (`Imaging::solve`) is `solving` that frame, when
+  both stay (owner approval 3).
+- **FR-008**: The alignment SHALL never move the mount, change the session's pointing,
+  target or settings, or write anything but its own imaging frames and their sidecars.
 
 - **FR-010**: Each solve SHALL be offered to the aim point through `Imaging::note_solve`
   (032's FR-037) before its line is written. `last` SHALL gain `aim`, the word of the
@@ -799,12 +874,18 @@ development, `npm test -- AlignmentBlock ToolsPage` and
   refusal, while the session's `track.wanted` is true, with 409
   `Track is on; turn it off while the finder camera's screws are turned`, the session
   read with no imaging lock held; and the run SHALL read it before every frame and,
-  while it is true, end as FR-007 ends a failed frame, `ended` `failed` with those words
-  as `error` (owner decision 7; owner approval 8).
+  while it is true, end as FR-005 and FR-007 end a failed frame, `ended` `failed` with
+  those words as `error` (owner decision 7; owner approval 8).
 - **FR-012**: The start SHALL refuse, before the live-solve check, while
   `Relation::height_inputs()` answers neither a scale nor a focal length, with 409
   `the imaging camera's field height is unknown: start the console with --focal-length-mm, or solve an imaging frame on the Imaging page`
   (owner decision 9; owner approval 8).
+- **FR-015**: Nothing else SHALL change in US3: 032's module, the routes and loop of US2
+  but for the stop and its route (FR-007), `last`'s two keys and FR-011's and FR-012's
+  refusals, and every existing test, US1's and US2's among them.
+
+**MCP and the words** (US4):
+
 - **FR-013**: MCP SHALL gain `get_finder_alignment`, read-only, which takes no arguments
   (else the tool error `get_finder_alignment takes no arguments`) and answers
   `{"align": ...}`, null before the first start; and `set_finder_alignment`, which
@@ -823,11 +904,10 @@ development, `npm test -- AlignmentBlock ToolsPage` and
   the finder alignment and `align`; and the _Avoid_ lines of **Sync**, **Pointing
   model**, **Zero-point epoch** and **Relation** SHALL mark the bare word, as plan.md
   § Interfaces gives them (owner decision 10; owner approvals 4 and 5).
-- **FR-015**: Nothing else SHALL change in US3: 032's module, the routes and loop of US2
-  but for `last`'s two keys and FR-011's and FR-012's refusals, and every existing test,
-  US1's and US2's among them.
+- **FR-021**: Nothing else SHALL change in US4: the routes, the run and the view of US2
+  and US3, 032's module, and every existing test, the earlier stories' among them.
 
-**The page** (US4):
+**The page** (US5):
 
 - **FR-016**: `crates/finder/web/src/api.ts` SHALL gain `ImagingAlignCentre`,
   `ImagingAlign`, `postImagingAlign` (body `{}`), `deleteImagingAlign` and
@@ -844,11 +924,11 @@ development, `npm test -- AlignmentBlock ToolsPage` and
   `Start aligning`, or `Stop aligning` while it runs; before the view it SHALL show
   `Reading the imaging camera.` and no button. Its status SHALL read
   `Taking the first imaging frame.` before the first frame; for a measured frame the
-  lines of US4-S1, where the place is "The imaging camera points X° right (left) and Y°
+  lines of US5-S1, where the place is "The imaging camera points X° right (left) and Y°
   up (down) of the finder camera's centre, as the finder camera sees it: Z° in all", one
   decimal each, and, when `aim` is given, `aimLine`'s line beside it; for `not_solved`
   `Imaging frame N did not solve: <error>. The next frame looks again.`, naming the
-  causes from `unsolved` 3 on as US4-S2 words them; and for `no_live_solve`
+  causes from `unsolved` 3 on as US5-S2 words them; and for `no_live_solve`
   `The finder camera had no live solve for imaging frame N.` A measured frame SHALL also
   draw the finder camera's frame, its middle half dashed, and the imaging camera's
   centre, held to the frame's edge along the line from the frame's centre when off it,
@@ -856,7 +936,7 @@ development, `npm test -- AlignmentBlock ToolsPage` and
   ended `failed` run SHALL show the alert `The finder alignment stopped: <error>.`, and a
   refused start or stop the route's words as an alert. It SHALL use DESIGN.md's existing
   classes and `currentColor`, so night mode stays red only.
-- **FR-020**: `crates/finder/web/e2e/tools.spec.ts` SHALL hold US4-S7, with
+- **FR-020**: `crates/finder/web/e2e/tools.spec.ts` SHALL hold US5-S7, with
   `"**/tools.spec.ts"` added to the default project's `testIgnore` and the simulate
   project's `testMatch` in `crates/finder/web/playwright.config.ts` (owner decision 8;
   owner approval 6); `crates/finder/web/dist` SHALL be rebuilt and committed. Nothing
@@ -894,9 +974,9 @@ development, `npm test -- AlignmentBlock ToolsPage` and
   the second frame after the turn (US2-S4).
 - **SC-004**: Done is said only once the centre has held in the middle for two frames in
   a row, with 032's word beside it, and the session's aim point is within 1.5 px of the
-  truth once 032 has measured it (US3-S1 to US3-S3); a start is refused with Track on or
-  without a field height (US3-S4, US3-S5); the stop leaves the imaging settings as they
-  were and the mount where it was (US2-S7), and does not wait out an exposure (US2-S8).
+  truth once 032 has measured it (US3-S3 to US3-S5); a start is refused with Track on or
+  without a field height (US3-S7, US3-S8); the stop leaves the imaging settings as they
+  were and the mount where it was (US3-S1), and does not wait out an exposure (US3-S2).
 
 ## Assumptions
 
@@ -928,22 +1008,31 @@ US1:
 US2:
   depends_on: []
   depends_on_merged: [US1]
-  implements: [FR-004, FR-005, FR-006, FR-007, FR-008, FR-009]
+  implements: [FR-004, FR-005, FR-006, FR-009]
 US3:
   depends_on: []
   depends_on_merged: [US2]
-  implements: [FR-010, FR-011, FR-012, FR-013, FR-014, FR-015]
+  implements: [FR-007, FR-008, FR-010, FR-011, FR-012, FR-015]
 US4:
   depends_on: []
   depends_on_merged: [US3]
+  implements: [FR-013, FR-014, FR-021]
+US5:
+  depends_on: []
+  depends_on_merged: [US4]
   implements: [FR-016, FR-017, FR-018, FR-019, FR-020]
 ```
 
-Four stories, each under 60 % of 65,536 B as the probe built them (plan.md § Plan
-traps 2): the place and the simulator; the run; Done, the night's two refusals, MCP and
-the words; the page. Each merges after the one before (`depends_on_merged`): US2's loop
-calls US1's `centre_of` and its tests point the simulator off the frame; US3 adds two
-keys and two refusals to US2's code and its tests use US2's test helpers; the page reads
-US3's `done` and `aim`, and its browser test needs US3's refusals to be met. Plain
+Five stories, each under 60 % of 65,536 B (39,321 B) as round 1's code re-cut for them
+measures (plan.md § Plan traps 2): the place and the simulator; the run and its start;
+the stop, Done and the night's two refusals; MCP and the words; the page. Round 1 built
+the four of the trio before this fold at 62.3 % and 64.5 % for its run and its Done
+story, so the stop moved from the run to the next story and MCP, the README and the
+glossary became a story of their own (owner decision on the scope). Each merges after
+the one before (`depends_on_merged`): US2's loop calls US1's `centre_of` and its tests
+point the simulator off the frame; US3 adds the stop, two keys and two refusals to
+US2's code and its tests use US2's test helpers; US4's tools start and stop US3's run
+and read its `done` and `aim`; the page reads US3's `done` and `aim` and US4 changes
+nothing it reads, and its browser test needs US3's refusals to be met. Plain
 `depends_on` would order them without putting the earlier code in the later story's
 base.
