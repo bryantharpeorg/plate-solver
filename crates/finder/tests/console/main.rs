@@ -15,6 +15,7 @@ mod calibration_flats;
 mod calibration_flats_sim;
 mod calibration_library;
 mod databases;
+mod finder_focus_aid;
 mod finder_focus_measure;
 mod freshness;
 mod imaging;
