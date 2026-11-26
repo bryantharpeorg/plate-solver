@@ -2,6 +2,7 @@
 import type { ObservingSession } from "../api";
 import { useImaging } from "../useImaging";
 import { AlignmentBlock } from "./AlignmentBlock";
+import { FocusTool } from "./FocusTool";
 
 export function ToolsPage({ onBack }: { session: ObservingSession; onBack: () => void }) {
   const { view, refresh } = useImaging();
@@ -24,6 +25,7 @@ export function ToolsPage({ onBack }: { session: ObservingSession; onBack: () =>
         </div>
       </header>
       <AlignmentBlock view={view} refresh={refresh} />
+      <FocusTool view={view} refresh={refresh} />
     </main>
   );
 }
