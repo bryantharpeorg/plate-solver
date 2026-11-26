@@ -15,11 +15,12 @@ interface Props {
   session: ObservingSession;
   put: (edit: SessionEdit) => Promise<void>;
   onBack: () => void;
+  onTools?: () => void;
   onChange?: () => void;
   mcp?: unknown;
 }
 
-export function SetupPage({ session, put, onBack, onChange, mcp }: Props) {
+export function SetupPage({ session, put, onBack, onTools, onChange, mcp }: Props) {
   const { live } = useLive(session);
   const [lat, setLat] = useState("");
   const [lon, setLon] = useState("");
@@ -116,6 +117,21 @@ export function SetupPage({ session, put, onBack, onChange, mcp }: Props) {
           >
             Back to console
           </a>
+          {session.node && onTools && (
+            <p>
+              <a
+                href="/tools"
+                className="link"
+                onClick={(e) => {
+                  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                  e.preventDefault();
+                  onTools();
+                }}
+              >
+                Tools
+              </a>
+            </p>
+          )}
         </div>
       </header>
 
