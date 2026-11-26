@@ -117,6 +117,7 @@ pub struct AppState {
     link: Option<Arc<LinkManager>>,
     live: Option<Arc<Live>>,
     recordings: Option<Arc<Recorder>>,
+    finder_focus: Arc<crate::finder_focus::FinderFocus>,
     imaging: Option<Arc<crate::imaging::Imaging>>,
     imaging_runner: Option<Arc<crate::imaging::run::Runner>>,
     calibration: Option<Arc<crate::imaging::calibration::service::Calibration>>,
@@ -156,6 +157,7 @@ impl AppState {
             link: None,
             live: None,
             recordings: None,
+            finder_focus: Arc::default(),
             imaging: None,
             imaging_runner: None,
             calibration: None,
@@ -466,6 +468,11 @@ impl AppState {
         self.goto.clone()
     }
 
+    /// The finder camera's focus aid (051).
+    pub fn finder_focus(&self) -> Arc<crate::finder_focus::FinderFocus> {
+        self.finder_focus.clone()
+    }
+
     /// Live reports and preview history for stream and calibration consumers.
     pub fn live(&self) -> Option<Arc<Live>> {
         self.live.clone()
@@ -651,6 +658,7 @@ pub fn router(state: AppState) -> Router {
         );
     }
     routes = routes.merge(crate::imaging::routes::routes());
+    routes = routes.merge(crate::finder_focus::routes());
     routes.with_state(state)
 }
 
