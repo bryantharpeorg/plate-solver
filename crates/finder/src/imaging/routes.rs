@@ -32,7 +32,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/api/imaging/abort", post(abort_frame))
         .route("/api/imaging/solve", post(post_solve))
         .route("/api/imaging/focus", post(post_focus).delete(delete_focus))
-        .route("/api/imaging/align", post(post_align))
+        .route("/api/imaging/align", post(post_align).delete(delete_align))
         .route("/api/imaging/calibration", get(get_calibration))
         .route("/api/imaging/calibration/darks", post(take_darks))
         .route("/api/imaging/calibration/flats", post(take_flats))
@@ -268,6 +268,18 @@ async fn post_focus(
         .await
         .map_err(|refusal| ApiError::new(refusal.status, refusal.message))?;
     Ok(Json(view))
+}
+
+/// Stop the finder alignment (050), waiting for the settings to be restored
+/// and the camera's lease to be released.
+async fn delete_align(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+) -> Result<Json<ImagingView>, ApiError> {
+    let imaging = state.imaging().ok_or_else(|| {
+        ApiError::new(StatusCode::CONFLICT, "this console takes no imaging frames")
+    })?;
+    Ok(Json(imaging.align_stop().await))
 }
 
 /// Start the finder alignment (050), reading its JSON body as the focus aid
