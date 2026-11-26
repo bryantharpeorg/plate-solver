@@ -63,15 +63,42 @@ pub fn render(
     seed: u64,
     frame_id: u64,
 ) -> Vec<u8> {
+    render_with_sigma(
+        optics,
+        stars,
+        exposure_ms,
+        gain,
+        seed,
+        frame_id,
+        PSF_SIGMA_PX,
+    )
+}
+
+/// `render` with stars of Gaussian width `sigma_px` (051): each star keeps its
+/// flux, so its peak falls as the square of `PSF_SIGMA_PX / sigma_px`, and its
+/// stamp grows with it. At `PSF_SIGMA_PX` the pixels are `render`'s own.
+pub fn render_with_sigma(
+    optics: &Optics,
+    stars: &[RenderStar],
+    exposure_ms: f64,
+    gain: f64,
+    seed: u64,
+    frame_id: u64,
+    sigma_px: f64,
+) -> Vec<u8> {
+    assert!(sigma_px.is_finite() && sigma_px >= PSF_SIGMA_PX);
     let strength = exposure_ms * gain / REFERENCE_EXPOSURE_MS;
     magnitude_limit(exposure_ms, gain);
     let width = optics.width as usize;
     let height = optics.height as usize;
     let mut light = vec![8.0 * strength; width * height];
     for star in stars {
-        let peak = 40.0 * strength * 10_f64.powf(-0.4 * (star.magnitude - REFERENCE_MAGNITUDE));
-        // Six sigma retains the wings even around saturated bright stars.
-        let radius = 8;
+        let peak = 40.0
+            * strength
+            * 10_f64.powf(-0.4 * (star.magnitude - REFERENCE_MAGNITUDE))
+            * (PSF_SIGMA_PX / sigma_px).powi(2);
+        // Retain the same fraction of the wings as at best focus.
+        let radius = (8.0 * sigma_px / PSF_SIGMA_PX).ceil() as i64;
         for y in (star.y.floor() as i64 - radius).max(0)
             ..=(star.y.floor() as i64 + radius).min(height as i64 - 1)
         {
@@ -80,7 +107,7 @@ pub fn render(
             {
                 let r2 = (x as f64 + 0.5 - star.x).powi(2) + (y as f64 + 0.5 - star.y).powi(2);
                 light[y as usize * width + x as usize] +=
-                    peak * (-r2 / (2.0 * PSF_SIGMA_PX.powi(2))).exp();
+                    peak * (-r2 / (2.0 * sigma_px.powi(2))).exp();
             }
         }
     }

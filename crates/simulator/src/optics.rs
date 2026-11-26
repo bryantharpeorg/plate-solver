@@ -74,6 +74,7 @@ pub struct TrueDirections {
 pub(crate) struct Pointing {
     pub optics: Optics,
     pub imaging: ImagingOptics,
+    pub finder_focus_error: f64,
     pub site: Site,
     pub alt: f64,
     pub az: f64,
@@ -98,6 +99,7 @@ impl Simulator {
             state: Arc::new(Mutex::new(Pointing {
                 optics: Optics::default(),
                 imaging: ImagingOptics::default(),
+                finder_focus_error: 0.0,
                 site,
                 alt: 45.0,
                 az: 180.0,
@@ -299,6 +301,21 @@ impl Simulator {
     pub fn set_focus_error(&self, error: f64) {
         assert!(error.is_finite());
         self.state.lock().unwrap().imaging.focus_error = error;
+    }
+
+    /// The finder camera's focus error (051): 0 is best focus, and its sign
+    /// does not change a star's size.
+    pub fn finder_focus_error(&self) -> f64 {
+        self.state.lock().unwrap().finder_focus_error
+    }
+
+    /// Turn the finder camera's simulated focuser (051): its stars' Gaussian
+    /// width becomes `render::PSF_SIGMA_PX` and `imaging::FOCUS_SIGMA_PX` times
+    /// the error, added in quadrature, from the next exposure. Panics on a
+    /// value that is not finite.
+    pub fn set_finder_focus_error(&self, error: f64) {
+        assert!(error.is_finite());
+        self.state.lock().unwrap().finder_focus_error = error;
     }
 
     /// Where the imaging frame points now, on the clock's reading.

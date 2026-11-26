@@ -87,6 +87,7 @@ pub mod catalog;
 pub mod constellation;
 pub mod databases;
 pub mod ephemeris;
+pub mod finder_focus;
 pub mod grid;
 pub mod link;
 pub mod live;
