@@ -18,6 +18,7 @@ mod databases;
 mod freshness;
 mod imaging;
 mod imaging_abort_silent;
+mod imaging_align;
 mod imaging_align_centre;
 mod imaging_astap;
 mod imaging_checks;

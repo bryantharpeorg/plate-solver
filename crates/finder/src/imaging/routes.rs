@@ -13,6 +13,7 @@ use serde::Deserialize;
 use crate::{
     api::{sim_json, ApiError, AppState, SessionWrite},
     imaging::{
+        align::AlignAsk,
         calibration::service::{CalibrationView, DarksRequest, FlatsRequest},
         focus::run::FocusAsk,
         run::{By, RunRequest, Runner},
@@ -31,6 +32,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/api/imaging/abort", post(abort_frame))
         .route("/api/imaging/solve", post(post_solve))
         .route("/api/imaging/focus", post(post_focus).delete(delete_focus))
+        .route("/api/imaging/align", post(post_align))
         .route("/api/imaging/calibration", get(get_calibration))
         .route("/api/imaging/calibration/darks", post(take_darks))
         .route("/api/imaging/calibration/flats", post(take_flats))
@@ -263,6 +265,24 @@ async fn post_focus(
     })?;
     let view = imaging
         .focus_start(ask)
+        .await
+        .map_err(|refusal| ApiError::new(refusal.status, refusal.message))?;
+    Ok(Json(view))
+}
+
+/// Start the finder alignment (050), reading its JSON body as the focus aid
+/// does before checking imaging availability and the start's refusals.
+async fn post_align(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+    ask: Result<Json<AlignAsk>, JsonRejection>,
+) -> Result<Json<ImagingView>, ApiError> {
+    let ask = sim_json(ask)?;
+    let imaging = state.imaging().ok_or_else(|| {
+        ApiError::new(StatusCode::CONFLICT, "this console takes no imaging frames")
+    })?;
+    let view = imaging
+        .align_start(ask)
         .await
         .map_err(|refusal| ApiError::new(refusal.status, refusal.message))?;
     Ok(Json(view))

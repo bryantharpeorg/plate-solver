@@ -85,6 +85,9 @@ pub struct ImagingView {
     /// only while the camera is `ready` and the console has a solver.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub focus: Option<focus::run::FocusView>,
+    /// The latest finder alignment, absent until its first start (050).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub align: Option<align::AlignView>,
     /// The calibration library and what matches the latest saved imaging frame (034).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub calibration: Option<calibration::service::CalibrationView>,
@@ -115,6 +118,7 @@ impl ImagingView {
             solve: None,
             relation: None,
             focus: None,
+            align: None,
             calibration: None,
             stack: None,
             steering: None,
@@ -362,6 +366,8 @@ struct Held {
     /// The focus state: what the console keeps about focus for one camera, and
     /// the latest run of the focus aid (033 US5, FR-029).
     focus: focus::run::State,
+    /// The latest finder alignment and its task (050).
+    align: align::State,
 }
 
 impl Default for Held {
@@ -392,6 +398,7 @@ impl Default for Held {
             relation: relation::Relation::new(PathBuf::new()),
             history_task: None,
             focus: focus::run::State::new(PathBuf::new()),
+            align: align::State::default(),
         }
     }
 }
@@ -433,6 +440,7 @@ impl Drop for Imaging {
             task.abort();
         }
         held.focus.abort_task();
+        held.align.abort_task();
     }
 }
 
@@ -532,6 +540,7 @@ impl Imaging {
                 .flatten(),
             // The focus view only while `ready` with a solver (033 FR-029).
             focus: (ready && held.solver.is_some()).then(|| focus::run::view(&held, now)),
+            align: align::view(&held),
             calibration: None,
             stack: None,
             steering: None,
