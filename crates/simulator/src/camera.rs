@@ -111,13 +111,14 @@ impl Camera for SimCamera {
             let id = self.frames;
             self.frames = self.frames.wrapping_add(1);
             tokio::time::sleep(Duration::from_secs_f64(exposure_s)).await;
-            let pixels = render::render(
+            let pixels = render::render_with_sigma(
                 &p.optics,
                 &stars.iter().map(|(_, s)| *s).collect::<Vec<_>>(),
                 exposure_ms,
                 gain,
                 self.seed,
                 id,
+                render::PSF_SIGMA_PX.hypot(crate::imaging::FOCUS_SIGMA_PX * p.finder_focus_error),
             );
             Ok(GrayFrame {
                 pixels,
