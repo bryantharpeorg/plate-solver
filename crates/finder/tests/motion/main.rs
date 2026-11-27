@@ -7,6 +7,7 @@ mod support;
 
 mod goto;
 mod imaging_align_track;
+mod imaging_focus_altitude;
 mod imaging_run;
 mod imaging_run_centring;
 mod imaging_run_stack;

@@ -15,7 +15,8 @@ use tokio::{sync::Notify, task::JoinHandle};
 
 use super::{
     aid::{Aid, Sample},
-    judge, FocusReading, Kept, KeptRegion, Mark, Of, Read, Source, Tile, Unmeasurable, Verdict,
+    carry, judge, FocusReading, Kept, KeptRegion, Mark, Of, Read, Source, Tile, Unmeasurable,
+    Verdict,
 };
 use crate::imaging::{
     frames::FrameView,
@@ -106,12 +107,15 @@ pub struct RecordOut {
     pub earlier: Option<SizeAt>,
 }
 
-/// A size and when it was read (FR-029).
+/// A size and when it was read (FR-029), and the altitude it was read at, when
+/// known (054).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct SizeAt {
     pub value: f64,
     /// Console Unix seconds.
     pub at: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alt_deg: Option<f64>,
 }
 
 /// The aid's part of the focus view (FR-029): the latest run, running or ended,
@@ -170,6 +174,9 @@ pub struct LastView {
     pub value: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stars: Option<u32>,
+    /// The altitude the frame was read at, when known (054).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alt_deg: Option<f64>,
 }
 
 /// The median of the readings held in the view (FR-025).
@@ -179,12 +186,25 @@ pub struct MedianView {
     pub readings: usize,
 }
 
-/// What a reading was judged against (FR-025).
+/// What a reading was judged against (FR-025): the record, carried to the
+/// reading's altitude when both altitudes are known (054).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct ReferenceView {
     pub value: f64,
     /// `tonight` or `earlier`.
     pub of: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub carried: Option<CarriedView>,
+}
+
+/// The record a reference was carried from, and the two altitudes (054): the
+/// record's own size in the view's unit, the altitude it was read at, and the
+/// reading's.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct CarriedView {
+    pub from: f64,
+    pub from_alt_deg: f64,
+    pub alt_deg: f64,
 }
 
 /// The focus state the imaging state holds: what the console keeps about focus
@@ -298,6 +318,9 @@ struct Run {
     /// The reference the verdict was judged against, as it stood before the
     /// reading was noted (FR-025).
     reference: Option<(f64, Of)>,
+    /// The record the reference was carried from, its altitude and the
+    /// reading's, when it was carried (054): the record's own size in pixels.
+    carried: Option<(f64, f64, f64)>,
     ended_reason: Option<&'static str>,
     error: Option<String>,
     restore_error: Option<String>,
@@ -325,6 +348,7 @@ impl Run {
             last: None,
             verdict: None,
             reference: None,
+            carried: None,
             ended_reason: None,
             error: None,
             restore_error: None,
@@ -698,8 +722,9 @@ async fn steps(imaging: &Arc<Imaging>, lease: &Lease, config: &Config, root: &Pa
             Err(error) => return with(Ended::failed(error.message()), remembered),
         };
         // f to h: one critical section, no await inside it. `at` is the middle
-        // of the exposure.
-        let settled = note(imaging, &read, frame.id, start + frame.exposure_ms / 2000.0);
+        // of the exposure, and `alt` the altitude Track's target had then (054).
+        let at = start + frame.exposure_ms / 2000.0;
+        let settled = note(imaging, &read, frame.id, at, altitude(imaging, at));
         // i. A check ends by itself (FR-026): at its first settled reading,
         //    with that reading's verdict; at its first unmeasurable frame,
         //    with that frame's verdict; or after `CHECK_FRAMES` imaging frames
@@ -985,11 +1010,36 @@ fn remove(root: &Path, previous: Option<(u64, Option<String>)>) {
     }
 }
 
+/// The altitude, in degrees, at `at`, of the place Track holds (054): while the
+/// session's Track is `tracking` and a site is set, its target's geometric
+/// altitude then; none otherwise, and none at or below the horizon. The session
+/// is read with the imaging state's lock released.
+fn altitude(imaging: &Arc<Imaging>, at: f64) -> Option<f64> {
+    let session = imaging
+        .state
+        .lock()
+        .expect("imaging state")
+        .session
+        .clone()?;
+    let view = session.0.snapshot(at);
+    let track = view.track.filter(|track| track.state == "tracking")?;
+    let site = view.site?;
+    let observer = crate::sky::Observer {
+        lat: site.lat_deg,
+        lon: site.lon_deg,
+        time: at,
+    };
+    let (alt, _) = crate::sky::alt_az(track.target.ra_deg, track.target.dec_deg, &observer);
+    (alt > 0.0).then_some(alt)
+}
+
 /// Steps 4f to 4h (FR-023, FR-025): the sample pushed, the cadence and the
 /// last sample set, the reference read before the verdict is set, the verdict
 /// kept with it, and a settled reading noted. One critical section; no await
-/// falls inside it. Answers the settled reading, if this sample made one.
-fn note(imaging: &Arc<Imaging>, read: &Read, id: u64, at: f64) -> Option<f64> {
+/// falls inside it. Answers the settled reading, if this sample made one. `alt`
+/// is the altitude the frame was read at, when known (054): the reference is
+/// the record carried to it when the record's own altitude is known too.
+fn note(imaging: &Arc<Imaging>, read: &Read, id: u64, at: f64, alt: Option<f64>) -> Option<f64> {
     let mut guard = imaging.state.lock().expect("imaging state");
     let held: &mut Held = &mut guard;
     let now = imaging.clock.now();
@@ -1015,37 +1065,49 @@ fn note(imaging: &Arc<Imaging>, read: &Read, id: u64, at: f64) -> Option<f64> {
         state,
         value,
         stars,
+        alt_deg: alt,
     });
     // g. The reference as it stood before the reading is noted, so a settled
     //    reading is never judged against itself. Only a measured scale reaches
-    //    the record (FR-025).
+    //    the record (FR-025). The record is carried to the reading's altitude
+    //    when both are known (054): the reference is then the carried size,
+    //    and the record's own size and both altitudes are kept with it.
     let measured = held
         .relation
         .view(None, false)
         .and_then(|view| view.scale)
         .map(|scale| scale.arcsec_per_px);
-    let reference = held.focus.kept.reference(now, measured);
+    let (reference, carried) = match (held.focus.kept.reference_at(now, measured), alt) {
+        (Some((px, of, Some(from_alt))), Some(to_alt)) => (
+            Some((carry(px, from_alt, to_alt), of)),
+            Some((px, from_alt, to_alt)),
+        ),
+        (found, _) => (found.map(|(px, of, _)| (px, of)), None),
+    };
     match (settled, read) {
         (Some(m), _) => {
             let found = run.aid.found();
             run.verdict = Some(judge(Ok(m), reference.map(|(px, _)| px)));
             run.reference = reference;
+            run.carried = carried;
             // h. Noted with the aid's `found` of this moment — but never by a
             //    check, which is judged against the record and changes
             //    nothing (FR-025, FR-026).
             if !run.check {
-                held.focus.kept.note(m, at, measured, found);
+                held.focus.kept.note_at(m, at, measured, found, alt);
             }
         }
         (None, Err(unmeasurable)) => {
             run.verdict = Some(judge(Err(*unmeasurable), reference.map(|(px, _)| px)));
             run.reference = reference;
+            run.carried = carried;
         }
         // A measurable frame that did not settle: no verdict and no reference
         // (FR-025).
         _ => {
             run.verdict = None;
             run.reference = None;
+            run.carried = None;
         }
     }
     settled
@@ -1159,9 +1221,11 @@ pub(in crate::imaging) fn view(held: &Held, now: f64) -> FocusView {
         .and_then(|view| view.scale)
         .map(|scale| scale.arcsec_per_px);
     let record = held.focus.kept.record(now, measured);
-    let sized = |mark: Mark| SizeAt {
+    let altitudes = held.focus.kept.altitudes(now, measured);
+    let sized = |mark: Mark, alt_deg: Option<f64>| SizeAt {
         value: mark.px * s,
         at: mark.at,
+        alt_deg,
     };
     // The region is the tile a running aid reads for the time being, shown as
     // `provisional`, in place of the kept one; without one, the kept region
@@ -1211,8 +1275,8 @@ pub(in crate::imaging) fn view(held: &Held, now: f64) -> FocusView {
         arcsec_per_px: shown,
         region,
         record: (record.tonight.is_some() || record.earlier.is_some()).then_some(RecordOut {
-            tonight: record.tonight.map(sized),
-            earlier: record.earlier.map(sized),
+            tonight: record.tonight.map(|mark| sized(mark, altitudes.tonight)),
+            earlier: record.earlier.map(|mark| sized(mark, altitudes.earlier)),
         }),
         aid: held.focus.run.as_ref().map(|run| AidView {
             state: run.lifecycle,
@@ -1239,6 +1303,13 @@ pub(in crate::imaging) fn view(held: &Held, now: f64) -> FocusView {
                     Of::Tonight => "tonight",
                     Of::Earlier => "earlier",
                 },
+                carried: run
+                    .carried
+                    .map(|(from, from_alt_deg, alt_deg)| CarriedView {
+                        from: from * s,
+                        from_alt_deg,
+                        alt_deg,
+                    }),
             }),
             history: run
                 .aid

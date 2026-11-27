@@ -227,7 +227,7 @@ The part of the imaging camera's frame where focus readings are taken: the tile 
 _Avoid_: focus box, ROI (alone)
 
 **Focus record**:
-The smallest settled reading this imaging camera has given on this telescope: tonight's, and the earlier nights'. A reading is judged against the smaller of the two, or against tonight's alone once the focus aid has passed through focus tonight; never against an absolute number.
+The smallest settled reading this imaging camera has given on this telescope: tonight's, and the earlier nights', each with the altitude it was read at when known. A reading is judged against the smaller of the two, or against tonight's alone once the focus aid has passed through focus tonight, carried to the reading's altitude when both altitudes are known; never against an absolute number.
 _Avoid_: best focus, focus target
 
 **Focus aid**:
