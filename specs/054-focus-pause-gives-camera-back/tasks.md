@@ -7,14 +7,15 @@ description: "Task list for 054-focus-pause-gives-camera-back: The Focus Pause G
 **Prerequisites** (plan.md § Prerequisites, each with its evidence there):
 - every spec in `depends_on_landed` has landed on `main`: met at f6d4f5fd;
 - `main` is still as read, and 052, 053 and 055, which write some of the same files,
-  have landed or been ordered: not met; the four land in the order 052, 053, 054, 055,
-  and the operator seat re-anchors each one's `shared_writes` on what has landed before
-  its flip;
-- the owner decisions in spec.md are settled and the owner approvals given: not met,
-  none of the five answered;
-- a cynical review and a probe round from this text alone, folded: half met (review r1
-  folded; the probe round from this text alone not run);
-- the page half has run once: met on the probe (`CI=1 npm run e2e`, 34 of 34);
+  have landed or been ordered: waits for 052 and 053 to land; the four land in the
+  order 052, 053, 054, 055, and the operator seat re-anchors each one's
+  `shared_writes` on what has landed before its flip;
+- the owner decisions in spec.md are settled and the owner approvals given: waits for
+  the owner at the flip, none of the five answered;
+- a cynical review and a probe round from this text alone, folded: met (review r1
+  folded; probe round 1, 0 blocking and 10 clarity, folded);
+- the page half has run once: met on probe round 1 after its fold (`CI=1 npm run e2e`,
+  34 of 34);
 - no operator-staged file is needed: met.
 
 **Rules for every story:**
@@ -36,7 +37,8 @@ description: "Task list for 054-focus-pause-gives-camera-back: The Focus Pause G
   `Kept::reference` keep their signatures.
 - The pause rig is private to `crates/finder/tests/console/imaging_run_focus.rs`
   (`rig`, `crates/finder/tests/console/imaging_run_focus.rs:363`): US1's test file
-  copies its lines (about 90), the settle added, and says so in a comment.
+  copies its lines (about 90), the settle added and its `Simulator` handed back, and
+  says so in a comment.
 - Copy the words of spec.md's FRs and of plan.md § Interfaces exactly, the README's
   and `GLOSSARY.md`'s among them. Say "finder camera", never "finder" alone, in every
   message and label.
@@ -161,6 +163,9 @@ US4
   `crates/finder/src/imaging/focus/run.rs` and the README after US1.
 - **US4** shares no file with the others and calls none of their code; it may run
   beside them.
-- **If US1 runs over** (plan.md § Plan traps 1), the operator seat splits US1-S4 to
-  US1-S6 and the region an aid left into a story of their own after US1.
+- **If the owner prefers the split at the flip** (plan.md § Plan traps 1), the
+  operator seat moves US1-S4 to US1-S6, US1-S3's last step and the region an aid left
+  into a story of their own after US1, with its own test file and copy of the pause
+  rig, and US1's `focus_left` answers the latest run's `restore_error` while the
+  settings are not whole until that story lands.
 - **`[P]`** marks nothing here: each story's implementation follows its tests.

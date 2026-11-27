@@ -6,9 +6,12 @@ depends_on_landed: ["013-live-finder", "015-tracking", "016-mcp", "031-imaging-f
 # defects of the field night of 2026-11-26), from a probe of that day on the branch
 # `probe/054` cut from f6d4f5fd. Cynical review r1 (0 blockers, 6 majors, 10
 # minors) folded the same day, with new probe commits on that branch (tip 965ec262,
-# every gate passing; plan.md § What was run and what was read). Every `path:line`
-# here was read at f6d4f5fd. Not yet probe-built from this text, and none of the
-# five owner decisions answered: each carries its recommendation, and the scenarios
+# every gate passing; plan.md § What was run and what was read). Probe round 1
+# built the four stories from this text alone the same day (branch `probe/054-r1`
+# from a2a65162, tip abf7e226): 0 blocking, 10 clarity defects, folded with three
+# test commits on that branch (99efbc63, 1eebf008, 06ec58d0, the tip; every gate
+# passing). Every `path:line` here was read at f6d4f5fd. None of the five owner
+# decisions is answered: each carries its recommendation, and the scenarios
 # and the record are written to the recommendations. 013 is named for the simulator
 # and the live loop the rigs run on; 015 because a reading's altitude is Track's
 # target's; 016 for MCP; 031 for the imaging camera's lease and the Imaging page; 033
@@ -40,12 +43,19 @@ imaging focus check, and the unit.
 
 ## Clarifications
 
-### Session 2026-11-27 (the probe on `main` at f6d4f5fd, and review r1's fold)
+### Session 2026-11-27 (the probe on `main` at f6d4f5fd, review r1's fold, probe round 1's fold)
 
 - Q: What does this trio read besides itself? → A: Nothing about the feature. `spec.md`
   holds every requirement and scenario, and `plan.md` every design decision, the
   interfaces, the shapes that existing tests pin and the alternatives rejected. The
   probe's branch and logs are not in the repository; what they showed is written here.
+- Q: Is the text enough to build from? → A: Yes. Probe round 1 built the four stories
+  from it alone, with plan.md § Interfaces' code as written and only each story's
+  `writes`: no blocking defect and 10 clarity defects. Four choices no scenario showed
+  (a refusal that changes nothing, the camera described again, a refused settings
+  change, the altitudes the foreign rule drops and a past night keeps) and the motion
+  rig's missing scale are now steps of US1-S3 to US1-S5, US2-S2, US2-S3 and US3-S1,
+  each run on the code and failing under its mutation (plan.md § What was run).
 - Q: Why did `Go anyway` end the run? → A: Every answer to the pause closes the focus
   aid: the run's focus part calls 033's `focus_stop`
   (`crates/finder/src/imaging/run/console.rs:599`), which aborts the aid's exposure in
@@ -193,24 +203,28 @@ altitude, and leaves every record without an altitude judging as it does today.
    for the field's 4.6″, under the far-out limit of about 11″ at every altitude.
    Evidence (run, plan.md § What was run): on the field night's numbers 6.7″ at 37°
    reads 1.120 times the carried record of 5.98″, `slightly_soft`, and 6.4″ at 38° 1.070,
-   `good`: the run goes on, with a warning for the first. Both factors pass the cap, so
-   the verdicts do not depend on the secant against another airmass formula nor on the
-   record's altitude anywhere in the session's 72° to 74° (the 4.60 is the session's
-   last reading's altitude, not the reading's own; at 66° the two read 1.134 and 1.098).
-   In the rig, a record of 2.0 px at 74° carries to 2.459 px at Track's target's 42.95°,
-   and a reading of 2.826 px is `slightly_soft`, `clearly_out` uncarried. **Records
+   `good`: the run goes on, with a warning for the first. Both factors pass the cap
+   (1.324 and 1.306 uncapped), so the verdicts do not depend on the secant against
+   another airmass formula; nor on the record's altitude anywhere in the session's 72°
+   to 74° (the 74° is the session's last reading's altitude, not the record reading's
+   own): from 72° the two read 1.120 and 1.072, and the 6.4″ would reach 1.10 only
+   against a record read below about 65.6°, the 6.7″ 1.30 below about 46.7°. In the
+   rig (its scale 2.19″ a pixel), a record of 2.0 px at 74° carries to 5.39″ at Track's
+   target's 42.96° (factor 1.229), and a reading of 6.19″ is `slightly_soft` (1.149),
+   `clearly_out` uncarried (1.413). **Records
    are compared with each other as read** (owner approval 8): under a one-sided carry a
    size carried to the zenith is unchanged, so comparing two records at one altitude
    is comparing them as read. The pause sentence and MCP's `focus.record` then name the
    carried size (owner approval 7). Instead: (b) **a quadrature carry with a stated
    seeing share s**: reference = √((s·k)² + R² − s²), k the uncapped factor; 6.7″ at 37°
-   reads 1.267 (`slightly_soft`) at s = 3.0″ and 1.317 (`clearly_out`) at 2.5″: the
+   reads 1.215 (`slightly_soft`) at s = 3.5″ and 1.363 (`clearly_out`) at 2.0″: the
    verdict rests on a share no reading here measures; (c) **no carry, a note on the
    page only**: the field night's readings stay `clearly_out` at 1.457 and 1.391; (d)
    **the full carry** (the first draft): it reads the whole size as seeing; from 4.6″
    at 74° `clearly_out` would start at 8.85″ at 30° and 11.12″ at 20°, past the far-out
-   limit, so below about 20.6° no change can pause; a doubled optical blur at 20°
-   (8.93″) reads `good`; a record of 6.1″ read at 37° carries to 4.67″ at 70°, and a
+   limit, so below about 20.5° no change can pause; a doubled optical blur at 20°
+   (8.93″, 3.0″ of the record's 4.6″ taken as seeing, in quadrature) reads `good` (1.044);
+   a record of 6.1″ read at 37° carries to 4.67″ at 70°, and a
    well-focused 5.5″ there reads `slightly_soft`; and the field's 6.7″ sits 0.02 % under
    the `good` line; (e) **a record per altitude band**: M42 at 37° would have no record
    and the run would pause all the same; (f) **looser thresholds** at every altitude.
@@ -307,9 +321,11 @@ Every scenario shares these definitions.
   `with_imaging`, `with_focal_length_mm(1800.0)`, the simulated imaging solver with
   `with_measure_noise(7, 0.02)`, and `with_imaging_run_steps` of a `Script`'s steps whose
   camera and focus are `console::camera` and `console::focus`; served by
-  `crate::support::mcp::app(state, "127.0.0.1")`, so that `/mcp` answers too. The tests
+  `crate::support::mcp::app(state, "127.0.0.1")`, so that `/mcp` answers too, and
+  handed back with its `Simulator`. The tests
   run under `#[tokio::test(start_paused = true)]`, read `GET /api/imaging` every 100 ms,
   and every state awaited comes within 300 s of paused time. No focus record is kept.
+  The simulator is made unresponsive and responsive again with its `set_unresponsive`.
 - **Whole** means that `settings.roi` of `GET /api/imaging` has `x` 0, `y` 0 and the
   `camera`'s `width` and `height`.
 - **Going on anyway mid-exposure** is: wait for `state` `ready`; `POST /api/imaging/run`
@@ -327,7 +343,8 @@ Every scenario shares these definitions.
 - **STILL** is `the camera refused the settings: it is still stopping an exposure`, the
   simulator's `STILL_STOPPING`; **REFUSED** is `the scope node did not apply the
   settings: ` followed by STILL; **NAMED** is `the focus aid could not put the imaging
-  camera's settings back: ` followed by REFUSED.
+  camera's settings back: ` followed by REFUSED; **REGION** is 041's words, `the
+  imaging camera has a region of interest set: clear it before an imaging run`.
 - **The motion rig** is a simulator on `crate::support::live::DB` with `Site::default()`
   and a `VirtualClock` from `crate::support::live::START`, with a `SimMount` connected,
   pushed to altitude 50° and azimuth 120°, focus error 0; served by `SimNode::new` with
@@ -335,8 +352,9 @@ Every scenario shares these definitions.
   node, the site of `crates/finder/tests/console/imaging_run_focus.rs:393` and the
   target `M42`; `AppState::shared` with `with_session`, `with_clock` of the simulator's
   clock, `with_link`, `with_live_solver` of `crate::support::goto::Stars`,
-  `with_imaging` and the simulated imaging solver without noise, served by
-  `finder::router`. It waits for the imaging `state` `ready` and a first sync
+  `with_imaging`, `with_focal_length_mm(1800.0)` and the simulated imaging solver
+  without noise, served by `finder::router`, so that a size in pixels is not one in
+  arcsec (s is about 2.19). It waits for the imaging `state` `ready` and a first sync
   (`model.syncs` above 0 in `GET /api/session`), then sets the aim at the simulator's
   eyepiece pixel with `Session::set_aim`. Paused time; every read every 100 ms, every
   state within 900 s.
@@ -349,7 +367,7 @@ Every scenario shares these definitions.
   `tracking` in `GET /api/session`, then 15 s. **A check** is `POST /api/imaging/focus`
   with `{"check":true}`, then waiting for `focus.aid.state` `ended`. **The true
   altitude** is the simulator's `telescope().eyepiece.alt`. **s** is the view's
-  `focus.arcsec_per_px`, or 1 when it has none.
+  `focus.arcsec_per_px`.
 - **The airmass** X(h) is 1/sin h, the secant of the zenith distance, and
   **carried(P, F, A)** is P·min(1.30, max(1, (X(A)/X(F))^0.6)).
 - **The page rig** is the component rendered by Testing Library with `fetch` stubbed to
@@ -390,30 +408,34 @@ The `test` gate's nextest command runs it; during development,
    answers REFUSED as `result.structuredContent.aid.restore_error`.
 3. **Given** the pause rig with a settle of 0.5 s, and again a fresh one with 10 s, and
    the aid alone exposing, **When** a committed test sends `DELETE /api/imaging/focus`
-   and measures the paused time until it answers, **Then** it asserts that each answers
-   200 with `focus.aid.ended_reason` `stopped`; that at 0.5 s it answers 0.9 s to 1.5 s
-   after it was sent, with no `restore_error` and the settings whole; and that at 10 s
-   it answers 4.9 s to 6.0 s after it was sent, with `restore_error` REFUSED and
-   `settings.roi` as it was while the aid ran.
+   and measures the paused time until it answers, and, at 10 s, then makes the
+   simulator unresponsive until `state` is not `ready`, then responsive until `state`
+   is `ready`, then sends `POST /api/imaging/run` with `{}`, **Then** it asserts that
+   each `DELETE` answers 200 with `focus.aid.ended_reason` `stopped`; that at 0.5 s it
+   answers 0.9 s to 1.5 s after it was sent, with no `restore_error` and the settings
+   whole; that at 10 s it answers 4.9 s to 6.0 s after it was sent, with
+   `restore_error` REFUSED and `settings.roi` as it was while the aid ran; and that
+   then the settings are not whole and the start answers 409 with `error` REGION.
 4. **Given** the pause rig with a settle of 20 s and the aid alone exposing, **When** a
    committed test sends `DELETE /api/imaging/focus`, answered 200, then makes a console
-   check, then sends `POST /api/imaging/run` with `{}`, then, 21 s after the `DELETE`
-   was sent, makes a console check again and sends `POST /api/imaging/run` with `{}`
-   again, **Then** it asserts that the `DELETE` answers `focus.aid.restore_error`
-   REFUSED; that the first check ends `focus.aid.ended_reason` `failed` with
-   `settings.roi` as it was while the aid ran; that the first start answers 409 with
-   `error` NAMED; that the second check ends `done` with the settings whole; and that
-   the second start answers 200.
+   check, then `PUT /api/imaging/settings` with `{"roi":null}`, then sends
+   `POST /api/imaging/run` with `{}`, then, 21 s after the `DELETE` was sent, makes a
+   console check again and sends `POST /api/imaging/run` with `{}` again, **Then** it
+   asserts that the `DELETE` answers `focus.aid.restore_error` REFUSED; that the first
+   check ends `focus.aid.ended_reason` `failed` with `settings.roi` as it was while the
+   aid ran; that the `PUT` answers 502 and the first start 409 with `error` NAMED; that
+   the second check ends `done` with the settings whole; and that the second start
+   answers 200.
 5. **Given** the pause rig with a settle of 10 s and the aid alone exposing, its
    `settings.roi` x 412, y 274, 412 × 274, **When** a committed test sends
-   `DELETE /api/imaging/focus`, then, 11 s after it was sent, `POST /api/imaging/run`
-   with `{}`, then `PUT /api/imaging/settings` with
+   `DELETE /api/imaging/focus`, then, 11 s after it was sent, `POST /api/imaging/frame`,
+   and waits until that frame is `saved`, then `POST /api/imaging/run` with `{}`, then
+   `PUT /api/imaging/settings` with
    `{"roi":{"x":412,"y":274,"width":412,"height":274}}`, then `POST /api/imaging/run`
    with `{}` again, **Then** it asserts that the `DELETE` answers 200 with
-   `focus.aid.restore_error` REFUSED; that the first start answers 409 with `error`
-   NAMED; that the `PUT` answers 200; and that the second start answers 409 with
-   `error` `the imaging camera has a region of interest set: clear it before an
-   imaging run`.
+   `focus.aid.restore_error` REFUSED; that the frame's `width` is 412 and its `height`
+   274; that the first start answers 409 with `error` NAMED; that the `PUT` answers
+   200; and that the second start answers 409 with `error` REGION.
 6. **Given** the pause rig with a settle of 20 s, **When** a committed test waits for
    `state` `ready`, sends `POST /api/imaging/run` with `{}`, answered 200, waits until
    `run.state` is `focus_pause`, `focus.aid.state` `running`, `frame.state` `exposing`
@@ -464,29 +486,39 @@ where it was made.
    false, Some(60.0))` and `note_at(3.1, T + 120, None, false, Some(30.0))`, describes a
    second `Kept` on the same file and reads its `reference_at`, then calls on the first
    `note_at(3.2, T + 43260, None, false, None)` and `note(2.5, T + 43300, None, false)`,
-   reading `reference_at`, `altitudes` and the file between them, **Then** it asserts
-   that the first note answers true, `reference_at(T + 1, None)` then answers `(3.0,
-   Of::Tonight, Some(74.0))` and the file's `record.tonight.alt_deg` is 74; that the
+   reading `reference_at`, `altitudes` and the file between them, then, on another
+   fresh `Kept` on `focus-past.json` in that folder, described with the same camera,
+   calls `note_at(3.0, T, None, false, Some(74.0))`, **Then** it asserts that the first
+   note answers true, `reference_at(T + 1, None)` then answers `(3.0, Of::Tonight,
+   Some(74.0))` and the file's `record.tonight.alt_deg` is 74; that the
    second answers true and the third, compared as read, false, and `altitudes(T + 121,
    None).tonight` is `Some(60.0)`; that the second `Kept` answers `reference_at(T + 121,
    None)` as `(2.9, Of::Tonight, Some(60.0))`; that the note a night later answers true,
    `reference_at(T + 43261, None)` then answers `(2.9, Of::Earlier, Some(60.0))`, the
-   file's `record.earlier_alt_deg` is 60 and its `record.tonight` has no `alt_deg`; and
+   file's `record.earlier_alt_deg` is 60 and its `record.tonight` has no `alt_deg`;
    that the last answers true and `reference_at(T + 43301, None)` answers `(2.5,
-   Of::Tonight, None)`.
+   Of::Tonight, None)`; and that the other fresh `Kept`'s `reference_at(T + 43201,
+   None)` answers `(3.0, Of::Earlier, Some(74.0))`.
 3. **Given** a scratch folder of its own, a fresh `Kept` on `focus-scaled.json` there
    described with the same camera, and T as in US2-S2, **When** a committed test calls
    `note_at(3.0, T, Some(0.55), false, Some(74.0))` on it and reads its `altitudes` at the
-   scales 0.55 and 1.1, then `note_at(5.0, T + 60, Some(1.1), false, None)`, then writes
-   033's own `focus.json` by hand in that folder, with `format` `imaging-focus/1`, the
-   simulated camera's `camera` block, no region and `record.tonight` of `px` 3.3 with
+   scales 0.55 and 1.1, then `note_at(5.0, T + 60, Some(1.1), false, None)`; then, on a
+   fresh `Kept` on `focus-foreign.json` there, described with the same camera,
+   `note_at(3.0, T, Some(0.55), false, Some(60.0))`, then `note_at(3.5, T + 43260,
+   Some(0.55), false, Some(70.0))`, then
+   `note_at(4.0, T + 43300, Some(1.1), false, Some(50.0))`; then writes 033's own
+   `focus.json` by hand in that folder, with `format` `imaging-focus/1`, the simulated
+   camera's `camera` block, no region and `record.tonight` of `px` 3.3 with
    `at` and `since` T − 800 and no altitudes, and describes another `Kept` on it,
    **Then** it asserts that the first note answers true; that `altitudes(T + 1,
    Some(0.55)).tonight` is `Some(74.0)` and `altitudes(T + 1, Some(1.1))` is
    `Altitudes::default()`; that the note at 1.1 answers true and `reference_at(T + 61,
-   Some(1.1))` answers `(5.0, Of::Tonight, None)`; and that the other `Kept` answers
-   `reference_at(T, None)` as `(3.3, Of::Tonight, None)` and `reference(T, None)` as
-   `(3.3, Of::Tonight)`.
+   Some(1.1))` answers `(5.0, Of::Tonight, None)`; that, between its second and third
+   notes, the `Kept` on `focus-foreign.json` answers `altitudes(T + 43261,
+   Some(0.55)).earlier` as `Some(60.0)`, and after the third `altitudes(T + 43301,
+   Some(1.1))` as `Altitudes { tonight: Some(50.0), earlier: None }`; and that the
+   `Kept` on 033's file answers `reference_at(T, None)` as `(3.3, Of::Tonight, None)` and
+   `reference(T, None)` as `(3.3, Of::Tonight)`.
 
 ### User Story 3 - The aid and the check judge at Track's altitude (Priority: P1)
 
@@ -589,7 +621,9 @@ page steady to read at the focuser.
 - **A later aid or check, or the observer, after a failed put-back**: the region stays
   named while it is in force (US1-S4, US1-S6); a later aid or check remembers it as the
   whole sensor and so puts the whole sensor back (US1-S4); the observer's own settings
-  change makes the region theirs, even the same one (US1-S5).
+  change makes the region theirs, even the same one (US1-S5), and one the camera
+  refuses changes nothing (US1-S4); the camera described again, as after the scope node
+  stopped answering, forgets the naming while the region stays in force (US1-S3).
 - **A Stop while the camera refuses**: the aid's stop, a Stop of the run during a
   pause (`crates/finder/src/imaging/run.rs:1406` closes the aid), and MCP's
   `set_focus_aid` stop answer up to about 5 s later than at f6d4f5fd (US1-S3), as the
@@ -611,13 +645,13 @@ page steady to read at the focuser.
   Focus block's record line says ` with no altitude` (US4-S4).
 - **Track's target and where the telescope points**: the altitude is the target's,
   which Track holds; in the rig it is within 0.5° of the simulator's own (US3-S1).
-- **Very low targets**: the factor reaches the cap of 1.30 at about 37° from a record
+- **Very low targets**: the factor reaches the cap of 1.30 at about 38.4° from a record
   made at 74°, so below that the record is loosened no further and `clearly_out` stays
   reachable, at 1.69 times the record (US2-S1, `carry(4.6, 74.0, 20.0)`).
 - **A record read low judging a high target** (the reverse case): the factor would be
   below 1, so the record judges as it is (US2-S1, `carry(6.1, 37.0, 70.0)`); a soft
-  focus high up is then judged against a lenient record (6.7″ at 70° against 6.1″ read
-  at 37° is `good`), which the next record made high corrects (plan.md § Risks).
+  focus high up is then judged against a lenient record (6.5″ at 70° against 6.1″ read
+  at 37° is `good`, 1.066), which the next record made high corrects (plan.md § Risks).
 - **A record kept across nights**: the earlier nights' part keeps its altitude (US2-S2).
 - **The pause sentence**: it names the carried size as the record; the Focus block
   names both altitudes (owner approval 7).
@@ -656,7 +690,8 @@ page steady to read at the focuser.
   put-back failed, with that put-back's words, set as the aid ends; it SHALL be cleared
   when a put-back takes, when the camera is described again, and when
   `Imaging::set` (`PUT /api/imaging/settings`, `crates/finder/src/imaging/mod.rs:584`,
-  and MCP's `set_imaging_camera`) changes the settings. While the settings in force hold
+  and MCP's `set_imaging_camera`) changes the settings; a change the scope node refuses
+  changes nothing and so clears nothing. While the settings in force hold
   that region, the refusal SHALL be worded `the focus aid could not put the imaging
   camera's settings back: ` followed by those words, and with 041's words otherwise.
   037 FR-002's "SHALL end `camera_failed` with the camera part's words when it cannot"
@@ -851,11 +886,14 @@ US4:
   implements: [FR-013, FR-014, FR-015]
 ```
 
-Four stories, each under 60 % of 65,536 B (39,321 B) as the probe's commits measure
-them, the largest US1 at about 48.8 % (plan.md § Plan traps 1): the put-back and its
-words; the record's altitude and the carry; judging at Track's altitude; the page. At
-the factory's worst overrun seen, 1.35 times, US1 would be about 66 %, over the line;
-plan.md § Plan traps 1 names the split to make if a build runs over. US2 merges after
+Four stories, each under 60 % of 65,536 B (39,321 B) as probe round 1's commits
+measure them, the largest US1 at 56.2 % with the fold's steps added (47.7 % written
+once; plan.md § Plan traps 1): the put-back and its words; the record's altitude and
+the carry; judging at Track's altitude; the page. At the factory's worst overrun seen,
+1.35 times, US1 would be about 76 % (64 % written once), over the line; the factory's
+builds of 050 and 051 ran 0.78 to 1.04 times their probes, and 051's US2 flipped at
+the same probe size. US1 is kept whole; plan.md § Plan traps 1 names the split the
+owner may choose at the flip instead. US2 merges after
 US1, so that the two stories' `mod` lines in `crates/finder/tests/console/main.rs` are
 not written at once; US3 merges after US2, whose `carry` and `note_at` it calls, and so
 after US1, which also writes `crates/finder/src/imaging/focus/run.rs` and the README.

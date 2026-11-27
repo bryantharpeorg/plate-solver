@@ -24,8 +24,9 @@ block keeps its readings while the aid looks for its region again, and both line
 compare with the record name the altitudes.
 
 Four stories: the put-back and its words; the record's altitude and the carry; judging
-at Track's altitude; the page. Each is under 50 % of 65,536 B on the probe's commits
-(§ Plan traps 1). Two general rules remove the side effects a narrower fix would bring
+at Track's altitude; the page. Each is under 60 % of 65,536 B on probe round 1's
+commits with this fold's steps added, US1 the largest at 56.2 % (§ Plan traps 1). Two
+general rules remove the side effects a narrower fix would bring
 (spec.md § Owner decisions): **whatever the focus aid sets, it gives back before anyone
 else holds the camera, or says why it could not, and no aid keeps what another aid
 left; and a reading is compared with the record at one altitude, the reading's own, by
@@ -62,7 +63,8 @@ tool descriptions unchanged (pinned by tests). Keep out of 052's files
 through `Session::snapshot`, and none of them is written. 052, 053 and 055 share
 other files with this spec (§ Prerequisites 2).
 
-**Scale/Scope**: four stories, about 85 KB of diff in all on the probe.
+**Scale/Scope**: four stories, about 84 KB of diff in all on probe round 1 (about
+86 KB written once with this fold's steps).
 
 ## Constitution Check
 
@@ -71,7 +73,7 @@ other files with this spec (§ Prerequisites 2).
 | Principle | How this plan honours it |
 |---|---|
 | I. Agreeing with cedar is correctness | Detection and the plate solver are untouched. The focus reading is 033's (ASTAP's `-analyse` on the scope's Pi, the simulated solver in the gates), unchanged. The carry rests on seeing theory, a star's size in seeing growing as the airmass to the power 3/5, which no local source gives (V below), applied only between 1 and 1.30 because the survey says seeing is not the whole size (`docs/research/2026-11-15-imaging-camera.md:220`): flagged as such in spec.md owner decision 2 and § Risks, and measured on the field night's own numbers (§ What was run). What rests on reading is listed in § What was run and what was read. |
-| II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. The only edits to existing test files are the `mod` lines of `crates/finder/tests/console/main.rs` (US1, US2) and `crates/finder/tests/motion/main.rs` (US3) (SC-002). The simulated imaging camera is f6d4f5fd's at its default settle of zero, so no existing caller sees a change (run: the 1,525 existing tests and the stories' 13 passed on the probe's tip, § What was run). 043's silent-node bound is kept by the rule that only the scope node's refusal (502) of a `ready` camera is tried again (the mutation that tries any refusal again fails 043's US1-S8 test). Owner decision 1 (b)'s first form would have edited 030's US6-S6 test's meaning; it is set aside. |
+| II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. The only edits to existing test files are the `mod` lines of `crates/finder/tests/console/main.rs` (US1, US2) and `crates/finder/tests/motion/main.rs` (US3) (SC-002). The simulated imaging camera is f6d4f5fd's at its default settle of zero, so no existing caller sees a change (run: the 1,525 existing tests and the stories' 13 passed on the probe's tip, and again on probe round 1's tip after this fold, 06ec58d0, § What was run). 043's silent-node bound is kept by the rule that only the scope node's refusal (502) of a `ready` camera is tried again (the mutation that tries any refusal again fails 043's US1-S8 test). Owner decision 1 (b)'s first form would have edited 030's US6-S6 test's meaning; it is set aside. |
 | III. Tests first, independent expectations | The oracles are the words of 041's refusal, of the simulator's refusal and of the scenarios; 031's own view of the settings and camera; the airmass written in each test as the secant of the zenith distance, the exponent 0.6 and the bounds 1 and 1.30 written there; 033's thresholds 1.10 and 1.30; the field night's numbers; the simulator's own altitude of the main telescope; and the views the page tests write. No test reads `RESTORE_PAUSE`, `RESTORE_WAIT`, `SEEING_EXPONENT` or `CARRY_CAP`, or calls `carry` for an expected value. Time comes from a paused tokio clock and the simulator's virtual clock. Every story's tests fail before it (run, § What was run). |
 | IV. Read the critical paths twice | None is touched: no `Cargo.toml` or `Cargo.lock` change, no `unsafe`, nothing under `proto/`, `crates/math-core`, `crates/pattern-database` or `crates/database-generation`, no `build.rs` or `.cargo/`. `crates/simulator` is not a critical path; its change is owner approval 1. |
 | V. Proven open source first, with honest licensing | Looked for, in local sources only (no download). **For the put-back:** the INDI adapter's own waits (`crates/scope-node/src/imaging/indi/mod.rs:40` to `crates/scope-node/src/imaging/indi/mod.rs:45`), whose `RETRY_PAUSE` of 1 s before an exposure is tried again is the pattern the retry follows, and its `ANSWER_WAIT`, which owner decision 1 (b) would have extended to the abort; no library is needed for a bounded retry of one call. Ekos, PHD2 and N.I.N.A. are applications, not libraries; that each capture there sets its own frame before it exposes (from memory, not read here) is the rule "no aid keeps what another aid left". **For the altitude:** the repository's survey of 2026-11-15, § 6 "Focus" (`docs/research/2026-11-15-imaging-camera.md:203`), with its sources on PHD2, SharpCap, Ekos and N.I.N.A.: each compares a reading with recent ones or the best since a reset (`docs/research/2026-11-15-imaging-camera.md:231`), and the survey says a reading cannot tell focus error from seeing (`docs/research/2026-11-15-imaging-camera.md:227`); none, as surveyed, carries a size across altitudes, and the survey gives no source for the airmass dependence. A search of the whole tree at f6d4f5fd, `reference-solutions/` (cedar-detect, cedar-solve) among it, finds no airmass anywhere. ASTAP's `-analyse`, installed as `astap_cli`, gives a half-flux diameter and a star count only. The console's own `sky::alt_az` (`crates/finder/src/sky.rs:258`) gives the geometric altitude, so nothing is adopted for it. The exponent 3/5 is seeing theory's (the Fried parameter's dependence on the zenith distance), cited from no local source: the owner's decision 2 accepts or refuses it. **For the page:** nothing to adopt; the kept picture is page state. |
@@ -412,10 +414,11 @@ absolute number." Its `_Avoid_` line is unchanged.
 
 ## What was run and what was read
 
-All on `probe/054`, cut from f6d4f5fd, with the factory's Rust toolchain, `--locked`,
-`npm ci --offline` and the factory's Playwright browsers; never pushed. Logs and
-scripts in the operator's probe folder, outside the repository; the fold's are
-`fold-r1-NN`.
+All on `probe/054`, cut from f6d4f5fd, and on `probe/054-r1`, cut from this trio at
+a2a65162, with the factory's Rust toolchain, `--locked`, `npm ci --offline` and the
+factory's Playwright browsers; never pushed. Logs and scripts in the operator's probe
+folder, outside the repository; the review fold's are `fold-r1-NN`, probe round 1's
+fold's `fold-probe-r1-NN`.
 
 - **The repro (run).** 2bd35a98 adds the simulator's settle and the repro test. On
   main's console code, going on anyway mid-exposure with a settle of 1 s ends
@@ -458,9 +461,11 @@ scripts in the operator's probe folder, outside the repository; the fold's are
   `Kept::altitudes`), and on the first draft's uncapped carry US2-S1 fails; US3's three
   tests fail on US1's `focus/run.rs` and README.
 - **The carry's options (run, fold-r1-04).** The field night's numbers and the rig's
-  under decision 2's options, as spec.md owner decision 2 gives them; under (a) the
-  scenario readings are 1.070 (6.4″ at 38°), 1.221 (7.3″ at 37°) and 1.421 (8.5″ at
-  37°) times the carried record of 5.98″, each at least 0.029 from 033's 1.10 and 1.30.
+  under decision 2's options, as spec.md owner decision 2 gives them (its (b) shares,
+  its record-altitude bounds and (d)'s 20.5° recomputed by hand in fold-probe-r1-08);
+  under (a) the scenario readings are 1.070 (6.4″ at 38°), 1.221 (7.3″ at 37°) and
+  1.421 (8.5″ at 37°) times the carried record of 5.98″, each at least 0.029 from 033's
+  1.10 and 1.30.
 - **ASTAP (run).** The local `astap_cli` CLI-2025.09.29, `-analyse 30`, on frames made
   for the probe: noise, bright noise, daylight and flat frames give `HFD_MEDIAN=99.0`
   and `STARS=0`, exit 0; a star field `HFD_MEDIAN=3.9`, `STARS=40`; saturated and
@@ -475,7 +480,7 @@ scripts in the operator's probe folder, outside the repository; the fold's are
   simulator never refusing fails US1-S2 to S6; no retry (`RESTORE_WAIT` 0) fails US1-S1 and US1-S3; a
   retry of any refusal in any state fails 043's
   `a_focus_stop_on_a_silent_node_ends_and_reports_the_restore_failure`; `remember`
-  keeping the left region fails US1-S4; the words unnamed fail US1-S2, S4 and S6;
+  keeping the left region fails US1-S4; the words unnamed fail US1-S2, S4, S5 and S6;
   `forget_left` doing nothing fails US1-S5; the carry uncapped and the exponent 0.5 fail
   US2-S1; Track `!= "off"` in place of `tracking`, no carry, and no `last.alt_deg` fail
   US3-S1; on the page, no kept picture and no line fail US4-S1, no readings while
@@ -488,6 +493,39 @@ scripts in the operator's probe folder, outside the repository; the fold's are
   13), the doc tests, and in `crates/finder/web` `npm ci --offline`, typecheck,
   Prettier, Vitest (611 of 611), the build, the dist check clean and `CI=1 npm run e2e`
   (34 of 34).
+- **Probe round 1 from this text alone (run).** `probe/054-r1`: eb6e4b93 and a269fdad
+  (US1), 5a4e6197 and ee9d093d (US2), fe40a82f and 21ac01f8 (US3), d8ca23bb and
+  abf7e226 (US4), each story's tests committed first and failing before it as tasks.md
+  says, each passing after it the first time, with plan.md § Interfaces' code as
+  written and only each story's `writes`; every gate passing on abf7e226 (nextest
+  1,538 of 1,538, Vitest 611 of 611, `CI=1 npm run e2e` 34 of 34); every `path:line`
+  of the trio true at f6d4f5fd. 0 blocking and 10 clarity defects, folded here. A
+  scenario bit each of its mutations of the four stories but these: diff-only (§ Read
+  from the diff), equivalent (`left` kept after a try that took; the picture keeping
+  its first frame), under the tolerance (the session read at `now`, inside 0.5°), no
+  rig (the earlier part showing tonight's altitude), and five bitten only by throwaway
+  cases, now steps.
+  In the motion rig, with the focal length this fold adds, Track's target stands at
+  42.963° (the simulator's 42.963°), s is 2.191, the record of 2.0 px (4.382″) carries
+  to 5.386″ (factor 1.229, 5.4 % under the cap), and the median 6.191″ is 1.149 times
+  it, `slightly_soft` (4.5 % over 1.10, 11.6 % under 1.30), 1.413 uncarried.
+- **Probe round 1's fold (run).** Three test commits on `probe/054-r1`, history kept:
+  99efbc63 (US1-S3's camera described again, US1-S4's refused PUT, US1-S5's frame; the
+  pause rig hands back its simulator), 1eebf008 (US2-S2's past night, US2-S3's foreign
+  rule) and 06ec58d0 (the motion rig's focal length), the tip. Each new step passed and
+  bit under its mutation (fold-probe-r1-05): the simulator changing its settings
+  before it refuses fails US1-S3 and US1-S5; the camera described again keeping the
+  naming, US1-S3; a refused PUT forgetting it, US1-S4; the foreign rule keeping the
+  altitudes, US2-S3; a past night showing the earlier nights' altitude, US2-S2;
+  `carried.from` in pixels, US3-S1. US1's seven still fail on main's sources with the
+  simulator's knob (fold-probe-r1-10), US3's three on US2's (fold-probe-r1-11). The
+  focused commands of every story (US1's 24 and the simulator's 98 three times, US2's
+  7 and US3's 3 three times, the console's 59, Vitest 4 and 72) and every gate on
+  06ec58d0 (fold-probe-r1-07): `cargo fmt`, clippy, both `cargo doc`, nextest 1,538 of
+  1,538, the doc tests, `cargo deny` offline, `npm ci --offline`, typecheck, Prettier,
+  Vitest 611 of 611, the build, the dist check clean and `CI=1 npm run e2e` 34 of 34.
+  Every worked number of spec.md and plan.md checked by hand against the formula
+  (fold-probe-r1-08).
 - **Read, not run.** That the field camera refused the put-back (the field logs never
   read `restore_error`); whether the field's INDI driver answers the abort switch late
   or early, and that INDI hands a driver its messages in order (no INDI source on this
@@ -496,15 +534,20 @@ scripts in the operator's probe folder, outside the repository; the fold's are
 
 ## Read from the diff, not from a test
 
+The choices probe round 1 found unseen (a refusal that changes nothing, the camera
+described again, a refused settings change, the altitudes the foreign rule drops and a
+past night keeps, `carried.from` in the view's unit) are steps of US1-S3 to US1-S5,
+US2-S2, US2-S3 and US3-S1 now, and so are not listed here; nor are `Kept::note`'s and
+`Kept::reference`'s signatures, `FocusCheck` and the checklist's 18 steps, which
+existing tests pin (§ Shapes that existing tests pin).
+
 - `finish` holds no lock across the put-back's await, and the release follows it; it
   sets `held.focus.left` in the critical section that sets the lifecycle `ended` (the
   judge reads `crates/finder/src/imaging/focus/run.rs`).
 - A refusal other than the scope node's 502 is not tried again (no rig makes a 400).
 - `altitude` clones the session out of the imaging state's lock before
   `Session::snapshot`.
-- `Kept::note` and `Kept::reference` keep their signatures; `FocusCheck`
-  (`crates/finder/src/imaging/run.rs:320`) and the five step traits are not changed.
-- The README's field checklist (`crates/finder/README.md:1759`) gains no step.
+- 037's five step traits are not changed.
 - `altitude` answers none at or below 0°: no rig puts Track's target under the horizon.
 - A check notes no reading in the record, with or without an altitude (`if !run.check`
   around `note_at`, as around `note` at f6d4f5fd).
@@ -525,11 +568,15 @@ scripts in the operator's probe folder, outside the repository; the fold's are
 - `crates/finder/tests/console/imaging_run_focus.rs:505`: the run's `focus.record` is
   the aid's `reference.value`; with no altitudes in its rig, uncarried.
 - `crates/finder/tests/console/imaging_focus_record.rs:61`: `Mark { px, at }` by
-  literal, and `Kept::note` and `Kept::reference` as 033 gave them.
+  literal, and `Kept::note` and `Kept::reference` as 033 gave them, which US2's tests
+  also call: their signatures cannot change.
+- `crates/finder/tests/console/imaging_run_focus.rs:16`: `FocusCheck`
+  (`crates/finder/src/imaging/run.rs:320`) by literal, so it gains no field.
 - `crates/finder/tests/mcp/imaging_focus.rs:242`, `crates/finder/tests/mcp/imaging_focus.rs:246`
   and `crates/finder/tests/mcp/imaging_run.rs:133`: the MCP tools' descriptions, word
   for word.
-- `crates/finder/tests/console/imaging_run_docs.rs:95`: the field checklist's 18 steps.
+- `crates/finder/tests/console/imaging_run_docs.rs:95`: the field checklist's 18 steps
+  (`crates/finder/README.md:1759`), so it gains none.
 - `crates/scope-node/tests/indi_expose.rs:782`: 030 US6-S6, the abort and the exposure
   answering in the instant of the call; untouched, since owner decision 1 (b) is set
   aside.
@@ -613,14 +660,18 @@ altitudes' words, the test file and the rebuilt `dist`.
    land in the order 052, 053, 054, 055, and the operator seat re-anchors each one's
    `shared_writes` (§ Refinement Record) on whatever has landed before its flip, then
    re-reads the files § Project Structure and § Shapes name and re-runs the validator.
-   Not met: none of the four has landed.
+   Waits: 052 and 053 have not landed, and the re-anchor on their landed `main` comes
+   after; every citation was true at f6d4f5fd on probe round 1.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
-   decisions, § Owner approvals). Not met: none answered.
+   decisions, § Owner approvals). Waits for the owner at the flip: none answered, each
+   with its recommendation, to which the scenarios and the record are written.
 4. **A cynical review and a probe round from this text alone**, their defects folded.
-   Half met: review r1 folded (0 blockers, 6 majors, 10 minors); the probe round from
-   this text alone is not run.
-5. **The page half has run once.** Met on the probe: `CI=1 npm run e2e` on the tip,
-   965ec262 (fold-r1-15).
+   Met: review r1 folded (0 blockers, 6 majors, 10 minors); probe round 1 built the
+   four stories from this text alone (`probe/054-r1`, tip abf7e226: 0 blocking, 10
+   clarity) and is folded, its new steps run on 06ec58d0 (§ What was run).
+5. **The page half has run once.** Met on probe round 1's tip after this fold:
+   `CI=1 npm run e2e` 34 of 34 on 06ec58d0 (fold-probe-r1-07), as on 965ec262
+   (fold-r1-15) and abf7e226.
 6. **No operator-staged files are needed.** Met: no story reads a file outside the
    repository.
 
@@ -659,16 +710,31 @@ landing.
 
 ## Plan traps
 
-1. **Story sizes.** Measured on the probe's tip, 965ec262, each story's whole diff, file
-   by file, `focus/run.rs` and the README split by hunk (fold-r1-16): US1 about 32.0 KB
-   (48.8 % of 65,536 B), US2 about 14.3 KB (21.8 %), US3 about 25.2 KB (38.5 %), US4
-   about 14.0 KB (21.4 %). At the factory's worst overrun seen, 1.35 times, US1 is about
-   43.2 KB (65.9 %), over 60 % (39,321 B); the others stay under (US3 52.0 %). US1's test
-   file is about half its diff (17.0 KB, the copied rig among it). If US1's build runs over,
-   the split is US1-S4 to US1-S6 with the region on the focus state (`left`,
-   `left_in`, `focus_left`, `forget_left`, `remember`'s rule and `hold`'s use of it,
-   about 12 KB) as a story of their own after US1, with US1's naming read from the
-   aid's own `restore_error` until then.
+1. **Story sizes.** Probe round 1 built each story from this text alone, each measured
+   as `git diff <story base> -- . ':(exclude)crates/finder/web/dist' | wc -c` (US1 from
+   a2a65162, each later story from the previous story's commit): US1 29,959 B (45.7 % of
+   65,536 B), US2 14,305 B (21.8 %), US3 25,299 B (38.6 %), US4 14,101 B (21.5 %; its
+   `dist` adds 697 B of binary-diff lines), 93.7 % to 100.7 % of the review fold's
+   estimates. With this fold's commits' bytes added to their stories (fold-probe-r1-12):
+   US1 36,812 B (56.2 %, 93.6 % of the 60 % line, 39,321 B), US2 15,905 B (24.3 %), US3
+   26,790 B (40.9 %), US4 unchanged. Those bytes count each hunk's context; written
+   once, with its test file whole, US1 is 31,285 B (47.7 %), US2 15,165 B, US3 25,422 B.
+   At the factory's worst overrun seen, 1.35 times, US1 is 49,696 B (75.8 %; 42,235 B,
+   64.4 %, written once), over the line; the others stay under (US3 55.2 %). The
+   factory's builds of 050 and 051 ran 0.78 to 1.04 times their probes, which puts US1 at
+   38,284 B at most (58.4 %; 49.6 % written once), and 051's US2 flipped whole at the
+   same probe size (29,952 B). So US1 is kept whole. US1's test file is about half its
+   diff (15.3 KB, about 5.3 KB of it the copied rig). **The split, if the owner prefers
+   it at the flip:** a story after US1 takes US1-S4 to US1-S6 and US1-S3's last step
+   (the camera described again), with the region on the focus state (`left`, `left_in`,
+   `forget_left`, `describe`'s clearing, `remember`'s rule, `finish`'s setting of `left`,
+   `Imaging::set`'s forgetting and `focus_left` answered from `left`), and US1-S3 then
+   ends at the stop's answer. Split so, the new story writes its own test file with its own
+   copy of the pause rig, one `mod` line, `focus/run.rs`, `imaging/mod.rs` and
+   `run/console.rs`. Until it lands, `focus_left` answers the latest run's
+   `restore_error` while the settings are not whole. It measures about 15 KB (S4 to S6
+   and the step about 4.6 KB, the region code about 5 KB, the rig copy 5.3 KB), leaving
+   US1 about 22 KB.
 2. **`FocusCheck` gains no field.** Tests build it by literal
    (`crates/finder/src/imaging/run.rs:320`); the carry stays in the aid's view, and the
    pause sentence is unchanged in its words (FR-010).
@@ -708,13 +774,13 @@ landing.
 | Risk | Effect | Mitigation |
 |---|---|---|
 | The record's size is part seeing, part optics, in an unmeasured share | Carried, it may still be too strict low down, or too lenient | The factor is held between 1 and 1.30; § Outside the factory step 6 measures the share |
-| A record read low judges a high target as read | A soft focus high up can read `good` (6.7″ at 70° against 6.1″ read at 37°) | The next record made high replaces it when smaller; the aid's own readings say |
-| Below about 37° from a record made at 74° the cap holds | A low target pauses a little sooner than full seeing theory says | `clearly_out` stays reachable (7.77″ for 4.6″), which is the cap's purpose |
+| A record read low judges a high target as read | A soft focus high up can read `good` (6.5″ at 70° against 6.1″ read at 37°, 1.066) | The next record made high replaces it when smaller; the aid's own readings say |
+| Below about 38° from a record made at 74° the cap holds | A low target pauses a little sooner than full seeing theory says | `clearly_out` stays reachable (7.77″ for 4.6″), which is the cap's purpose |
 | The record is the smallest settled reading, so it reads low | Carried, it still sets a strict line (the field night's 6.7″ reads `slightly_soft`) | Unchanged from 033; the verdict compares, and the aid is beside it |
 | The scope node refuses for another reason while ready | The stop answers up to about 5 s later | The refusal's own words still reach `restore_error` |
 | The field camera's refusal is inferred, never seen | The fix may not be the field's cause | The named words and `restore_error` say the camera's own refusal on the next night (§ Outside the factory step 3) |
 | The exponent rests on no local source | A wrong exponent mis-carries | Owner decision 2; a constant, one place to change, and the cap bounds it |
-| US1 at 1.35 times is over 60 % | A builder overrun could crowd the judge's diff | § Plan traps 1 names the split |
+| US1 at 1.35 times is over 60 % (75.8 %; 64.4 % written once) | A builder overrun could crowd the judge's diff | Builds of 050 and 051 ran at most 1.04 times their probes (58.4 %); § Plan traps 1 names the split the owner may choose at the flip |
 
 ## Refinement Record
 
@@ -729,7 +795,11 @@ gate, pause and region refusal, 043's silent-node bound, the INDI adapter's abor
 simulator's imaging camera, MCP's tools, the constitution and the survey of 2026-11-15.
 Cynical review r1 folded the same day, with the fold's probe commits (the region an aid
 left, the 502 rule, the capped one-sided carry, Track `tracking` only, the page's
-words) and decision 1 (b) trial-built on the scripted INDI server and set aside. Writes
+words) and decision 1 (b) trial-built on the scripted INDI server and set aside.
+Probe round 1 built the four stories from this text alone the same day (`probe/054-r1`,
+tip abf7e226: 0 blocking, 10 clarity), folded with three test commits there (tip
+06ec58d0, every gate passing): the steps of US1-S3 to US1-S5, US2-S2, US2-S3 and the
+motion rig's focal length, in the assertions below. Writes
 come from the task text. Shared writes name the spec story that last wrote the same file
 on `main`; within the spec, each story's files written by an earlier one are ordered by
 `depends_on_merged`; 052, 053 and 055 are re-anchored at the flip (§ Prerequisites 2).
@@ -757,17 +827,17 @@ stories:
       - path: crates/finder/tests/console/imaging_run_focus_restore.rs
         status: new
         disposition: add
-        assertion: "the pause rig at settle 0.5 s and a fresh one at 10 s, no record: POST /api/imaging/focus {tile: {col 1, row 1}} 200; at focus.aid.state running, frame.state exposing, frame.purpose focus, settings.roi not whole: DELETE /api/imaging/focus answers 200 with focus.aid.ended_reason stopped; at 0.5 s within 0.9 to 1.5 s of paused time, no restore_error, settings.roi whole; at 10 s within 4.9 to 6.0 s, restore_error 'the scope node did not apply the settings: the camera refused the settings: it is still stopping an exposure', settings.roi as while the aid ran"
+        assertion: "the pause rig at settle 0.5 s and a fresh one at 10 s, no record: POST /api/imaging/focus {tile: {col 1, row 1}} 200; at focus.aid.state running, frame.state exposing, frame.purpose focus, settings.roi not whole: DELETE /api/imaging/focus answers 200 with focus.aid.ended_reason stopped; at 0.5 s within 0.9 to 1.5 s of paused time, no restore_error, settings.roi whole; at 10 s within 4.9 to 6.0 s, restore_error 'the scope node did not apply the settings: the camera refused the settings: it is still stopping an exposure', settings.roi as while the aid ran; then the simulator unresponsive until state is not ready and responsive until ready: settings.roi not whole, POST /api/imaging/run {} answers 409 with error 'the imaging camera has a region of interest set: clear it before an imaging run'"
         decision: "spec.md:US1-S3"
       - path: crates/finder/tests/console/imaging_run_focus_restore.rs
         status: new
         disposition: add
-        assertion: "the pause rig at settle 20 s, the aid alone on tile (1, 1) exposing: DELETE /api/imaging/focus 200 with restore_error REFUSED; a console check (POST /api/imaging/focus {check: true}, until focus.aid.check true and state ended) ends ended_reason failed with settings.roi as while the aid ran; POST /api/imaging/run {} answers 409 with error 'the focus aid could not put the imaging camera's settings back: ' and REFUSED; 21 s after the DELETE a console check ends done with settings.roi whole; POST /api/imaging/run {} answers 200"
+        assertion: "the pause rig at settle 20 s, the aid alone on tile (1, 1) exposing: DELETE /api/imaging/focus 200 with restore_error REFUSED; a console check (POST /api/imaging/focus {check: true}, until focus.aid.check true and state ended) ends ended_reason failed with settings.roi as while the aid ran; PUT /api/imaging/settings {roi: null} answers 502; POST /api/imaging/run {} answers 409 with error 'the focus aid could not put the imaging camera's settings back: ' and REFUSED; 21 s after the DELETE a console check ends done with settings.roi whole; POST /api/imaging/run {} answers 200"
         decision: "spec.md:US1-S4"
       - path: crates/finder/tests/console/imaging_run_focus_restore.rs
         status: new
         disposition: add
-        assertion: "the pause rig at settle 10 s, the aid alone exposing with settings.roi x 412 y 274 412 x 274: DELETE /api/imaging/focus 200 with restore_error REFUSED; 11 s after it POST /api/imaging/run {} answers 409 with error 'the focus aid could not put the imaging camera's settings back: ' and REFUSED; PUT /api/imaging/settings {roi: {x 412, y 274, width 412, height 274}} 200; POST /api/imaging/run {} again answers 409 with error 'the imaging camera has a region of interest set: clear it before an imaging run'"
+        assertion: "the pause rig at settle 10 s, the aid alone exposing with settings.roi x 412 y 274 412 x 274: DELETE /api/imaging/focus 200 with restore_error REFUSED; 11 s after it POST /api/imaging/frame, and once that frame is saved its width 412 and height 274; POST /api/imaging/run {} answers 409 with error 'the focus aid could not put the imaging camera's settings back: ' and REFUSED; PUT /api/imaging/settings {roi: {x 412, y 274, width 412, height 274}} 200; POST /api/imaging/run {} again answers 409 with error 'the imaging camera has a region of interest set: clear it before an imaging run'"
         decision: "spec.md:US1-S5"
       - path: crates/finder/tests/console/imaging_run_focus_restore.rs
         status: new
@@ -863,12 +933,12 @@ stories:
       - path: crates/finder/tests/console/imaging_focus_carry.rs
         status: new
         disposition: add
-        assertion: "a Kept on a scratch focus.json described with the simulated camera, T 1768528800: note_at(3.0, T, None, false, Some(74)) true, reference_at(T+1, None) (3.0, Tonight, Some(74)), file record.tonight.alt_deg 74; note_at(2.9, T+60, .., Some(60)) true; note_at(3.1, T+120, .., Some(30)) false, compared as read; altitudes(T+121, None).tonight Some(60); a second Kept on the file reference_at(T+121, None) (2.9, Tonight, Some(60)); on the first Kept note_at(3.2, T+43260, .., None) true, reference_at(T+43261, None) (2.9, Earlier, Some(60)), file record.earlier_alt_deg 60 and no record.tonight.alt_deg; note(2.5, T+43300, None, false) true, reference_at(T+43301, None) (2.5, Tonight, None)"
+        assertion: "a Kept on a scratch focus.json described with the simulated camera, T 1768528800: note_at(3.0, T, None, false, Some(74)) true, reference_at(T+1, None) (3.0, Tonight, Some(74)), file record.tonight.alt_deg 74; note_at(2.9, T+60, .., Some(60)) true; note_at(3.1, T+120, .., Some(30)) false, compared as read; altitudes(T+121, None).tonight Some(60); a second Kept on the file reference_at(T+121, None) (2.9, Tonight, Some(60)); on the first Kept note_at(3.2, T+43260, .., None) true, reference_at(T+43261, None) (2.9, Earlier, Some(60)), file record.earlier_alt_deg 60 and no record.tonight.alt_deg; note(2.5, T+43300, None, false) true, reference_at(T+43301, None) (2.5, Tonight, None); a fresh Kept on focus-past.json after note_at(3.0, T, None, false, Some(74)): reference_at(T+43201, None) (3.0, Earlier, Some(74))"
         decision: "spec.md:US2-S2"
       - path: crates/finder/tests/console/imaging_focus_carry.rs
         status: new
         disposition: add
-        assertion: "a scratch folder of its own, a fresh Kept on focus-scaled.json: note_at(3.0, T, Some(0.55), false, Some(74)) true; altitudes(T+1, Some(0.55)).tonight Some(74); altitudes(T+1, Some(1.1)) Altitudes::default(); note_at(5.0, T+60, Some(1.1), false, None) true; reference_at(T+61, Some(1.1)) (5.0, Tonight, None); 033's own focus.json written by hand there (format imaging-focus/1, the simulated camera block, no region, record.tonight px 3.3 at and since T-800, no altitudes): another Kept's reference_at(T, None) (3.3, Tonight, None) and reference(T, None) (3.3, Tonight)"
+        assertion: "a scratch folder of its own, a fresh Kept on focus-scaled.json: note_at(3.0, T, Some(0.55), false, Some(74)) true; altitudes(T+1, Some(0.55)).tonight Some(74); altitudes(T+1, Some(1.1)) Altitudes::default(); note_at(5.0, T+60, Some(1.1), false, None) true; reference_at(T+61, Some(1.1)) (5.0, Tonight, None); a fresh Kept on focus-foreign.json: note_at(3.0, T, Some(0.55), false, Some(60)), note_at(3.5, T+43260, Some(0.55), false, Some(70)), then altitudes(T+43261, Some(0.55)).earlier Some(60); note_at(4.0, T+43300, Some(1.1), false, Some(50)), then altitudes(T+43301, Some(1.1)) Altitudes { tonight: Some(50), earlier: None }; 033's own focus.json written by hand there (format imaging-focus/1, the simulated camera block, no region, record.tonight px 3.3 at and since T-800, no altitudes): another Kept's reference_at(T, None) (3.3, Tonight, None) and reference(T, None) (3.3, Tonight)"
         decision: "spec.md:US2-S3"
       - path: crates/finder/tests/console/imaging_focus_record.rs
         status: existing
@@ -907,7 +977,7 @@ stories:
       - path: crates/finder/tests/motion/imaging_focus_altitude.rs
         status: new
         disposition: add
-        assertion: "the motion rig (SimMount, pushed to alt 50 az 120, target M42, a first sync, the aim at the eyepiece pixel) with focus.json by hand: record.tonight px 2.0 at START - 600 and alt_deg 74; POST /api/track {on: true} and at once a check: ended_reason done while track.state is still armed, focus.aid.reference without carried, focus.aid.last without alt_deg; then track.state tracking and 15 s, a check: ended_reason done; reference.carried.from_alt_deg 74, carried.alt_deg within 0.5 deg of sim.telescope().eyepiece.alt, carried.from within 1e-9 of 2.0 s; focus.aid.last.alt_deg equals carried.alt_deg; reference.value within 1e-9 relative of 2.0 s min(1.30, max(1, (X(alt)/X(74))^0.6)); verdict good at most 1.10, slightly_soft at most 1.30 times that, clearly_out beyond, and slightly_soft; median.value above 1.30 x 2.0 s; focus.record.tonight.alt_deg 74"
+        assertion: "the motion rig (SimMount, pushed to alt 50 az 120, target M42, with_focal_length_mm 1800 so that s, the view's arcsec_per_px, is about 2.19, a first sync, the aim at the eyepiece pixel) with focus.json by hand: record.tonight px 2.0 at START - 600 and alt_deg 74; POST /api/track {on: true} and at once a check: ended_reason done while track.state is still armed, focus.aid.reference without carried, focus.aid.last without alt_deg; then track.state tracking and 15 s, a check: ended_reason done; reference.carried.from_alt_deg 74, carried.alt_deg within 0.5 deg of sim.telescope().eyepiece.alt, carried.from within 1e-9 of 2.0 s; focus.aid.last.alt_deg equals carried.alt_deg; reference.value within 1e-9 relative of 2.0 s min(1.30, max(1, (X(alt)/X(74))^0.6)); verdict good at most 1.10, slightly_soft at most 1.30 times that, clearly_out beyond, and slightly_soft; median.value above 1.30 x 2.0 s; focus.record.tonight.alt_deg 74"
         decision: "spec.md:US3-S1"
       - path: crates/finder/tests/motion/imaging_focus_altitude.rs
         status: new
