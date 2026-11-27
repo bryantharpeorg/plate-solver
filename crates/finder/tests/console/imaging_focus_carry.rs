@@ -219,3 +219,40 @@ fn the_altitudes_by_scale_and_a_foreign_record() {
     assert_eq!(old.reference_at(T, None), Some((3.3, Of::Tonight, None)));
     assert_eq!(old.reference(T, None), Some((3.3, Of::Tonight)));
 }
+
+/// A night's record joins the earlier nights' only when it is the smaller (033
+/// FR-011, kept by 054 FR-006), and then brings its altitude with it. Night one's
+/// 2.0 at 50° joins the earlier nights' when night two begins. When night three
+/// begins, night two's 3.0 at 74° is larger than that earlier 2.0, so it joins
+/// nothing: the earlier part stays 2.0 at 50°, and tonight's 2.8 at 40° is
+/// judged against it.
+#[test]
+fn a_larger_night_does_not_replace_a_smaller_earlier_record() {
+    let scratch = Scratch::new("imaging-focus-carry-smaller-earlier");
+    let path = scratch.0.join("focus.json");
+    let mut kept = Kept::new(path.clone());
+    kept.describe(camera());
+
+    assert!(kept.note_at(2.0, T, None, false, Some(50.0)));
+    assert!(kept.note_at(3.0, T + 43_260.0, None, false, Some(74.0)));
+    assert_eq!(
+        kept.reference_at(T + 43_261.0, None),
+        Some((2.0, Of::Earlier, Some(50.0)))
+    );
+
+    assert!(kept.note_at(2.8, T + 86_520.0, None, false, Some(40.0)));
+    assert_eq!(
+        kept.reference_at(T + 86_521.0, None),
+        Some((2.0, Of::Earlier, Some(50.0)))
+    );
+    assert_eq!(
+        kept.altitudes(T + 86_521.0, None),
+        Altitudes {
+            tonight: Some(40.0),
+            earlier: Some(50.0),
+        }
+    );
+    let file = read_file(&path);
+    assert_eq!(file["record"]["earlier"]["px"], json!(2.0));
+    assert_eq!(file["record"]["earlier_alt_deg"], json!(50.0));
+}
