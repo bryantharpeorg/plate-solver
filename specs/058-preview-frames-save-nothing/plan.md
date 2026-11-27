@@ -31,9 +31,9 @@ that a holder can take the camera between two preview frames, and a run that tak
 camera back while one is in flight ends (spec.md owner decision 10); the block names a
 holder that overtook it, and the README tells the observer to stop and wait first.
 
-Four stories: the preview frame; its crop; MCP, the README, the glossary and ADR 0002's
-line; the page. Each is at most 42.6 % of 65,536 B on the fold's probe and at most
-57.6 % at the factory's 1.35 times (§ Plan traps 2).
+Four stories: the preview frame and ADR 0002's line; its crop; MCP, the README and the
+glossary; the page. Each is at most 43.1 % of 65,536 B on probe round 1 with its fold's
+changes in place and at most 58.2 % at the factory's 1.35 times (§ Plan traps 2).
 
 ## Technical Context
 
@@ -50,7 +50,8 @@ as built today.
 
 **Testing**:
 - `crates/finder/tests/console/imaging_preview_frames.rs` (new, US1): its own preview
-  rig, US1-S1 to US1-S3 under `#[tokio::test(start_paused = true)]`.
+  rig, US1-S1 to US1-S3 under `#[tokio::test(start_paused = true)]`, and US1-S4 under
+  `#[test]`.
 - `crates/finder/tests/console/imaging_preview_crop.rs` (new, US2): US2-S1 under
   `#[test]` on worked frames; US2-S2 on its own crop rig under
   `#[tokio::test(start_paused = true)]`.
@@ -89,7 +90,7 @@ so on the camera a preview frame comes about as often as a saved one.
 **Scale/Scope**: four stories; four changed Rust files under `crates/finder/src/imaging/`
 and `crates/finder/src/mcp/tools.rs`; three new Rust test files; one new page component,
 its test and one browser test; two changed page files; the README's section, rows and
-paragraph; one glossary entry and one changed.
+paragraph; two glossary entries and one changed; ADR 0002's one line.
 
 ## Constitution Check
 
@@ -98,7 +99,7 @@ paragraph; one glossary entry and one changed.
 | Principle | How this plan honours it |
 |---|---|
 | I. Agreeing with cedar is correctness | Detection, the plate solver and the imaging solver are untouched. The crop is 031's own colour and stretch over the centre's samples (FR-006); a preview frame is never solved (032's refusal, unchanged). |
-| II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. `playwright.config.ts` gains two list entries, an owner approval as 050's and 051's were. The only edits to existing test files are the `mod` lines of `crates/finder/tests/console/main.rs` and `crates/finder/tests/mcp/main.rs` (SC-002). The README's count of the imaging camera's tools, which `crates/finder/tests/console/imaging_run_docs.rs:139` pins, keeps its words and gains a clause, so the test is not edited (spec.md owner approval 5). Every existing test passed unchanged at each story's tip and on the fold's final tip (run: nextest 1,528 to 1,533 of as many; Vitest 607 to 613 of as many; `CI=1 npm run e2e` 34 of 34 before US4 and 35 of 35 from it). |
+| II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. `playwright.config.ts` gains two list entries, an owner approval as 050's and 051's were. The only edits to existing test files are the `mod` lines of `crates/finder/tests/console/main.rs` and `crates/finder/tests/mcp/main.rs` (SC-002). The README's count of the imaging camera's tools, which `crates/finder/tests/console/imaging_run_docs.rs:139` pins, keeps its words and gains a clause, so the test is not edited (spec.md owner approval 5). Every existing test passed unchanged at each story's tip and on the fold's final tip (run: nextest 1,528 to 1,533 of as many; Vitest 607 to 613 of as many; `CI=1 npm run e2e` 34 of 34 before US4 and 35 of 35 from it), and again in probe round 1, built from this text alone, and on its fold's final tip (run: nextest 1,528 to 1,533 of as many; Vitest 613 of 613 and `CI=1 npm run e2e` 35 of 35 at US4's tip and on the fold's tip). |
 | III. Tests first, independent expectations | The oracles are the simulated imaging camera's sensor (1236 × 822 RGGB, `crates/simulator/src/imaging.rs:145`), the worked frames and their hand-worked boxes and cells, the folders' own listings, 031's, 032's and 033's words and the scenarios' words, the README's and the ADR's text, and DESIGN.md's night ink. No test calls `crop` or `rgb` for an expected value or reads `CROP_SIDE`, `PREVIEW_SIDE`, `PREVIEWS_KEPT` or `POLL_MS`. Each story's new tests fail before it, and a mutation of each new or changed requirement is caught by a scenario (run, § What was run). Time comes from a paused tokio clock and the simulator's virtual clock in Rust, and real time within a bound in Vitest. |
 | IV. Read the critical paths twice | None is touched: no `Cargo.toml` or `Cargo.lock` change, no `unsafe`, nothing under `proto/`, `crates/math-core`, `crates/pattern-database`, `crates/database-generation`, `crates/scope-node` or `crates/scope-link`, no `build.rs` or `.cargo/`. |
 | V. Proven open source first, with honest licensing | Looked for, in local sources only (no download): the repository's survey of 2026-11-15 and the research notes behind it, the project's capture of INDI's CCD simulator (outside the repository), the vendored `reference-solutions/`, the crates in the cargo registry's local copy, the console's own code and the field night's viewer, outside the repository. **The camera maker's video mode**: the maker's library has one beside its single exposures, which INDI and INDIGO use for deep-sky frames (`docs/research/2026-11-15-imaging-camera.md:42`); the maker's planetary program uses video and its deep-sky one single frames (the research notes, read); one study saw its video stall on USB 3.0 (`docs/research/2026-11-15-imaging-camera.md:43`). **INDI's own stream**: the survey's property table lists the frame's format (`docs/research/2026-11-15-imaging-camera.md:74`) and where a frame goes (`docs/research/2026-11-15-imaging-camera.md:76`), not a stream, but INDI's CCD simulator, as the project captured it, offers `CCD_VIDEO_STREAM`, `STREAMING_EXPOSURE`, `CCD_STREAM_FRAME` (a subframe), `CCD_STREAM_ENCODER` with `RAW` and `MJPEG` and `LIMITS_PREVIEW_FPS`; whether `indi_asi_ccd` streams this camera is not known here. A stream would be a new node path and a `proto/` change (IV) and would amend ADR 0002's node that "does no pixel work": spec.md owner decision 1 (d), not adopted, not built. **N.I.N.A.'s looped exposure and Ekos's 1 s loop** (`docs/research/2026-11-15-imaging-camera.md:233`), the deep-sky focus tools, repeat single exposures, as this spec does; **SharpCap's** focus measures for the Moon and planets (`docs/research/2026-11-15-imaging-camera.md:208`): desktop programs that own the camera, read for their method only (owner decision 4 (d)). **OpenLiveStacker**: GPL-3, an appliance that wants the camera (`docs/research/2026-11-15-imaging-camera.md:419`). **The `image` crate** (0.25.10, already a dependency): its `imageops::crop_imm` crops a decoded picture, so it would need the whole frame in colour first, where a crop of the samples' rows before `rgb` keeps the mosaic's cells; its JPEG encoder is reused through `preview::jpeg`. **`reference-solutions/`** (cedar-detect, cedar-solve): no frame viewer (searched for one). The crop's box sum is a few lines over the samples the preview already reads. **The field night's viewer**, a script beside the field notes: one `POST /api/imaging/frame` at a time while the camera is idle, the console's preview shown; it is this design less the file. **The console's own `/api/live` stream** (`crates/finder/web/src/useLive.ts:22`), the finder camera's: a second kind of message on it, rejected in § Decisions. Nothing is adopted; the new code is the route, the frame's end without a file, the crop of rows around the brightest box, the tool and the block. |
@@ -110,7 +111,7 @@ crates/finder/
 ├── README.md                                  # US3: ## Preview frames, two rows, five edits, MCP paragraph
 ├── src/
 │   ├── imaging/frames.rs                      # US1: keep, show; US2: crop in show, FrameView.crop
-│   ├── imaging/mod.rs                         # US1: take_preview, take_as's keep, ended; US2: crops, crop()
+│   ├── imaging/mod.rs                         # US1: take_preview, take_as's keep; US2: crops, crop()
 │   ├── imaging/preview.rs                     # US2: CROP_SIDE, BOX_SIDE, brightest, crop
 │   ├── imaging/routes.rs                      # US1: POST /api/imaging/preview; US2: crop.jpg
 │   └── mcp/tools.rs                           # US3: take_preview_frame
@@ -131,12 +132,13 @@ crates/finder/
             ├── PreviewBlock.tsx               # US4, new
             └── PreviewBlock.test.tsx          # US4, new
 GLOSSARY.md                                    # US3: Preview frame, Crop; Purpose label
-docs/adr/0002-imaging-cameras-through-indi-frames-relayed-console-stacks.md  # US3: one line
+docs/adr/0002-imaging-cameras-through-indi-frames-relayed-console-stacks.md  # US1: one line
 ```
 
 ## Interfaces
 
-The code as it ran on `probe/058`'s fold of review round 1 (§ What was run). Bodies not
+The code as it ran on `probe/058`'s fold of review round 1, and as probe round 1 built
+it from this text on `probe/058-r1` and its fold changed it (§ What was run). Bodies not
 given here are the builder's, to these words and the FRs.
 
 ### `crates/finder/src/imaging/frames.rs` (US1; US2 adds)
@@ -196,8 +198,10 @@ impl Imaging {
 
 - `Held` gains (US2) `crops: Vec<(u64, Vec<u8>)>`, empty by default; the doc of
   `previews` and of `Imaging::preview` says "saved or shown frames".
-- `Imaging::ended`'s match of a frame that has ended gains `"shown"`:
-  `"saved" | "shown" | "failed" | "aborted"`.
+- `Imaging::ended` is unchanged: `FrameTask::finish` sets `held.ended` with the frame
+  (`crates/finder/src/imaging/frames.rs:255`), so `ended`'s first branch answers a shown
+  frame, and its match of the latest frame, `"saved" | "failed" | "aborted"`, gains
+  nothing (probe round 1: `"shown"` there changed nothing, 058-R8).
 - The doc of `take` ("Every frame `take` starts is saved to a file.") stays true:
   `take` passes `keep` true.
 
@@ -242,11 +246,23 @@ pixel a cell (058)." US2-S1's worked frames, by hand: the first's patch fills th
 of columns 672 to 703 and rows 288 to 319, whose sum (420,800) beats the hot sample's box
 (167,835), so the centre is (688, 304) and the crop starts at (488, 104); the second's
 patch fills the box of columns 0 to 31 and rows 256 to 287 (14,080 against the hot
-sample's 10,475), centre (16, 272), and the crop is moved in to start at (0, 100), its
+sample's 10,485), centre (16, 272), and the crop is moved in to start at (0, 100), its
 rows 288 to 299 in no box; the third's two patches tie and the first in row order wins,
-centre (1008, 112), the crop moved down to start at (808, 0). In each crop fewer than one
-pixel in a thousand differs from the background, so the stretch's span floors at 1 and
-any cell above the background is white, and a red sample alone red.
+centre (1008, 112), the crop moved down to start at (808, 0). The fourth's patch box
+(420,800) beats every box of its 300s (307,200), so its crop starts at (488, 104) as
+the first's does, and its 300s, columns 0 to 299, lie outside it: stretched over its
+own samples, the cell of 150 at (600, 300), pixel (56, 98), is white, where a stretch of
+the whole frame, then a cut, draws it (140, 140, 140) (run). The fifth holds no whole
+box (30 columns), so it is centred on itself, (15, 500): w = 30 and h = 200, from (0, 400),
+which puts its two samples of 200 at pixels (0, 0) and (29, 199). The sixth holds none
+either, centre (15, 501): w = 30 and h = 400, its first row ⌊min(301, 602)/2⌋·2 = 300,
+so (0, 302) is the red sample of cell (0, 1); unrounded, from row 301, it would read as
+a green one. In each crop fewer than one pixel in a thousand differs from the
+background, so the stretch's span floors at 1 and any cell above the background is
+white, and a red sample alone red. A frame with no whole cell row, such as a mosaic
+64 × 1, has H = 0 and so h = 0: its crop has no pixel and `preview::jpeg` gives none,
+and its preview none either. The simulated imaging camera makes such a frame with a
+`roi` of 64 × 1, and it ends `shown` with neither `preview` nor `crop` (US2-S2; run).
 
 ### `crates/finder/src/imaging/routes.rs` (US1; US2 adds)
 
@@ -276,7 +292,10 @@ no imaging: `this console takes no imaging frames`; a refusal: its words; then
 `imaging.ended(id).await`. `shown`: `CallToolResult::structured` of the imaging view with
 that frame, and an image block of `image/jpeg` (base64) for `imaging.preview(id)` and
 then `imaging.crop(id)`, each when kept; `aborted`: `the exposure was aborted`; failed:
-its `error`.
+its `error`. Before those, a frame whose id is not the preview frame's, the later frame
+`ended` answers for an older id (`crates/finder/src/imaging/mod.rs:877`), answers the
+tool error `the preview frame was overtaken by another imaging frame`, so the last arm
+meets only the preview frame's own `failed`.
 
 ### The README (`crates/finder/README.md`, US3)
 
@@ -393,7 +412,7 @@ _Avoid_: zoom, close-up, full-resolution preview, region of interest (that is th
 `align` and `preview`." The **Raw frame**'s _Avoid_ of "full-resolution preview"
 (`GLOSSARY.md:167`) stands: no word here says "full resolution".
 
-### ADR 0002 (US3)
+### ADR 0002 (US1)
 
 After its last line, a blank line and then the one line:
 
@@ -421,12 +440,14 @@ Amended by spec 058: the console saves every frame taken to be kept; a preview f
   every `POLL_MS` it reads `getImaging()`, a failed read setting `lost` and read again,
   until the view's frame is not that frame `exposing` or `receiving`; it clears
   `pending`; another frame's id (or none) loops to one more `POST`, `aborted` ends with
-  `the exposure was aborted`, any other state but `shown` with the frame's `error`, and a
-  shown frame sets `every` from `performance.now()` between the last two of this run of
-  the effect, shows it and loops. The effect's cleanup only marks it stopped: a hidden
-  page and `Stop` leave `pending` for the next run of the effect. `Start` clears the
-  alert, the shown frame, `every` and `lost` and sets `mode` `on`; `Stop` sets it
-  `stopping`.
+  `the exposure was aborted`, any other state but `shown` with the frame's `error`, or
+  its state when it has none, and a shown frame sets `every` from `performance.now()`
+  between the last two of this run of the effect, shows it and loops; a pause clears
+  neither, so S stays until the resumed run's second frame. The effect's cleanup only
+  marks it stopped: a hidden page and `Stop` leave `pending` for the next run of the
+  effect. `Start` clears the alert, the shown frame, `every` and `lost` and sets `mode`
+  `on`; `Stop` sets it `stopping`. The status reads `Waiting for the console` while
+  `lost`, before `Stopping` while `stopping` (FR-013).
 - The block's markup:
 
 ```tsx
@@ -587,6 +608,53 @@ cd55ef08:
   loop against a focus aid start on the simulated console (the aid's start won in a gap
   and the loop stopped, overtaken); and the 63 `path:line` cites, all true.
 
+**Run, probe round 1 from this trio alone** (2026-11-27), on `probe/058-r1` cut from
+660d4df7, reading nothing of `probe/058` or its logs:
+
+- **The commits.** 08ba4ca8 and b25d1c37 (US1, its tests first and then the story),
+  b4baa6c9 and ae6ddcf0 (US2), c66bbf06 and c28ec848 (US3), fe243835 and 0e2b083c (US4,
+  `dist` rebuilt).
+- **The result.** 0 blocking and 11 clarity defects (058-R1 to 058-R11). Every scenario
+  passed on the first build of its story; every gate passed at each story's tip (nextest
+  1,528, 1,530, 1,532 and 1,532 of as many; at 0e2b083c Vitest 613 of 613 in 65 files
+  and `CI=1 npm run e2e` 35 of 35); each story's new tests failed before it as tasks.md
+  says (US2's file on US1's tip: 1 error, `preview::crop` not found, where the review
+  fold's file had 4 call sites); the browser test alone passed 10 of 10 at the tip; and
+  every mutation was caught but those § Read from the diff names and four it did not:
+  FR-006's rounding to a whole cell and the crop's own stretch (058-R3, 058-R5),
+  FR-007's crop left out of the view (058-R4) and FR-009's description (058-R6).
+- **Read in the code.** `"shown"` in `Imaging::ended`'s match changed nothing (058-R8).
+  The new tool built with a copy of 031's last arm, made to take a saved frame,
+  panicked there and the call never answered (058-R9).
+- **The sizes**, from 660d4df7 and then each story's tip: US1 22,235 B, US2 23,325 B,
+  US3 29,021 B (12,320 B of it the README's) and US4 25,592 B.
+
+**Run, the fold of probe round 1** (2026-11-27), on `probe/058-r1` on top of 0e2b083c,
+its history kept:
+
+- **The commits.** 90fd4f55 (US1: `ended` left as it was, ADR 0002's line moved from
+  US3 with its check, US1-S4), 5110befd (US2: US2-S1's fourth to sixth frames, US2-S2's
+  region of 64 × 1) and 61da6c7e (US3: the overtaken frame's words, US3-S1's
+  description, US3-S2's glossary).
+- **Each new step passed on the code and failed under a mutation of its code:** ADR
+  0002's line dropped (f6d4f5fd's ADR) failed US1-S4; the whole frame stretched, then
+  cut, failed US2-S1 at the fourth frame; a frame with no whole box centred at (0, 0),
+  at the fifth; the first column and row not rounded to a whole cell, at the sixth; a
+  crop that cannot be made named in the view failed US2-S2 at its last frame; the
+  tool's description changed failed US3-S1; the glossary's **Crop** dropped, and the
+  purpose label's `preview` dropped, each failed US3-S2. `"shown"` put back in `ended`'s
+  match, and the overtaken check dropped, each passed every scenario (§ Read from the
+  diff).
+- **The gates** on 61da6c7e, every one: `cargo fmt --check`, clippy with
+  `-D warnings`, both `cargo doc` runs, nextest of the whole workspace (1,533 of 1,533),
+  the doc tests, `cargo deny --offline check`, `cargo machete`, `npm ci --offline`, the
+  typecheck, Prettier, Vitest (613 of 613 in 65 files), the build, the dist check
+  (clean) and `CI=1 npm run e2e` (35 of 35) all passed, as did each story's development
+  commands (US1 4 and 69 tests, US2 2 and 10, US3 2 and 3, US4 6 in Vitest and the
+  browser test alone, 1 of 1).
+- **The sizes** with the fold's changes in place at each story's tip: US1 23,693 B,
+  US2 25,113 B, US3 28,254 B and US4 25,592 B (§ Plan traps 2).
+
 **Read, not run:**
 
 - the real camera's download over the scope link for a preview frame: its share of each
@@ -625,21 +693,23 @@ diff.
   the order of the checks beyond US1-S2's lease before frame in flight.
 - FR-002's view of a shown frame beyond US1-S1's keys, and its preview pushed into the
   same eight as saved frames' (US2-S2 counts the crops' eight, not the previews').
-- FR-006's centre for a frame with no whole box (US2-S1's 64 × 1 frame makes no JPEG
-  whatever its centre), and its tie rule beyond the third worked frame.
-- FR-007's crop left out of the view when it cannot be made (US2-S1 shows that no JPEG
-  is made; no view holds such a frame).
+- FR-002's ADR 0002 line's place, after a blank line at its end, beyond US1-S4's line.
+- FR-006's tie rule beyond the third worked frame.
 - FR-008's route open to anyone while a lease is out.
-- FR-009's tool errors for an aborted and a failed frame.
-- FR-013's `receiving` state in the loop, S measured on the page's own clock, and a
-  press of `Start preview frames` while stopping.
+- FR-009's tool errors for an aborted and a failed frame, and for a later frame answered
+  in its place (`the preview frame was overtaken by another imaging frame`): another
+  frame must start and end between the preview frame's end and the tool's wait waking.
+- FR-013's `receiving` state in the loop, S measured on the page's own clock, a press
+  of `Start preview frames` while stopping, `Waiting for the console` before
+  `Stopping`, and S kept until two frames of a resumed run.
 - FR-014's refused `POST` words other than US4-S2's and US4-S3's, the frame shown while
-  stopping, an overtaking frame whose next `POST` is answered (the loop goes on), and a
+  stopping, an overtaking frame whose next `POST` is answered (the loop goes on), a
   frame in flight at the moment the page is hidden that is still in flight when it is
-  shown again.
+  shown again, and an end in another state with no `error` (its state's name).
 - FR-015's classes, beyond US4-S6's night screenshot.
-- The README's rows, section and edits and the glossary's entries (FR-010, FR-011),
-  beyond US3-S2's sentences and headings.
+- The README's rows, section and edits (FR-010), beyond US3-S2's sentences and
+  headings, and the glossary entries' words beyond their heads and the purpose label
+  (FR-011).
 
 ## Shapes that existing tests pin
 
@@ -660,7 +730,9 @@ diff.
   an older id, the last ended frame (`crates/finder/src/imaging/mod.rs:877`), were a
   shown preview frame: that needs a preview frame to start and end between a saved
   frame's end and the tool's waiter waking, so it is very unlikely, and FR-005 leaves
-  the tool as it is; noted here, not guarded.
+  the tool as it is; noted here, not guarded. The new `take_preview_frame` guards the
+  same case for its own frame (FR-009): a frame of another id answers
+  `the preview frame was overtaken by another imaging frame`.
 - **The README's MCP count.** `crates/finder/tests/console/imaging_run_docs.rs:139`
   asserts "sixteen tools of its own" (`crates/finder/README.md:88`): the sentence keeps
   those words and gains a clause naming the seventeenth, so the test passes unchanged
@@ -696,7 +768,8 @@ The ten owner decisions are in spec.md § Owner decisions, none answered. Below 
 | A hidden page | pause: no request, the frame in flight kept as the block's own, waited for when shown | end (decision 5 (a)); keep reading while hidden (a phone's browser may stop the page's timers anyway) |
 | An overtaken frame | one more `POST`, whose refusal names the holder | stop with `another imaging frame was taken` (hides the holder); `another imaging frame was taken (<purpose>)` (a purpose label, not the holder's words) |
 | The whole frame | the section `Imaging frame`'s own picture, read once a second | a second picture of the whole frame in the block (twice the bytes a frame to the phone) |
-| The story cut | four, the largest US3 at 57.6 % at the overrun (§ Plan traps 2) | three, with the crop in US1 (71.2 % at the overrun on the first cut) |
+| The story cut | four, the largest US3 at 58.2 % at the overrun (§ Plan traps 2) | three, with the crop in US1 (71.2 % at the overrun on the first cut) |
+| ADR 0002's line | US1, beside FR-002's frame saved nowhere, with its check US1-S4 | US3 beside the glossary (probe round 1's fold: with its new steps and the ADR's 1,441 B of diff and its check, US3 would have been about 62 % at the overrun, and about 61 % without the glossary's check) |
 
 ## Interplay with the specs drafted beside it
 
@@ -716,8 +789,8 @@ The ten owner decisions are in spec.md § Owner decisions, none answered. Below 
 
 ## User Story 1 - The preview frame
 
-`take`'s `keep`, `show`, `take_preview`, the route and the state `shown`, with their test
-file. No crop.
+`take`'s `keep`, `show`, `take_preview`, the route and the state `shown`, and ADR 0002's
+line, with their test file. No crop.
 
 ## User Story 2 - The crop
 
@@ -727,7 +800,7 @@ crops' ring, `Imaging::crop` and the route, with their test file.
 ## User Story 3 - MCP and the words
 
 The tool, the README's section, rows, paragraph and five edits, the glossary's two
-entries, ADR 0002's line, and their check.
+entries, and their check.
 
 ## User Story 4 - The page
 
@@ -765,13 +838,16 @@ browser test, the two config entries and the rebuilt `dist`.
    `depends_on_landed`, and run the validator and preflight again.
 3. **The owner decisions are answered and the owner approvals given** (spec.md § Owner
    decisions, § Owner approvals). Not met: none is answered.
-4. **A cynical review** of this trio, folded. Round 1 (0 blockers, 5 majors, 11 minors)
-   folded on 2026-11-27, every finding in § What was run's fold round; whether a second
-   round runs is the seat's call.
+4. **A cynical review** of this trio, folded. Met: round 1 (0 blockers, 5 majors, 11
+   minors) folded on 2026-11-27, every finding in § What was run's fold round; whether a
+   second round runs is the seat's call.
 5. **Probe builds.** A probe round builds the stories from this text alone, and its
-   defects are folded. Not met: the probe here was built beside the text.
-6. **The page half has run once.** Met on the probe: `CI=1 npm run e2e` 35 of 35 at each
-   story's tip from US4 on.
+   defects are folded. Met: probe round 1 built all four on `probe/058-r1` (tip
+   0e2b083c: 0 blocking, 11 clarity), and its fold proved each change on that branch (tip
+   61da6c7e, every gate passing) (§ What was run).
+6. **The page half has run once.** Met: `CI=1 npm run e2e` 35 of 35 at each story's tip
+   from US4 on, in probe round 1 at 0e2b083c and on its fold's tip 61da6c7e; it runs
+   again on the re-anchored base (2).
 7. **No operator-staged files are needed.** Met: no story reads a file outside the
    repository; the probe's measure of a real frame is not a story.
 
@@ -827,11 +903,12 @@ They bind every story.
 2. **One evidence budget.** *Check:* each story's whole diff stays under 60 % of
    65,536 B (39,321 B), measured with
    `git diff <base> -- . ':(exclude)crates/finder/web/dist' | wc -c` from the previous
-   story's tip. The fold's stories: US1 21,866 B (33.4 %), US2 21,997 B (33.6 %), US3
-   27,947 B (42.6 %) and US4 25,287 B (38.6 %), with its fix commit. At the 1.35 times a
-   factory build has run over its probe on earlier specs: about 29,519 B (45.0 %),
-   29,696 B (45.3 %), 37,728 B (57.6 %) and 34,137 B (52.1 %): every story under the
-   60 % line and far under the 128 KiB refusal.
+   story's tip. Probe round 1, built from this text, with its fold's changes in place
+   at each story's tip (ADR 0002's line in US1): US1 23,693 B (36.2 %), US2 25,113 B
+   (38.3 %), US3 28,254 B (43.1 %) and US4 25,592 B (39.1 %). At the 1.35 times a
+   factory build has run over its probe on earlier specs: about 31,985 B (48.8 %),
+   33,902 B (51.7 %), 38,142 B (58.2 %) and 34,549 B (52.7 %): every story under the
+   60 % line, US3 by 1,179 B, and far under the 128 KiB refusal.
 3. **A spec fixed mid-epic needs a relaunch.** *Check:* no builder edits
    `specs/058-preview-frames-save-nothing/` or `.specify/`.
 4. **An earlier story's test file is an existing test.** *Check:* US2 to US4 write no
@@ -851,6 +928,8 @@ They bind every story.
    listings stand beside the shown frame's preview and the saved frame's two files after
    them; US1-S2's empty listing beside the shown frame; US2-S1's black pixels beside the
    lit ones placed by hand, and the hot sample's absence beside the patch it lost to;
+   US2-S2's last frame with no `preview` and no `crop` beside the frames before it with
+   both;
    US3-S1's missing `frames` folder beside the two images; US4-S1's and US4-S4's "no
    `POST`" and "no request" beside the requests before and after; US4-S1's "no image"
    after the second start beside the crop that follows; US4-S3's "no image" beside its
@@ -900,7 +979,7 @@ They bind every story.
 20. **The box sums cover whole boxes only.** *Check:* `brightest` sums only the whole
     32 × 32-sample boxes from the top-left, so the samples past the last whole box of a
     row or a column (US2-S1's second frame's rows 288 to 299) count for none, and a
-    frame with no whole box is centred on itself.
+    frame with no whole box is centred on itself (US2-S1's fifth and sixth frames).
 21. **A pause keeps the block's frame.** *Check:* hiding the page or pressing Stop
     leaves the block's frame in flight, and its request while it is being answered, for
     the next run of the effect (US4-S1, US4-S4), so a shown page or a stopping block
@@ -924,7 +1003,7 @@ They bind every story.
 | 055's Nudge block and this block are each added near the end of the camera's sections in `ImagingPage.tsx` (`crates/finder/web/src/components/ImagingPage.tsx:291`), a textual neighbour. | One line each; the re-anchor moves this spec's line after 055's lands, and US4-S5 holds the order. |
 | Preview frames push saved frames' previews out of the eight. | A saved frame's file stays; its preview is 031's convenience (spec.md § Edge Cases). |
 | The stretch is 031's: on a synthetic Saturn the globe and the rings come out near white, the bands' contrast gone, though the limb and the ring gaps still show sharp against soft (run by the review on the synthetic Saturns, `crates/finder/src/imaging/preview.rs:51`). | Focus by eye reads the edge; the owner focused on Saturn through 031's preview (the field report, read); a number from the crop is decision 4 (d). |
-| A story grows past 60 % in the factory. | The largest, US3, measures 42.6 % on the probe and about 57.6 % at the worst overrun seen (§ Plan traps 2), 12,324 B of it the README's diff: a builder keeps to § The README's paragraphs. |
+| A story grows past 60 % in the factory. | The largest, US3, measures 43.1 % on probe round 1 with its fold and about 58.2 % at the worst overrun seen (§ Plan traps 2), 12,320 B of it the README's diff: a builder keeps to § The README's paragraphs. |
 
 ## Refinement Record
 
@@ -943,7 +1022,11 @@ the same four stories, with both gates passing at each story's tip and on the fi
 tip, each new test failing on the story before it, a mutation of each new or changed
 requirement caught by a scenario, the run with a preview frame in flight run on the
 probe's release console, the crop measured on synthetic Saturns and field subs, and
-the field night's cadence measured from its saved subs (§ What was run). Writes come
+the field night's cadence measured from its saved subs (§ What was run). Built again
+the same day by probe round 1 from this text alone on `probe/058-r1` (tip 0e2b083c: 0
+blocking, 11 clarity defects) and folded: each new step passed on the code and failed
+under a mutation of it, every gate passed on the fold's tip 61da6c7e, and ADR 0002's line
+moved from US3 to US1, which keeps US3 under the 60 % line (§ What was run). Writes come
 from the task text. Shared writes name the spec story that last wrote the same file on
 `main`; ADR 0002 was last written by a spec flip, not a story, so it has none; within the
 spec, each story's files written by an earlier one are ordered by `depends_on_merged`;
@@ -975,6 +1058,11 @@ stories:
         disposition: add
         assertion: "the preview rig, ready, exposure_ms 5000: POST /api/imaging/preview, 1 s later POST /api/imaging/abort 200, read until aborted: no preview; exposure_ms 100, POST /api/imaging/preview 200 with frame id 2, read until shown: preview /api/imaging/frames/2/preview.jpg; R lists nothing"
         decision: "spec.md:US1-S3"
+      - path: crates/finder/tests/console/imaging_preview_frames.rs
+        status: new
+        disposition: add
+        assertion: "docs/adr/0002-imaging-cameras-through-indi-frames-relayed-console-stacks.md read as a file holds Amended by spec 058: the console saves every frame taken to be kept; a preview frame is shown and saved nowhere."
+        decision: "spec.md:US1-S4"
       - path: crates/finder/tests/console/imaging_frames.rs
         status: existing
         disposition: preserve
@@ -994,6 +1082,7 @@ stories:
       - "Imaging::take and Lease::take save every frame they take, with the node's copy as save_at_node says (031 FR-008, FR-011, FR-030)"
       - "the lease, its words and each holder's check of a frame in flight are unchanged (031 FR-028, FR-029, FR-033), and a settings change in flight is refused as before (031 FR-004)"
       - "032's solve refuses a frame with no file with its words (032 FR-009)"
+      - "ADR 0002's decision text is unchanged; it gains one line after its last"
     checks:
       development:
         - "cargo nextest run -p finder --locked --test console -E 'test(imaging_preview_frames)'"
@@ -1006,6 +1095,7 @@ stories:
       - crates/finder/src/imaging/frames.rs
       - crates/finder/src/imaging/mod.rs
       - crates/finder/src/imaging/routes.rs
+      - docs/adr/0002-imaging-cameras-through-indi-frames-relayed-console-stacks.md
       - crates/finder/tests/console/imaging_preview_frames.rs
       - crates/finder/tests/console/main.rs
     no_write_reason: ""
@@ -1036,12 +1126,12 @@ stories:
       - path: crates/finder/tests/console/imaging_preview_crop.rs
         status: new
         disposition: add
-        assertion: "preview::crop of a worked 16-bit RGGB 1000 x 900 frame of samples 100 with a patch of 20000 at (700, 300), the sample (100, 800) at 65535, cells of 1000 at (488, 104), (886, 502) and (486, 102) and the sample (588, 304) at 1000: 200 x 200, its only pixels not black (0, 0), (106, 98), (107, 98), (106, 99), (107, 99) and (199, 199) white and (50, 100) red; of a worked 8-bit mono 500 x 300 frame of 10 with a patch of 250 at (4, 260), the sample (400, 50) at 255 and the samples (0, 100), (199, 299) and (200, 299) at 200: 200 x 200, its only such pixels (0, 0), the 16 with x 4 to 7 and y 160 to 163, and (199, 199), white; of a worked 16-bit RGGB 1236 x 822 frame of 100 with patches of 20000 at (1000, 100) and (200, 700) and cells of 1000 at (808, 0) and (1206, 398): 200 x 200, its only such pixels (0, 0), (96, 50), (97, 50), (96, 51), (97, 51) and (199, 199), white; of a worked 16-bit RGGB 64 x 1 frame: preview::jpeg gives none"
+        assertion: "preview::crop of a worked 16-bit RGGB 1000 x 900 frame of samples 100 with a patch of 20000 at (700, 300), the sample (100, 800) at 65535, cells of 1000 at (488, 104), (886, 502) and (486, 102) and the sample (588, 304) at 1000: 200 x 200, its only pixels not black (0, 0), (106, 98), (107, 98), (106, 99), (107, 99) and (199, 199) white and (50, 100) red; of a worked 8-bit mono 500 x 300 frame of 10 with a patch of 250 at (4, 260), the sample (400, 50) at 255 and the samples (0, 100), (199, 299) and (200, 299) at 200: 200 x 200, its only such pixels (0, 0), the 16 with x 4 to 7 and y 160 to 163, and (199, 199), white; of a worked 16-bit RGGB 1236 x 822 frame of 100 with patches of 20000 at (1000, 100) and (200, 700) and cells of 1000 at (808, 0) and (1206, 398): 200 x 200, its only such pixels (0, 0), (96, 50), (97, 50), (96, 51), (97, 51) and (199, 199), white; of a worked 16-bit RGGB 1000 x 900 frame of 100 with a patch of 20000 at (700, 300), the samples from (0, 600) to (299, 899) at 300 and a cell of 150 at (600, 300): its pixel (56, 98) white; of a worked 8-bit mono 30 x 1000 frame of 10 with the samples (0, 400) and (29, 599) at 200: 30 x 200, its only such pixels (0, 0) and (29, 199), white; of a worked 16-bit RGGB 30 x 1002 frame of 100 with the sample (0, 302) at 1000: 15 x 200, its only such pixel (0, 1), red; of a worked 16-bit RGGB 64 x 1 frame: preview::jpeg gives none"
         decision: "spec.md:US2-S1"
       - path: crates/finder/tests/console/imaging_preview_crop.rs
         status: new
         disposition: add
-        assertion: "the crop rig, ready, exposure_ms 100: a preview frame until shown has crop /api/imaging/frames/1/crop.jpg and the route 200 a JPEG of 200 x 200; a saved frame until saved has no crop and /api/imaging/frames/2/crop.jpg 404; after eight more preview frames, each until shown, frame 1's crop 404 with error the console no longer holds that crop, frames 3 and 10 200, /api/imaging/frames/abc/crop.jpg 400"
+        assertion: "the crop rig, ready, exposure_ms 100: a preview frame until shown has crop /api/imaging/frames/1/crop.jpg and the route 200 a JPEG of 200 x 200; a saved frame until saved has no crop and /api/imaging/frames/2/crop.jpg 404; after eight more preview frames, each until shown, frame 1's crop 404 with error the console no longer holds that crop, frames 3 and 10 200, /api/imaging/frames/abc/crop.jpg 400; then roi {x: 0, y: 0, width: 64, height: 1} set and one more preview frame until shown: its view has no preview and no crop"
         decision: "spec.md:US2-S2"
       - path: crates/finder/tests/console/imaging_preview.rs
         status: existing
@@ -1078,12 +1168,12 @@ stories:
       - path: crates/finder/tests/mcp/imaging_preview_frames.rs
         status: new
         disposition: add
-        assertion: "take_preview_frame {} on the bare MCP console: tool error this console takes no imaging frames; the MCP rig, ready, set_imaging_camera exposure_ms 200: {x: 1} tool error take_preview_frame takes no arguments; {} no error, structuredContent.frame state shown, purpose preview, no file, exactly two image blocks of image/jpeg, the first 618 x 411 and the second 200 x 200; R holds no frames folder; with Imaging::lease(the stack) out, tool error the imaging camera is held by the stack; tools/list holds take_preview_frame with outputSchema {type: object}"
+        assertion: "take_preview_frame {} on the bare MCP console: tool error this console takes no imaging frames; the MCP rig, ready, set_imaging_camera exposure_ms 200: {x: 1} tool error take_preview_frame takes no arguments; {} no error, structuredContent.frame state shown, purpose preview, no file, exactly two image blocks of image/jpeg, the first 618 x 411 and the second 200 x 200; R holds no frames folder; with Imaging::lease(the stack) out, tool error the imaging camera is held by the stack; tools/list holds take_preview_frame with outputSchema {type: object} and FR-009's description word for word"
         decision: "spec.md:US3-S1"
       - path: crates/finder/tests/mcp/imaging_preview_frames.rs
         status: new
         disposition: add
-        assertion: "crates/finder/README.md and ADR 0002 read as files, the README's text read with each run of whitespace as one space: it holds The imaging camera has sixteen tools of its own, which answer what the page's Imaging page does (a seventeenth, for its preview frames, follows the Tools page's tools below):; The Imaging page's preview frames have one tool: after The Tools page's focus aid for the finder camera has two tools: and before ### MCP under WSL2, with - `take_preview_frame` between them; it holds `exposing`, `receiving`, `saved`, `shown` (a preview frame's end, below), `failed` and `aborted`; ## Imaging frames, **One holder.**, ## Preview frames and ## Solving imaging frames in that order, The Imaging page's **Preview frames** are single frames too between the second and the third, nothing of it is saved and Stopping: the last preview frame is still in flight between the third and the fourth; the ADR holds Amended by spec 058: the console saves every frame taken to be kept; a preview frame is shown and saved nowhere."
+        assertion: "crates/finder/README.md and GLOSSARY.md read as files, the README's text read with each run of whitespace as one space: it holds The imaging camera has sixteen tools of its own, which answer what the page's Imaging page does (a seventeenth, for its preview frames, follows the Tools page's tools below):; The Imaging page's preview frames have one tool: after The Tools page's focus aid for the finder camera has two tools: and before ### MCP under WSL2, with - `take_preview_frame` between them; it holds `exposing`, `receiving`, `saved`, `shown` (a preview frame's end, below), `failed` and `aborted`; ## Imaging frames, **One holder.**, ## Preview frames and ## Solving imaging frames in that order, The Imaging page's **Preview frames** are single frames too between the second and the third, nothing of it is saved and Stopping: the last preview frame is still in flight between the third and the fourth; GLOSSARY.md holds **Preview frame**:, **Crop** (of a preview frame): and **Sub**:, each a line of its own, in that order, and `sub`, `run`, `align` and `preview`."
         decision: "spec.md:US3-S2"
       - path: crates/finder/tests/console/imaging_run_docs.rs
         status: existing
@@ -1102,7 +1192,6 @@ stories:
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
       - "take_imaging_frame and its description are unchanged; the README's sixteen tools sentence keeps its words, gaining only a clause naming the seventeenth"
-      - "ADR 0002's decision text is unchanged; it gains one line after its last"
     checks:
       development:
         - "cargo nextest run -p finder --locked --test mcp -E 'test(imaging_preview_frames)'"
@@ -1115,7 +1204,6 @@ stories:
       - GLOSSARY.md
       - crates/finder/README.md
       - crates/finder/src/mcp/tools.rs
-      - docs/adr/0002-imaging-cameras-through-indi-frames-relayed-console-stacks.md
       - crates/finder/tests/mcp/imaging_preview_frames.rs
       - crates/finder/tests/mcp/main.rs
     no_write_reason: ""
@@ -1161,7 +1249,7 @@ stories:
       - path: crates/finder/web/src/components/PreviewBlock.test.tsx
         status: new
         disposition: add
-        assertion: "PreviewBlock over the stub console, later reads each shown frame N: started, frame 1's crop shown, document.visibilityState hidden and visibilitychange dispatched: button Stop preview frames at once, no request in 1.2 s; visible and dispatched again: the image Crop of preview frame 2 around its brightest part within 3 s and exactly one POST more within 3 s; unmounted: no POST in 1.2 s"
+        assertion: "PreviewBlock over the stub console, later reads each shown frame N: started, frame 1's crop shown, document.visibilityState hidden and visibilitychange dispatched: button Stop preview frames at once, no request in 1.2 s; visible and dispatched again: the image Crop of preview frame 2 around its brightest part within 3 s and one POST more within 3 s, the block unmounted as soon as it has; unmounted: no POST in 1.2 s"
         decision: "spec.md:US4-S4"
       - path: crates/finder/web/src/components/PreviewBlock.test.tsx
         status: new

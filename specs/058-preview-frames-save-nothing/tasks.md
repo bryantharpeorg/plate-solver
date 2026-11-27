@@ -9,9 +9,12 @@ description: "Task list for 058-preview-frames-save-nothing: Preview Frames Save
 - 052 to 055 have landed and this spec is re-anchored on them: not met;
 - the owner decisions in spec.md are answered and the approvals given: not met, none
   is answered;
-- a cynical review of this trio, folded: round 1 folded on 2026-11-27;
-- every story has been probe-built from this text: not met;
-- the page half has run once: met on the probe (`CI=1 npm run e2e`, 35 of 35 at US4's tip and the final tip);
+- a cynical review of this trio, folded: met, round 1 folded on 2026-11-27;
+- every story has been probe-built from this text: met, probe round 1 on `probe/058-r1`
+  (tip 0e2b083c: 0 blocking, 11 clarity), folded with its proofs (tip 61da6c7e);
+- the page half has run once: met (`CI=1 npm run e2e`, 35 of 35 at US4's tip and the
+  final tip, and on probe round 1's fold's tip 61da6c7e); it runs again on the
+  re-anchored base;
 - no operator-staged file is needed: met.
 
 **Rules for every story:**
@@ -47,13 +50,16 @@ description: "Task list for 058-preview-frames-save-nothing: Preview Frames Save
 - [ ] T001 [US1] Create `crates/finder/tests/console/imaging_preview_frames.rs` with the
   preview rig of spec.md § User Scenarios (its own `Transport::connector` over a fresh
   `tokio::io::duplex` serving `node.service().routes()`, plan.md § Plan traps 5, the
-  node's folder N set with `with_imaging_save_dir`, and a `SimulatedSolver` over the
-  simulator), helpers that send a request and read its JSON, read the view every 100 ms
-  until a condition holds (within 120 s of paused time) and list a folder, and one test
-  for each of US1-S1, US1-S2 and US1-S3 under `#[tokio::test(start_paused = true)]`, and
-  add `mod imaging_preview_frames;` to `crates/finder/tests/console/main.rs` after
+  node's folder N set through `node.service().with_imaging_save_dir(N)`, which the
+  `SimNode`'s service shares, and a `SimulatedSolver` over the simulator), helpers that
+  send a request and read its JSON, read the view every 100 ms until a condition holds
+  (within 120 s of paused time) and list a folder, one test for each of US1-S1, US1-S2
+  and US1-S3 under `#[tokio::test(start_paused = true)]`, and one for US1-S4 under
+  `#[test]`, reading ADR 0002 from `../../docs/adr/` beside `env!("CARGO_MANIFEST_DIR")`,
+  and add `mod imaging_preview_frames;` to `crates/finder/tests/console/main.rs` after
   `mod imaging_preview;`. On f6d4f5fd's source there is no route
-  `/api/imaging/preview`, so the `POST`s answer no JSON and all three fail (run).
+  `/api/imaging/preview`, so the `POST`s answer no JSON and the first three fail (run),
+  and f6d4f5fd's ADR has no line of 058, so US1-S4 fails (run, as a mutation).
 
 ### Implementation
 
@@ -65,16 +71,17 @@ description: "Task list for 058-preview-frames-save-nothing: Preview Frames Save
   frame `shown` and writes nothing; and add `shown` to `FrameView::state`'s doc (FR-002,
   FR-003; plan.md § Interfaces).
 - [ ] T003 [US1] In `crates/finder/src/imaging/mod.rs`, add `Imaging::take_preview`,
-  give `take_as` the argument `keep` (true from `take` and `Lease::take`), add `"shown"`
-  to `Imaging::ended`'s match of a frame that has ended, and say "saved or shown" in the
-  docs of `Held::previews` and `Imaging::preview`; in
-  `crates/finder/src/imaging/routes.rs`, add `POST /api/imaging/preview` after
-  `/api/imaging/frame` and its handler `take_preview` (FR-001, FR-004, FR-005; plan.md
-  § Interfaces).
+  give `take_as` the argument `keep` (true from `take` and `Lease::take`), leave
+  `Imaging::ended` as it is (`finish` already answers a shown frame through
+  `held.ended`), and say "saved or shown" in the docs of `Held::previews` and
+  `Imaging::preview`; in `crates/finder/src/imaging/routes.rs`, add
+  `POST /api/imaging/preview` after `/api/imaging/frame` and its handler `take_preview`;
+  and add ADR 0002's one line after its last, as plan.md § Interfaces gives it (FR-001,
+  FR-002, FR-004, FR-005; plan.md § Interfaces).
 - [ ] T004 [US1] Run the `lint` and `test` gates with every existing test unchanged and
   green, `imaging_frames.rs`, `imaging_preview.rs`, `imaging_lease.rs`,
   `imaging_focus_aid.rs` and `imaging_solve.rs` among them, then commit the green story
-  (FR-001 to FR-005; US1-S1, US1-S2, US1-S3).
+  (FR-001 to FR-005; US1-S1, US1-S2, US1-S3, US1-S4).
 
 ## Phase 2: User Story 2 - The brightest part of each preview frame, one pixel a cell (Priority: P1)
 
@@ -115,7 +122,7 @@ description: "Task list for 058-preview-frames-save-nothing: Preview Frames Save
   bare MCP console, one test for US3-S1 under `#[tokio::test(start_paused = true)]` and
   one for US3-S2 under `#[test]`, reading `crates/finder/README.md` from
   `env!("CARGO_MANIFEST_DIR")` as `crates/finder/tests/console/imaging_run_docs.rs`
-  does, and ADR 0002 from `../../docs/adr/` beside it, reading the README's text with
+  does, and `GLOSSARY.md` from `../../` beside it, reading the README's text with
   each run of whitespace as one space, and add `mod imaging_preview_frames;` to
   `crates/finder/tests/mcp/main.rs` after `mod imaging_focus;`. On US2 the tool is unknown and the README has no line
   `The Imaging page's preview frames have one tool:`, so both fail (run).
@@ -123,15 +130,16 @@ description: "Task list for 058-preview-frames-save-nothing: Preview Frames Save
 ### Implementation
 
 - [ ] T010 [US3] In `crates/finder/src/mcp/tools.rs`, add `take_preview_frame` after
-  `take_imaging_frame`, with FR-009's description and answers (FR-009; plan.md
+  `take_imaging_frame`, with FR-009's description and answers, a frame of another id
+  answered `the preview frame was overtaken by another imaging frame` (FR-009; plan.md
   § Interfaces).
 - [ ] T011 [US3] In `crates/finder/README.md`, add the clause to the imaging camera's
   count, the MCP paragraph after the finder camera focus aid's entries, the two rows
   before the preview's row, the edits to the frame's states and keys, the preview row,
   the preview paragraph and **One holder**, and `## Preview frames` before
   `## Solving imaging frames`; in `GLOSSARY.md`, add **Preview frame** and **Crop**
-  before **Sub** and `preview` to the **Purpose label**'s list; and add ADR 0002's one
-  line after its last; each as plan.md § Interfaces gives it (FR-010, FR-011).
+  before **Sub** and `preview` to the **Purpose label**'s list; each as plan.md
+  § Interfaces gives it (FR-010, FR-011).
 - [ ] T012 [US3] Run the `lint` and `test` gates with every existing test unchanged and
   green, the earlier stories' test files, `imaging_run_docs.rs`,
   `crates/finder/tests/mcp/finder_focus.rs` and `crates/finder/tests/mcp/imaging.rs`
