@@ -36,8 +36,9 @@ use tokio::{
 pub const STARS_MEASURED: usize = 15;
 /// Half the side of the square box each star is measured in, in pixels (US1).
 pub const BOX_PX: i64 = 16;
-/// A star with a joined pixel at or above this level is not measured (US1).
-pub const SATURATED: u8 = 250;
+/// A star with a joined pixel at or above this level is not measured (US1): the finder
+/// camera's one saturation level, the scope node's detection's too (052).
+pub const SATURATED: u8 = star_detection::saturated::SATURATED;
 /// A pixel joins a star only this many noise levels above the background (US1).
 pub const THRESHOLD_NOISE: f64 = 3.0;
 /// Each pixel is summed as this many sub-pixels a side when a star's flux is

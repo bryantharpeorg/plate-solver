@@ -10,6 +10,7 @@ pub mod centroid;
 pub mod detect;
 pub mod gray;
 pub mod noise;
+pub mod saturated;
 pub mod star;
 
 pub use detect::{detect_stars, detect_stars_with_noise_floor};
