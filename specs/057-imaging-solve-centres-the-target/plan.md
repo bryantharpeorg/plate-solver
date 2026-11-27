@@ -7,22 +7,22 @@
 ## Summary
 
 A centring brings a place, the session's target or the sky at a tapped pixel of the
-latest solved imaging frame, to the imaging camera's set point, the sensor's centre, from
-that frame's imaging solve alone. A new module, `crates/finder/src/centre.rs`, serves
-`POST /api/imaging/centre`, reads the latest solve and frame, checks the guards, and
-hands Track the place to centre and the sky at the set point. `Tracker::centre` makes
-the place Track holds the place to centre and has Track's next turn make the step from
-the set point's sky to it, the step 055's nudge makes, so it needs no live pointing and
-is never a sync. `nudge::track_step`, the Track branch of 055's `nudge` made shared,
+latest solved imaging frame, to the imaging camera's set point, the sensor's centre,
+from that frame's imaging solve alone. A new module, `crates/finder/src/centre.rs`,
+serves `POST /api/imaging/centre`, reads the latest solve and frame, checks the guards,
+and hands Track the place to centre and the sky at the set point. `Tracker::centre`
+makes the place Track holds the place to centre and has Track's next turn make the step
+from the set point's sky to it, the step 055's nudge makes, so it needs no live pointing
+and is never a sync. `nudge::track_step`, the Track branch of 055's `nudge` made shared,
 reserves the move and reports it in `motion` and `axis_move`. After a centring,
 `Session::centred` marks the running Track for a minute, and the finder camera's first
 solve in it takes the aim point from the place Track holds, so its return moves nothing.
 The imaging run's mount part gains `centre`, a default method the console's part
 implements, and the run asks it when a solve moved no aim point. MCP gains a `centre`
 tool through the same function; the README and the glossary gain the words; the Imaging
-page gains a Centre block. Six stories: the target's centring and Track's step; the tap
-and the later refusals; the run and the stack; the finder camera's return; MCP and the
-words; the page.
+page gains a Centre block. Six stories: the target's centring and Track's step; the tap,
+the refusals and the region of interest; the run and the stack; the finder camera's
+return; MCP and the words; the page.
 
 ## Technical Context
 
@@ -131,11 +131,12 @@ ends.
 
 **Constraints**: no new dependency; no change to the pointing model, the live solve,
 `goto.rs` or the steering. `session.rs` gains only `TrackRun`'s mark, `Session::centred`
-and the aim reading at the head of `record_live_pointing`; `tracking.rs` gains `centre`
-and moves `nudge`'s body into `step_between` without changing what a nudge does.
+and the aim reading after `record_live_pointing`'s held aim point's block; `tracking.rs`
+gains `centre` and moves `nudge`'s body into `step_between` without changing what a
+nudge does.
 
-**Scale/Scope**: about 1,930 added lines across six stories (the probe's, without
-`dist`), about 1,350 of them tests.
+**Scale/Scope**: about 2,150 added lines across six stories (round 1's with this
+fold's tests, without `dist`), about 1,550 of them tests.
 
 ## Constitution Check
 
@@ -145,7 +146,7 @@ and moves `nudge`'s body into `step_between` without changing what a nudge does.
 |---|---|
 | I. Agreeing with cedar is correctness | Detection, the plate solver and the live solve are untouched; the imaging solve is read as 032 gives it (its centre, `cd_deg` and the frame's size), and the live frame's `project` as 032's aim reading reads it. |
 | II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. `playwright.config.ts` gains two list entries, an owner approval as 050's, 051's and 055's were. The only edits to existing test files are the `mod` lines of `crates/finder/tests/motion/main.rs` and `crates/finder/tests/mcp/main.rs` (SC-002). Every existing test passed unchanged at each story's tip (run, § What was run). |
-| III. Tests first, independent expectations | The oracles are the simulator's imaging truth, eyepiece and push, M42's catalogue place, the solve's own matrix at a pixel (032's), and the words of 041 and the scenarios. Each test file writes its own copy of PARTS and of the route's words; no test reads a constant of `centre.rs`. Time comes from a paused tokio clock and the simulator's virtual clock. Every story's new tests failed on the story before it (run, § What was run); US3-S2 passes from US1 on and pins US1's FR-003 under a stack (§ Plan traps 4). |
+| III. Tests first, independent expectations | The oracles are the simulator's imaging truth, eyepiece and push, M42's catalogue place, the solve's own matrix at a pixel (032's), and the words of 041 and the scenarios. Each test file writes its own copy of PARTS and of the route's words; no test reads a constant of `centre.rs`. Time comes from a paused tokio clock and the simulator's virtual clock. Every story's new tests failed on the story before it (run, § What was run), but US2-S3, US2-S4, US2-S5 and US3-S2, which pass from US1 on and pin US1's FR-003 and FR-002 (§ Plan traps 4). |
 | IV. Read the critical paths twice | None is touched: no `Cargo.toml` or `Cargo.lock` change, no `unsafe`, nothing under `proto/`, `crates/math-core`, `crates/pattern-database` or `crates/database-generation`, no `build.rs` or `.cargo/`. The mount's motion is a safety path: a centring is Track's own step through the same `step_path` and guards as 055's Track-on nudge, behind the same reservation; the aim point it leaves moves nothing by construction (its pointing is the place held). |
 | V. Proven open source first, with honest licensing | Looked for, in local sources only (no download): the vendored `reference-solutions/` (cedar-detect and cedar-solve: no mount control), the cargo registry caches (no mount or astronomy-control crate), and the repository's own research of 2026-10-21 and 2026-11-15 (`docs/research/`), which read **N.I.N.A.**'s centering solver (solve, then a sync or an offset, then a slew, up to 10 times within 1′), **KStars/Ekos** align (solve, sync, slew, up to 10 times within 30″) and **SharpCap** (one solve, sync and GoTo). All three are programs the console cannot link (and N.I.N.A. runs on Windows only); their method, a solve and a move by its offset, is the one taken here, without their sync (053's) and with Track's own step in place of a slew. Nothing to adopt, so the step is the console's existing one. |
 
@@ -446,9 +447,11 @@ right after `<ImagingSolveBlock …/>` (`crates/finder/web/src/components/Imagin
 
 ## What was run and what was read
 
-All on the probe branch `probe/057`, cut from `probe/055-r1` at 8b7212bb, on the
-simulator, with the factory's toolchain, `--locked`, and npm from its cache. Logs are
-outside the repository.
+All on the probe branches `probe/057`, cut from `probe/055-r1` at 8b7212bb, and
+`probe/057-r1`, from this trio at 4279aeaf, on the simulator, with the factory's
+toolchain, `--locked`, and npm from its cache. Logs are outside the repository. The
+scenario numbers here are the trio's as it now stands: the earlier rounds' US1-S3 and
+US1-S2 are US2-S3 and US2-S4.
 
 **The draft's round (979a2573 to 1a3f06be).** Five stories built with every scenario's
 test, then 00c4a55a (the tests in the draft's layout, the browser test renamed to sort
@@ -497,7 +500,8 @@ point 390″ or 240″ off at 30°, centred with the frames stopped, then starte
   3.5″ to 6.4″ after, the aim point (700.05, 420.10). With the frames back 60 s and
   180 s after the centring: 34.5″ and 95.8″ off by drift, the aim point 1.18 and 3.23
   pixels off, M42 34.8″ and 95.7″ off 30 s later (at 180 s a sync was recorded, the
-  epoch unchanged); (i) at those gaps followed, the place held 365.2″ and 337.5″ off.
+  epoch unchanged: not the centring's, but a live solve's frame sync kept past a 120 s
+  gap, round 1 below); (i) at those gaps followed, the place held 365.2″ and 337.5″ off.
 - **The age (F3).** With no finder camera solve, pressed 0.2, 30.2, 45.2, 60.2, 90.2,
   120.2 and 180.2 s after the frame ended: M42 10.3″, 23.0″, 30.3″, 37.3″, 49.7″, 63.7″
   and 90.2″ off once it rested.
@@ -509,15 +513,15 @@ point 390″ or 240″ off at 30°, centred with the frames stopped, then starte
   view's frame 11, purpose `sub`), the route answered 409 `a newer imaging frame was
   taken after frame 1`.
 - **A region of interest (F5).** The draft's step from the frame's centre: 538.6″ off at
-  17° and 549.2″ at 250°; with A1, US1-S3 passes.
+  17° and 549.2″ at 250°; with A1, US2-S3 passes.
 
-**Each new test failed on the story before it** (logs named `fold-r1-2*`): US1's on
-8b7212bb (405); US2-S1 and US2-S2 on US1 (400, unknown fields); US3's on US2 (the file
-did not compile: no `MountSteps::centre`), and US3-S1's push and aim cases each alone
-(tries 0, not 1); US4-S1 on US3 (at 390″ a push read)
-and US4-S2 (the aim point not measured); US5-S1 and US5-S2 on US4 (the tool unlisted, no README section); the Vitest file
-on US5 (no `CentreBlock`), and the browser test on US5 (no Centre block). US3-S2 passes
-from US1 (§ Plan traps 4).
+**Each new test failed on the story before it** (logs named `fold-r1-2*`): US1-S1,
+US2-S3 and US2-S4 on 8b7212bb (405); US2-S1 and US2-S2 on US1 (400, unknown fields);
+US3's on US2 (the file did not compile: no `MountSteps::centre`), and US3-S1's push and
+aim cases each alone (tries 0, not 1); US4-S1 on US3 (at 390″ a push read) and US4-S2
+(the aim point not measured); US5-S1 and US5-S2 on US4 (the tool unlisted, no README
+section); the Vitest file on US5 (no `CentreBlock`), and the browser test on US5 (no
+Centre block). US3-S2 passes from US1 (§ Plan traps 4).
 
 **The gates at each story's tip** (`lint` and `test`, `npm ci --offline`, the dist
 check against the tip's tree): every step exited 0 at each of the six
@@ -529,15 +533,59 @@ Before US6's commit its tap bound of 3 failed once (3.117) and became 4 (§ Plan
 8).
 
 **Mutations on 99875422** (each reverted after). The review's survivors now bite: M5b
-(Track steady now, not since the frame began) fails US1-S2; M6c (three steps not
+(Track steady now, not since the frame began) fails US2-S4; M6c (three steps not
 counted as measured) and M6d (the try's words dropped) fail US3-S3; M16 (the console's
 Stop ignored) fails US3-S4; P5 (no `halted` words) fails US6-S1. M4 (the held place
 kept) fails US2-S1 and passes US1-S1 (§ Plan traps 4). The fold's checks: the
 newer-frame check removed fails US2-S2; the age made ten minutes fails US2-S2; the
-frame's centre in place of the set point fails US1-S3; no mark fails US4-S1 and
+frame's centre in place of the set point fails US2-S3; no mark fails US4-S1 and
 US4-S2; a mark never late fails US4-S2; the API row after GoTo's, and the glossary
 entry under its old name, fail US5-S2; `Centred` before the step is seen fails US6-S1
 and US6-S2.
+
+**Round 1 of a probe from this text alone (854943aa to ba98d527).** Each story built
+from the trio alone, tests first, each on the one before: 854943aa and eeeadb66 US1,
+abf27e35 and e74fd932 US2, a558378f and fd3800a0 US3, 3a7f43a9 and cf23e9c8 US4,
+1a359052 and c6bb5b34 US5, 5ec4df0e, ee576397 and ba98d527 US6. Every story's tests
+failed before its code as tasks.md said and passed on its first build; every gate passed
+at each tip (nextest 1,548, 1,550, 1,554, 1,556, 1,558 and 1,558; Vitest 611 at US1 to
+US5 and 615 at US6; `dist` clean; `CI=1 npm run e2e` 38 of 38 at US1 to US5 and 40 of 40
+at US6), and no earlier test was edited. Every claim of § Read from the diff held. Its
+10 clarity defects are folded here: FR-002's order read literally (R1); the frame's
+check before the solve's state (R2) and the held aim point dropped (R7), each a survivor
+of its mutation and each passing on the code and failing under it as a throwaway, now
+US2-S5 and US4-S3; a development command that ran no tests (R3); US1 at 29,852 B, 725 B
+over the line (R4, § Plan traps 1); ψ's sense (R5); US6-S3's third view (R6); the
+Independent Test commands (R8); `npx playwright test` beside the e2e script's lock (R9);
+and US6-S5 reading the first frame's statuses on the second, which failed 1 run in 4
+(R10, fixed in ba98d527, then 3 of 3). Its other survivors are as § Plan traps 4 says:
+in US1 the reservation's entry (defensive), the age bound and the held place, which bite
+US2-S2 and US2-S1. **The finder camera's return after the minute** (a throwaway at
+cf23e9c8, the aim point off at 30°, the frames started again after a centring): at 390″
+back about 15 s after, the aim point taken a frame later, syncs 2, epoch 1, no push, M42
+6.9″ off; at 240″ back about 75 s after, nothing taken and no sync, M42 pulled back to
+239.5″ off; at 240″ back about 195 s after, `model.syncs` 2 to 3 at the first pointing,
+epoch 1, no slip, no push, M42 243.7″ off, because every live solve is a frame sync and
+`Model::add_sync` (`crates/finder/src/model.rs:524`) replaces a same-epoch sync within
+120 s and 2° but keeps one 120 s or more apart beside it; at 390″ back about 195 s
+after, a push `moving` and `slip_pending` at the return, then `following`, syncs 3 and
+epoch 2 about 5 s later, M42 97.9″ off.
+
+**This fold of round 1 (2e651943 to f7d6779a, on `probe/057-r1`).** 2e651943 moves
+US1-S3 and US1-S2 to `centre_tap.rs` as US2-S3 and US2-S4, unchanged, with `refused`,
+`moved` and their words; 1488b564 adds US2-S5; f7d6779a adds US4-S3. US1's tree with the
+fold's changes passes `cargo clippy -p finder --all-targets --all-features --locked --
+-D warnings`; US2's test file on US1's code fails US2-S1 and US2-S2 (400, unknown
+fields) and passes US2-S3, US2-S4, US2-S5 and US1-S1. With `session.rs` and `centre.rs`
+as at US3's tip, US4-S1, US4-S2 and US4-S3 fail. Each step's mutation, made once, fails
+its own test alone: the frame's check after the solve's state fails US2-S5; the frame's
+centre as the set point fails US2-S3; Track steady now, not since the frame began, fails
+US2-S4; the held aim point kept fails US4-S3. The sizes are § Plan traps 1's. At
+f7d6779a every gate step passed: fmt, clippy, both doc builds, nextest 1,560 of 1,560,
+doc tests, `cargo deny --offline`, `cargo machete`, `npm ci --offline`, typecheck,
+Prettier, Vitest 615 of 615, the build with `git status --porcelain -- dist` empty, and
+`CI=1 npm run e2e` 40 of 40; and each story's development commands of § Refinement
+Record passed.
 
 **Read, not run.** A centring refused for a latest frame that did not solve, for Track
 armed, in its keyhole wait or measuring backlash, during a direct axis move (the
@@ -552,9 +600,9 @@ a real mount and cameras.
 - `nudge.rs`'s `track_step` is the nudge's Track branch with its tool a parameter.
 - `run.rs` changes only the trait's one default method, its doc sentence, and the
   procedure's lines of § Interfaces; `Script` is not written.
-- `session.rs` changes only `TrackRun`'s field, its `None`, `Session::centred` and the
-  block at the head of `record_live_pointing`; the held aim point's block before it
-  and everything after it are as at 8b7212bb.
+- `session.rs` changes only `TrackRun`'s field, its `None`, `Session::centred` and one
+  block after `record_live_pointing`'s held aim point's block; the held aim point's
+  block and everything after the new block are as at 8b7212bb.
 - The MCP tool's description has § Interfaces' words; its test pins `real telescope`.
 - The README's new paragraph, row and section keep every sentence at 8b7212bb.
 - `CentreBlock` posts only `postCentre`; `ImagingPage` gains one import and one element.
@@ -564,9 +612,9 @@ a real mount and cameras.
 - **055's nudge with Track on.** `crates/finder/tests/motion/nudge_track.rs` and
   `crates/finder/tests/motion/nudge.rs` pass unchanged with `step_between` and
   `track_step` (run).
-- **The run's centring.** `crates/finder/tests/motion/imaging_run_centring.rs` (041) and
-  the library's `imaging::run` tests pass unchanged: `Script` keeps the default, so a
-  solve that moved no aim point is idle as before (run).
+- **The run's centring.** `crates/finder/tests/motion/imaging_run_centring.rs` (041)
+  passes unchanged: `Script` keeps the default, so a solve that moved no aim point is
+  idle as before (run).
 - **The aim point and the push.** 032's held aim reading
   (`crates/finder/tests/motion/imaging_track.rs`) and 038's push tests
   (`crates/finder/tests/motion/tracking/push.rs`) pass unchanged: with no centring no
@@ -647,25 +695,29 @@ The gates, copied from `ergane.yaml`:
 
 ## Prerequisites before this spec is flipped to `ready`
 
-- 052, 053, 054 and 055 have landed, in that order, and this trio is re-anchored on that
-  `main`: every `path:line` read again; 052 to 055 added to `depends_on_landed`;
-  `tracking.rs`'s and `nudge.rs`'s moves placed against 055's landed text; the README,
-  `GLOSSARY.md` and the test `main.rs` additions placed after theirs; `run/console.rs`'s
-  `centre` placed against 054's; the Centre block placed on 054's rewritten
-  `ImagingPage.tsx` after its Imaging solve block; US4's block placed in 053's
-  `record_live_pointing` and `TrackRun`, read again for any sync 053 makes there; and
-  the Refinement Record's last writers read again.
-- If 058 lands first: read its landed text for the shape § Technical Context settles (a
-  preview frame is the view's `frame`, `shown`, never solved, the next id, the same eight
-  previews). If it holds, FR-002 and FR-014 stand and the Edge Case on preview frames is
-  run once by hand on the re-anchored base (a preview after a solve, then `{}`: 409 with
-  `a newer imaging frame was taken after frame N`; the Centre block disabled and without
-  its picture). If it does not, the solved frame's definition is reopened as owner
-  decision 9's (b) before the flip.
-- The owner's nine decisions are answered.
-- A probe round from this text alone, folded.
-- The page half has run once on the re-anchored base (`CI=1 npm run e2e`).
-- No operator-staged file is needed.
+- Waits for 055 to land (052, 053 and 054 before it, in that order) and the seat's
+  re-anchor of this trio on that `main`: every `path:line` read again; 052 to 055 added
+  to `depends_on_landed`; `tracking.rs`'s and `nudge.rs`'s moves placed against 055's
+  landed text; the README, `GLOSSARY.md` and the test `main.rs` additions placed after
+  theirs; `run/console.rs`'s `centre` placed against 054's; the Centre block placed on
+  054's rewritten `ImagingPage.tsx` after its Imaging solve block; US4's block placed in
+  053's `record_live_pointing` and `TrackRun`, read again for any sync 053 makes there;
+  and the Refinement Record's last writers read again.
+- Waits for 058 only if it lands first: read its landed text for the shape § Technical
+  Context settles (a preview frame is the view's `frame`, `shown`, never solved, the
+  next id, the same eight previews). If it holds, FR-002 and FR-014 stand and the Edge
+  Case on preview frames is run once by hand on the re-anchored base (a preview after a
+  solve, then `{}`: 409 with `a newer imaging frame was taken after frame N`; the Centre
+  block disabled and without its picture). If it does not, the solved frame's definition
+  is reopened as owner decision 9's (b) before the flip.
+- Waits for the owner's answers to the nine decisions, at the flip ask.
+- Met: a probe round from this text alone, folded. Round 1 on `probe/057-r1` (tip
+  ba98d527, 0 blocking, 10 clarity), folded here with its proofs at f7d6779a (§ What
+  was run and what was read).
+- Waits for the re-anchor: the page half run once on the re-anchored base (`CI=1 npm run
+  e2e`). Met on `probe/057-r1` at each story's tip and at f7d6779a (40 of 40).
+- Met: no operator-staged file is needed (every test builds its rig from the
+  repository's own simulator and fixtures).
 
 ## Outside the factory
 
@@ -682,29 +734,40 @@ notes go in the night's report; nothing in the repository waits for them.
 
 ## Plan traps
 
-1. **The story sizes.** Measured on the fold's commits, each diff against the story
-   before without `dist`: US1 28,720 B (43.8 % of 65,536; 59.2 % at 1.35 times, 38,772 B
-   against 39,321), US2 10,599 B (16.2 %; 21.8 %), US3 11,764 B (18.0 %; 24.2 %), US4
-   8,996 B (13.7 %; 18.5 %), US5 21,355 B (32.6 %; 44.0 %), US6 20,086 B plus `dist`'s
-   697 B (31.7 %; 42.8 %). US1 is the tightest, 549 B under at 1.35: its fallback was
-   used (the newer-frame, solving and no-target asks are US2-S2's). Should it grow
-   again, US1-S3 (about 1 KB) moves to US2 as it stands.
+1. **The story sizes.** Measured on `probe/057-r1` with this fold's changes in place at
+   each story's tip, each diff against the story before without `dist` (US1 from
+   4279aeaf): US1 27,559 B (42.1 % of 65,536; 56.8 % at 1.35 times, 37,205 B against
+   39,321), US2 13,551 B (20.7 %; 27.9 %), US3 11,960 B (18.2 %; 24.6 %), US4 9,547 B
+   (14.6 %; 19.7 %), US5 22,093 B (33.7 %; 45.5 %), US6 21,382 B plus `dist`'s 697 B
+   (32.6 %; 44.0 %). Built from this text US1 measured 29,852 B, 725 B over 29,127 B
+   (39,321 at 1.35): its rig's test file, and `nudge.rs`'s moved branch, which counts
+   twice. Its fallback is taken: US1-S3 moved to US2 (28,961 B, 166 B under), and, to
+   clear the line by at least 1 KiB, US1-S2 with the helpers only it used: US1 is now
+   1,568 B under. US1 keeps its centring (US1-S1); the newer-frame, solving and
+   no-target asks are US2-S2's, the region of interest US2-S3 and the guards' asks
+   US2-S4. No scenario is left in US1 to move.
 2. **US1's helpers.** US2's, US3's and US4's tests use US1's rig from `super::centre`,
-   and US2's the `send` of 055's `crates/finder/tests/motion/nudge.rs`. US1 writes all of
-   these `pub(super)` from the start, as no story may edit an earlier story's test file:
-   the struct `Rig` with its fields `app`, `state` and `sim`; its methods `new`, `now`,
-   `call`, `get`, `wait`, `sleep`, `off`, `solve`, `track_on`, `rests` and `displace`;
-   the enum `Cause`; the functions `sep`, `m42` and `refused`; and the constants
-   `CENTRE` and `FINDER_ARCSEC_PER_PX`.
+   and US2's the `send` and `write` of 055's `crates/finder/tests/motion/nudge.rs`. US1
+   writes all of these `pub(super)` from the start, as no story may edit an earlier
+   story's test file: the struct `Rig` with its fields `app`, `state` and `sim`; its
+   methods `new`, `now`, `call`, `get`, `wait`, `sleep`, `off`, `solve`, `track_on`,
+   `rests`, `displace` and `held`; the enum `Cause`; the functions `sep` and `m42`; and
+   the constants `CENTRE` and `FINDER_ARCSEC_PER_PX`. US1-S1 uses every one, so none is
+   dead code in US1. US2's file writes its own `refused` (with 055's `write`), `moved`
+   and words.
 3. **Track must settle before the frame.** A frame begun within Track's settle after
    Track on, or during a step, is refused as moved. The rigs wait 30 s after Track on
    and 12 s after a step; the browser test waits 12 s after `tracking` (on the probe a
    frame taken at once after Track on was refused).
-4. **US3-S2 passes from US1.** It pins FR-003 under a stack (decision 3's evidence:
-   without the general rule's held place a stack pulls the target 65″ off), placed in
-   US3 for US1's size; it fails on 8b7212bb, where there is no route. US3-S1, US3-S3 and
-   US3-S4 are the story's failing tests. Likewise US2-S1 pins FR-003's held place (the
-   review's M4: a step that keeps the held place passes US1 and fails US2-S1).
+4. **US2-S3 to US2-S5 and US3-S2 pass from US1.** US2-S3, US2-S4 and US2-S5 pin US1's
+   set point (FR-003), its guards (FR-002) and its frame's check before the solve's
+   state, placed in US2 for US1's size (§ Plan traps 1): US1's code passes them, and
+   US2-S1 and US2-S2 are US2's failing tests (run). US3-S2 pins FR-003 under a stack
+   (decision 3's evidence: without the general rule's held place a stack pulls the
+   target 65″ off), placed in US3 for US1's size; it fails on 8b7212bb, where there is
+   no route. US3-S1, US3-S3 and US3-S4 are the story's failing tests. Likewise US2-S1
+   pins FR-003's held place (the review's M4: a step that keeps the held place passes
+   US1 and fails US2-S1).
 5. **The finder camera's frames.** The rigs stop the node's star frames (`stop_frames`)
    to stand for a finder camera that cannot solve; the imaging camera's frames go on.
    US4's cases start them again (`start_frames`) after the centring rests, or never stop
@@ -735,7 +798,7 @@ notes go in the night's report; nothing in the repository waits for them.
 |---|---|---|
 | The one-sync model's scale | a long step misses by about 3 % of its size | within the bounds; the next solve shows it, and the run takes another try |
 | A push by hand the finder camera does not see | a centring from a stale solve | the minute bounds it; the README says what Track knows of |
-| The finder camera back after more than a minute | (i)'s return: corrected away under 5′, followed and synced past it | the next centring takes the aim point at once (US4-S2); the run measures it when the finder camera solves |
+| The finder camera back after more than a minute | (i)'s return: Track's correction undoes the centring; under 5′ corrected away (one more sync past a 120 s gap), past it a push followed, a sync and a new epoch | the next centring takes the aim point at once (US4-S2); the run measures it when the finder camera solves |
 | The finder camera back within the minute after drift | the aim point taken off by the drift since (1.2 pixels at 60 s) | the drift is what a minute allows, against the night's 13 pixels |
 | Drift with no finder camera solves | about 0.45″ a second on the simulator | a stack's steering holds it (US3-S2); the README says to centre again |
 | A step made between two of the page's reads | the status stays `Centring …` | a step lasts several reads; on the simulated console it was always seen |
@@ -751,7 +814,9 @@ that day on `probe/057`, and folded the same day with the cynical review's round
 stories rebuilt on that branch, each on the one before, with every scenario's test,
 both gates passing at each story's tip, every story's new tests failing on the story
 before it, the fold's options measured on the simulator, the review's surviving
-mutations biting, and the page run in a browser by day and by night. Writes come from
+mutations biting, and the page run in a browser by day and by night; then probed from
+this text alone (round 1 on `probe/057-r1`, tip ba98d527: 0 blocking, 10 clarity) and
+folded, its proofs on that branch at f7d6779a. Writes come from
 the task text. Shared writes name the spec story that last wrote the same file on
 `main`; within the spec, each story's files written by an earlier one are ordered by
 `depends_on_merged`. 055's own writes (`nudge.rs` and its additions to the shared files)
@@ -774,16 +839,6 @@ stories:
         disposition: add
         assertion: "the centring rig at 17 pushed 390 at 30, at 100 pushed 120 at 120, at 250 pushed 240 at 210, and at 100 with the aim point 240 off at 300, each new, frames stopped: off M42 within 15 of D; a solve; centre {} answers 200 with the solve's frame_id, moved track and offset_arcsec within 5 of off M42; at once axis_move exactly {state moving, tool centre} and motion.tool centre; once it rests off M42 at most 25, axis_move exactly {state done, tool centre}, motion as before, the place Track holds within 0.01 arcsec of M42, aim, model.syncs and model.epoch as before, slip_pending false; the next solve's centre within 25 of M42"
         decision: "spec.md:US1-S1"
-      - path: crates/finder/tests/motion/centre.rs
-        status: new
-        disposition: add
-        assertion: "the centring rig at 17: {} before a solve 409 exactly the imaging camera has not solved a frame yet; a solve with Track off, 409 exactly Track is off: turn Track on to centre; Track on until tracking, 409 exactly the telescope moved after imaging frame N: take another and solve it with N the first solve's; a solve at once (begun in Track's settle), 15 s, 409 the same with N that solve's; a solve, 200, then at once 409 the same with N that solve's"
-        decision: "spec.md:US1-S2"
-      - path: crates/finder/tests/motion/centre.rs
-        status: new
-        disposition: add
-        assertion: "the centring rig at 17 pushed 0, PUT /api/imaging/settings roi 824 x 548 at (0, 0): a solve; centre {} answers 200 with offset_arcsec within 5 of off M42; once it rests off M42 (the sensor's true centre) at most 25"
-        decision: "spec.md:US1-S3"
       - path: crates/finder/tests/motion/nudge_track.rs
         status: existing
         disposition: preserve
@@ -849,6 +904,21 @@ stories:
         disposition: add
         assertion: "the bare console {} 409 exactly the imaging camera has not solved a frame yet; the rig at 17: a foreign write 403, text/plain 415, {z 1} 400; solve A with Track off: {frame_id A} and {frame_id A, x 1.0} 400 exactly PARTS; Track on, 15 s, solve B: {frame_id B, x 1237.0, y 10.0} 409 exactly the point is outside imaging frame B; {frame_id A, x 10.0, y 10.0} 409 exactly imaging frame A is not the latest solved frame; POST /api/imaging/frame C, at once {} 409 exactly a newer imaging frame was taken after frame B; C saved, solve posted, at once {} 409 exactly the imaging camera's solve is still running; C solved, target null, {} 409 exactly no target is selected; 61 s, {frame_id C, x 618.0, y 300.0} 409 exactly imaging frame C is more than a minute old: take another and solve it; solve D, {frame_id D, x 618.0, y 300.0} 200, then at once 409 exactly the telescope moved after imaging frame D: take another and solve it"
         decision: "spec.md:US2-S2"
+      - path: crates/finder/tests/motion/centre_tap.rs
+        status: new
+        disposition: add
+        assertion: "the centring rig at 17 pushed 0, PUT /api/imaging/settings roi 824 x 548 at (0, 0): a solve; centre {} answers 200 with offset_arcsec within 5 of off M42; once it rests off M42 (the sensor's true centre) at most 25; it pins US1's set point (FR-003) and passes from US1 on"
+        decision: "spec.md:US2-S3"
+      - path: crates/finder/tests/motion/centre_tap.rs
+        status: new
+        disposition: add
+        assertion: "the centring rig at 17: {} before a solve 409 exactly the imaging camera has not solved a frame yet; a solve with Track off, 409 exactly Track is off: turn Track on to centre; Track on until tracking, 409 exactly the telescope moved after imaging frame N: take another and solve it with N the first solve's; a solve at once (begun in Track's settle), 15 s, 409 the same with N that solve's; a solve, 200, then at once 409 the same with N that solve's; it pins US1's guards (FR-002) and passes from US1 on"
+        decision: "spec.md:US2-S4"
+      - path: crates/finder/tests/motion/centre_tap.rs
+        status: new
+        disposition: add
+        assertion: "the centring rig at 17: POST /api/imaging/frame for B, read until B is saved, POST /api/imaging/solve, POST /api/imaging/frame for C and {} at once: 409 exactly a newer imaging frame was taken after frame B, the frame's check before the solve's state (FR-002's order); it passes from US1 on"
+        decision: "spec.md:US2-S5"
     preserved_behavior:
       - "a centring of {} answers and refuses as US1 left it, US1's centre.rs tests passing unchanged with CentreAsk's three fields added; the route's write rules are US1's"
     checks:
@@ -898,7 +968,6 @@ stories:
     checks:
       development:
         - "cargo nextest run -p finder --locked --test motion -E 'test(/^centre_run::/) | test(/^imaging_run_centring::/) | test(/^imaging_run::/)'"
-        - "cargo nextest run -p finder --locked --lib -E 'test(/imaging::run::/)'"
       handoff: declared_gates
       independent: declared_pipeline
       release:
@@ -933,6 +1002,11 @@ stories:
         disposition: add
         assertion: "the centring rig at 17 with the aim point 240 off at 30, frames stopped: a solve, centre {} 200, rests, 60 s, frames started, 30 s: aim exactly as before the centring; a solve, centre {} 200, rests: aim.source measured"
         decision: "spec.md:US4-S2"
+      - path: crates/finder/tests/motion/centre_aim.rs
+        status: new
+        disposition: add
+        assertion: "the centring rig at 17 with the aim point 240 off at 30 and frames running: a solve, centre {} 200, rests, 30 s, GET /api/session; Track off with POST /api/track {on false}, 2 s: aim exactly as before Track off (FR-010's held aim point dropped)"
+        decision: "spec.md:US4-S3"
       - path: crates/finder/tests/motion/imaging_track.rs
         status: existing
         disposition: preserve
@@ -1076,7 +1150,7 @@ stories:
     checks:
       development:
         - "npm test -- CentreBlock"
-        - "npx playwright test --project=simulate e2e/solve-centre.spec.ts e2e/goto.spec.ts e2e/imaging.spec.ts"
+        - "CI=1 npm run e2e -- --project=simulate e2e/solve-centre.spec.ts e2e/goto.spec.ts e2e/imaging.spec.ts"
       handoff: declared_gates
       independent: declared_pipeline
       release:

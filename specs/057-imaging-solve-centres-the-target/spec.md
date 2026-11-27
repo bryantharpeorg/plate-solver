@@ -16,7 +16,11 @@ depends_on_landed: ["013-live-finder", "015-tracking", "016-mcp", "019-night-leg
 # each last changed on `main` a file this spec writes (plan.md § Refinement Record). 052,
 # 053, 054 and 055 are drafted beside this spec and land before it, in that order;
 # this spec is re-anchored on them before any flip, and they join
-# `depends_on_landed` then.
+# `depends_on_landed` then. Round 1 of a probe from this text alone, the same day on
+# `probe/057-r1` from 4279aeaf (tip ba98d527), found 0 blocking and 10 clarity defects;
+# folded the same day: US1-S3 and US1-S2 moved to US2 (US2-S3, US2-S4) for US1's size,
+# US2-S5 and US4-S3 added, the proofs committed on that branch at f7d6779a (plan.md
+# § What was run and what was read).
 ---
 
 # Feature Specification: An Imaging Solve Centres the Target
@@ -96,7 +100,7 @@ pick is the owner's only logged word on the feature.
   sensor's only with no region of interest: with a region of 824 × 548 at (0, 0) a
   centring from the frame's centre left M42 538.6″ and 549.2″ off the sensor's centre
   (run). The step now starts from the sky at the set point in the frame's pixels
-  (US1-S3).
+  (US2-S3).
 - Q: What happens when the finder camera solves again with the aim point off? → A:
   Today, under 5′ Track's corrections pull the centring off again (190″ to 254″ within
   15 s at 240″); over 5′, at the field night's 6.5′, the finder camera's pointings read
@@ -109,6 +113,23 @@ pick is the owner's only logged word on the feature.
   `a newer imaging frame was taken after frame N`, as 032 solves only the latest saved
   frame: during a stack Track stays steady while the steering moves the telescope, so a
   solve from before it is stale (owner decision 9).
+
+### Session 2026-11-27 (round 1 of a probe from this text alone, folded)
+
+- Q: What does the finder camera's return do after the minute? → A: What owner
+  decision 3 says: it is today's, and Track's correction undoes the centring. Round 1
+  read it in three outcomes (run): back about 195 s after a centring at 240″ off, one
+  more sync (`model.syncs` 2 to 3) with the epoch unchanged, no slip and no push,
+  because every live solve is a frame sync and `Model::add_sync`
+  (`crates/finder/src/model.rs:524`) keeps a same-epoch sync beside the one before only
+  120 s or more after it, so the count rises past a 120 s gap and not for the centring;
+  back about 195 s after at 390″ off, a push and a slip at once and a new epoch about
+  5 s later; and back about 75 s after at 240″ off, nothing taken and M42 pulled back
+  to 239.5″ off. No requirement changes for it.
+- Q: Which scenarios does US1 hold? → A: Its centring alone (US1-S1). Built from this
+  text it measured 29,852 B, over the line at 1.35 times (plan.md § Plan traps 1), so
+  its region of interest and its guards' refusals are US2-S3 and US2-S4. They pin US1's
+  FR-003 and FR-002 and pass from US1 on (plan.md § Plan traps 4).
 
 ## Owner decisions
 
@@ -159,7 +180,7 @@ of their own, as each makes Track unsteady (040's marks).
    parts. The step: from 120″ to 729″ off, one step left 4.2″ to 17.5″ after a push and
    6.9″ to 14.1″ with the aim point off, and a stack of 25 subs after it held M42 at
    1.4″ and 1.3″; from the frame's centre instead of the set point, a frame with a
-   region of interest left M42 538.6″ and 549.2″ off (US1-S3 brings it within 25″). The
+   region of interest left M42 538.6″ and 549.2″ off (US2-S3 brings it within 25″). The
    age: with no finder camera solve, a centring pressed 0, 30, 45, 60, 90, 120 and 180 s
    after its frame ended left M42 10.3″, 23.0″, 30.3″, 37.3″, 49.7″, 63.7″ and 90.2″ off,
    about 0.45″ a second, so a minute keeps the miss under half the run's 90″. The
@@ -176,7 +197,15 @@ of their own, as each makes Track unsteady (040's marks).
    1.2″ and 1.8″, Track off and on landed 9.6″ and 11.9″ off, and with the frames never
    stopped M42 stayed 3.5″ to 6.4″ off. Read 60 s and 180 s after the centring, (iii)'s
    aim point is off by the drift since, 1.2 and 3.2 finder pixels, against the 13 of
-   the night's: so the minute bounds it, and after it the return is (i)'s. Instead:
+   the night's: so the minute bounds it, and after it the return is (i)'s, in three
+   outcomes read on round 1 of the probe from this text: back about 195 s after a
+   centring at 240″ off, one more sync (syncs 2 to 3) with the epoch unchanged, no slip
+   and no push, as every live solve is a frame sync and `Model::add_sync`
+   (`crates/finder/src/model.rs:524`) keeps a same-epoch sync beside the one before only
+   120 s or more after it, not for the centring; back about 195 s after at 390″ off, a
+   push and a slip at once and the epoch 1 to 2 about 5 s later, M42 97.9″ off; and, in
+   general, Track's correction undoes the centring (back about 75 s after at 240″, M42
+   239.5″ off). Instead:
    (b) the place Track holds moves by the offset (a nudge of measured size): the same
    first step, but a stack's steering then brings the moved place, not M42, to the
    centre: 3.7″ to 74.0″ and 7.4″ to 76.4″ over 25 subs; (c) the aim point moves by the
@@ -341,10 +370,10 @@ Every scenario shares these definitions.
   goes on); 2 s; the simulated mount pushed by hand D arcseconds at position angle ψ
   (`push_by(D cos ψ / 3600 / cos A, D sin ψ / 3600)`, A the tube's true altitude); 2 s.
   **Put off by the aim point by D at ψ**: the same with the aim point set D arcseconds
-  from the true eyepiece pixel at ψ in the finder camera's pixels, 29.67″ a pixel (12°
-  over 1,456), and no push: Track holds the wrong pixel on M42, as an aim point that
-  could not be measured does. **With the frames running** means the same but the star
-  frames never stopped.
+  from the true eyepiece pixel at ψ in the finder camera's pixels (ψ from +x towards +y,
+  rows downward), 29.67″ a pixel (12° over 1,456), and no push: Track holds the wrong
+  pixel on M42, as an aim point that could not be measured does. **With the frames
+  running** means the same but the star frames never stopped.
 - **A solve** is `POST /api/imaging/frame`, read every 100 ms until that frame is
   `saved`, `POST /api/imaging/solve`, and read until its solve is no longer `solving`,
   asserted `solved`. **Rests** means `GET /api/session` reads `axis_move.state` other
@@ -394,22 +423,23 @@ the centring.
 
 **Independent Test**: `crates/finder/tests/motion/centre.rs`, new. The `test` gate's
 nextest command runs it; during development,
-`cargo nextest run -p finder --locked --test motion -E 'test(/^centre::/) | test(/^nudge_track::/)'`.
+`cargo nextest run -p finder --locked --test motion -E 'test(/^centre::/) | test(/^nudge_track::/)'`
+and `cargo nextest run -p finder --locked --test motion -E 'test(/^nudge::/)'`.
 
 **Acceptance Scenarios**:
 
 1. **Given** the centring rig at 17°, put off by a push of 390″ at 30°; at 100°, by a push of 120″ at 120°; at 250°, by a push of 240″ at 210°; and at 100°, put off by the aim point by 240″ at 300°, each a new rig, **When** a committed test checks that off M42 is within 15″ of D, makes a solve, posts a centring `{}`, reads `GET /api/session` at once, reads until it rests and makes another solve, **Then** it asserts that the centring answers 200 with the solve's `frame_id`, `moved` `track` and `offset_arcsec` within 5″ of off M42 before it; that the session read at once has `axis_move` exactly `{"state": "moving", "tool": "centre"}` and `motion.tool` `centre`; that once it rests off M42 is at most 25″, `axis_move` is exactly `{"state": "done", "tool": "centre"}`, `motion` is as before the centring, the place Track holds is within 0.01″ of M42, `aim`, `model.syncs` and `model.epoch` are as before and `slip_pending` is false; and that the second solve's centre is within 25″ of M42.
-2. **Given** the centring rig at 17°, **When** a committed test posts a centring `{}` before any solve; makes a solve with Track off and posts `{}`; turns Track on, reads until `tracking` and posts `{}`; makes a solve at once, waits 15 s and posts `{}`; makes a solve and posts `{}` twice one after another, **Then** it asserts that the answers are, in order, 409 with exactly `{"error": "the imaging camera has not solved a frame yet"}`, `{"error": "Track is off: turn Track on to centre"}`, `{"error": "the telescope moved after imaging frame N: take another and solve it"}` with N the first solve's frame, the same with N the second solve's frame (begun in Track's settle), then 200, and last 409 with the same words and N the third solve's frame.
-3. **Given** the centring rig at 17°, put off by a push of 0″, with the imaging settings' region of interest 824 × 548 at (0, 0) (`PUT /api/imaging/settings` `{"roi": {"x": 0, "y": 0, "width": 824, "height": 548}}`), **When** a committed test makes a solve, posts a centring `{}` and reads until it rests, **Then** it asserts that the centring answers 200 with `offset_arcsec` within 5″ of off M42 before it, and that once it rests off M42 is at most 25″.
 
 ### User Story 2 - A tap on the solved frame centres that point (Priority: P1)
 
 As the owner, I need to name any point of the latest solved imaging frame by its pixel
-and have Track bring it to the sensor's centre and hold it there, and the route's
-refusals to say what is wrong with the ask or the frame.
+and have Track bring it to the sensor's centre and hold it there, the route's refusals
+to say what is wrong with the ask or the frame, and the target's centring to keep to
+the sensor's centre with a region of interest and to Track's guards.
 
 **Why this priority**: The pick names the tap; a framing other than the catalogue
-centre, or a star beside the target, needs it.
+centre, or a star beside the target, needs it. US1's region of interest and guards sit
+here for US1's size (plan.md § Plan traps 1).
 
 **Independent Test**: `crates/finder/tests/motion/centre_tap.rs`, new. The `test`
 gate's nextest command runs it; during development,
@@ -419,6 +449,9 @@ gate's nextest command runs it; during development,
 
 1. **Given** the centring rig at 17°, 100° and 250°, each put off by a push of 0″ (Track on at the true eyepiece, the star frames stopped), **When** a committed test makes a solve, takes P, the sky at pixel (300, 200), (1000, 700) and (618, 100) respectively, by the solve's own `ra_deg`, `dec_deg` and `cd_deg` with `ImagingSolve::from_cd(…, 1236, 822).sky_at`, posts a centring `{"frame_id": F, "x": X, "y": Y}` with F the solve's frame and X, Y that pixel, and reads until it rests, **Then** it asserts that the centring answers 200 with `offset_arcsec` within 5″ of off P before it; that once it rests off P is at most 30″ and the place Track holds is within 0.01″ of P; and that the session's `track.target.id` is still `NGC 1976`.
 2. **Given** the bare console, and then the centring rig at 17°, **When** a committed test posts a centring `{}` to the bare console; posts to the rig a foreign write of `{}`, `{}` with `Content-Type: text/plain`, and `{"z": 1}`; makes a solve A with Track off and posts `{"frame_id": A}` and `{"frame_id": A, "x": 1.0}`; turns Track on, waits 15 s and makes a solve B; posts `{"frame_id": B, "x": 1237.0, "y": 10.0}` and `{"frame_id": A, "x": 10.0, "y": 10.0}`; posts `POST /api/imaging/frame` for a frame C and `{}` at once; reads until C is `saved`, posts `POST /api/imaging/solve` and `{}` at once; reads until C is `solved`, sets the session's target to none with `PUT /api/session` `{"target": null}` and posts `{}`; waits 61 s and posts `{"frame_id": C, "x": 618.0, "y": 300.0}`; and makes a solve D and posts `{"frame_id": D, "x": 618.0, "y": 300.0}` twice one after another, **Then** it asserts that the bare console answers 409 with exactly `{"error": "the imaging camera has not solved a frame yet"}`; that the rig answers 403, 415 and 400; that both partial asks answer 400 with exactly `{"error": PARTS}`; that the two points answer 409 with exactly `{"error": "the point is outside imaging frame B"}` and `{"error": "imaging frame A is not the latest solved frame"}`; that the next four answer 409 with exactly `{"error": "a newer imaging frame was taken after frame B"}`, `{"error": "the imaging camera's solve is still running"}`, `{"error": "no target is selected"}` and `{"error": "imaging frame C is more than a minute old: take another and solve it"}`; and that the last two answer 200 and then 409 with exactly `{"error": "the telescope moved after imaging frame D: take another and solve it"}`.
+3. **Given** the centring rig at 17°, put off by a push of 0″, with the imaging settings' region of interest 824 × 548 at (0, 0) (`PUT /api/imaging/settings` `{"roi": {"x": 0, "y": 0, "width": 824, "height": 548}}`), **When** a committed test makes a solve, posts a centring `{}` and reads until it rests, **Then** it asserts that the centring answers 200 with `offset_arcsec` within 5″ of off M42 before it, and that once it rests off M42 is at most 25″.
+4. **Given** the centring rig at 17°, **When** a committed test posts a centring `{}` before any solve; makes a solve with Track off and posts `{}`; turns Track on, reads until `tracking` and posts `{}`; makes a solve at once, waits 15 s and posts `{}`; makes a solve and posts `{}` twice one after another, **Then** it asserts that the answers are, in order, 409 with exactly `{"error": "the imaging camera has not solved a frame yet"}`, `{"error": "Track is off: turn Track on to centre"}`, `{"error": "the telescope moved after imaging frame N: take another and solve it"}` with N the first solve's frame, the same with N the second solve's frame (begun in Track's settle), then 200, and last 409 with the same words and N the third solve's frame.
+5. **Given** the centring rig at 17°, **When** a committed test posts `POST /api/imaging/frame` for a frame B, reads until B is `saved`, posts `POST /api/imaging/solve`, posts `POST /api/imaging/frame` for a frame C and posts `{}` at once, **Then** it asserts that the centring answers 409 with exactly `{"error": "a newer imaging frame was taken after frame B"}`.
 
 ### User Story 3 - The imaging run centres from an imaging solve alone, and a stack holds it (Priority: P1)
 
@@ -431,8 +464,7 @@ then pulls away would not help.
 
 **Independent Test**: `crates/finder/tests/motion/centre_run.rs`, new. The `test` gate's
 nextest command runs it; during development,
-`cargo nextest run -p finder --locked --test motion -E 'test(/^centre_run::/) | test(/^imaging_run_centring::/) | test(/^imaging_run::/)'`
-and `cargo nextest run -p finder --locked --lib -E 'test(/imaging::run::/)'`.
+`cargo nextest run -p finder --locked --test motion -E 'test(/^centre_run::/) | test(/^imaging_run_centring::/) | test(/^imaging_run::/)'`.
 
 **Acceptance Scenarios**:
 
@@ -452,12 +484,13 @@ camera's return pulls a centring off or reads it as a push and syncs.
 
 **Independent Test**: `crates/finder/tests/motion/centre_aim.rs`, new. The `test` gate's
 nextest command runs it; during development,
-`cargo nextest run -p finder --locked --test motion -E 'test(/^centre_aim::/) | test(/^centre::/)'`.
+`cargo nextest run -p finder --locked --test motion -E 'test(/^centre_aim::/) | test(/^centre::/) | test(/^tracking::push/) | test(/^imaging_track::/)'`.
 
 **Acceptance Scenarios**:
 
 1. **Given** the centring rig at 17°, once put off by the aim point by 390″ at 30° and once, on a new rig, by the aim point by 240″ at 30° with the frames running, **When** a committed test reads `GET /api/session`, makes a solve, posts a centring `{}`, reads until it rests, starts the star frames (`start_frames`), reads `GET /api/session` every second for 30 s, then turns Track off with `POST /api/track` `{"on": false}`, waits 2 s, turns Track on, reads until `tracking` and waits 30 s, **Then** it asserts that the centring answers 200; that no session read has a `track.push`; that after the 30 s off M42 is at most 25″, the place Track holds is within 0.01″ of M42, `model.syncs` and `model.epoch` are as before and `slip_pending` is false, and `aim` has `source` `measured` and lies within 1 pixel of the true eyepiece pixel; and that off M42 is at most 25″ once Track is on again.
 2. **Given** the centring rig at 17°, put off by the aim point by 240″ at 30°, **When** a committed test reads `GET /api/session`, makes a solve, posts a centring `{}`, reads until it rests, waits 60 s, starts the star frames, waits 30 s and reads the session, then makes a solve, posts `{}` and reads until it rests, **Then** it asserts that both centrings answer 200; that the session read after the 30 s has `aim` exactly as before the first centring; and that after the second `aim.source` is `measured`.
+3. **Given** the centring rig at 17°, put off by the aim point by 240″ at 30° with the frames running, **When** a committed test makes a solve, posts a centring `{}`, reads until it rests, waits 30 s and reads `GET /api/session`, turns Track off with `POST /api/track` `{"on": false}` and waits 2 s, **Then** it asserts that the centring answers 200 and that `aim` reads exactly as before Track off.
 
 ### User Story 5 - MCP and the README carry the centring (Priority: P2)
 
@@ -469,7 +502,8 @@ carries the feature.
 
 **Independent Test**: `crates/finder/tests/mcp/centre.rs`, new. The `test` gate's
 nextest command runs it; during development,
-`cargo nextest run -p finder --locked --test mcp -E 'test(/^centre::/)'`.
+`cargo nextest run -p finder --locked --test mcp -E 'test(/^centre::/) | test(/^nudge::/)'`
+and `cargo nextest run -p finder --locked --test console -E 'test(imaging_run_docs::)'`.
 
 **Acceptance Scenarios**:
 
@@ -488,15 +522,17 @@ are not one.
 **Independent Test**: `crates/finder/web/src/components/CentreBlock.test.tsx` and
 `crates/finder/web/e2e/solve-centre.spec.ts`, new. The `test` gate's `npm test` and
 `CI=1 npm run e2e` run them; during development, `npm test -- CentreBlock` and
-`npx playwright test --project=simulate e2e/solve-centre.spec.ts` in `crates/finder/web`.
+`CI=1 npm run e2e -- --project=simulate e2e/solve-centre.spec.ts e2e/goto.spec.ts e2e/imaging.spec.ts`
+in `crates/finder/web` (the repository's e2e script builds the release server and takes
+its lock on the browser tests' fixed ports).
 
 **Acceptance Scenarios**:
 
 1. **Given** the page rig with `fetch` answering `{"frame_id": 3, "offset_arcsec": 386.6, "moved": "track"}`, **When** a committed test clicks `Centre M42` in the Centre block and re-renders the block from the session with no `axis_move`, then with `axis_move` `{"state": "moving", "tool": "centre"}` and then `{"state": "done", "tool": "centre"}`, clicks `Centre M42` again and re-renders it from `{"state": "moving", "tool": "centre"}` and then `{"state": "halted", "tool": "centre", "reason": "stopped"}`, **Then** it asserts that `fetch` was called with `/api/imaging/centre`, method `POST`, the header `Content-Type: application/json` and the body `{}`; that `onChange` was called once after the first click and twice after the second; that the block's status reads exactly `Centring M42: 387″ from the centre…` after the answer, after the session with no `axis_move` and after the `moving` one; that it reads exactly `Centred M42 · Track holds it. Take another imaging frame to check.` after the `done` one; that after the second answer, with the `done` session still shown, it reads `Centring M42: 387″ from the centre…`; and that it reads exactly `Centring stopped: stopped` after the `halted` one.
 2. **Given** the page rig with `fetch` answering `{"frame_id": 3, "offset_arcsec": 834, "moved": "track"}` and the block's picture laid out at left 10, top 20, 618 × 411 CSS pixels, **When** a committed test finds the image named `Solved imaging frame 3: tap a point to centre it` and clicks it at client (319, 122.75), **Then** it asserts that its `src` is `/api/imaging/frames/3/preview.jpg`; that `fetch` was called with `/api/imaging/centre`, method `POST`, that header and the body `{"frame_id":3,"x":618,"y":205.5}`; and that the status reads exactly `Centring the tapped point: 13.9′ from the centre…`.
-3. **Given** the page rig with `fetch` answering 409 with `{"error": "Track is off: turn Track on to centre"}`, then the view with its solve of frame 2, then the session without its `target`, **When** a committed test clicks `Centre M42` and re-renders the block from each, **Then** it asserts that the block's alert reads exactly `Track is off: turn Track on to centre` and it has no status; that with the solve of frame 2 `Centre M42` is disabled and the block has no image; and that without a target it has no button and still the image.
+3. **Given** the page rig with `fetch` answering 409 with `{"error": "Track is off: turn Track on to centre"}`, then the view with its solve of frame 2, then the page rig's view with the session without its `target`, **When** a committed test clicks `Centre M42` and re-renders the block from each, **Then** it asserts that the block's alert reads exactly `Track is off: turn Track on to centre` and it has no status; that with the solve of frame 2 `Centre M42` is disabled and the block has no image; and that without a target it has no button and still the image.
 4. **Given** `ImagingPage` rendered by Testing Library from the recorded session `tracking`, with `fetch` answering the page rig's imaging view, **When** a committed test finds the region `Imaging solve`, **Then** it asserts that the region `Centre` follows it in the document and holds the button `Centre M42`.
-5. **Given** the simulated console by day, **When** a committed browser test takes an imaging frame and solves it with the `Take imaging frame` and `Solve imaging frame` buttons of their regions, reading each region's status until `Saved` and `Solved`, clicks `Centre M42`, waits 12 s, takes and solves another frame, and clicks the Centre block's picture at a quarter of its width and half its height, **Then** it asserts that the first centring's response is 200 with `moved` `track`, that the block's status comes to read exactly `Centred M42 · Track holds it. Take another imaging frame to check.` within 20 s and the session's `track.state` is `tracking`; and that the tap's request body has exactly the keys `frame_id`, `x` and `y` with `x` within 4 of 309 and `y` within 4 of 411, its response is 200, and the status comes to read exactly `Centred the tapped point · Track holds it. Take another imaging frame to check.` within 20 s.
+5. **Given** the simulated console by day, **When** a committed browser test takes an imaging frame and solves it with the `Take imaging frame` and `Solve imaging frame` buttons of their regions, reading each region's status until it reads `Saved` and `Solved` in words other than before the click, clicks `Centre M42`, waits 12 s, takes and solves another frame, and clicks the Centre block's picture at a quarter of its width and half its height, **Then** it asserts that the first centring's response is 200 with `moved` `track`, that the block's status comes to read exactly `Centred M42 · Track holds it. Take another imaging frame to check.` within 20 s and the session's `track.state` is `tracking`; and that the tap's request body has exactly the keys `frame_id`, `x` and `y` with `x` within 4 of 309 and `y` within 4 of 411, its response is 200, and the status comes to read exactly `Centred the tapped point · Track holds it. Take another imaging frame to check.` within 20 s.
 6. **Given** the simulated console by day with a frame taken and solved as in US6-S5, **When** a committed browser test screenshots the Centre block with its picture shown, turns on `Night mode: red and black`, reads `data-theme` `night` on `html`, waits 1.5 s and screenshots the block again, **Then** it asserts with 012's off-red count (a pixel whose red is above 226 or whose green or blue is above 0) that the day screenshot has more than 1,000 off-red pixels and the night one none.
 
 ### Edge Cases
@@ -506,14 +542,20 @@ are not one.
   push is read and no sync is made (US4-S1), at any aim point error: on the probe the aim
   point came within 0.27 finder pixels of the true one at 390″ and at 240″, and with the
   frames never stopped too.
-- **The finder camera solves again later.** The return is read as drafted: under 5′,
-  Track's corrections bring the old aim point back onto the place Track holds and the
-  target off with it (190″ to 254″ within 15 s at 240″, run); over 5′, at the night's
-  6.5′, the pointings read as a push, Track follows it, the model takes a sync and a new
-  epoch, M42 stays centred but the place Track holds ends 382″ from it, so a later
-  stack's steering is not used (its source stays `tracker`, run). An imaging solve with
-  the finder camera solving then measures the aim point (032), which Track off and on
-  applies (6.9″ and 7.2″ off after it, run); a new centring takes it at once (US4-S2).
+- **The finder camera solves again later.** The return is read as drafted, and Track's
+  correction undoes the centring. Under 5′, Track's corrections bring the old aim point
+  back onto the place Track holds and the target off with it (190″ to 254″ within 15 s
+  at 240″; back about 75 s after a centring, 239.5″ off; run), and back past 120 s after
+  the last sync the first pointing also adds one sync, as every live solve is a frame
+  sync (back about 195 s after at 240″: syncs 2 to 3, the epoch unchanged, no slip, no
+  push; `Model::add_sync`, `crates/finder/src/model.rs:524`; run). Over 5′, at the
+  night's 6.5′, the pointings read as a push, Track follows it, the model takes a sync
+  and a new epoch (back about 195 s after at 390″: a push and a slip at once, the epoch
+  1 to 2 about 5 s later, M42 97.9″ off; run); back at once, M42 stays centred but the
+  place Track holds ends 382″ from it, so a later stack's steering is not used (its
+  source stays `tracker`, run). An imaging solve with the finder camera solving then
+  measures the aim point (032), which Track off and on applies (6.9″ and 7.2″ off after
+  it, run); a new centring takes it at once (US4-S2).
 - **No finder camera solves at all.** Track holds the place on the model's rates alone,
   about 0.45″ a second on the simulator (run). Take another frame and centre again, or
   let a stack's steering hold it (US3-S2).
@@ -521,7 +563,7 @@ are not one.
   minute old: take another and solve it` (US2-S2), the minute counted from the frame's
   end, its start plus its exposure, so a long exposure is not refused for its length.
 - **Track's settle, a step or an earlier centring after the frame began.** Refused with
-  `the telescope moved after imaging frame N: take another and solve it` (US1-S2,
+  `the telescope moved after imaging frame N: take another and solve it` (US2-S4,
   US2-S2). A nudge after the frame is refused the same way (the review's E11, run).
 - **A push by hand after the frame began.** Refused only when the finder camera's live
   pointings show it past 5′ (038): a push the finder camera does not see passes, and the
@@ -550,9 +592,9 @@ are not one.
   as after three tries of the aim point's path, with 041's words for a measured offset
   (FR-009, US3-S3).
 - **A centring during a stack or an imaging run.** Refused with `a newer imaging frame
-  was taken after frame N`: a stack's subs are newer frames, and during a stack Track
-  stays steady while the steering moves the telescope (run). The run's own centring comes
-  before its stack.
+  was taken after frame N`, even while the solve before it still runs (US2-S5): a
+  stack's subs are newer frames, and during a stack Track stays steady while the
+  steering moves the telescope (run). The run's own centring comes before its stack.
 - **A preview frame (058, drafted beside this spec).** A preview frame becomes the
   imaging view's latest `frame` (`shown`, purpose `preview`) and is never solved, so a
   centring after one is refused with `a newer imaging frame was taken after frame N`,
@@ -560,7 +602,7 @@ are not one.
   solved again. The re-anchor on 058 checks it (plan.md § Prerequisites). Read, not run.
 - **A frame with a region of interest or binning.** The set point is the sensor's
   centre in the frame's own pixels, so the target comes to the sensor's centre, not the
-  region's (US1-S3).
+  region's (US2-S3).
 - **A step made between two of the page's reads.** The status stays `Centring …`
   until a read has shown the step `moving`; the page reads the session every second, and
   on the simulated console the step was always seen (US6-S5).
@@ -582,23 +624,23 @@ are not one.
   sensor's set point (FR-003), or 409 with a JSON `error` naming the refusal (owner
   decision 1).
 - **FR-002**: A centring SHALL read the latest imaging solve and the latest imaging
-  frame, and SHALL refuse with 409, checked in this order: no solve, or one without a
-  solution's place, with `the imaging camera has not solved a frame yet`; a latest frame
-  that is not the solve's, a newer frame of any purpose, with `a newer imaging frame was
-  taken after frame N`, N the solve's frame (owner decision 9); a solve still running
-  with `the imaging camera's solve is still running`; a solve that failed with `the
-  imaging camera's latest frame did not solve`; for the target, no target with `no
-  target is selected`; Track not wanted with `Track is off: turn Track on to centre`
-  (owner decision 6); Track wanted but not `tracking` with `Track is not tracking yet`;
-  Track not steady at any moment from the solved frame's start until now
-  (`Tracker::steady_between`, `crates/finder/src/tracking.rs:526`) with `the telescope
-  moved after imaging frame N: take another and solve it`; and a frame that ended, its
-  start plus its exposure, more than `AGE_S`, 60 s, before now with `imaging frame N is
-  more than a minute old: take another and solve it`, N the solved frame (owner
-  decision 3). Track is unsteady through its own moves (its settle, a nudge's or a
-  centring's step, a reversal, a backlash measure) and through a push only when the
-  finder camera's live pointings show it past 5′ (038's `PUSH_THRESHOLD_DEG`,
-  `crates/finder/src/session.rs:109`).
+  frame, and SHALL refuse with 409, checked in this order: no solve with `the imaging
+  camera has not solved a frame yet`; a latest frame that is not the solve's, a newer
+  frame of any purpose, with `a newer imaging frame was taken after frame N`, N the
+  solve's frame (owner decision 9); a solve still running with `the imaging camera's
+  solve is still running`; a solve that failed with `the imaging camera's latest frame
+  did not solve`; a solved solve without a solution's place with `the imaging camera has
+  not solved a frame yet`; for the target, no target with `no target is selected`; Track
+  not wanted with `Track is off: turn Track on to centre` (owner decision 6); Track
+  wanted but not `tracking` with `Track is not tracking yet`; Track not steady at any
+  moment from the solved frame's start until now (`Tracker::steady_between`,
+  `crates/finder/src/tracking.rs:526`) with `the telescope moved after imaging frame N:
+  take another and solve it`; and a frame that ended, its start plus its exposure, more
+  than `AGE_S`, 60 s, before now with `imaging frame N is more than a minute old: take
+  another and solve it`, N the solved frame (owner decision 3). Track is unsteady
+  through its own moves (its settle, a nudge's or a centring's step, a reversal, a
+  backlash measure) and through a push only when the finder camera's live pointings show
+  it past 5′ (038's `PUSH_THRESHOLD_DEG`, `crates/finder/src/session.rs:109`).
 - **FR-003**: Otherwise `Tracker::centre` SHALL make the place Track holds the place to
   centre (its RA and Dec; the rest of Track's target kept), clear the correction's
   memory as a nudge clears it, and have Track's next turn make the step from the sky at
@@ -743,14 +785,14 @@ are not one.
   `crates/finder/tests/motion/main.rs` and `crates/finder/tests/mcp/main.rs`.
 - **SC-003**: One centring brings M42 from 120″ to 390″ off to within 25″ of the
   sensor's centre at three imaging angles, after a push or with the aim point off
-  (US1-S1), and from a frame with a region of interest (US1-S3); a tap brings its point
+  (US1-S1), and from a frame with a region of interest (US2-S3); a tap brings its point
   within 30″ (US2-S1); a run with no finder camera solve stacks within 25″ after one try
   (US3-S1); a stack after a centring keeps M42 within 10″ (US3-S2); and the finder
   camera's return within a minute keeps it within 25″ with no push (US4-S1).
 - **SC-004**: No centring is a sync (US1-S1, US3-S1, US4-S1); the aim point moves only
   at the finder camera's first solve within a minute after one, to within 1 pixel of the
-  true one (US4-S1, US4-S2); every refusal is the route's (US1-S2, US2-S2, US5-S1), and
-  the page shows the console's own words (US6-S3).
+  true one (US4-S1, US4-S2); every refusal is the route's (US2-S2, US2-S4, US2-S5,
+  US5-S1), and the page shows the console's own words (US6-S3).
 
 ## Assumptions
 
@@ -803,17 +845,18 @@ US6:
   implements: [FR-014, FR-015, FR-016, FR-017]
 ```
 
-Six stories, each under 60 % of 65,536 B (39,321 B) at the factory's worst overrun
-seen, 1.35 times the probe's measure (plan.md § Plan traps 1): the target's centring and
-Track's step; the tap and the later refusals; the run and the stack; the finder
-camera's return; MCP, the README and the glossary; the page. The cut: the probe's first
-story held the target and the tap, 35,224 B, 47,552 B at 1.35, so the tap and the
-route's ask are a story of their own, and US1's refusal test keeps the asks its own
-guards need while the others sit in US2's; the stack's scenario sits with the run; and
-the finder camera's return, the fold's, is a story after the run. Each merges after
-the one before (`depends_on_merged`): US2 adds the tap to US1's `centre` module and uses
-US1's test rig; US3's mount part calls `centre` and its tests use US1's rig; US4 marks
-the centring in US1's `centre` and its tests use US1's rig; US5's tool reads the ask US2
-completes and its words name US4's; the page posts the tap and its browser test needs
-the route. Plain `depends_on` would order them without putting the earlier code in the
-later story's base.
+Six stories, each under 60 % of 65,536 B (39,321 B) at the factory's worst overrun seen,
+1.35 times the probe's measure (plan.md § Plan traps 1): the target's centring and
+Track's step; the tap, the refusals and the region of interest; the run and the stack;
+the finder camera's return; MCP, the README and the glossary; the page. The cut: the
+probe's first story held the target and the tap, 35,224 B, 47,552 B at 1.35, so the tap
+and the route's ask are a story of their own; built from this text US1 still measured
+29,852 B, 40,300 B at 1.35, so its region of interest and its guards' refusals sit in
+US2 (US2-S3, US2-S4) beside the route's other refusals, and US1 keeps its centring; the
+stack's scenario sits with the run; and the finder camera's return, the fold's, is a
+story after the run. Each merges after the one before (`depends_on_merged`): US2 adds
+the tap to US1's `centre` module and uses US1's test rig; US3's mount part calls
+`centre` and its tests use US1's rig; US4 marks the centring in US1's `centre` and its
+tests use US1's rig; US5's tool reads the ask US2 completes and its words name US4's;
+the page posts the tap and its browser test needs the route. Plain `depends_on` would
+order them without putting the earlier code in the later story's base.

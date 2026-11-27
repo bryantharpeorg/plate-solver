@@ -10,10 +10,11 @@ description: "Task list for 057-imaging-solve-centres-the-target: An Imaging Sol
   `main`: not met (this text is stacked on 055's probe code at 8b7212bb);
 - 058's preview frames read against FR-002 and FR-014, if 058 lands first: not met;
 - the owner decisions in spec.md are settled: not met, none of the nine is answered;
-- every story has been probe-built from this text: not met (the probe of 2026-11-27
-  built the six stories beside this text and its review fold, not from it);
-- the page half has run once: met on the probe (`CI=1 npm run e2e` at each story's
-  tip), to be run again on the re-anchored base;
+- every story has been probe-built from this text: met, round 1 of 2026-11-27 on
+  `probe/057-r1` (tip ba98d527: 0 blocking, 10 clarity), folded, its proofs on that
+  branch at f7d6779a;
+- the page half has run once: met on `probe/057-r1` (`CI=1 npm run e2e` at each
+  story's tip and at f7d6779a), to be run again on the re-anchored base;
 - no operator-staged file is needed: met.
 
 **Rules for every story:**
@@ -48,16 +49,16 @@ description: "Task list for 057-imaging-solve-centres-the-target: An Imaging Sol
 
 ### Tests first
 
-- [ ] T001 [US1] Create `crates/finder/tests/motion/centre.rs` with US1-S1, US1-S2 and
-  US1-S3 under `#[tokio::test(start_paused = true)]`, building the centring rig, its
+- [ ] T001 [US1] Create `crates/finder/tests/motion/centre.rs` with US1-S1 under
+  `#[tokio::test(start_paused = true)]`, building the centring rig, its
   two ways of putting the imaging camera's centre off M42, a solve and its rest as
   spec.md § User Scenarios defines them, and add `mod centre;` to
   `crates/finder/tests/motion/main.rs` in its alphabetical place. Make every item that
   US2, US3 and US4 use `pub(super)`, named in plan.md § Plan traps 2: `Rig` and its
   fields `app`, `state` and `sim`; its methods `new`, `now`, `call`, `get`, `wait`,
-  `sleep`, `off`, `solve`, `track_on`, `rests` and `displace`; `Cause`; `sep`, `m42` and
-  `refused`; `CENTRE` and `FINDER_ARCSEC_PER_PX`. Before T002 to T005 every centring
-  answers 405 and the three tests fail (run).
+  `sleep`, `off`, `solve`, `track_on`, `rests`, `displace` and `held`; `Cause`; `sep`
+  and `m42`; `CENTRE` and `FINDER_ARCSEC_PER_PX`. Before T002 to T005 every centring
+  answers 405 and the test fails (run).
 
 ### Implementation
 
@@ -77,16 +78,18 @@ description: "Task list for 057-imaging-solve-centres-the-target: An Imaging Sol
   after the nudge's merge (`crates/finder/src/api.rs:665`) and `"centre"` after
   `"nudge"` in `start_motion`'s reserved list (`crates/finder/src/api.rs:844`) (FR-004).
 - [ ] T006 [US1] Run the `lint` and `test` gates with every existing test unchanged and
-  green, then commit the green story (FR-001 to FR-005; US1-S1, US1-S2, US1-S3).
+  green, then commit the green story (FR-001 to FR-005; US1-S1).
 
 ## Phase 2: User Story 2 - A tap on the solved frame centres that point (Priority: P1)
 
 ### Tests first
 
-- [ ] T007 [US2] Create `crates/finder/tests/motion/centre_tap.rs` with US2-S1 and US2-S2
-  on US1's rig from `super::centre` and 055's `send` from `super::nudge`, with its own
-  copy of PARTS, and add `mod centre_tap;` to `crates/finder/tests/motion/main.rs` in
-  its alphabetical place. Before T008 a tap answers 400 and both tests fail (run).
+- [ ] T007 [US2] Create `crates/finder/tests/motion/centre_tap.rs` with US2-S1 to US2-S5
+  on US1's rig from `super::centre` and 055's `send` and `write` from `super::nudge`,
+  with its own copy of PARTS and of the refusals' words, and add `mod centre_tap;` to
+  `crates/finder/tests/motion/main.rs` in its alphabetical place. Before T008 a tap
+  answers 400 and US2-S1 and US2-S2 fail; US2-S3, US2-S4 and US2-S5 pass from US1 on
+  (plan.md § Plan traps 4) (run).
 
 ### Implementation
 
@@ -95,7 +98,8 @@ description: "Task list for 057-imaging-solve-centres-the-target: An Imaging Sol
   sky at the pixel by `ImagingSolve::from_cd` and `sky_at`, as plan.md § Interfaces
   gives them (FR-006, FR-007).
 - [ ] T009 [US2] Run the `lint` and `test` gates with every existing test unchanged and
-  green, then commit the green story (FR-006, FR-007; US2-S1, US2-S2).
+  green, then commit the green story (FR-006, FR-007; US2-S1, US2-S2, US2-S3, US2-S4,
+  US2-S5).
 
 ## Phase 3: User Story 3 - The imaging run centres from an imaging solve alone, and a stack holds it (Priority: P1)
 
@@ -124,21 +128,23 @@ description: "Task list for 057-imaging-solve-centres-the-target: An Imaging Sol
 
 ### Tests first
 
-- [ ] T014 [US4] Create `crates/finder/tests/motion/centre_aim.rs` with US4-S1 and
-  US4-S2 on US1's rig from `super::centre`, its frames-running cause a helper of its
-  own (plan.md § Plan traps 10), and add `mod centre_aim;` to
+- [ ] T014 [US4] Create `crates/finder/tests/motion/centre_aim.rs` with US4-S1, US4-S2
+  and US4-S3 on US1's rig from `super::centre`, its frames-running cause a helper of
+  its own (plan.md § Plan traps 10), and add `mod centre_aim;` to
   `crates/finder/tests/motion/main.rs` in its alphabetical place. Before T015 and T016
-  both tests fail: the aim point is not measured, and at 390″ a push is read (run).
+  the three tests fail: at 390″ a push is read, the aim point is not measured, and
+  `aim` changes at Track off (run).
 
 ### Implementation
 
 - [ ] T015 [US4] In `crates/finder/src/session.rs`, add `TrackRun`'s `centred` with its
-  `None`, `Session::centred`, and the aim reading at the head of
-  `record_live_pointing`, as plan.md § Interfaces gives them (FR-010).
+  `None`, `Session::centred`, and the aim reading in `record_live_pointing` after its
+  held aim point's block and before it reads the direction, as plan.md § Interfaces
+  gives them (FR-010).
 - [ ] T016 [US4] In `crates/finder/src/centre.rs`, call
   `state.session().centred(now + AGE_S)` after the step is handed to Track (FR-010).
 - [ ] T017 [US4] Run the `lint` and `test` gates with every existing test unchanged and
-  green, then commit the green story (FR-010; US4-S1, US4-S2).
+  green, then commit the green story (FR-010; US4-S1, US4-S2, US4-S3).
 
 ## Phase 5: User Story 5 - MCP and the README carry the centring (Priority: P2)
 
