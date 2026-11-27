@@ -965,7 +965,9 @@ reading in arcseconds; until then it is in sensor pixels, which compare exactly
 for one camera on one telescope. A frame with fewer than five stars says
 nothing, and one whose stars are larger than 20 frame pixels is far out of
 focus: the imaging solver's own limit, beyond which its star sizes stop being
-trustworthy.
+trustworthy. Every size in the imaging view's `focus`, and in the imaging run's
+`focus`, is in the `unit` beside it: `arcsec`, or `px`, sensor pixels. At
+binning 1 and 0.55″ a sensor pixel, the far-out limit is about 11″.
 
 The sensor's nine tiles — a third each way — are the candidates for the focus
 region, the part of the sensor the console reads while focusing: the optical
@@ -1003,6 +1005,22 @@ while this camera has none. No verdict says focus is good in absolute terms:
 seeing, collimation, a mirror still cooling and tube currents enlarge stars
 just as a focus error does, which is why the reading is judged against this
 camera's own record and never against a fixed number.
+
+Seeing also grows with the air a star is seen through: the part of a star's size
+that seeing makes grows as the airmass to the power 0.6, the airmass being the
+secant of the zenith distance. While Track is tracking and a site is set, each
+reading carries the geometric altitude of Track's target at the middle of its
+exposure, and the record keeps the altitude of the reading that made it. A
+reading is then judged against the record carried to its own altitude: its size
+times the ratio of the two airmasses to the power 0.6, that factor never by less
+than 1 or more than 1.30, so the air never makes the record stricter and never
+lets a low target off by more than a slightly soft focus. A record of 4.6″ read
+at 74° judges a reading at 37° as a record of 5.98″ would. The record's own parts
+are compared with each other as read. With either altitude unknown (Track not
+tracking, no site, or a record made before the console kept altitudes) the record
+judges as it is. The record's parts show their `alt_deg`, the latest reading its
+`alt_deg`, and a carried reference shows `carried`: the record's own size `from`,
+its `from_alt_deg` and the reading's `alt_deg`.
 
 The aid runs under the imaging camera's lease, held as `the focus aid` from
 its start until the settings are back. It remembers the camera's exposure,
@@ -1686,7 +1704,10 @@ aid, which puts the camera's settings back as `## Focus` says, and the run then
 holds the camera again. When the aid could not put them back, the run ends
 `camera_failed` with the camera's own words after
 `the focus aid could not put the imaging camera's settings back:`. Clear the
-region with `Use the whole sensor` and start again.
+region with `Use the whole sensor` and start again. The check is judged against
+the record carried to the target's altitude, so a record made high in the sky
+does not call a low target's stars out of focus for the air alone; the pause's
+words and the run's `focus.record` give that carried size.
 
 The ending's `reason` is one of the words below. The mount column describes
 the motion at the ending, before a later Stop or guard. Check the page's
