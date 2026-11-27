@@ -197,11 +197,11 @@ pub struct Progress {
 
 ### The README (`crates/finder/README.md`, US3)
 
-In the GoTo paragraph (`crates/finder/README.md:572`), "then uses a solved exposure
+In the GoTo paragraph (`crates/finder/README.md:577`), "then uses a solved exposure
 starting after that wait as a sync." becomes FR-012's first sentence; the `goto` keys
 become FR-012's second sentence, after "`GET /api/session` adds"; and after the
 paragraph's last sentence, which ends "is pending.", FR-012's third sentence. In the
-second-sync paragraph (`crates/finder/README.md:586`), after its first sentence, which
+second-sync paragraph (`crates/finder/README.md:591`), after its first sentence, which
 ends "before the base tilt is fitted.", FR-012's fourth sentence; after "and takes the
 sync, with no correction slews.", FR-012's fifth sentence. After that paragraph, a
 new one:
@@ -364,8 +364,8 @@ Each passes every scenario built the other way; the judge reads it in the diff.
 
 ## Decisions and the alternatives rejected
 
-The six owner decisions, all open, are in spec.md § Owner decisions, each with its
-recommendation. Below them:
+The six owner decisions, each answered with its recommendation on 2026-11-27, are in
+spec.md § Owner decisions. Below them:
 
 | Decision | Chosen | Rejected |
 |---|---|---|
@@ -474,19 +474,22 @@ The README's paragraphs and the glossary's entries, and their test.
 ## Prerequisites before this spec is flipped to `ready`
 
 1. **The earlier specs have landed:** every spec in `depends_on_landed`. Met: each is
-   on `main` at f6d4f5fd.
+   on `main` at 01b2d0f5, 052 included.
 2. **`main` is still as read.** Every citation here was read at f6d4f5fd. If `main`
    moves in a file § Project Structure names, or in a test § Shapes names, re-read them
-   and re-run the validator. Met at this fold: `main` is f6d4f5fd. 052's landing moves
-   it, and the re-anchor of 3 re-reads it then.
+   and re-run the validator. Met at the flip: `main` is 01b2d0f5, where 052 landed. Of
+   the files named, 052 changed `crates/finder/README.md`, `GLOSSARY.md` and
+   `crates/finder/tests/console/main.rs`; each was re-read there (the README's two
+   citations moved by five lines), and the validator re-ran.
 3. **The shared files are re-anchored.** 052, 054 and 055, drafted beside this spec, also
    write `crates/finder/README.md`, the console and motion test `main.rs` files and
    `GLOSSARY.md`. The four land in the order 052, 053, 054, 055, and the operator seat
-   re-anchors each one's `shared_writes` on whatever has landed before its flip. Not met
-   until 052 lands.
+   re-anchors each one's `shared_writes` on whatever has landed before its flip. Met at the
+   flip: 052 landed at 01b2d0f5, and the record's entries for the README, the glossary and
+   `crates/finder/tests/console/main.rs` name 052's US3 and US2.
 4. **The owner decisions are settled and the owner approvals given** (spec § Owner
-   decisions, § Owner approvals). Not met: all six are open, each with its
-   recommendation, and wait for the owner's answers at the flip ask.
+   decisions, § Owner approvals). Met: the owner answered all six on 2026-11-27, each with its
+   recommendation, and the flip gives the approvals.
 5. **Probe builds.** A probe round builds the stories from this text alone, and its
    defects are folded. Met: probe round 1 built all three from this text alone on
    `probe/053-r1` (tip a78a3f7a), 0 blocking and 8 clarity defects, each folded here and
@@ -597,17 +600,18 @@ a78a3f7a: 0 blocking, 8 clarity defects), each fold proved on that branch's comm
 removed, two README sentences, every gate). Writes come from the task text. Shared
 writes name the spec story that last wrote the same file on `main`; within the spec,
 each story's files written by an earlier one are ordered by `depends_on_merged`. 052,
-054 and 055 write some of the same files and land around this spec; the seat re-anchors
-these `shared_writes` before the flip (plan.md § Prerequisites 3).
+054 and 055 write some of the same files and land around this spec; the seat re-anchored
+these `shared_writes` on 052's landing, 01b2d0f5, before the flip (plan.md § Prerequisites 3).
 
-The six owner decisions of spec.md are open, each with its recommendation; this record
-is written to the recommendations. Its `open_questions` are empty so that the validator
-reports the record's structure; the decisions themselves are spec.md's, and the flip,
-which settles them, is the owner's. This record approves nothing.
+The six owner decisions of spec.md are answered, each with its recommendation
+(2026-11-27). This record, like the scenarios, is written to the recommendations. Its
+`open_questions` are empty so that the validator reports the record's structure; the
+decisions themselves are spec.md's. This record approves nothing; the owner flipped the
+spec on 2026-11-27.
 
 ```yaml
 version: 1
-reviewed_revision: f6d4f5fd482ccc9d5b634ef1aa5124c112769583
+reviewed_revision: 01b2d0f5aa29b85b57c35482df55816120920d14
 stories:
   US1:
     tests:
@@ -794,19 +798,19 @@ stories:
     no_write_reason: ""
     shared_writes:
       - path: crates/finder/README.md
-        other_spec: 051-tools-page-focuses-either-camera
+        other_spec: 052-node-keeps-saturated-stars
         other_story: US3
         disposition: merge_order
-        reason: "053 depends_on_landed 051, whose US3 last changed the README (9424a371)"
+        reason: "053 depends_on_landed 052, whose US3 last changed the README (01b2d0f5)"
       - path: GLOSSARY.md
-        other_spec: 051-tools-page-focuses-either-camera
+        other_spec: 052-node-keeps-saturated-stars
         other_story: US3
         disposition: merge_order
-        reason: "053 depends_on_landed 051, whose US3 last changed the glossary (9424a371)"
+        reason: "053 depends_on_landed 052, whose US3 last changed the glossary (01b2d0f5)"
       - path: crates/finder/tests/console/main.rs
-        other_spec: 051-tools-page-focuses-either-camera
+        other_spec: 052-node-keeps-saturated-stars
         other_story: US2
         disposition: merge_order
-        reason: "053 depends_on_landed 051, whose US2 last changed console/main.rs (f9706cc0)"
+        reason: "053 depends_on_landed 052, whose US2 last changed console/main.rs (bf1fcd66)"
     open_questions: []
 ```

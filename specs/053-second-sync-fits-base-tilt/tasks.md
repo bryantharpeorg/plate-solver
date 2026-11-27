@@ -5,10 +5,11 @@ description: "Task list for 053-second-sync-fits-base-tilt: The Second Sync Fits
 # Tasks: The Second Sync Fits the Base Tilt
 
 **Prerequisites** (plan.md § Prerequisites, each with its evidence there):
-- every spec in `depends_on_landed` has landed on `main`: met at f6d4f5fd;
-- `main` is still as read: met at f6d4f5fd, the draft's revision, until 052 lands;
-- the shared files are re-anchored on 052, which lands first: not met, waits for 052;
-- the owner decisions in spec.md are settled: not met, all six open, for the flip ask;
+- every spec in `depends_on_landed` has landed on `main`: met at 01b2d0f5, 052 included;
+- `main` is still as read: met at 01b2d0f5, where 052 landed, the files it changed re-read;
+- the shared files are re-anchored on 052: met, on its landing at 01b2d0f5;
+- the owner decisions in spec.md are settled: met, all six, each answered with its
+  recommendation on 2026-11-27;
 - every story has been probe-built from this text: met, probe round 1 (0 blocking,
   8 clarity defects, each folded);
 - no operator-staged file is needed: met.

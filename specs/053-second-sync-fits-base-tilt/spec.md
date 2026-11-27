@@ -1,6 +1,6 @@
 ---
-state: draft
-depends_on_landed: ["013-live-finder", "014-goto", "024-mount-link-recovery", "027-finder-tests-by-system", "038-track-follows-a-push", "047-console-uses-the-database-that-fits", "051-tools-page-focuses-either-camera"]
+state: ready
+depends_on_landed: ["013-live-finder", "014-goto", "024-mount-link-recovery", "027-finder-tests-by-system", "038-track-follows-a-push", "047-console-uses-the-database-that-fits", "051-tools-page-focuses-either-camera", "052-node-keeps-saturated-stars"]
 # Drafted 2026-11-27 against `main` at f6d4f5fd, at the owner's ask of that day ("Your
 # rec. Proceed", to the operator seat's ranked list of a field night's defects), the
 # second of four specs (052 detection keeps saturated stars, 053 this one, 054 the imaging
@@ -12,13 +12,20 @@ depends_on_landed: ["013-live-finder", "014-goto", "024-mount-link-recovery", "0
 # round 1, the three stories built from this text alone on `probe/053-r1` (from
 # c9a29b2f, tip a78a3f7a: 0 blocking, 8 clarity defects), each fold proved on that
 # branch's commits ea235dfb, 3d2fc4e8 and 8fac1157 (tip 8fac1157). Every `path:line`
-# here was read at f6d4f5fd. State: draft. The six owner decisions are open, each with
-# a recommendation the scenarios are written to; the flip is the owner's. 014 is named
+# here was read at f6d4f5fd, and those in files 052 changed re-read at 01b2d0f5. The
+# owner answered the six decisions on 2026-11-27, each with its recommendation, which
+# the scenarios were already written to. 014 is named
 # because this spec changes its sync intake, pointing model, GoTo and second sync
 # (FR-011, FR-012, FR-013, FR-019, FR-022, quoted in Clarifications); 038 because its
 # slip mark stays as it is; 013 for the live loop that takes the syncs; 047 for the
-# database in use; 024, 027, 038, 047 and 051 because each last changed a file this spec
+# database in use; 024, 027, 038, 047, 051 and 052 because each last changed a file this spec
 # writes (plan.md § Refinement Record).
+# Re-anchored the same day on `main` at 01b2d0f5, where 052 landed: 052 joins
+# `depends_on_landed`, and the record's entries for the README, the glossary and the
+# console test `main.rs` name 052's stories. Flipped to `ready` on 2026-11-27 at the
+# owner's ask ("Yes, all three", a standing yes to the seat flipping 053, 054 and 055,
+# each once the spec before it lands, with the seat's recommended answers), with every
+# prerequisite in plan.md met and none waived.
 ---
 
 # Feature Specification: The Second Sync Fits the Base Tilt
@@ -27,7 +34,7 @@ depends_on_landed: ["013-live-finder", "014-goto", "024-mount-link-recovery", "0
 
 **Created**: 2026-11-27
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: On a field night, on the alt-az mount with the finder camera about 1.6° wide,
 GoTos to the Pleiades and M52 had first errors of about 5.0° and 5.7°; no second sync
@@ -177,10 +184,25 @@ before the first far GoTo, which the README now says.
   solve of a right-sized field is still taken (owner decision 2); one of a field the
   database was not built for is not (FR-007).
 
+### Session 2026-11-27 (the flip)
+
+- Q: How were the six open decisions answered? → A: Each with its recommendation, by
+  the owner on 2026-11-27, who answered "Yes, all three" to the seat's question whether
+  it should flip 053, 054 and 055 itself, each once the spec before it lands, with its
+  recommended answers.
+- Q: What moved on `main` between the draft and the flip? → A: 052 landed, at
+  01b2d0f5. Of the files this spec writes or cites, it added a paragraph to
+  `crates/finder/README.md` before the GoTo paragraph (both README citations moved by
+  five lines), the entry **Saturated star** to `GLOSSARY.md`, one mod line to
+  `crates/finder/tests/console/main.rs`, and changed `crates/finder/src/solve.rs`
+  away from its cited line. Nothing this spec requires or tests changed.
+
 ## Owner decisions
 
-All six are open. Each has its options, its evidence and a recommendation; the scenarios
-and the record are written to the recommendations. The general rule behind them is the
+All six are settled by the owner on 2026-11-27, each answered with its recommendation:
+(d) for decision 1, (a) for decisions 2, 4, 5 and 6, and for decision 3 (a) for
+parts 1 to 5 and (iii) for part 6. Each keeps its options and its evidence; the scenarios and the record were
+written to the recommendations, so no scenario changed for them. The general rule behind them is the
 owner's own preference: fix the night's defect by the one rule that removes it, the
 second sync's solve fitting the base tilt, and add no state to hold or confirm solves.
 
@@ -203,7 +225,7 @@ second sync's solve fitting the base tilt, and add no state to hold or confirm s
    decision 4's field check and decision 3's plain end, and the hold left as a later spec
    the owner may decline. Size: the three stories here, 15.5, 28.3 and 15.4 KB; approvals:
    014's FR-011, FR-012, FR-013, FR-019 and FR-022 changed as quoted, two optional `goto`
-   keys, no existing test edited. Recommended: **(d)**.
+   keys, no existing test edited. Answered: **(d)**.
 2. **How a real slip is told from a bad solve** (FR-003). (a) **As today: a sync beyond
    the bound opens an epoch at once, and the next true solve opens another**; a push by
    hand while Track runs keeps 038's mark; a mount reset needs nothing of its own (024's
@@ -212,18 +234,18 @@ second sync's solve fitting the base tilt, and add no state to hold or confirm s
    (b) **Persistence** (decision 1(a)): no better on a repeated false field. (c)
    **Confirmation after a move**, the next correction's solve: not measured, and a
    correction planned from a false solve moves the telescope before it is confirmed.
-   Recommended: **(a)**, with decision 4's field check as the independent test against a
+   Answered: **(a)**, with decision 4's field check as the independent test against a
    false match.
 3. **The second sync** (FR-001, FR-008, FR-009).
    1. *Its band.* (a) **Between 30° and 60° up as the model predicts it, the altitudes
       searched as today; the nearest outside it only when no spot in the band has a safe
       path** (Clarifications: why 30° to 60°). (b) 15° to 60°,
-      SynScan's own: more trees and more refraction low down. Recommended: **(a)**.
+      SynScan's own: more trees and more refraction low down. Answered: **(a)**.
    2. *Its tilt bound.* (a) **6°**, above every tilt tried (0° to 5°, fitted within 1′);
       8° is taken as a slip (US1-S2, US2-S3). (b) **5°**, the top of the range tried and
       too close to it for a fit that lands at 5.00°. Immaterial to slips: two syncs fit
       the four terms exactly, so the bound is no check on a slip between them (part 6).
-      Recommended: **(a)**.
+      Answered: **(a)**.
    3. *A blocked spot.* (a) **It fails as today, "no frame solved after settling"; the
       README says that a GoTo to a clear target at least 90° round on the azimuth axis
       fits the base tilt by the same rule**. Run: with no second sync, a GoTo to a place
@@ -233,17 +255,17 @@ second sync's solve fitting the base tilt, and add no state to hold or confirm s
       out, or try the mirror spot**: pressing the second sync again plans the same spot,
       since the mount sits on it and the planner starts from the current place
       (`crates/finder/src/goto.rs:280`, `crates/finder/src/goto.rs:293`); a rule that
-      needs the timed-out spot kept. Recommended: **(a)**.
+      needs the timed-out spot kept. Answered: **(a)**.
    4. *The level-mount change.* With the band, a level mount's second sync from 75° up
       goes to 60° up, and from 20° up to 30° up, where today it stays at the current
       altitude (US2-S2). (a) **Accept it**: the band is what halves the unmodelled terms'
       share. (b) Keep the current altitude on a level mount: no way to know the mount is
-      level before the tilt is fitted. Recommended: **(a)**.
+      level before the tilt is fitted. Answered: **(a)**.
    5. *A second sync that fits no base tilt.* (a) **It ends `failed` with
       `taken as a slip: no base tilt fitted`** (FR-009), where today it ends `done`,
       fitting nothing, as on the field night. The page shows the reason after "GoTo
       failed" (`crates/finder/web/src/components/GoToControl.tsx:19`). (b) **`done` with
-      that reason**: the page would read "On target" before it. Recommended: **(a)**.
+      that reason**: the page would read "On target" before it. Answered: **(a)**.
    6. *A check before a two-sync tilt is trusted.* Two syncs fit IA, IE, AN and AW
       exactly, so a slip between them is taken as a wrong tilt: on the reviewer's run S,
       3° to 8° slips left worst misses of 3.5° to 9.4° and 92 % to 99 % of the sky over
@@ -268,7 +290,7 @@ second sync's solve fitting the base tilt, and add no state to hold or confirm s
       **None, as an accepted risk**: a slip over 2.5° while the telescope stands still is
       taken by the next live solve as a slip epoch before the second sync measures from
       it, so the window is the second sync's own slew; the README says to press the second sync at
-      once, with the telescope untouched. Recommended: **(iii) here, and (i), the simplest
+      once, with the telescope untouched. Answered: **(iii) here, and (i), the simplest
       that catches most slips, as a later spec with the simulator's camera rolling with
       the base first**.
 4. **The field check** (FR-007). (a) **A live solve whose field lies more than 5 %
@@ -281,7 +303,7 @@ second sync's solve fitting the base tilt, and add no state to hold or confirm s
    solve then no pointing either: a change to `crates/finder/src/live.rs` and to 047's
    lens-change path, where a true solve by the wrong database is what switches the
    database. (c) **Also at least 8 matched stars**: a number nothing measured supports.
-   (d) **None**, as today. Recommended: **(a)**.
+   (d) **None**, as today. Answered: **(a)**.
 5. **What the page and the API show** (FR-005, FR-006, FR-009). (a) **`goto.frame_id` and
    `goto.frame_time` in `GET /api/session`, and so in MCP's `get_session`
    (`crates/finder/src/mcp/tools.rs:538`, `crates/finder/src/api.rs:884`): the frame
@@ -294,12 +316,12 @@ second sync's solve fitting the base tilt, and add no state to hold or confirm s
    live pointing over 5 s old (`crates/finder/src/pushto.rs:184`,
    `crates/finder/web/src/components/ChartHeader.tsx:73`). (b) **Also a page line**: a
    page story, its build and its browser test, for words the reason already gives. No
-   held state is left to count or mark. Recommended: **(a)**.
+   held state is left to count or mark. Answered: **(a)**.
 6. **A warning while the model rests on one sync above about 70°** (none). (a) **None**:
    the band roughly halves what such a first sync leaves (Clarifications), the warning
    that mattered on the night was the silent second sync, which now fails plainly
    (decision 3, part 5), and the README says to take the first sync between 30° and 60°
-   up when the sky allows. (b) **`model.warning` and a Setup line**. Recommended: **(a)**.
+   up when the sky allows. (b) **`model.warning` and a Setup line**. Answered: **(a)**.
 
 ## Owner approvals
 
@@ -671,7 +693,7 @@ nextest command runs it; during development,
 ## Assumptions
 
 - **Earlier features are in place.** Every spec in `depends_on_landed` has landed. Every
-  citation here was read at f6d4f5fd.
+  citation here was read at f6d4f5fd, and those in files 052 changed re-read at 01b2d0f5.
 - **The simulator's mount stands for the real one** in the gates: an exact base tilt,
   zero points and backlash, and no collimation, axis-perpendicularity or flexure error,
   and its camera keeps its top to the true vertical (`crates/simulator/src/sky.rs:106`).
