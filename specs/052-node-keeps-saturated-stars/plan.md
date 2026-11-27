@@ -707,10 +707,11 @@ README's paragraph, the glossary and `solve_image`.
 - Every spec in `depends_on_landed` has landed: met at f6d4f5fd, where 013, 025, 045,
   047, 048 and 051 have all landed.
 - `main` is still as read, or the cites are re-read: met, `main` at f6d4f5fd at this
-  fold, every cite read there; waits on a re-read if `main` moves before the flip.
+  fold and at the flip, every cite read there.
 - A review round of this trio, folded: met, cynical review round 1 (0 blockers, 2 majors,
   11 minors) folded at 7d306e7e.
-- The seven owner decisions answered: waits for the owner, at the flip ask.
+- The seven owner decisions answered: met, by the owner on 2026-11-27, each with its
+  recommendation ("Flip 052 now").
 - A probe round that builds the three stories from this text alone: met, round 1 at
   491b7655 (0 blocking, 10 clarity), folded here with ae80ff09 (§ What was run).
 
@@ -816,11 +817,12 @@ ADRs. Writes come from the task text. Shared writes name the spec story that las
 the same file on `main`; within the spec, US2 follows US1 and US3 follows US2 by
 `depends_on_merged`.
 
-The seven owner decisions of spec.md are open. This record, like the scenarios, is
+The seven owner decisions of spec.md are answered, each with its recommendation
+(2026-11-27). This record, like the scenarios, is
 written to their recommendations (decisions 2 to 4 and 7 for US1, 1 and 5 for US2, 5 and
 6 for US3), so its `open_questions` are empty; an answer other than a recommendation
-reopens the record and the scenarios it names. This record approves nothing; the flip is
-the owner's.
+would have reopened the record and the scenarios it names. This record approves nothing;
+the owner flipped the spec on 2026-11-27.
 
 ```yaml
 version: 1

@@ -6,9 +6,10 @@ description: "Task list for 052-node-keeps-saturated-stars: The Node Keeps Satur
 
 **Prerequisites** (plan.md § Prerequisites):
 - every spec in `depends_on_landed` has landed on `main`: met at f6d4f5fd;
-- `main` is still as read: met, f6d4f5fd at the draft and at probe round 1's fold;
-- the owner decisions in spec.md are settled: not yet, all seven open, for the owner at
-  the flip ask;
+- `main` is still as read: met, f6d4f5fd at the draft, at probe round 1's fold and at the
+  flip;
+- the owner decisions in spec.md are settled: met, all seven, each answered with its
+  recommendation on 2026-11-27;
 - a review round of this trio, folded: met, round 1 folded;
 - a probe round from this trio alone, folded: met, round 1 (491b7655) folded with
   ae80ff09;

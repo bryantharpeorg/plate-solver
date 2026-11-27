@@ -1,5 +1,5 @@
 ---
-state: draft
+state: ready
 depends_on_landed: ["013-live-finder", "025-frame-capture", "045-node-runs-finder-over-indi", "047-console-uses-the-database-that-fits", "048-node-detects-stars-on-a-dark-sky", "051-tools-page-focuses-either-camera"]
 # Drafted 2026-11-27 against `main` at f6d4f5fd, at the owner's ask of 2026-11-27 ("Your
 # rec. Proceed", on the seat's ranked list of a field night's defects, this first), from
@@ -12,7 +12,8 @@ depends_on_landed: ["013-live-finder", "025-frame-capture", "045-node-runs-finde
 # every scenario passing, 0 blocking and 10 clarity defects) and folded: five choices
 # no scenario saw are now steps of US1-S1, US1-S2 and US1-S4 (commit ae80ff09, each
 # bitten by its mutation), the rest words; the gates' Rust commands pass at ae80ff09.
-# Every `path:line` here was read at f6d4f5fd. The owner decisions are open. 013 is named
+# Every `path:line` here was read at f6d4f5fd. The owner answered the seven decisions on
+# 2026-11-27, each with its recommendation, which the scenarios were already written to. 013 is named
 # because its stories built the node's detection, the simulator's finder camera and the
 # live loop, and last wrote `crates/scope-node/tests/detect.rs`; 025 because its raw
 # frames replay through detection; 045 because its US2 last wrote the node's README and
@@ -23,6 +24,9 @@ depends_on_landed: ["013-live-finder", "025-frame-capture", "045-node-runs-finde
 # `finder_focus.rs`, the console's test binary, the console's README and the glossary,
 # and its simulated focuser widens the stars these tests saturate (plan.md § Refinement
 # Record).
+# Flipped to `ready` on 2026-11-27 at the owner's ask ("Flip 052 now", in reply to the seat's
+# seven recommendations), with every prerequisite in plan.md met and none waived. `main`
+# still at f6d4f5fd.
 ---
 
 # Feature Specification: The Node Keeps Saturated Stars
@@ -31,7 +35,7 @@ depends_on_landed: ["013-live-finder", "025-frame-capture", "045-node-runs-finde
 
 **Created**: 2026-11-27
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: On a field night the finder camera (a ZWO ASI120MM Mini, 1280 × 960, about
 1.62° wide, read as 8 bits by the scope node) gave `no_match` on the Orion Nebula's
@@ -140,9 +144,18 @@ saturated; detect a frame uploaded to the console the same way; say so in the RE
   were not replayed: only a 640 × 480 preview JPEG of them survives, which is not a
   fixture. plan.md § What was run and what was read lists each claim.
 
+### Session 2026-11-27 (the flip)
+
+- Q: How were the seven open decisions answered? → A: Each with its recommendation, by
+  the owner on 2026-11-27, in reply to the seat's question whether to flip with its
+  recommended answer to each: "Flip 052 now".
+
 ## Owner decisions
 
-All open. One general rule is behind decisions 1 to 4 and 7: **a saturated star is the
+All seven are settled by the owner on 2026-11-27, each answered with its recommendation:
+(d) for decision 1, (a) for decisions 2, 3, 5 and 6, and (b) for decisions 4 and 7. Each
+keeps its options and its evidence; the scenarios and the record were written to the
+recommendations, so no scenario changed for them. One general rule is behind decisions 1 to 4 and 7: **a saturated star is the
 top of a star, so every finder camera frame the console solves keeps the regions of
 saturated pixels cedar's gates set aside when they look like a star's top, round or
 trailed with the rest of the frame, places them by their brightness and touches nothing
@@ -150,7 +163,7 @@ cedar keeps.** So cedar's detector, its parity and its order stay as they are, n
 setting or link field is added, and a frame with no such region gives exactly today's
 centroids. plan.md § Decisions and the alternatives rejected gives the measures.
 
-1. **Where the pass runs** (FR-004, FR-005). Recommended **(d) in the scope node's
+1. **Where the pass runs** (FR-004, FR-005). Answered **(d) in the scope node's
    detection and in the console's `solve_frame_with_frame`**, through a new module of
    `star-detection`; `detect_stars` keeps its code and results, so the parity tests, the
    e2e evaluation, the gRPC service and the plate solver's own detection are as before.
@@ -166,7 +179,7 @@ centroids. plan.md § Decisions and the alternatives rejected gives the measures
    moves. (c) As (a), with a `[detection]` key to turn it off: a config key, a
    `--check-config` line (048's US1-S6 pins today's print) and Configure's handling
    (048's FR-007), for a switch with nothing to switch off.
-2. **The centroid of a saturated star** (FR-001). Recommended **(a) the mean of its
+2. **The centroid of a saturated star** (FR-001). Answered **(a) the mean of its
    saturated pixels' centres**, tetra3's centre of mass with every weight equal.
    Evidence (run): drawn Gaussian and Moffat stars within 0.1 px of their place (US1-S1);
    520 kept stars of the simulator's bright fields, 90th percentile 0.29 px; at the
@@ -174,7 +187,7 @@ centroids. plan.md § Decisions and the alternatives rejected gives the measures
    place, and in the review's runs every node match within 2″ of truth. (b) Flux-weighted inside the ring, less the ring's
    mean: 90th percentile 1.15 px, largest 3.81 px, as a neighbour's light pulls it. (c)
    A profile fitted to its unsaturated wings: no reference does it, and more code.
-3. **The gates that set a region aside** (FR-001). Recommended **(a)**: the level 250,
+3. **The gates that set a region aside** (FR-001). Answered **(a)**: the level 250,
    8-connected; fewer than 5 pixels (tetra3's `min_area`); a frame holding more than
    24,576 pixels at the level (2 % of the finder camera's frame) set aside whole as
    `Extended`; a ring 3 px out from the box that crosses the frame's edge; longer than
@@ -207,7 +220,7 @@ centroids. plan.md § Decisions and the alternatives rejected gives the measures
    and the ratio: its default cap of 100 pixels refuses the brightest tops (up to 2,680
    pixels kept at the finder camera's geometry). (e) Relax cedar's own gates: changes
    `detect_stars` (as 1 (b)).
-4. **Where a saturated star ranks** (FR-001). Recommended **(b) before the first of
+4. **Where a saturated star ranks** (FR-001). Answered **(b) before the first of
    cedar's stars that is fainter than it**, its brightness the sum, over every pixel
    strictly inside its ring, of the pixel less the ring's mean, so the list stays
    brightest first and cedar's stars keep their own order. Evidence (run): with
@@ -217,7 +230,7 @@ centroids. plan.md § Decisions and the alternatives rejected gives the measures
    them, and failed `ten_dense_frames_have_all_fields_top_200_and_ids_count_dropped_exposures`
    (`crates/simulator/tests/node.rs:111`) once a 5-pixel top was kept. (a) Every kept star
    first, the most saturated pixels first, as drafted. (c) After cedar's list: 79 of 115.
-5. **Whether the live report names what was set aside** (FR-006, FR-009). Recommended
+5. **Whether the live report names what was set aside** (FR-006, FR-009). Answered
    **(a) not in the live report; `solve_image --saturated` prints, for a recorded raw
    frame, how many regions were kept and set aside and why**, and the README says a star
    frame carries neither. The live report would need a field on the star frame, a scope
@@ -226,14 +239,14 @@ centroids. plan.md § Decisions and the alternatives rejected gives the measures
    (b) That, as a later spec once 053 has landed; the next field night then learns the
    counts only from the raw frames it records. (c) Nothing at all: a raw frame recorded
    on a field night replays through `solve_image` as cedar detects it.
-6. **An exposure hint that keeps the brightest stars just under saturation**. Recommended
+6. **An exposure hint that keeps the brightest stars just under saturation**. Answered
    **(a) later, and only if a field night shows saturated frames still fail** once this
    lands: 8 bits cannot hold a magnitude 2.8 star under saturation and detect magnitude
    10, about 1,600 times fainter, and cedar-detect leaves exposure to its caller. (b)
    Here: needs 5 (b)'s link field, and a rule for "too many" saturated stars that no
    field night has measured. (c) Auto-exposure aiming below saturation: changes 013's
    FR-015, out of scope.
-7. **Trailed frames** (FR-001). Recommended **(b) a trail-aware ratio**: a region longer
+7. **Trailed frames** (FR-001). Answered **(b) a trail-aware ratio**: a region longer
    than 1.5 times its width is a trailed star when its major axis lies within 10° of the
    frame's common trail direction, the axial median of the frame's long regions'
    directions, which stands only when at least 3 of them lie within 10° of it; it is then
