@@ -61,6 +61,7 @@ mod pushto_separation;
 mod rates;
 mod recording;
 mod recording_raw;
+mod saturated_field;
 mod session;
 mod stack_accumulate;
 mod stack_camera;

@@ -398,6 +398,13 @@ pub fn solve_frame_with_frame(
         cedar.normalize_rows,
         cedar.detect_hot_pixels,
     );
+    // With the saturated stars cedar sets aside, as the scope node detects (052).
+    let detected = star_detection::saturated::with_saturated_stars(
+        &image.pixels,
+        image.width,
+        image.height,
+        detected,
+    );
     let detect = ms(t);
     let detected = detected.iter().map(|s| [s.x, s.y]).collect();
     solve_detected(db, detected, (image.width, image.height), options, detect)
