@@ -575,10 +575,14 @@ below by 0.5°. It tries alternate axis orders and a higher path for Sun clearan
 A telescope below the minimum must first lift without turning in azimuth.
 
 After slewing at the mount's top speed, it waits for both axes to stop plus 0.5 s,
-then uses a solved exposure starting after that wait as a sync. It corrects at most
-five times to bring the target within 1′ of the calibrated aim point.
-`GET /api/session` adds `goto: {state, correction, error_arcsec, reason}` only after
-one starts, retaining its result until the next GoTo. States are `slewing`,
+then for a solved exposure starting after that wait that the pointing model takes
+as a sync, and measures the error from that sync. It corrects at most five times
+to bring the target within 1′ of the calibrated aim point.
+`GET /api/session` adds
+`goto: {state, correction, error_arcsec, reason, frame_id, frame_time}` only after
+one starts, retaining its result until the next GoTo; `frame_id` is the star frame
+whose sync gave `error_arcsec` or ended the second sync, and `frame_time` its
+mid-exposure, so its age is the session's `time` less `frame_time`. States are `slewing`,
 `solving` (including the settle wait), `correcting` (numbered 1–5), `done`,
 `failed`, and `halted`.
 The final error is in arcseconds. Stop reports the observer; heartbeat silence of
@@ -586,16 +590,35 @@ one second reports a lost link; sunrise reports the Sun guard. A change in the
 scope node's watchdog stop count during a GoTo reports
 `halted by the scope node's watchdog`. Every halt stops both axes and cancels
 further motion. Stop remains available while planning, solving or another request
-is pending.
+is pending. When 30 s pass after settling with frames solved but none taken as a sync,
+the GoTo or second sync ends `failed` with `frame <id> solved but was not taken as a sync`,
+naming the last; with no frame solved, `no frame solved after settling`.
 
 After the first sync, the second-sync route chooses the nearest pointable spot
 in turn and tilt at least 90° in azimuth from every sync of the night, allowing
-for the initial model's uncertainty before the base tilt is fitted. It uses the
-same Sun guard, cable-wind and approach checks as GoTo, waits for a settled solve
-and takes the sync, with no correction slews. It leaves the selected target
-unchanged and reports progress through the same `goto` session field. Stop also
-halts a second sync. No suitable spot, missing sync, site or mount, a moving mount,
-or an operation already running answers 409 with a JSON `error` before movement.
+for the initial model's uncertainty before the base tilt is fitted. It looks first
+between 30° and 60° up, as the model predicts the altitude, and only when no spot
+there has a safe path does it take the nearest outside it. It uses the same Sun
+guard, cable-wind and approach checks as GoTo, waits for a settled solve and takes
+the sync, with no correction slews. When that sync is taken as a slip and no base
+tilt is fitted, it ends `failed` with `taken as a slip: no base tilt fitted`.
+It leaves the selected target unchanged and reports progress through the same
+`goto` session field. Stop also halts a second sync. No suitable spot, missing sync,
+site or mount, a moving mount, or an operation already running answers 409 with a
+JSON `error` before movement.
+
+Before the base tilt is fitted, a sync at least 90° on the azimuth axis from a sync
+of the current zero-point epoch joins that epoch and fits the base tilt when the tilt
+it fits is at most 6°, and is otherwise taken as a slip; the tilt alone decides it.
+Any other sync more than 2.5° from the model's prediction, or 0.5° once the base tilt
+is fitted, opens a new zero-point epoch, as does the first solve after a push by hand
+while Track runs, at a tilt spot too. A live solve whose field lies more than 5% outside
+the range of the database in use is not taken as a sync. Two syncs fit the base tilt
+and the zero points exactly, so a slip between them is taken as tilt: take the first
+sync between 30° and 60° up when the sky allows, and press the second sync at once,
+with the telescope untouched, before the first far GoTo. If a tree blocks the second
+sync's spot, a GoTo to a clear target at least 90° round on the azimuth axis fits the
+base tilt by the same rule.
 
 Resetting `night` clears the night's syncs, zero points and base tilt, retaining
 the fixed terms. Resetting `fixed` clears those hardware terms, retaining the
