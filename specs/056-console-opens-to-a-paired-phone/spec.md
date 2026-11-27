@@ -6,7 +6,10 @@ depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "0
 # token". Drafted from a probe of that day on the branch `probe/056` cut from f6d4f5fd,
 # and folded the same day after cynical review round 1 (1 blocker, 6 majors, 14 minors),
 # rebuilt story by story on that branch with every gate at each story's own tip
-# (plan.md § What was run and what was read). Every `path:line` here was read at
+# (plan.md § What was run and what was read). Probed from this text alone the same day
+# (round 1, branch `probe/056-r1` from 745dc3a8, tip 6fe4f173: 0 blocking, 16 clarity
+# defects) and folded: the fixes and new steps proven on that branch (5ca389bf, 0346d61d,
+# e4335286), every gate passing at e4335286. Every `path:line` here was read at
 # f6d4f5fd. None of the ten owner decisions is answered yet; the scenarios are written
 # to each recommendation. 012 is named for the same-origin rule and `--allow-host`; 013
 # for the scope link's token comparison; 014 and 017 for Stop, open to anyone; 016 for
@@ -108,6 +111,18 @@ the page, and 016's MCP endpoint already answers any LAN peer with no token.
   `crates/finder/tests/support/mod.rs`. A file of their own under `tests/support/`
   failed 027's layout test, which pins that folder's files
   (`crates/finder/tests/layout/main.rs:126`), at US1's tip (run).
+
+### Session 2026-11-27 (probe round 1, from this text alone)
+
+- Q: What does `/mcp` answer with `--no-mcp`? → A: With MCP off there is no door, so
+  `/mcp` is a page path like `/`. The gate passes `/mcp` only while MCP is on
+  (`state.mcp.enabled`), and its door asks (US3). Passed by its path alone, `GET /mcp`
+  from an unpaired phone answered 200 with the page's `index.html` (run); with the gate
+  reading `state.mcp.enabled`, 401 (US1-S2).
+- Q: How does a bad `console-token` stop the start? → A: `main` prints the error with
+  `eprintln!` and exits 1. Returned from `main`, Rust prints it in Debug form,
+  `Error: "<path>: …"`, escaping a path's quotes, backslashes and non-ASCII, so the line
+  is not the file's path followed by the words (run, US3-S4).
 
 ## Owner decisions
 
@@ -289,7 +304,8 @@ gains one module (approval 10).
    through `console-token.tmp`.
 4. **016's FR-001 for a peer that is not loopback** (FR-011), quoted below.
 5. **Every request names an allowed host** (FR-004): with a console token, every request
-   but Stop and `/mcp`, a loopback peer's among them and with or without an `Origin`,
+   but Stop and, while MCP is on, `/mcp`, a loopback peer's among them and with or
+   without an `Origin`,
    names an IP literal, `localhost` or an `--allow-host` name, beyond 012's FR-015,
    which asks it of writes that carry an `Origin`.
 6. **The binary's start** (FR-012): a start with a bad `console-token` fails; a shared
@@ -345,7 +361,7 @@ Every scenario shares these definitions.
   `crates/finder/tests/support/mod.rs` that US1 writes and later stories use unchanged.
 - **The gated console** is `crate::support::mcp::state()` (the cedar database, no
   samples) with `with_clock` of a clock the test sets, starting at T = 1,768,528,800, and
-  `with_console_token(ConsoleToken::new("test-console-token"))`, served by
+  `with_console_token(ConsoleToken::new("test-console-token").unwrap())`, served by
   `finder::router` with `MockConnectInfo` of the scenario's peer at port 40000. **The
   plain console** is `crate::support::mcp::state()` alone, served the same way. **The
   live console** is `crate::support::live::state(&crate::support::live::sim(), None,
@@ -410,12 +426,12 @@ them; during development,
 
 **Acceptance Scenarios**:
 
-1. **Given** the gated console and the plain console, **When** a committed test sends each of the reads from each loopback peer with `Host` localhost:8080, with `Host` 127.0.0.1:8080, with `Host` rebound.example:8080 and with no `Host`, and then from each `POST /api/stop` with `Host` rebound.example:8080 and no body and `PUT /api/session` with `Host` localhost:8080, `Content-Type: application/json` and `{"target": "M42"}`, **Then** it asserts that each read with localhost or 127.0.0.1 answers what the plain console answers the same request from 127.0.0.1; that each read with the rebound name or no `Host` answers 403 with exactly `{"error": BAD HOST}`; that each Stop answers 200 with exactly `{"stopped": true}`; and that each `PUT` answers 200.
-2. **Given** the gated console, **When** a committed test reads `GET /api/session` from 127.0.0.1, sends from the phone with no token each of the reads, `GET /setup`, `GET /assets/index.js` and `PUT /api/session` with `Content-Type: application/json` and `{"target": "M42"}`, sends `GET /api/session` with `Host` localhost:8080 through `finder::router` with no peer recorded, and reads `GET /api/session` from 127.0.0.1 again, **Then** it asserts that every request from the phone and the one with no peer answer 401; that each of them under `/api/` answers exactly `{"error": UNPAIRED}`; and that the last read equals the first.
-3. **Given** the gated console, **When** a committed test sends each of the reads from the phone five times, with the cookie, with `Cookie: theme=night; console_token=test-console-token`, with the bearer, with `Authorization: bearer test-c0ns0le-t0ken` and with `Authorization: BEARER TESTCONSOLETOKEN`, then `PUT /api/session` with the cookie, the phone's origin, `Content-Type: application/json` and `{"target": "M42"}`, and reads `GET /api/session` from 127.0.0.1, **Then** it asserts that each answer equals the answer 127.0.0.1 gets to the same read with `Host` 192.168.1.20:8080 and no token, that the `PUT` answers 200, and that the session's `target.messier` is `M42`.
+1. **Given** the gated console and the plain console, **When** a committed test sends each of the reads from each loopback peer with `Host` localhost:8080, with `Host` 127.0.0.1:8080, with `Host` rebound.example:8080 and with no `Host`, and then from each `POST /api/stop` with `Host` rebound.example:8080 and no body and `PUT /api/session` with `Host` localhost:8080, `Content-Type: application/json` and `{"target": "M42"}`, and sends `GET /api/session` from 127.0.0.2 with `Host` localhost:8080, **Then** it asserts that each read with localhost or 127.0.0.1 answers what the plain console answers the same request from 127.0.0.1; that each read with the rebound name or no `Host` answers 403 with exactly `{"error": BAD HOST}`; that each Stop answers 200 with exactly `{"stopped": true}`; that each `PUT` answers 200; and that `GET /api/session` from 127.0.0.2 with `Host` localhost:8080 answers 200.
+2. **Given** the gated console, **When** a committed test reads `GET /api/session` from 127.0.0.1, sends from the phone with no token each of the reads, `GET /setup`, `GET /assets/index.js`, `GET /api/finder-camera/focus` and `PUT /api/session` with `Content-Type: application/json` and `{"target": "M42"}`, sends `GET /api/session` with `Host` localhost:8080 through `finder::router` with no peer recorded, sends `GET /mcp` from the phone on the gated console `with_mcp(McpConfig { enabled: false, ..Default::default() })`, and reads `GET /api/session` from 127.0.0.1 again, **Then** it asserts that every request from the phone and the one with no peer answer 401; that each of them under `/api/`, `GET /api/finder-camera/focus` among them, answers exactly `{"error": UNPAIRED}`; that `GET /mcp` from the phone on the gated console `with_mcp(McpConfig { enabled: false, ..Default::default() })` answers 401; and that the last read equals the first.
+3. **Given** the gated console, **When** a committed test sends each of the reads from the phone five times, with the cookie, with `Cookie: theme=night; console_token=test-console-token`, with the bearer, with `Authorization: bearer test-c0ns0le-t0ken` and with `Authorization: BEARER TESTCONSOLETOKEN`, then `PUT /api/session` with the cookie, the phone's origin, `Content-Type: application/json` and `{"target": "M42"}`, reads `GET /api/session` from 127.0.0.1, and sends `GET /api/session` from the phone with `Authorization: Bearer NOPE-NOPE` and the cookie, **Then** it asserts that each answer equals the answer 127.0.0.1 gets to the same read with `Host` 192.168.1.20:8080 and no token, that the `PUT` answers 200, that the session's `target.messier` is `M42`, and that `GET /api/session` from the phone with `Authorization: Bearer NOPE-NOPE` and the cookie answers 401 with exactly `{"error": WRONG}`.
 4. **Given** the gated console, **When** a committed test sends `GET /api/health` from the phone at T + n seconds for n from 0 to 9, with `Cookie: console_token=NOPE-NOPE`, then `Authorization: Bearer NOPE-NOPE`, then `Authorization: Basic dGVzdA==`, then seven times `Authorization: Bearer NOPE-NOPE`; at T + 59.9 s sends `GET /api/session` with the cookie and `GET /` with the bearer from the phone and `GET /api/session` with the cookie from the other phone; and at T + 60 s sends `GET /api/session` with the cookie from the phone, **Then** it asserts that the first ten answer 401 with exactly `{"error": WRONG}`; that at T + 59.9 s the phone's two answer 429, the first with exactly `{"error": LIMITED}`, and the other phone's answers 200; and that at T + 60 s the phone's answers 200.
 5. **Given** the gated console with `with_allowed_hosts(["finder.example"])`, **When** a committed test sends from the phone `POST /api/stop` with `Host` rebound.example:8080 and no token, then `GET /api/session` with the cookie and `Host` rebound.example:8080, with `Host` rebound.example, with no `Host`, and with `Host` finder.example:8080, **Then** it asserts that Stop answers 200 with exactly `{"stopped": true}`; that the next three answer 403 with exactly `{"error": BAD HOST}`; and that the last answers 200.
-6. **Given** the gated console, **When** a committed test sends `GET /api/health` with `Authorization: Bearer NOPE-NOPE` at T once from each of the 1,024 addresses fd00::1 to fd00::400, then from fd00::401 once with `Authorization: Bearer NOPE-NOPE` and once with the bearer, and from fd00::1 with the bearer, **Then** it asserts that each of the 1,024 answers 401 with exactly `{"error": WRONG}`; that fd00::401's wrong token answers 429 with exactly `{"error": LIMITED}` and its bearer 200; and that fd00::1's bearer answers 200.
+6. **Given** the gated console, **When** a committed test sends `GET /api/health` with `Authorization: Bearer NOPE-NOPE` at T once from each of the 1,024 addresses fd00::1 to fd00::400, then from fd00::401 once with `Authorization: Bearer NOPE-NOPE` and once with the bearer, from fd00::1 with the bearer, and at T + 60 s from fd00::401 with `Authorization: Bearer NOPE-NOPE`, **Then** it asserts that each of the 1,024 answers 401 with exactly `{"error": WRONG}`; that fd00::401's wrong token answers 429 with exactly `{"error": LIMITED}` and its bearer 200; that fd00::1's bearer answers 200; and that at T + 60 s fd00::401's wrong token answers 401 with exactly `{"error": WRONG}`.
 7. **Given** the gated console, **When** a committed test sends `GET /api/health` with `Authorization: Bearer NOPE-NOPE` from the phone at T + n seconds for n from 0 to 9, then `GET /api/session` with the cookie at T + 9 s, sets the clock to T − 3,600 s and sends that request again, **Then** it asserts that the ten answer 401, the first `GET /api/session` 429, and the one after the clock stepped back 200.
 
 ### User Story 2 - The phone pairs once, through the console's prompt (Priority: P1)
@@ -433,7 +449,7 @@ both; during development,
 
 **Acceptance Scenarios**:
 
-1. **Given** the gated console and the plain console, **When** a committed test sends from the phone with no token to the gated console `GET /`, `GET /setup`, `GET /assets/index.js`, `GET /pair` and `GET /api/session`, and to the plain console `GET /pair`, `GET /pairx`, a form with `test-console-token` and the same form to `/pairx`, **Then** it asserts that the first three answer the prompt with `Pair this device: enter the console token.` with 401 and no `Set-Cookie`; that `GET /pair` answers the same prompt with 200; that `GET /api/session` answers 401 with the error UNPAIRED; and that on the plain console `GET /pair` answers what `GET /pairx` answers, 200, and the form what the form to `/pairx` answers, 405.
+1. **Given** the gated console and the plain console, **When** a committed test sends from the phone with no token to the gated console `GET /`, `GET /setup`, `GET /assets/index.js`, `GET /pair`, `GET /api/session` and `GET /pair` with `Host` rebound.example:8080, and to the plain console `GET /pair`, `GET /pairx`, a form with `test-console-token` and the same form to `/pairx`, **Then** it asserts that the first three answer the prompt with `Pair this device: enter the console token.` with 401 and no `Set-Cookie`; that `GET /pair` answers the same prompt with 200; that `GET /api/session` answers 401 with the error UNPAIRED; that `GET /pair` from the phone with `Host` rebound.example:8080 answers 403 with exactly `{"error": BAD HOST}`; and that on the plain console `GET /pair` answers what `GET /pairx` answers, 200, and the form what the form to `/pairx` answers, 405.
 2. **Given** the gated console, **When** a committed test sends a form with `test-CONSOLE+token`, then each of the reads from the phone with `Cookie: ` and the first part of that answer's `Set-Cookie` before its first `;`, then a form with `TEST%2DCONSOLE%2DTOKEN`, then a form whose body is `token=` and 1,019 `A`s (1,025 bytes), **Then** it asserts that the first answers 303 with `Location: /` and `Set-Cookie` exactly the set cookie; that each read's answer equals the one 127.0.0.1 gets to it with no token; that the second form answers 303; and that the last answers 413 with no `Set-Cookie`.
 3. **Given** the gated console, **When** a committed test sends from the phone a form with `NOPE-NOPE`; `GET /api/session` with `Cookie: console_token=NOPE`; `GET /` with that cookie; `GET /` with `Authorization: Bearer NOPE`; six more forms with `NOPE-NOPE`; a form with `test-console-token`; `GET /` with the cookie; and from the other phone `POST /pair` with the right token and `Origin` http://elsewhere.example, **Then** it asserts that the first form answers the prompt with `That is not the console token.` with 401 and no `Set-Cookie`; that `GET /api/session` answers 401 with the error WRONG and `Set-Cookie` exactly the cleared cookie; that the next `GET /` answers that prompt with 401 and the cleared cookie, and the bearer's that prompt with 401 and no `Set-Cookie`; that the six answer 401; that the right form and the last `GET /` each answer the prompt with `Too many wrong console tokens from this device: wait a minute and try again.` with 429, the form with no `Set-Cookie`; and that the other phone's answers 403 with the error `writes require the console's own origin and an allowed host` and no `Set-Cookie`.
 4. **Given** the gated console, **When** a committed test sends `GET /pair` from the phone and from 127.0.0.1 and reads each page, **Then** it asserts that each answers 200; that at least 10 `#` characters stand in each page and every one begins `#000000`, `#e00000`, `#d40000`, `#a80000` or `#5a0000`; that no page holds `rgb`, `hsl`, `white`, `<script`, `<img`, `<link` or `url(`; and that each holds `<label for="token">Console token</label>`, `<input id="token" name="token"`, `min-height: 44px; border: 1px solid #e00000;`, `label { display: block; margin: 1rem 0 0.25rem; font-size: 0.875rem; font-weight: 600; color: #d40000; }`, `input { padding: 0 12px; background: transparent;`, `button { margin-top: 1rem; padding: 0 16px; background: #5a0000; font-weight: 560; }` and `html, body { margin: 0; background: #000000;`.
@@ -457,10 +473,10 @@ and `npx playwright test --project=default e2e/pairing.spec.ts`.
 
 **Acceptance Scenarios**:
 
-1. **Given** the MCP rig, **When** a committed test reads `GET /api/session` from 127.0.0.1, calls `get_session` and `set_target` with `{"target": "M42"}` from the phone with no token and again with `Authorization: Bearer NOPE-NOPE`, reads the session again, calls `get_session` from the phone with the bearer and again with the cookie, then `set_target` with `{"target": "M42"}` with the bearer, calls `get_session` from 127.0.0.1 with no token and from 203.0.113.7 with the bearer, and calls `get_session` from the phone with no token on `crate::support::mcp::state()` with no console token, **Then** it asserts that each call with no token answers 401 with `www-authenticate` exactly `Bearer realm="finder console"` and the refusal with `MCP from another device needs the console token as a bearer token`; that each with the wrong token answers 401 with the refusal with WRONG; that the second session read equals the first; that the bearer's `get_session` answers 200 with `structuredContent` equal to that session and the cookie's 200; that the `set_target` answers 200 and the session's `target.messier` is then `M42`; that the loopback call answers 200, the call from 203.0.113.7 403, and the last 200.
+1. **Given** the MCP rig, **When** a committed test reads `GET /api/session` from 127.0.0.1, calls `get_session` and `set_target` with `{"target": "M42"}` from the phone with no token and again with `Authorization: Bearer NOPE-NOPE`, reads the session again, calls `get_session` from the phone with the bearer and again with the cookie, then `set_target` with `{"target": "M42"}` with the bearer, calls `get_session` from 127.0.0.1 with no token and from 203.0.113.7 with the bearer and with no token, and calls `get_session` from the phone with no token on `crate::support::mcp::state()` with no console token, **Then** it asserts that each call with no token answers 401 with `www-authenticate` exactly `Bearer realm="finder console"` and the refusal with `MCP from another device needs the console token as a bearer token`; that each with the wrong token answers 401 with the refusal with WRONG; that the second session read equals the first; that the bearer's `get_session` answers 200 with `structuredContent` equal to that session and the cookie's 200; that the `set_target` answers 200 and the session's `target.messier` is then `M42`; that the loopback call answers 200, the call from 203.0.113.7 with the bearer 403, `get_session` from 203.0.113.7 with no token 403, and the last 200.
 2. **Given** the MCP rig with the call log, **When** a committed test calls `stop` from the phone with no token, reads the call log, calls `get_session` from the phone ten times with `Authorization: Bearer NOPE-NOPE` and once with the bearer, and sends `GET /api/session` from the phone with the cookie, **Then** it asserts that `stop` answers 401 with the refusal with `MCP from another device needs the console token as a bearer token` and that the call log is then exactly `mcp stop {} -> {"stopped":true}` and a newline; that the ten answer 401; that the bearer's call answers 429 with the refusal with LIMITED; that the `GET` answers 429; and that the call log, in lower case, holds no `test-console-token`.
 3. **Given** the binary with a state folder holding only `console-token.tmp` with `junk`, **When** a committed test starts and stops it, reads `console-token` in the state folder and its mode, starts it again, sends `GET /api/session` with no token and `Host` its address to the address it printed, and stops it, **Then** it asserts that the file is three groups of four symbols of the alphabet joined by `-`, then one newline, with mode 0600; that `console-token.tmp` is gone; that the first start's stderr holds the line `(to open it from a phone, run with --listen 0.0.0.0:8080)`; that the `GET` answers `HTTP/1.1 200 OK` and the file is unchanged; and that neither stderr holds the token, with or without its dashes.
-4. **Given** the binary with a state folder whose `console-token` holds `my-own-console-token` and a newline at mode 0644, **When** a committed test starts and stops it, then writes `tiny7` and a newline there and starts it again, waiting at most 60 s for it to exit, **Then** it asserts that the file still holds `my-own-console-token` and a newline at mode 0644; that the first stderr holds the line of the file's path followed by `: other users can read the console token; chmod 600 the file` and, in lower case, not `my-own-console-token`; and that the second start exits unsuccessfully within the wait, its stderr holding the file's path followed by `: a console token is 8 to 64 letters and digits; dashes and spaces are ignored`, and neither `tiny7` nor `finder console: http://`.
+4. **Given** the binary with a state folder whose `console-token` holds `my-own-console-token` and a newline at mode 0644, **When** a committed test starts and stops it, then writes `tiny7` and a newline there and starts it again, waiting at most 60 s for it to exit, **Then** it asserts that the file still holds `my-own-console-token` and a newline at mode 0644; that the first stderr holds the line of the file's path followed by `: other users can read the console token; chmod 600 the file` and, in lower case, not `my-own-console-token`; and that the second start exits unsuccessfully within the wait, its stderr holding the line of the file's path followed by `: a console token is 8 to 64 letters and digits; dashes and spaces are ignored`, and neither `tiny7` nor `finder console: http://`.
 5. **Given** `finder::pairing::listening_hint`, the file path /state/console-token and an address source giving 127.0.0.1 then 192.168.1.20, or one giving none, **When** a committed unit test asks for the line of 127.0.0.1:8080 and [::1]:8080 with the first source, 0.0.0.0:8080 and [::]:8081 with the first, 192.168.1.21:8080 with none and 0.0.0.0:8080 with none, **Then** it asserts that the first two are `(to open it from a phone, run with --listen 0.0.0.0:8080)`; that the next three are `other devices open http://` followed by 192.168.1.20:8080, 192.168.1.20:8081 and 192.168.1.21:8080, each followed by ` and pair with the console token in /state/console-token`; and that the last is `other devices pair with the console token in /state/console-token`.
 6. **Given** the default console, **When** a committed browser test opens `/pair`, focuses the field labelled `Console token`, reads the computed `color`, `background-color`, `border-top-color`, `border-bottom-color`, `outline-color` and `caret-color` of `html`, `body` and every element in `body`, then fills `NOPE-NOPE-NOPE` and presses the button `Pair`, **Then** it asserts that `/pair` answers 200 with the heading `Pair with the finder console`; that more than 10 of those colours are not `rgba(0, 0, 0, 0)` and each of those is `rgb` or `rgba` with green and blue 0; that `html`'s background is `rgb(0, 0, 0)` and the focused field's outline `rgb(224, 0, 0)`; that the field and the button are each at least 44 px tall; and that the page then shows the status `That is not the console token.` under the same heading.
 
@@ -514,6 +530,8 @@ gate's nextest command runs it; during development,
   `into_make_service_with_connect_info`): never loopback, so asked (FR-001).
 - **A loopback client that sends no `Host`** (an HTTP/1.0 tool): refused 403 with BAD
   HOST (FR-004); every client of the console the repository holds sends one.
+- **`--no-mcp`**: with no door, `/mcp` is a page path, so a device that is not loopback
+  gets 401 there, as at `/` (FR-004, US1-S2).
 - **`--simulate` and `--mount-sky`** keep their own state folders, so each has its own
   token (FR-012).
 - **An `Authorization` header that is not a bearer** counts as a wrong token (US1-S4).
@@ -528,7 +546,8 @@ gate's nextest command runs it; during development,
 **The gate** (US1):
 
 - **FR-001**: With a console token, the console SHALL answer a request whose peer
-  address is not loopback only when the request presents the token, as
+  address is not loopback, on every route but `/api/stop` (FR-003), and from US3 on
+  `/mcp` while MCP is on (its door, FR-011), only when the request presents the token, as
   `Authorization: Bearer <token>`, the scheme in any case, or as the cookie
   `console_token=<token>`, the header read first when both are sent; an
   `Authorization` header of another scheme presents a wrong token. Two tokens SHALL be
@@ -543,23 +562,26 @@ gate's nextest command runs it; during development,
   names an allowed host (FR-004) SHALL never be asked for the token and SHALL be answered
   on every route but `/pair` as a console without a token answers it; its `POST /pair`
   is counted as FR-005 says, under its own address.
-- **FR-003**: `POST /api/stop` SHALL answer every peer as at f6d4f5fd, whatever token,
-  `Host` and `Origin` it sends (014's owner approval 2 and FR-020; 017's FR-004 and
-  FR-006).
-- **FR-004**: With a console token, every request but `POST /api/stop` and `/mcp`, a
-  loopback peer's among them, SHALL name in `Host` an IP literal, `localhost` or a name
-  given with `--allow-host`, as 012's `host_allowed` reads it
-  (`crates/finder/src/api.rs:602`), before its token is read, or be answered 403 with
-  exactly `{"error": "open the console at an IP address, localhost or an allowed host"}`;
-  a request with no `Host` SHALL be answered so too. `/mcp` keeps its door's own check
-  (016's FR-002) (owner decision 1 (e)).
+- **FR-003**: The gate SHALL pass every request to the path `/api/stop`, by any method,
+  so `POST /api/stop` answers every peer as at f6d4f5fd, whatever token, `Host` and
+  `Origin` it sends (014's owner approval 2 and FR-020; 017's FR-004 and FR-006), and
+  another method gets the router's 405 as at f6d4f5fd.
+- **FR-004**: With a console token, every request but those to `/api/stop` and, while
+  MCP is on, to `/mcp`, a loopback peer's among them, SHALL name in `Host` an IP
+  literal, `localhost` or a name given with `--allow-host`, as 012's `host_allowed`
+  reads it (`crates/finder/src/api.rs:602`), before its token is read, or be answered
+  403 with exactly `{"error": "open the console at an IP address, localhost or an
+  allowed host"}`; a request with no `Host` SHALL be answered so too. While MCP is on,
+  `/mcp` keeps its door's own check (016's FR-002); with MCP off it is a page path, gated
+  as `/` is (owner decision 1 (e)).
 - **FR-005**: A wrong token SHALL be answered 401, under `/api/` with exactly
   `{"error": "that is not the console token"}`. A peer address that has presented 10
   wrong tokens within the last 60 s of the console's clock SHALL be answered 429, under
   `/api/` with exactly `{"error": "too many wrong console tokens from this device: wait a
-  minute"}`, whatever it presents, until the oldest of those 10 is 60 s old; other
-  addresses SHALL NOT be affected. A wrong token counted at a time later than the
-  console's clock SHALL be dropped. At most 1,024 addresses SHALL be counted at once;
+  minute"}`, whatever token it presents (a request that presents none is answered as
+  unpaired, 401), until the oldest of those 10 is 60 s old; other addresses SHALL NOT be
+  affected. A wrong token counted at a time later than the console's clock SHALL be
+  dropped. At most 1,024 addresses SHALL be counted at once;
   past that a new address's wrong token is answered as one past the limit, and its right
   token is admitted (owner decision 8).
 - **FR-006**: `AppState` SHALL have no console token unless
@@ -584,8 +606,9 @@ gate's nextest command runs it; during development,
   Max-Age=34560000; HttpOnly; SameSite=Strict` (400 days, owner decision 4); a wrong one
   with the prompt, 401 and its words; a request past the limit with the prompt, 429 and
   its words; neither with a cookie.
-- **FR-009**: An answer to a request whose wrong token came in the cookie SHALL carry
-  `Set-Cookie: console_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict`.
+- **FR-009**: An answer of the gate to a request whose wrong token came in the cookie
+  SHALL carry `Set-Cookie: console_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict`;
+  MCP's door (FR-011) clears none.
 - **FR-010**: The prompt SHALL be DESIGN.md's night edition whatever the page's Night
   switch says: its only colours Night Ground `#000000` and the inks `#e00000`, `#d40000`,
   `#a80000` and `#5a0000`; no script, image, linked stylesheet or font of its own; the
@@ -618,11 +641,12 @@ gate's nextest command runs it; during development,
   written owner-only (mode 0600) to `console-token.tmp`, any left by an interrupted start
   removed first, and renamed, as the session file is (`crates/finder/src/session.rs:2058`)
   (owner decision 2). A file the owner wrote SHALL be kept as written; one its group or
-  other users can read SHALL also be warned of on stderr with its path followed by `:
-  other users can read the console token; chmod 600 the file`. A file that is not 8 to 64
-  letters and digits once dashes and white space are dropped SHALL stop the start with an
-  error holding the file's path followed by `: a console token is 8 to 64 letters and
-  digits; dashes and spaces are ignored`, never the file's contents. The binary SHALL
+  other users can read, write or run SHALL also be warned of on stderr with its path
+  followed by `: other users can read the console token; chmod 600 the file`. A file that
+  is not 8 to 64 letters and digits once dashes and white space are dropped SHALL stop
+  the start before it listens, printing on stderr the line of the file's path followed by
+  `: a console token is 8 to 64 letters and digits; dashes and spaces are ignored` and
+  exiting 1, never the file's contents. The binary SHALL
   never print the token. After its address line it SHALL print
   `finder::pairing::listening_hint`'s line: on a loopback address the hint of
   `crates/finder/src/main.rs:278`, unchanged; elsewhere `other devices open
@@ -700,9 +724,9 @@ gate's nextest command runs it; during development,
 - **Console token**: twelve symbols (or the owner's own 8 to 64), compared without case,
   dashes or spaces, O read as 0 and I and L as 1; kept in `console-token`, owner-only;
   never printed, logged or returned in a body.
-- **The gate**: one middleware before every route; Stop and `/mcp` pass; every other
-  request names an allowed host; loopback peers then pass, and `/pair` too; `/mcp` is
-  left to its door, which asks the same.
+- **The gate**: one middleware before every route; Stop, and `/mcp` while MCP is on,
+  pass; every other request names an allowed host; loopback peers then pass, and `/pair`
+  too; `/mcp` is left to its door, which asks the same.
 - **The pairing prompt**: the console's own page, red on black, at every page path and
   `/pair`.
 - **The cookie**: `console_token`, holding the token, `HttpOnly`, `SameSite=Strict`,

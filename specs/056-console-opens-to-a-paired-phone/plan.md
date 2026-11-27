@@ -8,9 +8,9 @@
 
 A new module, `crates/finder/src/pairing.rs`, holds the console token and one axum
 middleware, the gate, that `finder::router` puts in front of every route. With a token,
-every request but `POST /api/stop` and `/mcp` must name an allowed host (012's
-`host_allowed`), a loopback peer's too; a loopback peer then passes. Any other peer must
-present the token, as `Authorization: Bearer` (the scheme in any case) or as the
+every request but those to `/api/stop` and, while MCP is on, `/mcp` must name an allowed
+host (012's `host_allowed`), a loopback peer's too; a loopback peer then passes. Any other
+peer must present the token, as `Authorization: Bearer` (the scheme in any case) or as the
 `console_token` cookie, compared without case, dashes or spaces, O read as 0 and I and L
 as 1, through 013's `scope_link::tokens_match`; `POST /api/stop` always passes; wrong
 tokens are counted per peer address, 10 in 60 s and then 429, at most 1,024 addresses.
@@ -19,9 +19,10 @@ HTML form posting to `POST /pair`, which sets the cookie for 400 days; a wrong c
 cleared; a console without a token has no `/pair`. MCP's door asks the same, after its
 stops. The binary reads the token from `console-token` in its state folder, or writes a
 new one there through a temporary file (owner-only, 12 symbols of Crockford's base32 from
-`/dev/urandom`), never prints it, and off loopback prints the address another device opens.
-The React page, `dist`, `Cargo.toml` and `Cargo.lock` do not change. Four stories: the
-gate; the prompt and its cookie; MCP, the binary's token and the browser test; the words.
+`/dev/urandom`), never prints it, and off loopback prints the address another device
+opens. The React page, `dist`, `Cargo.toml` and `Cargo.lock` do not change. Four stories:
+the gate; the prompt and its cookie; MCP, the binary's token and the browser test; the
+words.
 
 ## Technical Context
 
@@ -153,10 +154,11 @@ that the binary keeps the token in `console-token`.
   from this device: wait a minute and try again.", "too many wrong console tokens from
   this device: wait a minute")`.
 - `pub(crate) async fn gate(State(state): State<AppState>, request: Request, next: Next)
-  -> Response`: no `pairing` → `next`; split the request; the path `/api/stop` or `/mcp`
-  → `next` (the door asks for `/mcp`, US3); `!api::host_allowed` → 403 `ApiError` with
-  `open the console at an IP address, localhost or an allowed host`; a loopback peer →
-  `next`; no token → 401; `Admitted` → `next`; `Wrong` → 401; `Limited` → 429; each
+  -> Response`: no `pairing` → `next`; split the request; the path `/api/stop` (any
+  method), or `/mcp` when `state.mcp.enabled` (its door asks, US3) → `next`; with MCP off
+  `/mcp` is a page path and goes on as `/` does; `!api::host_allowed` → 403 `ApiError`
+  with `open the console at an IP address, localhost or an allowed host`; a loopback peer
+  → `next`; no token → 401; `Admitted` → `next`; `Wrong` → 401; `Limited` → 429; each
   refusal an `ApiError` with the API's words. A request with no peer counts under
   `0.0.0.0`.
 - Unit test of `new` and `matches`: `abcd-efgh-jkmn` matches `ABCDEFGHJKMN` and
@@ -168,8 +170,9 @@ that the binary keeps the token in `console-token`.
 
 - `pub const COOKIE_MAX_AGE_S: u64 = 400 * 24 * 60 * 60;` and `const FORM_LIMIT: usize
   = 1024;`
-- In `gate`: after the loopback pass, the path `/pair` → `next` too; a refusal on a path
-  not under `/api/` is `(status, prompt_html(words))`; a `Wrong` whose token came from
+- In `gate`: after the loopback pass, the path `/pair` → `next` too; a 401 or 429 refusal
+  on a path not under `/api/` is `(status, prompt_html(words))`; the 403 for a host stays
+  the JSON error on every path (US1-S1 pins `/`); a `Wrong` whose token came from
   the cookie adds `Set-Cookie: console_token=; Path=/; Max-Age=0; HttpOnly;
   SameSite=Strict`.
 - `pub(crate) fn routes(state: &AppState) -> Router<AppState>`: with `state.pairing`
@@ -183,7 +186,7 @@ that the binary keeps the token in `console-token`.
   Path=/; Max-Age={COOKIE_MAX_AGE_S}; HttpOnly; SameSite=Strict`; `Wrong` → 401 prompt;
   `Limited` → 429 prompt.
 - `fn prompt_html(message: &str) -> Html<String>`, exactly this page with `{message}`
-  in place (FR-010; US2-S4 reads its text). Ten `#` colours, all night tokens:
+  in place (FR-010; US2-S4 reads its text). Eleven `#` colours, all night tokens:
 
 ```html
 <!doctype html>
@@ -267,7 +270,9 @@ input:focus, button:focus { outline: 2px solid #e00000; outline-offset: 2px; }
 
 - `AppState` gains `pub(crate) pairing: Option<Arc<crate::pairing::Pairing>>` after
   `allowed_hosts` (`crates/finder/src/api.rs:115`), `None` in `shared` after
-  `allowed_hosts: Arc::new(Vec::new()),` (`crates/finder/src/api.rs:155`).
+  `allowed_hosts: Arc::new(Vec::new()),` (`crates/finder/src/api.rs:155`), and its `mcp`
+  field (`crates/finder/src/api.rs:116`) becomes `pub(crate) mcp`, so the gate reads
+  `state.mcp.enabled`.
 - `router` (`crates/finder/src/api.rs:616`) becomes:
 
 ```rust
@@ -316,24 +321,29 @@ The stops (`crates/finder/src/mcp/door.rs:26`) stay first; 016's checks stay as 
 
 After `let session = Session::with_state_file(...)?;` (`crates/finder/src/main.rs:193`):
 `let token_path = state_dir.join(finder::pairing::TOKEN_FILE);` and `let token =
-finder::pairing::ConsoleToken::load_or_create(&token_path)?;`; `.with_console_token(token)`
-after `.with_allowed_hosts(args.allow_host)` (`crates/finder/src/main.rs:199`); and the
-loopback hint's `if` (`crates/finder/src/main.rs:277` to `:279`) replaced by
-`eprintln!("{}", finder::pairing::listening_hint(bound_addr,
-McpConfig::default().address_source.as_ref(), &token_path));`. `--listen`'s default and
-doc stay. A bad file returns the error from `main`, so the start fails before it binds.
+finder::pairing::ConsoleToken::load_or_create(&token_path).unwrap_or_else(|error| {
+eprintln!("{error}"); std::process::exit(1) });`; `.with_console_token(token)` after
+`.with_allowed_hosts(args.allow_host)` (`crates/finder/src/main.rs:199`); and the loopback
+hint's `if` (`crates/finder/src/main.rs:277` to `:279`) replaced by `eprintln!("{}",
+finder::pairing::listening_hint(bound_addr, McpConfig::default().address_source.as_ref(),
+&token_path));`. `--listen`'s default and doc stay. A bad file's error is printed as it
+is, the file's path and the words, and the start exits 1 before it binds. Returned from
+`main` with `?`, Rust would print it in Debug form, `Error: "<path>: …"`, escaping a
+path's quotes, backslashes and non-ASCII (US3-S4 reads the whole line).
 
 ### The rig (`crates/finder/tests/support/mod.rs`, US1)
 
 At the end of the file, after `Scratch`'s `Drop`: a doc comment saying what the rig is
 and that it lives here because 027's layout test pins the folder's files, then
-`pub mod pairing { ... }` holding `TOKEN`, `PHONE`, `OTHER_PHONE`, `HOST`, `ORIGIN`,
-`COOKIE`, `UNPAIRED`, `WRONG`, `LIMITED`, `BAD_HOST`, `READS`, `StepClock` (a `Clock`
-over a `Mutex<f64>`), `clock()`, `gated(clock)` (`super::mcp::state()` with the clock
-and the token), `from(state, peer)`, `get(path, host, header)`, `send`, `json_of` and
-`answer` (status, content type, body). The binaries already include `support` with
-`#[allow(dead_code, unused_imports)]`, so items one binary does not use are not dead
-code to clippy.
+`pub mod pairing { ... }` holding `TOKEN`, `T` (the scenarios' start time,
+`1_768_528_800.0`), `PHONE`, `OTHER_PHONE`, `HOST`, `ORIGIN`, `COOKIE`, `UNPAIRED`,
+`WRONG`, `LIMITED`, `BAD_HOST`, `READS`, `StepClock` (a `Clock` over a `Mutex<f64>`, with
+`set(&self, now: f64)` for US1-S4 and US1-S7), `clock()` (a `StepClock` at `T`),
+`gated(clock)` (`super::mcp::state()` with the clock and
+`ConsoleToken::new(TOKEN).unwrap()`), `from(state, peer)`, `get(path, host, header)`,
+`send`, `json_of` and `answer` (status, content type, body). The binaries already include
+`support` with `#[allow(dead_code, unused_imports)]`, so items one binary does not use are
+not dead code to clippy.
 
 ### The README (`crates/finder/README.md`, US4)
 
@@ -517,9 +527,11 @@ What the owner does, written for the README and for § Outside the factory:
 
 ## What was run and what was read
 
-All on the probe branch `probe/056`, cut from f6d4f5fd, on the factory's toolchain with
-`--locked`, npm from its cache with `npm ci --offline`, the browsers from the factory's
-Playwright cache. Logs are outside the repository.
+The drafting round and review round 1's fold ran on the probe branch `probe/056`, cut
+from f6d4f5fd; probe round 1 and its fold on `probe/056-r1`, cut from 745dc3a8 (f6d4f5fd
+and this trio). All on the factory's toolchain with `--locked`, npm from its cache with
+`npm ci --offline`, the browsers from the factory's Playwright cache. Logs are outside
+the repository.
 
 **The drafting round.** ef9009de (US1); fcc4bd2d (US2) with its fold e5f3c146;
 891e1805 (US3 and US4 together), split by a0447d0c (PROBE ONLY) and 9061c9d8 (US4), with
@@ -538,6 +550,27 @@ e2e` after `npm ci --offline` each exited 0 at 250868fc, c0fa8609, c4902bf9 and
 1aba3c3c (nextest 1,533, 1,539, 1,546 and 1,549 tests; Vitest 607 at each; the browser
 tests 34, 34, 35 and 35). At 4078f4ea, with the rig in a file of its own under
 `support/`, 027's layout test failed, so the rig moved.
+
+**Probe round 1, from this text alone, and its fold.** A builder who read only the trio
+built the four stories on `probe/056-r1`, each a tests-first commit and the story:
+212d637e and 8d236be3 (US1), 27fb9c02 and d4a631e5 (US2), 17e1e677 and 481092d9 (US3),
+4e395e46 and 6fe4f173 (US4). It found 0 blocking and 16 clarity defects (056-R1 to
+056-R16, all folded here); every story's new tests failed on the story before it, and
+every gate passed at each story's tip (nextest 1,533, 1,539, 1,546 and 1,549; Vitest 607;
+browser tests 34, 34, 35 and 35). The fold's code went on that branch on top of 6fe4f173,
+one commit per story: 5ca389bf (US1: the gate passes `/mcp` only while MCP is on, the
+`mcp` field `pub(crate)`; the new steps of US1-S1, US1-S2, US1-S3 and US1-S6), 0346d61d
+(US2: US2-S1's step) and e4335286 (US3: `main` prints a bad file's line and exits 1;
+US3-S1's step and US3-S4's whole line). Each new step passed on the code and failed under
+its mutation, one at a time: `mcp-passes-when-off` (US1-S2's `/mcp`, 200 for 401),
+`ipv4-only-127.0.0.1` (US1-S1's 127.0.0.2), `emptied-addresses-kept` (US1-S6 at T + 60 s,
+429 for 401), `cookie-read-first` (US1-S3), `focus-routes-ungated` (US1-S2's focus route,
+the gate layered before 051's merge), `pair-before-host-check` (US2-S1, 200 for 403),
+`token-before-016-checks` (US3-S1's 203.0.113.7, 401 for 403) and
+`bad-file-returned-from-main` (US3-S4: the line read `Error: "…"`). Comparing with `==` in
+place of `tokens_match` passes every test, so it is read from the diff. At e4335286 every
+command of `lint` and `test` exited 0, `CI=1 npm run e2e` among them, and so did
+cargo-deny (offline) and cargo-machete: nextest 1,549, Vitest 607, browser tests 35.
 
 - **Every story's new tests failed on the story before** (run): US1's do not build on
   f6d4f5fd (no `finder::pairing`); US2's five fail on US1's tip; US3's MCP tests fail on
@@ -609,11 +642,10 @@ test.
 
 ## Read from the diff, not from a test
 
-- The gate is the last layer of `router`, after every `merge` and the fallback.
 - No answer's body holds the token; `ConsoleToken` has no `Debug`, `Display` or
   `Serialize`.
 - `Pairing`'s mutex is never held across an await.
-- The door's order is stops, 016's checks, then the token.
+- `ConsoleToken::matches` compares through `scope_link::tokens_match`, never `==`.
 - `main.rs` loads the token before it binds, so a bad file stops the start before the
   `finder console:` line.
 - `write_owner_only` writes a temporary file and renames it; no test interrupts a write,
@@ -656,8 +688,8 @@ test.
 | Where the gate sits | one middleware on `router`, after every route | per-route extractors (every route, and the next route, would need one) |
 | How a browser presents it | a cookie set by the prompt | a header on every `fetch` (37 calls; `EventSource` and `<img>` cannot) |
 | The prompt | the console's own HTML, always night | the React page (its files open to unpaired devices; `dist` changes) |
-| MCP | the door asks after its stops | the gate before the door (would refuse a stop: 016's FR-012) |
-| The Host check | every request but Stop and `/mcp`, loopback's too | only another device's (a rebound name reads through the tunnel) |
+| MCP | the door asks after its stops; with MCP off, `/mcp` is gated as a page path | the gate before the door (would refuse a stop: 016's FR-012); `/mcp` passed by path alone (with `--no-mcp` it reached the page, 200, probe round 1) |
+| The Host check | every request but Stop and, while MCP is on, `/mcp`, loopback's too | only another device's (a rebound name reads through the tunnel) |
 | Stop | open to every origin | refusing a foreign `Origin` (changes 014's FR-020; a refused Stop) |
 | The token's source | the state folder's file, generated once | a flag (process list), a PIN (guessable), per start (re-pair nightly) |
 | Randomness | `/dev/urandom` with the standard library | `getrandom` (a `Cargo.lock` change for the same bytes) |
@@ -713,10 +745,12 @@ The gates, copied from `ergane.yaml`:
   Refinement Record's last writers read again. Waits for 052 to 055 and the seat's
   re-anchor.
 - The owner's ten decisions are answered. Waits for the flip ask.
-- A probe round from this text alone, folded. Waits: the drafting probe and review round
-  1's fold have run, each by the trio's author.
+- A probe round from this text alone, folded. Met: probe round 1 built all four stories
+  from the trio alone (`probe/056-r1`, tip 6fe4f173: 0 blocking, 16 clarity), and its
+  fold is proven on that branch, every gate passing at e4335286 (§ What was run and what
+  was read).
 - The page half has run once on the re-anchored base (`CI=1 npm run e2e`). Waits for the
-  re-anchor.
+  re-anchor (it passed at e4335286, on f6d4f5fd).
 - No operator-staged file is needed. Met: every story writes only code, tests and docs.
 
 ## Outside the factory
@@ -748,12 +782,16 @@ nothing in the repository waits for them.
 
 They bind every story.
 
-1. **The story sizes.** Review round 1's commits, each story's diff from the previous
-   story's tip: US1 26,644 B (35,969 B at 1.35 times), US2 23,397 B (31,586 B), US3
-   28,409 B (38,352 B, 97.5 % of the line) and US4 22,539 B (30,428 B). Every story is
-   under 39,321 B at 1.35 times. With the live stream's scenario in US1, US1 measured 28,636 B (38,659 B at 1.35 times, 98 % of the
-   line), so it is US2's, where the cookie is set; the browser test is US3's, whose
-   binary first has a token.
+1. **The story sizes.** Probe round 1's commits from this text, each story's diff from
+   the previous story's tip (`git diff <previous tip> -- .
+   ':(exclude)crates/finder/web/dist'`), with the fold's changes in place at each tip:
+   US1 27,558 B (26,485 B as built, 37,203 B at 1.35 times, 95 % of the line), US2
+   22,035 B (21,834 B; 29,747 B), US3 28,739 B (28,481 B; 38,798 B, 98.7 % of the line,
+   523 B under it) and US4 22,448 B (unchanged; 30,305 B). Every story is under 39,321 B
+   at 1.35 times, so US3 stays whole. Review round 1's commits measured 26,644, 23,397,
+   28,409 and 22,539 B. With the live stream's scenario in US1, US1 measured 28,636 B
+   (38,659 B at 1.35 times, 98 % of the line), so it is US2's, where the cookie is set;
+   the browser test is US3's, whose binary first has a token.
 2. **An earlier story's test file is an existing test.** The rig is US1's, at the end of
    `crates/finder/tests/support/mod.rs`; later stories use it and never edit it, nor any
    other story's test, the unit tests in `pairing.rs` among them: US2 and US3 add their
@@ -779,7 +817,8 @@ They bind every story.
 12. **The gate hosts share one network.** No test binds anything but loopback: the CLI
     tests listen on 127.0.0.1:0, and `listening_hint` is a unit test.
 13. **The Host check comes before the loopback pass.** A loopback request with a
-    rebound name or no `Host` is refused (US1-S1); Stop and `/mcp` pass before it.
+    rebound name or no `Host` is refused (US1-S1); Stop, and `/mcp` while MCP is on, pass
+    before it.
 14. **The set cookie holds the compared form.** `test-console-token` is
     `TESTC0NS01ET0KEN` once O reads as 0 and L as 1; the scenarios' cookie
     `console_token=TESTCONSOLETOKEN` still matches.
@@ -804,12 +843,14 @@ They bind every story.
 
 Drafted on 2026-11-27 by the plate-solver operator seat's spec session against `main` at
 f6d4f5fd, from a probe of that day on `probe/056`, and folded the same day after cynical
-review round 1: every finding folded, each story rebuilt on the one before with both
-gates passing at its own tip, every story's new tests failing on the story before it,
-and each new or changed FR's check mutated once. Read for it: the router, MCP's door,
-012's same-origin and host rules, 013's token comparison, 014's and 017's Stop, the
-binary's start, the page's requests, DESIGN.md's fields, the test layout rules, the
-constitution, the glossary, the public pages and the ADRs. Writes come from the task
+review round 1: every finding folded, each story rebuilt on the one before with both gates
+passing at its own tip, every story's new tests failing on the story before it, and each
+new or changed FR's check mutated once. Then probed from this text alone (round 1 on
+`probe/056-r1`: 0 blocking, 16 clarity) and folded, each new step's test and the code
+fixes proven on that branch (§ What was run and what was read). Read for it: the router,
+MCP's door, 012's same-origin and host rules, 013's token comparison, 014's and 017's
+Stop, the binary's start, the page's requests, DESIGN.md's fields, the test layout rules,
+the constitution, the glossary, the public pages and the ADRs. Writes come from the task
 text. Shared writes name the spec story that last wrote the same file on `main`;
 `README.md`, `docs/safety-and-security.md` and `docs/guide/console.md` were last changed
 by #371 and #360, not a spec's stories, and have no entry. Within the spec, each story's
@@ -830,17 +871,17 @@ stories:
       - path: crates/finder/tests/console/pairing.rs
         status: new
         disposition: add
-        assertion: "the gated console (support mcp state, a set clock, console token test-console-token) and the plain console: each read (GET /api/session, /api/health, /api/live, /api/live/preview.jpg?seq=1, /api/imaging/frames/1/preview.jpg, /) from 127.0.0.1, ::1 and ::ffff:127.0.0.1 with Host localhost:8080 and Host 127.0.0.1:8080 answers the status, content type and body the plain console gives 127.0.0.1; with Host rebound.example:8080 and with no Host 403 exactly {error: open the console at an IP address, localhost or an allowed host}; POST /api/stop from each with Host rebound.example:8080 200 exactly {stopped: true}; PUT /api/session {target M42} with Host localhost:8080 from each 200"
+        assertion: "the gated console (support mcp state, a set clock, console token test-console-token) and the plain console: each read (GET /api/session, /api/health, /api/live, /api/live/preview.jpg?seq=1, /api/imaging/frames/1/preview.jpg, /) from 127.0.0.1, ::1 and ::ffff:127.0.0.1 with Host localhost:8080 and Host 127.0.0.1:8080 answers the status, content type and body the plain console gives 127.0.0.1; with Host rebound.example:8080 and with no Host 403 exactly {error: open the console at an IP address, localhost or an allowed host}; POST /api/stop from each with Host rebound.example:8080 200 exactly {stopped: true}; PUT /api/session {target M42} with Host localhost:8080 from each 200; GET /api/session from 127.0.0.2 with Host localhost:8080 200"
         decision: "spec.md:US1-S1"
       - path: crates/finder/tests/console/pairing.rs
         status: new
         disposition: add
-        assertion: "the phone 192.168.1.30 with Host 192.168.1.20:8080 and no token: each read, GET /setup, GET /assets/index.js and PUT /api/session answer 401, those under /api/ exactly {error: this device is not paired: open the console's page and enter the console token}; GET /api/session with Host localhost:8080 through finder::router with no peer recorded the same 401; the session read from 127.0.0.1 after equals the one before"
+        assertion: "the phone 192.168.1.30 with Host 192.168.1.20:8080 and no token: each read, GET /setup, GET /assets/index.js, GET /api/finder-camera/focus and PUT /api/session answer 401, those under /api/ (the focus route among them) exactly {error: this device is not paired: open the console's page and enter the console token}; GET /api/session with Host localhost:8080 through finder::router with no peer recorded the same 401; GET /mcp from the phone on the gated console with_mcp(McpConfig { enabled: false, ..Default::default() }) 401; the session read from 127.0.0.1 after equals the one before"
         decision: "spec.md:US1-S2"
       - path: crates/finder/tests/console/pairing.rs
         status: new
         disposition: add
-        assertion: "from the phone with Cookie console_token=TESTCONSOLETOKEN, with Cookie theme=night; console_token=test-console-token, with Authorization Bearer test-console-token, with bearer test-c0ns0le-t0ken and with BEARER TESTCONSOLETOKEN: each read's answer equals the one 127.0.0.1 gets with Host 192.168.1.20:8080 and no token; PUT /api/session {target M42} with the cookie and Origin http://192.168.1.20:8080 answers 200 and target.messier is M42"
+        assertion: "from the phone with Cookie console_token=TESTCONSOLETOKEN, with Cookie theme=night; console_token=test-console-token, with Authorization Bearer test-console-token, with bearer test-c0ns0le-t0ken and with BEARER TESTCONSOLETOKEN: each read's answer equals the one 127.0.0.1 gets with Host 192.168.1.20:8080 and no token; PUT /api/session {target M42} with the cookie and Origin http://192.168.1.20:8080 answers 200 and target.messier is M42; GET /api/session from the phone with Authorization Bearer NOPE-NOPE and the cookie 401 exactly {error: that is not the console token}"
         decision: "spec.md:US1-S3"
       - path: crates/finder/tests/console/pairing.rs
         status: new
@@ -855,7 +896,7 @@ stories:
       - path: crates/finder/tests/console/pairing.rs
         status: new
         disposition: add
-        assertion: "GET /api/health with Bearer NOPE-NOPE at T once from each of fd00::1 to fd00::400 (1,024 addresses): each 401 exactly {error: that is not the console token}; fd00::401 with Bearer NOPE-NOPE 429 exactly {error: too many wrong console tokens from this device: wait a minute}, with the bearer 200; fd00::1 with the bearer 200"
+        assertion: "GET /api/health with Bearer NOPE-NOPE at T once from each of fd00::1 to fd00::400 (1,024 addresses): each 401 exactly {error: that is not the console token}; fd00::401 with Bearer NOPE-NOPE 429 exactly {error: too many wrong console tokens from this device: wait a minute}, with the bearer 200; fd00::1 with the bearer 200; at T + 60 s fd00::401 with Bearer NOPE-NOPE 401 exactly {error: that is not the console token}"
         decision: "spec.md:US1-S6"
       - path: crates/finder/tests/console/pairing.rs
         status: new
@@ -934,7 +975,7 @@ stories:
       - path: crates/finder/tests/console/pairing_prompt.rs
         status: new
         disposition: add
-        assertion: "the phone with no token: GET /, /setup and /assets/index.js answer 401, no Set-Cookie, text/html; charset=utf-8 holding <h1>Pair with the finder console</h1>, <p role=status>Pair this device: enter the console token.</p> and <form method=post action=/pair>; GET /pair the same with 200; GET /api/session 401 with the error this device is not paired: open the console's page and enter the console token; on the plain console GET /pair answers what GET /pairx answers, 200, and a form with test-console-token to /pair what the same form to /pairx answers, 405"
+        assertion: "the phone with no token: GET /, /setup and /assets/index.js answer 401, no Set-Cookie, text/html; charset=utf-8 holding <h1>Pair with the finder console</h1>, <p role=status>Pair this device: enter the console token.</p> and <form method=post action=/pair>; GET /pair the same with 200; GET /api/session 401 with the error this device is not paired: open the console's page and enter the console token; GET /pair with Host rebound.example:8080 403 exactly {error: open the console at an IP address, localhost or an allowed host}; on the plain console GET /pair answers what GET /pairx answers, 200, and a form with test-console-token to /pair what the same form to /pairx answers, 405"
         decision: "spec.md:US2-S1"
       - path: crates/finder/tests/console/pairing_prompt.rs
         status: new
@@ -986,7 +1027,7 @@ stories:
       - path: crates/finder/tests/mcp/pairing.rs
         status: new
         disposition: add
-        assertion: "the MCP rig: get_session and set_target M42 from the phone with no token 401, www-authenticate exactly Bearer realm=finder console, body exactly {jsonrpc 2.0, error {code -32001, message MCP from another device needs the console token as a bearer token}}; with Bearer NOPE-NOPE 401 message that is not the console token; the session unchanged; with the bearer get_session 200 structuredContent equal to the session, with the cookie 200, and set_target 200, target.messier M42; 127.0.0.1 with no token 200; 203.0.113.7 with the bearer 403; the phone on a console without a token 200"
+        assertion: "the MCP rig: get_session and set_target M42 from the phone with no token 401, www-authenticate exactly Bearer realm=finder console, body exactly {jsonrpc 2.0, error {code -32001, message MCP from another device needs the console token as a bearer token}}; with Bearer NOPE-NOPE 401 message that is not the console token; the session unchanged; with the bearer get_session 200 structuredContent equal to the session, with the cookie 200, and set_target 200, target.messier M42; 127.0.0.1 with no token 200; 203.0.113.7 with the bearer 403 and with no token 403; the phone on a console without a token 200"
         decision: "spec.md:US3-S1"
       - path: crates/finder/tests/mcp/pairing.rs
         status: new
@@ -1001,7 +1042,7 @@ stories:
       - path: crates/finder/tests/cli/pairing.rs
         status: new
         disposition: add
-        assertion: "console-token my-own-console-token and a newline at mode 0644: kept as written at 0644, stderr holds <the file's path>: other users can read the console token; chmod 600 the file and, in lower case, not my-own-console-token; tiny7 and a newline: the start exits unsuccessfully within 60 s, stderr holds <the file's path>: a console token is 8 to 64 letters and digits; dashes and spaces are ignored, and neither tiny7 nor finder console: http://"
+        assertion: "console-token my-own-console-token and a newline at mode 0644: kept as written at 0644, stderr holds <the file's path>: other users can read the console token; chmod 600 the file and, in lower case, not my-own-console-token; tiny7 and a newline: the start exits unsuccessfully within 60 s, stderr holds the line <the file's path>: a console token is 8 to 64 letters and digits; dashes and spaces are ignored, and neither tiny7 nor finder console: http://"
         decision: "spec.md:US3-S4"
       - path: crates/finder/src/pairing.rs
         status: new
