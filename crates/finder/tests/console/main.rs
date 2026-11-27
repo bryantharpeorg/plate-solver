@@ -54,6 +54,7 @@ mod imaging_smoothing;
 mod imaging_solve;
 mod link;
 mod live;
+mod model_docs;
 mod notices;
 mod pointing;
 mod pointing_up;

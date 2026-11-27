@@ -61,7 +61,7 @@ The fitted relation between the mount's axis positions and where the telescope p
 _Avoid_: star alignment, mount model, alignment (alone: see Finder alignment)
 
 **Base tilt**:
-How far, and toward which azimuth, the mount's base is off level (TPoint's AN and AW). Fitted once two syncs lie at least 90° apart in azimuth.
+How far, and toward which azimuth, the mount's base is off level (TPoint's AN and AW). Fitted once two syncs of one zero-point epoch lie at least 90° apart on the azimuth axis, up to 6°.
 _Avoid_: tilt (alone: that is a direction of motion), level error
 
 **Zero points**:
@@ -77,7 +77,7 @@ The pointing model's terms that belong to the telescope rather than the night (c
 _Avoid_: permanent model
 
 **Slip**:
-A sync far enough from the model's prediction that the axes must have moved without their readings following, as after a push by hand or a power cycle.
+A sync far enough from the model's prediction that the axes must have moved without their readings following, as after a push by hand or a power cycle. Before the base tilt is fitted, a sync a quarter turn round on the azimuth axis is one only when the tilt it fits is over 6°.
 _Avoid_: lost alignment
 
 **Apparent altitude**:
