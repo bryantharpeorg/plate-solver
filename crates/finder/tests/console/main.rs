@@ -30,6 +30,7 @@ mod imaging_control;
 mod imaging_fits;
 mod imaging_focus_aid;
 mod imaging_focus_arithmetic;
+mod imaging_focus_carry;
 mod imaging_focus_check;
 mod imaging_focus_far_out;
 mod imaging_focus_reading;
