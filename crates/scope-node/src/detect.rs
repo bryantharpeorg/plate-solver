@@ -39,7 +39,8 @@ impl Default for DetectSettings {
     }
 }
 
-/// The port supplies gray pixels; star-detection supplies brightness order.
+/// The port supplies gray pixels; star-detection supplies brightness order, the saturated
+/// stars cedar sets aside among them (052).
 pub fn detect(frame: &GrayFrame, settings: &DetectSettings) -> Vec<Centroid> {
     let stars = match settings.noise_floor {
         None => star_detection::detect_stars(
@@ -62,13 +63,18 @@ pub fn detect(frame: &GrayFrame, settings: &DetectSettings) -> Vec<Centroid> {
             noise_floor,
         ),
     };
-    stars
-        .into_iter()
-        .take(200)
-        .map(|s| Centroid {
-            x: s.x,
-            y: s.y,
-            brightness: s.brightness,
-        })
-        .collect()
+    star_detection::saturated::with_saturated_stars(
+        &frame.pixels,
+        frame.width as usize,
+        frame.height as usize,
+        stars,
+    )
+    .into_iter()
+    .take(200)
+    .map(|s| Centroid {
+        x: s.x,
+        y: s.y,
+        brightness: s.brightness,
+    })
+    .collect()
 }

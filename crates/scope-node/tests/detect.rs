@@ -23,7 +23,7 @@ fn cedar_defaults_equal_every_console_field() {
 }
 
 #[test]
-fn saved_finder_frame_has_identical_nonempty_centroids_in_console_order() {
+fn saved_finder_frame_keeps_its_saturated_star_first_then_the_consoles_centroids_in_order() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/scope-node");
     let fixture: Value =
         serde_json::from_slice(&std::fs::read(root.join("fixtures.json")).unwrap()).unwrap();
@@ -42,6 +42,26 @@ fn saved_finder_frame_has_identical_nonempty_centroids_in_console_order() {
         exposure_ms: 20.0,
         gain: 1.0,
     };
+    // Independent oracle: the saved frame's 29 saturated pixels, as (x, y).
+    let saturated: Vec<_> = gray
+        .pixels
+        .iter()
+        .enumerate()
+        .filter(|(_, value)| **value >= 250)
+        .map(|(i, _)| (i % gray.width as usize, i / gray.width as usize))
+        .collect();
+    let expected: Vec<_> = [
+        (186, 20, 20),
+        (187, 19, 24),
+        (188, 19, 24),
+        (189, 19, 25),
+        (190, 20, 24),
+        (191, 21, 24),
+    ]
+    .into_iter()
+    .flat_map(|(y, left, right)| (left..=right).map(move |x| (x, y)))
+    .collect();
+    assert_eq!(saturated, expected);
     let settings = DetectParams::cedar();
     let console = star_detection::detect_stars(
         &gray.pixels,
@@ -57,9 +77,19 @@ fn saved_finder_frame_has_identical_nonempty_centroids_in_console_order() {
         !node.is_empty(),
         "the saved finder frame must exercise detection"
     );
-    assert_eq!(node.len(), console.len());
-    for (a, b) in node.iter().zip(console) {
-        // Exact equality: both paths call the console's detector, without reordering.
+    assert!(
+        !console.is_empty(),
+        "cedar must still detect the saved frame"
+    );
+    assert!(console
+        .iter()
+        .all(|s| (s.x - 22.5).hypot(s.y - 189.5) >= 5.0));
+    assert_eq!(node.len(), console.len() + 1);
+    // Centre of mass of the 29 pixels above, with the pixel-centre convention.
+    assert!((node[0].x - (632.0 / 29.0 + 0.5)).abs() < 1e-9);
+    assert!((node[0].y - (5473.0 / 29.0 + 0.5)).abs() < 1e-9);
+    for (a, b) in node.iter().skip(1).zip(console) {
+        // Exact equality: cedar's centroids retain their values and order.
         assert_eq!((a.x, a.y, a.brightness), (b.x, b.y, b.brightness));
     }
 }
