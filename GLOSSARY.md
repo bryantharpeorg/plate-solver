@@ -323,6 +323,10 @@ _Avoid_: average, smoothed HFD
 **Centroid**:
 Sub-pixel `(y,x)` location of a detected star.
 
+**Saturated star**:
+A star whose brightest pixels read 250 or more, the finder camera's one saturation level, so its top is flat. 051's focus aid measures none; the scope node's detection keeps one that cedar-detect's gates set aside, by its brightness, when it is round or lies along the frame's trail, dark around and whole in the frame.
+_Avoid_: blown star, overexposed star
+
 **Pattern**:
 A group of 4 stars used as a matching unit.
 

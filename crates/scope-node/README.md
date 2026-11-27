@@ -192,6 +192,51 @@ its top with fewer than 25 stars or the live solve does not hold, lower the floo
 if the counts then climb back to hundreds, set a fixed longer exposure in Setup
 instead.
 
+## Bright stars: saturated stars
+
+A bright star saturates the finder camera: its brightest pixels read 250 or more, at or
+near the most an 8-bit frame holds, and its top is flat. cedar-detect's gates take a flat
+top only a few binned pixels wide and set a wider one aside, so the brightest stars of a
+frame, the ones the star patterns are built from, went missing, and on a field night the
+Orion Nebula's field gave `no_match` with tens of stars detected.
+
+The node's detection keeps them. After cedar-detect's own pass it finds each region of
+saturated pixels, and keeps one as a star when cedar-detect found no star in it and it is:
+
+- at least 5 pixels, tetra3's smallest spot;
+- round, its length at most 1.5 times its width: two stars run together are longer, and
+  so is a trail, which is kept when at least 3 of the frame's long regions lie within 10
+  degrees of their common direction, as every star's trail does while the mount is still;
+- dark around it, the ring 3 pixels out from it averaging less than 0.5 of the way from
+  the frame's median to 250: the bright core of a nebula is not;
+- whole, that ring inside the frame.
+
+A frame holding more than 24576 saturated pixels, the Moon, a white frame or a twilight
+sky, is set aside whole, and the node sends cedar-detect's stars as before.
+
+Each is centred on the mean of its saturated pixels, its brightness the sum of its box
+inside the ring less the ring's mean, and placed before the first of cedar-detect's stars
+that is fainter, so the list stays brightest first and cedar-detect's stars keep their own
+order; the node keeps the first 200 as before. A star frame does not say which centroids
+are saturated, nor how many regions were set aside.
+
+The console's Solve page detects an uploaded frame as the node does. `solve_image`
+detects as cedar-detect does; to replay a raw frame as the node detected it, here or when
+finding the noise floor's value, add `--saturated`, which also prints how many saturated
+regions were kept and set aside, and why. It does not combine with `--dark`: the node
+subtracts no dark.
+
+```sh
+cargo run --release --locked -p plate-solver --example solve_image -- \
+  --db <the-database-the-console-reports> --saturated <frame>
+```
+
+On drawn frames at the finder camera's own 1.617 degrees over a narrow database of Tycho
+stars around the Pleiades, untrailed and trailed 9 pixels, and on the simulator's Orion
+Nebula and Pleiades fields at the finder camera's pixel grid at a 10.5 degree field, the
+node's detection solves where cedar-detect's alone gives `no_match`. Whether a real finder
+camera frame does is a field night's check.
+
 ## The mount link
 
 With `[mount]` configured, the scope node starts and serves the camera even when

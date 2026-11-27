@@ -544,6 +544,11 @@ database star in the field at the current time. Stars continue to drift with the
 An exposure already in progress finishes before a push or stop takes effect. Outside
 simulate mode every `/api/sim/*` path answers 404. Unknown request fields are refused.
 
+The live solve takes the scope node's centroids as they come, with the saturated stars
+cedar-detect sets aside among them ([scope node README](../scope-node/README.md), Bright
+stars: saturated stars); a frame uploaded on the Solve page or through MCP is detected the
+same way.
+
 `GET /api/live` is `text/event-stream`. Each `live` event carries
 `{frame_id, time, pointing_seq, preview_seq, stars, report, guidance?, up_deg?}`. Time is the
 mid-exposure instant mapped to the console clock; `report` is the same `SolveReport`
