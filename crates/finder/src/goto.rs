@@ -22,6 +22,8 @@ use tokio::{
 
 const APPROACH: f64 = 0.5;
 const ACCELERATION: f64 = 3.0;
+/// The second sync's altitude band, degrees (053): searched first.
+const SECOND_SYNC_BAND: [f64; 2] = [30.0, 60.0];
 pub(crate) const TICK: Duration = Duration::from_millis(50);
 const AXES: [Axis; 2] = [Axis::Azimuth, Axis::Altitude];
 const WATCHDOG_HALT: &str = "halted by the scope node's watchdog";
@@ -310,9 +312,14 @@ impl Planner<'_> {
             }
         }
         spots.sort_by(|a, b| {
-            wrap(a.1 - az)
-                .hypot(a.0 - alt)
-                .total_cmp(&wrap(b.1 - az).hypot(b.0 - alt))
+            let band = SECOND_SYNC_BAND[0]..=SECOND_SYNC_BAND[1];
+            (!band.contains(&a.0))
+                .cmp(&!band.contains(&b.0))
+                .then_with(|| {
+                    wrap(a.1 - az)
+                        .hypot(a.0 - alt)
+                        .total_cmp(&wrap(b.1 - az).hypot(b.0 - alt))
+                })
         });
         for spot in spots {
             if let Ok(plan) = self.plan_place(|_| spot) {
@@ -501,10 +508,18 @@ pub struct Progress {
     pub error_arcsec: Option<f64>,
     /// Terminal failure or halt reason.
     pub reason: Option<String>,
+    /// The star frame whose solve, taken as a sync, gave `error_arcsec` or ended
+    /// the second sync (053).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frame_id: Option<u64>,
+    /// That frame's mid-exposure, console Unix seconds (053).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frame_time: Option<f64>,
 }
 #[derive(Default)]
 struct State {
     progress: Option<Progress>,
+    frame: Option<(u64, f64)>,
     busy: bool,
     generation: u64,
     wind: Wind,
@@ -629,11 +644,14 @@ impl GoTo {
             let mut state = self.state.lock().unwrap();
             state.busy = true;
             state.generation = generation;
+            state.frame = None;
             state.progress = Some(Progress {
                 state: "slewing",
                 correction: 0,
                 error_arcsec: None,
                 reason: None,
+                frame_id: None,
+                frame_time: None,
             });
         }
         let owner = self.clone();
@@ -834,6 +852,8 @@ impl GoTo {
                 correction,
                 error_arcsec: error,
                 reason,
+                frame_id: state.frame.map(|frame| frame.0),
+                frame_time: state.frame.map(|frame| frame.1),
             });
         }
     }
@@ -955,6 +975,7 @@ impl GoTo {
             let settled = self.clock.now();
             // Identify the first exposure STARTING after settle, not a late solve
             // of an exposure made during motion. The live loop takes the sync.
+            let mut passed_over = None;
             let solve = async {
                 let mut frames = self.link.frames();
                 let first_id = loop {
@@ -982,6 +1003,19 @@ impl GoTo {
                         if pointing.frame_id != Some(report.frame_id) {
                             continue;
                         }
+                        // The live loop records first. Only a solve taken by
+                        // the model may finish the second sync or steer a GoTo.
+                        if !self
+                            .session
+                            .model(report.time)
+                            .syncs
+                            .iter()
+                            .any(|s| s.time == report.time)
+                        {
+                            passed_over = Some(report.frame_id);
+                            continue;
+                        }
+                        self.state.lock().unwrap().frame = Some((report.frame_id, report.time));
                         if let Some(target) = target {
                             return Ok(Some(
                                 separation(
@@ -992,24 +1026,20 @@ impl GoTo {
                                 ) * 3600.0,
                             ));
                         }
-                        // A solve alone is insufficient: second sync completes
-                        // only when the live loop actually accepted its sync.
-                        if self
-                            .session
-                            .model(report.time)
-                            .syncs
-                            .iter()
-                            .any(|s| s.time == report.time)
-                        {
-                            return Ok(None);
-                        }
+                        return Ok(None);
                     }
                 }
             };
             error = tokio::time::timeout(Duration::from_secs(30), solve)
                 .await
-                .map_err(|_| "no frame solved after settling")??;
+                .map_err(|_| match passed_over {
+                    Some(frame) => format!("frame {frame} solved but was not taken as a sync"),
+                    None => "no frame solved after settling".into(),
+                })??;
             self.update(generation, "solving", correction, error, None);
+            if target.is_none() && self.session.model(self.clock.now()).base_tilt.is_none() {
+                return Err("taken as a slip: no base tilt fitted".into());
+            }
             if target.is_none() || error.is_some_and(|e| e < 60.0) {
                 self.update(generation, "done", correction, error, None);
                 return Ok(());

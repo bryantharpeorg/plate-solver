@@ -1516,13 +1516,22 @@ impl Session {
         if matches!(self.effective_push(), Push::Moving { .. }) {
             return Ok(false);
         }
-        let (aim, site, counts) = {
+        let (aim, site, counts, range) = {
             let values = self.values.lock().expect("observing session");
-            (values.aim, values.site, values.counts_per_revolution)
+            (
+                values.aim,
+                values.site,
+                values.counts_per_revolution,
+                values.field.as_ref().map(|field| field.range),
+            )
         };
         let (Some(site), Some(counts)) = (site, counts) else {
             return Ok(false);
         };
+        // A solve of a field the database in use was not built for is no sync (053).
+        if range.is_some_and(|(min, max)| !(0.95 * min..=1.05 * max).contains(&solved.fov_deg())) {
+            return Ok(false);
+        }
         // Tracking owns reversal direction, including fast take-up exposures.
         // A later GoTo approaches from below: observing that positive approach
         // restores its side of the gears, retained through the following stop.
