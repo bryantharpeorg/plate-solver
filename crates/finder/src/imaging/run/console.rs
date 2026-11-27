@@ -375,7 +375,13 @@ impl FrameSteps for ConsoleCamera {
             let roi = settings.roi;
             if roi.x != 0 || roi.y != 0 || roi.width != camera.width || roi.height != camera.height
             {
-                return Err("the imaging camera has a region of interest set: clear it before an imaging run".into());
+                // A region the focus aid could not take back is named as that (054).
+                return Err(match imaging.focus_left() {
+                    Some(words) => format!(
+                        "the focus aid could not put the imaging camera's settings back: {words}"
+                    ),
+                    None => "the imaging camera has a region of interest set: clear it before an imaging run".into(),
+                });
             }
         }
         *held = Some(Arc::new(lease));

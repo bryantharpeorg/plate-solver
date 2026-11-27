@@ -582,7 +582,14 @@ impl Imaging {
     /// answers the view of the settings then in force. While a lease is out,
     /// anyone but the holder answers its 409 (FR-029).
     pub async fn set(&self, edit: SettingsEdit) -> Result<ImagingView, Refusal> {
-        self.set_as(None, edit).await
+        let view = self.set_as(None, edit).await?;
+        // A region an aid left is the observer's once they change the settings (054).
+        self.state
+            .lock()
+            .expect("imaging state")
+            .focus
+            .forget_left();
+        Ok(view)
     }
 
     /// `set` for one caller (US9): no grant for anyone, a lease's grant for

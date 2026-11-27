@@ -44,6 +44,7 @@ mod imaging_run;
 mod imaging_run_centring;
 mod imaging_run_docs;
 mod imaging_run_focus;
+mod imaging_run_focus_restore;
 mod imaging_run_limits;
 mod imaging_run_routes;
 mod imaging_run_script;
