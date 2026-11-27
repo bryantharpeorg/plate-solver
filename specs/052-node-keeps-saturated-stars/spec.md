@@ -7,8 +7,12 @@ depends_on_landed: ["013-live-finder", "025-frame-capture", "045-node-runs-finde
 # with cynical review round 1 (0 blockers, 2 majors, 11 minors), the fold's probe commits
 # on the same branch (tip 62b814ef: the three stories built, every scenario's test and
 # both gates' Rust commands passing, each new test failing on the state before its
-# story, each gate mutated once; plan.md § What was run and what was read). Every
-# `path:line` here was read at f6d4f5fd. The owner decisions are open. 013 is named
+# story, each gate mutated once; plan.md § What was run and what was read). Probed
+# from this trio alone the same day (round 1, branch `probe/052-r1`, tip 491b7655:
+# every scenario passing, 0 blocking and 10 clarity defects) and folded: five choices
+# no scenario saw are now steps of US1-S1, US1-S2 and US1-S4 (commit ae80ff09, each
+# bitten by its mutation), the rest words; the gates' Rust commands pass at ae80ff09.
+# Every `path:line` here was read at f6d4f5fd. The owner decisions are open. 013 is named
 # because its stories built the node's detection, the simulator's finder camera and the
 # live loop, and last wrote `crates/scope-node/tests/detect.rs`; 025 because its raw
 # frames replay through detection; 045 because its US2 last wrote the node's README and
@@ -130,7 +134,9 @@ saturated; detect a frame uploaded to the console the same way; say so in the RE
 - Q: What rests on a run, and what on reading? → A: Every scenario's test was written
   on the probe as the stories would write it and passed; each failed on the state before
   its story, and each gate's mutation failed a scenario (run). With all three stories
-  built, every other test of the workspace passed unchanged. The field night's frames
+  built, every other test of the workspace passed unchanged. A second probe built the
+  three stories from this trio alone and every scenario passed; the choices it found
+  no scenario saw are steps or words here now (run). The field night's frames
   were not replayed: only a 640 × 480 preview JPEG of them survives, which is not a
   fixture. plan.md § What was run and what was read lists each claim.
 
@@ -202,11 +208,11 @@ centroids. plan.md § Decisions and the alternatives rejected gives the measures
    pixels kept at the finder camera's geometry). (e) Relax cedar's own gates: changes
    `detect_stars` (as 1 (b)).
 4. **Where a saturated star ranks** (FR-001). Recommended **(b) before the first of
-   cedar's stars that is fainter than it**, its brightness the sum of its box inside the
-   ring less the ring's mean, so the list stays brightest first and cedar's stars keep
-   their own order. Evidence (run): with decision 3's gates, (a) and (b) solved the same
-   frames (50 of 53 frames with a kept star at the finder camera's geometry, 115 of 116
-   of the simulator's); but (a), every kept star first, broke the star frame's "brightest
+   cedar's stars that is fainter than it**, its brightness the sum, over every pixel
+   strictly inside its ring, of the pixel less the ring's mean, so the list stays
+   brightest first and cedar's stars keep their own order. Evidence (run): with
+   decision 3's gates, (a) and (b) solved the same frames (50 of 53 frames with a kept
+   star at the finder camera's geometry, 115 of 116 of the simulator's); but (a), every kept star first, broke the star frame's "brightest
    first" (`crates/scope-link/proto/scope_node/v1/scope_node.proto:64`) on 38 and 48 of
    them, and failed `ten_dense_frames_have_all_fields_top_200_and_ids_count_dropped_exposures`
    (`crates/simulator/tests/node.rs:111`) once a 5-pixel top was kept. (a) Every kept star
@@ -315,13 +321,19 @@ Every scenario shares these definitions.
   `field_stars(500.0, 2.0)` read before the frame, in their order; **its truth** is
   `telescope().camera`.
 - **The Pleiades' narrow database** is built by the test from the 203 rows of
-  `fixtures/finder/tycho-pleiades.csv` (degrees, brightest first) with
-  `database_generation`'s `clean_and_limit`, `enumerate_patterns` for fields 1.6° to
-  1.85° (150 stars a field, oversampling 20, 50 patterns a field) and
-  `build_pattern_catalog` (error 0.001), and kept as one complete file in
-  `CARGO_TARGET_TMPDIR`, as 047's narrow test database is. **A field frame** is 1280 ×
-  960: background 10 plus, for each of `field_stars(1e9, 1.0)` of a simulator on that
-  database with optics 1280 × 960 at 1.617°, eyepiece (640, 480), pointed at the
+  `fixtures/finder/tycho-pleiades.csv` (degrees, brightest first), each a `CatalogEntry`
+  with `ra` and `dec` in radians, as a `CatalogEntry` takes them
+  (`crates/database-generation/src/catalog.rs:19-22`), `id` `CatalogId::Hip` of its row
+  number from 1 and no proper motion, with `database_generation`'s `clean_and_limit`,
+  `enumerate_patterns` for fields 1.6° to 1.85° (150 stars a field, oversampling 20, 50
+  patterns a field) and `build_pattern_catalog` (error 0.001), and kept as one complete
+  file, `052-tycho-pleiades.npz` in `CARGO_TARGET_TMPDIR`, with 047's
+  `DatabaseProperties` but `min_fov` 1.6, `max_fov` 1.85, `star_catalog` `tyc_main` and
+  `epoch_proper_motion` 2026.9, as 047's narrow test database is kept. Like 047's, it is
+  built only when the file is missing (`crates/finder/tests/console/databases/mod.rs:64`),
+  so a file built wrong stays for every later run until it is deleted. **A field
+  frame** is 1280 × 960: background 10 plus, for each of `field_stars(1e9, 1.0)` of a
+  simulator on that database with optics 1280 × 960 at 1.617°, eyepiece (640, 480), pointed at the
   Pleiades' field, a light of peak 255·10^(−0.4(m − 8.5)) within a reach of its place,
   rounded and held to 0 to 255: the finder camera's own geometry.
 - **The console's solve** is `finder::solve::solve_centroids` with
@@ -348,10 +360,10 @@ US1-S5). The `test` gate runs it; during development,
 
 **Acceptance Scenarios**:
 
-1. **Given** drawn frames each of one Gaussian at (p, p) for p = 200.5, 200.75 and 201.0, of σ 1.5, 3, 3 and 5 and P 3000, 3000, 30000 and 3000, two drawn frames of one Moffat at (200.5, 200.5) of α 2, P 25500 and β 2.5 and 1.8, and one of a Gaussian at (200.5, 200.5) of σ 1.5 and P 340, a top of five pixels, each also holding a Gaussian at (400.5, 300.5) of σ 1.5 and P 100, **When** a committed test calls `saturated_stars` on each with cedar's list and `with_saturated_stars` with it and with a list of two stars of brightness 10⁶ at (50.5, 50.5) and 10 at (600.5, 50.5), **Then** it asserts that each keeps exactly one star, within 0.1 px of (p, p) in x and y (of (200.5, 200.5) for the Moffats and the small one), with `peak_value` 255 and `num_saturated` the frame's count of pixels at 250 or above, and sets nothing aside; that `with_saturated_stars` gives that star followed by cedar's list unchanged, and the two-star list with that star between them; and that cedar's list holds a star within 0.5 px of (400.5, 300.5) and none within 3 px of the kept star's place.
-2. **Given** drawn frames of a segment from (150, 100) to (450, 340) at 400 within 1, 2 and 3 px of it; of two Gaussians of σ 3 at (300.5 ∓ d/2, 240.5), P 3000 and 3000 for d = 8, 10 and 12 and P 3000 and 800 for d = 8 and 12; of a Gaussian of σ 40 and P h at (320.5, 240.5) plus one of σ s and P c there, for (h, s, c) = (200, 8, 400), (60, 8, 400), (0, 25, 400) and (150, 3, 3000); of three Gaussians at (300.5, 230.5), (330.5, 250.5) and (315.5, 270.5) of σ 30, 25 and 20 and P 180, 180 and 150; of a Gaussian of σ 3 and P 3000 at (5.5, 240.5); and three frames of background 10 with 255 in a block of 1 × 1, 2 × 2 and 4 wide by 1 high from (320, 240), **When** a committed test calls `saturated_stars` on the first five kinds with cedar's list and on the blocks with no stars, **Then** it asserts that none keeps a star; that the segments and the pairs are each set aside as `[Elongated]`, the five nebulae as `[Extended]`, the star at 5.5 as `[Edge]`, the 1 × 1 block as `[]` and the other two blocks as `[Small]`; and that `with_saturated_stars` gives each of the first five kinds' cedar's list unchanged.
+1. **Given** drawn frames each of one Gaussian at (p, p) for p = 200.5, 200.75 and 201.0, of σ 1.5, 3, 3 and 5 and P 3000, 3000, 30000 and 3000, two drawn frames of one Moffat at (200.5, 200.5) of α 2, P 25500 and β 2.5 and 1.8, and one of a Gaussian at (200.5, 200.5) of σ 1.5 and P 340, a top of five pixels, each also holding a Gaussian at (400.5, 300.5) of σ 1.5 and P 100, **When** a committed test calls `saturated_stars` on each with cedar's list and `with_saturated_stars` with it and with a list of two stars of brightness 10⁶ at (50.5, 50.5) and 10 at (600.5, 50.5), **Then** it asserts that each keeps exactly one star, within 0.1 px of (p, p) in x and y (of (200.5, 200.5) for the Moffats and the small one), with `peak_value` 255 and `num_saturated` the frame's count of pixels at 250 or above, and sets nothing aside; that `with_saturated_stars` gives that star followed by cedar's list unchanged, and the two-star list with that star between them; that cedar's list holds a star within 0.5 px of (400.5, 300.5) and none within 3 px of the kept star's place; and that for the Gaussian of σ 3 and P 3000 at (200.5, 200.5) the kept star's brightness is within 10⁻⁶ of the sum, over the pixels from 2 px outside its saturated pixels' box on each side, of each pixel less the mean of the one-pixel perimeter 3 px outside that box.
+2. **Given** drawn frames of a segment from (150, 100) to (450, 340) at 400 within 1, 2 and 3 px of it; of two Gaussians of σ 3 at (300.5 ∓ d/2, 240.5), P 3000 and 3000 for d = 8, 10 and 12 and P 3000 and 800 for d = 8 and 12, and P 3000 and 3000 for d = 12 under a Gaussian of σ 40 and P 200 at (300.5, 240.5), a long region with a bright ring; of a Gaussian of σ 40 and P h at (320.5, 240.5) plus one of σ s and P c there, for (h, s, c) = (200, 8, 400), (60, 8, 400), (0, 25, 400) and (150, 3, 3000); of three Gaussians at (300.5, 230.5), (330.5, 250.5) and (315.5, 270.5) of σ 30, 25 and 20 and P 180, 180 and 150; of a Gaussian of σ 3 and P 3000 at (5.5, 240.5); of one Gaussian at (200.5, 200.5) of σ 1 and P 1000, a top of nine pixels cedar keeps; three frames of background 10 with 255 in a block of 1 × 1, 2 × 2 and 4 wide by 1 high from (320, 240); and one of background 10 with 255 in two 3 × 3 blocks from (300, 240) and (303, 243), touching at one corner, **When** a committed test calls `saturated_stars` on the first six kinds with cedar's list and on the blocks with no stars, **Then** it asserts that none keeps a star; that the segments and the pairs, the one under the halo too, are each set aside as `[Elongated]`, the five nebulae as `[Extended]`, the star at 5.5 as `[Edge]`, the top cedar keeps as `[]` with cedar's list holding a star within 0.5 px of (200.5, 200.5), the 1 × 1 block as `[]`, the other two blocks as `[Small]` and the two touching blocks as `[Elongated]`; and that `with_saturated_stars` gives each of the first six kinds' cedar's list unchanged.
 3. **Given** drawn frames of two Gaussians of σ 3 and P 3000 at (300.5 ∓ d/2, 240.5) for d = 4, 6, 16 and 24, **When** a committed test calls `saturated_stars` on each with cedar's list, **Then** it asserts that none sets anything aside, every kept star is within 0.1 px of y 240.5, at d = 4 and 6 one star is kept within 0.1 px of x 300.5, and at d = 16 and 24 two are kept within 0.1 px of 300.5 ∓ d/2.
-4. **Given** drawn frames holding, trailed 9 px, Gaussians of σ 1.5 and P 3000 at the first 5, 3 and 2 of (100.5, 100.5), (300.5, 150.5), (500.5, 100.5), (150.5, 350.5) and (450.5, 380.5), and in each two untrailed Gaussians of σ 3 and P 3000 at (295.5, 300.5) and (305.5, 300.5), **When** a committed test calls `saturated_stars` on each with cedar's list, **Then** it asserts that the frames of 5 and 3 trails keep exactly their 5 and 3 trailed stars, each within 0.1 px of its place in x and y, and set the pair aside as `[Elongated]`, and that the frame of 2 trails keeps none and sets aside `[Elongated, Elongated, Elongated]`.
+4. **Given** drawn frames holding, trailed 9 px, Gaussians of σ 1.5 and P 3000 at the first 5, 3 and 2 of (100.5, 100.5), (300.5, 150.5), (500.5, 100.5), (150.5, 350.5) and (450.5, 380.5), and in each two untrailed Gaussians of σ 3 and P 3000 at (295.5, 300.5) and (305.5, 300.5), and a drawn frame holding only such trails at the first 2 and at (5.5, 240.5), **When** a committed test calls `saturated_stars` on each with cedar's list, **Then** it asserts that the frames of 5 and 3 trails keep exactly their 5 and 3 trailed stars, each within 0.1 px of its place in x and y, and set the pair aside as `[Elongated]`; that the frame of 2 trails keeps none and sets aside `[Elongated, Elongated, Elongated]`; and that the frame with a trail at (5.5, 240.5) keeps none and sets aside `[Elongated, Elongated, Edge]`, the trail set aside at the edge not counted toward the frame's trail.
 5. **Given** drawn frames of a disc, every pixel whose centre lies within r of (320, 240) 1000 above the background, for r = 88 and 89, and a frame of 640 × 480 pixels all 255, **When** a committed test calls `saturated_stars` on each with no stars and `with_saturated_stars` on the white frame with none, **Then** it asserts that the disc of 88 keeps one star within 0.1 px of (320, 240) and sets nothing aside, that the disc of 89 and the white frame keep none and set aside `[Extended]`, and that `with_saturated_stars` gives the white frame no star.
 
 ### User Story 2 - The scope node and the console keep saturated stars (Priority: P1)
@@ -445,16 +457,20 @@ gate runs it; during development,
   box holds a star of `stars`; sets a region aside as `Small` below `MIN_PIXELS` pixels
   and `Edge` when its box widened by `RING_MARGIN` on each side leaves the frame; takes
   it as long when the root of its second moments' major over minor eigenvalue exceeds
-  `MAX_AXIS_RATIO`, and sets it aside as `Elongated` when the minor is not positive or
-  when it is long and no trail stands or its major axis lies more than
-  `TRAIL_TOLERANCE_DEG` from the frame's trail; sets aside as `Extended` a region whose widened box's one-pixel
-  perimeter (its ring) averages more than `MAX_RING_SHARE` of the way from the median of
-  every 64th pixel of the frame to `SATURATED`; and keeps every other region as a `Star`
-  at the mean of its pixels' centres, `peak_value` its brightest pixel, `num_saturated`
-  its pixel count, and brightness the sum over the box inside the ring less the ring's
-  mean for each pixel, the kept stars as `Star` orders them. The frame's trail is the
-  axial median of its long regions' major axes, and stands only when at least
-  `TRAIL_MIN_REGIONS` of them lie within `TRAIL_TOLERANCE_DEG` of it.
+  `MAX_AXIS_RATIO`, and sets it aside as `Elongated`, whatever its ring, when the minor
+  is not positive or when it is long and no trail stands or its major axis lies more
+  than `TRAIL_TOLERANCE_DEG` from the frame's trail; sets aside as `Extended` a region
+  whose widened box's one-pixel perimeter (its ring) averages more than `MAX_RING_SHARE`
+  of the way from the median of every 64th pixel of the frame to `SATURATED`; and keeps
+  every other region as a `Star` at the mean of its pixels' centres, `peak_value` its
+  brightest pixel, `num_saturated` its pixel count, and brightness the sum, over every
+  pixel strictly inside the ring, of the pixel less the ring's mean, the kept stars as
+  `Star` orders them. The frame's trail is the axial median of the major axes of the
+  regions found long (none passed over or set aside before its shape is read): half the
+  sum of their doubled angles' circular mean and the median of each doubled angle's
+  difference from that mean, taken into −180° to 180°, of an even count the mean of the
+  two middle differences; it stands only when at least `TRAIL_MIN_REGIONS` of them lie
+  within `TRAIL_TOLERANCE_DEG` of it.
   `with_saturated_stars(image, width, height, stars)` SHALL give `stars` with each kept
   star placed before the first of them that is fainter, and `stars` itself when none is
   kept (owner decisions 2 to 4 and 7, owner approvals 1 and 6).
@@ -479,8 +495,10 @@ gate runs it; during development,
   `DetectSettings` and the node's config, auto-exposure, every file of
   `crates/finder/src` but `solve.rs` and `finder_focus.rs`, the simulator's `src/`,
   `Cargo.toml` and `Cargo.lock`, every existing test but US2-S1's, and every existing
-  fixture; the one new file outside `crates/` is `fixtures/finder/tycho-pleiades.csv`
-  (owner decision 5, owner approval 7).
+  fixture; the one new file outside `crates/` is `fixtures/finder/tycho-pleiades.csv`,
+  its places in degrees where a `CatalogEntry` takes radians; US2-S4's test builds its
+  narrow database from it only when the database's file is missing (owner decision 5,
+  owner approval 7).
 
 **Words and replay** (US3):
 
@@ -563,9 +581,10 @@ US3:
   implements: [FR-007, FR-008, FR-009]
 ```
 
-Three stories, each under 60 % of 65,536 B (39,321 B) as the probe's commits measure
-them: US1 25,968 B (40 %), US2 24,473 B (37 %), US3 13,937 B (21 %); at the factory's
-worst overrun seen, 1.35 times, 35,057 B, 33,039 B and 18,815 B, still under the line.
+Three stories, each under 60 % of 65,536 B (39,321 B) as the probe from this trio
+measured them, with the fold's steps added to US1: US1 28,931 B (44 %), US2 25,069 B
+(38 %), US3 14,397 B (22 %); at the factory's worst overrun seen, 1.35 times, 39,057 B,
+33,843 B and 19,436 B, still under the line, US1 by 264 B.
 The draft had two; the fold's gates and tests pushed its first story to about 50 KB, so
 the node and the console's use of the pass is now a story of its own. US2 merges after
 US1 (`depends_on_merged`): it calls US1's `with_saturated_stars`; US3 merges after US2:

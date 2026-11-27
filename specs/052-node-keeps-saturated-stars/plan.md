@@ -125,12 +125,14 @@ order:
 8. The ring is the one-pixel perimeter of the box widened by `RING_MARGIN` on each side;
    it is bright when its mean less the median exceeds `MAX_RING_SHARE` × (250 − median).
    A region not long is `Extended` when its ring is bright and kept otherwise.
-9. The frame's trail: the axial median of the long regions' axes (the doubled angles'
-   median about their circular mean, halved); it stands when at least
+9. The frame's trail: the axial median of the axes of the regions found long at step 7
+   (none passed over or set aside before it): with m the circular mean of their doubled
+   angles, (m + the median of each doubled angle less m, taken into −180° to 180°) / 2,
+   of an even count the mean of the two middle deviations; it stands when at least
    `TRAIL_MIN_REGIONS` of them lie within `TRAIL_TOLERANCE_DEG` of it, the angle between
    two axes being half the doubled difference taken into −180° to 180°. A long region
    within that tolerance of a standing trail is `Extended` when its ring is bright and
-   kept otherwise; every other long region is `Elongated`.
+   kept otherwise; every other long region is `Elongated`, whatever its ring.
 10. Set-aside reasons are given in the reading order of each region's first pixel. A
     kept region becomes `Star::new(cx + 0.5, cy + 0.5, peak, brightness, n)`, peak its
     brightest pixel and brightness the sum over the pixels strictly inside the ring of
@@ -546,17 +548,64 @@ The fold's commits, after cynical review round 1 (logs `fold-r1-*`):
   white frame about 145 as drafted and 0.2 with the frame bound; a drawn Moon about 7.4
   and 0.13; twilight about 4.9 and 0.2.
 
+Probe round 1, from this trio alone, on `probe/052-r1` cut from 7d306e7e (the trio on
+f6d4f5fd), its logs beside the first probe's, the owner decisions built to their
+recommendations:
+
+- **986f34b0** to **491b7655**: each story's tests, then its code (US1 26be56b0, US2
+  f1c92069, US3 491b7655), 15 files, exactly the three `writes` lists. Every scenario's
+  test passed on the first build of its story's code but US2-S4, whose database was
+  first built in degrees (trap 6). Before each story: US1's test does not build; US2-S1
+  is one centroid short, US2-S2 lacks a bright star in the node's first 10, US2-S3 to
+  US2-S5 answer `NoMatch`, and with the node's call alone US2-S5's places are unequal;
+  US3-S1 finds no section. Each focused command passed three runs in a row. At
+  491b7655 the `lint` gate's commands exit 0 and `test`'s Rust commands pass, 1535 of
+  1535 and the doc tests.
+- Mutations, each once and reverted: every gate and rule of FR-001 failed a scenario
+  but the choices § Read from the diff lists and five that are steps now; with the
+  fixture's units, its cached database, T007's claim of what fails and that list, 0
+  blocking and 10 clarity defects, each folded here.
+
+The fold of probe round 1, one commit on `probe/052-r1` (logs `fold-probe-r1-*`):
+
+- **ae80ff09**, US1's test only: US1-S1's brightness, US1-S2's top cedar keeps, pair
+  under a halo and touching blocks, and US1-S4's trail at the edge, 3,568 B of diff. Each
+  step passed and failed under one mutation of the module, each reverted: a region
+  holding a star of cedar's kept (US1-S2), the brightness over the region's own box
+  (US1-S1), 4-connectivity (US1-S2), an edge region's axis counted toward the trail
+  (US1-S4), and a long region with a bright ring and no trail set aside as `Extended`
+  (US1-S2).
+- At **ae80ff09**: `cargo fmt --all --check`, clippy with `-D warnings`, both
+  `cargo doc` runs, 1535 of 1535 (the steps are in US1's five tests, so the count is
+  unchanged) and the doc tests; `cargo deny` offline and `cargo machete` clean; each
+  story's focused commands pass.
+
 Read, not run: the field night's frames (only a 640 × 480 preview survives); the INDI
 finder camera adapter's 255 at full scale, at every gain; the Mini's hot pixels; the
 pass's cost on the Pi; every `path:line` cited, at f6d4f5fd.
 
 ## Read from the diff, not from a test
 
+Probe round 1 found five choices of FR-001 no scenario saw; each is now a step that its
+mutation fails (§ What was run): the passed-over rule and 8-connectivity (US1-S2's top
+cedar keeps and its touching blocks), a kept star's brightness (US1-S1), a long region
+with a bright ring and no trail (US1-S2's pair under a halo) and which regions make the
+trail (US1-S4's trail at the edge). What no scenario sees:
+
 - FR-002, beyond US1-S1's check that cedar's list still sets each drawn saturated star
   aside: `crates/star-detection/src/detect.rs` and `crates/star-detection/src/binning.rs`
   are not in the diff, and the parity tests hold their results.
-- FR-001's set-aside order beyond each scenario's, its brightness of a kept star beyond
-  its place in a list, and the sampled median: no scenario pins them alone.
+- FR-001's set-aside order beyond each scenario's; the sampled median beyond US2-S1's
+  saved frame; the trail's median of an even count (the mean of the two middle
+  deviations, where the lower middle passes every scenario); the bound's strict "more
+  than" (no frame holds exactly 24,576 pixels at 250 or above); the passed-over box's
+  bounds (`left ≤ s.x ≤ right + 1`, step 4) beyond a star at its middle; each ring pixel
+  counted once; a minor of exactly 0 (`Elongated`); a kept star placed after cedar's
+  stars of equal brightness; and `peak_value` beyond 255, the only top drawn. The probe's
+  mutations of the set-aside order, the even median, the bound, the ring's corners, the
+  minor, the ties and `peak_value` each passed every test (run).
+- T006's fixture: its 205 lines equal § Interfaces' text byte for byte; no scenario reads
+  its rows beyond solving with them, so a row dropped or changed passes every test (run).
 - FR-003: `finder_focus.rs`'s one line; 051's focus tests pass unchanged, and no test
   can tell one constant from two of the same value.
 - FR-004's doc line, FR-006 (the diff's file list), and FR-007's paragraph of the
@@ -567,8 +616,9 @@ pass's cost on the Pi; every `path:line` cited, at f6d4f5fd.
 
 ## Shapes that existing tests pin
 
-With all three stories built, every existing test but the replaced one passed (log p10).
-The files beside the change:
+With all three stories built, every existing test but the replaced one passed (log p10),
+and again at probe round 1's 491b7655 and its fold's ae80ff09. The files beside the
+change:
 
 - **`crates/star-detection/tests/parity.rs`** and **`noise_floor.rs`**: call
   `detect_stars` and `detect_stars_with_noise_floor`, which do not change.
@@ -654,11 +704,15 @@ README's paragraph, the glossary and `solve_image`.
 
 ## Prerequisites before this spec is flipped to `ready`
 
-- Every spec in `depends_on_landed` has landed: met at f6d4f5fd.
-- `main` is still as read, or the cites are re-read.
-- A review round of this trio, folded: round 1 folded here.
-- The seven owner decisions answered.
-- Optionally, a probe round that builds the three stories from this text alone.
+- Every spec in `depends_on_landed` has landed: met at f6d4f5fd, where 013, 025, 045,
+  047, 048 and 051 have all landed.
+- `main` is still as read, or the cites are re-read: met, `main` at f6d4f5fd at this
+  fold, every cite read there; waits on a re-read if `main` moves before the flip.
+- A review round of this trio, folded: met, cynical review round 1 (0 blockers, 2 majors,
+  11 minors) folded at 7d306e7e.
+- The seven owner decisions answered: waits for the owner, at the flip ask.
+- A probe round that builds the three stories from this text alone: met, round 1 at
+  491b7655 (0 blocking, 10 clarity), folded here with ae80ff09 (§ What was run).
 
 ## Outside the factory
 
@@ -710,7 +764,12 @@ finder camera at gain 80 and sigma 8 as on the last field night unless a step sa
    (`crates/finder/tests/console/databases/mod.rs:16`,
    `crates/finder/tests/console/databases/mod.rs:53`): each test runs in its own process.
    Its rows are read from the fixture, never from the kit's database file, which is not
-   in the repository.
+   in the repository. The fixture's places are degrees and a `CatalogEntry` takes radians
+   (`crates/database-generation/src/catalog.rs:19-22`): rows left in degrees draw a
+   blank field frame and the node's centroids give `TooFew` (run). The test builds the
+   file only when it is missing (`crates/finder/tests/console/databases/mod.rs:64`), so
+   one built wrong stays for every later run: after changing how it is built, delete
+   `052-tycho-pleiades.npz` from `CARGO_TARGET_TMPDIR` (`target/tmp`) first.
 7. **Lines wrap in the README.** US3-S1 reads the section with its whitespace runs as one
    space; a phrase split across lines still matches.
 8. **Names.** "finder camera", never "finder" alone; "scope node"; "saturated star" as the
@@ -745,7 +804,10 @@ Drafted on 2026-11-27 by the plate-solver operator seat's spec session against `
 f6d4f5fd, from a probe of that day on `probe/052`, and folded the same day with cynical
 review round 1 (2 majors, 11 minors) from the fold's probe commits (tip 62b814ef: the
 three stories built, every scenario's test and both gates' Rust commands passing, each
-new test failing on the state before its story, each gate mutated once), and a reading of
+new test failing on the state before its story, each gate mutated once); probed from the
+trio alone (round 1, `probe/052-r1` at 491b7655: 0 blocking, 10 clarity defects) and
+folded with one commit of US1 steps (ae80ff09, each step failing under its mutation, the
+gates' Rust commands passing); and a reading of
 cedar-detect's gates and their port, the node's detection and its callers, the console's
 frame detection and its callers, 048's dark-sky work and tests, the simulator's finder
 camera, the console's live loop and solve, 025's raw frames, 047's narrow test database,
@@ -769,12 +831,12 @@ stories:
       - path: crates/star-detection/tests/saturated.rs
         status: new
         disposition: add
-        assertion: "drawn 640 x 480 frames, background 10, one Gaussian at (p, p), p 200.5, 200.75, 201.0, sigma/P 1.5/3000, 3/3000, 3/30000, 5/3000, Moffats at (200.5, 200.5) alpha 2, P 25500, beta 2.5 and 1.8, and a Gaussian sigma 1.5 P 340 at (200.5, 200.5) (a top of five pixels), each with a Gaussian at (400.5, 300.5) sigma 1.5 P 100: saturated_stars with cedar's list (sigma 8, binning 2, rows normalised, hot pixels rejected) keeps one star within 0.1 px of its place, peak_value 255, num_saturated the frame's count of pixels at 250 or above, sets nothing aside; with_saturated_stars gives it then cedar's list unchanged, and a list of brightness 1e6 at (50.5, 50.5) and 10 at (600.5, 50.5) with it between them; cedar's list has a star within 0.5 px of (400.5, 300.5) and none within 3 px of the kept place"
+        assertion: "drawn 640 x 480 frames, background 10, one Gaussian at (p, p), p 200.5, 200.75, 201.0, sigma/P 1.5/3000, 3/3000, 3/30000, 5/3000, Moffats at (200.5, 200.5) alpha 2, P 25500, beta 2.5 and 1.8, and a Gaussian sigma 1.5 P 340 at (200.5, 200.5) (a top of five pixels), each with a Gaussian at (400.5, 300.5) sigma 1.5 P 100: saturated_stars with cedar's list (sigma 8, binning 2, rows normalised, hot pixels rejected) keeps one star within 0.1 px of its place, peak_value 255, num_saturated the frame's count of pixels at 250 or above, sets nothing aside; with_saturated_stars gives it then cedar's list unchanged, and a list of brightness 1e6 at (50.5, 50.5) and 10 at (600.5, 50.5) with it between them; cedar's list has a star within 0.5 px of (400.5, 300.5) and none within 3 px of the kept place; for sigma 3 P 3000 at (200.5, 200.5) the kept brightness within 1e-6 of the sum over the saturated box widened by 2 of each pixel less the mean of the perimeter of the box widened by 3"
         decision: "spec.md:US1-S1"
       - path: crates/star-detection/tests/saturated.rs
         status: new
         disposition: add
-        assertion: "segments (150, 100) to (450, 340) at 400 within 1, 2, 3 px; Gaussian pairs sigma 3 at (300.5 -/+ d/2, 240.5), P 3000/3000 d 8, 10, 12 and P 3000/800 d 8, 12; nebulae sigma 40 P h plus sigma s P c at (320.5, 240.5), (h, s, c) (200, 8, 400), (60, 8, 400), (0, 25, 400), (150, 3, 3000); three lobes at (300.5, 230.5), (330.5, 250.5), (315.5, 270.5) sigma 30, 25, 20 P 180, 180, 150; a Gaussian sigma 3 P 3000 at (5.5, 240.5): none kept; segments and pairs [Elongated], nebulae [Extended], the edge star [Edge]; with_saturated_stars gives cedar's list unchanged; blocks of 255 from (320, 240) with no stars: 1 x 1 [], 2 x 2 and 4 wide 1 high [Small]"
+        assertion: "segments (150, 100) to (450, 340) at 400 within 1, 2, 3 px; Gaussian pairs sigma 3 at (300.5 -/+ d/2, 240.5), P 3000/3000 d 8, 10, 12 and P 3000/800 d 8, 12, and P 3000/3000 d 12 under a Gaussian sigma 40 P 200 at (300.5, 240.5); nebulae sigma 40 P h plus sigma s P c at (320.5, 240.5), (h, s, c) (200, 8, 400), (60, 8, 400), (0, 25, 400), (150, 3, 3000); three lobes at (300.5, 230.5), (330.5, 250.5), (315.5, 270.5) sigma 30, 25, 20 P 180, 180, 150; a Gaussian sigma 3 P 3000 at (5.5, 240.5); a Gaussian sigma 1 P 1000 at (200.5, 200.5), nine pixels cedar keeps: none kept; segments and pairs (the halo's too) [Elongated], nebulae [Extended], the edge star [Edge], cedar's kept top [] with cedar's list within 0.5 px of (200.5, 200.5); with_saturated_stars gives cedar's list unchanged; blocks of 255 with no stars: from (320, 240) 1 x 1 [], 2 x 2 and 4 wide 1 high [Small]; two 3 x 3 from (300, 240) and (303, 243), touching at a corner, [Elongated]"
         decision: "spec.md:US1-S2"
       - path: crates/star-detection/tests/saturated.rs
         status: new
@@ -784,7 +846,7 @@ stories:
       - path: crates/star-detection/tests/saturated.rs
         status: new
         disposition: add
-        assertion: "Gaussians sigma 1.5 P 3000 trailed 9 px at 20 degrees (the mean over 18 centres) at the first 5, 3 and 2 of (100.5, 100.5), (300.5, 150.5), (500.5, 100.5), (150.5, 350.5), (450.5, 380.5), each frame with an untrailed pair sigma 3 P 3000 at (295.5, 300.5) and (305.5, 300.5): 5 and 3 trails keep exactly their trailed stars within 0.1 px of their places and set the pair aside [Elongated]; 2 trails keep none, [Elongated, Elongated, Elongated]"
+        assertion: "Gaussians sigma 1.5 P 3000 trailed 9 px at 20 degrees (the mean over 18 centres) at the first 5, 3 and 2 of (100.5, 100.5), (300.5, 150.5), (500.5, 100.5), (150.5, 350.5), (450.5, 380.5), each frame with an untrailed pair sigma 3 P 3000 at (295.5, 300.5) and (305.5, 300.5): 5 and 3 trails keep exactly their trailed stars within 0.1 px of their places and set the pair aside [Elongated]; 2 trails keep none, [Elongated, Elongated, Elongated]; trails only at the first 2 and (5.5, 240.5) keep none, [Elongated, Elongated, Edge]"
         decision: "spec.md:US1-S4"
       - path: crates/star-detection/tests/saturated.rs
         status: new
@@ -859,7 +921,7 @@ stories:
       - path: crates/finder/tests/console/saturated_field.rs
         status: new
         disposition: add
-        assertion: "a narrow database built in CARGO_TARGET_TMPDIR from the 203 rows of fixtures/finder/tycho-pleiades.csv (clean_and_limit, enumerate_patterns 1.6 to 1.85 degrees, 150, 20, 50, build_pattern_catalog 0.001); field frames 1280 x 960 of field_stars(1e9, 1) of a simulator on it, optics 1.617 degrees eyepiece (640, 480), pointed at the Pleiades: background 10, peak 255 x 10^(-0.4 (m - 8.5)), Moffats alpha 2.5 beta 1.8 within 64 px, and Gaussians sigma 1.3 trailed 9 px at 20 degrees within 16 px; on each, solve_centroids over that database of cedar's list cut to 200 NoMatch, of detect's (DetectSettings::cedar, as a GrayFrame) MatchFound within 30 arcsec of telescope().camera"
+        assertion: "a narrow database built in CARGO_TARGET_TMPDIR, only when its file is missing, from the 203 rows of fixtures/finder/tycho-pleiades.csv, degrees as the radians a CatalogEntry takes (clean_and_limit, enumerate_patterns 1.6 to 1.85 degrees, 150, 20, 50, build_pattern_catalog 0.001); field frames 1280 x 960 of field_stars(1e9, 1) of a simulator on it, optics 1.617 degrees eyepiece (640, 480), pointed at the Pleiades: background 10, peak 255 x 10^(-0.4 (m - 8.5)), Moffats alpha 2.5 beta 1.8 within 64 px, and Gaussians sigma 1.3 trailed 9 px at 20 degrees within 16 px; on each, solve_centroids over that database of cedar's list cut to 200 NoMatch, of detect's (DetectSettings::cedar, as a GrayFrame) MatchFound within 30 arcsec of telescope().camera"
         decision: "spec.md:US2-S4"
       - path: crates/finder/tests/console/saturated_field.rs
         status: new

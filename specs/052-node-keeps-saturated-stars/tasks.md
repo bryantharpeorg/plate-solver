@@ -6,9 +6,12 @@ description: "Task list for 052-node-keeps-saturated-stars: The Node Keeps Satur
 
 **Prerequisites** (plan.md § Prerequisites):
 - every spec in `depends_on_landed` has landed on `main`: met at f6d4f5fd;
-- `main` is still as read: met at the draft, f6d4f5fd;
-- the owner decisions in spec.md are settled: not yet, all seven open;
-- a review round of this trio, folded: round 1 folded;
+- `main` is still as read: met, f6d4f5fd at the draft and at probe round 1's fold;
+- the owner decisions in spec.md are settled: not yet, all seven open, for the owner at
+  the flip ask;
+- a review round of this trio, folded: met, round 1 folded;
+- a probe round from this trio alone, folded: met, round 1 (491b7655) folded with
+  ae80ff09;
 - no operator-staged file is needed: met (US2's fixture is a story's own new file).
 
 **Rules for every story:**
@@ -71,15 +74,20 @@ description: "Task list for 052-node-keeps-saturated-stars: The Node Keeps Satur
 - [ ] T006 [US2] Create `fixtures/finder/tycho-pleiades.csv` exactly as plan.md
   § Interfaces gives it: its comment line, its header and its 203 rows, 5,329 bytes
   (spec.md owner approval 7). The kit's database it was read from is not in the
-  repository; the story copies the text and reads no other source.
+  repository; the story copies the text and reads no other source. Its places are
+  degrees; a `CatalogEntry` takes radians.
 - [ ] T007 [US2] Create `crates/finder/tests/console/saturated_field.rs` with US2-S2 to
   US2-S5, US2-S2, US2-S3 and US2-S5 under `#[tokio::test(start_paused = true)]` and
   US2-S4 under `#[test]`, using `crate::support::live::{event, request, DB, START}`, and
   add `mod saturated_field;` to `crates/finder/tests/console/main.rs` after
   `mod recording_raw;`. US2-S4 builds its database once into `CARGO_TARGET_TMPDIR` from
-  the fixture, a process-unique `.part` file renamed into place (plan trap 6). Before
-  T008 and T009 all four fail: the node's first 10 short of a bright star, `NoMatch`
-  where a match is asserted, and the uploaded frame's places unequal to the node's (run).
+  the fixture, each row's degrees converted to the radians a `CatalogEntry` takes, a
+  process-unique `.part` file renamed into place, and only when the file is missing:
+  after changing how it is built, delete `052-tycho-pleiades.npz` from
+  `CARGO_TARGET_TMPDIR` first (plan trap 6). Before T008 and T009 all four fail: US2-S2
+  with the node's first 10 short of a bright star, US2-S3 to US2-S5 with `NoMatch` where
+  a match is asserted; with T008 alone, US2-S5 fails with the uploaded frame's places
+  unequal to the node's (run).
 
 ### Implementation
 
