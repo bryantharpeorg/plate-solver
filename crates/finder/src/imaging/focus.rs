@@ -228,6 +228,12 @@ pub const SOFT_FRACTION: f64 = 0.30;
 /// A record made at a measured scale farther than this from the scale in
 /// force is another telescope's (FR-013).
 pub const SCALE_TOLERANCE: f64 = 0.05;
+/// Seeing widens a star as the airmass to this power (054): the record, read
+/// at one altitude, is carried to a reading's altitude by it.
+pub const SEEING_EXPONENT: f64 = 0.6;
+/// The most the air may loosen the record (054): a low target is never let
+/// off by more than this factor, so `clearly_out` stays reachable.
+pub const CARRY_CAP: f64 = 1.30;
 
 /// How a reading compares with the sharpest this camera has been on this
 /// telescope (FR-010). Focus is never said to be good in absolute terms.
@@ -306,6 +312,35 @@ pub struct RecordView {
 pub enum Of {
     Tonight,
     Earlier,
+}
+
+/// The altitudes, in degrees, the two parts of the record were read at, each
+/// when known (054).
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Altitudes {
+    pub tonight: Option<f64>,
+    pub earlier: Option<f64>,
+}
+
+impl Altitudes {
+    /// The altitude of the part `of` names.
+    pub fn of(self, of: Of) -> Option<f64> {
+        match of {
+            Of::Tonight => self.tonight,
+            Of::Earlier => self.earlier,
+        }
+    }
+}
+
+/// The record's size `px`, read at `from_alt_deg`, as it judges a reading at
+/// `to_alt_deg` (054): times the ratio of the two airmasses, each the secant of
+/// the zenith distance (`1 / sin` of the geometric altitude, no refraction), to
+/// the power `SEEING_EXPONENT`, that factor held between 1 and `CARRY_CAP`, so
+/// the air never makes the record stricter.
+pub fn carry(px: f64, from_alt_deg: f64, to_alt_deg: f64) -> f64 {
+    let airmass = |alt_deg: f64| 1.0 / alt_deg.to_radians().sin();
+    let factor = (airmass(to_alt_deg) / airmass(from_alt_deg)).powf(SEEING_EXPONENT);
+    px * factor.clamp(1.0, CARRY_CAP)
 }
 
 /// The format line of `focus.json` (FR-008).
@@ -402,6 +437,9 @@ struct StoredNight {
     since: f64,
     #[serde(default, skip_serializing_if = "is_false")]
     passed: bool,
+    /// The altitude tonight's reading was read at, when known (054).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    alt_deg: Option<f64>,
 }
 
 fn is_false(passed: &bool) -> bool {
@@ -419,6 +457,9 @@ struct StoredRecord {
     tonight: Option<StoredNight>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     earlier: Option<Mark>,
+    /// The altitude the earlier nights' record was read at, when known (054).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    earlier_alt_deg: Option<f64>,
 }
 
 /// `focus.json`: the camera, the focus region and the focus record, each left
@@ -450,6 +491,10 @@ pub struct Kept {
     tonight: Option<(f64, f64, f64, bool)>,
     /// The smaller record of the earlier nights (FR-011).
     earlier: Option<Mark>,
+    /// The altitude tonight's record was read at, when known (054).
+    tonight_alt: Option<f64>,
+    /// The altitude the earlier nights' record was read at, when known (054).
+    earlier_alt: Option<f64>,
 }
 
 impl Kept {
@@ -463,6 +508,8 @@ impl Kept {
             scale: None,
             tonight: None,
             earlier: None,
+            tonight_alt: None,
+            earlier_alt: None,
         }
     }
 
@@ -488,7 +535,15 @@ impl Kept {
             .as_ref()
             .and_then(|record| record.tonight)
             .map(|night| (night.px, night.at, night.since, night.passed));
-        self.earlier = record.and_then(|record| record.earlier);
+        self.tonight_alt = record
+            .as_ref()
+            .and_then(|record| record.tonight)
+            .and_then(|night| night.alt_deg);
+        self.earlier = record.as_ref().and_then(|record| record.earlier);
+        // The earlier nights' altitude is kept only while that part is.
+        self.earlier_alt = record
+            .as_ref()
+            .and_then(|record| record.earlier.and(record.earlier_alt_deg));
         self.camera = Some(camera);
     }
 
@@ -508,18 +563,40 @@ impl Kept {
         self.save();
     }
 
-    /// A settled reading of the focus aid (FR-011, FR-013). `passed` is the
-    /// aid's `found()` after that reading. `scale` is the measured scale, an
-    /// imaging solve's, or `None` while none has solved. True when the record
-    /// changed; before the camera is described this does nothing.
+    /// A settled reading of the focus aid with no altitude (FR-011, FR-013;
+    /// 054): `note_at` with `alt_deg` `None`.
     pub fn note(&mut self, px: f64, at: f64, scale: Option<f64>, passed: bool) -> bool {
+        self.note_at(px, at, scale, passed, None)
+    }
+
+    /// A settled reading of the focus aid, with the altitude it was read at when
+    /// known (FR-011, FR-013; 054). `passed` is the aid's `found()` after that
+    /// reading. `scale` is the measured scale, an imaging solve's, or `None`
+    /// while none has solved. Sizes are compared as read, whatever their
+    /// altitudes. The altitude is kept with the part the reading makes: a
+    /// reading that starts a night or replaces tonight's record sets tonight's
+    /// altitude to `alt_deg`, and a night's record that joins the earlier nights'
+    /// brings its altitude with it. A note that changes no size changes no
+    /// altitude. True when the record changed; before the camera is described
+    /// this does nothing.
+    pub fn note_at(
+        &mut self,
+        px: f64,
+        at: f64,
+        scale: Option<f64>,
+        passed: bool,
+        alt_deg: Option<f64>,
+    ) -> bool {
         if self.camera.is_none() {
             return false;
         }
-        // Another telescope's record is dropped; the next note replaces it.
+        // Another telescope's record is dropped, its altitudes with it; the next
+        // note replaces it.
         if self.foreign(scale) {
             self.tonight = None;
             self.earlier = None;
+            self.tonight_alt = None;
+            self.earlier_alt = None;
         }
         // When a scale is given it is held; a note that then changes nothing
         // writes it at the next change only.
@@ -532,6 +609,7 @@ impl Kept {
             // first reading carries the mark it is given.
             None => {
                 self.tonight = Some((px, at, at, passed));
+                self.tonight_alt = alt_deg;
                 changed = true;
             }
             // A night that began more than 12 hours before this reading is
@@ -543,8 +621,10 @@ impl Kept {
                         px: kept_px,
                         at: kept_at,
                     });
+                    self.earlier_alt = self.tonight_alt;
                 }
                 self.tonight = Some((px, at, at, passed));
+                self.tonight_alt = alt_deg;
                 changed = true;
             }
             // Otherwise tonight's record is replaced only when smaller, and the
@@ -553,6 +633,7 @@ impl Kept {
                 if px < kept_px {
                     kept_px = px;
                     kept_at = at;
+                    self.tonight_alt = alt_deg;
                     changed = true;
                 }
                 if passed && !kept_passed {
@@ -616,6 +697,41 @@ impl Kept {
         }
     }
 
+    /// What a reading is judged against at `now`, with the altitude of the part
+    /// it names (054): `reference`, and that part's altitude from `altitudes`.
+    pub fn reference_at(&self, now: f64, scale: Option<f64>) -> Option<(f64, Of, Option<f64>)> {
+        let (px, of) = self.reference(now, scale)?;
+        Some((px, of, self.altitudes(now, scale).of(of)))
+    }
+
+    /// The altitude each part of the record was read at, as `record` shows the
+    /// parts at `now` (054): tonight's while its night began at most `NIGHT_S`
+    /// ago, and the earlier part's that of whichever record `record` shows
+    /// there. Nothing at a foreign scale, as `record` shows nothing there.
+    pub fn altitudes(&self, now: f64, scale: Option<f64>) -> Altitudes {
+        if self.foreign(scale) {
+            return Altitudes::default();
+        }
+        match self.tonight {
+            Some((_, _, since, _)) if now - since <= NIGHT_S => Altitudes {
+                tonight: self.tonight_alt,
+                earlier: self.earlier_alt,
+            },
+            // A night past counts with the earlier nights': the part shown as
+            // earlier is the smaller record, and its altitude is that record's.
+            tonight => Altitudes {
+                tonight: None,
+                earlier: match tonight {
+                    Some((px, ..)) => match self.earlier {
+                        Some(kept) if kept.px <= px => self.earlier_alt,
+                        _ => self.tonight_alt,
+                    },
+                    None => self.earlier_alt,
+                },
+            },
+        }
+    }
+
     /// Whether the record was made at another measured scale than the one in
     /// force (FR-013): both known and more than `SCALE_TOLERANCE` apart. A
     /// record that holds no scale is never foreign.
@@ -638,8 +754,10 @@ impl Kept {
                 at,
                 since,
                 passed,
+                alt_deg: self.tonight_alt,
             }),
             earlier: self.earlier,
+            earlier_alt_deg: self.earlier.and(self.earlier_alt),
         });
         let stored = Stored {
             format: FORMAT.to_string(),
