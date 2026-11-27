@@ -9,6 +9,7 @@ import {
   putImagingWholeSensor,
   type ImagingFocusAid,
   type ImagingFocusAsk,
+  type ImagingFocusSized,
   type ImagingView,
 } from "../api";
 
@@ -79,11 +80,16 @@ function verdictWords(aid: ImagingFocusAid, size: (v: number) => string): string
   const reference = aid.reference;
   if (reference != null && aid.median != null) {
     const where = reference.of === "tonight" ? " tonight" : " from earlier nights";
+    // The record, named with its altitude and, when carried, as it reads at the reading's (054).
+    const carried = reference.carried;
+    const record =
+      carried != null
+        ? `${size(carried.from)} at ${carried.from_alt_deg.toFixed(0)}°${where}, as it reads at ${carried.alt_deg.toFixed(0)}°: ${size(reference.value)}`
+        : `${size(reference.value)}${where}`;
     const pct = Math.round((aid.median.value / reference.value - 1) * 100);
-    if (verdict === "good") return `Within 10% of the focus record of ${size(reference.value)}${where}.`;
-    if (verdict === "slightly_soft")
-      return `Slightly soft: ${pct}% larger than the focus record of ${size(reference.value)}${where}.`;
-    return `Clearly out: ${pct}% larger than the focus record of ${size(reference.value)}${where}.`;
+    if (verdict === "good") return `Within 10% of the focus record of ${record}.`;
+    if (verdict === "slightly_soft") return `Slightly soft: ${pct}% larger than the focus record of ${record}.`;
+    return `Clearly out: ${pct}% larger than the focus record of ${record}.`;
   }
   if (verdict === "clearly_out") return "Clearly out: the stars are too large to measure.";
   return null;
@@ -160,12 +166,18 @@ export function FocusBlock({ view, refresh }: { view: ImagingView; refresh: () =
         : `Focus region: the ${name} tile, ${kept.source === "found" ? "found from an imaging frame" : "set by hand"}.`;
   }
 
+  // A record part with its altitude as `at N°`; without one, `with no altitude` while the
+  // latest reading has an altitude to compare it with (054).
+  const sized = (part: ImagingFocusSized) => {
+    if (part.alt_deg != null) return `${size(part.value)} at ${part.alt_deg.toFixed(0)}°`;
+    return aid?.last?.alt_deg != null ? `${size(part.value)} with no altitude` : size(part.value);
+  };
   let recordLine: string | null = null;
   const record = focus.record;
   if (record?.tonight != null && record.earlier != null)
-    recordLine = `Focus record: ${size(record.tonight.value)} tonight · ${size(record.earlier.value)} on earlier nights.`;
-  else if (record?.tonight != null) recordLine = `Focus record: ${size(record.tonight.value)} tonight.`;
-  else if (record?.earlier != null) recordLine = `Focus record: ${size(record.earlier.value)} on earlier nights.`;
+    recordLine = `Focus record: ${sized(record.tonight)} tonight · ${sized(record.earlier)} on earlier nights.`;
+  else if (record?.tonight != null) recordLine = `Focus record: ${sized(record.tonight)} tonight.`;
+  else if (record?.earlier != null) recordLine = `Focus record: ${sized(record.earlier)} on earlier nights.`;
 
   const ended = aid?.state === "ended";
   const stopped = ended && aid.ended_reason === "stopped";
@@ -181,7 +193,8 @@ export function FocusBlock({ view, refresh }: { view: ImagingView; refresh: () =
     ended && aid.ended_reason != null && !stopped && !done ? `Focus aid stopped: ${aid.error ?? ""}.` : null;
   const restoreAlert =
     aid?.restore_error != null ? `The camera's settings were not put back: ${aid.restore_error}.` : null;
-  const showReading = aid != null && (aid.state === "running" || done);
+  // While the aid looks for its region again, the readings it has kept still show (054).
+  const showReading = aid != null && (aid.state === "running" || (aid.state === "finding" && aid.readings > 0) || done);
   const verdict = aid != null ? verdictWords(aid, size) : null;
   const roi = view.settings?.roi;
   const camera = view.camera;
