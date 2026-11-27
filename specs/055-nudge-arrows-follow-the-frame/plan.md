@@ -79,14 +79,18 @@ motion flanks of each move (`motion.moving`) and holding the frames out of the f
 `nudged`, and the loop goes on from the counts with its forecasts reset. Until
 `quiet_until`, `pointing` returns before the loop and `checks_push` is false
 (`crates/finder/src/tracking.rs:331`), so 038's check (`crates/finder/src/session.rs:1281`)
-sees none of the step's frames.
+sees none of the step's frames. When the step ends, `motion` reads again what it read
+before the press (FR-010). The step is made from the counts, so it carries any Track
+error the telescope had at the press, and Track's own loop corrects that error after
+the window as it corrects any error at f6d4f5fd, swinging past first when the error is
+large (spec.md § Clarifications, probe round 1).
 
 **Performance Goals**: a press answers at once (the route starts the move and returns).
 With Track on the telescope is at the new place within the 10 s US3-S1 allows.
 
 **Constraints**: no new dependency; no change to the model, the live solve, GoTo's
-correction solve or `session.rs` (053's); `goto.rs` gains only the two variants, one
-arm, one helper and one refusal.
+correction solve or `session.rs` (053's); `goto.rs` gains only the two variants, two
+arms, one helper and one refusal.
 
 **Scale/Scope**: about 2,500 added lines across five stories (the probe's, without
 `dist` and the probe-only tests), more than half of them tests.
@@ -118,9 +122,9 @@ specs/055-nudge-arrows-follow-the-frame/
 
 ```text
 crates/finder/src/nudge.rs                  # new (US1, mount view); US2 the camera views; US3 Track's branch
-crates/finder/src/goto.rs                   # US1: AxisMove::Offset, ::Through, one arm, `through`, the zenith refusal
+crates/finder/src/goto.rs                   # US1: AxisMove::Offset, ::Through, two arms, `through`, the zenith refusal
 crates/finder/src/mcp/guard.rs              # US1: `start_by`, driving `Through`
-crates/finder/src/api.rs                    # US1: the reservation's two names, one `merge`; US2: `nudge_kept`
+crates/finder/src/api.rs                    # US1: the reservation's two names, one `merge`; US2: `nudge_kept`; US3: `motion` pub(crate)
 crates/finder/src/lib.rs                    # US1: `pub mod nudge;`
 crates/finder/src/tracking.rs               # US3: `Tracker::nudge`, the loop's step, the quiet window
 crates/finder/src/mcp/tools.rs              # US4: the `nudge` tool
@@ -141,7 +145,7 @@ crates/finder/web/dist                      # US5: the build
 ```
 
 **053's files.** Of `crates/finder/src/{model,goto,live,session}.rs`, only `goto.rs` is
-written, and only by adding: two `AxisMove` variants after `Rate`, one arm in
+written, and only by adding: two `AxisMove` variants after `Rate`, two arms in
 `Planner::direct`'s `match`, and the helper `through` after `direct`. No line of GoTo's
 planning, correction solve or sync is changed. `session.rs` is read only
 (`Session::tracker`, `crates/finder/src/session.rs:931`; `PushView`,
@@ -213,9 +217,13 @@ less than `PUSH_QUIET_S` after its `at`, it refuses with FR-012's words; else
 not tracking yet`), `Tracker::nudge(up, right, session.model(now))`, sets `axis_move`
 to `{tool: "nudge", state: "moving"}` and spawns a watcher that every `goto::TICK` reads
 the tracker: off ends `halted` with its `ended_reason`, `!stepping()` ends `done`; it
-answers `moved` `track`.
+answers `moved` `track`. Before `start_motion` the Track branch reads the `motion`
+record (`AppState::motion`, `crates/finder/src/api.rs:132`, made `pub(crate)` in US3),
+and the watcher, ending the step, sets `axis_move` and puts that record back under
+`motion`'s lock, so `motion` names the nudge only while its step is made (FR-010).
 
-US2's imaging arm: of the latest solve, one reading `solved` replaces `kept` with
+US2's imaging arm: of the latest solve, one reading `solved` replaces `kept`, when
+nothing is kept or the kept `frame_id` is not the solve's, with
 `frame_axes(solve, site, time)`, `time` the held frame's `start + exposure_ms / 2000`
 when the imaging view's frame has the solve's `frame_id`, else `requested_at`; no site:
 `a site is needed`. With nothing kept, FR-005's three words by the latest solve's state.
@@ -292,15 +300,17 @@ again, the held target moved, `followed` true, the memory cleared as `follow` cl
 (proportional, previous pointing, samples, subs, pending, lapsed, held; `fresh_after`
 now), `stepping = Some(from)`, `mark`. `step_path(model, axes, current, direction, from,
 to, now)`: two passes so the end is at arrival: `last = current + round(inverse(to, now
-+ duration) − inverse(from, now))`; for a moved axis `first = last ∓ round(0.5 ·
++ duration) − inverse(from, now))`, azimuth's difference wrapped to the nearer way
+round; for a moved axis `first = last ∓ round(0.5 ·
 counts / 360)`, minus while `direction ≥ 0`, plus while below; `duration =
 Planner { .. }.through(first, last)?`. The rate loop reads `stepping` with `followed`
 and `target` at the top of each turn (`crates/finder/src/tracking.rs:1376`) and, when
 some, runs `step`: `stop_all`, `at_rest`, `step_path` again, `motion.crossing(i, true)`,
 for each waypoint `motion.moving(i, delta)` and `goto_axis` then `at_rest`,
 `crossing(i, false)`; under the lock `stepping = None`, `quiet_until = now + 1 +
-SETTLE`, settling with the cause `nudged`, `mark`; then its forecasts, `prepared`,
-`refresh_at` and the second-step state reset. `Shared::pointing`
+SETTLE`, settling with the cause `nudged`, `mark`; then its forecasts, `prepared` and
+`refresh_at` reset and `second.reset()`, the rate loop's one-second interval restarted as
+after the keyhole's slew (`crates/finder/src/tracking.rs:1404`). `Shared::pointing`
 (`crates/finder/src/tracking.rs:579`) returns after the wind's observation while
 `stepping` is some or before `quiet_until`; `checks_push` adds `&& stepping.is_none()
 && now >= quiet_until`; `pause` reports `nudged` while stepping; the steady mark needs
@@ -399,17 +409,23 @@ aria-label="Arrows follow">` styled as `FocusTool.tsx`'s camera box (its imaging
 only with `session.imaging_camera`; `first` chosen when offered), a `role="group"`
 `Step` of two `.button`s with `aria-pressed`, a three-column grid of four `.button`s at
 least 44 CSS pixels (`min-h-11 min-w-11`) labelled `Nudge up`, `Nudge right`, `Nudge
-down` and `Nudge left`, drawn ↑, ←, →, ↓ in a cross, disabled while a press is pending;
-a `<p role="status">` and a `<p role="alert">` as `TrackControl.tsx` has them. A press
-keeps `{way, track, over: session}`; the status is `Nudging <way>…` while the session
-is still `over` or its `axis_move` (tool `nudge`) is `moving`, `Nudge stopped: <reason>`
-when `halted`, else FR-017's `Nudged` words. `GuidanceBlock.tsx` renders it after
+down` and `Nudge left`, drawn `↑`, `→`, `↓` and `←` in a cross (up; left and right;
+down), disabled while a press is pending; a `<p role="status">` and a `<p
+role="alert">` as `TrackControl.tsx` has them. A press
+keeps `{way, track, over: session}`; the status is FR-017's one rule: `Nudging <way>…`
+while the session is still `over` or its `axis_move` (tool `nudge`) is `moving`,
+`Nudge stopped: <reason>` when `halted`, else the `Nudged` words, so a later session
+without `axis_move` reads `Nudged` and `useSession.ts`'s copy keeps it `Nudging`
+(US5-S5). `GuidanceBlock.tsx` renders it after
 `TrackControl` (`crates/finder/web/src/components/GuidanceBlock.tsx:95`).
 `ImagingPage` (`crates/finder/web/src/components/ImagingPage.tsx:46`) gains the optional
 props `session?: ObservingSession` and `onChange?: () => void` and renders
 `{session && <NudgeBlock session={session} onChange={onChange} first="imaging_camera" />}`
-after its imaging frame's section (`crates/finder/web/src/components/ImagingPage.tsx:291`
-at f6d4f5fd; on 054's page, after its frame). `App.tsx` passes `session={session}
+after the ready camera's sections, outside `{camera != null && settings != null && (...)}`
+(`crates/finder/web/src/components/ImagingPage.tsx:168` to
+`crates/finder/web/src/components/ImagingPage.tsx:293` at f6d4f5fd), so it shows with or
+without a ready imaging camera (on 054's page, after its frame and outside its ready
+camera's sections). `App.tsx` passes `session={session}
 onChange={changed}` (`crates/finder/web/src/App.tsx:200`).
 
 ## What was run and what was read
@@ -479,7 +495,8 @@ cb9cc8cc (US3), 06504889 (US4) and c61d2c07 (US5).
   mid-exposure; a mirrored frame un-mirrored), FR-006 (approach on falling axes only; the
   approach's floor check), FR-007 (`move_axis` for `nudge`), FR-008 (the two names out of
   the reservation), FR-009 (88° to 95°), FR-010 (approach always from below), FR-011
-  (`checks_push` without the window; pointings fed during the step), FR-012 (the
+  (`checks_push` left on during a step; pointings fed during the step; not the window
+  alone, removed or cut to 1 s, which no scenario caught: probe round 1 found it), FR-012 (the
   settling refusal; the stepping refusal with the reservation's `nudge`, as the
   tracker's alone is covered by FR-008's), FR-014 to FR-016 (the tool's words, the
   README's last sentence, the glossary's last clause), FR-017 (`Nudged` at once) and
@@ -492,6 +509,41 @@ cb9cc8cc (US3), 06504889 (US4) and c61d2c07 (US5).
   tests) and the build passed, `dist` unchanged by the build; `CI=1 npm run e2e` passed
   37 of 37.
 
+**Probe round 1 from this text (2026-11-27).** On `probe/055-r1` from 21ae53a4 (f6d4f5fd
+and this trio), the five stories built from the trio alone, in order, tests first:
+ce5c7429 (US1), ff9a05c0 (US2), 6d313c86 (US3), 0f4775c9 (US4) and a6a92960 (US5, the
+tip), each after its tests' commit, each story's tests failing on the story before. Both
+gates passed on the tip (nextest 1,544, Vitest 611, `CI=1 npm run e2e` 37). Three
+blocking and fourteen clarity defects, folded here. These mutations passed every
+scenario: FR-011's window removed or cut to 1 s; `axis_move` `done` at the watcher's
+first tick; `App` passing the Imaging page no session; the up and down glyphs swapped;
+the block above Track; `useSession` dropping `axis_move`; the arrows never disabled; the
+tracker's own stepping refusal (plan trap 7). In US3-S4 a push down and coarse `up`
+came within 10″ at 7.6 s, swung 72.6″ past and was back within 10″ by about 26 s.
+
+**This fold, on `probe/055-r1`.** d55caf08 (US3), 9f3b103f and 8b7212bb (US5) on
+a6a92960, the tip 8b7212bb.
+
+- **The new steps**, each with one mutation alone on the tip and its story's focused
+  command, each failing its step: US3-S7 (the window removed; cut to 1 s); US3-S3's
+  `moving` at 1 s (`done` at the watcher's first tick); US3-S1's `motion` (not put back,
+  as on a6a92960); US3-S4's last 10 s (the loop held out 30 s after the step: US3-S4's
+  push-down half failed at that clause, its other clauses passing); US5-S2 (the arrows never disabled); US5-S3 (up
+  and down swapped; the block above Track); US5-S4's `off` view (the block inside the
+  ready camera's sections, as on a6a92960); US5-S5's `Nudging` (`useSession` dropping
+  `axis_move`; the status ignoring it); US5-S8 (`App` passing no session).
+- **US3-S4's swing** (spec.md § Clarifications), read every 0.5 s for 45 s with Track
+  started at five times 0.1 s apart: the same 1.5′ push down with no press swung 19″ to
+  70″ past the held place and was within 15″ for good after 4.5 s to 18 s; with coarse
+  `up`, 30″ to 84″ past and 13 s to 28 s. US3-S4's own run: within 10″ at 7.6 s and
+  27.1 s, at most 10.5″ and 8.5″ off over the last 10 s.
+- **Gates on 8b7212bb**: `lint` (fmt, clippy with `-D warnings`, both doc runs)
+  passed; nextest 1,545 of 1,545 (1,525 existing, 20 new); the doc tests passed; `npm
+  ci`, typecheck, the Prettier check, Vitest (65 files, 611 tests), the build and the
+  `dist` check passed; `CI=1 npm run e2e` passed 38 of 38 (34 existing, 4 new). Every
+  existing test passed unchanged. US3's seven tests failed on US2's code (409 `the mount
+  is already moving` where 200 or the settling words were due).
+
 **Read, not run.** Stop during a press or a Track-on step (the watchers' Stop paths,
 unchanged); a press refused across the Sun guard or the cable's turn; a press from below
 the minimum altitude; a press with Track in its keyhole wait or measuring backlash; a
@@ -500,14 +552,21 @@ press during an imaging run or a live stack; the imaging camera turned after a s
 
 ## Read from the diff, not from a test
 
-- `goto.rs` gains only additions (two variants, one arm, `through`); no line of GoTo's
+- `goto.rs` gains only additions (two variants, two arms, `through`); no line of GoTo's
   planning or correction is changed.
 - `mcp::guard::start` keeps its signature and calls `start_by` with `"mcp"`.
 - `Tracker::follow` and 038's push check are unchanged; `nudge` reuses `follow`'s
   clearing; with no step pending the rate loop commands what it commanded at f6d4f5fd.
 - The README's new section and the MCP paragraph keep every sentence at f6d4f5fd.
 - `NudgeBlock` posts only `postNudge`; `GuidanceBlock` gains one import and one line;
-  `ImagingPage` two optional props and one line.
+  `ImagingPage` two imports, two optional props and one line.
+- The README section's sentences that US4-S3 does not quote (the approach, the settling
+  refusal) are plan § Interfaces' words.
+
+Probe round 1 found these read only from its diff; each is now a step: FR-011's window
+(US3-S7), Track-on `axis_move` timing (US3-S3), the glyphs and the block's order
+(US5-S3), the disabled arrows (US5-S2), the `axis_move` copy (US5-S5) and App's wiring
+(US5-S8). The `Nudge stopped:` words stay read, not run.
 
 ## Shapes that existing tests pin
 
@@ -544,6 +603,7 @@ press during an imaging run or a live stack; the imaging camera turned after a s
 | Track on | Track makes the step, against its own way (decision 4 (e′)) | the draft's added commands (66 s to unbounded); GoTo's approach (529″ on a setting target); refusing half the arrows (f) |
 | The push check | off while a step is made and 1 s + `SETTLE` after | on (the step read as a push: review A and B) |
 | A second press | refused while a step runs, by the reservation and the tracker | accepted (lost at the turnaround; a push with Track on) |
+| `motion` with Track on | the nudge's while its step is made, Track's again after, as a direct move's is read only while it runs | kept as the nudge's (probe round 1: the MCP note named the nudge for the rest of the run) |
 | The imaging orientation | kept from the last solve that solved, at mid-exposure | the latest solve only (refuses after a failed one); the ask's time (turns with the field) |
 | The tool | through `nudge::nudge` | through the route (the tool needs `by` `mcp`) |
 | The page | the guidance block and the Imaging page | one place only (decision 7) |
@@ -560,8 +620,8 @@ the unit tests and `nudge_views.rs` of spec.md US2.
 
 ## User Story 3 - Track's step
 
-`Tracker::nudge`, the loop's step and the quiet window, the Track branch and the
-settling refusal in `nudge`, and the tests of spec.md US3.
+`Tracker::nudge`, the loop's step and the quiet window, the Track branch, its `motion`
+put back and the settling refusal in `nudge`, and the tests of spec.md US3.
 
 ## User Story 4 - MCP and the words
 
@@ -593,11 +653,17 @@ The gates, copied from `ergane.yaml`:
   `main`: every `path:line` read again; `goto.rs`'s additions placed against 053's;
   the README, `GLOSSARY.md` and test `main.rs` additions placed after theirs; and the
   Imaging page's Nudge block placed on 054's rewritten `ImagingPage.tsx`, after its
-  imaging frame, with US5-S4 and the Refinement Record's last writer read again.
-- The owner's ten decisions are answered.
-- A probe round from this text alone, folded.
-- The page half has run once on the re-anchored base (`CI=1 npm run e2e`).
-- No operator-staged file is needed.
+  imaging frame and outside its ready camera's sections, with US5-S4 and the
+  Refinement Record's last writer read again. Waits for 052, 053 and 054 to land and
+  the seat's re-anchor.
+- The owner's ten decisions are answered. Waits for the flip ask.
+- A probe round from this text alone, folded. Met: probe round 1 on `probe/055-r1`
+  (tip a6a92960, 3 blocking and 14 clarity defects), folded here; its new steps pass
+  and bite on 8b7212bb (§ What was run).
+- The page half has run once on the re-anchored base (`CI=1 npm run e2e`). Waits for the
+  re-anchor; on 8b7212bb it passed 38 of 38.
+- No operator-staged file is needed. Met: every story writes only code, tests, docs
+  and `dist`.
 
 ## Outside the factory
 
@@ -613,19 +679,32 @@ them.
 
 ## Plan traps
 
-1. **The story sizes.** Measured on the probe's story commits, each diff without `dist`:
-   US1 24,689 B (37.7 % of 65,536; 50.9 % at 1.35 times), US2 25,411 B (38.8 %; 52.3 %),
-   US3 27,809 B (42.4 %; 57.3 %), US4 17,665 B (27.0 %; 36.4 %), US5 23,380 B plus
-   `dist`'s 1,189 B (35.7 %; 48.2 %). US3 is the tightest, 37,542 B at 1.35 against
-   39,321: should it grow, its push-settling refusal and that test (about 2.2 KB) move to
-   US4.
+1. **The story sizes.** Probe round 1's story commits, each diff from the previous
+   story's commit without `dist`, with this fold's commits added to their story: US1
+   28,611 B (43.7 % of 65,536; 38,625 B at 1.35 times, 98.2 % of 39,321), US2 26,156 B
+   (39.9 %; 35,311 B, 89.8 %), US3 27,451 + 6,336 = 33,787 B (51.6 %; 45,612 B, 116.0 %),
+   US4 18,512 B (28.2 %; 24,991 B, 63.6 %), US5 23,269 + 6,132 + 704 B plus `dist`'s
+   1,189 + 617 B, 31,911 B (48.7 %; 43,080 B, 109.6 %). Every story is under 39,321 B as
+   measured; US3 and US5 go over it at 1.35 times and stay whole, as 054's US1 and 051's
+   US2 did (the factory's builds of 050 and 051 ran 0.78 to 1.04 times their probes).
+   US1 gains no scenario. Should US3 go over 39,321 B as measured, its push-settling
+   refusal and that test (about 2.2 KB) move to US4.
 2. **The backlash in tests.** A fresh simulated rig's first press up or right takes up
    the sync's flank (§ What was run). US1's synced rig presses down and left first; the
    Track rig and the imaging rig are past it by Track's and the priming presses' moves.
-3. **US1's helpers.** US2's and US3's tests use US1's `pub(super)` helpers (`nudge`,
-   `write`, `refused`, `rest`, `synced`, `moved`, `miss`, `wrap`, `START`, `WAYS`,
-   `STEPS`) from `super::nudge`; US1 writes them `pub(super)` from the start, as no story
-   may edit an earlier story's test file.
+3. **US1's helpers.** US2's and US3's tests use US1's helpers from `super::nudge`, which
+   US1 writes `pub(super)` from the start, as no story may edit an earlier story's test
+   file, and each used by US1's own tests, as a `pub(super)` item its file does not use
+   is dead code to clippy's `-D warnings`: `START: f64`, `WAYS: [(&str, f64); 4]`,
+   `STEPS: [(&str, f64); 2]`, `fn wrap(angle: f64) -> f64`, `async fn write(app:
+   &Router, method: &str, path: &str, body: Value) -> (StatusCode, Value)`, `async fn
+   nudge(app: &Router, direction: &str, step: &str, view: &str) -> (StatusCode, Value)`,
+   `async fn refused(app: &Router, direction: &str, step: &str, view: &str, words:
+   &str)`, `async fn rest(rig: &Rig) -> Value`, `async fn synced(alt: f64) -> Rig`, `fn
+   moved(before: MountDirection, after: MountDirection) -> [f64; 2]` and `fn miss(moved:
+   [f64; 2], size: f64, angle_deg: f64) -> f64`. `Router` is `axum::Router`, so the
+   imaging rig's router takes the pressing ones too; `Rig` is
+   `crate::support::goto::Rig`.
 4. **The sky turns under a still mount.** The imaging camera's centre moves with the sky
    between the press and the read; US2-S3's oracle is where it would be.
 5. **The rate limit in US4-S2.** A refused call takes a slot; wait 1.1 s before the
@@ -648,12 +727,13 @@ them.
 ## Refinement Record
 
 Drafted on 2026-11-27 by the plate-solver operator seat's spec session against `main` at
-f6d4f5fd, from a probe of that day on `probe/055`, and folded the same day from cynical
+f6d4f5fd, from a probe of that day on `probe/055`, folded the same day from cynical
 review round 1 on that branch (five stories built with every scenario's test, both gates
 passing on the tip, every story's tests failing on the story before, one mutation per
 new or changed FR biting, Track's step measured rising, near transit and setting, and the
-page run in a browser by day and by night), and a reading of MCP's direct moves and
-their guards, GoTo's planner, Track and 038's push check, the live pointing's up and the
+page run in a browser by day and by night) and from probe round 1, built from this text
+alone on `probe/055-r1` (tip a6a92960) with its new steps proven there on 8b7212bb,
+and a reading of MCP's direct moves and their guards, GoTo's planner, Track and 038's push check, the live pointing's up and the
 chart rotation, the imaging solve, the guidance block and the Imaging page, the
 constitution, the glossary and the ADRs. Writes come from the task text. Shared writes
 name the spec story that last wrote the same file on `main`; within the spec, each
@@ -774,7 +854,7 @@ stories:
       - path: crates/finder/src/nudge.rs
         status: new
         disposition: add
-        assertion: "unit: a mirrored frame's up and down equal the unmirrored frame's, its right and left the unmirrored left and right; a solve asked at T of a held frame begun at T - 1200 s with a 2 s exposure answers as one asked at T - 1199 s and more than 1 deg from one asked at T"
+        assertion: "unit: a mirrored frame's up and down equal the unmirrored frame's, its right and left the unmirrored left and right; a solve asked at T = START of a held frame begun at T - 1200 s with a 2 s exposure answers as one asked at T - 1199 s and more than 1 deg from one asked at T"
         decision: "spec.md:US2-S4"
       - path: crates/finder/src/nudge.rs
         status: new
@@ -804,7 +884,7 @@ stories:
       - path: crates/finder/tests/motion/nudge_track.rs
         status: new
         disposition: add
-        assertion: "the Track rig (eyepiece at M42, synced, Track on, 30 s), settled before each: every step each way in the mount view answers 200 moved track, axis_move at once exactly {state moving, tool nudge}; read every 100 ms for 30 s: the true place within 10 arcsec of the stepped place (the held place moved by the step with the simulator's horizon transform) within 10 s and within 30 arcsec over the next 20 s, no push key, slip_pending never true, then axis_move done and track tracking; model epoch unchanged"
+        assertion: "the Track rig (eyepiece at M42, synced, Track on, 30 s), settled before each: every step each way in the mount view answers 200 moved track, axis_move at once exactly {state moving, tool nudge}; read every 100 ms for 30 s: the true place within 10 arcsec of the stepped place (the held place moved by the step with the simulator's horizon transform) within 10 s and within 30 arcsec over the next 20 s, no push key, slip_pending never true, then axis_move done and track tracking; motion.tool nudge at once and, once axis_move reads done, motion exactly as read just before the press; model epoch unchanged"
         decision: "spec.md:US3-S1"
       - path: crates/finder/tests/motion/nudge_track.rs
         status: new
@@ -814,12 +894,12 @@ stories:
       - path: crates/finder/tests/motion/nudge_track.rs
         status: new
         disposition: add
-        assertion: "the Track rig settled: coarse left 200, coarse left 1 s later 409 exactly the mount is already moving; 9 s more with no push key and slip_pending false; at 10 s the true place within 10 arcsec of the first press's stepped place; epoch unchanged"
+        assertion: "the Track rig settled: coarse left 200, axis_move.state moving 1 s later, coarse left then 409 exactly the mount is already moving; 9 s more with no push key and slip_pending false; at 10 s the true place within 10 arcsec of the first press's stepped place; epoch unchanged"
         decision: "spec.md:US3-S3"
       - path: crates/finder/tests/motion/nudge_track.rs
         status: new
         disposition: add
-        assertion: "the Track rig settled, the mount pushed by hand 1.5 arcmin down then coarse up, and on a new Track rig 1.5 arcmin up then coarse down: each 200; read for 45 s: within 10 arcsec of the stepped place, no push key, slip_pending false, epoch unchanged"
+        assertion: "the Track rig settled, the mount pushed by hand 1.5 arcmin down then coarse up, and on a new Track rig 1.5 arcmin up then coarse down: each 200; read for 45 s: within 10 arcsec of the stepped place and within 15 arcsec of it at every read of the last 10 s, no push key, slip_pending false, epoch unchanged"
         decision: "spec.md:US3-S4"
       - path: crates/finder/tests/motion/nudge_track.rs
         status: new
@@ -831,6 +911,11 @@ stories:
         disposition: add
         assertion: "the Track rig, push_by(0.0, -2.0): fine up at the first push.state moving and the first following 409 exactly a push by hand is still settling: press again in a few seconds; 10 s later 200 moved track; the motion rig synced, target M42 elsewhere, Track on reading armed: fine up 409 exactly Track is not tracking yet"
         decision: "spec.md:US3-S6"
+      - path: crates/finder/tests/motion/nudge_track.rs
+        status: new
+        disposition: add
+        assertion: "the Track rig settled, coarse left in the mount view: the tracker's checks_push false at every 100 ms read while axis_move.state reads moving, false at the first read it does not and 2.5 s after that, true 3.5 s after that"
+        decision: "spec.md:US3-S7"
       - path: crates/finder/tests/motion/tracking/push.rs
         status: existing
         disposition: preserve
@@ -843,16 +928,18 @@ stories:
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
       - "Tracker::follow, commanded and the push check are unchanged; with no step pending the rate loop commands what it commanded at f6d4f5fd and checks_push is as before"
+      - "motion reads as at f6d4f5fd but while a Track-on step is made"
       - "Track's keyhole, backlash take-up and steady mark behave as before when no step is pending"
     checks:
       development:
         - "cargo nextest run -p finder --locked --test motion -E 'test(/^nudge_track::/)'"
-        - "cargo nextest run -p finder --locked --test motion -E 'test(tracking::)'"
+        - "cargo nextest run -p finder --locked --test motion -E 'test(/^tracking::/)'"
       handoff: declared_gates
       independent: declared_pipeline
       release:
         - "release owner: the repository owner, through the merge queue's ci.yml jobs and the night of plan.md Outside the factory"
     writes:
+      - crates/finder/src/api.rs
       - crates/finder/src/nudge.rs
       - crates/finder/src/tracking.rs
       - crates/finder/tests/motion/main.rs
@@ -947,22 +1034,22 @@ stories:
       - path: crates/finder/web/src/components/NudgeBlock.test.tsx
         status: new
         disposition: add
-        assertion: "fetch answering 409 {error the night has no sync yet}: Nudge up clicked, the Nudge region's alert exactly the night has no sync yet"
+        assertion: "fetch holding its answer, then 409 {error the night has no sync yet}: Nudge up clicked, all four arrows disabled until it answers and Nudge up enabled after; the Nudge region's alert exactly the night has no sync yet"
         decision: "spec.md:US5-S2"
       - path: crates/finder/web/src/components/NudgeBlock.test.tsx
         status: new
         disposition: add
-        assertion: "the session without imaging_camera: Arrows follow offers exactly the mount and the finder camera; with it: the mount, the finder camera and the imaging camera; without mount: no Nudge region"
+        assertion: "the session without imaging_camera: Arrows follow offers exactly the mount and the finder camera; with it: the mount, the finder camera and the imaging camera, the region Nudge after the region Track in the document, and Nudge up, right, down and left reading the arrows up, right, down and left; without mount: no Nudge region"
         decision: "spec.md:US5-S3"
       - path: crates/finder/web/src/components/NudgeBlock.test.tsx
         status: new
         disposition: add
-        assertion: "ImagingPage from the recorded session tracking without its target, fetch answering a ready imaging view: a region Nudge follows the region Imaging frame in the document and its Arrows follow box reads imaging_camera"
+        assertion: "ImagingPage from the recorded session tracking without its target, fetch answering a ready imaging view: a region Nudge follows the region Imaging frame in the document and its Arrows follow box reads imaging_camera; rendered again with fetch answering state off, once The scope node is not connected. shows, a region Nudge is still shown"
         decision: "spec.md:US5-S4"
       - path: crates/finder/web/e2e/nudge.spec.ts
         status: new
         disposition: add
-        assertion: "the simulated console, Track off, by day: Arrows follow reads mount; Nudge right answers 200 exactly {up_arcsec 0, right_arcsec 30, moved axes} and the block's status Nudged right 30 (arcsec); after axis_move.state done and mount.moving false, Coarse then Nudge down answers exactly {up_arcsec -240, right_arcsec 0, moved axes} and Nudge up at once 409 with the block's alert the mount is already moving"
+        assertion: "the simulated console, Track off, by day: Arrows follow reads mount; Nudge right answers 200 exactly {up_arcsec 0, right_arcsec 30, moved axes} and the block's status Nudged right 30 (arcsec); after axis_move.state done and mount.moving false, Coarse then Nudge down answers exactly {up_arcsec -240, right_arcsec 0, moved axes} and Nudge up at once 409 with the block's alert the mount is already moving; once at rest, Coarse and Nudge left, and 1.5 s later the session's axis_move.state moving and the block's status exactly Nudging left 4 (arcmin) with an ellipsis"
         decision: "spec.md:US5-S5"
       - path: crates/finder/web/e2e/nudge.spec.ts
         status: new
@@ -974,6 +1061,11 @@ stories:
         disposition: add
         assertion: "the Nudge block's own screenshot by day has more than 1000 off-red pixels (red above 226 or green or blue above 0); after Night mode: red and black, html data-theme night and 1.5 s, none"
         decision: "spec.md:US5-S7"
+      - path: crates/finder/web/e2e/nudge.spec.ts
+        status: new
+        disposition: add
+        assertion: "the simulated console with the session nudge.spec.ts sets: /imaging opened, a region Nudge visible within 20 s and its Arrows follow box reading imaging_camera"
+        decision: "spec.md:US5-S8"
       - path: crates/finder/web/src/components/TrackControl.test.tsx
         status: existing
         disposition: preserve

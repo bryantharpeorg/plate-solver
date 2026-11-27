@@ -4,9 +4,11 @@ depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-con
 # Drafted 2026-11-27 against `main` at f6d4f5fd, at the owner's ask of 2026-11-27 ("Your
 # rec. Proceed", to the seat's ranked list after a field night), from a probe of that day
 # on the branch `probe/055` cut from f6d4f5fd; cynical review round 1 folded the same day
-# on that branch (plan.md § What was run and what was read). Every `path:line` here was
-# read at f6d4f5fd. None of the ten owner decisions is answered yet; the scenarios are
-# written to each recommendation. 014 is named for the direct move's guards and approach;
+# on that branch; probe round 1 from this text alone on `probe/055-r1` (tip a6a92960:
+# 3 blocking, 14 clarity defects) folded the same day, its new steps proven there on
+# d55caf08, 9f3b103f and 8b7212bb (plan.md § What was run and what was read). Every
+# `path:line` here was read at f6d4f5fd. None of the ten owner decisions is answered yet; the
+# scenarios are written to each recommendation. 014 is named for the direct move's guards and approach;
 # 015 and 038 for Track and its push check; 016 for direct axis moves, MCP and
 # `axis_move`; 021 for the chart rotation and the live pointing's up; 032 for the imaging
 # solve; 019 for the night rule; 017, 022, 024, 040, 042, 050 and 051 because each last
@@ -60,8 +62,8 @@ axis and rate. Those three quotations are the owner's only logged words on the f
   § Technical Context). A step is an altitude change and an azimuth change scaled by the
   altitude's cosine. No equatorial direction is used anywhere.
 - Q: Which of the other drafts' files does this spec write? → A: Of 053's, only
-  `crates/finder/src/goto.rs`, and there only two new `AxisMove` variants, one new arm of
-  `Planner::direct`, its helper and one refusal; GoTo's correction solve, the model, the
+  `crates/finder/src/goto.rs`, and there only two new `AxisMove` variants, two new arms
+  of `Planner::direct`, its helper and one refusal; GoTo's correction solve, the model, the
   live solve and `session.rs` are not written. 052, 053 and 054 also write
   `crates/finder/README.md`, `GLOSSARY.md` and the `console` and `motion` test
   `main.rs` files, and 054 rewrites `crates/finder/web/src/components/ImagingPage.tsx`
@@ -90,6 +92,22 @@ axis and rate. Those three quotations are the owner's only logged words on the f
   Track makes the step and each moved axis comes back the way Track drives it (FR-010).
 - Q: Which owner words does decision 9 rest on? → A: Only the three quoted in the Input.
   The draft's "a press moves the picture the way the arrow points" was the seat's gloss.
+
+### Session 2026-11-27 (probe round 1 from this text, folded on `probe/055-r1`)
+
+- Q: With Track on, why did US3-S4's place come within 10″, swing 72.6″ past and come
+  back? → A: Track's own loop, as at f6d4f5fd. The step is made from the counts, so it
+  carries the 1.5′ Track error the push left; after the quiet window Track's correction
+  sends its proportional term (`crates/finder/src/tracking.rs:633`, computed for a
+  pointing's 0.5 s) once a second (`crates/finder/src/tracking.rs:1335`), so it
+  overshoots, and it never drives an axis against Track's way
+  (`crates/finder/src/tracking.rs:1540`), so the swing above comes back only as the sky
+  rises (run: the same push with no press swung 19″ to 70″ past by the rate loop's
+  phase). US3-S4 now holds the place at the end of its read.
+- Q: Does a Track-on step keep `motion`? → A: No. A direct move's `motion` is read only
+  while its move runs (`crates/finder/src/api.rs:787`, `crates/finder/src/api.rs:904`),
+  so a Track-on step's `motion` names the nudge while the step is made and then reads
+  Track's own start again (US3-S1).
 
 ## Owner decisions
 
@@ -180,7 +198,8 @@ made.
    in the main page's guidance block under Track, which shows only with a session target
    (`crates/finder/web/src/components/GuidanceBlock.tsx:21`), opening on the mount's
    view; and on the Imaging page after the imaging camera's frame, with or without a
-   target, opening on the imaging camera's view when the session has one. The Imaging
+   target or a ready imaging camera, opening on the imaging camera's view when the
+   session has one. The Imaging
    page half builds on 054's rewritten page once this spec is re-anchored. Instead:
    (b) the guidance block only (the draft's; the imaging camera's arrows then sit on a
    page without its frame); (c) the Imaging page only; (d) Setup's mount section.
@@ -222,8 +241,9 @@ file changes.
    already moving`, on target or off. 016's Q10 reads: "The page's routes keep the
    answers 015 gives them (FR-009, FR-013)", and 015's FR-013 lists four conditions for
    Track on; this adds a fifth on the page's route.
-4. **A page action in `motion`** (FR-007): 016's FR-014 names the page actions `goto`,
-   `second_sync` and `track`; a nudge adds `nudge`.
+4. **A page action in `motion`** (FR-007, FR-010): 016's FR-014 names the page actions
+   `goto`, `second_sync` and `track`; a nudge adds `nudge`, with Track on only while its
+   step is made.
 5. **`axis_move` reports a Track-on step** (FR-010): 016's FR-022 reports the latest
    direct axis move; a Track-on nudge's step, which Track makes, is reported there too,
    with `tool` `nudge`, and is reserved as a direct move is.
@@ -320,8 +340,8 @@ Every scenario shares these definitions.
   by the step's size at the press's angle clockwise of the zenith with the simulator's
   own horizon transform. **Read for N s** means read every 100 ms for N s: the first
   time the true place is within 10″ of the stepped place, the farthest it is from it
-  over the 20 s after, whether any read's `track` has a `push` key and whether any reads
-  `slip_pending` true.
+  over the 20 s after and over the read's last 10 s, whether any read's `track` has a
+  `push` key and whether any reads `slip_pending` true.
 - **The bare console** is `finder::router` over `AppState::shared` alone, with no link.
 - **The MCP rig** is `crate::support::mcp::sim::Rig::new(START, 50.0, 120.0, true)`,
   synced, its tools called with `tools/call` as `crates/finder/tests/mcp/` calls them;
@@ -337,7 +357,7 @@ Every scenario shares these definitions.
   the night reset and frames running until `model.syncs` is above 0, as
   `crates/finder/web/e2e/tracking.spec.ts` sets it up. **The Nudge block** is the
   region named `Nudge` inside the region whose name starts `Target M42`; every page
-  locator of these scenarios is held to it.
+  locator of US5-S5 to US5-S7 is held to it.
 - **Oracles.** The simulator's true tube direction, counts, eyepiece and imaging truth
   and its own horizon transform; the steps' sizes and the ways' angles; the mount's
   counts a turn (half a degree is 2,250 counts); the words of these scenarios and of
@@ -384,7 +404,7 @@ during development,
 1. **Given** the bare console, and then the synced rig with `PUT /api/session` `{"chart_rotation_deg": 200}`, **When** a committed test presses fine `up` in the `finder_camera` view on the bare console, then on the rig presses each step each way in the `finder_camera` view, reading each until it rests, **Then** it asserts that the bare console answers 409 with exactly `{"error": "the finder camera has no live pointing yet"}`, and that each press on the rig answers 200 with `moved` `axes` and lands within 3 % at φ + 200° clockwise of the zenith (the simulator's live pointing reads `up_deg` near 0°, so this proves the chart rotation only).
 2. **Given** the unit session with `up_deg` 40° at chart rotations 0° and 200°, **When** a committed unit test asks `offset` for a coarse press each way in the `finder_camera` view, **Then** it asserts that each answer is `[240 cos a, 240 sin a]` within 10⁻⁹ as `[up, right]`, a = φ + R − 40° with R the chart rotation.
 3. **Given** the bare console, and then the imaging rig at an imaging angle of 100° once `GET /api/imaging` reads `state` `ready` and the model holds a sync, **When** a committed test presses fine `up` in the `imaging_camera` view on the bare console and on the rig; presses fine `down` and then fine `left` in the `mount` view, reading each until `axis_move.state` is `done`; takes an imaging frame with `POST /api/imaging/frame`, reads it until it is saved, solves it with `POST /api/imaging/solve` and reads until its solve is `solved`; and then presses each step each way in the `imaging_camera` view, reading each until `axis_move.state` is `done` and 1 s more, **Then** it asserts that both first presses answer 409 with exactly `{"error": "the imaging camera has not solved a frame yet"}`; and that after each later press, which answers 200, the frame's centre has moved from where it would be by the step's size within 4 % of the step, at the position angle east of north of the simulator's `up_east_of_north_deg` less φ, the way an unmirrored frame's arrow points.
-4. **Given** solved imaging views, one unmirrored and one mirrored, and an unmirrored one whose solve was asked for at T while the imaging view still holds its frame, of the same id, begun at T − 1,200 s with a 2 s exposure, **When** a committed unit test asks `offset` for a coarse press each way in the `imaging_camera` view of each, **Then** it asserts that the mirrored frame's `up` and `down` equal the unmirrored frame's and its `right` and `left` equal the unmirrored frame's `left` and `right`; and that the late solve's answers equal those of a solve asked for at T − 1,199 s and differ by more than 1° from those of a solve asked for at T.
+4. **Given** solved imaging views, one unmirrored and one mirrored, and an unmirrored one whose solve was asked for at T = START while the imaging view still holds its frame, of the same id, begun at T − 1,200 s with a 2 s exposure, **When** a committed unit test asks `offset` for a coarse press each way in the `imaging_camera` view of each, **Then** it asserts that the mirrored frame's `up` and `down` equal the unmirrored frame's and its `right` and `left` equal the unmirrored frame's `left` and `right`; and that the late solve's answers equal those of a solve asked for at T − 1,199 s and differ by more than 1° from those of a solve asked for at T.
 5. **Given** a solved imaging view at T, **When** a committed unit test asks `offset` for a coarse `right` in the `imaging_camera` view with it, then with later solves at T + 60 s reading `solving` and `failed` and the same kept frame, then with nothing kept for a solve reading `solving`, one reading `failed` and no imaging view, and then with a session without a site, **Then** it asserts that both later solves answer what the solved one did; that the three answer exactly `the imaging camera's solve is still running`, `the imaging camera's latest frame did not solve` and `the imaging camera has not solved a frame yet`; and that the last answers exactly `a site is needed`.
 
 ### User Story 3 - With Track on, the place Track holds moves by the step and Track makes it (Priority: P1)
@@ -402,12 +422,13 @@ nextest command runs it; during development,
 
 **Acceptance Scenarios**:
 
-1. **Given** the Track rig, **When** a committed test, each time settled, presses each step each way in the `mount` view, reads `GET /api/session` at once and reads for 30 s, **Then** it asserts that each press answers 200 with `moved` `track`; that the session read at once has `axis_move` exactly `{"state": "moving", "tool": "nudge"}`; that the true place comes within 10″ of the stepped place within 10 s and stays within 30″ of it over the next 20 s; that no read has a `push` key or `slip_pending` true; that `axis_move.state` then reads `done` and `track.state` `tracking`; and that the model's `epoch` after the presses is the one before them.
+1. **Given** the Track rig, **When** a committed test, each time settled, presses each step each way in the `mount` view, reads `GET /api/session` at once and reads for 30 s, **Then** it asserts that each press answers 200 with `moved` `track`; that the session read at once has `axis_move` exactly `{"state": "moving", "tool": "nudge"}` and `motion.tool` `nudge`; that the true place comes within 10″ of the stepped place within 10 s and stays within 30″ of it over the next 20 s; that no read has a `push` key or `slip_pending` true; that `axis_move.state` then reads `done`, `track.state` `tracking` and `motion` exactly what it read just before the press; and that the model's `epoch` after the presses is the one before them.
 2. **Given** the Track rig at START + 4 h, where M42 has set west of the meridian and Track drives altitude down, **When** a committed test, each time settled, presses coarse `up` and then coarse `down` in the `mount` view and reads each for 30 s, **Then** it asserts the same as US3-S1 for each press.
-3. **Given** the Track rig, settled, **When** a committed test presses coarse `left` in the `mount` view, presses coarse `left` again 1 s later and reads for 9 s more, **Then** it asserts that the first answers 200 and the second 409 with exactly `{"error": "the mount is already moving"}`; that no read has a `push` key or `slip_pending` true; that 10 s after the first press the true place is within 10″ of the stepped place of that press; and that the model's `epoch` is the one before.
-4. **Given** the Track rig, settled, once with the simulator's mount then pushed by hand 1.5′ down (`push_by(0.0, −1.5/60)`) and once on a new Track rig pushed 1.5′ up, **When** a committed test presses coarse `up` after the push down and coarse `down` after the push up, each in the `mount` view, and reads each for 45 s, **Then** it asserts that each press answers 200; that the true place comes within 10″ of the stepped place; that no read has a `push` key or `slip_pending` true; and that the model's `epoch` is the one before.
+3. **Given** the Track rig, settled, **When** a committed test presses coarse `left` in the `mount` view, presses coarse `left` again 1 s later and reads for 9 s more, **Then** it asserts that the first answers 200 and the second 409 with exactly `{"error": "the mount is already moving"}`; that 1 s after the first press `axis_move.state` reads `moving`; that no read has a `push` key or `slip_pending` true; that 10 s after the first press the true place is within 10″ of the stepped place of that press; and that the model's `epoch` is the one before.
+4. **Given** the Track rig, settled, once with the simulator's mount then pushed by hand 1.5′ down (`push_by(0.0, −1.5/60)`) and once on a new Track rig pushed 1.5′ up, **When** a committed test presses coarse `up` after the push down and coarse `down` after the push up, each in the `mount` view, and reads each for 45 s, **Then** it asserts that each press answers 200; that the true place comes within 10″ of the stepped place and is within 15″ of it at every read of the last 10 s; that no read has a `push` key or `slip_pending` true; and that the model's `epoch` is the one before.
 5. **Given** the Track rig, settled, with the node's frames then stopped, **When** a committed test presses coarse `right` in the `mount` view and reads the true place every 100 ms for 5 s, **Then** it asserts that the press answers 200 and that the true place came within 20″ of the stepped place.
 6. **Given** the Track rig with the simulator's mount pushed down by hand by 2° (`push_by(0.0, −2.0)`), and then the motion rig, synced, with the target M42 elsewhere and Track turned on, reading `armed`, **When** a committed test presses fine `up` in the `mount` view the first time `track.push.state` reads `moving`, again the first time it reads `following`, once more 10 s after that, and then once on the second rig, **Then** it asserts that the first two answer 409 with exactly `{"error": "a push by hand is still settling: press again in a few seconds"}`; that the third answers 200 with `moved` `track`; and that the last answers 409 with exactly `{"error": "Track is not tracking yet"}`.
+7. **Given** the Track rig, settled, **When** a committed test presses coarse `left` in the `mount` view and reads the tracker's `checks_push` at every 100 ms tick while `axis_move.state` reads `moving`, then 2.5 s and 3.5 s later, **Then** it asserts that `checks_push` is false at every read while moving, when it ends and 2.5 s later, and true 3.5 s later.
 
 ### User Story 4 - MCP and the README carry the nudge (Priority: P2)
 
@@ -444,12 +465,13 @@ buttons.
 **Acceptance Scenarios**:
 
 1. **Given** the page rig with `fetch` answering `{"up_arcsec": 0, "right_arcsec": 240, "moved": "axes"}`, **When** a committed test chooses `finder_camera` in the Nudge block's `Arrows follow` box, clicks `Coarse 4′` and then `Nudge right`, and re-renders the block from the same session with `axis_move` `{"state": "moving", "tool": "nudge"}` and then `{"state": "done", "tool": "nudge"}`, **Then** it asserts that `Coarse 4′` is pressed (`aria-pressed` true); that `fetch` was called with `/api/mount/nudge`, method `POST`, the header `Content-Type: application/json` and the body `{"direction":"right","step":"coarse","view":"finder_camera"}`; that `onChange` was called once; that the block's status reads exactly `Nudging right 4′…` after the answer and after the `moving` session; and that it reads exactly `Nudged right 4′` after the `done` one.
-2. **Given** the page rig with `fetch` answering 409 with `{"error": "the night has no sync yet"}`, **When** a committed test clicks `Nudge up`, **Then** it asserts that the Nudge block's alert reads exactly `the night has no sync yet`.
-3. **Given** the page rig's session without `imaging_camera`, then with it, then without `mount`, **When** a committed test renders each, **Then** it asserts that the `Arrows follow` box offers exactly `the mount` and `the finder camera`, then `the mount`, `the finder camera` and `the imaging camera`, and that without a mount there is no Nudge block.
-4. **Given** `ImagingPage` rendered by Testing Library from the recorded session `tracking` without its `target`, with `fetch` answering a `ready` imaging view of the simulated imaging camera, **When** a committed test finds the region `Imaging frame`, **Then** it asserts that a region named `Nudge` follows it in the document and that its `Arrows follow` box reads `imaging_camera`.
-5. **Given** the simulated console with Track off and the page open by day, **When** a committed browser test reads the `Arrows follow` box, clicks `Nudge right`, reads the session until `axis_move.state` is `done` and `mount.moving` false, clicks `Coarse 4′`, clicks `Nudge down` and at once `Nudge up`, and reads until it rests, **Then** it asserts that the box reads `mount`; that the first press's response is 200 with exactly `{"up_arcsec": 0, "right_arcsec": 30, "moved": "axes"}` and the block's status reads `Nudged right 30″`; that `Nudge down` answers exactly `{"up_arcsec": -240, "right_arcsec": 0, "moved": "axes"}`; and that `Nudge up` answers 409 and the block's alert reads `the mount is already moving`.
+2. **Given** the page rig with `fetch` holding its answer until the test releases it, then answering 409 with `{"error": "the night has no sync yet"}`, **When** a committed test clicks `Nudge up` and then releases the answer, **Then** it asserts that after `Nudge up` all four arrows are disabled until it answers, and `Nudge up` is enabled after; and that the Nudge block's alert reads exactly `the night has no sync yet`.
+3. **Given** the page rig's session without `imaging_camera`, then with it, then without `mount`, **When** a committed test renders each, **Then** it asserts that the `Arrows follow` box offers exactly `the mount` and `the finder camera`, then `the mount`, `the finder camera` and `the imaging camera`, and, from the session `tracking`, that the region `Nudge` follows the region `Track` in the document and that `Nudge up`, `Nudge right`, `Nudge down` and `Nudge left` read `↑`, `→`, `↓` and `←`; and that without a mount there is no Nudge block.
+4. **Given** `ImagingPage` rendered by Testing Library from the recorded session `tracking` without its `target`, with `fetch` answering a `ready` imaging view of the simulated imaging camera, and then rendered again with `fetch` answering `{"state": "off"}`, **When** a committed test finds the region `Imaging frame`, and then the words `The scope node is not connected.`, **Then** it asserts that a region named `Nudge` follows the frame in the document and that its `Arrows follow` box reads `imaging_camera`; and that with the view reading `off` a region named `Nudge` is still shown.
+5. **Given** the simulated console with Track off and the page open by day, **When** a committed browser test reads the `Arrows follow` box, clicks `Nudge right`, reads the session until `axis_move.state` is `done` and `mount.moving` false, clicks `Coarse 4′`, clicks `Nudge down` and at once `Nudge up`, and reads until it rests; then clicks `Coarse 4′` and `Nudge left`, waits 1.5 s, reads the session and reads until it rests, **Then** it asserts that the box reads `mount`; that the first press's response is 200 with exactly `{"up_arcsec": 0, "right_arcsec": 30, "moved": "axes"}` and the block's status reads `Nudged right 30″`; that `Nudge down` answers exactly `{"up_arcsec": -240, "right_arcsec": 0, "moved": "axes"}`; that `Nudge up` answers 409 and the block's alert reads `the mount is already moving`; and that 1.5 s after `Nudge left` the session's `axis_move.state` is `moving` and the block's status reads exactly `Nudging left 4′…`.
 6. **Given** the simulated console with Track turned on with the guidance block's Track switch and read until `track.state` is `tracking`, **When** a committed browser test clicks `Coarse 4′` and `Nudge up` and reads the session every 500 ms for 10 s, **Then** it asserts that the press's response is 200 with exactly `{"up_arcsec": 240, "right_arcsec": 0, "moved": "track"}`; that the block's status comes to read `Nudged up 4′ · Track holds the new place` within 20 s; and that every read has `track.state` `tracking` and no `push`.
 7. **Given** the simulated console with the page open by day, **When** a committed browser test screenshots the Nudge block, turns on `Night mode: red and black`, reads `data-theme` `night` on `html`, waits 1.5 s and screenshots the block again, **Then** it asserts with 012's off-red count (a pixel whose red is above 226 or whose green or blue is above 0) that the day screenshot has more than 1,000 off-red pixels and the night one none.
+8. **Given** the simulated console with the session `nudge.spec.ts` sets, **When** a committed browser test opens `/imaging`, **Then** it asserts that a region `Nudge` is visible within 20 s and its `Arrows follow` box reads `imaging_camera`.
 
 ### Edge Cases
 
@@ -494,7 +516,10 @@ buttons.
   but not `tracking` is refused with `Track is not tracking yet`: armed is run (US3-S6);
   the keyhole wait and the backlash measure are read, not run.
 - **A step from a Track error.** A step taken while Track is still 1.5′ off is not read
-  as a push either way (US3-S4).
+  as a push either way (US3-S4). The step carries that error, and Track's own loop then
+  corrects it as it corrects any error, swinging past the stepped place before it holds
+  it (run, simulated time: within 10″ at 7.6 s, 72.6″ past it about 1.5 s later, within
+  10.5″ over the last 10 s of 45 s). US3-S4 holds it within 15″ at the end.
 
 ## Requirements *(mandatory)*
 
@@ -524,7 +549,8 @@ buttons.
   live views as the page draws them, turned counter-clockwise by the session's chart
   rotation R: the press's angle clockwise of the zenith is φ + R − u, u the latest live
   pointing's `up_deg`. With no live pointing it SHALL answer 409 with `the finder camera
-  has no live pointing yet`.
+  has no live pointing yet`, and with a live pointing without `up_deg` (no site) with
+  FR-005's `a site is needed`.
 - **FR-005**: In the `imaging_camera` view, the arrows SHALL follow the imaging camera's
   frame as the last imaging solve that solved gives it: the solve's `cd_deg`, whose
   determinant's sign is the frame's handedness (a mirrored frame's is negative, and its
@@ -580,7 +606,10 @@ buttons.
   SHALL first pass a GoTo's guards (FR-006's refusals). Track SHALL stay `tracking`. The
   step SHALL be reported as `axis_move` with `tool` `nudge`, `moving` from the press and
   `done` once made, or `halted` with Track's reason if Track ends first, and reserved as
-  a direct move is (FR-008). A press with Track wanted but not `tracking`, or while a
+  a direct move is (FR-008). While it is made, `motion` SHALL read `by` and `tool`
+  `nudge`; once `axis_move` ends, `motion` SHALL read again what it read before the
+  press, as a direct move's `motion` is read only while it runs
+  (`crates/finder/src/api.rs:787`). A press with Track wanted but not `tracking`, or while a
   backlash is measured, SHALL answer 409 with `Track is not tracking yet`.
 - **FR-011**: While a press's step is to be made or being made, and for 1 s plus Track's
   settle (`SETTLE`, `crates/finder/src/tracking.rs:31`) after it is made, the tracker's
@@ -631,23 +660,26 @@ buttons.
 
 **The page** (US5):
 
-- **FR-017**: The guidance block, which shows with a session target, SHALL show under
-  Track, while the mount is connected, a region named `Nudge` holding a box `Arrows
-  follow` (`the mount`, `the finder camera`, and `the imaging camera` when the session
-  has `imaging_camera`, the imaging camera's sensor geometry; `the mount` first), two
-  buttons `Fine 30″` and `Coarse 4′` of which the chosen one is pressed (`Fine 30″`
-  first), and four buttons `Nudge up`, `Nudge right`, `Nudge down` and `Nudge left`
-  drawn as arrows in a cross, at least 44 CSS pixels each. A click SHALL post the press
-  and disable the arrows until it answers; the status SHALL read `Nudging <way>…` until
-  a later session reads the press's `axis_move` (`tool` `nudge`) other than `moving`,
-  then `Nudged <way>`, with ` · Track holds the new place` when `moved` is `track`, or
-  `Nudge stopped: <reason>` when `halted`; `<way>` is the direction and `30″` or `4′`.
-  It SHALL refresh the session, and a refusal SHALL show its `error` in the block's
-  alert.
+- **FR-017**: The guidance block, which shows with a session target, SHALL show after
+  the region `Track`, while the mount is connected, a region named `Nudge` holding a
+  box `Arrows follow` (`the mount`, `the finder camera`, and `the imaging camera` when
+  the session has `imaging_camera`, the imaging camera's sensor geometry; `the mount`
+  first), two buttons `Fine 30″` and `Coarse 4′` of which the chosen one is pressed
+  (`Fine 30″` first), and four buttons `Nudge up`, `Nudge right`, `Nudge down` and
+  `Nudge left` drawn as the arrows `↑`, `→`, `↓` and `←` in a cross (under either
+  answer of owner decision 9), at least 44 CSS pixels each. A click SHALL post the
+  press and disable the arrows until it answers; the status SHALL read `Nudging <way>…`
+  while the session is still the one the press was made from or its `axis_move`
+  (`tool` `nudge`) reads `moving`, then `Nudge stopped: <reason>` when that reads
+  `halted`, and otherwise `Nudged <way>`, with ` · Track holds the new place` when
+  `moved` is `track`; `<way>` is the direction and `30″` or `4′`. It SHALL refresh the
+  session, and a refusal SHALL show its `error` in the block's alert.
 - **FR-018**: The Imaging page SHALL show the same Nudge block after its imaging frame,
-  with or without a session target, its `Arrows follow` box first on `the imaging
-  camera` when the session has `imaging_camera`. `ImagingPage` SHALL take the session
-  and its refresh from `App`, and the page's session SHALL copy `axis_move`.
+  with or without a session target and with or without a ready imaging camera (after
+  the camera's sections, `crates/finder/web/src/components/ImagingPage.tsx:293`, not
+  inside them), its `Arrows follow` box first on `the imaging camera` when the session
+  has `imaging_camera`. `ImagingPage` SHALL take the session and its refresh from
+  `App`, and the page's session SHALL copy `axis_move`.
 - **FR-019**: The Nudge block SHALL follow the red-only night rule.
 - **FR-020**: `playwright.config.ts` SHALL gain only owner approval 9's two entries, and
   `crates/finder/web/dist` SHALL be the build of its source.
@@ -677,7 +709,8 @@ buttons.
   the finder camera's views (US1-S1, US2-S1) and within 4 % in the imaging camera's
   (US2-S3); with Track on the telescope is within 10″ of the stepped place within 10 s
   every way, rising or setting (US3-S1, US3-S2).
-- **SC-004**: No press is a sync, a slip or read as a push (US1-S1, US3-S1 to US3-S4),
+- **SC-004**: No press is a sync, a slip or read as a push (US1-S1, US3-S1 to US3-S4,
+  US3-S7),
   every guard's refusal is the route's (US1-S3, US1-S5, US3-S6, US4-S2), and the page
   shows the console's own words (US5-S2, US5-S5).
 
@@ -729,9 +762,9 @@ US5:
   implements: [FR-017, FR-018, FR-019, FR-020]
 ```
 
-Five stories, each under 60 % of 65,536 B (39,321 B) at the factory's worst overrun seen,
-1.35 times the probe's measure (plan.md § Plan traps 1): the mount's view with Track
-off, the approach, the reservation and the zenith; the two camera views; Track's step;
+Five stories, each under 60 % of 65,536 B (39,321 B) as probe round 1 and its fold
+measured them; US3 and US5 go over it at 1.35 times, the factory's worst overrun seen,
+and stay whole (plan.md § Plan traps 1): the mount's view with Track off, the approach, the reservation and the zenith; the two camera views; Track's step;
 MCP, the README and the glossary; the page. The cut: the draft's US1 gave up its finder
 camera view and US2 its imaging camera view and Track, so each view and Track is a story
 of its own, and US2's and US3's tests use US1's test helpers. Each merges after the one

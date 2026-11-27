@@ -8,11 +8,12 @@ description: "Task list for 055-nudge-arrows-follow-the-frame: The Nudge Arrows 
 - every spec in `depends_on_landed` has landed on `main`: met at f6d4f5fd;
 - 052, 053 and 054 have landed, in that order, and this trio is re-anchored on that
   `main`: not met;
-- the owner decisions in spec.md are settled: not met, none of the ten is answered;
-- every story has been probe-built from this text: not met (the fold of 2026-11-27 built
-  the five stories beside this text, not from it);
-- the page half has run once: met on the probe (`CI=1 npm run e2e`, 37 of 37), to be run
-  again on the re-anchored base;
+- the owner decisions in spec.md are settled: not met, none of the ten is answered (the
+  flip ask);
+- every story has been probe-built from this text: met, probe round 1 on
+  `probe/055-r1` (tip a6a92960), folded, its new steps proven there on 8b7212bb;
+- the page half has run once: met on the probe (`CI=1 npm run e2e`, 38 of 38 on
+  8b7212bb), to be run again on the re-anchored base;
 - no operator-staged file is needed: met.
 
 **Rules for every story:**
@@ -101,7 +102,7 @@ description: "Task list for 055-nudge-arrows-follow-the-frame: The Nudge Arrows 
 ### Tests first
 
 - [ ] T010 [US3] Create `crates/finder/tests/motion/nudge_track.rs` with US3-S1 to
-  US3-S6 under `#[tokio::test(start_paused = true)]`, on US1's helpers, building the
+  US3-S7 under `#[tokio::test(start_paused = true)]`, on US1's helpers, building the
   Track rig as spec.md § User Scenarios defines it, and add `mod nudge_track;` to
   `crates/finder/tests/motion/main.rs` in its alphabetical place. Before T011 and T012
   every Track press answers 409 `the mount is already moving` or meets no refusal it is
@@ -115,10 +116,12 @@ description: "Task list for 055-nudge-arrows-follow-the-frame: The Nudge Arrows 
   loop's step, and the `pointing`, `checks_push`, `pause` and steady-mark changes, as
   plan.md § Interfaces gives them (FR-010, FR-011, FR-012).
 - [ ] T012 [US3] In `crates/finder/src/nudge.rs`, add `PUSH_QUIET_S`, the push-settling
-  refusal, the Track branch of `nudge` and its watcher (FR-010, FR-012).
+  refusal, the Track branch of `nudge` and its watcher, which puts back the `motion`
+  record read before the press when the step ends; in `crates/finder/src/api.rs`, make
+  `AppState::motion` `pub(crate)` (`crates/finder/src/api.rs:132`) (FR-010, FR-012).
 - [ ] T013 [US3] Run the `lint` and `test` gates with every existing test unchanged and
   green, then commit the green story (FR-010 to FR-012; US3-S1, US3-S2, US3-S3, US3-S4,
-  US3-S5, US3-S6).
+  US3-S5, US3-S6, US3-S7).
 
 ## Phase 4: User Story 4 - MCP and the README carry the nudge (Priority: P2)
 
@@ -148,7 +151,7 @@ description: "Task list for 055-nudge-arrows-follow-the-frame: The Nudge Arrows 
 
 - [ ] T018 [US5] Create `crates/finder/web/src/components/NudgeBlock.test.tsx` with
   US5-S1 to US5-S4 on the page rig and `ImagingPage`, and
-  `crates/finder/web/e2e/nudge.spec.ts` with US5-S5, US5-S6 and US5-S7 on the simulated
+  `crates/finder/web/e2e/nudge.spec.ts` with US5-S5 to US5-S8 on the simulated
   console, its 012 off-red helper kept local as `tracking.spec.ts` keeps it and its
   session put back at the end as `tracking.spec.ts` puts it back; add
   `"**/nudge.spec.ts"` to the default project's `testIgnore` and the simulate project's
@@ -163,12 +166,12 @@ description: "Task list for 055-nudge-arrows-follow-the-frame: The Nudge Arrows 
   `crates/finder/web/src/useSession.ts`; create
   `crates/finder/web/src/components/NudgeBlock.tsx` as plan.md § Interfaces gives it;
   render it in `GuidanceBlock.tsx` after `TrackControl` and in `ImagingPage.tsx` after
-  its imaging frame, with the two optional props; pass them from
+  its imaging frame, outside the ready camera's sections, with the two optional props; pass them from
   `crates/finder/web/src/App.tsx`; and build `dist` with `npm run build` (FR-017 to
   FR-020).
 - [ ] T020 [US5] Run the `lint` and `test` gates, `CI=1 npm run e2e` among them, with
   every existing test unchanged and green, then commit the green story with `dist`
-  (FR-017 to FR-020; US5-S1, US5-S2, US5-S3, US5-S4, US5-S5, US5-S6, US5-S7).
+  (FR-017 to FR-020; US5-S1, US5-S2, US5-S3, US5-S4, US5-S5, US5-S6, US5-S7, US5-S8).
 
 ## Execution Order
 
