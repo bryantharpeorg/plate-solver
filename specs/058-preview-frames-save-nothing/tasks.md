@@ -9,9 +9,9 @@ description: "Task list for 058-preview-frames-save-nothing: Preview Frames Save
 - 052 to 055 have landed and this spec is re-anchored on them: not met;
 - the owner decisions in spec.md are answered and the approvals given: not met, none
   is answered;
-- a cynical review of this trio, folded: not met;
+- a cynical review of this trio, folded: round 1 folded on 2026-11-27;
 - every story has been probe-built from this text: not met;
-- the page half has run once: met on the probe (`CI=1 npm run e2e`, 35 of 35);
+- the page half has run once: met on the probe (`CI=1 npm run e2e`, 35 of 35 at US4's tip and the final tip);
 - no operator-staged file is needed: met.
 
 **Rules for every story:**
@@ -37,6 +37,8 @@ description: "Task list for 058-preview-frames-save-nothing: Preview Frames Save
   tool the gates don't run, and do not set `CARGO_TARGET_DIR`.
 - The results said here before each story's implementation are the probe's
   (plan.md § What was run and what was read), where it ran them.
+- Read a fixed-size pair of bytes with `as_chunks::<2>()`: the factory's clippy refuses
+  `chunks_exact(2)` (plan.md § Plan traps 22).
 
 ## Phase 1: User Story 1 - The console takes a preview frame and saves nothing (Priority: P1)
 
@@ -74,23 +76,25 @@ description: "Task list for 058-preview-frames-save-nothing: Preview Frames Save
   `imaging_focus_aid.rs` and `imaging_solve.rs` among them, then commit the green story
   (FR-001 to FR-005; US1-S1, US1-S2, US1-S3).
 
-## Phase 2: User Story 2 - The centre of each preview frame at full resolution (Priority: P1)
+## Phase 2: User Story 2 - The brightest part of each preview frame, one pixel a cell (Priority: P1)
 
 ### Tests first
 
 - [ ] T005 [US2] Create `crates/finder/tests/console/imaging_preview_crop.rs` with one
   test for US2-S1 under `#[test]`, building the worked frames of spec.md § User
-  Scenarios and listing each crop's pixels that are not black, and the crop rig (the
-  preview rig with no node folder and no solver) with one test for US2-S2 under
-  `#[tokio::test(start_paused = true)]`, and add `mod imaging_preview_crop;` to
-  `crates/finder/tests/console/main.rs` after `mod imaging_preview;`. On US1's source
-  the console binary does not build: there is no `preview::crop` (run).
+  Scenarios (helpers for a cell and a patch at a place) and listing each crop's pixels
+  that are not black, and the crop rig (the preview rig with no node folder and no
+  solver) with one test for US2-S2 under `#[tokio::test(start_paused = true)]`, and add
+  `mod imaging_preview_crop;` to `crates/finder/tests/console/main.rs` after
+  `mod imaging_preview;`. On US1's source the console binary does not build: there is no
+  `preview::crop` (run).
 
 ### Implementation
 
-- [ ] T006 [US2] In `crates/finder/src/imaging/preview.rs`, add `CROP_SIDE` and `crop`
-  with their docs, and say in the module's doc that a preview frame also gets a crop of
-  its centre at full resolution (FR-006; plan.md § Interfaces).
+- [ ] T006 [US2] In `crates/finder/src/imaging/preview.rs`, add `CROP_SIDE` (200), the
+  private `BOX_SIDE` (32) and `brightest`, and `crop` centred on the brightest box, with
+  their docs, and say in the module's doc that a preview frame also gets a crop around
+  its brightest box, one pixel a cell (FR-006; plan.md § Interfaces).
 - [ ] T007 [US2] In `crates/finder/src/imaging/frames.rs`, add `FrameView::crop` after
   `preview`, `None` in `take`, and make `show` encode the crop beside the preview in its
   one blocking step, keep it among the last `PREVIEWS_KEPT` crops and set the view's
@@ -111,8 +115,9 @@ description: "Task list for 058-preview-frames-save-nothing: Preview Frames Save
   bare MCP console, one test for US3-S1 under `#[tokio::test(start_paused = true)]` and
   one for US3-S2 under `#[test]`, reading `crates/finder/README.md` from
   `env!("CARGO_MANIFEST_DIR")` as `crates/finder/tests/console/imaging_run_docs.rs`
-  does, and add `mod imaging_preview_frames;` to `crates/finder/tests/mcp/main.rs` after
-  `mod imaging_focus;`. On US2 the tool is unknown and the README has no line
+  does, and ADR 0002 from `../../docs/adr/` beside it, reading the README's text with
+  each run of whitespace as one space, and add `mod imaging_preview_frames;` to
+  `crates/finder/tests/mcp/main.rs` after `mod imaging_focus;`. On US2 the tool is unknown and the README has no line
   `The Imaging page's preview frames have one tool:`, so both fail (run).
 
 ### Implementation
@@ -120,12 +125,13 @@ description: "Task list for 058-preview-frames-save-nothing: Preview Frames Save
 - [ ] T010 [US3] In `crates/finder/src/mcp/tools.rs`, add `take_preview_frame` after
   `take_imaging_frame`, with FR-009's description and answers (FR-009; plan.md
   § Interfaces).
-- [ ] T011 [US3] In `crates/finder/README.md`, add the MCP paragraph after the finder
-  camera focus aid's entries, the two rows before the preview's row, the preview row's
-  and the preview paragraph's words, and `## Preview frames` before
-  `## Solving imaging frames`; in `GLOSSARY.md`, add **Preview frame** before **Sub** and
-  `preview` to the **Purpose label**'s list, each as plan.md § Interfaces gives it
-  (FR-010, FR-011).
+- [ ] T011 [US3] In `crates/finder/README.md`, add the clause to the imaging camera's
+  count, the MCP paragraph after the finder camera focus aid's entries, the two rows
+  before the preview's row, the edits to the frame's states and keys, the preview row,
+  the preview paragraph and **One holder**, and `## Preview frames` before
+  `## Solving imaging frames`; in `GLOSSARY.md`, add **Preview frame** and **Crop**
+  before **Sub** and `preview` to the **Purpose label**'s list; and add ADR 0002's one
+  line after its last; each as plan.md § Interfaces gives it (FR-010, FR-011).
 - [ ] T012 [US3] Run the `lint` and `test` gates with every existing test unchanged and
   green, the earlier stories' test files, `imaging_run_docs.rs`,
   `crates/finder/tests/mcp/finder_focus.rs` and `crates/finder/tests/mcp/imaging.rs`
@@ -136,30 +142,33 @@ description: "Task list for 058-preview-frames-save-nothing: Preview Frames Save
 ### Tests first
 
 - [ ] T013 [US4] Create `crates/finder/web/src/components/PreviewBlock.test.tsx` with one
-  test for each of US4-S1, US4-S2, US4-S3, US4-S4 and US4-S5, stubbing `fetch` with the
-  stub console of spec.md § User Scenarios as the page's existing tests stub it, and an
-  `afterEach` that cleans up, unstubs the globals and puts `document.visibilityState`
-  back to `visible`.
+  test for each of US4-S1, US4-S2, US4-S3, US4-S4, US4-S5 and US4-S7, each `it` with
+  its own timeout of 15 000 ms, stubbing `fetch` with the stub console of spec.md § User
+  Scenarios as the page's existing tests stub it (one helper that also lets a scenario
+  answer the n-th `POST` itself), and an `afterEach` that cleans up, unstubs the globals
+  and puts `document.visibilityState` back to `visible`.
 - [ ] T014 [US4] Create `crates/finder/web/e2e/imaging-preview.spec.ts` with a test for
-  US4-S6 and its own copy of `imaging.spec.ts`'s off-red count, and add
+  US4-S6, reading the section's picture once the block shows no status (plan.md § Plan
+  traps 16), and its own copy of `imaging.spec.ts`'s off-red count, and add
   `"**/imaging-preview.spec.ts"` to the default project's `testIgnore` and the simulate
   project's `testMatch` in `crates/finder/web/playwright.config.ts`, each on a line of
   its own after `"**/imaging.spec.ts"` (spec.md owner approval 6). Before T015 and T016,
-  `PreviewBlock.test.tsx` fails to resolve `./PreviewBlock` (run); the browser test
-  before them: not run.
+  `PreviewBlock.test.tsx` fails to resolve `./PreviewBlock` (run), and the browser test
+  runs out its 60 s with no `Start preview frames` on the page (run).
 
 ### Implementation
 
 - [ ] T015 [US4] In `crates/finder/web/src/api.ts`, add the state `shown`, `crop?` and
   `postImagingPreview`; create `components/PreviewBlock.tsx` with `POLL_MS` and
-  `PreviewBlock`, its loop, ends, words and markup as FR-012 to FR-015 and plan.md
-  § Interfaces give them.
+  `PreviewBlock`, its modes, its pause while hidden, its loop, ends, words and markup as
+  FR-012 to FR-015 and plan.md § Interfaces give them.
 - [ ] T016 [US4] In `components/ImagingPage.tsx`, import `PreviewBlock` and render
   `<PreviewBlock />` right after the section `Imaging frame`, inside the same fragment
   (FR-012). Run `npm run build` and commit `crates/finder/web/dist`.
 - [ ] T017 [US4] Run the `lint` and `test` gates with every existing test unchanged and
   green, `ImagingPage.test.tsx` and `e2e/imaging.spec.ts` among them, then commit the
-  green story (FR-012 to FR-016; US4-S1, US4-S2, US4-S3, US4-S4, US4-S5, US4-S6).
+  green story (FR-012 to FR-016; US4-S1, US4-S2, US4-S3, US4-S4, US4-S5, US4-S6,
+  US4-S7).
 
 ## Execution Order
 
@@ -172,7 +181,8 @@ US1 -> US2 -> US3
   055.
 - **US2** starts once US1 has merged: its crop is made in US1's `show`, and its rig
   takes US1's preview frames.
-- **US3** starts once US2 has merged: its tool answers US2's crop.
+- **US3** starts once US2 has merged: its tool answers US2's crop, and its README
+  describes it.
 - **US4** starts once US2 has merged: the page draws US2's crop, and its browser test
   needs US1's route. US3 and US4 write no file in common and may run side by side.
 - **`[P]`** marks nothing here: each story's implementation follows its tests.
