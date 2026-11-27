@@ -14,6 +14,10 @@ use scope_link::proto::StarFrame;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
+/// The largest base tilt a second sync may fit before it is read as a slip, in
+/// degrees (053).
+const MAX_BASE_TILT_DEG: f64 = 6.0;
+
 /// A solved aim point and interpolated axis positions, all at mid-exposure.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Sync {
@@ -197,7 +201,7 @@ pub struct Model {
     pub syncs: Vec<Sync>,
     /// Zero points, oldest epoch first.
     pub epochs: Vec<Epoch>,
-    /// Absent until two syncs in an epoch are at least 90° apart.
+    /// Absent until two syncs in an epoch are at least 90° apart on the azimuth axis.
     pub base_tilt: Option<BaseTilt>,
     /// Absent until the count and spread requirements are met.
     pub fixed: Option<FixedTerms>,
@@ -261,6 +265,11 @@ pub fn mid_exposure(frame: &StarFrame, counts: [u32; 2]) -> Option<[f64; 2]> {
     Some([0, 1].map(|i| (start[i] + end[i]) / 2.0))
 }
 impl Sync {
+    /// The azimuth axis's own direction in degrees, which no model error moves (053).
+    pub(crate) fn axis_az_deg(&self) -> f64 {
+        self.axis[0] * 360.0 / f64::from(self.counts_per_revolution[0])
+    }
+
     /// Build a sync from a scope-node solve, never from an uploaded image.
     /// Transform catalog directions to the observed horizontal frame before fitting,
     /// separating Meeus refraction from mechanical terms. Transforming camera up
@@ -505,13 +514,35 @@ impl Model {
         {
             return false;
         }
-        let slip = self.slip_pending
-            || self
-                .predict(sync.axis, sync.counts_per_revolution)
-                .is_some_and(|p| {
-                    separation(p.az_deg, p.alt_deg, sync.az_deg, sync.alt_deg)
-                        > if self.base_tilt.is_some() { 0.5 } else { 2.5 }
-                });
+        let slip = self.slip_pending || !self.fits(&sync);
+        self.take(sync, slip);
+        true
+    }
+    fn fits(&self, sync: &Sync) -> bool {
+        let Some(prediction) = self.predict(sync.axis, sync.counts_per_revolution) else {
+            return true;
+        };
+        if self.base_tilt.is_none() && self.tilt_spot(sync) {
+            let mut trial = self.clone();
+            trial.take(sync.clone(), false);
+            return trial
+                .base_tilt
+                .is_some_and(|base| base.deg() <= MAX_BASE_TILT_DEG);
+        }
+        separation(
+            prediction.az_deg,
+            prediction.alt_deg,
+            sync.az_deg,
+            sync.alt_deg,
+        ) <= if self.base_tilt.is_some() { 0.5 } else { 2.5 }
+    }
+    fn tilt_spot(&self, sync: &Sync) -> bool {
+        self.syncs.iter().any(|old| {
+            old.epoch == self.epochs.len() - 1
+                && wrap(old.axis_az_deg() - sync.axis_az_deg()).abs() >= 90.0
+        })
+    }
+    fn take(&mut self, mut sync: Sync, slip: bool) {
         if self.epochs.is_empty() || slip {
             let axis =
                 [0, 1].map(|i| sync.axis[i] * 360.0 / f64::from(sync.counts_per_revolution[i]));
@@ -530,16 +561,15 @@ impl Model {
         self.syncs.push(sync);
         let fit_base = !slip
             && self.syncs.iter().any(|a| {
-                self.syncs
-                    .iter()
-                    .any(|b| a.epoch == b.epoch && wrap(a.az_deg - b.az_deg).abs() >= 90.0)
+                self.syncs.iter().any(|b| {
+                    a.epoch == b.epoch && wrap(a.axis_az_deg() - b.axis_az_deg()).abs() >= 90.0
+                })
             });
         let (n, az, alt) = self.spread();
         let fit_fixed = !slip && n >= 20 && az >= 180.0 && alt >= 30.0;
         self.fit(fit_base, fit_fixed, slip);
         // A refused sync leaves the mark set; this one was accepted.
         self.slip_pending = false;
-        true
     }
     /// API summary, omitted for an entirely empty model.
     pub fn view(&self) -> Option<ModelView> {
