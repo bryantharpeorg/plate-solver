@@ -576,7 +576,7 @@ existing tests pin (§ Shapes that existing tests pin).
   and `crates/finder/tests/mcp/imaging_run.rs:133`: the MCP tools' descriptions, word
   for word.
 - `crates/finder/tests/console/imaging_run_docs.rs:95`: the field checklist's 18 steps
-  (`crates/finder/README.md:1759`), so it gains none.
+  (`crates/finder/README.md:1764`), so it gains none.
 - `crates/scope-node/tests/indi_expose.rs:782`: 030 US6-S6, the abort and the exposure
   answering in the instant of the call; untouched, since owner decision 1 (b) is set
   aside.
@@ -650,21 +650,25 @@ altitudes' words, the test file and the rebuilt `dist`.
 ## Prerequisites before this spec is flipped to `ready`
 
 1. **The earlier specs have landed:** every spec in `depends_on_landed`. Met: each is
-   on `main` at f6d4f5fd.
+   on `main` at 01b2d0f5, 052 included.
 2. **`main` is still as read, and the sibling drafts are ordered.** Every citation here
-   was read at f6d4f5fd. Not yet checked at a flip. 052, 053 and 055, drafted beside
+   was read at f6d4f5fd. Met at the flip, as follows. 052, 053 and 055, drafted beside
    this spec, write files this spec writes: 052's and 053's `writes` hold
    `crates/finder/README.md`, `crates/finder/tests/console/main.rs` and `GLOSSARY.md`;
    `probe/055` writes `crates/finder/README.md`, `crates/finder/tests/motion/main.rs`,
    `GLOSSARY.md`, `crates/finder/web/src/api.ts` and `crates/finder/web/dist`. The four
-   land in the order 052, 053, 054, 055, and the operator seat re-anchors each one's
-   `shared_writes` (§ Refinement Record) on whatever has landed before its flip, then
-   re-reads the files § Project Structure and § Shapes name and re-runs the validator.
-   Waits: 052 and 053 have not landed, and the re-anchor on their landed `main` comes
-   after; every citation was true at f6d4f5fd on probe round 1.
+   were to land in the order 052, 053, 054, 055, the operator seat re-anchoring each
+   one's `shared_writes` (§ Refinement Record) on whatever has landed before its flip.
+   052 landed at 01b2d0f5; the record's entries for the README, the glossary and
+   `crates/finder/tests/console/main.rs` name its US3 and US2, the files § Project
+   Structure and § Shapes name were re-read there (the README's two citations moved by
+   five lines), and the validator re-ran. The owner then chose (2026-11-27, "053 Sol +
+   054 Haiku") to build 053 beside this spec: the two write the README, the glossary
+   and the console `main.rs` at other places (spec.md § Clarifications, the flip), so
+   neither names the other. 055 waits for both.
 3. **The owner decisions are settled and the owner approvals given** (spec § Owner
-   decisions, § Owner approvals). Waits for the owner at the flip: none answered, each
-   with its recommendation, to which the scenarios and the record are written.
+   decisions, § Owner approvals). Met: the owner answered all five on 2026-11-27, each
+   with its recommendation, and the flip gives the approvals.
 4. **A cynical review and a probe round from this text alone**, their defects folded.
    Met: review r1 folded (0 blockers, 6 majors, 10 minors); probe round 1 built the
    four stories from this text alone (`probe/054-r1`, tip abf7e226: 0 blocking, 10
@@ -724,8 +728,8 @@ landing.
    factory's builds of 050 and 051 ran 0.78 to 1.04 times their probes, which puts US1 at
    38,284 B at most (58.4 %; 49.6 % written once), and 051's US2 flipped whole at the
    same probe size (29,952 B). So US1 is kept whole. US1's test file is about half its
-   diff (15.3 KB, about 5.3 KB of it the copied rig). **The split, if the owner prefers
-   it at the flip:** a story after US1 takes US1-S4 to US1-S6 and US1-S3's last step
+   diff (15.3 KB, about 5.3 KB of it the copied rig). **The split, not taken at the
+   flip:** a story after US1 takes US1-S4 to US1-S6 and US1-S3's last step
    (the camera described again), with the region on the focus state (`left`, `left_in`,
    `forget_left`, `describe`'s clearing, `remember`'s rule, `finish`'s setting of `left`,
    `Imaging::set`'s forgetting and `focus_left` answered from `left`), and US1-S3 then
@@ -802,15 +806,16 @@ tip abf7e226: 0 blocking, 10 clarity), folded with three test commits there (tip
 motion rig's focal length, in the assertions below. Writes
 come from the task text. Shared writes name the spec story that last wrote the same file
 on `main`; within the spec, each story's files written by an earlier one are ordered by
-`depends_on_merged`; 052, 053 and 055 are re-anchored at the flip (§ Prerequisites 2).
+`depends_on_merged`; the seat re-anchored them on 052's landing, 01b2d0f5, before the
+flip, and 053 builds beside this spec (§ Prerequisites 2).
 
-None of the five owner decisions of spec.md is answered; this record is written to
-their recommendations, and approves nothing. The flip is the owner's. No open question
-is left: each choice is an owner decision with a recommendation.
+The five owner decisions of spec.md are answered, each with its recommendation
+(2026-11-27). This record, like the scenarios, is written to the recommendations, and
+approves nothing; the owner flipped the spec on 2026-11-27. No open question is left.
 
 ```yaml
 version: 1
-reviewed_revision: f6d4f5fd482ccc9d5b634ef1aa5124c112769583
+reviewed_revision: 01b2d0f5aa29b85b57c35482df55816120920d14
 stories:
   US1:
     tests:
@@ -913,15 +918,15 @@ stories:
         disposition: merge_order
         reason: "054 depends_on_landed 041, whose US8 last changed the run's console parts (61b54a47)"
       - path: crates/finder/README.md
-        other_spec: 051-tools-page-focuses-either-camera
+        other_spec: 052-node-keeps-saturated-stars
         other_story: US3
         disposition: merge_order
-        reason: "054 depends_on_landed 051, whose US3 last changed the README (9424a371); re-anchored at the flip on 052 and 053 (plan.md Prerequisites 2)"
+        reason: "054 depends_on_landed 052, whose US3 last changed the README (01b2d0f5); 053 builds beside it at other places (plan.md Prerequisites 2)"
       - path: crates/finder/tests/console/main.rs
-        other_spec: 051-tools-page-focuses-either-camera
+        other_spec: 052-node-keeps-saturated-stars
         other_story: US2
         disposition: merge_order
-        reason: "054 depends_on_landed 051, whose US2 last changed console/main.rs (f9706cc0); re-anchored at the flip on 052 and 053 (plan.md Prerequisites 2)"
+        reason: "054 depends_on_landed 052, whose US2 last changed console/main.rs (bf1fcd66); 053 builds beside it at another line (plan.md Prerequisites 2)"
     open_questions: []
   US2:
     tests:
@@ -967,10 +972,10 @@ stories:
         disposition: merge_order
         reason: "054 depends_on_landed 033, whose US5 last changed focus.rs (c8d30d26)"
       - path: crates/finder/tests/console/main.rs
-        other_spec: 051-tools-page-focuses-either-camera
+        other_spec: 052-node-keeps-saturated-stars
         other_story: US2
         disposition: merge_order
-        reason: "054 depends_on_landed 051, whose US2 last changed console/main.rs (f9706cc0); re-anchored at the flip on 052 and 053 (plan.md Prerequisites 2)"
+        reason: "054 depends_on_landed 052, whose US2 last changed console/main.rs (bf1fcd66); 053 builds beside it at another line (plan.md Prerequisites 2)"
     open_questions: []
   US3:
     tests:
@@ -1025,15 +1030,15 @@ stories:
         disposition: merge_order
         reason: "054 depends_on_landed 033, whose US8 last changed the aid's run (9e670694)"
       - path: crates/finder/README.md
-        other_spec: 051-tools-page-focuses-either-camera
+        other_spec: 052-node-keeps-saturated-stars
         other_story: US3
         disposition: merge_order
-        reason: "054 depends_on_landed 051, whose US3 last changed the README (9424a371); re-anchored at the flip on 052 and 053 (plan.md Prerequisites 2)"
+        reason: "054 depends_on_landed 052, whose US3 last changed the README (01b2d0f5); 053 builds beside it at other places (plan.md Prerequisites 2)"
       - path: GLOSSARY.md
-        other_spec: 051-tools-page-focuses-either-camera
+        other_spec: 052-node-keeps-saturated-stars
         other_story: US3
         disposition: merge_order
-        reason: "054 depends_on_landed 051, whose US3 last changed GLOSSARY.md (9424a371); re-anchored at the flip on 052 and 053 (plan.md Prerequisites 2)"
+        reason: "054 depends_on_landed 052, whose US3 last changed GLOSSARY.md (01b2d0f5); 053 builds beside it at other entries (plan.md Prerequisites 2)"
       - path: crates/finder/tests/motion/main.rs
         other_spec: 050-tools-page-aligns-finder-camera
         other_story: US3

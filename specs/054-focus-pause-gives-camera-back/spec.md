@@ -1,6 +1,6 @@
 ---
-state: draft
-depends_on_landed: ["013-live-finder", "015-tracking", "016-mcp", "031-imaging-frames-on-console", "033-focus-reading-and-aid", "035-live-stack", "037-imaging-run", "041-imaging-run-on-the-rig", "042-imaging-run-page-and-mcp", "043-imaging-abort-answers-in-time", "050-tools-page-aligns-finder-camera", "051-tools-page-focuses-either-camera"]
+state: ready
+depends_on_landed: ["013-live-finder", "015-tracking", "016-mcp", "031-imaging-frames-on-console", "033-focus-reading-and-aid", "035-live-stack", "037-imaging-run", "041-imaging-run-on-the-rig", "042-imaging-run-page-and-mcp", "043-imaging-abort-answers-in-time", "050-tools-page-aligns-finder-camera", "051-tools-page-focuses-either-camera", "052-node-keeps-saturated-stars"]
 # Drafted 2026-11-27 against `main` at f6d4f5fd, at the owner's ask of 2026-11-27
 # ("Your rec. Proceed", the owner's answer to the operator seat's ranked list of the
 # defects of the field night of 2026-11-26), from a probe of that day on the branch
@@ -10,15 +10,23 @@ depends_on_landed: ["013-live-finder", "015-tracking", "016-mcp", "031-imaging-f
 # built the four stories from this text alone the same day (branch `probe/054-r1`
 # from a2a65162, tip abf7e226): 0 blocking, 10 clarity defects, folded with three
 # test commits on that branch (99efbc63, 1eebf008, 06ec58d0, the tip; every gate
-# passing). Every `path:line` here was read at f6d4f5fd. None of the five owner
-# decisions is answered: each carries its recommendation, and the scenarios
-# and the record are written to the recommendations. 013 is named for the simulator
+# passing). Every `path:line` here was read at f6d4f5fd, and those in files 052
+# changed re-read at 01b2d0f5. The owner answered the five decisions on 2026-11-27,
+# each with its recommendation, which the scenarios were already written to. 013 is named for the simulator
 # and the live loop the rigs run on; 015 because a reading's altitude is Track's
 # target's; 016 for MCP; 031 for the imaging camera's lease and the Imaging page; 033
 # for the focus aid, its put-back, record and verdict and the Focus block; 037 and
 # 041 for the imaging run, its focus gate and pause and its region refusal; 043
-# because its silent-node bound must hold; 035, 042, 050 and 051 because each last
+# because its silent-node bound must hold; 035, 042, 050, 051 and 052 because each last
 # changed a file this spec writes (plan.md § Refinement Record).
+# Re-anchored the same day on `main` at 01b2d0f5, where 052 landed: 052 joins
+# `depends_on_landed`, and the record's entries for the README, the glossary and the
+# console test `main.rs` name 052's stories. 053, flipped the same day, builds beside
+# this spec at the owner's choice ("053 Sol + 054 Haiku"); the two write those three
+# files at other places (plan.md § Prerequisites 2). Flipped to `ready` on 2026-11-27
+# at the owner's ask ("Yes, all three", a standing yes to the seat flipping 053, 054
+# and 055 with the seat's recommended answers), with every prerequisite in plan.md met
+# and none waived.
 ---
 
 # Feature Specification: The Focus Pause Gives the Camera Back
@@ -27,7 +35,7 @@ depends_on_landed: ["013-live-finder", "015-tracking", "016-mcp", "031-imaging-f
 
 **Created**: 2026-11-27
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: On the field night of 2026-11-26 the owner's first imaging run paused at its
 focus check, "Focus is clearly out: stars are 6.7 arcsec across against a record of 4.6
@@ -109,7 +117,7 @@ imaging focus check, and the unit.
   measured" (`docs/research/2026-11-15-imaging-camera.md:220`), says a reading cannot
   tell focus error from seeing, tube currents, a cooling mirror or miscollimation
   (`docs/research/2026-11-15-imaging-camera.md:227`), and the README says the same
-  (`crates/finder/README.md:975`); 4.6″ at 0.5475″ a pixel is 8.4 px, more than the
+  (`crates/finder/README.md:980`); 4.6″ at 0.5475″ a pixel is 8.4 px, more than the
   survey's 4″ seeing (`docs/research/2026-11-15-imaging-camera.md:15`). So the carry is
   one-sided and capped (owner decision 2).
 - Q: What blanks on the Imaging page? → A: The picture: the page draws it only while the
@@ -126,10 +134,31 @@ imaging focus check, and the unit.
   ASTAP already answers a starless frame in a form the adapter reads as too few stars;
   the page already writes ″ or px, and MCP's tool descriptions are pinned by tests.
 
+### Session 2026-11-27 (the flip)
+
+- Q: How were the five open decisions answered? → A: Each with its recommendation, (a),
+  by the owner on 2026-11-27, who answered "Yes, all three" to the seat's question
+  whether it should flip 053, 054 and 055 itself with its recommended answers. US1 is
+  built whole: the split of plan.md § Plan traps 1 was not taken.
+- Q: Does this spec wait for 053? → A: No. The owner chose on 2026-11-27 to build 053
+  and this spec side by side ("053 Sol + 054 Haiku"). They share three files and write
+  them at other places: in `crates/finder/README.md` 053 writes the GoTo and second-sync
+  paragraphs and this spec its sections Focus and An imaging run; in `GLOSSARY.md` 053
+  rewords **Base tilt** and **Slip** and this spec **Focus record**; in
+  `crates/finder/tests/console/main.rs` 053 adds `mod model_docs;` and this spec its
+  `imaging_` lines. If 053 lands first, the README and glossary lines cited here may
+  move; the text they name does not change. 055 waits for both.
+- Q: What moved on `main` between the draft and the flip? → A: 052 landed, at
+  01b2d0f5. Of the files this spec writes or cites, it added a paragraph to
+  `crates/finder/README.md` (both README citations moved by five lines), the entry
+  **Saturated star** to `GLOSSARY.md` after **Focus record**, and one mod line to
+  `crates/finder/tests/console/main.rs`. Nothing this spec requires or tests changed.
+
 ## Owner decisions
 
-None is answered yet. Each keeps its options and its evidence, with a recommendation;
-the scenarios and the record are written to the recommendations. Two general rules
+All five are settled by the owner on 2026-11-27, each answered with its recommendation,
+(a). Each keeps its options and its evidence; the scenarios and the record were written
+to the recommendations, so no scenario changed for them. Two general rules
 carry the recommendations and remove the side effects a narrower fix would bring:
 **whatever the focus aid sets, it gives back before anyone else holds the camera, or
 says why it could not, and no aid keeps what another aid left; and a reading is
@@ -149,7 +178,7 @@ altitude, and leaves every record without an altitude judging as it does today.
    refuses settings while it stops (the early answer). INDI hands a driver its messages
    in order, so a refusal on the field needs a driver whose abort returns before its
    camera stops; whether it then answers late or early is not read here (no INDI
-   source on this machine; plan.md § What was run, read, not run). Recommended (a):
+   source on this machine; plan.md § What was run, read, not run). Answered (a):
    **the aid's put-back tries again, once a second for up to 5 s, when the scope node
    refuses it (502) while the camera is ready; the region a put-back left is kept on
    the focus state with its words, named by 041's refusal while it stands and never
@@ -190,7 +219,7 @@ altitude, and leaves every record without an altitude judging as it does today.
    node waits a fixed time after an abort**: testable on the scripted server as (b) is
    (the first draft's "untestable" was wrong), but its wait is a guess that (b) makes
    general.
-2. **The verdict and the altitude** (FR-005 to FR-012). Recommended (a): **the record
+2. **The verdict and the altitude** (FR-005 to FR-012). Answered (a): **the record
    keeps the altitude it was read at, and a reading is judged against the record
    carried to its own altitude by the airmass to the power 0.6, the factor held
    between 1 and 1.30**: factor = min(1.30, max(1, (X(A)/X(F))^0.6)), X(h) the secant
@@ -230,7 +259,7 @@ altitude, and leaves every record without an altitude judging as it does today.
    and the run would pause all the same; (f) **looser thresholds** at every altitude.
    Only a night with records at two altitudes and the same focus can settle the share
    of seeing (plan.md § Outside the factory, step 6).
-3. **What the view shows between previews** (FR-013, FR-014). Recommended (a): **the
+3. **What the view shows between previews** (FR-013, FR-014). Answered (a): **the
    Imaging page keeps the last picture it drew until the next preview, under a quiet
    line `Frame N, the last picture`, and the Focus block keeps its readings while the
    aid looks for the region again.** Evidence (run): on main's page four of the five
@@ -240,7 +269,7 @@ altitude, and leaves every record without an altitude judging as it does today.
    and their tests, for what the page alone needs (read, not run); (c) **a picture in
    the Focus block**: a second picture of the same frame on the same page; (d) **leave
    it**.
-4. **The starless wording** (out of scope here). Recommended (a): **not here**; capture
+4. **The starless wording** (out of scope here). Answered (a): **not here**; capture
    what the field's ASTAP writes for a starless frame first (plan.md § Outside the
    factory, step 5). Evidence (run, plan.md § What was run): the local `astap_cli`
    (CLI-2025.09.29) answers `-analyse 30` on noise, bright noise, daylight and flat
@@ -254,7 +283,7 @@ altitude, and leaves every record without an altitude judging as it does today.
    would hide a real failure to read the measure. Seen in passing, not in scope:
    saturated and all-zero frames answer `STARS=29721` and `STARS=29119` with
    `HFD_MEDIAN=99.0`, which the adapter reads as far out.
-5. **The unit of every focus size** (FR-012). Recommended (a): **one README sentence**:
+5. **The unit of every focus size** (FR-012). Answered (a): **one README sentence**:
    every size in the imaging view's `focus` and in the imaging run's `focus` is in the
    `unit` beside it, `arcsec` or `px`, and at binning 1 and 0.55″ a sensor pixel the
    far-out limit is about 11″ (20 frame pixels at 0.5475″, the aid's own binning). The
@@ -847,7 +876,7 @@ page steady to read at the focuser.
 ## Assumptions
 
 - **Earlier features are in place.** Every spec in `depends_on_landed` has landed. Every
-  citation here was read at f6d4f5fd.
+  citation here was read at f6d4f5fd, and those in files 052 changed re-read at 01b2d0f5.
 - **The simulated camera's refusal stands for the real one**: a camera that refuses a
   settings change for a while after an abort, with the driver's words. INFERRED from the
   field night, which never read `restore_error` (plan.md § Outside the factory, step 3,
@@ -893,7 +922,7 @@ the carry; judging at Track's altitude; the page. At the factory's worst overrun
 1.35 times, US1 would be about 76 % (64 % written once), over the line; the factory's
 builds of 050 and 051 ran 0.78 to 1.04 times their probes, and 051's US2 flipped at
 the same probe size. US1 is kept whole; plan.md § Plan traps 1 names the split the
-owner may choose at the flip instead. US2 merges after
+owner did not take at the flip. US2 merges after
 US1, so that the two stories' `mod` lines in `crates/finder/tests/console/main.rs` are
 not written at once; US3 merges after US2, whose `carry` and `note_at` it calls, and so
 after US1, which also writes `crates/finder/src/imaging/focus/run.rs` and the README.
