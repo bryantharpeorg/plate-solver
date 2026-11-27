@@ -6,10 +6,11 @@ description: "Task list for 053-second-sync-fits-base-tilt: The Second Sync Fits
 
 **Prerequisites** (plan.md § Prerequisites, each with its evidence there):
 - every spec in `depends_on_landed` has landed on `main`: met at f6d4f5fd;
-- `main` is still as read: met at f6d4f5fd, the draft's revision;
-- the shared files are re-anchored on 052, which lands first: not met;
-- the owner decisions in spec.md are settled: not met, all six open;
-- every story has been probe-built from this text: not met;
+- `main` is still as read: met at f6d4f5fd, the draft's revision, until 052 lands;
+- the shared files are re-anchored on 052, which lands first: not met, waits for 052;
+- the owner decisions in spec.md are settled: not met, all six open, for the flip ask;
+- every story has been probe-built from this text: met, probe round 1 (0 blocking,
+  8 clarity defects, each folded);
 - no operator-staged file is needed: met.
 
 **Rules for every story:**
@@ -42,10 +43,10 @@ description: "Task list for 053-second-sync-fits-base-tilt: The Second Sync Fits
 - [ ] T001 [US1] Create `crates/finder/tests/motion/model/tilt.rs` with the mount of
   spec.md § User Scenarios written in the file (zero points, collimation and axis
   non-perpendicularity, then Rodrigues' rotation by the base tilt), the chord distance
-  and the worst miss over its grid, one test for each of US1-S1 to US1-S5 under
+  and the worst miss over its grid, one test for each of US1-S1 to US1-S8 under
   `#[test]`, and add `mod tilt;` to `crates/finder/tests/motion/model/mod.rs` in its
   alphabetical place. On `main`'s `model.rs`, US1-S1, US1-S3, US1-S4 and US1-S5 fail and
-  US1-S2 passes (run).
+  US1-S2, US1-S6, US1-S7 and US1-S8 pass, each pinning what `main` already does (run).
 
 ### Implementation
 
@@ -55,7 +56,7 @@ description: "Task list for 053-second-sync-fits-base-tilt: The Second Sync Fits
   each as plan.md § Interfaces gives it (FR-001 to FR-003).
 - [ ] T003 [US1] Run the `lint` and `test` gates with every existing test unchanged and
   green, then commit the green story (FR-001 to FR-003; US1-S1, US1-S2, US1-S3, US1-S4,
-  US1-S5).
+  US1-S5, US1-S6, US1-S7, US1-S8).
 
 ## Phase 2: User Story 2 - The second sync keeps to the band and says when it fits no tilt, and a GoTo corrects only from a taken sync (Priority: P1)
 
@@ -87,9 +88,9 @@ description: "Task list for 053-second-sync-fits-base-tilt: The Second Sync Fits
   timeout with FR-006's reason when one was passed over, and end a second sync that
   leaves no base tilt `failed` with FR-009's reason (FR-004 to FR-006, FR-009; plan.md
   § Interfaces).
-- [ ] T008 [US2] In `Planner::second_sync`, add `SECOND_SYNC_BAND`, start the altitudes
-  at the current altitude held to the band, and sort the spots inside the band first,
-  keeping today's clearance, cone and sky test (FR-008; plan.md § Interfaces).
+- [ ] T008 [US2] In `Planner::second_sync`, add `SECOND_SYNC_BAND` and sort the spots
+  inside the band first, keeping today's clearance, cone, sky test and altitudes (FR-008;
+  plan.md § Interfaces).
 - [ ] T009 [US2] Run the `lint` and `test` gates with every existing test unchanged and
   green, US1's test file and `crates/finder/tests/motion/goto/second_sync.rs` among
   them, then commit the green story (FR-004 to FR-010; US2-S1, US2-S2, US2-S3, US2-S4,
@@ -101,8 +102,9 @@ description: "Task list for 053-second-sync-fits-base-tilt: The Second Sync Fits
 
 - [ ] T010 [US3] Create `crates/finder/tests/console/model_docs.rs` with one test for
   US3-S1 under `#[test]`, reading `crates/finder/README.md` and `GLOSSARY.md` from
-  `env!("CARGO_MANIFEST_DIR")` with every run of whitespace joined into one space, as
-  `crates/finder/tests/console/imaging_run_docs.rs` reads the README, and add
+  `env!("CARGO_MANIFEST_DIR")` (the glossary as `../../GLOSSARY.md`), as
+  `crates/finder/tests/console/imaging_run_docs.rs` reads the README, with every run of
+  whitespace joined into one space (`split_whitespace`, joined by one space), and add
   `mod model_docs;` to `crates/finder/tests/console/main.rs` in its alphabetical place.
   On US2 the README and the glossary lack every sentence, so it fails (run).
 

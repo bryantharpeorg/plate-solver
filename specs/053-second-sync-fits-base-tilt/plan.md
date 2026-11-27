@@ -12,10 +12,11 @@ round on the mount's azimuth axis from a sync of the current zero-point epoch is
 the tilt it fits alone**: at most 6°, it joins the epoch and fits the tilt; above, it is a
 slip. Base-tilt pairs are read on the axis, not in solved azimuth. Every other sync keeps
 014's bounds (0.5° once the base tilt is fitted, 2.5° before), and 038's slip mark is taken
-at once as today. No solve is held, and no state is added.
+at once as today, at a tilt spot too, before its tilt is judged. No solve is held, and no
+state is added.
 
-The second sync looks for its spot first between 30° and 60° up, from the current altitude
-held to that band, and ends `failed` with `taken as a slip: no base tilt fitted` when it
+The second sync looks for its spot first between 30° and 60° up, the altitudes searched as
+today, and ends `failed` with `taken as a slip: no base tilt fitted` when it
 leaves no base tilt. A live solve whose field lies more than 5 % outside the range of the
 database in use is no sync. A GoTo and the second sync wait for a solve the model took,
 name it (`goto.frame_id`, `goto.frame_time`), and a timeout after solves not taken names
@@ -24,7 +25,8 @@ the last. With these, on the simulator's tilted mount, the second sync fits a ti
 (on `main`, for 2° to 5°) to under 120″.
 
 Three stories: the model (US1), the second sync, the field and GoTo (US2), the words
-(US3). The largest is US2 at 36.9 % of 65,536 B on the probe's code (§ Plan traps 2).
+(US3). The largest is US2 at 43.2 % of 65,536 B on the probe from this text with its fold
+(§ Plan traps 2).
 
 ## Technical Context
 
@@ -36,7 +38,7 @@ Three stories: the model (US1), the second sync, the field and GoTo (US2), the w
 today (`crates/finder/src/session.rs:1475`).
 
 **Testing**:
-- `crates/finder/tests/motion/model/tilt.rs` (new, US1): US1-S1 to US1-S5 under `#[test]`
+- `crates/finder/tests/motion/model/tilt.rs` (new, US1): US1-S1 to US1-S8 under `#[test]`
   on the model rig.
 - `crates/finder/tests/motion/goto/tilt.rs` (new, US2): its own `rig_with` and the tilt
   rig; US2-S1 as six tests (one a tilt, two directions each), US2-S2 and US2-S3 one each.
@@ -69,7 +71,7 @@ paragraphs and one new paragraph, and two glossary entries.
 |---|---|
 | I. Agreeing with cedar is correctness | Detection and the plate solver are untouched; the model reads the solve the live loop gives it, as today. The field check (FR-007) reads the solved field against the database's own stated range, after the solver and 047's choice have run, and refuses only the sync. |
 | II. Never weaken a gate | No golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS`, `ergane.yaml` or existing test is edited; the only edits to existing test files are three `mod` lines (SC-002). Every other test of the workspace passed unchanged on the probe's tip (§ What was run). |
-| III. Tests first, independent expectations | The oracle of every Rust scenario is a mount written fresh in each test file (zero points, in the model tests CA and NPAE, then Rodrigues' rotation by the base tilt), the chord distance written in the test, the catalog's M42, the simulator's true eyepiece direction, the test database's stated range, and a frame answered at 0.7 times its solved field. No test calls `finder::model::separation` or the fit for an expected value, or reads a constant of the code; `predict` is called only to measure the model's miss, and the support rig's `finish_with` and `error_arcsec` call `separation` only to measure the Sun distance and the true error, as in every GoTo test. Time comes from a paused tokio clock and the simulator's virtual clock. Each story's tests fail before it (§ What was run), but US1-S2, which keeps today's slip for a tilt over 6° and bites when the bound moves. |
+| III. Tests first, independent expectations | The oracle of every Rust scenario is a mount written fresh in each test file (zero points, in the model tests CA and NPAE, then Rodrigues' rotation by the base tilt), the chord distance written in the test, the catalog's M42, the simulator's true eyepiece direction, the test database's stated range, and a frame answered at 0.7 times its solved field. No test calls `finder::model::separation` or the fit for an expected value, or reads a constant of the code; `predict` is called only to measure the model's miss, and the support rig's `finish_with` and `error_arcsec` call `separation` only to measure the Sun distance and the true error, as in every GoTo test. Time comes from a paused tokio clock and the simulator's virtual clock. Each story's tests fail before it (§ What was run), but US1-S2, US1-S6, US1-S7 and US1-S8, which keep today's behaviour (a slip for a tilt over 6°, 038's mark, the current epoch, the short way round) and each bite under a mutation of the story's code (§ Mutations). |
 | IV. Read the critical paths twice | None is touched: no `Cargo.toml` or `Cargo.lock` change, no `unsafe`, nothing under `proto/`, `crates/math-core`, `crates/pattern-database` or `crates/database-generation`, no `build.rs` or `.cargo/`. |
 | V. Proven open source first, with honest licensing | Looked for, in local sources only (no download): the repository's survey of 2026-10-21 (`docs/research/2026-10-21-pointing-model-and-tracking.md:18`, § 1 and § 2), with its sources on TPoint, Taki's matrix method and INDI's alignment subsystem, Cedar, PiFinder, StarSense, N.I.N.A., Ekos, SharpCap, ASIAIR and SynScan; the vendored `reference-solutions/` (cedar-detect, cedar-solve); and the local crate cache. **TPoint** is the model's own source (IA, IE, AN, AW and the fixed terms) and a desktop program fitted from a list of observations by an operator, with no live intake to adopt. **INDI's alignment subsystem** (Taki's method) is a pure rotation that the survey finds leaves 32′ worst case for an IE of 0.25° (`docs/research/2026-10-21-pointing-model-and-tracking.md:59`), and a C++ library of a server this console does not run; not adopted. **N.I.N.A., Ekos and SharpCap** loop solve, sync and re-slew (`docs/research/2026-10-21-pointing-model-and-tracking.md:88`, `docs/research/2026-10-21-pointing-model-and-tracking.md:92`, `docs/research/2026-10-21-pointing-model-and-tracking.md:95`); the survey reads no rule in them for refusing a sync; their loop is already 014's. Solve-and-sync tools hold a solve to the configured image scale (general knowledge, not in the survey), which is FR-007. **SynScan**'s alignment advice, 15° to 60° up and 45° to 135° apart (`docs/research/2026-10-21-pointing-model-and-tracking.md:101`), is the source of the band; it is advice, not code. **cedar-solve** (tetra3) holds a match to a false-alarm probability, already applied (`crates/finder/src/solve.rs:26`), and has no pointing model. **The local crate cache** holds no pointing-model, alignment or robust-fitting crate. So the rule is written here: a dozen lines on the model's own fit, no number of its own but the 6° bound, the band and the 5 %. |
 
@@ -95,8 +97,9 @@ GLOSSARY.md                                     # US3: Base tilt, Slip
 
 ## Interfaces
 
-The code as it ran on `probe/053` (tip 764a47c0; § What was run lists the commits).
-Bodies not given here are the builder's, to these words and the FRs.
+The code as it ran on `probe/053` (tip 764a47c0) and as probe round 1 rebuilt it from this
+text on `probe/053-r1`, with this fold's commits (tip 8fac1157; § What was run lists the
+commits). Bodies not given here are the builder's, to these words and the FRs.
 
 ### `crates/finder/src/model.rs` (US1)
 
@@ -122,6 +125,9 @@ let slip = self.slip_pending || !self.fits(&sync);
 self.take(sync, slip);
 true
 ```
+
+038's mark is read first: with `slip_pending` set, the sync opens an epoch, at a tilt spot
+too, whatever tilt it would fit (FR-001, US1-S6).
 
 - `fn fits(&self, sync: &Sync) -> bool`: true when `predict` gives nothing (the night's
   first sync); before the base tilt is fitted, when `tilt_spot(sync)`, whether a clone
@@ -172,11 +178,11 @@ pub struct Progress {
 
 - `State` gains `frame: Option<(u64, f64)>`, set to `None` where a GoTo or second sync
   starts and copied into every `Progress` that `update` writes.
-- `Planner::second_sync` (`crates/finder/src/goto.rs:265`) keeps today's clearance, cone
-  and sky test; the first altitude tried is
-  `alt.clamp(SECOND_SYNC_BAND[0], SECOND_SYNC_BAND[1]).max(self.min_alt)` in place of
-  `alt.max(self.min_alt)` (`crates/finder/src/goto.rs:280`), and the spots are sorted with
-  those inside the band first, then by today's distance.
+- `Planner::second_sync` (`crates/finder/src/goto.rs:265`) keeps today's clearance, cone,
+  sky test and altitudes (`crates/finder/src/goto.rs:280`), and sorts the spots with those
+  inside the band first, 30° and 60° themselves inside, then by today's distance. Today's
+  altitudes already hold 30° and 60° (every 0.5° at or above the minimum altitude), so
+  holding the first altitude tried to the band would change no spot inside it.
 - The settle loop (`crates/finder/src/goto.rs:955` to `crates/finder/src/goto.rs:1011`):
   after a report's pointing matches its frame (`crates/finder/src/goto.rs:982`), when no
   sync of `self.session.model(report.time)` has the report's time, it records the
@@ -205,13 +211,13 @@ new one:
 > it fits is at most 6°, and is otherwise taken as a slip; the tilt alone decides it.
 > Any other sync more than 2.5° from the model's prediction, or 0.5° once the base tilt
 > is fitted, opens a new zero-point epoch, as does the first solve after a push by hand
-> while Track runs. A live solve whose field lies more than 5% outside the range of the
-> database in use is not taken as a sync. Two syncs fit the base tilt and the zero
-> points exactly, so a slip between them is taken as tilt: take the first sync between
-> 30° and 60° up when the sky allows, and press the second sync at once, with the
-> telescope untouched, before the first far GoTo. If a tree blocks the second sync's
-> spot, a GoTo to a clear target at least 90° round on the azimuth axis fits the base
-> tilt by the same rule.
+> while Track runs, at a tilt spot too. A live solve whose field lies more than 5% outside
+> the range of the database in use is not taken as a sync. Two syncs fit the base tilt
+> and the zero points exactly, so a slip between them is taken as tilt: take the first
+> sync between 30° and 60° up when the sky allows, and press the second sync at once,
+> with the telescope untouched, before the first far GoTo. If a tree blocks the second
+> sync's spot, a GoTo to a clear target at least 90° round on the azimuth axis fits the
+> base tilt by the same rule.
 
 ### The glossary (`GLOSSARY.md`, US3)
 
@@ -226,7 +232,8 @@ new one:
 ## What was run and what was read
 
 Logs are under the operator's probe folder, not in the repository; the draft's are
-numbered 00 to 13, the fold's `fold-r1-01` to `fold-r1-18`.
+numbered 00 to 13, the fold's `fold-r1-01` to `fold-r1-18`, probe round 1's in its own
+folder, and its fold's `fold-probe-r1-01` to `fold-probe-r1-13`.
 
 **The commits**, on `probe/053`, cut from f6d4f5fd. The draft's: 2bee1989 and 8570c83f
 (measurements on `main`'s code, not stories: `probe_tilts.rs` and a `Rig::with_mount`
@@ -235,8 +242,15 @@ stories with the hold). The fold's: 1ef0d298 (US1, the hold reverted), 1fe5c824 
 ac2dba1a (US3), 3cfa6408 (US2's formatting), f0d5e17e and bcc52b51 (measurements, not
 stories), 204f61c3 and 764a47c0 (US1-S1 in a second direction and US1-S5 a 5° slip, so
 that FR-002's mutations and `main` fail them), c4d36f72 (US2: the planner's axis rule
-removed, § Mutations) and 3f3165cc (US3: its words). The tip is 764a47c0. Story sizes
-are measured by path from f6d4f5fd (§ Plan traps 2).
+removed, § Mutations) and 3f3165cc (US3: its words). The tip is 764a47c0.
+
+**Probe round 1, from this text alone**, on `probe/053-r1`, cut from c9a29b2f (this trio
+on f6d4f5fd): ec3162f3 and 42eec24a (US1, its tests and then the story), ab7f972a and
+b4962257 (US2), f4087b9a and a78a3f7a (US3). Every story built from the text: 0 blocking
+and 8 clarity defects, each folded here. **Its fold**, on top: ea235dfb (US1-S6 to
+US1-S8), 3d2fc4e8 (US2: the band's clamp removed, and US2-S1's and US2-S5's new steps)
+and 8fac1157 (US3: FR-012's fourth and seventh sentences). The tip is 8fac1157. Story
+sizes: § Plan traps 2.
 
 **Run:**
 
@@ -286,6 +300,21 @@ are measured by path from f6d4f5fd (§ Plan traps 2).
   `npm ci --offline`, the typecheck, Prettier, Vitest (607 of 607), the build, the dist
   check (clean) and `CI=1 npm run e2e` (34 of 34) with the factory's own browsers, the
   same on both tips.
+- **Probe round 1, from this text** (its own logs, on a78a3f7a): each story's tests
+  failed before it as § Each story before it says and passed on three runs after; its
+  mutations found the unpinned choices this fold pins (§ Mutations, § Read from the diff);
+  every gate passed, nextest 1,541 of 1,541, Vitest 607 of 607, e2e 34 of 34.
+- **The fold's new steps** (logs fold-probe-r1-01, -04 and -07): US1-S6 to US1-S8, US2-S1's
+  and US2-S5's new clauses, US3-S1's new words, and the five tests of `goto::second_sync`,
+  passed; each new step's code mutated once (logs fold-probe-r1-02, -05 and -08):
+  § Mutations; each story's tests on the code before it (logs fold-probe-r1-03, -06 and
+  -09): § Each story before it.
+- **The gates on the tip 8fac1157** (logs fold-probe-r1-10 to -12), as on 764a47c0:
+  `lint` passed; nextest 1,544 of 1,544 (round 1's 1,541 and US1's three new tests) and
+  every doc test passed; `npm ci --offline`, the typecheck, Prettier, Vitest (607 of 607),
+  the build, the dist check (clean) and `CI=1 npm run e2e` (34 of 34). `cargo deny
+  --offline check` (log fold-probe-r1-13), not a gate: advisories, bans, licenses and
+  sources ok, on its local copy of the advisories.
 
 **Read, not run:**
 
@@ -302,10 +331,10 @@ are measured by path from f6d4f5fd (§ Plan traps 2).
 
 Each passes every scenario built the other way; the judge reads it in the diff.
 
-- FR-002's "within one epoch": every two-sync scenario has one epoch.
-- FR-004's "within the same 30 s" and its reading at the time it reads the report: US2-S4's
-  passed frames are four, within it.
-- FR-005's "until the next GoTo or second sync starts".
+- FR-001's "at most 6°" at exactly 6° (`<` in place of `<=`): no fit lands on it.
+- FR-001's tilt spot whose taking fits no tilt at all, its partner thinned away (a quarter
+  turn above about 88.6° up): taken as a slip, as § Interfaces' `fits` reads it.
+- FR-004's reading of the session's model at the report's time, not the console's.
 - FR-007's 5 % at the upper end: Scale's frames lie below the range.
 - FR-008's "only when none of those has a safe path, the nearest outside it": no scenario
   blocks the band.
@@ -348,29 +377,44 @@ recommendation. Below them:
 | Where the field check lives | `record_frame_sync`, the sync only | the live loop (no pointing either: a change to 047's lens-change path) |
 | What a GoTo corrects from | a solve the model took | the first solve after the settle, today's (a refused solve's pointing would steer the error) |
 | A second sync with no tilt | `failed`, its reason | `done` with the reason (the page reads "On target") |
-| The story cut | three stories, US2 the largest at 36.9 % | four (the field check apart: a rig copied twice) |
+| The story cut | three stories, US2 the largest at 43.2 % | four (the field check apart: a rig copied twice) |
 
 ## Mutations
 
 One mutation of each changed FR's code, each run alone on the new tests (log
-fold-r1-14: on bcc52b51, and FR-001's, FR-002's and the README's again on 764a47c0);
-the scenarios named fail, and every other new test passes:
+fold-r1-14: on bcc52b51, and FR-001's, FR-002's and the README's again on 764a47c0;
+probe round 1's on a78a3f7a; its fold's, logs fold-probe-r1-02, -05 and -08, on the
+fold's commits); the scenarios named fail, and every other new test passes:
 
 - FR-001: the 6° bound raised to 9°: US1-S2, US1-S3, US2-S3. The tilt or the 2.5° bound
   deciding at a tilt spot: US1-S3. The tilt-spot rule removed (`main`'s intake): US1-S1,
-  US1-S3, US1-S4, US1-S5 and US2-S1 at 2° to 5°.
+  US1-S3, US1-S4, US1-S5 and US2-S1 at 2° to 5°. 038's mark ignored at a tilt spot:
+  US1-S6. The tilt spot read from a sync of any epoch: US1-S7. The tilt spot read
+  without `wrap`: US1-S7, US1-S8.
 - FR-002: the base-tilt pairs read in solved azimuth, and, apart, the tilt spot read in
   solved azimuth: US1-S1 (5° toward 15°). Neither bit US1-S1 in one direction, whose
   syncs lay over 90° apart in solved azimuth as well, nor any GoTo scenario, since the
   sky rule puts the second sync over 90° from the first in solved azimuth on those rigs;
-  so US1-S1 has a second direction.
-- FR-004, every solve taken: US2-S4, US2-S5.
-- FR-005, `State::frame` never set: US2-S1 (all six), US2-S4.
-- FR-006, today's reason on the timeout: US2-S5.
+  so US1-S1 has a second direction. The base-tilt pairs read across epochs: US2-S3 (the
+  live loop's next sync at the slipped spot joins the new epoch and, paired with the
+  first sync, fits a tilt).
+- FR-003, the 0.5° and 2.5° bounds swapped: US1-S7, US1-S8, and the existing
+  `slips_refit_only_epoch_zero_points_at_the_half_degree_threshold`,
+  `fixed_calibration_uses_fresh_syncs_after_reset_and_spans_epochs` and
+  `goto::sim::hand_push_opens_an_epoch_and_goto_still_converges` (probe round 1).
+- FR-004, every solve taken: US2-S4, US2-S5. A 300 s wait in place of the 30 s: US2-S5.
+- FR-005, `State::frame` never set: US2-S1 (all six), US2-S4. Not reset where a GoTo
+  starts: US2-S1 (all six).
+- FR-006, today's reason on the timeout: US2-S5. The first report passed over named, not
+  the last: US2-S5.
 - FR-007, the field check removed: US2-S4, US2-S5.
-- FR-008, the band removed (clamp and sort): US2-S2.
+- FR-008, the band-first sort removed: US2-S2. Round 1's build also held the first
+  altitude tried to the band; with that alone removed every US2 test passed, since
+  today's altitudes already hold the band's, so 3d2fc4e8 removed it (§ Interfaces).
 - FR-009, the plain end removed: US2-S3.
-- FR-012, "at most 6°" made "at most 7°" in the README: US3-S1.
+- FR-012, "at most 6°" made "at most 7°" in the README: US3-S1. The fourth sentence with
+  "starting from the current altitude held to that band" back, and the seventh without
+  "at a tilt spot too": US3-S1.
 - **The planner's axis rule** (review minor 17), removed: no new test failed, nor any of
   `goto::second_sync`, and the four spot sweeps (64 second syncs: tilts of 1°, 3°, 5°
   and 8°, eight directions each, from 45°, 75° and 82° up) gave the same spot, epochs and
@@ -383,11 +427,14 @@ the scenarios named fail, and every other new test passes:
 ## Each story before it
 
 Each story's new tests on the code before it, the earlier stories' code in place (log
-fold-r1-13, on 764a47c0):
+fold-r1-13, on 764a47c0; probe round 1, as T001, T005 and T010 say; and its fold's, logs
+fold-probe-r1-03, -06 and -09, on 8fac1157's test files):
 
 - **US1** on `main`'s `model.rs`, `goto.rs` and `session.rs`: US1-S1, US1-S3, US1-S4 and
   US1-S5 fail; US1-S2 passes, since `main` already takes the 8° second sync as a slip,
-  and bites under FR-001's 9° mutation.
+  and bites under FR-001's 9° mutation; US1-S6, US1-S7 and US1-S8 pass, since `main`
+  already takes 038's mark at once, opens no epoch at a sync near the newest epoch's and
+  measures nothing the long way round, and each bites under its mutation (§ Mutations).
 - **US2** on US1's code (`goto.rs` and `session.rs` at f6d4f5fd): all ten fail: US2-S1's
   six and US2-S4 on `frame_id` absent, US2-S2 on the altitude, US2-S3 and US2-S5 on a
   `done` where they assert `failed`.
@@ -430,16 +477,20 @@ The README's paragraphs and the glossary's entries, and their test.
    on `main` at f6d4f5fd.
 2. **`main` is still as read.** Every citation here was read at f6d4f5fd. If `main`
    moves in a file § Project Structure names, or in a test § Shapes names, re-read them
-   and re-run the validator.
+   and re-run the validator. Met at this fold: `main` is f6d4f5fd. 052's landing moves
+   it, and the re-anchor of 3 re-reads it then.
 3. **The shared files are re-anchored.** 052, 054 and 055, drafted beside this spec, also
    write `crates/finder/README.md`, the console and motion test `main.rs` files and
    `GLOSSARY.md`. The four land in the order 052, 053, 054, 055, and the operator seat
    re-anchors each one's `shared_writes` on whatever has landed before its flip. Not met
    until 052 lands.
 4. **The owner decisions are settled and the owner approvals given** (spec § Owner
-   decisions, § Owner approvals). Not met: all six are open.
+   decisions, § Owner approvals). Not met: all six are open, each with its
+   recommendation, and wait for the owner's answers at the flip ask.
 5. **Probe builds.** A probe round builds the stories from this text alone, and its
-   defects are folded. Not met: the fold's probe built them beside this text.
+   defects are folded. Met: probe round 1 built all three from this text alone on
+   `probe/053-r1` (tip a78a3f7a), 0 blocking and 8 clarity defects, each folded here and
+   proved on the fold's commits (tip 8fac1157; § What was run).
 6. **No operator-staged files are needed.** Met: no story reads a file outside the
    repository.
 
@@ -474,13 +525,15 @@ They bind every story.
    diff. *Check:* every Then names a committed test the `test` gate runs.
 2. **One evidence budget.** *Check:* each story's whole diff stays under 60 % of
    65,536 B (39,321 B), measured with `git diff <base> -- . | wc -c` from the previous
-   story's tip. On the probe's code, by path from f6d4f5fd: US1 (`model.rs`,
-   `tests/motion/model/`) 12,975 B (19.8 %), US2 (`goto.rs`, `session.rs`,
-   `tests/motion/goto/`) 24,169 B (36.9 %), US3 (the README, the glossary,
-   `tests/console/`) 9,394 B (14.3 %). At the 1.35 times a factory build has run over its
-   probe on earlier specs: US1 about 17,500 B (26.7 %), US2 about 32,600 B (49.8 %), US3
-   about 12,700 B (19.4 %), each under the 60 % line, and far under the judge's 128 KiB
-   evidence limit and its 256 KiB refusal (the validator's report).
+   story's tip. On probe round 1's code, built from this text, US1 from c9a29b2f and each
+   later story from the one before: US1 13,781 B, US2 24,983 B, US3 9,665 B; with each
+   fold commit's own diff added to its story (1,673 B, 3,310 B and 5,767 B): US1
+   15,454 B (23.6 %), US2 28,293 B (43.2 %), US3 15,432 B (23.5 %). That sum is an upper
+   bound: by path from c9a29b2f with the fold in place, 15,060 B, 25,312 B and 9,597 B.
+   At the 1.35 times a factory build has run over its probe on earlier specs: US1 about
+   20,900 B (31.8 %), US2 about 38,200 B (58.3 %), US3 about 20,800 B (31.8 %), each
+   under the 60 % line, and far under the judge's 128 KiB evidence limit and its 256 KiB
+   refusal (the validator's report).
 3. **A spec fixed mid-epic needs a relaunch.** *Check:* no builder edits
    `specs/053-second-sync-fits-base-tilt/` or `.specify/`.
 4. **An earlier story's test file is an existing test.** *Check:* US2 and US3 write no
@@ -498,7 +551,9 @@ They bind every story.
 8. **A negative assertion passes when nothing happens.** *Check:* US2-S4's unchanged
    epochs stand beside the `field.fov_deg` under 9 read while it ran and the `frame_id`
    past the window; US2-S5's absent `error_arcsec` beside its reason; US1-S2's two
-   epochs beside the prediction at the second sync.
+   epochs beside the prediction at the second sync; US2-S1's slewing reads without a
+   `frame_id` beside its test's check that there is at least one, and the `frame_id` each
+   GoTo then names.
 9. **Paused time and the simulator's clock.** *Check:* every GoTo test runs under
    `start_paused = true` and every wait is bounded by `finish_with`'s 5,000 reads.
 10. **nextest ends a test after 5 minutes** (`.config/nextest.toml:23`). *Check:* each
@@ -520,7 +575,7 @@ They bind every story.
 | The real mount's unmodelled terms leave more after two syncs than the simulator does: 0.5° of CA or NPAE leaves 0.71° to 1.04° worst with the second sync in the band, 0.5° of each 1.90° to 2.07° (log 01) or 1.50° to 1.86° (run U), with 36 % to 81 % of places over 0.5°. | The band roughly halves what a high second sync leaves; the GoTo corrects locally; the fixed terms are fitted once 20 syncs are spread; § Outside the factory step 5 says what would change the design. |
 | A false solve of a right-sized field is taken and steers one correction the wrong way (run P: about 32°). | The false-alarm test makes it rare; the next true solve opens another epoch and the GoTo ends `done` (owner decision 2). |
 | A true solve of a field outside the database's range by more than 5 % is refused as a sync. | 047 has then chosen the database whose range holds the field, so only a field in no database's range is refused; § Outside the factory step 4 records it. |
-| A story grows past 60 % in the factory. | The largest is 36.9 % on the probe's code and about 49.8 % at the worst overrun seen. |
+| A story grows past 60 % in the factory. | The largest, US2, is 43.2 % on probe round 1's code with its fold commit added (38.6 % by path) and about 58.3 % at the worst overrun seen. |
 | A new RustSec advisory fails `cargo-deny` in the merge queue. | Not this spec's to answer: the advisory's ignore is the owner's. |
 
 ## Refinement Record
@@ -535,12 +590,15 @@ the three stories built with their scenarios' tests, each story's tests on the c
 before it, a mutation per changed FR, and every gate on the tip), and a reading of 014's
 pointing model, GoTo and second sync, 013's live loop, 024's refusal after a reset, 038's
 push rules, 047's databases, 032's and 050's uses of a sync, MCP's session tool, the
-constitution, the glossary and the repository's pointing-model survey. Writes come from
-the task text. Shared writes name the spec story that last wrote the same file on
-`main`; within the spec, each story's files written by an earlier one are ordered by
-`depends_on_merged`. 052, 054 and 055 write some of the same files and land around this
-spec; the seat re-anchors these `shared_writes` before the flip (plan.md
-§ Prerequisites 3).
+constitution, the glossary and the repository's pointing-model survey. Folded again from
+probe round 1, the three stories built from this text alone on `probe/053-r1` (tip
+a78a3f7a: 0 blocking, 8 clarity defects), each fold proved on that branch's commits
+(tip 8fac1157: three new US1 steps, new clauses in US2-S1 and US2-S5, the band's clamp
+removed, two README sentences, every gate). Writes come from the task text. Shared
+writes name the spec story that last wrote the same file on `main`; within the spec,
+each story's files written by an earlier one are ordered by `depends_on_merged`. 052,
+054 and 055 write some of the same files and land around this spec; the seat re-anchors
+these `shared_writes` before the flip (plan.md § Prerequisites 3).
 
 The six owner decisions of spec.md are open, each with its recommendation; this record
 is written to the recommendations. Its `open_questions` are empty so that the validator
@@ -578,6 +636,21 @@ stories:
         disposition: add
         assertion: "model rig under 1 degree toward 130, a sync at (30, 40) at 0 s and one at (140, 50) at 200 s under zero points (22, -2): the test's own one-sync prediction more than 2.5 degrees from the slipped geometry, both true, one epoch, a base tilt, the worst miss against the slipped geometry over 2 degrees"
         decision: "spec.md:US1-S5"
+      - path: crates/finder/tests/motion/model/tilt.rs
+        status: new
+        disposition: add
+        assertion: "model rig under 1 degree toward 130, a sync at (30, 40) at 0 s, Model::mark_slip, a sync at (140, 50) at 200 s: both true, two epochs, no base tilt"
+        decision: "spec.md:US1-S6"
+      - path: crates/finder/tests/motion/model/tilt.rs
+        status: new
+        disposition: add
+        assertion: "model rig under 8 degrees toward 195, the syncs of US1-S2 and a third at (350, 45) at 240 s: the third true, still two epochs"
+        decision: "spec.md:US1-S7"
+      - path: crates/finder/tests/motion/model/tilt.rs
+        status: new
+        disposition: add
+        assertion: "model rig under 1 degree toward 130, syncs at (350, 45) at 0 s and (20, 45) at 120 s: both true, one epoch, no base tilt"
+        decision: "spec.md:US1-S8"
       - path: crates/finder/src/model.rs
         status: existing
         disposition: preserve
@@ -625,7 +698,7 @@ stories:
       - path: crates/finder/tests/motion/goto/tilt.rs
         status: new
         disposition: add
-        assertion: "tilt rig at (75, 122), tilts 0, 1, 2, 3, 4 and 5 toward 195 and 300: POST /api/model/second-sync done, every read correction 0, two syncs, one epoch, base_tilt deg within 1 arcmin of the tilt; GoTos to (36, 127) and (40, 250) each done, first error_arcsec under 120, frame_id above the latest frame id and frame_time after the console time at its start; one epoch after both"
+        assertion: "tilt rig at (75, 122), tilts 0, 1, 2, 3, 4 and 5 toward 195 and 300: POST /api/model/second-sync done, every read correction 0, two syncs, one epoch, base_tilt deg within 1 arcmin of the tilt; GoTos to (36, 127) and (40, 250) each done, first error_arcsec under 120, frame_id above the latest frame id and frame_time after the console time at its start; no slewing read at correction 0 with a frame_id; one epoch after both"
         decision: "spec.md:US2-S1"
       - path: crates/finder/tests/motion/goto/tilt.rs
         status: new
@@ -640,12 +713,12 @@ stories:
       - path: crates/finder/tests/motion/goto/field.rs
         status: new
         disposition: add
-        assertion: "field rig (1 degree toward 130, zero points (120, 50), syncs at counts (4500, 4500) and (580000, 4500)), Scale's window the four frames after the latest at the first solving read: GoTo to M42 done, frame_id at least the window's end, the first error_arcsec read under 120, the final error_arcsec and Rig::error_arcsec each under 60, a field.fov_deg read under 9, epochs unchanged"
+        assertion: "field rig (1 degree toward 130, zero points (120, 50), syncs at counts (4500, 4500) and (580000, 4500)), Scale's window the frames latest + 1 to latest + 4 at the first solving read: GoTo to M42 done, frame_id above latest + 4, the first error_arcsec read under 120, the final error_arcsec and Rig::error_arcsec each under 60, a Session::snapshot read in finish_with's sample with field.fov_deg under 9, epochs unchanged"
         decision: "spec.md:US2-S4"
       - path: crates/finder/tests/motion/goto/field.rs
         status: new
         disposition: add
-        assertion: "field rig, Scale's window from the frame after the latest without an end at the first solving read: GoTo to M42 failed, reason 'frame <id> solved but was not taken as a sync' with the id at least the window's first frame, no error_arcsec, epochs unchanged"
+        assertion: "field rig, Scale's window from the frame after the latest without an end at the first solving read: GoTo to M42 failed, reason 'frame <id> solved but was not taken as a sync' with the id at least the window's first frame and within 3 of the latest frame's id at the end, ended within 35 s of the first solving read, no error_arcsec, epochs unchanged"
         decision: "spec.md:US2-S5"
       - path: crates/finder/tests/motion/goto/second_sync.rs
         status: existing

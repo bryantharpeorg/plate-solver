@@ -8,14 +8,17 @@ depends_on_landed: ["013-live-finder", "014-goto", "024-mount-link-recovery", "0
 # (round 1: 0 blockers, 6 majors, 12 minors) and the seat's direction to re-centre the
 # spec on the tilt fix: the draft's hold of far solves is now owner option 1(a), not
 # built here. From a probe on the branch `probe/053` cut from f6d4f5fd (tip 764a47c0;
-# plan.md § What was run and what was read). Every `path:line` here was read at
-# f6d4f5fd. State: draft. The six owner decisions are open, each with a recommendation
-# the scenarios are written to; the flip is the owner's. 014 is named because this spec
-# changes its sync intake, pointing model, GoTo and second sync (FR-011, FR-012, FR-013,
-# FR-019, FR-022, quoted in Clarifications); 038 because its slip mark stays as it is;
-# 013 for the live loop that takes the syncs; 047 for the database in use; 024, 027,
-# 038, 047 and 051 because each last changed a file this spec writes (plan.md
-# § Refinement Record).
+# plan.md § What was run and what was read). Folded again the same day from probe
+# round 1, the three stories built from this text alone on `probe/053-r1` (from
+# c9a29b2f, tip a78a3f7a: 0 blocking, 8 clarity defects), each fold proved on that
+# branch's commits ea235dfb, 3d2fc4e8 and 8fac1157 (tip 8fac1157). Every `path:line`
+# here was read at f6d4f5fd. State: draft. The six owner decisions are open, each with
+# a recommendation the scenarios are written to; the flip is the owner's. 014 is named
+# because this spec changes its sync intake, pointing model, GoTo and second sync
+# (FR-011, FR-012, FR-013, FR-019, FR-022, quoted in Clarifications); 038 because its
+# slip mark stays as it is; 013 for the live loop that takes the syncs; 047 for the
+# database in use; 024, 027, 038, 047 and 051 because each last changed a file this spec
+# writes (plan.md § Refinement Record).
 ---
 
 # Feature Specification: The Second Sync Fits the Base Tilt
@@ -192,13 +195,13 @@ second sync's solve fitting the base tilt, and add no state to hold or confirm s
    sync at 79° up, 24 of 24 true solves 30° up were held (the review's run U), so a GoTo
    would need two solves in its first 30 s where `main` needs one. Size and approvals: the
    draft's model story, the hold with the tilt fix, measured 19.0 KB on its probe against
-   this spec's 13.0 KB for the tilt fix with its five scenarios; one line of an existing
+   this spec's 15.5 KB for the tilt fix with its eight scenarios; one line of an existing
    unit test replaced, 014's FR-011 and FR-013 changed for it, a `model.candidate` key and
    a glossary entry. (b) **A gate of its own at 1°**, a second solve within 5′ to confirm:
    the same weakness, and two bounds. (c) **No gate and no tilt fix**, as today: the
    night's defect stays (run: log 02). (d) **The tilt fix and the band only**, with
    decision 4's field check and decision 3's plain end, and the hold left as a later spec
-   the owner may decline. Size: the three stories here, 13.0, 24.2 and 9.4 KB; approvals:
+   the owner may decline. Size: the three stories here, 15.5, 28.3 and 15.4 KB; approvals:
    014's FR-011, FR-012, FR-013, FR-019 and FR-022 changed as quoted, two optional `goto`
    keys, no existing test edited. Recommended: **(d)**.
 2. **How a real slip is told from a bad solve** (FR-003). (a) **As today: a sync beyond
@@ -212,9 +215,9 @@ second sync's solve fitting the base tilt, and add no state to hold or confirm s
    Recommended: **(a)**, with decision 4's field check as the independent test against a
    false match.
 3. **The second sync** (FR-001, FR-008, FR-009).
-   1. *Its band.* (a) **Between 30° and 60° up as the model predicts it, searched from
-      the current altitude held to that band; the nearest outside it only when no spot in
-      the band has a safe path** (Clarifications: why 30° to 60°). (b) 15° to 60°,
+   1. *Its band.* (a) **Between 30° and 60° up as the model predicts it, the altitudes
+      searched as today; the nearest outside it only when no spot in the band has a safe
+      path** (Clarifications: why 30° to 60°). (b) 15° to 60°,
       SynScan's own: more trees and more refraction low down. Recommended: **(a)**.
    2. *Its tilt bound.* (a) **6°**, above every tilt tried (0° to 5°, fitted within 1′);
       8° is taken as a slip (US1-S2, US2-S3). (b) **5°**, the top of the range tried and
@@ -351,7 +354,9 @@ Every scenario shares these definitions.
   which solves each frame as `Stars` does but with no field estimate and, for the frames
   whose ids lie in a window the test sets, answers the solved place with a frame of 0.7
   times the solved field (about 8.4° for the simulator's 12°), built with
-  `finder::sky::Frame::from_solution`. **The tilt rig at (alt, az)** is the GoTo rig with
+  `finder::sky::Frame::from_solution` from a `plate_solver::Solution` made of the
+  report's `pointing` (its ra, dec, roll and distortion, and a camera of the frame's size
+  at 0.7 times its `fov_deg`). **The tilt rig at (alt, az)** is the GoTo rig with
   `Stars` over a tilt t toward w with zero points that put counts (4500, 4500), reached
   from rest at zero, at the true (alt, az): the test's own inverse rotation, the tube
   0.85° after half the backlash, as `crates/finder/tests/motion/goto/second_sync.rs`'s
@@ -367,9 +372,10 @@ Every scenario shares these definitions.
   `Rig::finish_with(Some(15.0), true, …)`, which asserts at every read that the true
   altitude is at least 15° and the true direction at least 15° from the Sun, and that it
   ends within 5,000 reads.
-- **The docs rig** is the README and the glossary read as text, every run of whitespace
-  joined into one space, as `crates/finder/tests/console/imaging_run_docs.rs` reads the
-  README.
+- **The docs rig** is `crates/finder/README.md` and `GLOSSARY.md` read from
+  `env!("CARGO_MANIFEST_DIR")` (the glossary as `../../GLOSSARY.md`), as
+  `crates/finder/tests/console/imaging_run_docs.rs` reads the README, with every run of
+  whitespace joined into one space (`split_whitespace`, joined by one space).
 
 ### User Story 1 - The second sync's solve fits the base tilt (Priority: P1)
 
@@ -418,6 +424,16 @@ nextest command runs it; during development,
    one-sync prediction lies more than 2.5° from the slipped geometry, that both answer
    true, that the model holds one epoch and a base tilt, and that the worst miss against
    the slipped geometry is over 2°.
+6. **Given** the model rig under a tilt of 1° toward 130°, a sync at (30°, 40°) at 0 s,
+   `Model::mark_slip`, and a sync at (140°, 50°) at 200 s, **When** a committed test adds
+   them, **Then** it asserts that both answer true and that the model holds two epochs
+   and no base tilt.
+7. **Given** the model rig under a tilt of 8° toward 195° with the syncs of US1-S2 and a
+   third at (350°, 45°) at 240 s, **When** a committed test adds the three, **Then** it
+   asserts that the third answers true and the model still holds two epochs.
+8. **Given** the model rig under a tilt of 1° toward 130° with a sync at (350°, 45°) at
+   0 s and one at (20°, 45°) at 120 s, **When** a committed test adds them, **Then** it
+   asserts that both answer true and the model holds one epoch and no base tilt.
 
 ### User Story 2 - The second sync keeps to the band and says when it fits no tilt, and a GoTo corrects only from a taken sync (Priority: P1)
 
@@ -443,8 +459,9 @@ them; during development,
    correction 0, that the model then holds two syncs, one epoch and a base tilt whose
    `deg()` is within 1′ of the tilt, that each GoTo ends `done` with its first
    `error_arcsec` under 120, a `frame_id` above the latest frame's id when it was started
-   and a `frame_time` after the console time when it was started, and that the model
-   still holds one epoch after both.
+   and a `frame_time` after the console time when it was started, that every progress
+   read of each GoTo in state `slewing` at correction 0 has no `frame_id`, and that the
+   model still holds one epoch after both.
 2. **Given** the level rig at (75°, 122°), at (45°, 122°) and at (20°, 122°), **When** a
    committed test sends `POST /api/model/second-sync` on each, **Then** it asserts that
    each ends `done`, that the mount's true altitude is then within 0.2° of 60°, 45° and
@@ -456,18 +473,20 @@ them; during development,
    every progress read at correction 0, and that the model then holds two epochs and no
    base tilt.
 4. **Given** the field rig, **When** a committed test starts a GoTo to M42 and, at the
-   first progress read `solving`, sets Scale's window to the four frames after the
-   latest, **Then** it asserts that the GoTo ends `done`, that its `frame_id` is at least
-   the window's end, that the first `error_arcsec` read is under 120, that the final
-   `error_arcsec` and the simulator's true error from M42 (`Rig::error_arcsec`) are each
-   under 60, that a session read while it ran had a `field.fov_deg` under 9, and that the
-   model holds the same number of epochs as before.
+   first progress read `solving`, sets Scale's window to the frames latest + 1 to
+   latest + 4, latest being the latest frame's id then, **Then** it asserts that the GoTo
+   ends `done`, that its `frame_id` is above latest + 4, that the first `error_arcsec`
+   read is under 120, that the final `error_arcsec` and the simulator's true error from
+   M42 (`Rig::error_arcsec`) are each under 60, that a `Session::snapshot` read in
+   `finish_with`'s sample had a `field.fov_deg` under 9, and that the model holds the
+   same number of epochs as before.
 5. **Given** the field rig, **When** a committed test starts a GoTo to M42 and, at the
    first progress read `solving`, sets Scale's window from the frame after the latest
    without an end, **Then** it asserts that the GoTo ends `failed` with the `reason`
    `frame <id> solved but was not taken as a sync`, its id at least the window's first
-   frame, with no `error_arcsec`, and that the model holds the same number of epochs as
-   before.
+   frame, with no `error_arcsec`, that the id it names is within 3 of the latest frame's
+   id when it ends, that it ends within 35 s of the first progress read `solving`, and
+   that the model holds the same number of epochs as before.
 
 ### User Story 3 - The README and the glossary say how the second sync fits the tilt (Priority: P2)
 
@@ -496,7 +515,8 @@ nextest command runs it; during development,
   `crates/finder/tests/motion/mount_identity.rs` passed unchanged.
 - **A push by hand while Track runs**: 038 marks the slip
   (`crates/finder/src/session.rs:1302`) and the first sync after it opens an epoch, at a
-  tilt spot too. Run: the `tracking::push*` and `steering_*` tests passed unchanged.
+  tilt spot too, before its tilt is judged (FR-001, US1-S6). Run: the `tracking::push*`
+  and `steering_*` tests passed unchanged.
 - **A push by hand with Track off**: the first solve once the telescope is still is
   more than the bound from the prediction and opens an epoch, as today; a later second
   sync measures from that epoch's syncs. Run:
@@ -535,9 +555,10 @@ nextest command runs it; during development,
 - **FR-001**: Before the base tilt is fitted, `Model::add_sync` SHALL judge a qualified
   sync at least 90° on the azimuth axis from a sync of the current zero-point epoch by
   the base tilt its taking would fit alone, whatever its distance from the prediction:
-  at most 6° (`MAX_BASE_TILT_DEG`), it SHALL join that epoch and fit the tilt, and never
-  open an epoch; above it, it SHALL open a new epoch fitted from that sync alone, as 014's
-  FR-013 fits one. **Refs**: 014's FR-012 and FR-013; owner decisions 1 and 3.
+  at most 6° (`MAX_BASE_TILT_DEG`), it SHALL join that epoch and fit the tilt unless
+  038's slip mark is set (FR-003), which opens an epoch first; above it, it SHALL open a
+  new epoch fitted from that sync alone, as 014's FR-013 fits one. **Refs**: 014's FR-012
+  and FR-013; 038's FR-007; owner decisions 1 and 3.
 - **FR-002**: Two syncs SHALL count as 90° apart for the base tilt when their axis
   positions' azimuths, the azimuth count times 360 over the counts a revolution, differ
   by at least 90°, within one epoch. **Refs**: 014's FR-012; Clarifications (why the
@@ -572,8 +593,8 @@ nextest command runs it; during development,
 - **FR-008**: The second sync's spot SHALL be the nearest in turn and tilt (the
   hypotenuse of the azimuth and altitude differences) among the spots whose altitude, as
   the model predicts it, lies between 30° and 60° (`SECOND_SYNC_BAND`), the altitudes
-  searched from the current altitude held to that band and to the minimum altitude; only
-  when none of those has a safe path SHALL it be the nearest outside the band, as today.
+  searched as today; only when none of those has a safe path SHALL it be the nearest
+  outside the band, as today.
   Today's 90° on the sky with its allowance (`crates/finder/src/goto.rs:275`) stays.
   **Refs**: 014's FR-022; owner decision 3.
 - **FR-009**: A second sync whose taken sync leaves the model with no base tilt SHALL end
@@ -598,9 +619,8 @@ nextest command runs it; during development,
   3. "When 30 s pass after settling with frames solved but none taken as a sync, the GoTo
      or second sync ends `failed` with `frame <id> solved but was not taken as a sync`,
      naming the last; with no frame solved, `no frame solved after settling`."
-  4. "It looks first between 30° and 60° up, as the model predicts the altitude, starting
-     from the current altitude held to that band, and only when no spot there has a safe
-     path does it take the nearest outside it."
+  4. "It looks first between 30° and 60° up, as the model predicts the altitude, and only
+     when no spot there has a safe path does it take the nearest outside it."
   5. "When that sync is taken as a slip and no base tilt is fitted, it ends `failed` with
      `taken as a slip: no base tilt fitted`."
   6. "Before the base tilt is fitted, a sync at least 90° on the azimuth axis from a sync
@@ -608,7 +628,7 @@ nextest command runs it; during development,
      tilt it fits is at most 6°, and is otherwise taken as a slip; the tilt alone decides
      it."
   7. "opens a new zero-point epoch, as does the first solve after a push by hand while
-     Track runs."
+     Track runs, at a tilt spot too."
   8. "A live solve whose field lies more than 5% outside the range of the database in use
      is not taken as a sync."
   9. "take the first sync between 30° and 60° up when the sky allows, and press the
@@ -689,10 +709,10 @@ US3:
   implements: [FR-011, FR-012, FR-013]
 ```
 
-Three stories, each under 60 % of 65,536 B (39,321 B) as the probe's commits measure
-them, the largest US2 at 36.9 %, and at the factory's worst overrun seen, 1.35 times,
-still under it, US2 at about 49.8 % (plan.md § Plan traps 2): the model; the second
-sync, the field and GoTo; the words. Each merges after the one before
+Three stories, each under 60 % of 65,536 B (39,321 B) as the probe from this text and
+its fold measure them, the largest US2 at 43.2 %, and at the factory's worst overrun
+seen, 1.35 times, still under it, US2 at about 58.3 % (plan.md § Plan traps 2): the
+model; the second sync, the field and GoTo; the words. Each merges after the one before
 (`depends_on_merged`): US2's tilt rig needs US1's tilt rule to fit a tilt over 1° in one
 epoch, and US3's words describe US2's progress keys, reasons and band. Plain
 `depends_on` would order them without putting the earlier code in the later story's base.
