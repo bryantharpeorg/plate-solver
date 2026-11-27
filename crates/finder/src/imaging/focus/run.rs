@@ -6,8 +6,10 @@
 use std::{
     path::{Path, PathBuf},
     sync::{Arc, Weak},
+    time::Duration,
 };
 
+use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 use tokio::{sync::Notify, task::JoinHandle};
 
@@ -19,7 +21,7 @@ use crate::imaging::{
     frames::FrameView,
     relation::CameraId,
     solver::{ImagingSolver, Region, SolveFrame},
-    CameraView, Held, Imaging, ImagingView, Lease, Refusal, RoiEdit, SettingsEdit,
+    CameraView, Held, Imaging, ImagingView, Lease, Refusal, RoiEdit, RoiView, SettingsEdit,
 };
 
 /// The purpose label of every imaging frame the aid takes (FR-020).
@@ -30,6 +32,11 @@ pub const HOLDER: &str = "the focus aid";
 pub const FOCUS_EXPOSURE_MS: f64 = 1000.0;
 /// A focus check ends after this many imaging frames at the latest (FR-026).
 pub const CHECK_FRAMES: u64 = 9;
+/// A put-back the scope node refuses while the camera is `ready` is tried
+/// again after this long (054), as the scope node waits after its own aborts.
+pub const RESTORE_PAUSE: Duration = Duration::from_secs(1);
+/// No put-back is tried later than this after the first (054).
+pub const RESTORE_WAIT: Duration = Duration::from_secs(5);
 /// The words of a search that found no tile to read (FR-022).
 const NO_REGION: &str = "no tile of the imaging frame had five stars to measure";
 
@@ -190,6 +197,9 @@ pub(in crate::imaging) struct State {
     run: Option<Run>,
     /// Woken once the run's lifecycle is `ended`, after the lease is dropped.
     ended: Arc<Notify>,
+    /// The region an aid could not take back, and its put-back's words (054):
+    /// kept here, not with the run, so a later run does not lose it.
+    left: Option<(RoiView, String)>,
 }
 
 impl State {
@@ -199,12 +209,29 @@ impl State {
             kept: Kept::new(path),
             run: None,
             ended: Arc::new(Notify::new()),
+            left: None,
         }
     }
 
-    /// The camera was described: the `Kept` reads `focus.json` for it (FR-029).
+    /// The camera was described: the `Kept` reads `focus.json` for it (FR-029),
+    /// and a region an aid left is no longer named (054).
     pub(in crate::imaging) fn describe(&mut self, camera: CameraId) {
         self.kept.describe(camera);
+        self.left = None;
+    }
+
+    /// The observer changed the settings (054): a region an aid left is now theirs.
+    pub(in crate::imaging) fn forget_left(&mut self) {
+        self.left = None;
+    }
+
+    /// The words of the region an aid could not take back, while that region is
+    /// still the one in force (054).
+    fn left_in(&self, roi: RoiView) -> Option<&str> {
+        self.left
+            .as_ref()
+            .filter(|(left, _)| *left == roi)
+            .map(|(_, words)| words.as_str())
     }
 
     /// End the run's task, for `Drop` (the run's lifecycle stays as it is).
@@ -715,16 +742,18 @@ fn with(mut end: Ended, remembered: Remembered) -> Ended {
 }
 
 /// The settings in force, remembered for the end (FR-021); `None` when the
-/// camera left `ready`.
+/// camera left `ready`. A region an earlier aid could not put back is taken as
+/// the whole sensor (054): an aid never keeps another aid's leftovers.
 fn remember(imaging: &Arc<Imaging>) -> Option<Remembered> {
     let held = imaging.state.lock().expect("imaging state");
     let settings = held.settings.clone()?;
-    let whole = held.camera.as_ref().is_some_and(|camera| {
-        settings.roi.x == 0
-            && settings.roi.y == 0
-            && settings.roi.width == camera.width
-            && settings.roi.height == camera.height
-    });
+    let whole = held.focus.left_in(settings.roi).is_some()
+        || held.camera.as_ref().is_some_and(|camera| {
+            settings.roi.x == 0
+                && settings.roi.y == 0
+                && settings.roi.width == camera.width
+                && settings.roi.height == camera.height
+        });
     Some(Remembered {
         exposure_ms: settings.exposure_ms,
         binning: settings.binning,
@@ -1040,10 +1069,48 @@ fn check_ends(imaging: &Arc<Imaging>, settled: bool, unmeasurable: bool) -> bool
     true
 }
 
+impl Imaging {
+    /// The words of a put-back that failed, while the region the aid could not
+    /// take back is still in force (054); 041's region refusal names it.
+    pub(in crate::imaging) fn focus_left(&self) -> Option<String> {
+        let held = self.state.lock().expect("imaging state");
+        let roi = held.settings.as_ref()?.roi;
+        held.focus.left_in(roi).map(str::to_string)
+    }
+}
+
+/// Put the remembered settings back through the lease (FR-027, 054): the scope
+/// node's refusal (502) while the camera is `ready` is followed by another try
+/// `RESTORE_PAUSE` later, so long as that try starts within `RESTORE_WAIT` of
+/// the first; any other refusal is the last at once. Answers the last refusal's
+/// words, or none once a try takes. No lock is held across the pause.
+async fn put_back(
+    imaging: &Arc<Imaging>,
+    lease: &Lease,
+    remembered: &Remembered,
+) -> Option<String> {
+    let first = tokio::time::Instant::now();
+    loop {
+        let refusal = match lease.set(remembered.edit()).await {
+            Ok(_) => return None,
+            Err(refusal) => refusal,
+        };
+        let ready = imaging.state.lock().expect("imaging state").state == "ready";
+        if !ready
+            || refusal.status != StatusCode::BAD_GATEWAY
+            || first.elapsed() + RESTORE_PAUSE > RESTORE_WAIT
+        {
+            return Some(refusal.message);
+        }
+        tokio::time::sleep(RESTORE_PAUSE).await;
+    }
+}
+
 /// Step 5 (FR-027): wait out a frame in flight, put the remembered settings
 /// back through the lease, drop the lease and only then let the lifecycle say
 /// `ended`, so a reader who sees it finds the camera free and the settings as
-/// they will stay.
+/// they will stay. A put-back that fails leaves the region in force named as
+/// the aid's (054).
 async fn finish(imaging: &Arc<Imaging>, lease: Lease, end: Ended) {
     if let Some(id) = {
         let held = imaging.state.lock().expect("imaging state");
@@ -1054,17 +1121,22 @@ async fn finish(imaging: &Arc<Imaging>, lease: Lease, end: Ended) {
     } {
         imaging.ended(id).await;
     }
+    let remembered = end.restore.is_some();
     let restore_error = match end.restore {
-        Some(remembered) => match lease.set(remembered.edit()).await {
-            Ok(_) => None,
-            Err(refusal) => Some(refusal.message),
-        },
+        Some(settings) => put_back(imaging, &lease, &settings).await,
         None => None,
     };
     drop(lease);
     {
         let mut guard = imaging.state.lock().expect("imaging state");
         let held: &mut Held = &mut guard;
+        if remembered {
+            let roi = held.settings.as_ref().map(|settings| settings.roi);
+            held.focus.left = match (restore_error.as_ref(), roi) {
+                (Some(words), Some(roi)) => Some((roi, words.clone())),
+                _ => None,
+            };
+        }
         let run = held.focus.run.as_mut().expect("the run");
         run.lifecycle = "ended";
         run.ended_reason = Some(end.reason);

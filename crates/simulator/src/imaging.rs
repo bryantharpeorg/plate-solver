@@ -269,13 +269,20 @@ pub fn deep_field(seed: u64, ra_deg: f64, dec_deg: f64, radius_deg: f64) -> Vec<
     stars
 }
 
+/// The words of a settings change refused while the camera is still stopping
+/// an aborted exposure (054), as a real camera's driver refuses one.
+pub const STILL_STOPPING: &str =
+    "the camera refused the settings: it is still stopping an exposure";
+
 /// The settings in force, whether an exposure runs, how many aborts have been
-/// asked for and how many frames this camera has delivered.
+/// asked for, how many frames this camera has delivered, and until when the
+/// settings are refused after an abort (054).
 struct State {
     settings: ImagingSettings,
     exposing: bool,
     aborts: u64,
     frames: u64,
+    refused_until: Option<tokio::time::Instant>,
 }
 
 /// Clears the exposing mark on every way out, a dropped future included.
@@ -310,6 +317,8 @@ pub struct SimImagingCamera {
     seed: u64,
     stars: Option<Vec<SimStar>>,
     noise: bool,
+    /// How long after an abort of an exposure the settings are refused (054).
+    abort_settle: Duration,
     state: Mutex<State>,
     abort: Notify,
 }
@@ -326,6 +335,7 @@ impl SimImagingCamera {
             seed: 13,
             stars: None,
             noise: true,
+            abort_settle: Duration::ZERO,
             state: Mutex::new(State {
                 settings: ImagingSettings {
                     gain: Some(120.0),
@@ -343,6 +353,7 @@ impl SimImagingCamera {
                 exposing: false,
                 aborts: 0,
                 frames: 0,
+                refused_until: None,
             }),
             abort: Notify::new(),
         }
@@ -350,6 +361,15 @@ impl SimImagingCamera {
 
     pub fn with_seed(mut self, seed: u64) -> Self {
         self.seed = seed;
+        self
+    }
+
+    /// Refuse every settings change that names a setting, with
+    /// [`STILL_STOPPING`], for `settle` after each abort of an exposure, as a
+    /// real camera's driver can while it stops one (054). Zero, the default,
+    /// refuses none.
+    pub fn with_abort_settle(mut self, settle: Duration) -> Self {
+        self.abort_settle = settle;
         self
     }
 
@@ -758,6 +778,15 @@ impl ImagingCamera for SimImagingCamera {
                 }
                 return Err(ImagingError::Busy);
             }
+            // After an abort, a camera still stopping its exposure refuses any
+            // change that names a setting, until its settle has passed (054).
+            if *settings != ImagingSettings::default()
+                && state
+                    .refused_until
+                    .is_some_and(|until| tokio::time::Instant::now() < until)
+            {
+                return Err(ImagingError::Failed(STILL_STOPPING.to_string()));
+            }
             let merged = check_settings(&self.info(), &state.settings, settings)?;
             state.settings = merged.clone();
             Ok(merged)
@@ -836,6 +865,9 @@ impl ImagingCamera for SimImagingCamera {
             let mut state = self.state.lock().unwrap();
             if state.exposing {
                 state.aborts += 1;
+                if !self.abort_settle.is_zero() {
+                    state.refused_until = Some(tokio::time::Instant::now() + self.abort_settle);
+                }
                 drop(state);
                 self.abort.notify_one();
             }

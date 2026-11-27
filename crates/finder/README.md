@@ -992,7 +992,15 @@ settings change asked for meanwhile is refused with `the focus aid` in the
 words, and a start is refused the same way while something else holds the
 camera. However it ends — `stopped`, by a stop; `done`, by a check; `failed`,
 by a fault; or `no_region`, when no tile had five stars to measure — it puts
-the settings back and releases the camera.
+the settings back and releases the camera. A camera still stopping an aborted
+exposure can refuse the settings for a moment, so a put-back the scope node
+refuses while the camera is ready is tried again once a second for up to 5 s,
+and a stop answers that much later. One that never takes is the aid's
+`restore_error`, and the camera keeps the aid's settings until they are changed
+by hand: `Use the whole sensor` on the Focus block, or `PUT /api/imaging/settings`
+with `{"roi":null}`. Until then the region is named as the aid's, even after a
+later check, and the next aid or check puts the whole sensor back rather than
+keep it.
 
 From the readings alone the aid works out what to tell a hand on the
 focuser: the median of the last three readings, a reading more than 15% from
@@ -1650,7 +1658,12 @@ At a focus pause, turn the focuser while watching the aid, then press
 `Check focus again`, or call `continue_imaging_run` with `anyway` false.
 `Go anyway`, or `anyway` true, goes on without another check and keeps a
 warning. Only the first answer to a pause counts. The pause can last at most
-15 minutes; the page shows its time left.
+15 minutes; the page shows its time left. Every answer, and a Stop, closes the
+aid, which puts the camera's settings back as `## Focus` says, and the run then
+holds the camera again. When the aid could not put them back, the run ends
+`camera_failed` with the camera's own words after
+`the focus aid could not put the imaging camera's settings back:`. Clear the
+region with `Use the whole sensor` and start again.
 
 The ending's `reason` is one of the words below. The mount column describes
 the motion at the ending, before a later Stop or guard. Check the page's
