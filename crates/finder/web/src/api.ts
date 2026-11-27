@@ -596,6 +596,8 @@ export interface ImagingRelation {
 export interface ImagingFocusSized {
   value: number;
   at: number;
+  // The altitude the size was read at, when known (054).
+  alt_deg?: number;
 }
 
 export interface ImagingFocusAid {
@@ -611,13 +613,21 @@ export interface ImagingFocusAid {
     state: "reading" | "settling" | "too_few_stars" | "far_out";
     value?: number;
     stars?: number;
+    // The altitude the frame was read at, when known (054).
+    alt_deg?: number;
   };
   median?: { value: number; readings: number };
   best?: number;
   trend?: "better" | "worse" | "same";
   found: boolean;
   verdict?: "good" | "slightly_soft" | "clearly_out" | "unmeasurable" | "no_record";
-  reference?: { value: number; of: "tonight" | "earlier" };
+  // The record the verdict is compared with; `carried` when it was carried to the
+  // reading's altitude (054).
+  reference?: {
+    value: number;
+    of: "tonight" | "earlier";
+    carried?: { from: number; from_alt_deg: number; alt_deg: number };
+  };
   history: (number | null)[];
   ended_reason?: "stopped" | "done" | "failed" | "no_region";
   error?: string;

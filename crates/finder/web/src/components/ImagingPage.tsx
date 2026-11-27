@@ -138,6 +138,12 @@ export function ImagingPage({ night, onBack }: { night: boolean; onBack: () => v
     await refresh();
   };
 
+  // The last picture the page drew stays until the next preview (054): set while
+  // rendering, once per new preview, so the same render already shows it.
+  const [kept, setKept] = useState<{ id: number; src: string } | null>(null);
+  if (frame?.preview != null && kept?.src !== frame.preview) setKept({ id: frame.id, src: frame.preview });
+  const picture = frame?.preview != null ? { id: frame.id, src: frame.preview } : kept;
+
   const busy = frame?.state === "exposing" || frame?.state === "receiving";
   return (
     <main className="mx-auto max-w-[32.5rem] space-y-6 px-4 pt-4 pb-16 sm:px-5 sm:pt-6">
@@ -268,16 +274,19 @@ export function ImagingPage({ night, onBack }: { night: boolean; onBack: () => v
                 <p role="alert">{`The scope node kept no copy: ${frame.node_save_error}.`}</p>
               )}
               {frameAlert && <p role="alert">{frameAlert}</p>}
-              {frame?.preview && (
+              {picture != null && (
                 <div className="border border-ink bg-photo">
                   <img
-                    src={frame.preview}
-                    alt={`Imaging frame ${frame.id}`}
+                    src={picture.src}
+                    alt={`Imaging frame ${picture.id}`}
                     className={held ? "block h-auto w-full" : "photo block h-auto w-full"}
                   />
                 </div>
               )}
-              {night && frame?.preview && (
+              {picture != null && frame?.preview == null && (
+                <p className="quiet">{`Frame ${picture.id}, the last picture`}</p>
+              )}
+              {night && picture != null && (
                 <>
                   <button type="button" className="button" aria-pressed={held} {...bind}>
                     Hold to see colour
