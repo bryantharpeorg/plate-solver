@@ -36,6 +36,9 @@ const DEADBAND_ARCSEC: f64 = 10.0;
 const FORECAST_S: f64 = 30.0 * 60.0;
 const TAKEUP_RATE: f64 = 0.5;
 const KEYHOLE_ALT: f64 = 88.0;
+/// Each axis a nudge's step moves goes this far past its end and comes back, against the
+/// way Track drives it: GoTo's approach (014's `APPROACH`, `goto.rs`) (055).
+const STEP_APPROACH_DEG: f64 = 0.5;
 
 /// Shares of the sub error and measured drift taken out at each gap (036).
 const SUB_STEP_SHARE: f64 = 0.5;
@@ -144,6 +147,14 @@ struct Control {
     gaps: Vec<oneshot::Sender<Stepped>>,
     step_share: f64,
     rate_share: f64,
+    /// The axes as `start` described them: their counts and capabilities (055).
+    axes: Option<[AxisInfo; 2]>,
+    /// The place a nudge moved Track's hold from, while its step is to be made or being
+    /// made (055).
+    stepping: Option<Target>,
+    /// Until this console time, no live pointing feeds the loop and no push is checked:
+    /// a step is made, and 1 s plus `SETTLE` pass after it (055).
+    quiet_until: f64,
 }
 
 #[derive(Default)]
@@ -275,6 +286,7 @@ impl Tracker {
             }
             *control = Control {
                 counts,
+                axes: Some(axes),
                 settling: true,
                 cause: "starting",
                 unsteady: VecDeque::from([(f64::NEG_INFINITY, None)]),
@@ -330,7 +342,9 @@ impl Tracker {
         };
         state.checks_push = state.state == "tracking"
             && control.measurement[0].is_none()
-            && control.measurement[1].is_none();
+            && control.measurement[1].is_none()
+            && control.stepping.is_none()
+            && now >= control.quiet_until;
         state
     }
 
@@ -359,19 +373,58 @@ impl Tracker {
         target.ra_deg = ra_deg;
         target.dec_deg = dec_deg;
         control.followed = true;
-        control.proportional = [0.0; 2];
-        control.previous_pointing = None;
-        control.state.samples.clear();
-        // Errors measured at the old place, or steps held for it, would steer
-        // back toward it by up to 30 arcseconds a gap (036 FR-011).
-        control.subs = None;
-        control.pending = None;
-        control.lapsed = false;
-        control.held = Held::default();
-        control.fresh_after = self.shared.clock.now();
-        control.pushed = false;
+        forget(&mut control, self.shared.clock.now());
         self.shared.mark(&mut control);
         Ok(())
+    }
+
+    /// Hold the step a nudge asks for (055): the place Track holds moves by `up`
+    /// arcseconds in altitude and `right` across the sky the way azimuth grows, and the
+    /// rate loop's next turn makes the step, with the session's `model`. A press the GoTo
+    /// guards refuse changes nothing, nor does one while not `tracking`, while a backlash
+    /// is measured, or with an earlier step still to be made or being made.
+    pub async fn nudge(&self, up: f64, right: f64, model: Model) -> Result<(), String> {
+        let axes = {
+            let control = self.shared.control.lock().unwrap();
+            may_nudge(&control)?;
+            control.axes.ok_or("Track is not tracking yet")?
+        };
+        let mut client = self.shared.link.mount().ok_or("no mount is connected")?;
+        let mut current = [0; 2];
+        for (i, axis) in AXES.into_iter().enumerate() {
+            let reading = timeout(SECOND, client.axis_state(axis))
+                .await
+                .map_err(|_| "mount did not answer")?
+                .map_err(|_| "link_lost")?;
+            current[i] = reading.position;
+        }
+        // Checked and changed under one lock: the path's guards, then the place, the
+        // model and the memory. Nothing awaits from here to the end.
+        let mut control = self.shared.control.lock().unwrap();
+        may_nudge(&control)?;
+        let from = control
+            .state
+            .target
+            .clone()
+            .ok_or("Track is not tracking yet")?;
+        let now = self.shared.clock.now();
+        let (east, north) = self.shared.sky_step(&from, up, right, now);
+        let to = moved(&from, east, north);
+        self.shared
+            .step_path(&model, axes, current, control.direction, &from, &to)?;
+        // The session's model goes to Track only with a step it accepts.
+        *self.shared.model.lock().unwrap() = Arc::new(model);
+        control.state.target = Some(to);
+        control.followed = true;
+        forget(&mut control, now);
+        control.stepping = Some(from);
+        self.shared.mark(&mut control);
+        Ok(())
+    }
+
+    /// Whether a nudge's step is still to be made or under way (055).
+    pub fn stepping(&self) -> bool {
+        self.shared.control.lock().unwrap().stepping.is_some()
     }
 
     /// The J2000 place being tracked; `None` when off.
@@ -460,6 +513,8 @@ impl Tracker {
             None
         } else if control.pushed {
             Some("pushed")
+        } else if control.stepping.is_some() {
+            Some("nudged")
         } else if control.measurement.iter().any(Option::is_some) {
             Some("measuring")
         } else if control.settling {
@@ -595,6 +650,10 @@ impl Shared {
             },
         );
         self.wind.lock().unwrap().observe(az);
+        // A nudge's step, and the window after it, feed the loop no pointing (055 FR-011).
+        if control.stepping.is_some() || time < control.quiet_until {
+            return;
+        }
         if control.state.state == "keyhole_wait" {
             if control.solve_after.is_some_and(|after| time >= after) {
                 control.resume_pointing = Some(PointingError {
@@ -661,7 +720,8 @@ impl Shared {
             && !control.settling
             && !control.pushed
             && !control.stalled
-            && control.measurement.iter().all(Option::is_none);
+            && control.measurement.iter().all(Option::is_none)
+            && control.stepping.is_none();
         if steady == control.steady {
             return;
         }
@@ -707,6 +767,7 @@ impl Shared {
         control.corrections.clear();
         control.gaps.clear();
         control.pushed = false;
+        control.stepping = None;
         self.mark(&mut control);
         for (i, measurement) in control.measurement.iter_mut().enumerate() {
             if measurement.take().is_some() {
@@ -1261,6 +1322,156 @@ impl Shared {
         Ok(())
     }
 
+    /// `[up, right]` arcseconds in the mount's view as east and north of J2000 at `time`:
+    /// the inverse of `axis_error`'s turn, with the parallactic angle at `time` (055).
+    fn sky_step(&self, target: &Target, up: f64, right: f64, time: f64) -> (f64, f64) {
+        let (q, _) = self.axis_frame(target, time);
+        let (sin_q, cos_q) = q.sin_cos();
+        (sin_q * up - cos_q * right, cos_q * up + sin_q * right)
+    }
+
+    /// The model's counts for a J2000 place at `time`, under `model` (055).
+    fn inverse_at(
+        &self,
+        model: &Model,
+        target: &Target,
+        counts: [u32; 2],
+        time: f64,
+    ) -> Option<[f64; 2]> {
+        let (alt, az) = self.place(target, time);
+        model.inverse(az, ephemeris::apparent_from_true(alt), counts)
+    }
+
+    /// The two waypoints of a nudge's step (055): the end on each axis the step moves, and
+    /// 0.5° before it, against the way Track drives that axis, so the gears come to rest on
+    /// Track's flank. The end is the counts at `to`'s arrival less those at `from` now, added
+    /// to the counts read. `Planner::through` checks the path, as a GoTo's is checked.
+    fn step_path(
+        &self,
+        model: &Model,
+        axes: [AxisInfo; 2],
+        current: [i32; 2],
+        direction: [f64; 2],
+        from: &Target,
+        to: &Target,
+    ) -> Result<([i32; 2], [i32; 2]), String> {
+        let now = self.clock.now();
+        let counts = axes.map(|a| a.counts_per_revolution);
+        let planner = Planner {
+            model,
+            axes,
+            current,
+            wind: *self.wind.lock().unwrap(),
+            site: self.site,
+            start: now,
+            min_alt: *self.min_alt_deg.lock().unwrap(),
+        };
+        let here = self
+            .inverse_at(model, from, counts, now)
+            .ok_or("cannot invert the pointing model")?;
+        let mut duration = 0.0;
+        let mut waypoints = (current, current);
+        // Two passes: the end is the place's counts at the arrival the first one gives.
+        for _ in 0..2 {
+            let there = self
+                .inverse_at(model, to, counts, now + duration)
+                .ok_or("cannot invert the pointing model")?;
+            let mut last = current;
+            for i in 0..2 {
+                let mut turn = (there[i] - here[i]) * 360.0 / f64::from(counts[i]);
+                if i == 0 {
+                    // Azimuth turns the nearer way round.
+                    turn = (turn + 180.0).rem_euclid(360.0) - 180.0;
+                }
+                let counted = (turn * f64::from(counts[i]) / 360.0).round();
+                if !counted.is_finite() || counted.abs() > f64::from(i32::MAX) {
+                    return Err("axis position is outside the mount's range".into());
+                }
+                last[i] = current[i]
+                    .checked_add(counted as i32)
+                    .ok_or("axis position is outside the mount's range")?;
+            }
+            let mut first = last;
+            for i in 0..2 {
+                if last[i] != current[i] {
+                    let approach =
+                        (STEP_APPROACH_DEG * f64::from(counts[i]) / 360.0).round() as i32;
+                    first[i] = if direction[i] >= 0.0 {
+                        last[i] - approach
+                    } else {
+                        last[i] + approach
+                    };
+                }
+            }
+            duration = planner.through(first, last)?;
+            waypoints = (first, last);
+        }
+        Ok(waypoints)
+    }
+
+    /// Make a nudge's step (055): stop both axes and read them at rest, plan the step from
+    /// those counts, drive each waypoint with the model's motion marked as a GoTo marks it
+    /// and correction held out of the fit, then hold correction off for 1 s plus `SETTLE`.
+    async fn step(
+        &self,
+        client: &mut MountClient,
+        axes: [AxisInfo; 2],
+        resets: u64,
+    ) -> Result<(), String> {
+        let model = self.model();
+        let counts = axes.map(|a| a.counts_per_revolution);
+        let (from, to, direction) = {
+            let control = self.control.lock().unwrap();
+            (
+                control.stepping.clone(),
+                control.state.target.clone(),
+                control.direction,
+            )
+        };
+        let (Some(from), Some(to)) = (from, to) else {
+            return Err("stopped".into());
+        };
+        client.stop_all().await.map_err(|_| "link_lost")?;
+        let mut current = self.at_rest(client, counts, resets).await?;
+        let (first, last) = self.step_path(&model, axes, current, direction, &from, &to)?;
+        let waypoints = if first == last {
+            vec![last]
+        } else {
+            vec![first, last]
+        };
+        for i in 0..2 {
+            model.motion.crossing(i, true);
+        }
+        let driven = async {
+            for waypoint in waypoints {
+                for (i, axis) in AXES.into_iter().enumerate() {
+                    model
+                        .motion
+                        .moving(i, f64::from(waypoint[i]) - f64::from(current[i]));
+                    client
+                        .goto_axis(axis, waypoint[i])
+                        .await
+                        .map_err(|_| "mount refused the slew")?;
+                }
+                current = self.at_rest(client, counts, resets).await?;
+            }
+            Ok::<(), String>(())
+        }
+        .await;
+        for i in 0..2 {
+            model.motion.crossing(i, false);
+        }
+        driven?;
+        let mut control = self.control.lock().unwrap();
+        control.stepping = None;
+        control.quiet_until = self.clock.now() + 1.0 + SETTLE.as_secs_f64();
+        control.settling = true;
+        control.settle_until = None;
+        control.cause = "nudged";
+        self.mark(&mut control);
+        Ok(())
+    }
+
     async fn stop_axis(client: &mut MountClient, axis: Axis) -> Result<(), String> {
         client.rate_axis(axis, 0.0).await.map_err(|_| "link_lost")?;
         loop {
@@ -1370,13 +1581,14 @@ impl Shared {
                 if state.mount_resets != resets {
                     return "the mount was power-cycled".into();
                 }
-                let now = self.clock.now();
+                let mut now = self.clock.now();
                 // The rate loop plans for the place the tracker holds, which a
-                // followed push can change between turns.
-                let (followed, target) = {
+                // followed push or a nudge can change between turns.
+                let (followed, stepping, target) = {
                     let mut control = self.control.lock().unwrap();
                     (
                         std::mem::take(&mut control.followed),
+                        control.stepping.is_some(),
                         control.state.target.clone(),
                     )
                 };
@@ -1386,6 +1598,19 @@ impl Shared {
                 let model = self.model();
                 if followed {
                     refresh_at = 0.0;
+                }
+                // A nudge's step is made in this turn, and the rates follow it (055).
+                if stepping {
+                    if let Err(reason) = self.step(&mut movement, axes, resets).await {
+                        return reason;
+                    }
+                    // Forecasts restart from the place the step reached, as after a
+                    // keyhole's slew, with the rate loop's second restarted.
+                    forecast = [None; 2];
+                    prepared = [false; 2];
+                    refresh_at = 0.0;
+                    second.reset();
+                    now = self.clock.now();
                 }
                 if now >= refresh_at {
                     keyhole_entry = self.keyhole_entry(&target);
@@ -1532,6 +1757,45 @@ impl Shared {
             .clone()
             .stop_until_acknowledged(Some(client), stop_deadline())
             .await;
+    }
+}
+
+/// Forget the correction's memory for the place now held: the proportional term, the
+/// previous pointing, the error samples, the subs' claim, the pending and held steps, a
+/// lapse and a push by hand. Errors measured at the old place, or steps held for it,
+/// would steer back toward it by up to 30 arcseconds a gap (036 FR-011).
+fn forget(control: &mut Control, now: f64) {
+    control.proportional = [0.0; 2];
+    control.previous_pointing = None;
+    control.state.samples.clear();
+    control.subs = None;
+    control.pending = None;
+    control.lapsed = false;
+    control.held = Held::default();
+    control.fresh_after = now;
+    control.pushed = false;
+}
+
+/// Whether Track can take a nudge now (055): tracking, with no backlash measured, and no
+/// earlier step still to be made or being made.
+fn may_nudge(control: &Control) -> Result<(), String> {
+    if control.state.state != "tracking" || control.measurement.iter().any(Option::is_some) {
+        return Err("Track is not tracking yet".into());
+    }
+    if control.stepping.is_some() {
+        return Err("the mount is already moving".into());
+    }
+    Ok(())
+}
+
+/// The J2000 place `east` and `north` arcseconds from `target`, as `Shared::pointing`
+/// measures a place's errors (east is RA times cos declination) (055).
+fn moved(target: &Target, east: f64, north: f64) -> Target {
+    Target {
+        ra_deg: (target.ra_deg + east / (3600.0 * target.dec_deg.to_radians().cos()))
+            .rem_euclid(360.0),
+        dec_deg: target.dec_deg + north / 3600.0,
+        ..target.clone()
     }
 }
 
