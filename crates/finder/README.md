@@ -125,7 +125,8 @@ moves the telescope, the guidance block and top bar say
 it stays enabled throughout motion and ends GoTo, direct axis moves and tracking.
 
 The imaging camera has sixteen tools of its own, which answer what the page's
-Imaging page does:
+Imaging page does (a seventeenth, for its preview frames, follows the Tools
+page's tools below):
 
 - `get_imaging_camera` reads the imaging view: the state, the camera's
   description, its status, the settings in force and the latest imaging frame;
@@ -202,6 +203,14 @@ The page's nudge arrows have one tool:
   else, as `POST /api/mount/nudge` does. It moves a real telescope one step, is
   rate-limited and logged, and answers `up_arcsec`, `right_arcsec` and `moved`
   (`axes` or `track`), or the route's refusal as a tool error.
+
+The Imaging page's preview frames have one tool:
+
+- `take_preview_frame` takes no arguments, does what `POST /api/imaging/preview`
+  does, waits until the frame is shown and answers the imaging view with the
+  frame's colour JPEG preview and its crop as two image blocks. Nothing of it
+  is saved. It is refused as `take_imaging_frame` is, with the same words, and
+  an aborted or failed frame answers a tool error with its words.
 
 ### MCP under WSL2: portproxy or mirrored mode
 
@@ -342,7 +351,9 @@ about 1.7 GB for a 2° database built from Tycho (an estimate).
 | `PUT /api/imaging/settings` | JSON partial edit of `exposure_ms`, `gain`, `offset`, `binning`, `roi` (a region or null for the whole sensor), `cooler_on`, `set_temp_c`, `forward_kib_per_s` (a whole number from 64 to 1048576 KiB/s, or null for no limit) and `save_at_node`. Answers 200 with the imaging view; 400 with a JSON `error` for a value the console or the camera refuses, 403 for a foreign origin, 415 for another content type, 409 while the state is not `ready` or an exposure is in progress, and 502 with `the scope node did not apply the settings: <message>` when the node's call fails otherwise. Same-origin writes only. |
 | `POST /api/imaging/frame` | No body. Take one imaging frame with the settings' `exposure_ms` and the purpose `frame`, receiving the samples on the imaging connection while the mount keeps tracking, and save them untouched as a FITS file. Answers 200 at once with the imaging view, whose `frame` is the exposure just asked for, `exposing`; the frame moves on through `receiving` to `saved`, `failed` or `aborted`, each state read from `GET /api/imaging`. 409 with the state's words while the state is not `ready`, and 409 `an exposure is already in progress` while a frame is `exposing` or `receiving`. Same-origin writes only. |
 | `POST /api/imaging/abort` | No body. Abort the exposure in progress through the node's `AbortExposure`, or stop a frame still being received, ending it `aborted`; answers 200 with the imaging view, and with nothing in progress answers 200 and changes nothing. A node that does not answer the abort within 5 s is given up on: the frame ends `aborted` and the call answers then. Same-origin writes only. |
-| `GET /api/imaging/frames/{id}/preview.jpg` | The colour JPEG preview of the saved imaging frame with this id, `image/jpeg`, while it is among the last eight saved; 404 with `the console no longer holds that preview` otherwise, and 400 for an id that is not a number. A saved frame's view carries the route as `preview`; a frame whose preview cannot be made, such as a mosaic with no whole 2 × 2 cell, is saved with no `preview`. |
+| `POST /api/imaging/preview` | No body. Take one preview frame, as `POST /api/imaging/frame` takes one and with its refusals and words, but save nothing of it, at the console or at the node: its `frame` has the purpose `preview` and ends `shown`, with its `preview` and `crop`. Same-origin writes only. |
+| `GET /api/imaging/frames/{id}/crop.jpg` | The crop of the preview frame with this id, 200 × 200 cells around its brightest part, one pixel a cell, `image/jpeg`, while it is among the last eight preview frames; 404 with `the console no longer holds that crop` otherwise, and 400 for an id that is not a number. |
+| `GET /api/imaging/frames/{id}/preview.jpg` | The colour JPEG preview of the saved or shown imaging frame with this id, `image/jpeg`, while it is among the last eight given one; 404 with `the console no longer holds that preview` otherwise, and 400 for an id that is not a number. A saved frame's view carries the route as `preview`; a frame whose preview cannot be made, such as a mosaic with no whole 2 × 2 cell, is saved with no `preview`. |
 | `POST /api/imaging/solve` | No body. Solve the latest saved imaging frame with the imaging solver; answers 200 with the imaging view, whose `solve` goes from `solving` to `solved` or `failed`, or 409 with a JSON `error`. Same-origin writes only. |
 | `POST /api/imaging/focus` | JSON `{}` or any of `check`, `find`, `tile` (`{col, row}`, each 0 to 2) and `exposure_ms`. Start the focus aid on the focus region, or with `check` a focus check that stops by itself with a verdict; answers 200 with the imaging view, whose `focus.aid` reports it, or 400 or 409 with a JSON `error`. Same-origin writes only. |
 | `DELETE /api/imaging/focus` | No body. Stop the focus aid, put the imaging settings back and answer 200 with the imaging view. Same-origin writes only. |
@@ -822,13 +833,15 @@ folder `--imaging-dir` names. `POST /api/imaging/frame` takes one: the node
 exposes the camera for the settings' `exposure_ms`, the console receives the
 samples on the imaging connection while the mount keeps tracking, and the frame
 is saved untouched. The view's `frame` follows it: `id`, `state` (one of
-`exposing`, `receiving`, `saved`, `failed` and `aborted`), `purpose`,
+`exposing`, `receiving`, `saved`, `shown` (a preview frame's end, below),
+`failed` and `aborted`), `purpose`,
 `exposure_ms`, `requested_at` and `roi`; with the cooler on, `set_temp_c`, the
 temperature the file's `SET-TEMP` card is written from; from the frame's header
 on, `width`, `height`, `bits`, `bayer`, `gain`, `offset`, `binning`, `temp_c`,
 `start`, `date_obs`, `bytes` and `received`, and with `save_at_node` the node's
 own copy as `node_file`, or the reason there is none as `node_save_error`; once
-the last byte is in hand, `received_at`, and when saved, `saved_at` and `file`.
+the last byte is in hand, `received_at`, and when saved, `saved_at` and `file`;
+a shown preview frame has no `file` but a `crop` (§ Preview frames).
 `roi` starts as the region the console's settings held and is replaced by the
 header's when the header carries one, so a region moved by another client is
 stamped as it really was.
@@ -872,9 +885,10 @@ The time a frame took to reach the console is read from the view:
 to the last byte in hand, which is what the forwarding limit paces; that less
 the scope node's own probe figure for the link is the link alone.
 
-Each saved frame is also given a small colour preview, in memory only and kept
-for the last eight saved frames, its route shown as the frame's `preview`. It
-is made from the frame's samples as they were saved: each whole 2 × 2 cell of
+Each saved frame, and each shown preview frame, is also given a small colour
+preview, in memory only and kept for the last eight frames given one, its
+route shown as the frame's `preview`. It is made from the frame's samples as
+they were received: each whole 2 × 2 cell of
 the camera's mosaic becomes one pixel, red and blue their samples and green the
 mean of its two, a mono frame one pixel a sample in all three channels; the
 picture is then box-averaged by a whole factor until its longer side is at most
@@ -883,7 +897,7 @@ its 99.9th percentile's distance and thirty times its noise, mapped by
 `255·asinh(10·t)/asinh(10)` with `t` the value's place in that span, so faint
 stars show. The result is encoded as a JPEG of quality 85 and served by
 `GET /api/imaging/frames/<id>/preview.jpg`, `image/jpeg`, while the frame is
-among the last eight saved; a preview that cannot be made — a frame with no
+among the last eight given one; a preview that cannot be made — a frame with no
 pixels, such as a mosaic with no whole 2 × 2 cell — does not fail the frame,
 whose view then carries no `preview`.
 
@@ -895,8 +909,59 @@ camera is held by` and the holder's name. `GET /api/imaging`, the previews,
 `POST /api/imaging/abort` and `get_imaging_camera` stay open to anyone, so an
 exposure can always be stopped. A single imaging frame from the page or an MCP
 client holds no lease: while it is in flight a second one is refused with `an
-exposure is already in progress`, as before.
+exposure is already in progress`, as before. The Imaging page's **Preview
+frames** are single frames too, taken one after another: nothing holds the
+camera between two of them, so a holder can start in the gap (§ Preview
+frames).
 
+## Preview frames
+
+A preview frame is an imaging frame taken only to be looked at: to focus the
+imaging camera by eye on a bright star or a planet, or to frame a target. It is
+taken at the settings in force, as `POST /api/imaging/frame` takes one, and is
+refused with the same words, but nothing of it is saved: no file under the
+imaging folder, no copy at the scope node whatever `save_at_node` says, and so
+no solve. `POST /api/imaging/preview` takes one. Its `frame` in the view has
+the purpose `preview` and ends `shown`, with its `preview` and its `crop`, or
+`failed` or `aborted` as any frame does. Its id is the console's same count, so
+the next saved frame's id comes after it.
+
+The crop is 200 × 200 cells of the frame around its brightest part, one picture
+pixel a cell, a cell being a 2 × 2 cell of the mosaic or one sample of a mono
+frame (or as many as the frame holds). The frame is cut from its top-left into
+whole boxes of 32 × 32 samples, and the crop is centred on the box whose
+samples sum the highest, the first in row order on a tie and the frame's own
+centre when it holds no whole box, then moved in to lie within the frame, its
+first column and row rounded down to a whole cell. A box's sum outweighs one
+hot sample, so the crop follows a planet that drifts across the frame or the
+bright star being focused on. It is turned into colour and stretched as the
+preview is, but over its own samples and with no box average.
+`GET /api/imaging/frames/<id>/crop.jpg` answers it as `image/jpeg` while the
+frame is among the last eight preview frames, and 404 `the console no longer
+holds that crop` after; its preview is kept among the last eight previews, as a
+saved frame's is. However short the exposure, a frame comes no sooner than the
+camera's read-out, its download and the console's preview allow.
+
+On the Imaging page, **Preview frames** takes them one after another at the
+settings above: **Start preview frames** asks for the next as soon as the last
+is shown. The whole frame shows under **Imaging frame**, and the crop in the
+block, drawn at the block's width. Hiding the page (another tab, or a phone
+whose screen locks itself) pauses them, and showing it again asks for the next:
+lengthen the phone's auto-lock while focusing. **Stop preview frames** lets the
+frame in flight end by itself, and the block reads `Stopping: the last preview
+frame is still in flight` until it has; leaving the page ends them too. A
+refusal or a failed frame stops them with its words.
+
+Nothing holds the camera between two preview frames. While one is in flight a
+holder's start (the focus aid, darks or flats, the stack, an imaging run or the
+finder alignment) is refused with `an exposure is in progress`, and a holder
+that starts in the gap stops the block with the holder's name. Before anything
+else takes the imaging camera, stop the preview frames and wait until the block
+no longer reads `Stopping`. This holds for an imaging run's **Go anyway** after
+a focus pause: the run takes the camera back at once and ends `camera_failed`
+if a preview frame is still in flight. The settings in force are the night's:
+put back the exposure and gain the night's subs use before starting a stack or
+a run.
 
 ## Solving imaging frames
 

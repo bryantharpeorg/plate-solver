@@ -822,6 +822,61 @@ impl Console {
         }
     }
 
+    #[tool(description = "Take one preview frame, as POST /api/imaging/preview does: an imaging frame at the settings in force that is shown and never saved, at the console or at the scope node. It waits until the frame is shown and returns it with its colour JPEG preview and its crop, 200 x 200 cells around its brightest part, one pixel a cell.",
+        output_schema = object_schema())]
+    async fn take_preview_frame(&self, arguments: JsonObject) -> CallToolResult {
+        if !arguments.is_empty() {
+            return CallToolResult::error(vec![ContentBlock::text(
+                "take_preview_frame takes no arguments",
+            )]);
+        }
+        let Some(imaging) = self.state.imaging() else {
+            return CallToolResult::error(vec![ContentBlock::text(
+                "this console takes no imaging frames",
+            )]);
+        };
+        let result = async {
+            let view = imaging
+                .take_preview()
+                .await
+                .map_err(|refusal| refusal.message)?;
+            let id = view.frame.as_ref().expect("a frame in the view").id;
+            let frame = imaging.ended(id).await;
+            Ok::<_, String>((id, frame))
+        }
+        .await;
+        match result {
+            Err(reason) => CallToolResult::error(vec![ContentBlock::text(reason)]),
+            // A later frame answered in the preview frame's place (FR-009).
+            Ok((id, frame)) if frame.id != id => CallToolResult::error(vec![ContentBlock::text(
+                "the preview frame was overtaken by another imaging frame",
+            )]),
+            Ok((id, frame)) if frame.state == "shown" => {
+                let mut view = imaging.view();
+                view.frame = Some(frame);
+                let mut result = CallToolResult::structured(
+                    serde_json::to_value(view).expect("imaging view JSON"),
+                );
+                for picture in [imaging.preview(id), imaging.crop(id)]
+                    .into_iter()
+                    .flatten()
+                {
+                    result.content.push(ContentBlock::image(
+                        BASE64_STANDARD.encode(picture),
+                        "image/jpeg",
+                    ));
+                }
+                result
+            }
+            Ok((_, frame)) if frame.state == "aborted" => {
+                CallToolResult::error(vec![ContentBlock::text("the exposure was aborted")])
+            }
+            Ok((_, frame)) => CallToolResult::error(vec![ContentBlock::text(
+                frame.error.expect("a failed frame carries its error"),
+            )]),
+        }
+    }
+
     #[tool(description = "Solve the latest imaging frame, as POST /api/imaging/solve does. It waits until the solve ends and returns the imaging camera's state with the solve.",
         output_schema = object_schema())]
     async fn solve_imaging_frame(&self, arguments: JsonObject) -> CallToolResult {

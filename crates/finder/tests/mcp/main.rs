@@ -13,6 +13,7 @@ mod frames;
 mod imaging;
 mod imaging_align;
 mod imaging_focus;
+mod imaging_preview_frames;
 mod imaging_run;
 mod imaging_solve;
 mod motion;
