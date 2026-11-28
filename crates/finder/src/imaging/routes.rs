@@ -39,6 +39,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/api/imaging/calibration/flats", post(take_flats))
         .route("/api/imaging/calibration/{id}", delete(delete_calibration))
         .route("/api/imaging/frames/{id}/preview.jpg", get(frame_preview))
+        .route("/api/imaging/frames/{id}/crop.jpg", get(frame_crop))
         .route("/api/imaging/stack", post(start_stack).delete(stop_stack))
         .route("/api/imaging/stack/preview.jpg", get(stack_preview))
         .route("/api/imaging/steering", put(put_steering))
@@ -237,6 +238,26 @@ async fn frame_preview(
             )
         })?;
     Ok(([(header::CONTENT_TYPE, "image/jpeg")], preview))
+}
+
+/// `GET /api/imaging/frames/{id}/crop.jpg` (058 FR-008): the crop of one of the
+/// last eight preview frames, `image/jpeg`, open to anyone as the preview route
+/// is; an id the console no longer holds answers 404, an id that is not a number
+/// 400.
+async fn frame_crop(
+    State(state): State<AppState>,
+    Path(id): Path<u64>,
+) -> Result<impl IntoResponse, ApiError> {
+    let crop = state
+        .imaging()
+        .and_then(|imaging| imaging.crop(id))
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "the console no longer holds that crop",
+            )
+        })?;
+    Ok(([(header::CONTENT_TYPE, "image/jpeg")], crop))
 }
 
 /// `POST /api/imaging/abort` (FR-013): no body; abort the exposure or the

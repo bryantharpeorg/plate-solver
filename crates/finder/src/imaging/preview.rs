@@ -1,7 +1,8 @@
 //! The colour preview of a saved imaging frame (031 US6): superpixel colour
 //! for a mosaic and gray for mono, box-averaged by a whole factor until the
 //! longer side is at most 1280 pixels, stretched over each channel's noise,
-//! and encoded as a JPEG of quality 85.
+//! and encoded as a JPEG of quality 85. A preview frame also gets a crop around
+//! its brightest box, one pixel a cell (058).
 
 use image::{codecs::jpeg::JpegEncoder, ExtendedColorType, ImageEncoder};
 
@@ -15,6 +16,10 @@ pub const PREVIEWS_KEPT: usize = 8;
 pub const STRETCH: f64 = 10.0;
 /// The least span the stretch reads, in units of a channel's noise (FR-017).
 pub const NOISE_FLOOR: f64 = 30.0;
+/// The crop's side, in cells: one picture pixel a cell (058 FR-006).
+pub const CROP_SIDE: u32 = 200;
+/// The side, in samples, of the boxes the crop's centre is found among (058 FR-006).
+const BOX_SIDE: u32 = 32;
 
 /// One colour picture: RGB, 3 bytes a pixel, row by row from the top-left.
 #[derive(Debug, Clone, PartialEq)]
@@ -180,4 +185,66 @@ pub fn jpeg(picture: &Rgb) -> Option<Vec<u8>> {
         )
         .ok()
         .map(|_| out.into_inner())
+}
+
+/// The centre, in samples, of the frame's brightest box (058 FR-006): of the
+/// whole `BOX_SIDE` × `BOX_SIDE` boxes cut from the frame's top-left, the one
+/// whose samples sum the highest, the first in row order on a tie; the frame's
+/// own centre when it holds no whole box. Samples past the last whole box of a
+/// row or a column belong to none.
+fn brightest(samples: &[u8], width: u32, height: u32, bits: u32) -> (u32, u32) {
+    let bytes = if bits == 8 { 1 } else { 2 };
+    let (boxes_across, boxes_down) = (width / BOX_SIDE, height / BOX_SIDE);
+    let mut sums = vec![0u64; boxes_across as usize];
+    let mut best: Option<(u64, u32, u32)> = None;
+    for band in 0..boxes_down {
+        // One band of rows at a time: each box's samples are summed as they
+        // pass, and the sums are reset for the next band.
+        sums.fill(0);
+        for row in band * BOX_SIDE..(band + 1) * BOX_SIDE {
+            for column in 0..boxes_across * BOX_SIDE {
+                let index = (row * width + column) as usize * bytes;
+                let sample = if bytes == 1 {
+                    u64::from(samples[index])
+                } else {
+                    u64::from(u16::from_le_bytes([samples[index], samples[index + 1]]))
+                };
+                sums[(column / BOX_SIDE) as usize] += sample;
+            }
+        }
+        for (across, &sum) in sums.iter().enumerate() {
+            if best.is_none_or(|(top, _, _)| sum > top) {
+                let x = across as u32 * BOX_SIDE + BOX_SIDE / 2;
+                let y = band * BOX_SIDE + BOX_SIDE / 2;
+                best = Some((sum, x, y));
+            }
+        }
+    }
+    best.map_or((width / 2, height / 2), |(_, x, y)| (x, y))
+}
+
+/// The crop of a preview frame (058 FR-006): `rgb` of the `CROP_SIDE` ×
+/// `CROP_SIDE` cells around the frame's brightest box, one picture pixel a cell
+/// and stretched over its own samples, never box-averaged. A mosaic's cell is
+/// 2 × 2 samples and a mono frame's one sample; the crop is moved in to lie
+/// within the frame's whole cells, and its first column and row fall on a whole
+/// cell, so a mosaic keeps its pattern. A frame with no whole cell row gives a
+/// picture with no pixels, which `jpeg` gives no JPEG for.
+pub fn crop(samples: &[u8], width: u32, height: u32, bits: u32, bayer: Option<&str>) -> Rgb {
+    let cell = if mosaic(bayer).is_some() { 2 } else { 1 };
+    let bytes = if bits == 8 { 1 } else { 2 };
+    let (whole_width, whole_height) = (width / cell * cell, height / cell * cell);
+    let w = (CROP_SIDE * cell).min(whole_width);
+    let h = (CROP_SIDE * cell).min(whole_height);
+    let (x, y) = brightest(samples, width, height, bits);
+    let x0 = x.saturating_sub(w / 2).min(whole_width - w) / cell * cell;
+    let y0 = y.saturating_sub(h / 2).min(whole_height - h) / cell * cell;
+    let row_bytes = width as usize * bytes;
+    let span = w as usize * bytes;
+    let mut part = Vec::with_capacity(span * h as usize);
+    for row in y0..y0 + h {
+        let start = row as usize * row_bytes + x0 as usize * bytes;
+        part.extend_from_slice(&samples[start..start + span]);
+    }
+    rgb(&part, w, h, bits, bayer)
 }

@@ -348,6 +348,9 @@ struct Held {
     /// The JPEG previews of the last `PREVIEWS_KEPT` saved or shown frames,
     /// by id (FR-018, 058 FR-002).
     previews: Vec<(u64, Vec<u8>)>,
+    /// The JPEG crops of the last `PREVIEWS_KEPT` shown preview frames, by id
+    /// (058 FR-007).
+    crops: Vec<(u64, Vec<u8>)>,
     /// The console's imaging solver, and the latest solve (032 US2).
     solver: Option<solving::HeldSolver>,
     solve: Option<solving::SolveView>,
@@ -391,6 +394,7 @@ impl Default for Held {
             next_grant: 1,
             lease_folder: None,
             previews: Vec::new(),
+            crops: Vec::new(),
             solver: None,
             solve: None,
             session: None,
@@ -917,6 +921,16 @@ impl Imaging {
     pub fn preview(&self, id: u64) -> Option<Vec<u8>> {
         let held = self.state.lock().expect("imaging state");
         held.previews
+            .iter()
+            .find(|(kept, _)| *kept == id)
+            .map(|(_, jpeg)| jpeg.clone())
+    }
+
+    /// The JPEG crop of the preview frame with this id, among the last
+    /// `PREVIEWS_KEPT` shown, or none (058 FR-007, FR-008).
+    pub fn crop(&self, id: u64) -> Option<Vec<u8>> {
+        let held = self.state.lock().expect("imaging state");
+        held.crops
             .iter()
             .find(|(kept, _)| *kept == id)
             .map(|(_, jpeg)| jpeg.clone())

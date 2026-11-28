@@ -103,6 +103,10 @@ pub struct FrameView {
     /// and its preview could be made (FR-018).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preview: Option<String>,
+    /// `/api/imaging/frames/<id>/crop.jpg`, set when a preview frame is shown
+    /// and its crop could be made (058 FR-007).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub crop: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -202,6 +206,7 @@ pub(super) fn take(
         saved_at: None,
         file: None,
         preview: None,
+        crop: None,
         error: None,
     };
     guard.frame = Some(frame.clone());
@@ -488,11 +493,11 @@ async fn save(
     None
 }
 
-/// Show a whole preview frame (058 FR-002): make its preview on the blocking
-/// pool, keep it among the last `PREVIEWS_KEPT` — the same eight as saved
-/// frames' — set the view's route, and end the frame `shown`. Nothing is
-/// written. A preview that cannot be made does not fail the frame: `preview`
-/// is then absent.
+/// Show a whole preview frame (058 FR-002, FR-007): make its preview and its
+/// crop on the blocking pool, keep each among the last `PREVIEWS_KEPT` — the
+/// same eight as saved frames' — set the view's routes, and end the frame
+/// `shown`. Nothing is written. A picture that cannot be made does not fail the
+/// frame: its route is then absent.
 async fn show(task: &mut FrameTask, samples: Vec<u8>) {
     let (width, height, bits) = (
         task.frame.width.expect("the header's width"),
@@ -500,28 +505,37 @@ async fn show(task: &mut FrameTask, samples: Vec<u8>) {
         task.frame.bits.expect("the header's bits"),
     );
     let bayer = task.frame.bayer.clone();
-    let jpeg = tokio::task::spawn_blocking(move || {
-        preview::jpeg(&preview::rgb(
-            &samples,
-            width,
-            height,
-            bits,
-            bayer.as_deref(),
-        ))
+    let (preview, crop) = tokio::task::spawn_blocking(move || {
+        let bayer = bayer.as_deref();
+        (
+            preview::jpeg(&preview::rgb(&samples, width, height, bits, bayer)),
+            preview::jpeg(&preview::crop(&samples, width, height, bits, bayer)),
+        )
     })
     .await
     .expect("the preview maker cannot be cancelled");
-    if let Some(jpeg) = jpeg {
-        let mut held = task.held.lock().expect("imaging state");
-        held.previews.push((task.frame.id, jpeg));
-        while held.previews.len() > preview::PREVIEWS_KEPT {
-            held.previews.remove(0);
-        }
-        drop(held);
-        task.frame.preview = Some(format!("/api/imaging/frames/{}/preview.jpg", task.frame.id));
+    let id = task.frame.id;
+    let mut held = task.held.lock().expect("imaging state");
+    if let Some(jpeg) = preview {
+        keep_jpeg(&mut held.previews, id, jpeg);
+        task.frame.preview = Some(format!("/api/imaging/frames/{id}/preview.jpg"));
     }
+    if let Some(jpeg) = crop {
+        keep_jpeg(&mut held.crops, id, jpeg);
+        task.frame.crop = Some(format!("/api/imaging/frames/{id}/crop.jpg"));
+    }
+    drop(held);
     task.frame.state = "shown";
     task.finish();
+}
+
+/// Keep `jpeg` as frame `id`'s among the last `PREVIEWS_KEPT` of `kept` (058
+/// FR-002, FR-007): the oldest is let go first.
+fn keep_jpeg(kept: &mut Vec<(u64, Vec<u8>)>, id: u64, jpeg: Vec<u8>) {
+    kept.push((id, jpeg));
+    while kept.len() > preview::PREVIEWS_KEPT {
+        kept.remove(0);
+    }
 }
 
 /// The saved frame's cards (FR-012): the plan's list, in order, each written
