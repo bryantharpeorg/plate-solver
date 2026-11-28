@@ -200,6 +200,10 @@ at the camera's own pace, saving nothing.
   file (the README, the glossary, the test binaries' `main.rs`, `mcp/tools.rs`,
   `nudge.rs`, the page's files, `dist`), the later to land is rebased onto the earlier.
   Both keep the README's `sixteen tools of its own`, which US3 extends with a clause.
+- Q: Who builds each story? → A: US1 and US3 on GLM 5.3 (`glm-implementer`), US2 and US4
+  on Haiku (`haiku-implementer`), at the owner's ask of 2026-11-28 ("Can we do that one
+  on glm 5.3 instead"): 056 and 057 hold the one Sol builder, so Sol stories here would
+  only wait for it.
 
 ## Owner decisions
 
@@ -1000,6 +1004,7 @@ under `npm test`, and `crates/finder/web/e2e/imaging-preview.spec.ts`, new, unde
 US1:
   depends_on: []
   implements: [FR-001, FR-002, FR-003, FR-004, FR-005]
+  persona: glm-implementer
 US2:
   depends_on: []
   depends_on_merged: [US1]
@@ -1009,6 +1014,7 @@ US3:
   depends_on: []
   depends_on_merged: [US2]
   implements: [FR-009, FR-010, FR-011]
+  persona: glm-implementer
 US4:
   depends_on: []
   depends_on_merged: [US2]
