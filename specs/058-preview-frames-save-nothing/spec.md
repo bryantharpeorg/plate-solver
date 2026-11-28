@@ -960,6 +960,7 @@ US2:
   depends_on: []
   depends_on_merged: [US1]
   implements: [FR-006, FR-007, FR-008]
+  persona: haiku-implementer
 US3:
   depends_on: []
   depends_on_merged: [US2]
@@ -968,6 +969,7 @@ US4:
   depends_on: []
   depends_on_merged: [US2]
   implements: [FR-012, FR-013, FR-014, FR-015, FR-016]
+  persona: haiku-implementer
 ```
 
 Four stories, each under 60 % of 65,536 B (39,321 B) at 1.35 times its probe size, as
