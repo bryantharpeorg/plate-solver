@@ -170,6 +170,14 @@ _Avoid_: raw (alone), RAW file, full-resolution preview
 One exposure from the imaging camera as the scope node relays it: its samples exactly as the camera delivered them, before any colour processing, with its exposure start and end on the node's clock and the settings it was made with.
 _Avoid_: frame (alone), image, star frame (the finder camera's), raw frame (the finder camera's 8-bit pixels)
 
+**Preview frame**:
+An imaging frame taken only to be looked at, while the observer focuses or frames by eye: the console makes its preview and its crop, keeps them in memory, and saves nothing of it, at the console or at the scope node.
+_Avoid_: live view, snapshot, test frame
+
+**Crop** (of a preview frame):
+The 200 × 200 cells of a preview frame around its brightest part, one picture pixel a 2 × 2 cell of the mosaic or one sample of a mono frame, for the eye to judge focus on.
+_Avoid_: zoom, close-up, full-resolution preview, region of interest (that is the camera's)
+
 **Sub**:
 An imaging frame taken for a stack.
 _Avoid_: light, light frame, subframe
@@ -279,7 +287,8 @@ One press of a nudge arrow: the telescope moves one step on the sky, fine 30″ 
 _Avoid_: jog, slew, manual move
 
 **Purpose label**:
-The short word an exposure is asked for with, saying what it is for: `frame` and `probe`, and later `focus`, `dark`, `flat`, `sub`, `run` and `align`.
+The short word an exposure is asked for with, saying what it is for: `frame` and `probe`, and later `focus`, `dark`, `flat`, `sub`, `run`,
+`align` and `preview`.
 _Avoid_: frame type (that is INDI's), kind
 
 **Lease** (on the imaging camera):
