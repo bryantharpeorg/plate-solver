@@ -280,6 +280,20 @@ struct NudgeArguments {
     view: String,
 }
 
+#[derive(rmcp::schemars::JsonSchema)]
+#[expect(
+    dead_code,
+    reason = "schema only; centre parses its arguments as the route does"
+)]
+struct CentreArguments {
+    /// the imaging frame the point is on; omit it for the session's target
+    frame_id: Option<u64>,
+    /// the point's x in that frame's pixels, with y and frame_id
+    x: Option<f64>,
+    /// the point's y in that frame's pixels, with x and frame_id
+    y: Option<f64>,
+}
+
 fn object_schema() -> Arc<JsonObject> {
     Arc::new(json!({"type":"object"}).as_object().unwrap().clone())
 }
@@ -518,6 +532,28 @@ impl Console {
         .await;
         self.state
             .log_call("nudge", &raw, result.as_ref().map_err(String::as_str));
+        tool_result(result)
+    }
+
+    #[tool(description = "Move a real telescope so the session's target, or the point at pixel x, y of imaging frame frame_id, comes to the imaging camera's centre, from that frame's imaging solve alone, as the Imaging page's Centre block does. Needs Track tracking and the latest imaging frame solved, ended within the last minute, with nothing Track knows of moving the telescope since it began; the place Track holds becomes that place and Track makes the step. It is never a sync; the finder camera's first solve within a minute after it takes the aim point from that place. Answers frame_id, offset_arcsec and moved: track.",
+        input_schema = rmcp::handler::server::common::schema_for_input::<CentreArguments>().expect("centre schema"),
+        output_schema = object_schema())]
+    async fn centre(&self, arguments: JsonObject) -> CallToolResult {
+        let raw = Value::Object(arguments);
+        let result = async {
+            // The route's parse: an ask that does not parse is refused before it takes a place
+            // in the rate limit. The route checks the shape of the rest after the limit.
+            let ask = serde_json::from_value::<crate::centre::CentreAsk>(raw.clone())
+                .map_err(|_| crate::centre::PARTS.to_owned())?;
+            self.state.limit_move()?;
+            let view = crate::centre::centre(&self.state, "mcp", &ask)
+                .await
+                .map_err(|error| error.message)?;
+            Ok(serde_json::to_value(view).expect("centre JSON"))
+        }
+        .await;
+        self.state
+            .log_call("centre", &raw, result.as_ref().map_err(String::as_str));
         tool_result(result)
     }
 

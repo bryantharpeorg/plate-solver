@@ -6,6 +6,7 @@ mod support;
 
 mod axis_moves;
 mod calibration;
+mod centre;
 mod databases;
 mod endpoint;
 mod finder_focus;

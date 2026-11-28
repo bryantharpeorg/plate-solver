@@ -212,6 +212,14 @@ The Imaging page's preview frames have one tool:
   is saved. It is refused as `take_imaging_frame` is, with the same words, and
   an aborted or failed frame answers a tool error with its words.
 
+Centring from an imaging solve has one tool:
+
+- `centre` takes nothing, to centre the session's target, or `frame_id`, `x`
+  and `y` together, to centre that pixel of that imaging frame, as
+  `POST /api/imaging/centre` does. It moves a real telescope with Track on, is
+  rate-limited and logged, and answers `frame_id`, `offset_arcsec` and `moved`
+  (`track`), or the route's refusal as a tool error.
+
 ### MCP under WSL2: portproxy or mirrored mode
 
 Under WSL2's default NAT networking, the WSL address listed in Setup is not the
@@ -373,6 +381,7 @@ about 1.7 GB for a 2° database built from Tycho (an estimate).
 | `POST /api/imaging/run` | JSON with optional `subs` (1 to 100000), `duration_s` (1 to 43200, default 7200) and `keep_subs` (default true). Start an imaging run on the session's target: GoTo, tracking, a first imaging frame, a focus check, centring on the imaging camera's sensor and stacking. Answers 200 with the imaging view, whose `run` says where it has got to; 400 or 409 with a JSON `error`. Same-origin writes only. |
 | `DELETE /api/imaging/run` | No body. End the imaging run as `stopped` and save its stack; answers 200 with the imaging view once it has ended. It stops the mount only while the run still slews: `POST /api/stop` stops it at any time, and ends the run too. Same-origin writes only. |
 | `POST /api/imaging/run/continue` | JSON `{"anyway":false}` or `{"anyway":true}`. From a focus pause, check focus again, or go on unchecked; 409 with a JSON `error` when no run is paused. Same-origin writes only. |
+| `POST /api/imaging/centre` | JSON `{}`, or `{"frame_id":N,"x":X,"y":Y}` with X and Y a pixel of imaging frame N. Bring the session's target, or that pixel's place, to the sensor's centre from the latest imaging solve, with Track on; answers 200 with `frame_id`, `offset_arcsec` (how far that place was from the sky at the sensor's centre) and `moved` (`track`), or 400, 409 or 415 with a JSON `error`. Same-origin writes only. |
 | `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
 | `POST /api/mount/nudge` | JSON `{"direction":D,"step":S,"view":V}`: D is `up`, `right`, `down` or `left`, S `fine` (30″) or `coarse` (4′), V `mount`, `finder_camera` or `imaging_camera`. Move the telescope one step on the sky that way in that view; answers 200 with `up_arcsec` and `right_arcsec` (the step in the mount's view) and `moved` (`axes`, or `track` while Track is on), or 400, 409 or 415 with a JSON `error`. Same-origin writes only. |
 | `POST /api/stop` | No body. Always 200, ending tracking, clearing arming and commanding both axes to stop, from any origin, without taking the motion lock. Sends `StopAll` immediately, retrying in its own task with 200 ms per attempt and 50 ms between attempts for a bounded 2 s window, even if the request goes away. Waits for the round and answers exactly `{"stopped":true}` when the scope node answers OK or there is no scope link; otherwise answers `{"stopped":true,"acknowledged":false}`. This means the node did not answer and the mount may still be moving; press Stop again. The MCP tools `stop` and `stop_all` return the same reply. |
@@ -744,6 +753,25 @@ is never read as a push and never a sync: the next solve syncs as usual.
 Turning Track on after nudges made with Track off goes back to the target, as
 Track on always does: centre with Track on.
 
+
+## Centring from an imaging solve
+
+A centring brings a place to the sensor's centre from the latest imaging solve
+alone: the session's target, or a point tapped on the solved frame's picture in
+the Imaging page's Centre block. It needs no live pointing, so it works when the
+finder camera cannot solve. Take an imaging frame and solve it with Track on,
+then centre within a minute: the place Track holds becomes that place and Track
+makes the step, as a nudge's. The solve's frame must be the latest frame, or the
+centring is refused with `a newer imaging frame was taken after frame N`. Track
+must have been steady since that frame began, or it is refused with
+`the telescope moved after imaging frame N: take another and solve it`. Track
+knows of its own settling and steps, and of a push only while the finder camera
+solves. A centring is never a sync. The finder camera's first solve within a
+minute after it takes the aim point from the place centred, so Track holds the
+target where the centring put it, and a later GoTo lands there too. An imaging
+run centres the same way when a solve measures no new aim point. Without the
+finder camera's solves Track holds the place on the mount's rates alone and may
+drift: take another frame and centre again, or let a stack's steering hold it.
 
 ## Recording a night
 
