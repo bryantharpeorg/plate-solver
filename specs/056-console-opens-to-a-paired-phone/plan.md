@@ -46,7 +46,7 @@ against the release binary on 127.0.0.1:8097.
 **Target Platform**: the console on the scope node's computer (Linux on AArch64), a desk
 console on Linux or macOS; `/dev/urandom` exists on all of `deny.toml`'s three targets.
 
-**Constraints**: loopback answers byte-for-byte as at f6d4f5fd at the console's own host
+**Constraints**: loopback answers byte-for-byte as before this spec at the console's own host
 (FR-002); Stop answers everyone (014, 017); no answer's body holds the token; the gates
 make no network request and bind nothing but loopback.
 
@@ -177,7 +177,7 @@ that the binary keeps the token in `console-token`.
   SameSite=Strict`.
 - `pub(crate) fn routes(state: &AppState) -> Router<AppState>`: with `state.pairing`
   `Some`, `Router::new().route("/pair", get(prompt).post(pair))`; with `None`,
-  `Router::new()`, so a console without a token answers `/pair` as at f6d4f5fd (FR-006).
+  `Router::new()`, so a console without a token answers `/pair` as before this spec (FR-006).
   `prompt` answers 200 with the prompt and UNPAIRED's words. `pair` runs
   `api::check_origin` first (its 403 as it is); reads at most `FORM_LIMIT` bytes (a bare
   413 past it); takes `form_field(body, "token")` (`&`-split pairs, `+` as space, `%XX`
@@ -242,7 +242,7 @@ input:focus, button:focus { outline: 2px solid #e00000; outline-offset: 2px; }
   newline through `write_owner_only`; other read errors `cannot read {path}: {error}`.
   Never the contents in an error.
 - `fn write_owner_only(path: &Path, text: &str) -> io::Result<()>`, as
-  `crates/finder/src/session.rs:2051` to `crates/finder/src/session.rs:2091` writes the session: create the folder;
+  `crates/finder/src/session.rs:2060` to `crates/finder/src/session.rs:2100` writes the session: create the folder;
   `path.with_added_extension("tmp")`, removing any left there (`NotFound` is fine);
   `OpenOptions` `write`, `create_new` and, on unix, `mode(0o600)` on it; `write_all`,
   `sync_all`, then `fs::rename` to `path`.
@@ -270,10 +270,10 @@ input:focus, button:focus { outline: 2px solid #e00000; outline-offset: 2px; }
 
 - `AppState` gains `pub(crate) pairing: Option<Arc<crate::pairing::Pairing>>` after
   `allowed_hosts` (`crates/finder/src/api.rs:115`), `None` in `shared` after
-  `allowed_hosts: Arc::new(Vec::new()),` (`crates/finder/src/api.rs:155`), and its `mcp`
+  `allowed_hosts: Arc::new(Vec::new()),` (`crates/finder/src/api.rs:159`), and its `mcp`
   field (`crates/finder/src/api.rs:116`) becomes `pub(crate) mcp`, so the gate reads
   `state.mcp.enabled`.
-- `router` (`crates/finder/src/api.rs:616`) becomes:
+- `router` (`crates/finder/src/api.rs:621`) becomes:
 
 ```rust
 /// The console's routes, behind the console token's gate (056).
@@ -294,7 +294,7 @@ fn console_routes(state: AppState) -> Router {
 
 ### `crates/finder/src/lib.rs` (US1; US2 one line)
 
-US1: after `pub mod imaging;` (`crates/finder/src/lib.rs:115`), a blank line,
+US1: after `pub mod imaging;` (`crates/finder/src/lib.rs:116`), a blank line,
 `/// The console token's gate for devices other than the console's own machine (056).`
 and `pub mod pairing;`; after the paragraph ending `[`AppState::with_allowed_hosts`].`,
 `//!` and: "With a console token ([`AppState::with_console_token`]), every request must
@@ -508,7 +508,7 @@ named `US3-S6: ...`; `page.goto("/pair")`, `getByRole("heading", ...)`,
 `/^rgba?\((\d+), 0, 0(?:, [\d.]+)?\)$/`, `toHaveCSS` for `html`'s background and the
 focused field's outline, `boundingBox()` heights, then `fill` and `click` and
 `getByRole("status")`. Its file name is not in the default project's `testIgnore`
-(`crates/finder/web/playwright.config.ts:36` to `crates/finder/web/playwright.config.ts:46`), so it runs there with no
+(`crates/finder/web/playwright.config.ts:36` to `crates/finder/web/playwright.config.ts:47`), so it runs there with no
 config change, against 127.0.0.1:8097, whose binary has a token from US3 on.
 
 ## Opening the console from a phone
@@ -742,15 +742,19 @@ The gates, copied from `ergane.yaml`:
   module line after 055's; the README section, the glossary entries, the other pages'
   passages and the test binaries' `mod` lines placed after theirs, each in its
   alphabetical place (055 adds `mod nudge;`); every story's size measured again; the
-  Refinement Record's last writers read again. Waits for 052 to 055 and the seat's
-  re-anchor.
-- The owner's ten decisions are answered. Waits for the flip ask.
+  Refinement Record's last writers read again. Met at 936b140d: the 17 cites into changed files moved with
+  their lines (none inside a changed hunk); `lib.rs`'s `pub mod pairing` and the test
+  binaries' `mod` lines in their alphabetical places after 055's; the gate around the
+  router 055 extended; the record's last writers name 054 US2 and 055 US1, US3 and US4;
+  the stories measure 27,555, 22,041, 28,731 and 22,454 B on the replay, as before.
+- The owner's ten decisions are answered. Met on 2026-11-28: each with its
+  recommendation.
 - A probe round from this text alone, folded. Met: probe round 1 built all four stories
   from the trio alone (`probe/056-r1`, tip 6fe4f173: 0 blocking, 16 clarity), and its
   fold is proven on that branch, every gate passing at e4335286 (§ What was run and what
   was read).
-- The page half has run once on the re-anchored base (`CI=1 npm run e2e`). Waits for the
-  re-anchor (it passed at e4335286, on f6d4f5fd).
+- The page half has run once on the re-anchored base (`CI=1 npm run e2e`). Met: on the
+  probe's code replayed onto 936b140d, 39 of 39; it passed at e4335286, on f6d4f5fd.
 - No operator-staged file is needed. Met: every story writes only code, tests and docs.
 
 ## Outside the factory
@@ -856,15 +860,14 @@ text. Shared writes name the spec story that last wrote the same file on `main`;
 by #371 and #360, not a spec's stories, and have no entry. Within the spec, each story's
 files written by an earlier one are ordered by `depends_on_merged`.
 
-None of the ten owner decisions of spec.md is answered; this record is written to the
-recommendations. Its `open_questions` are empty because the validator refuses a record
-that holds any; what is open is spec.md's owner decisions 1 to 10 and § Prerequisites
-(the re-anchoring after 052 to 055, and 057 and 058). Nothing in this record is an owner
+The ten owner decisions of spec.md are answered, each with the recommendation this record
+was written to, and the trio is re-anchored on `main` at 936b140d, so its `open_questions`
+are empty and nothing is open. Nothing in this record is an owner
 approval: those are in spec.md, and flipping to `ready` gives them.
 
 ```yaml
 version: 1
-reviewed_revision: f6d4f5fd482ccc9d5b634ef1aa5124c112769583
+reviewed_revision: 936b140d3c0dda8879e28eb0efa3b5581f5a6bac
 stories:
   US1:
     tests:
@@ -929,8 +932,8 @@ stories:
         assertion: "027's layout: tests/support holds goto.rs, live.rs, mcp.rs, mod.rs, stop.rs and tracker.rs and no tests"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
-      - "a console without a console token answers every request as at f6d4f5fd (FR-006)"
-      - "POST /api/stop answers every peer as at f6d4f5fd, from any origin and at any host (014 owner approval 2 and FR-020, 017 FR-004, FR-006)"
+      - "a console without a console token answers every request as before this spec (FR-006)"
+      - "POST /api/stop answers every peer as before this spec, from any origin and at any host (014 owner approval 2 and FR-020, 017 FR-004, FR-006)"
       - "012's check_origin and host_allowed are called, not changed; /mcp's door is not changed in US1"
     checks:
       development:
@@ -950,20 +953,20 @@ stories:
     no_write_reason: ""
     shared_writes:
       - path: crates/finder/src/api.rs
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US2
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US3
         disposition: merge_order
-        reason: "056 depends_on_landed 051, whose US2 last changed api.rs (f9706cc0)"
+        reason: "056 depends_on_landed 055, whose US3 last changed api.rs (26a39791)"
       - path: crates/finder/src/lib.rs
-        other_spec: 051-tools-page-focuses-either-camera
+        other_spec: 055-nudge-arrows-follow-the-frame
         other_story: US1
         disposition: merge_order
-        reason: "056 depends_on_landed 051, whose US1 last changed lib.rs (4c39350e)"
+        reason: "056 depends_on_landed 055, whose US1 last changed lib.rs (0baeb8ad)"
       - path: crates/finder/tests/console/main.rs
-        other_spec: 051-tools-page-focuses-either-camera
+        other_spec: 054-focus-pause-gives-camera-back
         other_story: US2
         disposition: merge_order
-        reason: "056 depends_on_landed 051, whose US2 last changed console/main.rs (f9706cc0)"
+        reason: "056 depends_on_landed 054, whose US2 last changed the console test main.rs (92e833da)"
       - path: crates/finder/tests/support/mod.rs
         other_spec: 028-finder-tests-do-less
         other_story: US5
@@ -1004,7 +1007,7 @@ stories:
         decision: "spec.md:FR-008"
     preserved_behavior:
       - "US1's answers under /api/ and its limit are unchanged; only page paths gain the prompt"
-      - "a console without a token answers GET /pair and POST /pair as at f6d4f5fd (FR-006)"
+      - "a console without a token answers GET /pair and POST /pair as before this spec (FR-006)"
       - "the React page and dist are not changed; playwright.config.ts is not edited"
     checks:
       development:
@@ -1103,10 +1106,10 @@ stories:
         disposition: merge_order
         reason: "056 depends_on_landed 047, whose US1 last changed cli/main.rs (d3f8bd0f)"
       - path: crates/finder/tests/mcp/main.rs
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US3
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US4
         disposition: merge_order
-        reason: "056 depends_on_landed 051, whose US3 last changed mcp/main.rs (9424a371)"
+        reason: "056 depends_on_landed 055, whose US4 last changed the MCP test main.rs (b1ccbddd)"
     open_questions: []
   US4:
     tests:
@@ -1131,7 +1134,7 @@ stories:
         assertion: "the README's ## API rows and ## MCP clients' sixteen tools of its own, as before"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
-      - "every sentence of the five pages at f6d4f5fd but the passages FR-013 and FR-014 replace stays; every other glossary entry stays"
+      - "every sentence of the five pages before this spec but the passages FR-013 and FR-014 replace stays; every other glossary entry stays"
     checks:
       development:
         - "cargo nextest run -p finder --locked --test console -E 'test(/^pairing_docs::/) | test(/^imaging_run_docs::/)'"
@@ -1150,14 +1153,14 @@ stories:
     no_write_reason: ""
     shared_writes:
       - path: GLOSSARY.md
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US3
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US4
         disposition: merge_order
-        reason: "056 depends_on_landed 051, whose US3 last changed GLOSSARY.md (9424a371)"
+        reason: "056 depends_on_landed 055, whose US4 last changed GLOSSARY.md (b1ccbddd)"
       - path: crates/finder/README.md
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US3
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US4
         disposition: merge_order
-        reason: "056 depends_on_landed 051, whose US3 last changed README.md (9424a371)"
+        reason: "056 depends_on_landed 055, whose US4 last changed the README (b1ccbddd)"
     open_questions: []
 ```

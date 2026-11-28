@@ -5,15 +5,16 @@ description: "Task list for 056-console-opens-to-a-paired-phone: The Console Ope
 # Tasks: The Console Opens to a Paired Phone
 
 **Prerequisites** (plan.md § Prerequisites, each with its evidence there):
-- every spec in `depends_on_landed` has landed on `main`: met at f6d4f5fd;
+- every spec in `depends_on_landed` has landed on `main`: met at 936b140d, 052 to 055 included;
 - 052, 053, 054 and 055 have landed, in that order, and this trio is re-anchored on that
-  `main`, and on 057 or 058 if either lands first: not met;
-- the owner decisions in spec.md are settled: not met, none of the ten is answered (the
-  flip ask);
+  `main`, and on 057 or 058 if either lands first: met at 936b140d (neither had landed);
+- the owner decisions in spec.md are settled: met, each with its recommendation, on
+  2026-11-28;
 - every story has been probe-built from this text: met, probe round 1 on `probe/056-r1`
   (tip 6fe4f173: 0 blocking, 16 clarity), folded and proven on that branch at e4335286;
 - the page half has run at each story's tip: met in probe round 1 and at the fold's tip
-  e4335286 (`CI=1 npm run e2e`), to be run again on the re-anchored base;
+  e4335286 (`CI=1 npm run e2e`), and again on the probe's code replayed onto 936b140d
+  (39 of 39);
 - no operator-staged file is needed: met.
 
 **Rules for every story:**

@@ -1,6 +1,6 @@
 ---
-state: draft
-depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "016-mcp", "017-console-stop-confirm", "019-night-legibility", "028-finder-tests-do-less", "047-console-uses-the-database-that-fits", "051-tools-page-focuses-either-camera"]
+state: ready
+depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "016-mcp", "017-console-stop-confirm", "019-night-legibility", "028-finder-tests-do-less", "047-console-uses-the-database-that-fits", "051-tools-page-focuses-either-camera", "054-focus-pause-gives-camera-back", "055-nudge-arrows-follow-the-frame"]
 # Drafted 2026-11-27 against `main` at f6d4f5fd, at the owner's ask of 2026-11-27: after a
 # field night the owner picked, from the seat's options, "Console on local network +
 # token". Drafted from a probe of that day on the branch `probe/056` cut from f6d4f5fd,
@@ -10,14 +10,25 @@ depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "0
 # (round 1, branch `probe/056-r1` from 745dc3a8, tip 6fe4f173: 0 blocking, 16 clarity
 # defects) and folded: the fixes and new steps proven on that branch (5ca389bf, 0346d61d,
 # e4335286), every gate passing at e4335286. Every `path:line` here was read at
-# f6d4f5fd. None of the ten owner decisions is answered yet; the scenarios are written
-# to each recommendation. 012 is named for the same-origin rule and `--allow-host`; 013
+# f6d4f5fd, and those into files 052 to 055 changed re-read at 936b140d. The owner answered
+# the ten decisions on 2026-11-28 with their recommendations, which the scenarios were
+# already written to. 012 is named for the same-origin rule and `--allow-host`; 013
 # for the scope link's token comparison; 014 and 017 for Stop, open to anyone; 016 for
 # MCP's door; 019 for the night edition; 017, 028, 047 and 051 because each last changed
 # a file this spec writes (plan.md § Refinement Record). 052, 053, 054 and 055 are drafted
 # beside this spec and land before it, in that order, and 057 and 058, drafted the same
 # day, write some of the same files; it is re-anchored on whichever have landed before
 # any flip.
+# Re-anchored on 2026-11-28 on `main` at 936b140d, where 052 to 055 had landed (057 and 058
+# had not): 054 and 055 join `depends_on_landed`; the record's entries for
+# `GLOSSARY.md`, the README and the MCP test binary's `main.rs` (055 US4), `api.rs` (055
+# US3), `lib.rs` (055 US1) and the console test binary's `main.rs` (054 US2) name their
+# last writers; every cite into a changed file moved with its line (17, none inside a
+# changed hunk); the probe's code replayed onto 936b140d in story order, its one conflict
+# the MCP test binary's two `mod` lines (kept alphabetical), and passed every gate there.
+# Flipped to `ready` on 2026-11-28 at the owner's ask ("Flip 056, all recs": a yes to the
+# seat flipping it itself with its recommended answers once the re-anchor passes), with
+# every prerequisite in plan.md met and none waived.
 ---
 
 # Feature Specification: The Console Opens to a Paired Phone
@@ -26,7 +37,7 @@ depends_on_landed: ["012-targets-and-push-to", "013-live-finder", "014-goto", "0
 
 **Created**: 2026-11-27
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: On a field night the console listened on its own machine's loopback only, so
 the phone at the telescope could not open it, and the owner watched through a laptop's
@@ -52,17 +63,17 @@ the page, and 016's MCP endpoint already answers any LAN peer with no token.
   interfaces, the shapes that existing tests pin and the alternatives rejected. The
   probe's branch and logs are not in the repository; what they showed is written here.
 - Q: How does the console serve today? → A: One axum router
-  (`crates/finder/src/api.rs:616`) holds the JSON API, the live stream
-  (`GET /api/live`, server-sent events, `crates/finder/src/api.rs:638`), the previews,
+  (`crates/finder/src/api.rs:621`) holds the JSON API, the live stream
+  (`GET /api/live`, server-sent events, `crates/finder/src/api.rs:643`), the previews,
   the imaging routes and the finder camera's focus routes merged in
-  (`crates/finder/src/api.rs:661`), `/mcp` behind its door
-  (`crates/finder/src/api.rs:653`) and the embedded page as the fallback
-  (`crates/finder/src/api.rs:643`). The binary binds `--listen`
+  (`crates/finder/src/api.rs:666`), `/mcp` behind its door
+  (`crates/finder/src/api.rs:658`) and the embedded page as the fallback
+  (`crates/finder/src/api.rs:648`). The binary binds `--listen`
   (`crates/finder/src/main.rs:258`) and serves it with the peer's address recorded
   (`crates/finder/src/main.rs:282`). No route asks who is calling. Writes carry 012's
-  same-origin rule (`crates/finder/src/api.rs:537`): an `Origin`, when sent, must match,
+  same-origin rule (`crates/finder/src/api.rs:542`): an `Origin`, when sent, must match,
   and its `Host` must be an IP literal, `localhost` or an `--allow-host` name
-  (`crates/finder/src/api.rs:602`). MCP's door carries out any stop first
+  (`crates/finder/src/api.rs:607`). MCP's door carries out any stop first
   (`crates/finder/src/mcp/door.rs:41`), then makes the Origin and Host checks
   (`crates/finder/src/mcp/door.rs:56`) and refuses a peer that is not loopback, private,
   link-local or unique-local (`crates/finder/src/mcp/door.rs:61`,
@@ -80,7 +91,7 @@ the page, and 016's MCP endpoint already answers any LAN peer with no token.
 - Q: What does the scope link's pairing teach? → A: Its token is compared in constant
   time by `scope_link::tokens_match` (`crates/scope-link/src/auth.rs:13`), never logged,
   never returned by the API (`token_set` only), and kept in an owner-only file
-  (`crates/finder/src/session.rs:2070`). This spec reuses all four; its stop needs no
+  (`crates/finder/src/session.rs:2079`). This spec reuses all four; its stop needs no
   token, as here.
 - Q: Can the factory's gates make a request from a peer that is not loopback? → A: In
   process, yes: `axum`'s `MockConnectInfo` sets the peer, as 016's tests do
@@ -124,10 +135,27 @@ the page, and 016's MCP endpoint already answers any LAN peer with no token.
   `Error: "<path>: …"`, escaping a path's quotes, backslashes and non-ASCII, so the line
   is not the file's path followed by the words (run, US3-S4).
 
+### Session 2026-11-28 (the flip)
+
+- Q: How were the ten open decisions answered? → A: Each with its recommendation, by the
+  owner's "Flip 056, all recs" on 2026-11-28, the seat's question being whether it should
+  flip 056 itself with its recommended answers: (a) with (e) for decision 1 and (a) for
+  decisions 2 to 10.
+- Q: What moved on `main` between the draft and the flip? → A: 052, 053, 054 and 055 landed, at
+  936b140d. 055 added `pub mod nudge` to `lib.rs`, its `nudge` part and router merge to
+  `api.rs`, `mod nudge;` to the MCP test binary, and README and glossary passages; 054
+  last changed the console test binary's `main.rs`. Every `path:line` here into those
+  files was re-read there and moved where its line moved; this spec's module and `mod`
+  lines sit in their alphabetical places after 055's, and its gate wraps the router 055
+  extended. The probe's story commits replayed onto 936b140d with one conflict, the MCP
+  test binary's `mod` lines, kept alphabetical; every gate passed there and each story
+  measures as before. Nothing this spec requires or tests changed.
+
 ## Owner decisions
 
-None is answered yet. Each keeps its options and its evidence, and the scenarios and the
-record are written to the recommendations. One general rule is behind decisions 1, 4, 6
+All ten are settled by the owner on 2026-11-28, each with its recommendation: (a) with (e)
+for 1 and (a) for 2 to 10. Each keeps its options and its evidence; the scenarios and the
+record were written to the recommendations, so no scenario changed for them. One general rule is behind decisions 1, 4, 6
 and 9: **with a console token, every request but Stop names an allowed host, and one
 from a peer that is not loopback also presents the token, as a cookie or as a bearer
 header, or nothing behind it runs; only Stop, and the pairing prompt for the token,
@@ -137,7 +165,7 @@ rule of their own, no route lists who may call it, and the React page is not cha
 the one cookie the prompt sets reaches every request the page makes.
 
 1. **Who presents the token, and who names an allowed host** (FR-001 to FR-004).
-   Recommended (a) with (e): **every peer that is not loopback presents the token on
+   Answered (a) with (e): **every peer that is not loopback presents the token on
    every route but `POST /api/stop` and the prompt; loopback peers, the tunnel and a
    Claude session on the console's machine among them, never; and every request but
    Stop, loopback's too, names an IP literal, `localhost` or an `--allow-host` name.**
@@ -169,7 +197,7 @@ the one cookie the prompt sets reaches every request the page makes.
    console with a token they pass, but the binary's Stop then breaks FR-020 (run). What
    it spares is a halt, which fails safe; what it risks is a refused Stop. Not
    recommended; a change to 014's owner approval 2 would be the owner's.
-2. **The token's form and source** (FR-012). Recommended (a): **twelve symbols of
+2. **The token's form and source** (FR-012). Answered (a): **twelve symbols of
    Crockford's base32 (60 bits) in three groups, such as `ABCD-EFGH-JKMN`, written at the
    first start to `console-token` in the state folder, owner-only, from the system's
    random source `/dev/urandom` read with the standard library, as the simulated node's
@@ -190,7 +218,7 @@ the one cookie the prompt sets reaches every request the page makes.
    six-digit PIN**: 10⁶ tries, about 98 minutes at the console's bound, about 6.6 hours
    from the 254 addresses of an IPv4 /24; (e) **a new token every start**: the phone
    pairs again every night.
-3. **How the owner reads it** (FR-012, FR-013). Recommended (a): **the owner reads
+3. **How the owner reads it** (FR-012, FR-013). Answered (a): **the owner reads
    `console-token` in the console's state folder over their own ssh, or writes their own
    token there, 8 to 64 letters and digits they can type from memory at the eyepiece;
    the README says both. No route returns the token in a body, and the console never
@@ -204,7 +232,7 @@ the one cookie the prompt sets reaches every request the page makes.
    § Constitution Check), and the constitution adds no npm package, so it would be
    written fresh, for a step done once per name; (d) **printed at start**: it would sit
    in the service's journal, which field reports copy from.
-4. **How long the browser keeps it, and rotation** (FR-008, FR-009). Recommended (a):
+4. **How long the browser keeps it, and rotation** (FR-008, FR-009). Answered (a):
    **an `HttpOnly`, `SameSite=Strict` cookie holding the token in its compared form,
    kept 400 days (`Max-Age=34560000`, the most browsers keep one); a new token unpairs
    every browser at once, with no session table; a wrong cookie is cleared.** Evidence
@@ -221,7 +249,7 @@ the one cookie the prompt sets reaches every request the page makes.
    link opens the page, and 012's Origin check still refuses a cross-site write (from
    memory of RFC 6265bis, read not run), but every top-level navigation from another
    site then carries the token.
-5. **Plain HTTP or TLS** (FR-013). Recommended (a): **plain HTTP on a private network the
+5. **Plain HTTP or TLS** (FR-013). Answered (a): **plain HTTP on a private network the
    owner trusts, such as the phone's own hotspot; the README says that the listener
    follows the node onto every network it joins and that the token crosses the air in
    the clear on every request, not only at pairing.** Evidence: no new crate; the phone
@@ -231,7 +259,7 @@ the one cookie the prompt sets reaches every request the page makes.
    browser shows a full-page certificate warning to click through, again whenever it
    forgets the exception; (c) **TLS from a local authority installed on the phone**: a
    certificate to make, install and renew.
-6. **`/mcp` over the network** (FR-011). Recommended (a): **the same token, after the
+6. **`/mcp` over the network** (FR-011). Answered (a): **the same token, after the
    door's stops and 016's checks, which stay: `Authorization: Bearer`, or, as on every
    route, the cookie.** Evidence (run): US3-S1 and US3-S2; a stop from an unpaired device
    is still carried out. Instead: (b) **loopback only**: refuses an MCP app on the phone,
@@ -240,7 +268,7 @@ the one cookie the prompt sets reaches every request the page makes.
    header only**: a rule of its own for nothing, since the cookie reaches `/mcp` only from
    a page of the console's own name (`SameSite=Strict`), which the door's Origin check
    admits anyway.
-7. **The default `--listen`, and the name the phone opens** (FR-012). Recommended (a):
+7. **The default `--listen`, and the name the phone opens** (FR-012). Answered (a):
    **unchanged, 127.0.0.1:8080; the scope node's service passes --listen 0.0.0.0:8080
    and --allow-host with the node's `.local` name** (plan.md § Outside the factory), so
    the phone pairs once by that name on every network; off loopback the start line names
@@ -249,7 +277,7 @@ the one cookie the prompt sets reaches every request the page makes.
    stays on its own machine unless asked. Instead: (b) 0.0.0.0:8080 by default, the token
    guarding it; (c) [::]:8080; (d) **no `--allow-host`**: the phone pairs by IP address,
    again on each network, in the dark at the scope.
-8. **Wrong tokens** (FR-005). Recommended (a): **per peer address, 10 wrong tokens within
+8. **Wrong tokens** (FR-005). Answered (a): **per peer address, 10 wrong tokens within
    60 s of the console's clock, then 429 whatever that address presents until the oldest
    is 60 s old; at most 1,024 addresses counted, a new one past them answered 429 for a
    wrong token and admitted with the right one; a time later than the console's clock
@@ -259,7 +287,7 @@ the one cookie the prompt sets reaches every request the page makes.
    still the right advice. Instead: (b) **one count for every peer**: a device on the
    Wi-Fi sending wrong tokens would keep the owner's phone out; (c) **no limit**: 60 bits
    alone make guessing hopeless, but not a short token the owner writes (8 symbols).
-9. **The prompt** (FR-007, FR-010). Recommended (a): **a page the console serves itself
+9. **The prompt** (FR-007, FR-010). Answered (a): **a page the console serves itself
    at every page path and at `/pair`, always DESIGN.md's night edition, with DESIGN.md's
    field (`DESIGN.md:272`, `DESIGN.md:273`) and night primary button (`DESIGN.md:254`),
    and no script, picture or font; the React page is not changed.** A phone that opens it
@@ -271,7 +299,7 @@ the one cookie the prompt sets reaches every request the page makes.
    unpaired devices, the page and its `dist` change, and it follows the Night switch,
    unknown before pairing; (c) **the prompt turns Night on for the page**: a script on the
    prompt or a page change.
-10. **How `POST /pair` reads its form** (FR-008). Recommended (a): **a hand-written
+10. **How `POST /pair` reads its form** (FR-008). Answered (a): **a hand-written
     `form_field`, `&`-split pairs with `+` and `%XX` decoded, pinned by its unit test,
     after reading at most 1,024 bytes.** Evidence (run, at US2's tip): with axum's own
     `form` feature instead, `Cargo.lock` stayed byte-for-byte the same (its
@@ -563,13 +591,13 @@ gate's nextest command runs it; during development,
   on every route but `/pair` as a console without a token answers it; its `POST /pair`
   is counted as FR-005 says, under its own address.
 - **FR-003**: The gate SHALL pass every request to the path `/api/stop`, by any method,
-  so `POST /api/stop` answers every peer as at f6d4f5fd, whatever token, `Host` and
+  so `POST /api/stop` answers every peer as before this spec, whatever token, `Host` and
   `Origin` it sends (014's owner approval 2 and FR-020; 017's FR-004 and FR-006), and
-  another method gets the router's 405 as at f6d4f5fd.
+  another method gets the router's 405 as before this spec.
 - **FR-004**: With a console token, every request but those to `/api/stop` and, while
   MCP is on, to `/mcp`, a loopback peer's among them, SHALL name in `Host` an IP
   literal, `localhost` or a name given with `--allow-host`, as 012's `host_allowed`
-  reads it (`crates/finder/src/api.rs:602`), before its token is read, or be answered
+  reads it (`crates/finder/src/api.rs:607`), before its token is read, or be answered
   403 with exactly `{"error": "open the console at an IP address, localhost or an
   allowed host"}`; a request with no `Host` SHALL be answered so too. While MCP is on,
   `/mcp` keeps its door's own check (016's FR-002); with MCP off it is a page path, gated
@@ -586,7 +614,7 @@ gate's nextest command runs it; during development,
   token is admitted (owner decision 8).
 - **FR-006**: `AppState` SHALL have no console token unless
   `AppState::with_console_token` gives it one, and without one SHALL answer every request
-  as at f6d4f5fd, `/pair` among them.
+  as before this spec, `/pair` among them.
 
 **The prompt** (US2):
 
@@ -598,7 +626,7 @@ gate's nextest command runs it; during development,
   again.`. On a console with a token, `GET /pair` SHALL answer the prompt with 200 and
   the first words to every peer that names an allowed host (owner decision 9).
 - **FR-008**: `POST /pair` SHALL be a same-origin write by 012's FR-014 check
-  (`crates/finder/src/api.rs:537`) and read its body, whatever its `Content-Type`, as
+  (`crates/finder/src/api.rs:542`) and read its body, whatever its `Content-Type`, as
   `application/x-www-form-urlencoded`, at most 1,024 bytes, a larger one answered 413 with
   no cookie; its `token` field, `+` and `%XX` decoded, is compared as FR-001 says and
   counted as FR-005 says (owner decision 10). The right token SHALL be answered 303 with
@@ -639,7 +667,7 @@ gate's nextest command runs it; during development,
   it listens: 12 symbols of `0123456789ABCDEFGHJKMNPQRSTVWXYZ` (Crockford's base32, 60
   bits) from `/dev/urandom`, in three groups of four joined by `-`, then a newline,
   written owner-only (mode 0600) to `console-token.tmp`, any left by an interrupted start
-  removed first, and renamed, as the session file is (`crates/finder/src/session.rs:2058`)
+  removed first, and renamed, as the session file is (`crates/finder/src/session.rs:2067`)
   (owner decision 2). A file the owner wrote SHALL be kept as written; one its group or
   other users can read, write or run SHALL also be warned of on stderr with its path
   followed by `: other users can read the console token; chmod 600 the file`. A file that
@@ -758,7 +786,8 @@ gate's nextest command runs it; during development,
 ## Assumptions
 
 - **Earlier features are in place.** Every spec in `depends_on_landed` has landed. Every
-  citation here was read at f6d4f5fd.
+  citation here was read at f6d4f5fd, and those into files 052 to 055 changed re-read at
+  936b140d.
 - **In-process peers stand for the network.** The gates make requests from a phone's
   address with `MockConnectInfo`; the built binary and the browser test reach the console
   over loopback only, and the phone on a real Wi-Fi, by the node's `.local` name, is the
