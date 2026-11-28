@@ -67,6 +67,11 @@
 //! `/mcp` checks the same allowed names on every request, even without an Origin.
 //! Library servers configure names with [`AppState::with_allowed_hosts`].
 //!
+//! With a console token ([`AppState::with_console_token`]), every request must
+//! name an allowed host, and one from a peer that is not loopback must also present the
+//! token, as the `console_token` cookie or a bearer header, before any route but
+//! `POST /api/stop` answers ([`pairing`]).
+//!
 //! Every successful solve records the latest pointing: its sequence, solved frame,
 //! J2000 RA/Dec, console time, and altitude/azimuth when a site is set. Its report
 //! carries the sequence as optional `pointing_seq`; a frame that does not solve
@@ -114,3 +119,6 @@ pub mod goto;
 
 /// The imaging camera as the console holds it (031).
 pub mod imaging;
+
+/// The console token's gate for devices other than the console's own machine (056).
+pub mod pairing;
