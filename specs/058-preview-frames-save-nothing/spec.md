@@ -56,14 +56,14 @@ at the camera's own pace, saving nothing.
 - Q: Why does every frame save today? → A: `POST /api/imaging/frame`
   (`crates/finder/src/imaging/routes.rs:31`) is "one frame, saved as FITS"
   (`crates/finder/src/imaging/routes.rs:190`), and `Imaging::take` says "Every frame
-  `take` starts is saved to a file" (`crates/finder/src/imaging/mod.rs:741`): once the
+  `take` starts is saved to a file" (`crates/finder/src/imaging/mod.rs:748`): once the
   frame is whole the task saves it (`crates/finder/src/imaging/frames.rs:383`), with the
   node's own copy when `save_at_node` is on (`crates/finder/src/imaging/frames.rs:218`),
   and makes its preview in the same blocking step
   (`crates/finder/src/imaging/frames.rs:453`), kept among the last eight
   (`crates/finder/src/imaging/frames.rs:464`, `crates/finder/src/imaging/preview.rs:13`).
   The focus aid saves each of its frames for the imaging solver's star measure and
-  removes the one before (`crates/finder/src/imaging/focus/run.rs:932`); nothing else
+  removes the one before (`crates/finder/src/imaging/focus/run.rs:986`); nothing else
   takes a frame that is not kept.
 - Q: How large is the preview, and can a star's focus be judged on it? → A: The preview
   is box-averaged by a whole factor until its longer side is at most 1280 pixels
@@ -76,9 +76,9 @@ at the camera's own pace, saving nothing.
 - Q: What holds the imaging camera? → A: The lease (031 FR-028): the focus aid, darks
   and flats, the stack, the imaging run and the finder alignment each take it, and while
   it is out a single frame is refused with `the imaging camera is held by` and the
-  holder's name (`crates/finder/src/imaging/mod.rs:975`). A single frame holds none (031
+  holder's name (`crates/finder/src/imaging/mod.rs:982`). A single frame holds none (031
   FR-033): while one is in flight each holder's start is refused with
-  `an exposure is in progress` (`crates/finder/src/imaging/focus/run.rs:382`,
+  `an exposure is in progress` (`crates/finder/src/imaging/focus/run.rs:433`,
   `crates/finder/src/imaging/stack/service.rs:411`,
   `crates/finder/src/imaging/run/console.rs:372`,
   `crates/finder/src/imaging/align.rs:237`,
@@ -86,7 +86,8 @@ at the camera's own pace, saving nothing.
   single frame keeps both rules unchanged (owner decision 1; run).
 - Q: How does the Imaging page see a frame end? → A: It reads `GET /api/imaging` once a
   second (`crates/finder/web/src/useImaging.ts:17`) and draws the latest frame's
-  preview while the frame has one (`crates/finder/web/src/components/ImagingPage.tsx:271`).
+  preview while the frame has one (`crates/finder/web/src/components/ImagingPage.tsx:271` at
+  f6d4f5fd; since 054 it keeps the last picture, `crates/finder/web/src/components/ImagingPage.tsx:157`).
   The probe's loop reads every 250 ms while its frame is in flight and asks for the next
   as soon as one is shown: on the simulated console, 200 ms frames came a mean 1.8 times
   the exposure apart (from 1.26 to 2.67 times, over 20) and 1000 ms frames 1.27 times
@@ -115,7 +116,7 @@ at the camera's own pace, saving nothing.
   (`crates/finder/README.md:34`), and browsers keep such features to pages served over
   HTTPS (`crates/finder/README.md:62`). So the block pauses while hidden and asks for the
   next frame once shown again, as the page's own session read pauses and resumes
-  (`crates/finder/web/src/useSession.ts:93`); hiding still frees the camera, and the
+  (`crates/finder/web/src/useSession.ts:94`); hiding still frees the camera, and the
   README tells the observer to lengthen the phone's auto-lock (owner decision 5; US4-S4,
   run, and in a browser on the probe's simulated console, plan.md § What was run).
 - Q: What if an imaging run takes the camera back while a preview frame is in flight?
@@ -160,7 +161,7 @@ at the camera's own pace, saving nothing.
   mosaic: it ends `shown` with neither `preview` nor `crop` (US2-S2; run).
 - Q: What does `take_preview_frame` answer when its wait answers another frame? → For
   an older id `Imaging::ended` answers the last ended frame
-  (`crates/finder/src/imaging/mod.rs:877`), a later one when another frame was taken
+  (`crates/finder/src/imaging/mod.rs:884`), a later one when another frame was taken
   in between; the tool answers it
   `the preview frame was overtaken by another imaging frame` (FR-009; read, not run), where a copy of 031's tool's last arm would panic on a frame
   with no error and never answer (run in the probe, the tool made to take a saved frame).
@@ -178,7 +179,7 @@ page's loop, not the console, decides when the next is asked for. Its own parts 
 route, the frame's end without a file, the crop, the MCP tool and the page's block. The
 rule departs from one line of 031's README, **One holder**: "A part of the console that
 takes imaging frames one after another holds the imaging camera while it runs"
-(`crates/finder/README.md:790`). The block takes frames one after another and holds
+(`crates/finder/README.md:851`). The block takes frames one after another and holds
 nothing between them, so a holder can start in the gap (the block then names it,
 FR-014) and a run that takes the camera back while a preview frame is in flight ends
 (decision 10). The README's paragraph gains a sentence saying so (FR-010).
@@ -203,8 +204,8 @@ FR-014) and a run that takes the camera back while a preview frame is in flight 
    existing tests send `null` with a JSON content type
    (`crates/finder/tests/console/imaging_preview.rs:237`,
    `crates/finder/tests/support/live.rs:98`) and the page sends no content type
-   (`crates/finder/web/src/api.ts:774`), and MCP's `take_imaging_frame` answers
-   `take_imaging_frame takes no arguments` (`crates/finder/src/mcp/tools.rs:745`);
+   (`crates/finder/web/src/api.ts:784`), and MCP's `take_imaging_frame` answers
+   `take_imaging_frame takes no arguments` (`crates/finder/src/mcp/tools.rs:782`);
    (d) **INDI's own stream at the node**, a subframe sent as MJPEG: frames at video rate
    and small (inferred), but a new node path, a `proto/` change (Principle IV), ADR
    0002's "it does no pixel work" amended for the node
@@ -229,7 +230,7 @@ FR-014) and a run that takes the camera back while a preview frame is in flight 
    would be the preview's own scale; a region of interest is the one knob that shortens
    the download, but by a share no run has measured, and its price is known: the
    observer must clear it, only the run refuses a region left set
-   (`crates/finder/src/imaging/run/console.rs:378`), and the live stack has no such check
+   (`crates/finder/src/imaging/run/console.rs:383`), and the live stack has no such check
    and stacks the region, the failure 054 is drafted for. Instead: (b) **the block's own
    exposure and gain**, set for the preview frames and put back after: the focus aid's
    remember-and-put-back, whose failure left a region set on a field night (054's
@@ -267,7 +268,7 @@ FR-014) and a run that takes the camera back while a preview frame is in flight 
 4. **The focus aid's star size beside it** (FR-012). Recommended (a): **none**: the aid
    and preview frames each need the camera and cannot run together, and a star size
    needs a saved file (033's measure is the imaging solver's on a FITS file,
-   `crates/finder/src/imaging/focus/run.rs:932`), which is what this spec avoids; the
+   `crates/finder/src/imaging/focus/run.rs:986`), which is what this spec avoids; the
    Focus block sits below for a reading once the eye has done its part. Instead: (b)
    **the focus record as a line in the block**: cheap, from the view, but a record is a
    settled reading of the focus region, not of what the eye sees; (c) **a reading of each
@@ -287,7 +288,7 @@ FR-014) and a run that takes the camera back while a preview frame is in flight 
    phone's auto-lock would end (a) for good until Start is pressed again; the page
    cannot hold the screen on over plain HTTP (§ Clarifications); hiding still frees the
    camera, as under (a); the page's own session read pauses and resumes the same way
-   (`crates/finder/web/src/useSession.ts:93`); built and run (US4-S4, and in a browser on
+   (`crates/finder/web/src/useSession.ts:94`); built and run (US4-S4, and in a browser on
    the probe's simulated console: hidden, the frame in flight ended and a saved frame
    was taken; shown, the block asked once more and showed the next crop). Instead: (a)
    **hiding ends it**, as the draft had: the observer presses Start after each lock,
@@ -300,7 +301,7 @@ FR-014) and a run that takes the camera back while a preview frame is in flight 
    (`crates/finder/src/imaging/routes.rs:224`), which may by then be another's.
 6. **Where on the page** (FR-012). Recommended (a): **a block `Preview frames` on the
    Imaging page right after the section `Imaging frame`**, whose own picture shows the
-   whole frame (`crates/finder/web/src/components/ImagingPage.tsx:271`); the block shows
+   whole frame (`crates/finder/web/src/components/ImagingPage.tsx:289`); the block shows
    the crop. On a phone the crop sits under the whole frame, so the observer scrolls to
    it. Instead: (b) **inside `Imaging frame`, beside `Take imaging frame`**: one section
    fewer, but 054 rewrites that section's picture and 055 adds the Nudge block after the
@@ -316,8 +317,8 @@ FR-014) and a run that takes the camera back while a preview frame is in flight 
 8. **"Save this one"** (FR-005). Recommended (a): **none new**: stop, wait for the last
    preview frame, then `Take imaging frame` in the section above saves the next frame at
    the same settings. `Take imaging frame` is disabled while any frame is in flight
-   (`crates/finder/web/src/components/ImagingPage.tsx:141`,
-   `crates/finder/web/src/components/ImagingPage.tsx:251`), and a press in the gap
+   (`crates/finder/web/src/components/ImagingPage.tsx:159`,
+   `crates/finder/web/src/components/ImagingPage.tsx:269`), and a press in the gap
    between two preview frames takes the camera first, so the block's next request is
    refused `an exposure is already in progress` and it stops with those words. Instead:
    (b) **keep the last preview frame's samples** (32,472,192 B on the imaging camera) to
@@ -365,10 +366,10 @@ file changes.
 5. **The finder README** (FR-010): `## Preview frames`, two rows of the API table, a
    paragraph of MCP tools of its own, and edits to five passages of 031's and 042's:
    the imaging camera's count of tools (`crates/finder/README.md:88`), the frame's
-   states and keys (`crates/finder/README.md:725`), the preview row
-   (`crates/finder/README.md:298`), the preview paragraph
-   (`crates/finder/README.md:775`, `crates/finder/README.md:786`) and **One holder**
-   (`crates/finder/README.md:790`). The count's sentence
+   states and keys (`crates/finder/README.md:786`), the preview row
+   (`crates/finder/README.md:306`), the preview paragraph
+   (`crates/finder/README.md:836`, `crates/finder/README.md:847`) and **One holder**
+   (`crates/finder/README.md:851`). The count's sentence
    `The imaging camera has sixteen tools of its own`, which an existing test pins
    (`crates/finder/tests/console/imaging_run_docs.rs:139`), keeps its words and gains a
    clause naming a seventeenth tool for preview frames, so it stays true and the test is
@@ -379,7 +380,7 @@ file changes.
    `"**/imaging-preview.spec.ts"` in the default project's `testIgnore` and the simulate
    project's `testMatch`, each on a line of its own after `"**/imaging.spec.ts"`
    (`crates/finder/web/playwright.config.ts:42`,
-   `crates/finder/web/playwright.config.ts:62`).
+   `crates/finder/web/playwright.config.ts:63`).
 7. **The page** (FR-012): the Imaging page's block `Preview frames`.
 8. **One line added to ADR 0002** (FR-002): its "The console saves every frame"
    (`docs/adr/0002-imaging-cameras-through-indi-frames-relayed-console-stacks.md:3`) is
@@ -820,9 +821,9 @@ under `npm test`, and `crates/finder/web/e2e/imaging-preview.spec.ts`, new, unde
   frame and the preview and the crop as two `image/jpeg` blocks in that order; a refusal
   SHALL be a tool error with the route's words, an aborted frame
   `the exposure was aborted` and a failed one its error, as `take_imaging_frame` answers
-  them (`crates/finder/src/mcp/tools.rs:740`), and any other frame, a later one that
+  them (`crates/finder/src/mcp/tools.rs:777`), and any other frame, a later one that
   `Imaging::ended` answers for the preview frame's older id
-  (`crates/finder/src/imaging/mod.rs:877`), the tool error
+  (`crates/finder/src/imaging/mod.rs:884`), the tool error
   `the preview frame was overtaken by another imaging frame`. Its description SHALL be
   "Take one preview frame, as POST /api/imaging/preview does: an imaging frame at the
   settings in force that is shown and never saved, at the console or at the scope node.
@@ -839,10 +840,10 @@ under `npm test`, and `crates/finder/web/e2e/imaging-preview.spec.ts`, new, unde
   (`crates/finder/README.md:88`), which keeps
   `The imaging camera has sixteen tools of its own` and gains a clause naming a
   seventeenth for preview frames; the frame's states and keys
-  (`crates/finder/README.md:725`), which gain `shown` and a shown frame's `crop`; the
-  preview row (`crates/finder/README.md:298`) and the preview paragraph
-  (`crates/finder/README.md:775`, `crates/finder/README.md:786`), which name the frames
-  given one; and **One holder** (`crates/finder/README.md:790`), which gains a sentence
+  (`crates/finder/README.md:786`), which gain `shown` and a shown frame's `crop`; the
+  preview row (`crates/finder/README.md:306`) and the preview paragraph
+  (`crates/finder/README.md:836`, `crates/finder/README.md:847`), which name the frames
+  given one; and **One holder** (`crates/finder/README.md:851`), which gains a sentence
   saying preview frames are single frames, nothing holding the camera between two
   (owner decision 10; owner approval 5).
 - **FR-011**: `GLOSSARY.md` SHALL gain **Preview frame** and then **Crop**, before

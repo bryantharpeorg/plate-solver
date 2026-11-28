@@ -293,7 +293,7 @@ no imaging: `this console takes no imaging frames`; a refusal: its words; then
 that frame, and an image block of `image/jpeg` (base64) for `imaging.preview(id)` and
 then `imaging.crop(id)`, each when kept; `aborted`: `the exposure was aborted`; failed:
 its `error`. Before those, a frame whose id is not the preview frame's, the later frame
-`ended` answers for an older id (`crates/finder/src/imaging/mod.rs:877`), answers the
+`ended` answers for an older id (`crates/finder/src/imaging/mod.rs:884`), answers the
 tool error `the preview frame was overtaken by another imaging frame`, so the last arm
 meets only the preview frame's own `failed`.
 
@@ -308,7 +308,7 @@ page's tools below):
 ```
 
 After the finder camera focus aid's entries (`crates/finder/README.md:149`) and before
-`### MCP under WSL2` (`crates/finder/README.md:159`):
+`### MCP under WSL2` (`crates/finder/README.md:167`):
 
 ```markdown
 The Imaging page's preview frames have one tool:
@@ -320,7 +320,7 @@ The Imaging page's preview frames have one tool:
   an aborted or failed frame answers a tool error with its words.
 ```
 
-The API table, before the preview's row (`crates/finder/README.md:298`):
+The API table, before the preview's row (`crates/finder/README.md:306`):
 
 ```markdown
 | `POST /api/imaging/preview` | No body. Take one preview frame, as `POST /api/imaging/frame` takes one and with its refusals and words, but save nothing of it, at the console or at the node: its `frame` has the purpose `preview` and ends `shown`, with its `preview` and `crop`. Same-origin writes only. |
@@ -329,19 +329,19 @@ The API table, before the preview's row (`crates/finder/README.md:298`):
 
 The preview's row then begins "The colour JPEG preview of the saved or shown imaging
 frame with this id, `image/jpeg`, while it is among the last eight given one;", the rest
-as it is. In `## Imaging frames`: the states (`crates/finder/README.md:725`) read
+as it is. In `## Imaging frames`: the states (`crates/finder/README.md:786`) read
 "`exposing`, `receiving`, `saved`, `shown` (a preview frame's end, below), `failed` and
 `aborted`"; the keys' sentence ends "and when saved, `saved_at` and `file`; a shown
 preview frame has no `file` but a `crop` (§ Preview frames)."; the preview paragraph
-(`crates/finder/README.md:775`) begins "Each saved frame, and each shown preview frame,
+(`crates/finder/README.md:836`) begins "Each saved frame, and each shown preview frame,
 is also given a small colour preview, in memory only and kept for the last eight frames
 given one, its route shown as the frame's `preview`. It is made from the frame's samples
 as they were received:", and its "while the frame is among the last eight saved"
-(`crates/finder/README.md:786`) reads "among the last eight given one"; and **One
-holder** (`crates/finder/README.md:790`) ends "…, as before. The Imaging page's
+(`crates/finder/README.md:847`) reads "among the last eight given one"; and **One
+holder** (`crates/finder/README.md:851`) ends "…, as before. The Imaging page's
 **Preview frames** are single frames too, taken one after another: nothing holds the
 camera between two of them, so a holder can start in the gap (§ Preview frames)."
-Between that paragraph and `## Solving imaging frames` (`crates/finder/README.md:801`):
+Between that paragraph and `## Solving imaging frames` (`crates/finder/README.md:862`):
 
 ```markdown
 ## Preview frames
@@ -408,7 +408,7 @@ The 200 × 200 cells of a preview frame around its brightest part, one picture p
 _Avoid_: zoom, close-up, full-resolution preview, region of interest (that is the camera's)
 ```
 
-**Purpose label** (`GLOSSARY.md:277`): "`sub`, `run` and `align`." becomes "`sub`, `run`,
+**Purpose label** (`GLOSSARY.md:281`): "`sub`, `run` and `align`." becomes "`sub`, `run`,
 `align` and `preview`." The **Raw frame**'s _Avoid_ of "full-resolution preview"
 (`GLOSSARY.md:167`) stands: no word here says "full resolution".
 
@@ -425,7 +425,7 @@ Amended by spec 058: the console saves every frame taken to be kept; a preview f
 - `api.ts`: `ImagingFrame.state` gains `"shown"` after `"saved"`; `crop?: string` after
   `preview?`; `postImagingPreview(): Promise<ImagingView>`, a `POST` to
   `/api/imaging/preview` with no body, after `postImagingFrame`
-  (`crates/finder/web/src/api.ts:774`).
+  (`crates/finder/web/src/api.ts:784`).
 - `components/PreviewBlock.tsx`: `export const POLL_MS = 250;` and
   `export function PreviewBlock()`, with no props. State: `mode` (`off`, `on` or
   `stopping`), `visible` (from `document.visibilityState`, kept by a
@@ -470,7 +470,7 @@ Amended by spec 058: the console saves every frame taken to be kept; a preview f
 
 - `components/ImagingPage.tsx`: `import { PreviewBlock } from "./PreviewBlock";` among
   the block imports, and `<PreviewBlock />` right after the section `Imaging frame`'s
-  closing tag (`crates/finder/web/src/components/ImagingPage.tsx:291`), inside the same
+  closing tag (`crates/finder/web/src/components/ImagingPage.tsx:312`), inside the same
   fragment, so it shows while that section does.
 
 ## What was run and what was read
@@ -726,8 +726,8 @@ diff.
 - **MCP's frame tool.** `crates/finder/tests/mcp/imaging.rs` passes unchanged:
   `take_imaging_frame` is not edited (run). Its last arm,
   `frame.error.expect("a failed frame carries its error")`
-  (`crates/finder/src/mcp/tools.rs:783`), would panic if `Imaging::ended`'s answer for
-  an older id, the last ended frame (`crates/finder/src/imaging/mod.rs:877`), were a
+  (`crates/finder/src/mcp/tools.rs:820`), would panic if `Imaging::ended`'s answer for
+  an older id, the last ended frame (`crates/finder/src/imaging/mod.rs:884`), were a
   shown preview frame: that needs a preview frame to start and end between a saved
   frame's end and the tool's waiter waking, so it is very unlikely, and FR-005 leaves
   the tool as it is; noted here, not guarded. The new `take_preview_frame` guards the
@@ -773,10 +773,10 @@ The ten owner decisions are in spec.md § Owner decisions, none answered. Below 
 
 ## Interplay with the specs drafted beside it
 
-- **054** keeps the section `Imaging frame`'s last picture. Until it lands that picture
-  is drawn only while the latest frame has a preview
-  (`crates/finder/web/src/components/ImagingPage.tsx:271`), so it blinks out on every
-  preview frame; after it, 054's line for the last picture comes and goes each frame.
+- **054**, landed, keeps the section `Imaging frame`'s last picture
+  (`crates/finder/web/src/components/ImagingPage.tsx:157`), so the whole frame no longer
+  blinks out between preview frames; 054's line for the last picture
+  (`crates/finder/web/src/components/ImagingPage.tsx:298`) comes and goes each frame.
   The block's crop keeps the last shown frame either way.
 - **055**'s Nudge block goes after the camera's sections, so the page reads Imaging
   frame, Preview frames, Nudge: the arrows sit under the crop, which suits a target the
@@ -999,8 +999,8 @@ They bind every story.
 | An imaging run's `Go anyway` with a preview frame in flight ends the run `camera_failed` (run on the probe's console). | The README and the field steps say to stop and wait until the block no longer reads `Stopping` (owner decision 10 (b)); a run that waits it out is a later spec's (10 (c)). |
 | A phone's auto-lock pauses the preview frames, and the page cannot keep the screen on over plain HTTP. | The block asks for the next frame when shown again (US4-S4); the README and § Outside the factory step 1 say to lengthen the auto-lock. |
 | Something brighter than the target (the Moon's edge, a brighter star) takes the crop. | The whole frame under `Imaging frame` still shows the target; the observer frames the target alone (§ Outside the factory step 4). |
-| At f6d4f5fd the section `Imaging frame` draws its picture only while the latest frame has a preview (`crates/finder/web/src/components/ImagingPage.tsx:271`), so between two preview frames the whole frame blinks out; the block's crop does not, as it keeps the last shown. | 054's kept picture lands first and keeps the last picture until the next (read in 054's draft); the re-anchor checks it (§ Prerequisites 2). |
-| 055's Nudge block and this block are each added near the end of the camera's sections in `ImagingPage.tsx` (`crates/finder/web/src/components/ImagingPage.tsx:291`), a textual neighbour. | One line each; the re-anchor moves this spec's line after 055's lands, and US4-S5 holds the order. |
+| At f6d4f5fd the section `Imaging frame` draws its picture only while the latest frame has a preview (`crates/finder/web/src/components/ImagingPage.tsx:271`), so between two preview frames the whole frame blinks out; the block's crop does not, as it keeps the last shown. | 054 landed first and keeps the last picture until the next (`crates/finder/web/src/components/ImagingPage.tsx:157`, read at 936b140d); the re-anchor checks it (§ Prerequisites 2). |
+| 055's Nudge block and this block are each added near the end of the camera's sections in `ImagingPage.tsx` (`crates/finder/web/src/components/ImagingPage.tsx:312`), a textual neighbour. | One line each; the re-anchor moves this spec's line after 055's lands, and US4-S5 holds the order. |
 | Preview frames push saved frames' previews out of the eight. | A saved frame's file stays; its preview is 031's convenience (spec.md § Edge Cases). |
 | The stretch is 031's: on a synthetic Saturn the globe and the rings come out near white, the bands' contrast gone, though the limb and the ring gaps still show sharp against soft (run by the review on the synthetic Saturns, `crates/finder/src/imaging/preview.rs:51`). | Focus by eye reads the edge; the owner focused on Saturn through 031's preview (the field report, read); a number from the crop is decision 4 (d). |
 | A story grows past 60 % in the factory. | The largest, US3, measures 43.1 % on probe round 1 with its fold and about 58.2 % at the worst overrun seen (§ Plan traps 2), 12,320 B of it the README's diff: a builder keeps to § The README's paragraphs. |
