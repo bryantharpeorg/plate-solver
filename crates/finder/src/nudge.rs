@@ -472,6 +472,7 @@ mod tests {
             received_at: None,
             saved_at: None,
             file: None,
+            crop: None,
             preview: None,
             error: None,
         }
