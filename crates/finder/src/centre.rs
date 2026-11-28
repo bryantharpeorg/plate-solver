@@ -21,9 +21,15 @@ use serde::{Deserialize, Serialize};
 /// refuses an older one.
 pub const AGE_S: f64 = 60.0;
 
+/// The body of a centring: none of the three for the session's target, or
+/// `frame_id`, `x` and `y` together for a pixel of that imaging frame (FR-006).
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct CentreAsk {}
+pub struct CentreAsk {
+    pub frame_id: Option<u64>,
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+}
 
 #[derive(Debug, Serialize)]
 pub struct CentreView {
@@ -32,6 +38,8 @@ pub struct CentreView {
     pub moved: &'static str,
 }
 
+/// The words for a malformed ask (FR-006).
+pub const PARTS: &str = "centre takes nothing, to centre the target, or frame_id, x and y together";
 const NOT_SOLVED: &str = "the imaging camera has not solved a frame yet";
 const NOT_TRACKING: &str = "Track is not tracking yet";
 
@@ -49,13 +57,22 @@ async fn press(
     Ok(Json(centre(&state, "page", &ask).await?))
 }
 
-/// Centre the session's target from the latest imaging solve alone, by `by`.
-/// Refusals answer 409, checked in FR-002's order.
+/// Centre the session's target, or the point `ask` names on the latest imaging
+/// solve, from that solve alone, by `by`. A malformed ask answers 400; other
+/// refusals answer 409, checked in FR-002's order, with a point's own checks
+/// (FR-007) where the target's are.
 pub async fn centre(
     state: &AppState,
     by: &'static str,
-    _ask: &CentreAsk,
+    ask: &CentreAsk,
 ) -> Result<CentreView, ApiError> {
+    let point = match (ask.frame_id, ask.x, ask.y) {
+        (None, None, None) => None,
+        (Some(frame_id), Some(x), Some(y)) if x.is_finite() && y.is_finite() => {
+            Some((frame_id, x, y))
+        }
+        _ => return Err(ApiError::new(StatusCode::BAD_REQUEST, PARTS)),
+    };
     let now = state.clock.now();
     let session = state.session().snapshot(now);
     let conflict = |words| ApiError::new(StatusCode::CONFLICT, words);
@@ -101,10 +118,27 @@ pub async fn centre(
     ) else {
         return Err(conflict(NOT_SOLVED.into()));
     };
-    let target = session
-        .target
-        .ok_or_else(|| conflict("no target is selected".into()))?;
-    let to = (target.ra_deg, target.dec_deg);
+    let to = match point {
+        Some((frame_id, x, y)) => {
+            if frame_id != solve.frame_id {
+                return Err(conflict(format!(
+                    "imaging frame {frame_id} is not the latest solved frame"
+                )));
+            }
+            if !(0.0..=f64::from(width)).contains(&x) || !(0.0..=f64::from(height)).contains(&y) {
+                return Err(conflict(format!(
+                    "the point is outside imaging frame {frame_id}"
+                )));
+            }
+            ImagingSolve::from_cd(ra, dec, cd, width, height).sky_at((x, y))
+        }
+        None => {
+            let target = session
+                .target
+                .ok_or_else(|| conflict("no target is selected".into()))?;
+            (target.ra_deg, target.dec_deg)
+        }
+    };
     if !session.track.as_ref().is_some_and(|track| track.wanted) {
         return Err(conflict("Track is off: turn Track on to centre".into()));
     }
