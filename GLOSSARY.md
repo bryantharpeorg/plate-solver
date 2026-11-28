@@ -290,6 +290,10 @@ _Avoid_: raw move, manual slew
 One press of a nudge arrow: the telescope moves one step on the sky, fine 30″ or coarse 4′, up, right, down or left in the view the arrows follow: the mount's own (up is higher altitude, right a clockwise turn), the finder camera's live views as the page turns them, or the imaging camera's frame from its latest solved imaging solve. With Track off it is a direct axis move; with Track on the place Track holds moves by the step and Track makes it. A nudge is never a sync, never a slip and never read as a push.
 _Avoid_: jog, slew, manual move
 
+**Centring from an imaging solve**:
+Bringing a place, the session's target or a point tapped on the latest solved imaging frame, to the imaging camera's set point from that frame's imaging solve alone: the place Track holds becomes that place, and Track steps the telescope by what the solve says lies between them. It needs no live pointing and is never a sync; the finder camera's first solve within a minute after it takes the aim point from the place Track holds.
+_Avoid_: recentre (the imaging run's Track off and on to a new aim point), slew to solve, plate-solve sync
+
 **Purpose label**:
 The short word an exposure is asked for with, saying what it is for: `frame` and `probe`, and later `focus`, `dark`, `flat`, `sub`, `run`,
 `align` and `preview`.
