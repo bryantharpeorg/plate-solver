@@ -16,6 +16,7 @@ mod imaging_run;
 mod imaging_solve;
 mod mount_sky;
 mod mount_sky_night;
+mod pairing;
 mod recording;
 mod session;
 mod session_rotation;

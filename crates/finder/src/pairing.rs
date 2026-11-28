@@ -378,4 +378,81 @@ mod tests {
             assert_eq!(super::form_field(invalid, "token"), None);
         }
     }
+
+    /// FR-012's worked spellings, grouped exactly without changing comparison.
+    #[test]
+    fn grouped_uses_four_symbols_per_group() {
+        assert_eq!(
+            ConsoleToken::new("abcdefghjkmn").unwrap().grouped(),
+            "ABCD-EFGH-JKMN"
+        );
+        assert_eq!(
+            ConsoleToken::new("my-own-console-token").unwrap().grouped(),
+            "MY0W-NC0N-S01E-T0KE-N"
+        );
+    }
+
+    /// FR-012's 12-symbol Crockford alphabet; generated values are never printed.
+    #[test]
+    fn generated_tokens_have_twelve_random_crockford_symbols() {
+        let first = ConsoleToken::generate().unwrap();
+        let second = ConsoleToken::generate().unwrap();
+        for token in [&first, &second] {
+            assert_eq!(token.normal.len(), 12);
+            assert!(token
+                .normal
+                .bytes()
+                .all(|byte| b"0123456789ABCDEFGHJKMNPQRSTVWXYZ".contains(&byte)));
+        }
+        assert!(
+            first.normal != second.normal,
+            "independent generations differ"
+        );
+    }
+
+    /// US3-S5's fixed address lists and exact listening lines, no tolerance.
+    #[test]
+    fn listening_hints_use_the_bound_address_or_first_outward_address() {
+        use std::net::IpAddr;
+        use std::path::Path;
+
+        struct Addresses(Vec<IpAddr>);
+        impl crate::mcp::AddressSource for Addresses {
+            fn addresses(&self) -> Vec<IpAddr> {
+                self.0.clone()
+            }
+        }
+        struct Unused;
+        impl crate::mcp::AddressSource for Unused {
+            fn addresses(&self) -> Vec<IpAddr> {
+                panic!("loopback needs no outward address")
+            }
+        }
+        let source = Addresses(vec![
+            "127.0.0.1".parse().unwrap(),
+            "192.168.1.20".parse().unwrap(),
+        ]);
+        let none = Addresses(vec![]);
+        let path = Path::new("/state/console-token");
+        for bound in ["127.0.0.1:8080", "[::1]:8080"] {
+            for addresses in [&source as &dyn crate::mcp::AddressSource, &Unused] {
+                assert_eq!(
+                    super::listening_hint(bound.parse().unwrap(), addresses, path),
+                    "(to open it from a phone, run with --listen 0.0.0.0:8080)"
+                );
+            }
+        }
+        for (bound, addresses, advertised) in [
+            ("0.0.0.0:8080", &source, "192.168.1.20:8080"),
+            ("[::]:8081", &source, "192.168.1.20:8081"),
+            ("192.168.1.21:8080", &none, "192.168.1.21:8080"),
+        ] {
+            assert_eq!(super::listening_hint(bound.parse().unwrap(), addresses, path),
+                format!("other devices open http://{advertised} and pair with the console token in /state/console-token"));
+        }
+        assert_eq!(
+            super::listening_hint("0.0.0.0:8080".parse().unwrap(), &none, path),
+            "other devices pair with the console token in /state/console-token"
+        );
+    }
 }
