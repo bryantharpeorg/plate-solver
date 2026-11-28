@@ -40,6 +40,7 @@ mod imaging_frames;
 mod imaging_hints;
 mod imaging_lease;
 mod imaging_preview;
+mod imaging_preview_frames;
 mod imaging_relation;
 mod imaging_run;
 mod imaging_run_centring;

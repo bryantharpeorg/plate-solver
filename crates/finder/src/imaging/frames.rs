@@ -42,7 +42,8 @@ fn header_wait(exposure_ms: f64) -> (Duration, u64) {
 #[non_exhaustive]
 pub struct FrameView {
     pub id: u64,
-    /// `exposing`, `receiving`, `saved`, `failed` or `aborted`.
+    /// `exposing`, `receiving`, `saved`, `shown` (a preview frame, 058),
+    /// `failed` or `aborted`.
     pub state: &'static str,
     pub purpose: String,
     pub exposure_ms: f64,
@@ -139,10 +140,12 @@ fn largest_id(root: &Path, date: &str) -> u64 {
 /// `Imaging::take` (FR-008): the checks, the id and everything the frame task
 /// needs, under one acquisition of the state's lock. US5 adds the
 /// frame-in-flight refusal and US9 the lease's check, which `held` makes
-/// between the state's and the frame's.
+/// between the state's and the frame's. `keep` false is a preview frame
+/// (058): shown and saved nowhere.
 pub(super) fn take(
     imaging: &Imaging,
     purpose: &str,
+    keep: bool,
     held: impl FnOnce(&Held) -> Result<Option<String>, Refusal>,
 ) -> Result<FrameTask, Refusal> {
     let mut guard = imaging.state.lock().expect("imaging state");
@@ -215,7 +218,10 @@ pub(super) fn take(
         model: camera.model,
         serial: camera.serial,
         forward_kib_per_s: settings.forward_kib_per_s,
-        save: settings.save_at_node,
+        // The node keeps a copy only of a frame asked to be kept, whatever
+        // `save_at_node` says of a preview frame (058 FR-002).
+        save: keep && settings.save_at_node,
+        keep,
         folder,
     })
 }
@@ -236,6 +242,9 @@ pub(super) struct FrameTask {
     forward_kib_per_s: Option<u32>,
     /// Whether the node also keeps a copy of this frame (FR-008).
     save: bool,
+    /// Whether the console saves this frame (058): false is a preview frame,
+    /// shown instead.
+    keep: bool,
     /// The caller's lease folder, read together with its grant (035).
     folder: Option<String>,
 }
@@ -380,6 +389,11 @@ async fn follow(task: &mut FrameTask) -> Outcome {
             task.frame.received = Some(header.byte_count);
             task.frame.received_at = Some(task.clock.now());
             drop(stream);
+            // A preview frame is shown, not saved (058 FR-002).
+            if !task.keep {
+                show(task, samples).await;
+                return Outcome::Saved;
+            }
             return match save(task, &samples, &date, header.exposure_ms).await {
                 Some(error) => Outcome::Failed(error),
                 None => Outcome::Saved,
@@ -472,6 +486,42 @@ async fn save(
     task.frame.saved_at = Some(task.clock.now());
     task.finish();
     None
+}
+
+/// Show a whole preview frame (058 FR-002): make its preview on the blocking
+/// pool, keep it among the last `PREVIEWS_KEPT` — the same eight as saved
+/// frames' — set the view's route, and end the frame `shown`. Nothing is
+/// written. A preview that cannot be made does not fail the frame: `preview`
+/// is then absent.
+async fn show(task: &mut FrameTask, samples: Vec<u8>) {
+    let (width, height, bits) = (
+        task.frame.width.expect("the header's width"),
+        task.frame.height.expect("the header's height"),
+        task.frame.bits.expect("the header's bits"),
+    );
+    let bayer = task.frame.bayer.clone();
+    let jpeg = tokio::task::spawn_blocking(move || {
+        preview::jpeg(&preview::rgb(
+            &samples,
+            width,
+            height,
+            bits,
+            bayer.as_deref(),
+        ))
+    })
+    .await
+    .expect("the preview maker cannot be cancelled");
+    if let Some(jpeg) = jpeg {
+        let mut held = task.held.lock().expect("imaging state");
+        held.previews.push((task.frame.id, jpeg));
+        while held.previews.len() > preview::PREVIEWS_KEPT {
+            held.previews.remove(0);
+        }
+        drop(held);
+        task.frame.preview = Some(format!("/api/imaging/frames/{}/preview.jpg", task.frame.id));
+    }
+    task.frame.state = "shown";
+    task.finish();
 }
 
 /// The saved frame's cards (FR-012): the plan's list, in order, each written

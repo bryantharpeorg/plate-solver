@@ -345,8 +345,8 @@ struct Held {
     next_grant: u64,
     /// The current grant's save folder (035), cleared with the lease.
     lease_folder: Option<String>,
-    /// The JPEG previews of the last `PREVIEWS_KEPT` saved frames, by id
-    /// (FR-018).
+    /// The JPEG previews of the last `PREVIEWS_KEPT` saved or shown frames,
+    /// by id (FR-018, 058 FR-002).
     previews: Vec<(u64, Vec<u8>)>,
     /// The console's imaging solver, and the latest solve (032 US2).
     solver: Option<solving::HeldSolver>,
@@ -748,13 +748,27 @@ impl Imaging {
     /// Every frame `take` starts is saved to a file. While a lease is out,
     /// anyone but the holder answers its 409 (FR-029).
     pub async fn take(&self, purpose: &str) -> Result<ImagingView, Refusal> {
-        self.take_as(None, purpose).await
+        self.take_as(None, purpose, true).await
+    }
+
+    /// Take one preview frame (058 FR-001): `take`'s checks, refusals and
+    /// words with the purpose `preview`, but the frame is shown and saved
+    /// nowhere, at the console or at the node. It holds no lease, as a single
+    /// frame holds none.
+    pub async fn take_preview(&self) -> Result<ImagingView, Refusal> {
+        self.take_as(None, "preview", false).await
     }
 
     /// `take` for one caller (US9), as `set_as`: the lease's check is passed
     /// to `frames::take`, which makes it under its one lock acquisition.
-    async fn take_as(&self, grant: Option<u64>, purpose: &str) -> Result<ImagingView, Refusal> {
-        let task = frames::take(self, purpose, |held| {
+    /// `keep` false is a preview frame (058).
+    async fn take_as(
+        &self,
+        grant: Option<u64>,
+        purpose: &str,
+        keep: bool,
+    ) -> Result<ImagingView, Refusal> {
+        let task = frames::take(self, purpose, keep, |held| {
             held_by(held, grant)?;
             Ok(grant.and_then(|grant| {
                 held.lease
@@ -899,7 +913,7 @@ impl Imaging {
     }
 
     /// The JPEG preview of the frame with this id, among the last
-    /// `PREVIEWS_KEPT` saved frames, or none (FR-018).
+    /// `PREVIEWS_KEPT` saved or shown frames, or none (FR-018, 058 FR-002).
     pub fn preview(&self, id: u64) -> Option<Vec<u8>> {
         let held = self.state.lock().expect("imaging state");
         held.previews
@@ -953,7 +967,7 @@ impl Lease {
     /// `Imaging::take` for the holder, as `set` (FR-030).
     pub async fn take(&self, purpose: &str) -> Result<ImagingView, Refusal> {
         match self.imaging.upgrade() {
-            Some(imaging) => imaging.take_as(Some(self.grant), purpose).await,
+            Some(imaging) => imaging.take_as(Some(self.grant), purpose, true).await,
             None => Err(gone()),
         }
     }
