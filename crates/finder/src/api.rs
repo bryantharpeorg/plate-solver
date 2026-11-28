@@ -659,6 +659,7 @@ pub fn router(state: AppState) -> Router {
     }
     routes = routes.merge(crate::imaging::routes::routes());
     routes = routes.merge(crate::finder_focus::routes());
+    routes = routes.merge(crate::nudge::routes());
     routes.with_state(state)
 }
 
@@ -832,7 +833,13 @@ where
     }
     if matches!(
         tool,
-        "goto" | "second_sync" | "goto_target" | "goto_axis_position" | "move_axis"
+        "goto"
+            | "second_sync"
+            | "goto_target"
+            | "goto_axis_position"
+            | "move_axis"
+            | "nudge"
+            | "track"
     ) && direct_move_running
     {
         return Err(ApiError::new(

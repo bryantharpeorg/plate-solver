@@ -2,10 +2,11 @@
 use crate::{
     api::{self, ApiError},
     goto::{AxisMove, GoTo, TICK},
-    link::stop_deadline,
+    link::{stop_deadline, MountClient},
     AppState,
 };
 use axum::http::StatusCode;
+use scope_link::proto::Axis;
 use serde::Serialize;
 use std::{sync::Arc, time::Duration};
 
@@ -23,7 +24,17 @@ pub(crate) async fn start(
     tool: &'static str,
     request: AxisMove,
 ) -> Result<(), ApiError> {
-    api::start_motion(state, "mcp", tool, || begin(state, tool, request)).await
+    start_by(state, "mcp", tool, request).await
+}
+
+/// A direct move for `by` (`page` or `mcp`), reserved and attributed as `start_motion` does.
+pub(crate) async fn start_by(
+    state: &AppState,
+    by: &'static str,
+    tool: &'static str,
+    request: AxisMove,
+) -> Result<(), ApiError> {
+    api::start_motion(state, by, tool, || begin(state, tool, request)).await
 }
 
 async fn begin(state: &AppState, tool: &'static str, request: AxisMove) -> Result<(), ApiError> {
@@ -46,6 +57,13 @@ async fn begin(state: &AppState, tool: &'static str, request: AxisMove) -> Resul
             AxisMove::Rate {
                 axis, deg_per_s, ..
             } => client.rate_axis(axis, deg_per_s).await,
+            AxisMove::Through { first, .. } => {
+                match client.goto_axis(Axis::Azimuth, first[0]).await {
+                    Ok(()) => client.goto_axis(Axis::Altitude, first[1]).await,
+                    Err(error) => Err(error),
+                }
+            }
+            AxisMove::Offset { .. } => unreachable!("a checked offset is a through move"),
         }
     };
     let result = tokio::select! {
@@ -117,7 +135,7 @@ async fn duration(state: &AppState, request: AxisMove, started: f64) {
 async fn path(
     state: &AppState,
     goto: &GoTo,
-    request: AxisMove,
+    mut request: AxisMove,
     started: f64,
 ) -> Result<(), String> {
     let mut client = state
@@ -151,8 +169,41 @@ async fn path(
                 }
                 request
             }
+            AxisMove::Through { first, last } => {
+                if axes_moving(&mut client).await? {
+                    request
+                } else if first == last {
+                    return Ok(());
+                } else {
+                    // At rest on the approach: the end is the last waypoint.
+                    client
+                        .goto_axis(Axis::Azimuth, last[0])
+                        .await
+                        .map_err(|_| "mount did not answer")?;
+                    client
+                        .goto_axis(Axis::Altitude, last[1])
+                        .await
+                        .map_err(|_| "mount did not answer")?;
+                    // The end is now the only waypoint left; later ticks see it.
+                    request = AxisMove::Through { first: last, last };
+                    request
+                }
+            }
+            AxisMove::Offset { .. } => unreachable!("a checked offset is a through move"),
         };
         goto.recheck_axis_move(remaining).await?;
         tokio::time::sleep(TICK).await;
     }
+}
+
+async fn axes_moving(client: &mut MountClient) -> Result<bool, String> {
+    let mut moving = false;
+    for axis in [Axis::Azimuth, Axis::Altitude] {
+        moving |= client
+            .axis_state(axis)
+            .await
+            .map_err(|_| "mount did not answer")?
+            .moving;
+    }
+    Ok(moving)
 }
