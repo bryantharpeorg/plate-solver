@@ -827,6 +827,7 @@ US2:
   depends_on: []
   depends_on_merged: [US1]
   implements: [FR-006, FR-007]
+  persona: haiku-implementer
 US3:
   depends_on: []
   depends_on_merged: [US2]
@@ -839,10 +840,12 @@ US5:
   depends_on: []
   depends_on_merged: [US4]
   implements: [FR-011, FR-012, FR-013]
+  persona: haiku-implementer
 US6:
   depends_on: []
   depends_on_merged: [US5]
   implements: [FR-014, FR-015, FR-016, FR-017]
+  persona: haiku-implementer
 ```
 
 Six stories, each under 60 % of 65,536 B (39,321 B) at the factory's worst overrun seen,
