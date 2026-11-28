@@ -384,6 +384,48 @@ impl Tracker {
     /// guards refuse changes nothing, nor does one while not `tracking`, while a backlash
     /// is measured, or with an earlier step still to be made or being made.
     pub async fn nudge(&self, up: f64, right: f64, model: Model) -> Result<(), String> {
+        self.step_between(model, |held, now| {
+            let (east, north) = self.shared.sky_step(held, up, right, now);
+            (held.clone(), moved(held, east, north))
+        })
+        .await
+    }
+
+    /// Hold `to`, a J2000 place, in place of the place held, and have the rate
+    /// loop's next turn step the telescope by `to` less `from`, the J2000 place
+    /// an imaging solve found at the imaging camera's set point (057): Track's
+    /// own step, as a nudge's. Refused as a nudge is.
+    pub async fn centre(
+        &self,
+        from: (f64, f64),
+        to: (f64, f64),
+        model: Model,
+    ) -> Result<(), String> {
+        self.step_between(model, |held, _| {
+            (
+                Target {
+                    ra_deg: from.0,
+                    dec_deg: from.1,
+                    ..held.clone()
+                },
+                Target {
+                    ra_deg: to.0,
+                    dec_deg: to.1,
+                    ..held.clone()
+                },
+            )
+        })
+        .await
+    }
+
+    /// Plan a nudge's or centring's step from the counts, take the session's
+    /// model, hold `to` and mark the step pending from `from`. Both places are
+    /// worked out from the held place and time under the lock that changes them.
+    async fn step_between(
+        &self,
+        model: Model,
+        places: impl FnOnce(&Target, f64) -> (Target, Target),
+    ) -> Result<(), String> {
         let axes = {
             let control = self.shared.control.lock().unwrap();
             may_nudge(&control)?;
@@ -402,14 +444,13 @@ impl Tracker {
         // model and the memory. Nothing awaits from here to the end.
         let mut control = self.shared.control.lock().unwrap();
         may_nudge(&control)?;
-        let from = control
+        let held = control
             .state
             .target
             .clone()
             .ok_or("Track is not tracking yet")?;
         let now = self.shared.clock.now();
-        let (east, north) = self.shared.sky_step(&from, up, right, now);
-        let to = moved(&from, east, north);
+        let (from, to) = places(&held, now);
         self.shared
             .step_path(&model, axes, current, control.direction, &from, &to)?;
         // The session's model goes to Track only with a step it accepts.

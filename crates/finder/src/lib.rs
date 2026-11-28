@@ -89,6 +89,7 @@
 
 pub mod api;
 pub mod catalog;
+pub mod centre;
 pub mod constellation;
 pub mod databases;
 pub mod ephemeris;

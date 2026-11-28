@@ -10,6 +10,7 @@ use crate::{
     goto::{AxisMove, TICK},
     imaging::{solving::SolveView, ImagingView},
     mcp::guard::{self, Progress},
+    model::Model,
     session::{PointingSource, PushView, SessionView, Site},
     sky::{self, Observer},
     tracking::Tracker,
@@ -21,7 +22,10 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
+use std::{
+    future::Future,
+    sync::{Arc, Mutex},
+};
 
 /// A fine step on the sky, arcseconds (055 FR-002).
 pub const FINE_ARCSEC: f64 = 30.0;
@@ -292,6 +296,26 @@ async fn track_press(
     if settling {
         return Err(ApiError::new(StatusCode::CONFLICT, SETTLING));
     }
+    track_step(state, by, "nudge", now, |tracker, model| async move {
+        tracker.nudge(up, right, model).await
+    })
+    .await
+}
+
+/// A step Track makes, through `start_motion` with `tool` (055; 057's centring too):
+/// `ask` hands the step to the tracker with the session's model at `now`, then
+/// `axis_move` reports it under `tool` until it is made; `motion` names it only then.
+pub(crate) async fn track_step<F, Fut>(
+    state: &AppState,
+    by: &'static str,
+    tool: &'static str,
+    now: f64,
+    ask: F,
+) -> Result<(), ApiError>
+where
+    F: FnOnce(Arc<Tracker>, Model) -> Fut,
+    Fut: Future<Output = Result<(), String>>,
+{
     let tracker = state
         .session()
         .tracker()
@@ -300,17 +324,16 @@ async fn track_press(
     // The record the step's end puts back, read before `start_motion` takes the lock.
     let before = state.motion.lock().await.clone();
     let watched = tracker.clone();
-    api::start_motion(state, by, "nudge", || async move {
-        tracker
-            .nudge(up, right, model)
+    api::start_motion(state, by, tool, || async move {
+        ask(tracker, model)
             .await
             .map_err(|reason| ApiError::new(StatusCode::CONFLICT, reason))?;
         *state.axis_move.lock().unwrap() = Some(Progress {
-            tool: "nudge",
+            tool,
             state: "moving",
             reason: None,
         });
-        tokio::spawn(watch_step(state.clone(), watched, before));
+        tokio::spawn(watch_step(state.clone(), watched, before, tool));
         Ok(())
     })
     .await
@@ -319,7 +342,12 @@ async fn track_press(
 /// Ends `axis_move` for a step Track makes: `done` once it is made, or `halted` with Track's
 /// reason if Track ends first. Then `motion` reads again what it read before the press
 /// (055 FR-010).
-async fn watch_step(state: AppState, tracker: Arc<Tracker>, before: Option<Motion>) {
+async fn watch_step(
+    state: AppState,
+    tracker: Arc<Tracker>,
+    before: Option<Motion>,
+    tool: &'static str,
+) {
     let (ended, reason) = loop {
         let track = tracker.state();
         if track.state == "off" {
@@ -335,7 +363,7 @@ async fn watch_step(state: AppState, tracker: Arc<Tracker>, before: Option<Motio
     };
     *state.motion.lock().await = before;
     *state.axis_move.lock().unwrap() = Some(Progress {
-        tool: "nudge",
+        tool,
         state: ended,
         reason,
     });
