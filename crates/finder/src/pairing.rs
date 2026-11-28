@@ -16,15 +16,21 @@ use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
 
+use axum::body::to_bytes;
 use axum::extract::{ConnectInfo, FromRequestParts, Request, State};
-use axum::http::{header, request::Parts, HeaderMap, StatusCode};
+use axum::http::{header, request::Parts, HeaderMap, HeaderValue, StatusCode};
 use axum::middleware::Next;
-use axum::response::{IntoResponse, Response};
+use axum::response::{Html, IntoResponse, Response};
+use axum::routing::get;
+use axum::Router;
 
 use crate::{api, AppState};
 
 /// The browser cookie that presents the console token.
 pub const COOKIE: &str = "console_token";
+/// The browser keeps the console token for 400 days.
+pub const COOKIE_MAX_AGE_S: u64 = 400 * 24 * 60 * 60;
+const FORM_LIMIT: usize = 1024;
 /// Wrong tokens from one peer that fill the sliding window.
 pub const WRONG_TOKENS: usize = 10;
 /// The sliding window in seconds of the console's clock.
@@ -192,11 +198,11 @@ pub(crate) async fn gate(State(state): State<AppState>, request: Request, next: 
         .into_response();
     }
     let peer = peer(&mut parts).await;
-    if peer.is_some_and(loopback) {
+    if peer.is_some_and(loopback) || parts.uri.path() == "/pair" {
         return next.run(Request::from_parts(parts, body)).await;
     }
-    let Some((supplied, _from_cookie)) = presented(&parts.headers) else {
-        return api::ApiError::new(StatusCode::UNAUTHORIZED, UNPAIRED.1).into_response();
+    let Some((supplied, from_cookie)) = presented(&parts.headers) else {
+        return refusal(parts.uri.path(), StatusCode::UNAUTHORIZED, UNPAIRED);
     };
     match pairing.check(
         peer.unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED)),
@@ -204,11 +210,136 @@ pub(crate) async fn gate(State(state): State<AppState>, request: Request, next: 
         state.clock.now(),
     ) {
         Check::Admitted => next.run(Request::from_parts(parts, body)).await,
-        Check::Wrong => api::ApiError::new(StatusCode::UNAUTHORIZED, WRONG.1).into_response(),
-        Check::Limited => {
-            api::ApiError::new(StatusCode::TOO_MANY_REQUESTS, LIMITED.1).into_response()
+        Check::Wrong => {
+            let mut response = refusal(parts.uri.path(), StatusCode::UNAUTHORIZED, WRONG);
+            if from_cookie {
+                response.headers_mut().insert(
+                    header::SET_COOKIE,
+                    HeaderValue::from_static(
+                        "console_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict",
+                    ),
+                );
+            }
+            response
         }
+        Check::Limited => refusal(parts.uri.path(), StatusCode::TOO_MANY_REQUESTS, LIMITED),
     }
+}
+
+fn refusal(path: &str, status: StatusCode, words: (&str, &str)) -> Response {
+    if path.starts_with("/api/") {
+        api::ApiError::new(status, words.1).into_response()
+    } else {
+        (status, prompt_html(words.0)).into_response()
+    }
+}
+
+pub(crate) fn routes(state: &AppState) -> Router<AppState> {
+    if state.pairing.is_some() {
+        Router::new().route("/pair", get(prompt).post(pair))
+    } else {
+        Router::new()
+    }
+}
+
+async fn prompt() -> Html<String> {
+    prompt_html(UNPAIRED.0)
+}
+
+async fn pair(State(state): State<AppState>, request: Request) -> Response {
+    let (mut parts, body) = request.into_parts();
+    if let Err(error) = api::check_origin(&parts, &state.allowed_hosts) {
+        return error.into_response();
+    }
+    let Ok(body) = to_bytes(body, FORM_LIMIT).await else {
+        return StatusCode::PAYLOAD_TOO_LARGE.into_response();
+    };
+    let supplied = form_field(&body, "token").unwrap_or_default();
+    let peer = peer(&mut parts)
+        .await
+        .unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+    let pairing = state.pairing.as_ref().expect("pair route requires a token");
+    match pairing.check(peer, &supplied, state.clock.now()) {
+        Check::Admitted => {
+            let cookie = format!(
+                "{COOKIE}={}; Path=/; Max-Age={COOKIE_MAX_AGE_S}; HttpOnly; SameSite=Strict",
+                pairing.token.normal
+            );
+            (
+                StatusCode::SEE_OTHER,
+                [(header::LOCATION, "/"), (header::SET_COOKIE, &cookie)],
+            )
+                .into_response()
+        }
+        Check::Wrong => (StatusCode::UNAUTHORIZED, prompt_html(WRONG.0)).into_response(),
+        Check::Limited => (StatusCode::TOO_MANY_REQUESTS, prompt_html(LIMITED.0)).into_response(),
+    }
+}
+
+fn form_field(body: &[u8], name: &str) -> Option<String> {
+    fn decode(text: &str) -> Option<String> {
+        let mut decoded = Vec::with_capacity(text.len());
+        let mut bytes = text.bytes();
+        while let Some(byte) = bytes.next() {
+            decoded.push(match byte {
+                b'+' => b' ',
+                b'%' => {
+                    let high = (bytes.next()? as char).to_digit(16)?;
+                    let low = (bytes.next()? as char).to_digit(16)?;
+                    ((high << 4) | low) as u8
+                }
+                other => other,
+            });
+        }
+        String::from_utf8(decoded).ok()
+    }
+
+    std::str::from_utf8(body)
+        .ok()?
+        .split('&')
+        .find_map(|field| {
+            let (key, value) = field.split_once('=')?;
+            (decode(key)? == name).then(|| decode(value)).flatten()
+        })
+}
+
+fn prompt_html(message: &str) -> Html<String> {
+    Html(format!(
+        r##"<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Pair with the finder console</title>
+<style>
+html, body {{ margin: 0; background: #000000; color: #e00000; font: 540 16px/1.5 system-ui, sans-serif; }}
+main {{ max-width: 24rem; margin: 0 auto; padding: 2rem 1rem; }}
+h1 {{ font-size: 1.25rem; font-weight: 600; margin: 0 0 1rem; }}
+p {{ color: #d40000; }}
+label {{ display: block; margin: 1rem 0 0.25rem; font-size: 0.875rem; font-weight: 600; color: #d40000; }}
+input, button {{ box-sizing: border-box; width: 100%; min-height: 44px; border: 1px solid #e00000; border-radius: 0; font: inherit; color: #e00000; caret-color: #e00000; }}
+input {{ padding: 0 12px; background: transparent; letter-spacing: 0.1em; text-transform: uppercase; }}
+button {{ margin-top: 1rem; padding: 0 16px; background: #5a0000; font-weight: 560; }}
+input:focus, button:focus {{ outline: 2px solid #e00000; outline-offset: 2px; }}
+::selection {{ background: #5a0000; color: #e00000; }}
+</style>
+</head>
+<body>
+<main>
+<h1>Pair with the finder console</h1>
+<p role="status">{message}</p>
+<form method="post" action="/pair">
+<label for="token">Console token</label>
+<input id="token" name="token" autocomplete="off" autocapitalize="characters" spellcheck="false" required>
+<button type="submit">Pair</button>
+</form>
+<p>The console token is in the file console-token in the console's state folder. This browser keeps it until the token changes.</p>
+</main>
+</body>
+</html>
+"##
+    ))
 }
 
 #[cfg(test)]
@@ -228,6 +359,23 @@ mod tests {
         assert!(token.matches("IOAB CDEF GHOJ"));
         for invalid in ["short", "not/a/token", &"A".repeat(65)] {
             assert!(ConsoleToken::new(invalid).is_err());
+        }
+    }
+
+    /// FR-008's worked form decoding and missing-field outcomes, exactly.
+    #[test]
+    fn form_field_decodes_and_finds_the_token() {
+        assert_eq!(
+            super::form_field(b"token=AB+CD%2DEF", "token").as_deref(),
+            Some("AB CD-EF")
+        );
+        assert_eq!(
+            super::form_field(b"x=1&token=Q", "token").as_deref(),
+            Some("Q")
+        );
+        assert_eq!(super::form_field(b"x=1", "token"), None);
+        for invalid in [b"token=%zz".as_slice(), b"token=%", b"token=%ff"] {
+            assert_eq!(super::form_field(invalid, "token"), None);
         }
     }
 }

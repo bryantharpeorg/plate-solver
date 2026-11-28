@@ -52,6 +52,7 @@
 //! * POST /api/imaging/run: {"subs":N,"duration_s":S,"keep_subs":true}, each optional; start an imaging run on the session's target.
 //! * DELETE /api/imaging/run: no body; end the imaging run and save its stack. It stops the mount only while the run still slews.
 //! * POST /api/imaging/run/continue: {"anyway":false} checks focus again, {"anyway":true} goes on; from a focus pause only.
+//! * GET /pair: the pairing prompt; POST /pair: a form with the console token, answered 303 with its cookie (056; only with a console token).
 //!
 //! A fresh session has no site, target or pointing and a 15° minimum altitude. Site
 //! coordinates are `lat_deg` (±90°) and `lon_deg` (±180°, east positive); the minimum
@@ -70,7 +71,7 @@
 //! With a console token ([`AppState::with_console_token`]), every request must
 //! name an allowed host, and one from a peer that is not loopback must also present the
 //! token, as the `console_token` cookie or a bearer header, before any route but
-//! `POST /api/stop` answers ([`pairing`]).
+//! `/pair` and `POST /api/stop` answers ([`pairing`]).
 //!
 //! Every successful solve records the latest pointing: its sequence, solved frame,
 //! J2000 RA/Dec, console time, and altitude/azimuth when a site is set. Its report
