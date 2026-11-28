@@ -132,7 +132,8 @@ pub struct AppState {
     simulation: Option<Arc<Simulation>>,
     goto: Option<Arc<crate::goto::GoTo>>,
     tracking_owner: Option<Arc<crate::session::TrackingOwner>>,
-    motion: Arc<tokio::sync::Mutex<Option<Motion>>>,
+    /// The run's motion, which a nudge with Track on holds for its step (055 FR-010).
+    pub(crate) motion: Arc<tokio::sync::Mutex<Option<Motion>>>,
     call_log: Arc<Mutex<Box<dyn Write + Send>>>,
     pub(crate) axis_move: Arc<Mutex<Option<crate::mcp::guard::Progress>>>,
     move_limit: Arc<Mutex<crate::mcp::limit::MoveLimit>>,
