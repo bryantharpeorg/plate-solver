@@ -5,15 +5,15 @@ description: "Task list for 055-nudge-arrows-follow-the-frame: The Nudge Arrows 
 # Tasks: The Nudge Arrows Follow the Frame
 
 **Prerequisites** (plan.md § Prerequisites, each with its evidence there):
-- every spec in `depends_on_landed` has landed on `main`: met at f6d4f5fd;
+- every spec in `depends_on_landed` has landed on `main`: met at f72b77d2, 053 and 054 included;
 - 052, 053 and 054 have landed, in that order, and this trio is re-anchored on that
-  `main`: not met;
-- the owner decisions in spec.md are settled: not met, none of the ten is answered (the
-  flip ask);
+  `main`: met at f72b77d2;
+- the owner decisions in spec.md are settled: met, decision 9 (a) by the owner and the
+  other nine with their recommendations, on 2026-11-27;
 - every story has been probe-built from this text: met, probe round 1 on
   `probe/055-r1` (tip a6a92960), folded, its new steps proven there on 8b7212bb;
 - the page half has run once: met on the probe (`CI=1 npm run e2e`, 38 of 38 on
-  8b7212bb), to be run again on the re-anchored base;
+  8b7212bb), and again on the probe's code replayed onto f72b77d2 (38 of 38, every other gate 0);
 - no operator-staged file is needed: met.
 
 **Rules for every story:**

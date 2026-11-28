@@ -1,20 +1,29 @@
 ---
-state: draft
-depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-confirm", "019-night-legibility", "021-chart-orientation", "022-altaz-guidance", "024-mount-link-recovery", "032-imaging-solve-and-aim-point", "038-track-follows-a-push", "040-stack-waits-for-steady", "042-imaging-run-page-and-mcp", "050-tools-page-aligns-finder-camera", "051-tools-page-focuses-either-camera"]
+state: ready
+depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-confirm", "019-night-legibility", "021-chart-orientation", "022-altaz-guidance", "024-mount-link-recovery", "032-imaging-solve-and-aim-point", "038-track-follows-a-push", "040-stack-waits-for-steady", "042-imaging-run-page-and-mcp", "050-tools-page-aligns-finder-camera", "051-tools-page-focuses-either-camera", "053-second-sync-fits-base-tilt", "054-focus-pause-gives-camera-back"]
 # Drafted 2026-11-27 against `main` at f6d4f5fd, at the owner's ask of 2026-11-27 ("Your
 # rec. Proceed", to the seat's ranked list after a field night), from a probe of that day
 # on the branch `probe/055` cut from f6d4f5fd; cynical review round 1 folded the same day
 # on that branch; probe round 1 from this text alone on `probe/055-r1` (tip a6a92960:
 # 3 blocking, 14 clarity defects) folded the same day, its new steps proven there on
 # d55caf08, 9f3b103f and 8b7212bb (plan.md § What was run and what was read). Every
-# `path:line` here was read at f6d4f5fd. None of the ten owner decisions is answered yet; the
-# scenarios are written to each recommendation. 014 is named for the direct move's guards and approach;
+# `path:line` here was read at f6d4f5fd, and those in files 052 to 054 changed re-read at f72b77d2.
+# The owner answered the ten decisions on 2026-11-27, decision 9 directly and the others with
+# their recommendations, which the scenarios were already written to. 014 is named for the direct move's guards and approach;
 # 015 and 038 for Track and its push check; 016 for direct axis moves, MCP and
 # `axis_move`; 021 for the chart rotation and the live pointing's up; 032 for the imaging
 # solve; 019 for the night rule; 017, 022, 024, 040, 042, 050 and 051 because each last
 # changed a file this spec writes (plan.md § Refinement Record). 052, 053 and 054 are
 # drafted beside this spec and land before it, in that order; it is re-anchored on them
 # before any flip.
+# Re-anchored the same day on `main` at f72b77d2, where 052, 053 and 054 had landed: 053 and
+# 054 join `depends_on_landed`; the record's entries for `goto.rs` (053 US2), the README,
+# `GLOSSARY.md` and the motion test `main.rs` (054 US3), and `api.ts`, `dist` and
+# `ImagingPage.tsx` (054 US4) name their last writers; the probe's code replayed onto
+# f72b77d2 with only `dist` to rebuild and passed every gate there. Flipped to `ready` on
+# 2026-11-27 at the owner's ask ("Yes, all three", a standing yes to the seat flipping 053,
+# 054 and 055 with the seat's recommended answers, and decision 9 answered (a) by the owner),
+# with every prerequisite in plan.md met and none waived.
 ---
 
 # Feature Specification: The Nudge Arrows Follow the Frame
@@ -23,7 +32,7 @@ depends_on_landed: ["014-goto", "015-tracking", "016-mcp", "017-console-stop-con
 
 **Created**: 2026-11-27
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: On a field night the owner had a target slightly off centre after a GoTo and
 Track (the GoTo's error was 35″, yet the target was not centred in the finder camera's
@@ -51,8 +60,8 @@ axis and rate. Those three quotations are the owner's only logged words on the f
   (`crates/finder/src/api.rs:797`), which refuses them over MCP with `Track is on`
   (`crates/finder/src/api.rs:817`) and, while a direct move runs, refuses the tools of
   one list (`crates/finder/src/api.rs:835`) with `the mount is already moving`; and
-  `GoTo::check_axis_move` (`crates/finder/src/goto.rs:772`), whose `Planner::direct`
-  (`crates/finder/src/goto.rs:220`) asks for the night's sync and the guards of a GoTo.
+  `GoTo::check_axis_move` (`crates/finder/src/goto.rs:790`), whose `Planner::direct`
+  (`crates/finder/src/goto.rs:222`) asks for the night's sync and the guards of a GoTo.
   The page has none; the glossary says "Only MCP clients ask for one"
   (`GLOSSARY.md:274`).
 - Q: Does a step on the sky fit the alt-az mount? → A: Yes. A camera fixed to the tube of
@@ -87,8 +96,8 @@ axis and rate. Those three quotations are the owner's only logged words on the f
   (FR-008): Track on during a press and a second press at the approach's turnaround
   answer 409 `the mount is already moving` (US1-S3, US1-S4).
 - Q: Is the approach GoTo's? → A: Now yes: every moved axis approaches its end from 0.5°
-  below, as a GoTo approaches every axis (`crates/finder/src/goto.rs:370`), with GoTo's
-  words for an approach under the floor (`crates/finder/src/goto.rs:372`). With Track on,
+  below, as a GoTo approaches every axis (`crates/finder/src/goto.rs:377`), with GoTo's
+  words for an approach under the floor (`crates/finder/src/goto.rs:379`). With Track on,
   Track makes the step and each moved axis comes back the way Track drives it (FR-010).
 - Q: Which owner words does decision 9 rest on? → A: Only the three quoted in the Input.
   The draft's "a press moves the picture the way the arrow points" was the seat's gloss.
@@ -96,7 +105,7 @@ axis and rate. Those three quotations are the owner's only logged words on the f
 ### Session 2026-11-27 (probe round 1 from this text, folded on `probe/055-r1`)
 
 - Q: With Track on, why did US3-S4's place come within 10″, swing 72.6″ past and come
-  back? → A: Track's own loop, as at f6d4f5fd. The step is made from the counts, so it
+  back? → A: Track's own loop, as before this spec. The step is made from the counts, so it
   carries the 1.5′ Track error the push left; after the quiet window Track's correction
   sends its proportional term (`crates/finder/src/tracking.rs:633`, computed for a
   pointing's 0.5 s) once a second (`crates/finder/src/tracking.rs:1335`), so it
@@ -109,10 +118,31 @@ axis and rate. Those three quotations are the owner's only logged words on the f
   so a Track-on step's `motion` names the nudge while the step is made and then reads
   Track's own start again (US3-S1).
 
+### Session 2026-11-27 (the flip)
+
+- Q: How were the ten open decisions answered? → A: Decision 9 by the owner directly on
+  2026-11-27: (a), "Telescope moves right", the telescope turns the way the arrow points.
+  The other nine each with its recommendation, by the owner's "Yes, all three" to the
+  seat's question whether it should flip 053, 054 and 055 itself with its recommended
+  answers: (a) for decisions 1, 2, 3, 5, 6, 7 and 8, (e′) for decision 4 and (c) for
+  decision 10.
+- Q: What moved on `main` between the draft and the flip? → A: 052, 053 and 054 landed,
+  at f72b77d2. 053 changed `crates/finder/src/goto.rs` (the second sync's band and plain
+  failure, the field check, `goto.frame_id` and `goto.frame_time`); 054 rewrote
+  `crates/finder/web/src/components/ImagingPage.tsx` (the kept picture) and changed
+  `api.ts`, `dist`, the README, `GLOSSARY.md` and the motion test `main.rs`. Every
+  `path:line` here into those files was re-read there and moved where its line moved; the
+  Nudge block's place on the Imaging page (after the imaging frame, outside the ready
+  camera's sections) holds on 054's page. The probe's story commits replayed onto
+  f72b77d2 with no conflict but `dist`, and with `dist` rebuilt every gate passed there.
+  Nothing this spec requires or tests changed.
+
 ## Owner decisions
 
-None is answered yet. Each keeps its options and its evidence, and the scenarios and
-the record are written to the recommendations. One general rule is behind decisions 1,
+All ten are settled by the owner on 2026-11-27: decision 9 answered (a) by the owner
+directly, the other nine each with its recommendation, (a) for 1, 2, 3, 5, 6, 7 and 8, (e′)
+for 4 and (c) for 10. Each keeps its options and its evidence; the scenarios and the record
+were written to the recommendations, so no scenario changed for them. One general rule is behind decisions 1,
 4, 5 and 6: **a nudge is one step on the sky, never a sync, never a slip and never read
 as a push. Every moved axis ends its step moving the way it is next driven: up from
 0.5° below, as a GoTo's approach, with Track off; Track's own way with Track on. With
@@ -123,7 +153,7 @@ the model's epochs; its own parts are the step, the view the arrows follow, Trac
 step, the quiet window and the refusals while a step or a push by hand is still being
 made.
 
-1. **Which frame the arrows follow** (FR-003 to FR-005). Recommended (a): **a choice of
+1. **Which frame the arrows follow** (FR-003 to FR-005). Answered (a): **a choice of
    three views**: the mount's own (up is higher altitude, right a clockwise turn), the
    finder camera's live views as the page draws them, turned by the chart rotation, and
    the imaging camera's frame from its last solved imaging solve. Before a live pointing
@@ -141,7 +171,7 @@ made.
    route, a click on the Imaging page's frame and their tests, about 9 KB, a story of its
    own on 054's Imaging page; the owner's logged words ask for buttons, so it is
    recommended as a follow-up spec, not built here.
-2. **The step sizes** (FR-002). Recommended (a): **fine 30″ and coarse 4′ in every view**:
+2. **The step sizes** (FR-002). Answered (a): **fine 30″ and coarse 4′ in every view**:
    fine is about 55 pixels of the imaging camera (0.5475″ a pixel) and the field night's
    35″ GoTo error is one press; coarse is about 438 pixels of the imaging camera and 53
    of the finder camera (4.55″ a pixel), and the field night's 6.2′ to 6.6′ offset is one
@@ -151,11 +181,11 @@ made.
    (c) a tenth of the chosen view's frame (about 3′ for the imaging camera, about 7′ for
    the finder camera's measured 1.617° × 1.21° field). Instead also: (b) one step of 1′;
    (d) steps the owner sets on Setup.
-3. **Press or hold** (FR-001). Recommended (a): **one press, one step**: the move's end
+3. **Press or hold** (FR-001). Answered (a): **one press, one step**: the move's end
    is known before it starts, so the guards check its whole path, and a phone that loses
    a release cannot leave the telescope running. Instead: (b) hold to move at a rate and
    stop on release (a release watchdog and a rate rule of its own).
-4. **Track and a nudge** (FR-010 to FR-012). Recommended (e′): **the place Track holds
+4. **Track and a nudge** (FR-010 to FR-012). Answered (e′): **the place Track holds
    moves by the step and Track makes the step at once, each moved axis going 0.5° past
    its end against the way Track drives it and coming back**, so its gears end on the
    flank Track drives them on. Evidence (run, simulated time): every step each way at
@@ -175,14 +205,14 @@ made.
    up the backlash: 529″ off, read as a push, a slip and two new epochs; (f) refuse a
    press against the gears, with words: half the arrows refused at any moment (down and
    left at the Track rig and near transit, up and left on the setting target).
-5. **Whether a nudge becomes a sync** (FR-013). Recommended (a): **never**: a nudge
+5. **Whether a nudge becomes a sync** (FR-013). Answered (a): **never**: a nudge
    writes nothing to the pointing model, opens no zero-point epoch and marks no slip, and
    the live solve's syncs go on as before (053's rules, whatever they become, are not
    touched). Evidence (run): after the presses the model's epoch was the one before them,
    `slip_pending` stayed false, and the live solve recorded new syncs (US1-S1, US3-S1).
    Instead: (b) mark a slip, as a push by hand does; (c) make the next solve a sync of its
    own (053's to decide).
-6. **Guards** (FR-006 to FR-009). Recommended (a): **every guard of a direct axis move,
+6. **Guards** (FR-006 to FR-009). Answered (a): **every guard of a direct axis move,
    every moved axis approaching from below with GoTo's words, the reservation and a
    refusal near the zenith**: the Sun guard, the night's sync, the minimum altitude (an
    end below it answers `the position is below the minimum altitude`, an approach below
@@ -194,7 +224,7 @@ made.
    it, at the tube's true 84.85°, it kept within 14.3 % (US1-S5's bound 25 %). Instead:
    (b) the draft's approach on falling axes only (a first up press after Track, a push or
    a Stop takes up the backlash); (c) no zenith refusal.
-7. **The page** (FR-017 to FR-019). Recommended (a): **one Nudge block in two places**:
+7. **The page** (FR-017 to FR-019). Answered (a): **one Nudge block in two places**:
    in the main page's guidance block under Track, which shows only with a session target
    (`crates/finder/web/src/components/GuidanceBlock.tsx:21`), opening on the mount's
    view; and on the Imaging page after the imaging camera's frame, with or without a
@@ -203,17 +233,17 @@ made.
    page half builds on 054's rewritten page once this spec is re-anchored. Instead:
    (b) the guidance block only (the draft's; the imaging camera's arrows then sit on a
    page without its frame); (c) the Imaging page only; (d) Setup's mount section.
-8. **MCP** (FR-014). Recommended (a): **a `nudge` tool taking the route's three
+8. **MCP** (FR-014). Answered (a): **a `nudge` tool taking the route's three
    arguments**, logged and rate-limited as every moving tool is. Instead: (b) no tool.
 9. **When you press the right arrow while watching the imaging camera's frame, should
    the telescope turn right so the stars slide left, as a hand controller does, or should
-   the stars slide right?** (FR-002). Recommended (a): **the telescope turns the way the
+   the stars slide right?** (FR-002). Answered (a): **the telescope turns the way the
    arrow points and the stars slide the other way**, as hand controllers, mount panels and
    manual slews name their arrows; the logged words ("nudge the scope onto it"; "up and
    down are altitude") name the telescope's move. Instead: (b) the stars slide the way the
    arrow points. Answering (b) changes one angle in FR-002, φ to φ + 180°, and the
    scenarios' expected angles with it.
-10. **Track turned on after nudges made with Track off** (FR-015). Recommended (c):
+10. **Track turned on after nudges made with Track off** (FR-015). Answered (c):
     **as today**: Track on GoTos the session's target first when the pointing is more
     than 1′ from it (015's FR-014), so it undoes Track-off nudges; the README says to
     centre with Track on. Evidence (run): two coarse right presses took the eyepiece
@@ -493,7 +523,7 @@ buttons.
   ends when Track does, `halted` with Track's reason. Not run for a nudge.
 - **Near the minimum altitude.** A press whose end or approach would go below it is
   refused (US1-S3). A telescope already below it may not go lower (the floor `move_axis`
-  uses, `crates/finder/src/goto.rs:200`), and since every moved axis approaches from
+  uses, `crates/finder/src/goto.rs:202`), and since every moved axis approaches from
   0.5° below, an altitude press there is refused too: such a telescope climbs with a
   GoTo, not by nudges. Not run for the low start.
 - **Across the Sun guard or the cable's turn.** Refused with `no path keeps clear of the
@@ -584,7 +614,7 @@ buttons.
   it as `axis_move` with `tool` `nudge` and `state` `moving`, then `done` or `halted`
   with its reason (016's FR-014 and FR-022).
 - **FR-008**: While a direct axis move runs, `api::start_motion` SHALL refuse the tools
-  `nudge` and `track`, beside those it refuses at f6d4f5fd (`goto`, `second_sync`,
+  `nudge` and `track`, beside those it refuses before this spec (`goto`, `second_sync`,
   `goto_target`, `goto_axis_position`, `move_axis`), with 409 `the mount is already
   moving`: a second press, at the approach's turnaround too, and Track turned on from the
   page during a press or an MCP direct move, on target or off (owner approval 3).
@@ -676,7 +706,7 @@ buttons.
   session, and a refusal SHALL show its `error` in the block's alert.
 - **FR-018**: The Imaging page SHALL show the same Nudge block after its imaging frame,
   with or without a session target and with or without a ready imaging camera (after
-  the camera's sections, `crates/finder/web/src/components/ImagingPage.tsx:293`, not
+  the camera's sections, `crates/finder/web/src/components/ImagingPage.tsx:302`, not
   inside them), its `Arrows follow` box first on `the imaging camera` when the session
   has `imaging_camera`. `ImagingPage` SHALL take the session and its refresh from
   `App`, and the page's session SHALL copy `axis_move`.
@@ -717,7 +747,7 @@ buttons.
 ## Assumptions
 
 - **Earlier features are in place.** Every spec in `depends_on_landed` has landed. Every
-  citation here was read at f6d4f5fd.
+  citation here was read at f6d4f5fd, and those in files 052 to 054 changed re-read at f72b77d2.
 - **The simulator stands for the mount and cameras** in the gates: its mount's backlash,
   counts, rates and tilted base, its finder camera with the zenith at frame-up, and its
   imaging camera at the angle a test sets. The finder camera's roll is proven by a unit

@@ -54,13 +54,13 @@ of it), across = −cos q·east + sin q·north and up = sin q·east + cos q·nor
 No equatorial direction is used.
 
 **One movement rule.** Every moved axis ends its step moving the way it is next driven.
-With Track off that is a GoTo's way: `Planner::direct` (`crates/finder/src/goto.rs:220`)
+With Track off that is a GoTo's way: `Planner::direct` (`crates/finder/src/goto.rs:222`)
 predicts the altitude and azimuth at the axes' counts, adds the step (azimuth divided by
 the altitude's cosine), and asks the model's inverse at both places; the end is the
 counts plus the difference, so the model's own errors cancel to first order; every axis
 whose counts change first goes to 0.5° (014's `APPROACH`,
 `crates/finder/src/goto.rs:23`, 2,250 counts at 1,620,000 a turn) below its end, as a
-GoTo does (`crates/finder/src/goto.rs:370`). With Track on it is Track's way: the
+GoTo does (`crates/finder/src/goto.rs:377`). With Track on it is Track's way: the
 waypoint is 0.5° past the end against the way Track drives that axis
 (`Control::direction`), so the gears end on Track's flank and Track's next command
 takes up nothing. GoTo's approach from below on a setting target, where Track drives
@@ -258,7 +258,7 @@ night has no sync yet`); `last = current + round(there − here)`; for each axis
 Result<f64, String>`: `ready()`; a floor of the lower of the predicted altitude now and
 `min_alt`, less 10⁻⁶; `last` below it: `the position is below the minimum altitude`;
 `first` below it: `approach would go below the minimum altitude`; `safe_path` of
-`[last]` or `[first, last]` (`crates/finder/src/goto.rs:426`), none: 014's path words;
+`[last]` or `[first, last]` (`crates/finder/src/goto.rs:433`), none: 014's path words;
 answers the path's duration.
 
 ### `crates/finder/src/mcp/guard.rs` and `api.rs` (US1)
@@ -353,7 +353,7 @@ After the `POST /api/goto` row (`crates/finder/README.md:318`):
 | `POST /api/mount/nudge` | JSON `{"direction":D,"step":S,"view":V}`: D is `up`, `right`, `down` or `left`, S `fine` (30″) or `coarse` (4′), V `mount`, `finder_camera` or `imaging_camera`. Move the telescope one step on the sky that way in that view; answers 200 with `up_arcsec` and `right_arcsec` (the step in the mount's view) and `moved` (`axes`, or `track` while Track is on), or 400, 409 or 415 with a JSON `error`. Same-origin writes only. |
 ```
 
-Before `## Recording a night` (`crates/finder/README.md:637`), with two blank lines
+Before `## Recording a night` (`crates/finder/README.md:665`), with two blank lines
 before each heading as there:
 
 ```markdown
@@ -389,8 +389,8 @@ with `_Avoid_: jog, slew, manual move`.
 ### The page (`crates/finder/web/src/`, US5)
 
 `api.ts`: `ObservingSession` gains `axis_move?: { state: string; tool: string; reason?:
-string }` after `imaging_camera` (`crates/finder/web/src/api.ts:852`); before
-`postRecord` (`crates/finder/web/src/api.ts:946`):
+string }` after `imaging_camera` (`crates/finder/web/src/api.ts:862`); before
+`postRecord` (`crates/finder/web/src/api.ts:956`):
 
 ```ts
 export type NudgeDirection = "up" | "right" | "down" | "left";
@@ -422,8 +422,8 @@ without `axis_move` reads `Nudged` and `useSession.ts`'s copy keeps it `Nudging`
 props `session?: ObservingSession` and `onChange?: () => void` and renders
 `{session && <NudgeBlock session={session} onChange={onChange} first="imaging_camera" />}`
 after the ready camera's sections, outside `{camera != null && settings != null && (...)}`
-(`crates/finder/web/src/components/ImagingPage.tsx:168` to
-`crates/finder/web/src/components/ImagingPage.tsx:293` at f6d4f5fd), so it shows with or
+(`crates/finder/web/src/components/ImagingPage.tsx:174` to
+`crates/finder/web/src/components/ImagingPage.tsx:302` at f72b77d2), so it shows with or
 without a ready imaging camera (on 054's page, after its frame and outside its ready
 camera's sections). `App.tsx` passes `session={session}
 onChange={changed}` (`crates/finder/web/src/App.tsx:200`).
@@ -556,8 +556,8 @@ press during an imaging run or a live stack; the imaging camera turned after a s
   planning or correction is changed.
 - `mcp::guard::start` keeps its signature and calls `start_by` with `"mcp"`.
 - `Tracker::follow` and 038's push check are unchanged; `nudge` reuses `follow`'s
-  clearing; with no step pending the rate loop commands what it commanded at f6d4f5fd.
-- The README's new section and the MCP paragraph keep every sentence at f6d4f5fd.
+  clearing; with no step pending the rate loop commands what it commanded before this spec.
+- The README's new section and the MCP paragraph keep every sentence they held before this spec.
 - `NudgeBlock` posts only `postNudge`; `GuidanceBlock` gains one import and one line;
   `ImagingPage` two imports, two optional props and one line.
 - The README section's sentences that US4-S3 does not quote (the approach, the settling
@@ -650,18 +650,22 @@ The gates, copied from `ergane.yaml`:
 ## Prerequisites before this spec is flipped to `ready`
 
 - 052, 053 and 054 have landed, in that order, and this trio is re-anchored on that
-  `main`: every `path:line` read again; `goto.rs`'s additions placed against 053's;
+  `main`. Met at f72b77d2: every `path:line` read again; `goto.rs`'s additions placed against 053's;
   the README, `GLOSSARY.md` and test `main.rs` additions placed after theirs; and the
   Imaging page's Nudge block placed on 054's rewritten `ImagingPage.tsx`, after its
   imaging frame and outside its ready camera's sections, with US5-S4 and the
-  Refinement Record's last writer read again. Waits for 052, 053 and 054 to land and
-  the seat's re-anchor.
-- The owner's ten decisions are answered. Waits for the flip ask.
+  Refinement Record's last writer read again. Every cite into a changed file moved with its
+  line; the record's entries name 053 US2, 054 US3 and 054 US4; the Nudge block sits after
+  054's imaging frame, outside its ready camera's sections; the probe's commits replayed
+  onto f72b77d2 with only `dist` to rebuild.
+- The owner's ten decisions are answered. Met on 2026-11-27: decision 9 (a) by the owner,
+  the other nine with their recommendations.
 - A probe round from this text alone, folded. Met: probe round 1 on `probe/055-r1`
   (tip a6a92960, 3 blocking and 14 clarity defects), folded here; its new steps pass
   and bite on 8b7212bb (§ What was run).
-- The page half has run once on the re-anchored base (`CI=1 npm run e2e`). Waits for the
-  re-anchor; on 8b7212bb it passed 38 of 38.
+- The page half has run once on the re-anchored base (`CI=1 npm run e2e`). Met: on the
+  probe's code replayed onto f72b77d2, it passed 38 of 38, with every other gate 0; on
+  8b7212bb it passed 38 of 38.
 - No operator-staged file is needed. Met: every story writes only code, tests, docs
   and `dist`.
 
@@ -747,7 +751,7 @@ are in spec.md, and flipping to `ready` gives them.
 
 ```yaml
 version: 1
-reviewed_revision: f6d4f5fd482ccc9d5b634ef1aa5124c112769583
+reviewed_revision: f72b77d2b7386932b824700288677039e096864f
 stories:
   US1:
     tests:
@@ -788,7 +792,7 @@ stories:
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
       - "AxisMove's Position and Rate, Planner::direct's arms for them and GoTo's planning and correction are unchanged (goto.rs gains only additions)"
-      - "MCP's goto_axis_position and move_axis answer, refuse and log as at f6d4f5fd; start_motion reserves its five tools as before and adds nudge and track"
+      - "MCP's goto_axis_position and move_axis answer, refuse and log as before this spec; start_motion reserves its five tools as before and adds nudge and track"
       - "the pointing model, the live solve and session.rs are not written"
     checks:
       development:
@@ -814,10 +818,10 @@ stories:
         disposition: merge_order
         reason: "055 depends_on_landed 051, whose US2 last changed api.rs (f9706cc0)"
       - path: crates/finder/src/goto.rs
-        other_spec: 024-mount-link-recovery
-        other_story: US3
+        other_spec: 053-second-sync-fits-base-tilt
+        other_story: US2
         disposition: merge_order
-        reason: "055 depends_on_landed 024, whose US3 last changed goto.rs (20839158)"
+        reason: "055 depends_on_landed 053, whose US2 last changed goto.rs (9e344373)"
       - path: crates/finder/src/lib.rs
         other_spec: 051-tools-page-focuses-either-camera
         other_story: US1
@@ -829,10 +833,10 @@ stories:
         disposition: merge_order
         reason: "055 depends_on_landed 017, whose US2 last changed mcp/guard.rs (4273369d)"
       - path: crates/finder/tests/motion/main.rs
-        other_spec: 050-tools-page-aligns-finder-camera
+        other_spec: 054-focus-pause-gives-camera-back
         other_story: US3
         disposition: merge_order
-        reason: "055 depends_on_landed 050, whose US3 last changed motion/main.rs (6b70a4a2)"
+        reason: "055 depends_on_landed 054, whose US3 last changed motion/main.rs (f72b77d2)"
     open_questions: []
   US2:
     tests:
@@ -927,8 +931,8 @@ stories:
         assertion: "015's rate loop and correction as before 055 when no step is pending"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
-      - "Tracker::follow, commanded and the push check are unchanged; with no step pending the rate loop commands what it commanded at f6d4f5fd and checks_push is as before"
-      - "motion reads as at f6d4f5fd but while a Track-on step is made"
+      - "Tracker::follow, commanded and the push check are unchanged; with no step pending the rate loop commands what it commanded before this spec and checks_push is as before"
+      - "motion reads as before this spec but while a Track-on step is made"
       - "Track's keyhole, backlash take-up and steady mark behave as before when no step is pending"
     checks:
       development:
@@ -985,8 +989,8 @@ stories:
         assertion: "050's README paragraph before ### MCP under WSL2 and its sections' order"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
-      - "every MCP tool at f6d4f5fd keeps its name, schema, description and answers"
-      - "every README sentence and glossary entry at f6d4f5fd stays, but Direct axis move's words (owner approval 7)"
+      - "every MCP tool before this spec keeps its name, schema, description and answers"
+      - "every README sentence and glossary entry before this spec stays, but Direct axis move's words (owner approval 7)"
     checks:
       development:
         - "cargo nextest run -p finder --locked --test mcp -E 'test(/^nudge::/)'"
@@ -1004,15 +1008,15 @@ stories:
     no_write_reason: ""
     shared_writes:
       - path: GLOSSARY.md
-        other_spec: 051-tools-page-focuses-either-camera
+        other_spec: 054-focus-pause-gives-camera-back
         other_story: US3
         disposition: merge_order
-        reason: "055 depends_on_landed 051, whose US3 last changed GLOSSARY.md (9424a371)"
+        reason: "055 depends_on_landed 054, whose US3 last changed GLOSSARY.md (f72b77d2)"
       - path: crates/finder/README.md
-        other_spec: 051-tools-page-focuses-either-camera
+        other_spec: 054-focus-pause-gives-camera-back
         other_story: US3
         disposition: merge_order
-        reason: "055 depends_on_landed 051, whose US3 last changed the README (9424a371)"
+        reason: "055 depends_on_landed 054, whose US3 last changed the README (f72b77d2)"
       - path: crates/finder/src/mcp/tools.rs
         other_spec: 051-tools-page-focuses-either-camera
         other_story: US3
@@ -1107,10 +1111,10 @@ stories:
     no_write_reason: ""
     shared_writes:
       - path: crates/finder/web/dist
-        other_spec: 051-tools-page-focuses-either-camera
+        other_spec: 054-focus-pause-gives-camera-back
         other_story: US4
         disposition: merge_order
-        reason: "055 depends_on_landed 051, whose US4 last built dist (f6d4f5fd)"
+        reason: "055 depends_on_landed 054, whose US4 last built dist (337dd09f)"
       - path: crates/finder/web/playwright.config.ts
         other_spec: 051-tools-page-focuses-either-camera
         other_story: US4
@@ -1122,20 +1126,20 @@ stories:
         disposition: merge_order
         reason: "055 depends_on_landed 050, whose US5 last changed App.tsx (c75a6e76)"
       - path: crates/finder/web/src/api.ts
-        other_spec: 051-tools-page-focuses-either-camera
+        other_spec: 054-focus-pause-gives-camera-back
         other_story: US4
         disposition: merge_order
-        reason: "055 depends_on_landed 051, whose US4 last changed api.ts (f6d4f5fd)"
+        reason: "055 depends_on_landed 054, whose US4 last changed api.ts (337dd09f)"
       - path: crates/finder/web/src/components/GuidanceBlock.tsx
         other_spec: 022-altaz-guidance
         other_story: US1
         disposition: merge_order
         reason: "055 depends_on_landed 022, whose US1 last changed GuidanceBlock.tsx (9e23cb1f)"
       - path: crates/finder/web/src/components/ImagingPage.tsx
-        other_spec: 042-imaging-run-page-and-mcp
-        other_story: US9
+        other_spec: 054-focus-pause-gives-camera-back
+        other_story: US4
         disposition: merge_order
-        reason: "055 depends_on_landed 042, whose US9 last changed ImagingPage.tsx (5d8f5353); 054 rewrites it before 055 lands and the re-anchor reads its last writer again"
+        reason: "055 depends_on_landed 054, whose US4 last rewrote ImagingPage.tsx (337dd09f)"
       - path: crates/finder/web/src/useSession.ts
         other_spec: 032-imaging-solve-and-aim-point
         other_story: US6
