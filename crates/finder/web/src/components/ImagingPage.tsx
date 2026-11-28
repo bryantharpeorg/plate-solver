@@ -16,6 +16,7 @@ import { FocusBlock } from "./FocusBlock";
 import { ImagingSolveBlock } from "./ImagingSolveBlock";
 import { ImagingRunBlock } from "./ImagingRunBlock";
 import { NudgeBlock } from "./NudgeBlock";
+import { PreviewBlock } from "./PreviewBlock";
 import { StackBlock } from "./StackBlock";
 import { SteeringBlock } from "./SteeringBlock";
 
@@ -310,6 +311,7 @@ export function ImagingPage({
               )}
             </div>
           </section>
+          <PreviewBlock />
         </>
       )}
       {session && <NudgeBlock session={session} onChange={onChange} first="imaging_camera" />}

@@ -270,7 +270,7 @@ export interface ImagingSettings {
 
 export interface ImagingFrame {
   id: number;
-  state: "exposing" | "receiving" | "saved" | "failed" | "aborted";
+  state: "exposing" | "receiving" | "saved" | "shown" | "failed" | "aborted";
   purpose: string;
   exposure_ms: number;
   start?: number;
@@ -279,6 +279,8 @@ export interface ImagingFrame {
   received_at?: number;
   file?: string;
   preview?: string;
+  /** `/api/imaging/frames/<id>/crop.jpg`, set when a preview frame is shown (058). */
+  crop?: string;
   node_file?: string;
   node_save_error?: string;
   error?: string;
@@ -783,6 +785,11 @@ export async function putImagingSteering(edit: {
 
 export async function postImagingFrame(): Promise<ImagingView> {
   return json(await fetch("/api/imaging/frame", { method: "POST" }));
+}
+
+// One preview frame, shown and saved nowhere (058): the view's frame, in flight.
+export async function postImagingPreview(): Promise<ImagingView> {
+  return json(await fetch("/api/imaging/preview", { method: "POST" }));
 }
 
 export async function postImagingAbort(): Promise<ImagingView> {
