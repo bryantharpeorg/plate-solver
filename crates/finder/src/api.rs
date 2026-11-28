@@ -628,7 +628,7 @@ pub fn router(state: AppState) -> Router {
 }
 
 fn console_routes(state: AppState) -> Router {
-    let mut routes = Router::new()
+    let mut routes = crate::pairing::routes(&state)
         .route("/api/health", get(health))
         .route("/api/samples", get(list_samples))
         .route("/api/samples/{name}", get(sample_file))
