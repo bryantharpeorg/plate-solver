@@ -118,6 +118,9 @@ pub struct AppState {
     live: Option<Arc<Live>>,
     recordings: Option<Arc<Recorder>>,
     finder_focus: Arc<crate::finder_focus::FinderFocus>,
+    /// The imaging camera's frame for the nudge arrows, kept from the latest imaging
+    /// solve that solved (055 FR-005).
+    pub(crate) nudge_kept: Arc<Mutex<Option<crate::nudge::Kept>>>,
     imaging: Option<Arc<crate::imaging::Imaging>>,
     imaging_runner: Option<Arc<crate::imaging::run::Runner>>,
     calibration: Option<Arc<crate::imaging::calibration::service::Calibration>>,
@@ -158,6 +161,7 @@ impl AppState {
             live: None,
             recordings: None,
             finder_focus: Arc::default(),
+            nudge_kept: Arc::default(),
             imaging: None,
             imaging_runner: None,
             calibration: None,
