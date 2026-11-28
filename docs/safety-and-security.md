@@ -55,18 +55,28 @@ under the console's own guards. How to handle that case is still an open design 
 
 ## Network exposure
 
-**The console has no login.**
+**The console asks every other device for a token, over plain HTTP.**
 
 - By default it listens on `127.0.0.1:8080`, so only the same computer can reach it.
-- With `--listen 0.0.0.0:8080`, anyone who can reach that port on your network can move the
-  telescope, through the page's API or through `/mcp`. Only do this on a network you trust.
+- With `--listen 0.0.0.0:8080`, it listens on every network its computer joins. Every device
+  other than that computer must then present the console token, kept by a phone's browser as a
+  cookie or sent by an MCP client as a bearer header, before the console answers it; a device
+  that sends 10 wrong tokens within 60 s is answered 429. The crate reference's
+  [console token](../crates/finder/README.md#the-console-token) section says where it is.
+- **The token crosses the air in the clear** on every request, so anyone who can listen to the
+  network can copy it. Only do this on a network you trust, such as a phone's own hotspot.
+- **Any device, and any web page open in a browser on that network, can stop the mount.**
+  `POST /api/stop` needs no token, no `Origin` and no allowed host.
 - **Browser writes are protected against other websites.** A write must come from the console's
   own origin, and the `Host` header must be an IP address, `localhost` or a name you allowed with
   `--allow-host`. That blocks DNS rebinding.
+- **Every request but Stop must name an allowed host,** from the console's own computer too, so
+  a page on a rebound name cannot read the console either.
 - **Requests with no `Origin` header are allowed.** A script such as `curl` is not a browser, so
   it is accepted.
-- **`/mcp` has no token.** It also requires the caller to be on the same machine or a private
-  network address (loopback, RFC 1918, link-local, or IPv6 ULA). `--no-mcp` turns it off.
+- **`/mcp` takes the same token from another device.** It also requires the caller to be on the
+  same machine or a private network address (loopback, RFC 1918, link-local, or IPv6 ULA).
+  `--no-mcp` turns it off.
 
 **The scope link uses a shared token, without encryption.**
 

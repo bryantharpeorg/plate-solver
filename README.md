@@ -131,9 +131,11 @@ claude mcp add --transport http finder http://localhost:8080/mcp
 ```
 
 Every moving tool runs the page's guards, the page says when an MCP client is moving the
-telescope, and the page's Stop ends any motion. MCP calls carry no token. The console listens
-on localhost by default; with `--listen 0.0.0.0:8080`, anyone on your network can move the
-telescope. See [the console manual](docs/guide/console.md) and
+telescope, and the page's Stop ends any motion. The console listens on localhost by default,
+and MCP calls from its own machine carry no token. With `--listen 0.0.0.0:8080`, every other
+device must present the console token, a phone once through the console's prompt and an MCP
+client as a bearer token, though any device can still stop the mount. See
+[the console manual](docs/guide/console.md) and
 [safety and security](docs/safety-and-security.md#network-exposure).
 
 Here is a session with the simulated telescope. The tool calls and replies are real, shortened.
@@ -253,7 +255,8 @@ Here is what backs it up, and where the gaps are.
   ([first light](docs/field/2026-11-13-first-light.md), [the first Track](docs/field/2026-11-20-driveway-track.md)).
 - The node stops the mount when it is stopped or shut down, but a crash or a power cut still
   ends it without a stop ([safety](docs/safety-and-security.md#what-does-not-stop-the-mount-yet)).
-- The console has no login. It listens only on localhost by default.
+- The console asks other devices for a token but speaks plain HTTP, and no test pairs a phone
+  over a real Wi-Fi. It listens only on localhost by default.
 
 ## How this repository is built
 

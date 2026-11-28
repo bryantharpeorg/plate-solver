@@ -31,7 +31,7 @@ cargo run --release -p finder -- --db my_camera.npz --samples ~/frames
 |------|---------|---------|
 | `--db PATH` | cedar's `default_database.npz` | Pattern database covering your camera's field of view. Repeat it to hold several (§ Several databases). |
 | `--samples DIR` | cedar's `medium_fov` samples | Folder of frames to offer on the page. |
-| `--listen ADDR` | `127.0.0.1:8080` | Address to serve on. `0.0.0.0:8080` lets other devices connect. |
+| `--listen ADDR` | `127.0.0.1:8080` | Address to serve on. `0.0.0.0:8080` lets other devices connect; they must present the console token (§ The console token). |
 | `--state DIR` | `$XDG_STATE_HOME/finder`, otherwise `~/.local/state/finder` | Folder holding the observing session in `session.json`. |
 | `--imaging-dir DIR` | `imaging/` in the state folder | Folder for imaging frames. |
 | `--simulate` | off | In-process simulator on a virtual clock, with an isolated session and pairing. |
@@ -40,7 +40,7 @@ cargo run --release -p finder -- --db my_camera.npz --samples ~/frames
 | `--tube-alt DEG` | | The tube's altitude when the console starts, from a level, 0 to 90. Requires `--mount-sky`. |
 | `--mount-sky-night UTC` | | Run the console on a night clock from `YYYY-MM-DDTHH:MM:SSZ`, so a daylight test can move the mount. The Sun guard then checks that clock's Sun. Requires `--mount-sky` and `--covers-on`. |
 | `--covers-on` | off | Confirm that the mirror's cover and the finder's cap are on. Requires `--mount-sky-night`. |
-| `--allow-host NAME` | none | DNS name permitted for same-origin writes, in addition to IP literals and `localhost`. Repeat for multiple names. |
+| `--allow-host NAME` | none | DNS name the console answers, in addition to IP literals and `localhost`; any other name gets only `POST /api/stop`. Repeat for multiple names. |
 | `--licenses` | | Print the third-party notices for the embedded page and data, and exit. |
 
 ### From a phone
@@ -62,6 +62,43 @@ Location ("what is up now") is entered by hand on the page. Browsers only share 
 location with pages served over HTTPS or from the same device, so "use this device's
 location" works when the phone runs the server itself.
 
+### The console token
+
+Every device other than the console's own machine must present the console token
+before the console answers it. At its first start the console writes a new token,
+twelve letters and digits in three groups such as `ABCD-EFGH-JKMN`, to `console-token`
+in its state folder, readable by its owner only; it never prints the token. Read it
+over your own ssh, for example with `cat ~/.local/state/finder/console-token`, or in
+the folder the console's `--state` names. Or write your own token there, 8 to 64
+letters and digits you can type from memory at the eyepiece, and start the console
+again.
+
+Pair the phone once, at home: start the console with `--listen 0.0.0.0:8080` and
+`--allow-host` with its computer's `.local` name, open that name on the phone, such as
+`http://<the computer's name>.local:8080`, and type the token into the prompt. Case,
+dashes and spaces do not matter, and O reads as 0, I and L as 1. The browser keeps it
+in a cookie for 400 days, for that name only, so a new address or name asks again. If
+the phone cannot find the name, open the address the console's start line prints
+instead. Then turn Night on once; the page keeps it for the same name. Every page,
+live stream and picture then works as it does on the console's own machine. Another
+device's MCP client, or curl, sends the token as `Authorization: Bearer <token>`.
+
+- Clients on the console's own machine are never asked for the token, an ssh tunnel to
+  127.0.0.1:8080 among them.
+- Every request but `POST /api/stop` must open the console at an IP address,
+  `localhost` or a name given with `--allow-host`, from the console's own machine too.
+- `POST /api/stop` and MCP's `stop` and `stop_all` stop the mount from any device and
+  any web page, paired or not.
+- A device that sends 10 wrong tokens within 60 s is answered 429 until the oldest of
+  them is a minute old.
+- To change the token, stop the console, delete `console-token` or write your own in
+  its place, and start the console again; every paired browser then asks again.
+- A browser sends the cookie to every service at the console's address, whatever its
+  port, so run one console per address.
+- The console listens on every network its computer joins, and it speaks plain HTTP,
+  so the token crosses the air unencrypted on every request. Use it on a private
+  network you trust, such as a phone's own hotspot, never on a public one.
+
 ## MCP clients
 
 The console serves Streamable HTTP MCP at `/mcp` on the same port as the page.
@@ -77,7 +114,9 @@ the names given with `--allow-host`, just as the page's writes do. For example,
 `http://surface.local:8080/mcp`. Names have no scheme or port, match exactly
 ignoring ASCII case, and the flag may be repeated.
 
-There is no token or console confirmation for MCP calls. Every moving tool runs
+An MCP client on the console's own machine needs no token; another device's client
+sends the console token as `Authorization: Bearer <token>` (§ The console token).
+There is no console confirmation for MCP calls. Every moving tool runs
 the page's guards: Sun guard, minimum altitude, cable wind and mount range checks,
 plus the scope link's watchdog and tracking's safe endings. Direct axis moves
 need a sync so the console can check their path on the sky. While an MCP client

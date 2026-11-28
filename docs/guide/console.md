@@ -52,7 +52,7 @@ WSL2. It needs nothing Windows-specific.
 | `--mount-sky`, `--tube-alt DEG` | off | Daylight testing on the real mount: stars are drawn from the mount's encoders instead of the camera. |
 | `--mount-sky-night UTC`, `--covers-on` | off | With `--mount-sky`, a night clock for daylight GoTo tests. `--covers-on` confirms the mirror cover and finder cap are on. |
 | `--no-mcp` | MCP on | Turns the `/mcp` endpoint off. |
-| `--allow-host NAME` | none | A DNS name allowed in the `Host` header for writes and `/mcp`, besides IP addresses and `localhost`. Repeatable. |
+| `--allow-host NAME` | none | A DNS name allowed in the `Host` header, besides IP addresses and `localhost`; any other name gets only Stop. Repeatable. |
 | `--licenses` | | Prints the third-party notices for the embedded page and data. |
 
 ## A pattern database for your finder
@@ -93,7 +93,13 @@ the mount. The node's imaging camera uses a second connection to the same node.
 
 Then open `http://<console-LAN-IP>:8080` on the phone. Every open page shares one session.
 
-**Security.** Anyone on that network can then use the page, the API and `/mcp`. See
+**The phone asks for the console token once.** Read it from `console-token` in the console's
+state folder over your own ssh, or write your own token there; the crate reference's
+[console token](../../crates/finder/README.md#the-console-token) section says how. Pair by the
+name you will use at the telescope, since the browser keeps the pairing for that name only.
+
+**Security.** Every other device must present the console token, but the console speaks plain
+HTTP and any device can stop the mount. See
 [network exposure](../safety-and-security.md#network-exposure).
 
 **Under WSL2's default NAT networking,** the console's address is not the laptop's network
@@ -103,7 +109,7 @@ rule, or switch WSL to mirrored networking. The crate reference's section
 gives both recipes.
 
 **If you reach the console by name** (for example a `.local` name), add that name with
-`--allow-host`. Otherwise writes are refused.
+`--allow-host`. Otherwise the console answers that name only with Stop.
 
 ## Imaging prerequisites
 
@@ -159,14 +165,16 @@ Finder recordings (Setup › Recording) go to `recordings/<UTC>/` in the state f
 ## Connect an AI assistant
 
 The console serves MCP (Streamable HTTP) at `/mcp` on the same port as the page. It is
-stateless and takes no token. Setup's **MCP** section shows the address to copy.
+stateless, and on the console's own machine it takes no token. Setup's **MCP** section shows the
+address to copy.
 
 ```sh
 claude mcp add --transport http finder http://localhost:8080/mcp
 ```
 
 - **From another device,** use the console's network address. `/mcp` answers only callers on
-  the same machine or a private network address, and needs `--listen 0.0.0.0:8080`.
+  the same machine or a private network address, and needs `--listen 0.0.0.0:8080` and the
+  console token as `Authorization: Bearer <token>`.
 - **Every moving tool passes the page's guards.** Moving tools are limited to two calls a
   second, and each call is logged to standard error as `mcp <tool> <args> -> <result>`.
 - **`stop` and `stop_all` are always accepted.**
