@@ -6,6 +6,7 @@
 mod support;
 
 mod centre;
+mod centre_aim;
 mod centre_run;
 mod centre_tap;
 mod goto;

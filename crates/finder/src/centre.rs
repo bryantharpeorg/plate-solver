@@ -18,7 +18,8 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 /// How long a solve holds, in seconds after its frame ended: a centring
-/// refuses an older one.
+/// refuses an older one, and the finder camera's first solve within it after a
+/// centring takes the aim point from the place Track holds.
 pub const AGE_S: f64 = 60.0;
 
 /// The body of a centring: none of the three for the session's target, or
@@ -171,6 +172,7 @@ pub async fn centre(
         tracker.centre(from, to, model).await
     })
     .await?;
+    state.session().centred(now + AGE_S);
     Ok(CentreView {
         frame_id: solve.frame_id,
         offset_arcsec,

@@ -170,6 +170,8 @@ struct TrackRun {
     check_armed: bool,
     /// The follow's own sync is recorded; hand the tracker the model then.
     model_due: bool,
+    /// Until when a centring's place may give the aim point (057).
+    centred: Option<f64>,
 }
 impl TrackRun {
     fn view(&self, values: &Values, time: f64) -> TrackView {
@@ -1062,6 +1064,7 @@ impl Session {
                 push: Push::None,
                 check_armed: false,
                 model_due: false,
+                centred: None,
             });
             values.track_generation
         };
@@ -1629,6 +1632,16 @@ impl Session {
         seq
     }
 
+    /// A centring (057) has brought the place Track holds to the imaging
+    /// camera's set point: the first live pointing recorded before `until`
+    /// with Track steady takes the aim point from that place, persisted as
+    /// measured and in force at once, since its pointing is the place held.
+    pub fn centred(&self, until: f64) {
+        if let Some(run) = &mut self.values.lock().expect("observing session").track {
+            run.centred = Some(until);
+        }
+    }
+
     /// Record a live solve at the current aim pixel, timed at mapped mid-exposure.
     /// A measured aim point held back while Track was on is applied first, when
     /// Track is off, before this pointing is taken, so the pointing is the
@@ -1650,6 +1663,47 @@ impl Session {
             };
             if written {
                 *values = next;
+            }
+        }
+        if let Some(run) = &mut values.track {
+            if let Some(until) = run.centred {
+                let held = run
+                    .tracker
+                    .as_ref()
+                    .filter(|tracker| tracker.state().state == "tracking" && tracker.steady())
+                    .and_then(|tracker| tracker.target());
+                if time > until || held.is_some() {
+                    run.centred = None;
+                }
+                if time <= until {
+                    if let Some((ra, dec)) = held {
+                        if let Some((x, y)) = frame.project(math_core::UnitVector::from_radec(
+                            ra.to_radians(),
+                            dec.to_radians(),
+                        )) {
+                            let aim = Aim { x, y };
+                            if aim.validate().is_ok() {
+                                let mut next = values.clone();
+                                next.aim = Some(aim);
+                                next.aim_measured = true;
+                                next.held_aim = None;
+                                let written = match &self.state_file {
+                                    Some(path) => write_state(path, &next)
+                                        .map_err(|error| {
+                                            eprintln!(
+                                                "could not persist the centred aim point: {error}"
+                                            )
+                                        })
+                                        .is_ok(),
+                                    None => true,
+                                };
+                                if written {
+                                    *values = next;
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
         let direction = match values.aim {
