@@ -329,7 +329,7 @@ point: …` and the aim point left as it was), then the pointing is read as befo
 
 ```rust
 pub trait MountSteps: Send + Sync {
-    // ... the methods at 8b7212bb, unchanged ...
+    // ... the methods at 936b140d, unchanged ...
     /// Step the telescope so the target comes to the imaging camera's centre,
     /// from the latest imaging solve alone, with Track's own step (057).
     /// `false` when no step was made; the default makes none.
@@ -368,7 +368,7 @@ and `Ending::NotCentred`. `ConsoleMount::centre`, after its `steady_between`
 
 `CentreArguments { frame_id: Option<u64>, x: Option<f64>, y: Option<f64> }`, schema
 only, after `NudgeArguments` (`crates/finder/src/mcp/tools.rs:274`), and the tool
-`centre` before `set_tracking` (`crates/finder/src/mcp/tools.rs:489`): it reads its
+`centre` before `set_tracking` (`crates/finder/src/mcp/tools.rs:526`): it reads its
 arguments as a `CentreAsk` (a failure answers PARTS), takes `limit_move`, calls
 `centre::centre(&state, "mcp", &ask)` and logs the call as `centre`. Its description:
 "Move a real telescope so the session's target, or the point at pixel x, y of imaging
@@ -382,7 +382,7 @@ takes the aim point from that place. Answers frame_id, offset_arcsec and moved: 
 ### The README (`crates/finder/README.md`, US5)
 
 After the nudge's MCP paragraph, before `### MCP under WSL2`
-(`crates/finder/README.md:159`):
+(`crates/finder/README.md:167`):
 
 ```markdown
 Centring from an imaging solve has one tool:
@@ -394,14 +394,14 @@ Centring from an imaging solve has one tool:
   (`track`), or the route's refusal as a tool error.
 ```
 
-In `## API`, right before the `POST /api/goto` row (`crates/finder/README.md:318`):
+In `## API`, right before the `POST /api/goto` row (`crates/finder/README.md:326`):
 
 ```markdown
 | `POST /api/imaging/centre` | JSON `{}`, or `{"frame_id":N,"x":X,"y":Y}` with X and Y a pixel of imaging frame N. Bring the session's target, or that pixel's place, to the sensor's centre from the latest imaging solve, with Track on; answers 200 with `frame_id`, `offset_arcsec` (how far that place was from the sky at the sensor's centre) and `moved` (`track`), or 400, 409 or 415 with a JSON `error`. Same-origin writes only. |
 ```
 
 After `## Nudging the telescope`'s text, before `## Recording a night`
-(`crates/finder/README.md:665`):
+(`crates/finder/README.md:698`):
 
 ```markdown
 ## Centring from an imaging solve
@@ -426,8 +426,7 @@ drift: take another frame and centre again, or let a stack's steering hold it.
 
 ### The glossary (`GLOSSARY.md`, US5)
 
-After **Nudge** (055's US4 adds it after **Direct axis move**, `GLOSSARY.md:273`), before
-**Purpose label** (`GLOSSARY.md:277`):
+After **Nudge** (`GLOSSARY.md:277`), before **Purpose label** (`GLOSSARY.md:281`):
 `**Centring from an imaging solve**:`, then on the next line FR-013's words, then
 `_Avoid_: recentre (the imaging run's Track off and on to a new aim point), slew to
 solve, plate-solve sync`. The name is not **Centring** alone: the imaging run's
@@ -452,7 +451,7 @@ a session's `axis_move` with `tool` `centre` reads `moving`; the status reads `C
 stopped: <reason>` when `halted`, else `Centred <what> · Track holds it. Take another
 imaging frame to check.` `ImagingPage.tsx` imports it after `ImagingSolveBlock` and
 renders `<CentreBlock view={view} session={session} onChange={() => { onChange?.(); void refresh(); }} />`
-right after `<ImagingSolveBlock …/>` (`crates/finder/web/src/components/ImagingPage.tsx:305`).
+right after `<ImagingSolveBlock …/>` (`crates/finder/web/src/components/ImagingPage.tsx:318`).
 
 ## What was run and what was read
 
@@ -612,9 +611,9 @@ a real mount and cameras.
   procedure's lines of § Interfaces; `Script` is not written.
 - `session.rs` changes only `TrackRun`'s field, its `None`, `Session::centred` and one
   block after `record_live_pointing`'s held aim point's block; the held aim point's
-  block and everything after the new block are as at 8b7212bb.
+  block and everything after the new block are as at 936b140d.
 - The MCP tool's description has § Interfaces' words; its test pins `real telescope`.
-- The README's new paragraph, row and section keep every sentence at 8b7212bb.
+- The README's new paragraph, row and section keep every sentence at 936b140d.
 - `CentreBlock` posts only `postCentre`; `ImagingPage` gains one import and one element.
 
 ## Shapes that existing tests pin
@@ -628,12 +627,12 @@ a real mount and cameras.
 - **The aim point and the push.** 032's held aim reading
   (`crates/finder/tests/motion/imaging_track.rs`) and 038's push tests
   (`crates/finder/tests/motion/tracking/push.rs`) pass unchanged: with no centring no
-  `TrackRun` has a mark, so `record_live_pointing` reads as at 8b7212bb (run).
+  `TrackRun` has a mark, so `record_live_pointing` reads as at 936b140d (run).
 - **The reservation.** 016's and 055's tests of `the mount is already moving` pass with
   `centre` added (run).
 - **The README's MCP count.** `crates/finder/tests/console/imaging_run_docs.rs:139`
   asserts "sixteen tools of its own" (`crates/finder/README.md:88`): the tool is a
-  paragraph of its own (run). 055's `crates/finder/tests/mcp/nudge.rs:209` finds
+  paragraph of its own (run). 055's `crates/finder/tests/mcp/nudge.rs:239` finds
   `## Nudging the telescope` before `## Recording a night`, which stays true (run).
 - **The Imaging page.** `ImagingPage.test.tsx` and `imaging.spec.ts` pass unchanged: the
   block's picture is named `Solved imaging frame N: …`, not `Imaging frame …`, which
@@ -705,27 +704,34 @@ The gates, copied from `ergane.yaml`:
 
 ## Prerequisites before this spec is flipped to `ready`
 
-- Waits for 055 to land (052, 053 and 054 before it, in that order) and the seat's
-  re-anchor of this trio on that `main`: every `path:line` read again; 052 to 055 added
-  to `depends_on_landed`; `tracking.rs`'s and `nudge.rs`'s moves placed against 055's
-  landed text; the README, `GLOSSARY.md` and the test `main.rs` additions placed after
-  theirs; `run/console.rs`'s `centre` placed against 054's; the Centre block placed on
-  054's rewritten `ImagingPage.tsx` after its Imaging solve block; US4's block placed in
-  053's `record_live_pointing` and `TrackRun`, read again for any sync 053 makes there;
-  and the Refinement Record's last writers read again.
-- Waits for 058 only if it lands first: read its landed text for the shape § Technical
+- Met: 055 landed (052, 053 and 054 before it, in that order) and the seat re-anchored
+  this trio on that `main` at 936b140d: every `path:line` read again; 052 to 055 added to
+  `depends_on_landed`; `tracking.rs`'s and `nudge.rs`'s moves placed against 055's landed
+  text (`step_between(model, places)`, `track_press` through `track_step`); the README,
+  `GLOSSARY.md` and the test `main.rs` additions placed after theirs; `run/console.rs`'s
+  `centre` placed against 054's; the Centre block placed on `ImagingPage.tsx` after its
+  Imaging solve block; US4's block placed in `record_live_pointing` and `TrackRun`, where
+  053 makes no sync (its field check is in `record_frame_sync`); and the Refinement
+  Record's last writers read again. `probe/057-r1`'s code replayed on 936b140d story by
+  story, with 055's tests and every earlier test unchanged, passed every gate step at its
+  US6 tip: fmt, clippy, both doc builds, nextest 1,604 of 1,604, doc tests, `npm ci
+  --offline`, typecheck, Prettier, Vitest 619 of 619, the build with `git status
+  --porcelain -- dist` empty, and `CI=1 npm run e2e` 40 of 40.
+- Met: 058 had not landed at 936b140d, so nothing of it is read here. Had it landed first: read its landed text for the shape § Technical
   Context settles (a preview frame is the view's `frame`, `shown`, never solved, the
   next id, the same eight previews). If it holds, FR-002 and FR-014 stand and the Edge
   Case on preview frames is run once by hand on the re-anchored base (a preview after a
   solve, then `{}`: 409 with `a newer imaging frame was taken after frame N`; the Centre
   block disabled and without its picture). If it does not, the solved frame's definition
   is reopened as owner decision 9's (b) before the flip.
-- Waits for the owner's answers to the nine decisions, at the flip ask.
+- Met on 2026-11-28: the owner's answers to the nine decisions, each with its
+  recommendation.
 - Met: a probe round from this text alone, folded. Round 1 on `probe/057-r1` (tip
   ba98d527, 0 blocking, 10 clarity), folded here with its proofs at f7d6779a (§ What
   was run and what was read).
-- Waits for the re-anchor: the page half run once on the re-anchored base (`CI=1 npm run
-  e2e`). Met on `probe/057-r1` at each story's tip and at f7d6779a (40 of 40).
+- Met: the page half run once on the re-anchored base: `CI=1 npm run e2e` 40 of 40 at the
+  replay's US6 tip on 936b140d, `solve-centre.spec.ts` beside 055's `nudge.spec.ts`; and
+  on `probe/057-r1` at each story's tip and at f7d6779a (40 of 40).
 - Met: no operator-staged file is needed (every test builds its rig from the
   repository's own simulator and fixtures).
 
@@ -755,7 +761,9 @@ notes go in the night's report; nothing in the repository waits for them.
    clear the line by at least 1 KiB, US1-S2 with the helpers only it used: US1 is now
    1,568 B under. US1 keeps its centring (US1-S1); the newer-frame, solving and
    no-target asks are US2-S2's, the region of interest US2-S3 and the guards' asks
-   US2-S4. No scenario is left in US1 to move.
+   US2-S4. No scenario is left in US1 to move. Measured again on the replay on 936b140d,
+   the same way: US1 25,221 B (34,048 at 1.35, 86.6 % of 39,321), US2 14,581 B, US3
+   11,960 B, US4 9,547 B, US5 22,093 B and US6 21,382 B plus `dist`'s 697 B.
 2. **US1's helpers.** US2's, US3's and US4's tests use US1's rig from `super::centre`,
    and US2's the `write` of 055's `crates/finder/tests/motion/nudge.rs`. US1
    writes all of these `pub(super)` from the start, as no story may edit an earlier
@@ -829,18 +837,18 @@ this text alone (round 1 on `probe/057-r1`, tip ba98d527: 0 blocking, 10 clarity
 folded, its proofs on that branch at f7d6779a. Writes come from
 the task text. Shared writes name the spec story that last wrote the same file on
 `main`; within the spec, each story's files written by an earlier one are ordered by
-`depends_on_merged`. 055's own writes (`nudge.rs` and its additions to the shared files)
-are not on `main`; they are named again at the re-anchor (§ Prerequisites).
+`depends_on_merged`. Re-anchored on 2026-11-28 on `main` at 936b140d, with 052 to 055
+landed: the replay of `probe/057-r1`'s code on it passed both gates (§ Prerequisites), and
+every last writer was read again there.
 
-None of the nine owner decisions of spec.md is answered; this record is written to the
-recommendations. Its `open_questions` are empty because the validator refuses a record
-that holds any; what is open is spec.md's owner decisions 1 to 9 and § Prerequisites
-(the re-anchoring after 052 to 055, and 058's shape). Nothing in this record is an owner
+The nine owner decisions of spec.md are answered, each with the recommendation this
+record was written to, and the trio is re-anchored on `main` at 936b140d (058 had not
+landed), so its `open_questions` are empty and nothing is open. Nothing in this record is an owner
 approval: those are in spec.md, and flipping to `ready` gives them.
 
 ```yaml
 version: 1
-reviewed_revision: 8b7212bb8d4c52bb2daf56f9f379dd2f9116ab7f
+reviewed_revision: 936b140d3c0dda8879e28eb0efa3b5581f5a6bac
 stories:
   US1:
     tests:
@@ -857,11 +865,11 @@ stories:
       - path: crates/finder/tests/motion/nudge.rs
         status: existing
         disposition: preserve
-        assertion: "055's presses, reservation and refusals as at 8b7212bb, start_motion's list gaining centre"
+        assertion: "055's presses, reservation and refusals as at 936b140d, start_motion's list gaining centre"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
-      - "Tracker::nudge answers, refuses and steps as at 8b7212bb; step_between is its body, the places worked out by its places closure"
-      - "the nudge route's and the MCP nudge's answers, motion and axis_move as at 8b7212bb"
+      - "Tracker::nudge answers, refuses and steps as at 936b140d; step_between is its body, the places worked out by its places closure"
+      - "the nudge route's and the MCP nudge's answers, motion and axis_move as at 936b140d"
       - "the pointing model, the aim point, the live solve, session.rs, goto.rs and the steering are not written"
     checks:
       development:
@@ -882,25 +890,30 @@ stories:
     no_write_reason: ""
     shared_writes:
       - path: crates/finder/src/api.rs
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US2
-        disposition: merge_order
-        reason: "057 depends_on_landed 051, whose US2 last changed api.rs on main (f9706cc0); 055 adds to it before 057 lands"
-      - path: crates/finder/src/lib.rs
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US1
-        disposition: merge_order
-        reason: "057 depends_on_landed 051, whose US1 last changed lib.rs on main (4c39350e); 055 adds to it before 057 lands"
-      - path: crates/finder/src/tracking.rs
-        other_spec: 040-stack-waits-for-steady
-        other_story: US6
-        disposition: merge_order
-        reason: "057 depends_on_landed 040, whose US6 last changed tracking.rs on main (f1847647); 055 adds to it before 057 lands"
-      - path: crates/finder/tests/motion/main.rs
-        other_spec: 050-tools-page-aligns-finder-camera
+        other_spec: 055-nudge-arrows-follow-the-frame
         other_story: US3
         disposition: merge_order
-        reason: "057 depends_on_landed 050, whose US3 last changed motion/main.rs on main (6b70a4a2)"
+        reason: "057 depends_on_landed 055, whose US3 last changed api.rs on main (26a39791)"
+      - path: crates/finder/src/lib.rs
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US1
+        disposition: merge_order
+        reason: "057 depends_on_landed 055, whose US1 last changed lib.rs on main (0baeb8ad)"
+      - path: crates/finder/src/nudge.rs
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US3
+        disposition: merge_order
+        reason: "057 depends_on_landed 055, whose US3 last changed nudge.rs on main (26a39791)"
+      - path: crates/finder/src/tracking.rs
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US3
+        disposition: merge_order
+        reason: "057 depends_on_landed 055, whose US3 last changed tracking.rs on main (26a39791)"
+      - path: crates/finder/tests/motion/main.rs
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US3
+        disposition: merge_order
+        reason: "057 depends_on_landed 055, whose US3 last changed motion/main.rs on main (26a39791)"
     open_questions: []
   US2:
     tests:
@@ -973,8 +986,8 @@ stories:
         assertion: "041's centring of the run: tolerance, tries, idle solves, warnings and endings with the script's parts, which keep MountSteps::centre's default"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
-      - "Script and every MountSteps implementation but the console's answer as at 8b7212bb; a run whose mount part makes no step centres, idles, warns and ends as 041's FR-024 reads"
-      - "the run's states, endings, words and record as at 8b7212bb"
+      - "Script and every MountSteps implementation but the console's answer as at 936b140d; a run whose mount part makes no step centres, idles, warns and ends as 041's FR-024 reads"
+      - "the run's states, endings, words and record as at 936b140d"
     checks:
       development:
         - "cargo nextest run -p finder --locked --test motion -E 'test(/^centre_run::/) | test(/^imaging_run_centring::/) | test(/^imaging_run::/)'"
@@ -995,10 +1008,10 @@ stories:
         disposition: merge_order
         reason: "057 depends_on_landed 041, whose US7 last changed run.rs on main (8a880e4f)"
       - path: crates/finder/src/imaging/run/console.rs
-        other_spec: 041-imaging-run-on-the-rig
-        other_story: US8
+        other_spec: 054-focus-pause-gives-camera-back
+        other_story: US1
         disposition: merge_order
-        reason: "057 depends_on_landed 041, whose US8 last changed run/console.rs on main (61b54a47); 054 writes it before 057 lands and the re-anchor reads its last writer again"
+        reason: "057 depends_on_landed 054, whose US1 last changed run/console.rs on main (a5fb8b85)"
     open_questions: []
   US4:
     tests:
@@ -1020,16 +1033,16 @@ stories:
       - path: crates/finder/tests/motion/imaging_track.rs
         status: existing
         disposition: preserve
-        assertion: "032's aim reading taken while Track is on held back and applied at the next Track on (FR-036), as at 8b7212bb, no TrackRun having a centring's mark"
+        assertion: "032's aim reading taken while Track is on held back and applied at the next Track on (FR-036), as at 936b140d, no TrackRun having a centring's mark"
         decision: "plan.md:Shapes that existing tests pin"
       - path: crates/finder/tests/motion/tracking/push.rs
         status: existing
         disposition: preserve
-        assertion: "038's push check, its follow, sync and epoch, as at 8b7212bb"
+        assertion: "038's push check, its follow, sync and epoch, as at 936b140d"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
-      - "record_live_pointing reads every pointing as at 8b7212bb while the running Track has no centring's mark"
-      - "set_aim, set_measured_aim and 032's held aim point as at 8b7212bb"
+      - "record_live_pointing reads every pointing as at 936b140d while the running Track has no centring's mark"
+      - "set_aim, set_measured_aim and 032's held aim point as at 936b140d"
     checks:
       development:
         - "cargo nextest run -p finder --locked --test motion -E 'test(/^centre_aim::/) | test(/^centre::/) | test(/^tracking::push/) | test(/^imaging_track::/)'"
@@ -1045,10 +1058,10 @@ stories:
     no_write_reason: ""
     shared_writes:
       - path: crates/finder/src/session.rs
-        other_spec: 047-console-uses-the-database-that-fits
+        other_spec: 053-second-sync-fits-base-tilt
         other_story: US2
         disposition: merge_order
-        reason: "057 depends_on_landed 047, whose US2 last changed session.rs on main (c15937e7); 053 writes it before 057 lands and the re-anchor reads its last writer again"
+        reason: "057 depends_on_landed 053, whose US2 last changed session.rs on main (9e344373)"
     open_questions: []
   US5:
     tests:
@@ -1073,8 +1086,8 @@ stories:
         assertion: "055's README paragraph before ### MCP under WSL2 and ## Nudging the telescope before ## Recording a night"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
-      - "every MCP tool at 8b7212bb keeps its name, schema, description and answers"
-      - "every README sentence and glossary entry at 8b7212bb stays"
+      - "every MCP tool at 936b140d keeps its name, schema, description and answers"
+      - "every README sentence and glossary entry at 936b140d stays"
     checks:
       development:
         - "cargo nextest run -p finder --locked --test mcp -E 'test(/^centre::/) | test(/^nudge::/)'"
@@ -1092,25 +1105,25 @@ stories:
     no_write_reason: ""
     shared_writes:
       - path: GLOSSARY.md
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US3
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US4
         disposition: merge_order
-        reason: "057 depends_on_landed 051, whose US3 last changed GLOSSARY.md on main (9424a371)"
+        reason: "057 depends_on_landed 055, whose US4 last changed GLOSSARY.md on main (b1ccbddd)"
       - path: crates/finder/README.md
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US3
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US4
         disposition: merge_order
-        reason: "057 depends_on_landed 051, whose US3 last changed the README on main (9424a371)"
+        reason: "057 depends_on_landed 055, whose US4 last changed the README on main (b1ccbddd)"
       - path: crates/finder/src/mcp/tools.rs
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US3
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US4
         disposition: merge_order
-        reason: "057 depends_on_landed 051, whose US3 last changed mcp/tools.rs on main (9424a371)"
+        reason: "057 depends_on_landed 055, whose US4 last changed mcp/tools.rs on main (b1ccbddd)"
       - path: crates/finder/tests/mcp/main.rs
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US3
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US4
         disposition: merge_order
-        reason: "057 depends_on_landed 051, whose US3 last changed mcp/main.rs on main (9424a371)"
+        reason: "057 depends_on_landed 055, whose US4 last changed mcp/main.rs on main (b1ccbddd)"
     open_questions: []
   US6:
     tests:
@@ -1155,7 +1168,7 @@ stories:
         assertion: "the GoTo test's single status in the region Target M42, with solve-centre.spec.ts sorting after it"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
-      - "every block of the Imaging page renders and answers as at 8b7212bb; ImagingPage gains one import and one element"
+      - "every block of the Imaging page renders and answers as at 936b140d; ImagingPage gains one import and one element"
       - "the simulate project's other files see the server as they set it: solve-centre.spec.ts turns Track off and the target to null at the end"
     checks:
       development:
@@ -1176,24 +1189,24 @@ stories:
     no_write_reason: ""
     shared_writes:
       - path: crates/finder/web/dist
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US4
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US5
         disposition: merge_order
-        reason: "057 depends_on_landed 051, whose US4 last built dist on main (f6d4f5fd)"
+        reason: "057 depends_on_landed 055, whose US5 last built dist on main (936b140d)"
       - path: crates/finder/web/playwright.config.ts
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US4
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US5
         disposition: merge_order
-        reason: "057 depends_on_landed 051, whose US4 last changed playwright.config.ts on main (f6d4f5fd)"
+        reason: "057 depends_on_landed 055, whose US5 last changed playwright.config.ts on main (936b140d)"
       - path: crates/finder/web/src/api.ts
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US4
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US5
         disposition: merge_order
-        reason: "057 depends_on_landed 051, whose US4 last changed api.ts on main (f6d4f5fd)"
+        reason: "057 depends_on_landed 055, whose US5 last changed api.ts on main (936b140d)"
       - path: crates/finder/web/src/components/ImagingPage.tsx
-        other_spec: 042-imaging-run-page-and-mcp
-        other_story: US9
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US5
         disposition: merge_order
-        reason: "057 depends_on_landed 042, whose US9 last changed ImagingPage.tsx on main (5d8f5353); 054 and 055 rewrite and add to it before 057 lands and the re-anchor reads its last writer again"
+        reason: "057 depends_on_landed 055, whose US5 last changed ImagingPage.tsx on main (936b140d)"
     open_questions: []
 ```

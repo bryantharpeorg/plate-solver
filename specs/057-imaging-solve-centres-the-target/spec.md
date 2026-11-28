@@ -1,14 +1,15 @@
 ---
-state: draft
-depends_on_landed: ["013-live-finder", "015-tracking", "016-mcp", "019-night-legibility", "032-imaging-solve-and-aim-point", "035-live-stack", "036-tracking-from-subs", "037-imaging-run", "038-track-follows-a-push", "040-stack-waits-for-steady", "041-imaging-run-on-the-rig", "042-imaging-run-page-and-mcp", "047-console-uses-the-database-that-fits", "050-tools-page-aligns-finder-camera", "051-tools-page-focuses-either-camera"]
+state: ready
+depends_on_landed: ["013-live-finder", "015-tracking", "016-mcp", "019-night-legibility", "032-imaging-solve-and-aim-point", "035-live-stack", "036-tracking-from-subs", "037-imaging-run", "038-track-follows-a-push", "040-stack-waits-for-steady", "041-imaging-run-on-the-rig", "042-imaging-run-page-and-mcp", "047-console-uses-the-database-that-fits", "050-tools-page-aligns-finder-camera", "051-tools-page-focuses-either-camera", "052-node-keeps-saturated-stars", "053-second-sync-fits-base-tilt", "054-focus-pause-gives-camera-back", "055-nudge-arrows-follow-the-frame"]
 # Drafted 2026-11-27 against 055's probe code, the branch `probe/055-r1` at 8b7212bb
 # (`main` at 9c4a0a15 under it), at the owner's pick of 2026-11-27 ("Centre from
 # imaging solve", from the seat's ranked list), from a probe of that day on the branch
 # `probe/057` cut from 8b7212bb, and folded the same day with the cynical review's
 # round 1 (0 blockers, 6 majors, 12 minors), rebuilt on that branch in six stories
 # (plan.md § What was run and what was read). Every `path:line` here was read at
-# 8b7212bb. None of the nine owner decisions is answered yet; the scenarios are
-# written to each recommendation. 015, 038 and 040 are named for Track, its push
+# 8b7212bb, and every one re-read at 936b140d, where 055 landed. The owner answered the
+# nine decisions on 2026-11-28 with their recommendations, which the scenarios were
+# already written to. 015, 038 and 040 are named for Track, its push
 # check and its steady marks; 016 for MCP, `motion` and `axis_move`; 032 for the
 # imaging solve and the aim point; 035 and 036 for the stack and its steering; 037,
 # 041 and 042 for the imaging run, its parts and its page; 013 for the simulator's
@@ -21,6 +22,14 @@ depends_on_landed: ["013-live-finder", "015-tracking", "016-mcp", "019-night-leg
 # folded the same day: US1-S3 and US1-S2 moved to US2 (US2-S3, US2-S4) for US1's size,
 # US2-S5 and US4-S3 added, the proofs committed on that branch at f7d6779a (plan.md
 # § What was run and what was read).
+# Re-anchored on 2026-11-28 on `main` at 936b140d, where 052 to 055 had landed (058 had
+# not): 052 to 055 join `depends_on_landed`; the record's last writers name 055's
+# stories where 055 last changed a file; the probe's code replayed onto 055's landed
+# code story by story (its moves in `tracking.rs` and `nudge.rs` placed against 055's
+# `step_between`, `track_press` and `track_step`), and passed every gate there.
+# Flipped to `ready` on 2026-11-28 at the owner's ask ("Flip 057, all recs": a yes to
+# the seat flipping it itself with its recommended answers once the re-anchor passes),
+# with every prerequisite in plan.md met and none waived.
 ---
 
 # Feature Specification: An Imaging Solve Centres the Target
@@ -29,7 +38,7 @@ depends_on_landed: ["013-live-finder", "015-tracking", "016-mcp", "019-night-leg
 
 **Created**: 2026-11-27
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: On 2026-11-27 the owner picked "Centre from imaging solve" from the seat's
 ranked list after a field night. The list's item read: "Let an imaging-camera solve
@@ -131,10 +140,29 @@ pick is the owner's only logged word on the feature.
   its region of interest and its guards' refusals are US2-S3 and US2-S4. They pin US1's
   FR-003 and FR-002 and pass from US1 on (plan.md § Plan traps 4).
 
+### Session 2026-11-28 (the flip)
+
+- Q: How were the nine open decisions answered? → A: Each with its recommendation, (a),
+  by the owner's "Flip 057, all recs" on 2026-11-28, the seat's question being whether it
+  should flip 057 itself with its recommended answers.
+- Q: What moved on `main` between the draft and the flip? → A: 052 to 055 landed, at 936b140d.
+  This spec was drafted on 055's probe code; 055's landed code places the same behaviour
+  differently, so the probe's code was replayed onto it: the Track-on step goes through
+  `nudge::track_step`, which `track_press` now calls, Track's step between two places is
+  `tracking::step_between(model, places)`, and the private `watch_step` takes the tool.
+  Every `path:line` and every name taken from 055 was re-read on the landed code; every
+  gate passed there (nextest 1,604, Vitest 619, e2e 40 of 40), and no scenario or FR
+  changed. 058 had not landed, so its preview frames are not read here.
+- Q: Does owner approval 1's "No existing signature changes" cover the private
+  `watch_step`, which gains the tool? → A: No. Approval 1 is about the library's public
+  API; it now says "No existing public signature changes", which is what it meant. The
+  private function's new parameter needs no approval.
+
 ## Owner decisions
 
-None is answered yet. Each keeps its options and its evidence, and the scenarios and the
-record are written to the recommendations. One general rule is behind decisions 3, 5, 6
+All nine are settled by the owner on 2026-11-28, each with its recommendation, (a). Each
+keeps its options and its evidence; the scenarios and the record were written to the
+recommendations, so no scenario changed for them. One general rule is behind decisions 3, 5, 6
 and 9 and the guards: **a centring is one of Track's steps, sized by the latest imaging
 solve. The place Track holds becomes the place to centre (the session's target, or the
 sky at a tapped pixel of the solved frame), and Track steps the telescope by what that
@@ -149,14 +177,14 @@ there too; the run's centring with no new aim point is the same call; and Track'
 settle, its steps, an earlier centring and a push the finder camera sees need no rule
 of their own, as each makes Track unsteady (040's marks).
 
-1. **Which actions** (FR-001, FR-006, FR-014). Recommended (a): **both, through one
+1. **Which actions** (FR-001, FR-006, FR-014). Answered (a): **both, through one
    route and one tool**: `Centre <target>` for the session's target and a tap on the
    solved frame's picture for any point of it. Evidence (run): one centring brought M42
    from 115″ to 726″ off to 4.2″ to 17.5″ (four trials, three imaging angles); taps
    834″, 1,047″ and 679″ from the centre came to 23.2″, 13.2″ and 7.6″. Instead: (b) the
    target only (a tap is a later spec); (c) the tap only (the target is then a tap on
    it, and a target outside the frame cannot be centred).
-2. **One step or repeated, and the tolerance** (FR-003, FR-009). Recommended (a): **one
+2. **One step or repeated, and the tolerance** (FR-003, FR-009). Answered (a): **one
    step a press outside a run; within a run, repeated to the run's tolerance**: the
    page's and MCP's centring makes one step and says how far it was, and the page says
    to take another imaging frame to check; the run repeats it, at most three tries
@@ -172,7 +200,7 @@ of their own, as each makes Track unsteady (040's marks).
    N.I.N.A. (1′, up to 10 slews) do, with a stop and a status of its own; (c) a page
    tolerance such as 30″.
 3. **What a centring moves, from where, for how long, and what the finder camera's
-   return does** (FR-002, FR-003, FR-010). Recommended (a): **the general rule: the
+   return does** (FR-002, FR-003, FR-010). Answered (a): **the general rule: the
    place Track holds becomes the place to centre, and Track steps the telescope by the
    solve's offset from the sky at the sensor's set point; a solve holds for a minute
    after its frame ends; and the finder camera's first solve in the minute after a
@@ -213,7 +241,7 @@ of their own, as each makes Track unsteady (040's marks).
    off and on); (d) a sync from the imaging solve (053's, decision 5); (e) no age, or 30
    s or 2 minutes (23.0″ and 63.7″ at those ages); (f) the return as (i), said in the
    README; (g) the return as (ii).
-4. **Whether the run uses an imaging solve alone** (FR-008, FR-009). Recommended (a):
+4. **Whether the run uses an imaging solve alone** (FR-008, FR-009). Answered (a):
    **yes, when a solve measured no new aim point**: the run asks its mount part to
    centre from the solve and counts a try; the aim point's re-centre stays the path
    when the finder camera's fixes move the aim point. Evidence (run): today the run
@@ -222,7 +250,7 @@ of their own, as each makes Track unsteady (040's marks).
    centring tests fail, so they pin the aim point's path. Instead: (b) the run always
    centres from the imaging solve, never turning Track off and on to a new aim point
    (the aim point stays wrong for the next GoTo); (c) the run as it is.
-5. **Whether an imaging solve ever becomes a sync** (FR-005, FR-010). Recommended (a):
+5. **Whether an imaging solve ever becomes a sync** (FR-005, FR-010). Answered (a):
    **never here**: a centring writes nothing to the pointing model, and the aim point
    it leaves is taken from the place Track holds (decision 3); 053 owns syncs, whatever
    it decides. Evidence (run): after every centring the model's syncs and epoch and the
@@ -231,13 +259,13 @@ of their own, as each makes Track unsteady (040's marks).
    as drafted, at the night's 6.5′, the return made one (syncs 2 to 3, epoch 1 to 2).
    Instead: (b) a centring also records a sync from the imaging solve, so later GoTos
    land nearer (053's rule to write).
-6. **Track off** (FR-002). Recommended (a): **refuse with `Track is off: turn Track on
+6. **Track off** (FR-002). Answered (a): **refuse with `Track is off: turn Track on
    to centre`**. With Track off the sky moves past the still telescope about 15″ a
    second, so a solve's offset is stale within seconds, and Track turned on later GoTos
    the session's target and undoes a Track-off move (015's FR-014, 055's owner
    decision 10). Instead: (b) a direct axis move by the offset with Track off; (c) the
    centring turns Track on first (its GoTo moves the frame the solve read).
-7. **What is shown** (FR-014, FR-015). Recommended (a): **a Centre block after the
+7. **What is shown** (FR-014, FR-015). Answered (a): **a Centre block after the
    Imaging solve block, with its own picture of the solved frame**: `Centre <target>`,
    the solved frame's picture to tap, and words while Track makes the step. Both (a)
    and (b) show the solved frame only while it is the latest (decision 9), so what
@@ -245,12 +273,12 @@ of their own, as each makes Track unsteady (040's marks).
    `crates/finder/web/e2e/imaging.spec.ts:42`, which pins that picture's name; against
    (a), a phone shows a second full-width copy of the frame. Instead: (b) a tap on the
    Imaging frame block's picture; (c) the button only.
-8. **MCP** (FR-011). Recommended (a): **a `centre` tool with the route's arguments**,
+8. **MCP** (FR-011). Answered (a): **a `centre` tool with the route's arguments**,
    logged and rate-limited as every moving tool is, whose description says what the
    guard covers: the latest frame solved within the last minute, "with nothing Track
    knows of moving the telescope since it began", never a sync, the aim point taken
    from the place by the finder camera's next solve. Instead: (b) no tool.
-9. **Which solve a centring reads** (FR-002, FR-014). Recommended (a): **the latest
+9. **Which solve a centring reads** (FR-002, FR-014). Answered (a): **the latest
    frame's: a newer frame of any purpose, a stack's sub or 058's preview frame among
    them, is refused plainly with `a newer imaging frame was taken after frame N`**, as
    032 solves only the latest saved frame. Evidence (run): during a stack Track stayed
@@ -273,7 +301,7 @@ file changes.
 1. **New public API in `crates/finder`'s library** (FR-001 to FR-007, FR-010): the
    module `finder::centre` with `CentreAsk`, `CentreView`, `PARTS`, `AGE_S`, `routes`
    and `centre`; `Tracker::centre`; and `Session::centred`. `nudge::track_step` is
-   `pub(crate)`. No existing signature changes.
+   `pub(crate)`. No existing public signature changes.
 2. **A new route and tool** (FR-001, FR-011): `POST /api/imaging/centre` and the MCP tool
    `centre`.
 3. **A default method on the run's mount part** (FR-008): `MountSteps::centre`, against
@@ -798,8 +826,7 @@ its lock on the browser tests' fixed ports).
 
 - **Earlier features are in place.** Every spec in `depends_on_landed` has landed, and
   052 to 055 have landed before the flip (plan.md § Prerequisites). Every citation here
-  was read at 26a39791 (`main` with 055's US1 to US3), but those of 055's US4 and US5,
-  not yet on `main`, which were read at 8b7212bb.
+  was read at 936b140d.
 - **The simulator stands for the mount and cameras** in the gates: its mount's
   backlash, counts and rates, its finder camera, whose frames a test stops while the
   imaging camera goes on, and its imaging camera at the angle a test sets, solved by the

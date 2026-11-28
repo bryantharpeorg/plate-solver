@@ -5,16 +5,18 @@ description: "Task list for 057-imaging-solve-centres-the-target: An Imaging Sol
 # Tasks: An Imaging Solve Centres the Target
 
 **Prerequisites** (plan.md § Prerequisites, each with its evidence there):
-- every spec in `depends_on_landed` has landed on `main`: met at 9c4a0a15;
+- every spec in `depends_on_landed` has landed on `main`: met at 936b140d;
 - 052, 053, 054 and 055 have landed, in that order, and this trio is re-anchored on that
-  `main`: not met (this text is stacked on 055's probe code at 8b7212bb);
-- 058's preview frames read against FR-002 and FR-014, if 058 lands first: not met;
-- the owner decisions in spec.md are settled: not met, none of the nine is answered;
+  `main`: met at 936b140d (the replay passed every gate step there);
+- 058's preview frames read against FR-002 and FR-014, if 058 lands first: met, 058 had not
+  landed at 936b140d;
+- the owner decisions in spec.md are settled: met, each with its recommendation, on
+  2026-11-28;
 - every story has been probe-built from this text: met, round 1 of 2026-11-27 on
   `probe/057-r1` (tip ba98d527: 0 blocking, 10 clarity), folded, its proofs on that
   branch at f7d6779a;
 - the page half has run once: met on `probe/057-r1` (`CI=1 npm run e2e` at each
-  story's tip and at f7d6779a), to be run again on the re-anchored base;
+  story's tip and at f7d6779a) and again on the re-anchored base at 936b140d (40 of 40);
 - no operator-staged file is needed: met.
 
 **Rules for every story:**
