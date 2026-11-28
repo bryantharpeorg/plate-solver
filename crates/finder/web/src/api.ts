@@ -835,6 +835,13 @@ export interface SessionMotion {
   since: number;
 }
 
+/** A move the console makes on its axes, as the session reports it (055). */
+export interface SessionAxisMove {
+  tool: string;
+  state: string;
+  reason?: string;
+}
+
 export interface McpStatus {
   enabled: boolean;
   local_only: boolean;
@@ -877,6 +884,8 @@ export interface ObservingSession {
   aim?: { x: number; y: number; source?: "measured" };
   /** The imaging camera's state with its solve and relation (032). */
   imaging?: ImagingView;
+  /** The last axis move the console made: a nudge's or a guard's, and its state (055). */
+  axis_move?: SessionAxisMove;
   /** How far the live views are turned, degrees counter-clockwise; omitted until set. */
   chart_rotation_deg?: number;
   field?: {
@@ -949,6 +958,28 @@ export async function postTrack(on: boolean): Promise<ObservingSession> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ on }),
+    }),
+  );
+}
+
+export type NudgeDirection = "up" | "right" | "down" | "left";
+export type NudgeStep = "fine" | "coarse";
+/** Whose view the arrows follow: the mount's, the finder camera's or the imaging camera's (055). */
+export type NudgeView = "mount" | "finder_camera" | "imaging_camera";
+
+/** The step a press made: the offset in the mount's view, and whether Track made it (055). */
+export interface Nudged {
+  up_arcsec: number;
+  right_arcsec: number;
+  moved: "axes" | "track";
+}
+
+export async function postNudge(direction: NudgeDirection, step: NudgeStep, view: NudgeView): Promise<Nudged> {
+  return json(
+    await fetch("/api/mount/nudge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ direction, step, view }),
     }),
   );
 }

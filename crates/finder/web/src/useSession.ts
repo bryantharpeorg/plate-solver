@@ -44,6 +44,7 @@ async function request(init?: RequestInit): Promise<ObservingSession> {
     ...(body?.goto != null && { goto: body.goto }),
     ...(body?.goto_refusal != null && { goto_refusal: body.goto_refusal }),
     ...(body?.motion != null && { motion: body.motion }),
+    ...(body?.axis_move != null && { axis_move: body.axis_move }),
     ...(body?.track != null && { track: body.track }),
     ...(body?.recording != null && { recording: body.recording }),
     ...(body?.imaging != null && { imaging: body.imaging }),

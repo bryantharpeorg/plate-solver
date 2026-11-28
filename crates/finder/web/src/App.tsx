@@ -197,7 +197,7 @@ export function App() {
       ) : path === "/tools" ? (
         <ToolsPage session={session} onBack={() => navigate("/")} />
       ) : path === "/imaging" ? (
-        <ImagingPage night={night} onBack={() => navigate("/")} />
+        <ImagingPage night={night} onBack={() => navigate("/")} session={session} onChange={changed} />
       ) : (
         <>
           {/*

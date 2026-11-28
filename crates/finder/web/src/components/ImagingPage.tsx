@@ -7,6 +7,7 @@ import {
   type ImagingFrame,
   type ImagingSettings,
   type ImagingStatus,
+  type ObservingSession,
 } from "../api";
 import { useColourHold } from "../useColourHold";
 import { useImaging } from "../useImaging";
@@ -14,6 +15,7 @@ import { CalibrationBlock } from "./CalibrationBlock";
 import { FocusBlock } from "./FocusBlock";
 import { ImagingSolveBlock } from "./ImagingSolveBlock";
 import { ImagingRunBlock } from "./ImagingRunBlock";
+import { NudgeBlock } from "./NudgeBlock";
 import { StackBlock } from "./StackBlock";
 import { SteeringBlock } from "./SteeringBlock";
 
@@ -43,7 +45,17 @@ function savedLine(frame: ImagingFrame): string {
   return line;
 }
 
-export function ImagingPage({ night, onBack }: { night: boolean; onBack: () => void }) {
+export function ImagingPage({
+  night,
+  onBack,
+  session,
+  onChange,
+}: {
+  night: boolean;
+  onBack: () => void;
+  session?: ObservingSession;
+  onChange?: () => void;
+}) {
   const { view, refresh } = useImaging();
   const { held, bind } = useColourHold(night);
   const camera = view?.state === "ready" ? view.camera : undefined;
@@ -300,6 +312,7 @@ export function ImagingPage({ night, onBack }: { night: boolean; onBack: () => v
           </section>
         </>
       )}
+      {session && <NudgeBlock session={session} onChange={onChange} first="imaging_camera" />}
       {view?.state === "ready" && (
         <>
           <ImagingSolveBlock view={view} refresh={refresh} />
