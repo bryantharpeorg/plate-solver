@@ -6,6 +6,7 @@
 mod support;
 
 mod centre;
+mod centre_run;
 mod centre_tap;
 mod goto;
 mod imaging_align_track;

@@ -328,6 +328,22 @@ impl MountSteps for ConsoleMount {
             .steered()
             .is_some_and(|tracker| tracker.steady_between(start, end))
     }
+
+    fn centre(&self) -> StepFuture<'_, Result<bool, Failure>> {
+        Box::pin(async move {
+            if self.stopped() {
+                return Err(Failure::Stopped);
+            }
+            let by = self.memory.lock().unwrap().by;
+            Ok(crate::centre::centre(
+                &self.state,
+                by.as_str(),
+                &crate::centre::CentreAsk::default(),
+            )
+            .await
+            .is_ok())
+        })
+    }
 }
 
 struct ConsoleCamera {
