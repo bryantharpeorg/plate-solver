@@ -93,6 +93,7 @@ pub mod link;
 pub mod live;
 pub mod mcp;
 pub mod mount_sky;
+pub mod nudge;
 pub mod pushto;
 pub mod recording;
 pub mod samples;

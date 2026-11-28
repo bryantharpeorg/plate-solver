@@ -43,6 +43,13 @@ pub enum AxisMove {
         deg_per_s: f64,
         duration_s: f64,
     },
+    /// Move the telescope by an offset on the sky from where it points: up in
+    /// altitude, and across the sky the way azimuth grows, in arcseconds (055).
+    /// Checked into `Through`.
+    Offset { up_arcsec: f64, right_arcsec: f64 },
+    /// Move both axes to `first`, then to `last`: an offset as checked, ending
+    /// on each axis the way a GoTo's approach ends (055).
+    Through { first: [i32; 2], last: [i32; 2] },
 }
 fn axis_index(axis: Axis) -> Result<usize, String> {
     match axis {
@@ -243,7 +250,81 @@ impl Planner<'_> {
                     duration_s,
                 })
             }
+            AxisMove::Offset {
+                up_arcsec,
+                right_arcsec,
+            } => {
+                if !up_arcsec.is_finite() || !right_arcsec.is_finite() {
+                    return Err("the offset must be finite".into());
+                }
+                self.ready()?;
+                let (alt, az) = self.predict(self.degrees(self.current))?;
+                if alt >= 88.0 {
+                    return Err(
+                        "the telescope is too near the zenith: nudges stop at 88° altitude".into(),
+                    );
+                }
+                let counts = self.counts();
+                let to_alt = alt + up_arcsec / 3600.0;
+                let to_az = az + right_arcsec / 3600.0 / alt.to_radians().cos();
+                // Each inverse starts from its own uncorrected place, so their
+                // difference is the step's counts on whichever turn the axes are.
+                let here = self
+                    .model
+                    .inverse(az, ephemeris::apparent_from_true(alt), counts)
+                    .ok_or("the night has no sync yet")?;
+                let there = self
+                    .model
+                    .inverse(to_az, ephemeris::apparent_from_true(to_alt), counts)
+                    .ok_or("the night has no sync yet")?;
+                let mut last = [0; 2];
+                let mut first = [0; 2];
+                for i in 0..2 {
+                    let delta = (there[i] - here[i]).round();
+                    if !delta.is_finite() || delta.abs() > f64::from(i32::MAX) {
+                        return Err("axis position is outside the mount's range".into());
+                    }
+                    last[i] = self.current[i]
+                        .checked_add(delta as i32)
+                        .ok_or("axis position is outside the mount's range")?;
+                    first[i] = if last[i] == self.current[i] {
+                        last[i]
+                    } else {
+                        last[i] - (APPROACH * f64::from(counts[i]) / 360.0).round() as i32
+                    };
+                }
+                self.through(first, last)?;
+                Ok(AxisMove::Through { first, last })
+            }
+            AxisMove::Through { first, last } => {
+                self.through(first, last)?;
+                Ok(request)
+            }
         }
+    }
+    /// Check a move through two waypoints: the end, and the approach below it,
+    /// against the minimum altitude and the path's guards. Answers the path's duration.
+    pub(crate) fn through(&self, first: [i32; 2], last: [i32; 2]) -> Result<f64, String> {
+        self.ready()?;
+        let floor = self
+            .predict(self.degrees(self.current))?
+            .0
+            .min(self.min_alt)
+            - 1e-6;
+        if self.predict(self.degrees(last))?.0 < floor {
+            return Err("the position is below the minimum altitude".into());
+        }
+        if self.predict(self.degrees(first))?.0 < floor {
+            return Err("approach would go below the minimum altitude".into());
+        }
+        let waypoints = if first == last {
+            vec![last]
+        } else {
+            vec![first, last]
+        };
+        self.safe_path(&waypoints)?.ok_or_else(|| {
+            "no path keeps clear of the Sun guard, minimum altitude and cable wind".into()
+        })
     }
     /// Two arrival-time estimates, then the apparent place and model inverse.
     pub fn plan(&self, target: &Target) -> Result<Plan, String> {
