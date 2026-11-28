@@ -57,6 +57,7 @@ mod link;
 mod live;
 mod model_docs;
 mod notices;
+mod pairing;
 mod pointing;
 mod pointing_up;
 mod pushto;

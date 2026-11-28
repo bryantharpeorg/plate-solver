@@ -113,7 +113,8 @@ pub struct AppState {
     session: Arc<Session>,
     pub(crate) clock: Arc<dyn Clock>,
     pub(crate) allowed_hosts: Arc<Vec<String>>,
-    mcp: crate::mcp::McpConfig,
+    pub(crate) pairing: Option<Arc<crate::pairing::Pairing>>,
+    pub(crate) mcp: crate::mcp::McpConfig,
     link: Option<Arc<LinkManager>>,
     live: Option<Arc<Live>>,
     recordings: Option<Arc<Recorder>>,
@@ -157,6 +158,7 @@ impl AppState {
             session: Arc::new(Session::default()),
             clock: Arc::new(SystemClock),
             allowed_hosts: Arc::new(Vec::new()),
+            pairing: None,
             mcp: crate::mcp::McpConfig::default(),
             link: None,
             live: None,
@@ -617,8 +619,15 @@ pub(crate) fn host_allowed(parts: &Parts, allowed_hosts: &[String]) -> bool {
             .any(|allowed| name.eq_ignore_ascii_case(allowed))
 }
 
-/// The console's routes.
+/// The console's routes, behind the console token's gate (056).
 pub fn router(state: AppState) -> Router {
+    console_routes(state.clone()).layer(axum::middleware::from_fn_with_state(
+        state,
+        crate::pairing::gate,
+    ))
+}
+
+fn console_routes(state: AppState) -> Router {
     let mut routes = Router::new()
         .route("/api/health", get(health))
         .route("/api/samples", get(list_samples))
