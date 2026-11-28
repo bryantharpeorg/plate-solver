@@ -43,6 +43,7 @@ export default defineConfig({
         "**/stack.spec.ts",
         "**/tools.spec.ts",
         "**/tools-focus.spec.ts",
+        "**/nudge.spec.ts",
       ],
     },
     {
@@ -63,6 +64,7 @@ export default defineConfig({
         "**/stack.spec.ts",
         "**/tools.spec.ts",
         "**/tools-focus.spec.ts",
+        "**/nudge.spec.ts",
       ],
       workers: 1,
       use: { baseURL: externalURL ?? simulateURL },
