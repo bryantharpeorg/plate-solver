@@ -255,6 +255,12 @@ pub trait MountSteps: Send + Sync {
     fn track_on(&self) -> bool;
     /// Whether the tracker was steady for all of a window of console Unix seconds.
     fn steady_between(&self, start: f64, end: f64) -> bool;
+    /// Step the telescope so the target comes to the imaging camera's centre,
+    /// from the latest imaging solve alone, with Track's own step (057).
+    /// `false` when no step was made; the default makes none.
+    fn centre(&self) -> StepFuture<'_, Result<bool, Failure>> {
+        Box::pin(async { Ok(false) })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -375,7 +381,8 @@ pub trait StackSteps: Send + Sync {
 }
 
 /// The five parts. The five traits and this struct are complete from US12: no later
-/// story or spec adds a method or a field, because the script implements them all.
+/// story or spec adds a method or a field, because the script implements them all, but
+/// `MountSteps::centre` (057), whose default makes no step.
 #[derive(Clone)]
 pub struct Steps {
     pub mount: Arc<dyn MountSteps>,
@@ -1216,6 +1223,7 @@ impl RunTask {
         let mut failures = 0;
         let mut tries = 0;
         let mut idle = 0;
+        let mut stepped = false;
         loop {
             let frame = self.frame().await?;
             let centre = match self
@@ -1262,7 +1270,26 @@ impl RunTask {
                 }
                 continue;
             }
-            if !centre.aim_moved {
+            if !centre.aim_moved && tries < CENTRE_TRIES {
+                match self.steps.mount.centre().await {
+                    Ok(true) => {
+                        tries += 1;
+                        stepped = true;
+                        idle = 0;
+                        self.update(|run| {
+                            run.aim_moved = true;
+                            run.view.centring.as_mut().unwrap().tries = tries;
+                        });
+                        self.set_state("centring")?;
+                        continue;
+                    }
+                    Ok(false) => {}
+                    Err(Failure::Stopped) => return Err(Ending::Stopped),
+                    Err(failure) => return Err(Ending::MountFailed(failure.words().into())),
+                }
+            }
+            let measured = centre.aim_moved || (stepped && tries >= CENTRE_TRIES);
+            if !measured {
                 idle += 1;
                 if idle < CENTRE_IDLE {
                     self.set_state("centring")?;
@@ -1272,13 +1299,13 @@ impl RunTask {
             if centre.offset_arcsec <= centre.near_arcsec {
                 self.warn(Warning::OffCentre {
                     offset_arcsec: centre.offset_arcsec,
-                    measured: centre.aim_moved,
+                    measured,
                 });
                 break;
             }
             return Err(Ending::NotCentred {
                 offset_arcsec: centre.offset_arcsec,
-                measured: centre.aim_moved,
+                measured,
             });
         }
 
