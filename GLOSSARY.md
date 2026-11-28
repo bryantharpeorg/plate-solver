@@ -263,8 +263,12 @@ An axis's own reading of where it is, in the mount's frame rather than the sky's
 _Avoid_: mount alt/az, encoder alt/az
 
 **MCP client**:
-A program that calls the console's MCP tools over the house LAN, such as Claude on the Surface or an app on the phone. It needs no token, and passes the same guards as the page, so it can move the telescope nowhere the page could not.
+A program that calls the console's MCP tools, such as a Claude session on the owner's laptop or an app on the phone. On the console's own machine it needs no token; from another device it presents the console token. It passes the same guards as the page, so it can move the telescope nowhere the page could not.
 _Avoid_: agent, the AI (alone), bot
+
+**Console token**:
+The secret every device other than the console's own machine presents before the console answers it: typed once into the console's pairing prompt, which the browser then keeps in a cookie, or sent by an MCP client as a bearer token. The console keeps it in `console-token` in its state folder. Typing it into a browser pairs that device with the console, which is not the scope link's pairing of the console with a scope node.
+_Avoid_: password, PIN, API key, node token
 
 **MCP tool**:
 One action the console offers MCP clients, passing through to one of the console's own actions or one of the scope link's mount calls.
