@@ -743,11 +743,11 @@ constitution, the glossary and the ADRs. Writes come from the task text. Shared 
 name the spec story that last wrote the same file on `main`; within the spec, each
 story's files written by an earlier one are ordered by `depends_on_merged`.
 
-None of the ten owner decisions of spec.md is answered; this record is written to the
-recommendations. Its `open_questions` are empty because the validator refuses a record
-that holds any; what is open is spec.md's owner decisions 1 to 10 and § Prerequisites
-(the re-anchoring after 052 to 054). Nothing in this record is an owner approval: those
-are in spec.md, and flipping to `ready` gives them.
+The ten owner decisions of spec.md are answered (2026-11-27: decision 9 (a) by the
+owner, the other nine with their recommendations), and this record was written to those
+answers. Its `open_questions` are empty: nothing is open, and § Prerequisites are met at
+f72b77d2. Nothing in this record is an owner approval: those are in spec.md, and the
+flip to `ready` gives them.
 
 ```yaml
 version: 1
