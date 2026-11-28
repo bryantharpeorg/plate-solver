@@ -156,6 +156,14 @@ The Tools page's focus aid for the finder camera has two tools:
   or the route's refusal as a tool error. It moves nothing and changes no
   setting: the observer turns the focuser.
 
+The page's nudge arrows have one tool:
+
+- `nudge` takes `direction` (`up`, `right`, `down` or `left`), `step` (`fine` or
+  `coarse`) and `view` (`mount`, `finder_camera` or `imaging_camera`) and nothing
+  else, as `POST /api/mount/nudge` does. It moves a real telescope one step, is
+  rate-limited and logged, and answers `up_arcsec`, `right_arcsec` and `moved`
+  (`axes` or `track`), or the route's refusal as a tool error.
+
 ### MCP under WSL2: portproxy or mirrored mode
 
 Under WSL2's default NAT networking, the WSL address listed in Setup is not the
@@ -316,6 +324,7 @@ about 1.7 GB for a 2° database built from Tycho (an estimate).
 | `DELETE /api/imaging/run` | No body. End the imaging run as `stopped` and save its stack; answers 200 with the imaging view once it has ended. It stops the mount only while the run still slews: `POST /api/stop` stops it at any time, and ends the run too. Same-origin writes only. |
 | `POST /api/imaging/run/continue` | JSON `{"anyway":false}` or `{"anyway":true}`. From a focus pause, check focus again, or go on unchecked; 409 with a JSON `error` when no run is paused. Same-origin writes only. |
 | `POST /api/goto` | No body. Start a GoTo to the session's target; 200 when started, 409 with a JSON `error` naming a refused move. Same-origin writes only. |
+| `POST /api/mount/nudge` | JSON `{"direction":D,"step":S,"view":V}`: D is `up`, `right`, `down` or `left`, S `fine` (30″) or `coarse` (4′), V `mount`, `finder_camera` or `imaging_camera`. Move the telescope one step on the sky that way in that view; answers 200 with `up_arcsec` and `right_arcsec` (the step in the mount's view) and `moved` (`axes`, or `track` while Track is on), or 400, 409 or 415 with a JSON `error`. Same-origin writes only. |
 | `POST /api/stop` | No body. Always 200, ending tracking, clearing arming and commanding both axes to stop, from any origin, without taking the motion lock. Sends `StopAll` immediately, retrying in its own task with 200 ms per attempt and 50 ms between attempts for a bounded 2 s window, even if the request goes away. Waits for the round and answers exactly `{"stopped":true}` when the scope node answers OK or there is no scope link; otherwise answers `{"stopped":true,"acknowledged":false}`. This means the node did not answer and the mount may still be moving; press Stop again. The MCP tools `stop` and `stop_all` return the same reply. |
 | `POST /api/model/second-sync` | No body. Start the second sync; 200 with `{"started":true}`, or 409 with a JSON `error` naming the refusal. Same-origin writes only. |
 | `POST /api/model/reset` | JSON `{"what":"night"}` or `{"what":"fixed"}`. Reset that part of the pointing model and return the session. Same-origin writes only. |
@@ -660,6 +669,30 @@ that clock's Sun, so a GoTo works in daylight, and every other guard is unchange
 
 What the drawn sky cannot test: slip, gear backlash after the encoder, the base's tilt,
 and the 2 to 3% shortfall seen on the sky in the real board's 1° moves.
+
+
+## Nudging the telescope
+
+A nudge moves the telescope one step on the sky: fine is 30″, coarse is 4′. The
+arrows follow one of three views. `mount`: up is higher altitude and right a
+clockwise turn. `finder_camera`: up, right, down and left as the page draws the
+finder camera's live views, turned by the chart rotation; it needs a live
+pointing. `imaging_camera`: as the imaging camera's frame shows them, from the
+latest imaging solve that solved; it needs one. Without them the press is
+refused with `the finder camera has no live pointing yet`
+or `the imaging camera has not solved a frame yet`.
+
+Each axis a step moves goes 0.5° past its end and comes back, so its gears end
+on a known side. With Track off a nudge is a direct axis move of both axes: it
+needs a sync and passes every guard a GoTo passes, and each moved axis comes up
+from below as a GoTo's does. From 88° altitude up a nudge is refused: there a
+step's turn of azimuth no longer keeps its size. With Track on the place Track
+holds moves by the step and Track makes it, each moved axis coming back the way
+Track drives it; a press is refused with `a push by hand is still settling: press
+again in a few seconds` while a push by hand is still being read. A nudge
+is never read as a push and never a sync: the next solve syncs as usual.
+Turning Track on after nudges made with Track off goes back to the target, as
+Track on always does: centre with Track on.
 
 
 ## Recording a night

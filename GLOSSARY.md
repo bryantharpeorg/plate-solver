@@ -271,8 +271,12 @@ One action the console offers MCP clients, passing through to one of the console
 _Avoid_: command, endpoint
 
 **Direct axis move**:
-Moving an axis to an axis position, or at a rate for a set time, asked for by axis rather than by target. Only MCP clients ask for one; it needs a sync and passes the same guards as a GoTo.
+Moving an axis to an axis position, or at a rate for a set time, asked for by axis rather than by target, or both axes by one nudge's step. MCP clients ask for the first two; a nudge with Track off is the third. Each needs a sync and passes the same guards as a GoTo.
 _Avoid_: raw move, manual slew
+
+**Nudge**:
+One press of a nudge arrow: the telescope moves one step on the sky, fine 30″ or coarse 4′, up, right, down or left in the view the arrows follow: the mount's own (up is higher altitude, right a clockwise turn), the finder camera's live views as the page turns them, or the imaging camera's frame from its latest solved imaging solve. With Track off it is a direct axis move; with Track on the place Track holds moves by the step and Track makes it. A nudge is never a sync, never a slip and never read as a push.
+_Avoid_: jog, slew, manual move
 
 **Purpose label**:
 The short word an exposure is asked for with, saying what it is for: `frame` and `probe`, and later `focus`, `dark`, `flat`, `sub`, `run` and `align`.
