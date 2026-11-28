@@ -10,10 +10,17 @@
 //! Wrong tokens are counted by peer address: ten in a sliding minute refuse any
 //! presented token until the oldest expires. The count holds at most 1,024 peers,
 //! drops times later than the console's clock, and never holds a lock over an await.
+//!
+//! The binary keeps its console token in `console-token` in its state folder,
+//! creating an owner-only file at first start and keeping an owner's token as written.
+//! It prints the file's path in the listening hint, never the token itself.
 
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use axum::body::to_bytes;
@@ -22,12 +29,16 @@ use axum::http::{header, request::Parts, HeaderMap, HeaderValue, StatusCode};
 use axum::middleware::Next;
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
-use axum::Router;
+use axum::{Json, Router};
+use serde_json::json;
 
 use crate::{api, AppState};
 
 /// The browser cookie that presents the console token.
 pub const COOKIE: &str = "console_token";
+/// The token file within the console's state folder.
+pub const TOKEN_FILE: &str = "console-token";
+const ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 /// The browser keeps the console token for 400 days.
 pub const COOKIE_MAX_AGE_S: u64 = 400 * 24 * 60 * 60;
 const FORM_LIMIT: usize = 1024;
@@ -55,8 +66,116 @@ impl ConsoleToken {
         Ok(Self { normal })
     }
 
+    /// Generate twelve Crockford base32 symbols (60 bits) from `/dev/urandom`.
+    pub fn generate() -> io::Result<Self> {
+        let mut bytes = [0; 12];
+        File::open("/dev/urandom")?.read_exact(&mut bytes)?;
+        // 256 is a multiple of 32, so masking keeps the distribution uniform.
+        let normal = bytes
+            .iter()
+            .map(|byte| char::from(ALPHABET[(byte & 31) as usize]))
+            .collect();
+        Ok(Self { normal })
+    }
+
+    /// Format the compared token in groups of four symbols.
+    pub fn grouped(&self) -> String {
+        self.normal
+            .as_bytes()
+            .chunks(4)
+            .map(|chunk| std::str::from_utf8(chunk).unwrap())
+            .collect::<Vec<_>>()
+            .join("-")
+    }
+
+    /// Read the owner's token unchanged, or atomically create an owner-only file.
+    /// Errors and shared-file warnings name the path without disclosing its contents.
+    pub fn load_or_create(path: &Path) -> Result<Self, String> {
+        match fs::read_to_string(path) {
+            Ok(text) => {
+                let token =
+                    Self::new(&text).map_err(|error| format!("{}: {error}", path.display()))?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let metadata = fs::metadata(path)
+                        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+                    if metadata.permissions().mode() & 0o077 != 0 {
+                        eprintln!(
+                            "{}: other users can read the console token; chmod 600 the file",
+                            path.display()
+                        );
+                    }
+                }
+                Ok(token)
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                let token = Self::generate()
+                    .map_err(|error| format!("cannot generate console token: {error}"))?;
+                write_owner_only(path, &format!("{}\n", token.grouped()))
+                    .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
+                Ok(token)
+            }
+            Err(error) => Err(format!("cannot read {}: {error}", path.display())),
+        }
+    }
+
     fn matches(&self, supplied: &str) -> bool {
         scope_link::tokens_match(normalize(supplied).as_bytes(), self.normal.as_bytes())
+    }
+}
+
+fn write_owner_only(path: &Path, text: &str) -> io::Result<()> {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent)?;
+    }
+    let temporary = path.with_added_extension("tmp");
+    match fs::remove_file(&temporary) {
+        Ok(()) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&temporary)?;
+    file.write_all(text.as_bytes())?;
+    file.sync_all()?;
+    fs::rename(temporary, path)
+}
+
+/// Tell the owner how another device reaches the console and finds its token file.
+/// An unspecified listener uses Setup's outward-address source, which sends nothing.
+pub fn listening_hint(
+    bound: SocketAddr,
+    addresses: &dyn crate::mcp::AddressSource,
+    token_path: &Path,
+) -> String {
+    if loopback(bound.ip()) {
+        return "(to open it from a phone, run with --listen 0.0.0.0:8080)".to_owned();
+    }
+    let address = if bound.ip().is_unspecified() {
+        addresses.addresses().into_iter().find(|ip| !loopback(*ip))
+    } else {
+        Some(bound.ip())
+    };
+    match address {
+        Some(ip) => format!(
+            "other devices open http://{} and pair with the console token in {}",
+            SocketAddr::new(ip, bound.port()),
+            token_path.display()
+        ),
+        None => format!(
+            "other devices pair with the console token in {}",
+            token_path.display()
+        ),
     }
 }
 
@@ -180,6 +299,38 @@ const LIMITED: (&str, &str) = (
     "Too many wrong console tokens from this device: wait a minute and try again.",
     "too many wrong console tokens from this device: wait a minute",
 );
+
+/// MCP calls this only after carrying out Stop and checking Origin, Host and peer.
+pub(crate) async fn admits_mcp(parts: &mut Parts, state: &AppState) -> Option<Response> {
+    let pairing = state.pairing.as_ref()?;
+    let peer = peer(parts).await;
+    if peer.is_some_and(loopback) {
+        return None;
+    }
+    let (status, message) = match presented(&parts.headers) {
+        None => (
+            StatusCode::UNAUTHORIZED,
+            "MCP from another device needs the console token as a bearer token",
+        ),
+        Some((supplied, _)) => match pairing.check(
+            peer.unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED)),
+            &supplied,
+            state.clock.now(),
+        ) {
+            Check::Admitted => return None,
+            Check::Wrong => (StatusCode::UNAUTHORIZED, WRONG.1),
+            Check::Limited => (StatusCode::TOO_MANY_REQUESTS, LIMITED.1),
+        },
+    };
+    Some(
+        (
+            status,
+            [(header::WWW_AUTHENTICATE, "Bearer realm=\"finder console\"")],
+            Json(json!({"jsonrpc":"2.0", "error":{"code":-32001, "message":message}})),
+        )
+            .into_response(),
+    )
+}
 
 pub(crate) async fn gate(State(state): State<AppState>, request: Request, next: Next) -> Response {
     let Some(pairing) = &state.pairing else {

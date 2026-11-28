@@ -64,6 +64,9 @@ pub(crate) async fn door(State(state): State<AppState>, request: Request, next: 
     if !peer_allowed {
         return denied();
     }
+    if let Some(refusal) = crate::pairing::admits_mcp(&mut parts, &state).await {
+        return refusal;
+    }
 
     next.run(Request::from_parts(parts, Body::from(bytes)))
         .await
