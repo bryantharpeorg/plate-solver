@@ -13,10 +13,11 @@ serves `POST /api/imaging/centre`, reads the latest solve and frame, checks the 
 and hands Track the place to centre and the sky at the set point. `Tracker::centre`
 makes the place Track holds the place to centre and has Track's next turn make the step
 from the set point's sky to it, the step 055's nudge makes, so it needs no live pointing
-and is never a sync. `nudge::track_step`, the Track branch of 055's `nudge` made shared,
-reserves the move and reports it in `motion` and `axis_move`. After a centring,
-`Session::centred` marks the running Track for a minute, and the finder camera's first
-solve in it takes the aim point from the place Track holds, so its return moves nothing.
+and is never a sync. `nudge::track_step`, 055's `track_press` made shared after its
+push check, reserves the move and reports it in `motion` and `axis_move`. After a
+centring, `Session::centred` marks the running Track for a minute, and the finder
+camera's first solve in it takes the aim point from the place Track holds, so its return
+moves nothing.
 The imaging run's mount part gains `centre`, a default method the console's part
 implements, and the run asks it when a solve moved no aim point. MCP gains a `centre`
 tool through the same function; the README and the glossary gain the words; the Imaging
@@ -67,23 +68,24 @@ steady from before it while the steering moves the telescope (run, § What was r
 a solve before a stack is stale even though Track never turned unsteady: refusing any
 newer frame is the plain rule, and its words say what to do.
 
-**Track's step.** 055's `Tracker::nudge` (`crates/finder/src/tracking.rs:393`) reads
-the held place, works out the moved place, reads the counts, plans the step with
-`step_path` (the counts plus the model's inverse at the moved place on arrival less
-that at the held place now, each moved axis 0.5° past against Track's way, a GoTo's
-guards), takes the session's model, sets the held place, clears the correction's memory
-and marks the step pending (`stepping = Some(from)`,
-`crates/finder/src/tracking.rs:446`); the rate loop makes it and runs the quiet window
-(055's FR-010, FR-011). Everything after the moved place is the same for a centring, with
+**Track's step.** 055's `Tracker::nudge` (`crates/finder/src/tracking.rs:386`) reads
+the counts, then under one lock reads the held place, works out the moved place, plans
+the step with `step_path` (the counts plus the model's inverse at the moved place on
+arrival less that at the held place now, each moved axis 0.5° past against Track's way,
+a GoTo's guards), takes the session's model, sets the held place, clears the
+correction's memory (`forget`) and marks the step pending (`stepping = Some(from)`,
+`crates/finder/src/tracking.rs:420`); the rate loop makes it and runs the quiet window
+(055's FR-010, FR-011). Everything but the two places is the same for a centring, with
 `from` the set point's sky instead of the held place. So that body becomes
-`step_between(from, to, model)`, which `nudge` and the new `centre` call. The step's end
+`step_between(model, places)`, `places` working out `from` and `to` from the held place
+under that lock, which `nudge` and the new `centre` call. The step's end
 is planned as a difference of the model's inverses, so the model's zero-point errors
 cancel to first order; what is left is the model's scale, about 2 % of the step on the
 simulator (055's Risks), 17.5″ on a 726″ step and 23.2″ on an 834″ tap.
 
 **What the guard sees.** An imaging solve says where the set point was during its
 frame. 040's steady marks (`Tracker::steady_between`,
-`crates/finder/src/tracking.rs:526`) are false for any moment Track was settling,
+`crates/finder/src/tracking.rs:500`) are false for any moment Track was settling,
 stepping (a nudge's or a centring's step), reversing or measuring backlash, before Track
 first tracked, and while a push is read. A push is read only from the finder camera's
 live pointings, and only past 5′ (038's `track_live_pointing`,
@@ -100,14 +102,14 @@ ended more than `AGE_S`, 60 s, before the press is refused (owner decision 3).
 so with the aim point wrong, the finder camera's next pointings put the target off again:
 under 5′ Track corrects the centring away, and past 5′ 038 reads a push, follows it and
 syncs (spec.md Edge Cases). `Session::record_live_pointing`
-(`crates/finder/src/session.rs:1629`) is where every live pointing reaches Track. With a
+(`crates/finder/src/session.rs:1638`) is where every live pointing reaches Track. With a
 centring's mark on the running Track (`TrackRun`, `crates/finder/src/session.rs:161`),
 the first pointing recorded before the mark's time, with the tracker `tracking` and
 steady, first sets the aim point to the pixel of that live frame at which the place
 Track holds lies (`Frame::project`), persisted as measured as 032's FR-022 persists an
 aim reading, and in force at once; the pointing then read from it is the place Track
 holds, so Track has nothing to correct and 038 nothing to read. A held aim point (032's
-FR-036, `Session::set_measured_aim`, `crates/finder/src/session.rs:1730`) is dropped,
+FR-036, `Session::set_measured_aim`, `crates/finder/src/session.rs:1739`) is dropped,
 since this one moves nothing. A pointing after the mark's time clears it. Track turned
 on again builds a new `TrackRun`, with no mark.
 
@@ -166,7 +168,7 @@ specs/057-imaging-solve-centres-the-target/
 ```text
 crates/finder/src/centre.rs                      # new (US1, the target); US2 the tap and PARTS; US4 the mark
 crates/finder/src/tracking.rs                    # US1: `Tracker::centre`, `step_between`
-crates/finder/src/nudge.rs                       # US1: `track_step`, the nudge's Track branch through it
+crates/finder/src/nudge.rs                       # US1: `track_step`, `track_press` through it
 crates/finder/src/api.rs                         # US1: one `merge`, `centre` in the reservation
 crates/finder/src/lib.rs                         # US1: `pub mod centre;`
 crates/finder/src/imaging/run.rs                 # US3: `MountSteps::centre`, the doc sentence, the procedure's step
@@ -187,7 +189,7 @@ crates/finder/web/playwright.config.ts           # US6: two entries
 crates/finder/web/dist                           # US6: the build
 ```
 
-**055's files.** This spec is stacked on 055's code: `nudge.rs` exists only there, and
+**055's files.** This spec is stacked on 055's code: `nudge.rs` is 055's, and
 `tracking.rs`, `api.rs`, `mcp/tools.rs`, the README, the glossary, `api.ts`,
 `ImagingPage.tsx` and `playwright.config.ts` carry 055's additions, which this spec
 places its own after. In `tracking.rs` and `nudge.rs` the lines that move keep their
@@ -249,7 +251,7 @@ minute old: take another and solve it`. Then:
 let set_point = set_point_in_frame((camera.width, camera.height), None, frame.roi.into(), frame.binning.unwrap_or(1));
 let from = ImagingSolve::from_cd(ra, dec, cd, width, height).sky_at(set_point);
 let offset_arcsec = separation(from.0, from.1, to.0, to.1) * 3600.0;
-crate::nudge::track_step(state, by, "centre", |tracker, model| async move { tracker.centre(from, to, model).await }).await?;
+crate::nudge::track_step(state, by, "centre", now, |tracker, model| async move { tracker.centre(from, to, model).await }).await?;
 state.session().centred(now + AGE_S);   // US4
 ```
 
@@ -257,7 +259,8 @@ state.session().centred(now + AGE_S);   // US4
 
 ```rust
 impl Tracker {
-    /// (055) Unchanged in what it does: works out `to` and calls `step_between`.
+    /// (055) Unchanged in what it does: hands `step_between` the held place and
+    /// the moved place.
     pub async fn nudge(&self, up: f64, right: f64, model: Model) -> Result<(), String>;
     /// Hold `to`, a J2000 place, in place of the place held, and have the rate
     /// loop's next turn step the telescope by `to` less `from`, the J2000 place
@@ -265,34 +268,39 @@ impl Tracker {
     /// step, as a nudge's. Refused as a nudge is.
     pub async fn centre(&self, from: (f64, f64), to: (f64, f64), model: Model) -> Result<(), String>;
     /// The step both a nudge and a centring make: plan it from the counts, take
-    /// the session's `model`, hold `to` and mark the step pending from `from`.
-    async fn step_between(&self, from: Target, to: Target, model: Model) -> Result<(), String>;
+    /// the session's `model`, hold `to` and mark the step pending from `from`,
+    /// both worked out by `places` from the place held and the time, under the
+    /// lock that changes them.
+    async fn step_between(&self, model: Model, places: impl FnOnce(&Target, f64) -> (Target, Target)) -> Result<(), String>;
 }
 ```
 
-`centre` checks `may_nudge` (`crates/finder/src/tracking.rs:849`) and builds both places
-from the held target with only RA and Dec changed. `step_between` is `nudge`'s body
-from the axes' read onwards, unchanged.
+`centre`'s `places` builds both places from the held target with only RA and Dec
+changed. `step_between` is `nudge`'s body, unchanged but for `places`; its two
+`may_nudge` checks (`crates/finder/src/tracking.rs:1781`) refuse a centring as they
+refuse a nudge.
 
 ### `crates/finder/src/nudge.rs` and `api.rs` (US1)
 
 ```rust
-/// A step Track makes, through `start_motion` with `tool` (055; 057's
-/// centring too): `ask` hands the step to the tracker with the session's model,
-/// then `axis_move` reads `moving` until the tracker has made it, `done`, or
-/// `halted` with Track's reason, and `motion` reads again what it read before.
-pub(crate) async fn track_step<F, Fut>(state: &AppState, by: &'static str, tool: &'static str, ask: F) -> Result<(), ApiError>
+/// A step Track makes, through `start_motion` with `tool` (055; 057's centring too):
+/// `ask` hands the step to the tracker with the session's model at `now`, then
+/// `axis_move` reports the step under `tool` until it is made (`watch_step`); `motion`
+/// names it only while then.
+pub(crate) async fn track_step<F, Fut>(state: &AppState, by: &'static str, tool: &'static str, now: f64, ask: F) -> Result<(), ApiError>
 where
     F: FnOnce(Arc<Tracker>, Model) -> Fut,
     Fut: Future<Output = Result<(), String>>;
 ```
 
-Its body is `nudge`'s Track branch at `crates/finder/src/nudge.rs:214` with `"nudge"`
-replaced by `tool`; that branch becomes
-`track_step(state, by, "nudge", |tracker, model| async move { tracker.nudge(up, right, model).await })`.
+Its body is `track_press`'s (`crates/finder/src/nudge.rs:278`) from the tracker's read
+on, with `"nudge"` replaced by `tool`, and `watch_step`
+(`crates/finder/src/nudge.rs:322`) takes the tool for `axis_move`'s `done` or `halted`;
+`track_press` keeps its push check and then calls
+`track_step(state, by, "nudge", now, |tracker, model| async move { tracker.nudge(up, right, model).await })`.
 `api.rs` gains `routes = routes.merge(crate::centre::routes());` after the nudge's merge
-(`crates/finder/src/api.rs:665`) and `| "centre"` after `| "nudge"` in `start_motion`'s
-reserved list (`crates/finder/src/api.rs:844`), an entry that is defensive for `centre`;
+(`crates/finder/src/api.rs:667`) and `| "centre"` after `| "nudge"` in `start_motion`'s
+reserved list (`crates/finder/src/api.rs:846`), an entry that is defensive for `centre`;
 `lib.rs` gains `pub mod centre;` after `pub mod catalog;` (`crates/finder/src/lib.rs:86`).
 
 ### `crates/finder/src/session.rs` (US4)
@@ -360,7 +368,7 @@ and `Ending::NotCentred`. `ConsoleMount::centre`, after its `steady_between`
 
 `CentreArguments { frame_id: Option<u64>, x: Option<f64>, y: Option<f64> }`, schema
 only, after `NudgeArguments` (`crates/finder/src/mcp/tools.rs:274`), and the tool
-`centre` before `set_tracking` (`crates/finder/src/mcp/tools.rs:525`): it reads its
+`centre` before `set_tracking` (`crates/finder/src/mcp/tools.rs:489`): it reads its
 arguments as a `CentreAsk` (a failure answers PARTS), takes `limit_move`, calls
 `centre::centre(&state, "mcp", &ask)` and logs the call as `centre`. Its description:
 "Move a real telescope so the session's target, or the point at pixel x, y of imaging
@@ -374,7 +382,7 @@ takes the aim point from that place. Answers frame_id, offset_arcsec and moved: 
 ### The README (`crates/finder/README.md`, US5)
 
 After the nudge's MCP paragraph, before `### MCP under WSL2`
-(`crates/finder/README.md:167`):
+(`crates/finder/README.md:159`):
 
 ```markdown
 Centring from an imaging solve has one tool:
@@ -386,14 +394,14 @@ Centring from an imaging solve has one tool:
   (`track`), or the route's refusal as a tool error.
 ```
 
-In `## API`, right before the `POST /api/goto` row (`crates/finder/README.md:326`):
+In `## API`, right before the `POST /api/goto` row (`crates/finder/README.md:318`):
 
 ```markdown
 | `POST /api/imaging/centre` | JSON `{}`, or `{"frame_id":N,"x":X,"y":Y}` with X and Y a pixel of imaging frame N. Bring the session's target, or that pixel's place, to the sensor's centre from the latest imaging solve, with Track on; answers 200 with `frame_id`, `offset_arcsec` (how far that place was from the sky at the sensor's centre) and `moved` (`track`), or 400, 409 or 415 with a JSON `error`. Same-origin writes only. |
 ```
 
 After `## Nudging the telescope`'s text, before `## Recording a night`
-(`crates/finder/README.md:670`):
+(`crates/finder/README.md:665`):
 
 ```markdown
 ## Centring from an imaging solve
@@ -418,7 +426,8 @@ drift: take another frame and centre again, or let a stack's steering hold it.
 
 ### The glossary (`GLOSSARY.md`, US5)
 
-After **Nudge** (`GLOSSARY.md:277`), before **Purpose label** (`GLOSSARY.md:281`):
+After **Nudge** (055's US4 adds it after **Direct axis move**, `GLOSSARY.md:273`), before
+**Purpose label** (`GLOSSARY.md:277`):
 `**Centring from an imaging solve**:`, then on the next line FR-013's words, then
 `_Avoid_: recentre (the imaging run's Track off and on to a new aim point), slew to
 solve, plate-solve sync`. The name is not **Centring** alone: the imaging run's
@@ -443,7 +452,7 @@ a session's `axis_move` with `tool` `centre` reads `moving`; the status reads `C
 stopped: <reason>` when `halted`, else `Centred <what> · Track holds it. Take another
 imaging frame to check.` `ImagingPage.tsx` imports it after `ImagingSolveBlock` and
 renders `<CentreBlock view={view} session={session} onChange={() => { onChange?.(); void refresh(); }} />`
-right after `<ImagingSolveBlock …/>` (`crates/finder/web/src/components/ImagingPage.tsx:309`).
+right after `<ImagingSolveBlock …/>` (`crates/finder/web/src/components/ImagingPage.tsx:305`).
 
 ## What was run and what was read
 
@@ -566,7 +575,7 @@ back about 15 s after, the aim point taken a frame later, syncs 2, epoch 1, no p
 6.9″ off; at 240″ back about 75 s after, nothing taken and no sync, M42 pulled back to
 239.5″ off; at 240″ back about 195 s after, `model.syncs` 2 to 3 at the first pointing,
 epoch 1, no slip, no push, M42 243.7″ off, because every live solve is a frame sync and
-`Model::add_sync` (`crates/finder/src/model.rs:524`) replaces a same-epoch sync within
+`Model::add_sync` (`crates/finder/src/model.rs:555`) replaces a same-epoch sync within
 120 s and 2° but keeps one 120 s or more apart beside it; at 390″ back about 195 s
 after, a push `moving` and `slip_pending` at the return, then `following`, syncs 3 and
 epoch 2 about 5 s later, M42 97.9″ off.
@@ -595,9 +604,10 @@ a real mount and cameras.
 
 ## Read from the diff, not from a test
 
-- `tracking.rs`'s `step_between` is `nudge`'s body from the axes' read onwards, in the
-  same order; `nudge` only works out `to` first.
-- `nudge.rs`'s `track_step` is the nudge's Track branch with its tool a parameter.
+- `tracking.rs`'s `step_between` is `nudge`'s body in the same order, the two places
+  worked out by `places` under its lock where `nudge` worked out `to`.
+- `nudge.rs`'s `track_step` is `track_press`'s body after its push check, with its tool
+  and its `now` parameters; `watch_step` takes the tool.
 - `run.rs` changes only the trait's one default method, its doc sentence, and the
   procedure's lines of § Interfaces; `Script` is not written.
 - `session.rs` changes only `TrackRun`'s field, its `None`, `Session::centred` and one
@@ -747,14 +757,14 @@ notes go in the night's report; nothing in the repository waits for them.
    no-target asks are US2-S2's, the region of interest US2-S3 and the guards' asks
    US2-S4. No scenario is left in US1 to move.
 2. **US1's helpers.** US2's, US3's and US4's tests use US1's rig from `super::centre`,
-   and US2's the `send` and `write` of 055's `crates/finder/tests/motion/nudge.rs`. US1
+   and US2's the `write` of 055's `crates/finder/tests/motion/nudge.rs`. US1
    writes all of these `pub(super)` from the start, as no story may edit an earlier
    story's test file: the struct `Rig` with its fields `app`, `state` and `sim`; its
    methods `new`, `now`, `call`, `get`, `wait`, `sleep`, `off`, `solve`, `track_on`,
    `rests`, `displace` and `held`; the enum `Cause`; the functions `sep` and `m42`; and
    the constants `CENTRE` and `FINDER_ARCSEC_PER_PX`. US1-S1 uses every one, so none is
-   dead code in US1. US2's file writes its own `refused` (with 055's `write`), `moved`
-   and words.
+   dead code in US1. US2's file writes its own `send` (055's is private there),
+   `refused` (with 055's `write`), `moved` and words.
 3. **Track must settle before the frame.** A frame begun within Track's settle after
    Track on, or during a step, is refused as moved. The rigs wait 30 s after Track on
    and 12 s after a step; the browser test waits 12 s after `tracking` (on the probe a
@@ -842,7 +852,7 @@ stories:
       - path: crates/finder/tests/motion/nudge_track.rs
         status: existing
         disposition: preserve
-        assertion: "055's Track-on nudge: the place held moves by the step, Track makes it within 10 s, never a push or a slip, the epoch unchanged, with nudge's body now in step_between and its Track branch in track_step"
+        assertion: "055's Track-on nudge: the place held moves by the step, Track makes it within 10 s, never a push or a slip, the epoch unchanged, with nudge's body now in step_between and track_press's step in track_step"
         decision: "plan.md:Shapes that existing tests pin"
       - path: crates/finder/tests/motion/nudge.rs
         status: existing
@@ -850,7 +860,7 @@ stories:
         assertion: "055's presses, reservation and refusals as at 8b7212bb, start_motion's list gaining centre"
         decision: "plan.md:Shapes that existing tests pin"
     preserved_behavior:
-      - "Tracker::nudge answers, refuses and steps as at 8b7212bb; step_between is its body from the axes' read onwards"
+      - "Tracker::nudge answers, refuses and steps as at 8b7212bb; step_between is its body, the places worked out by its places closure"
       - "the nudge route's and the MCP nudge's answers, motion and axis_move as at 8b7212bb"
       - "the pointing model, the aim point, the live solve, session.rs, goto.rs and the steering are not written"
     checks:

@@ -61,7 +61,7 @@ pick is the owner's only logged word on the feature.
   386″, 242″ and 114″ off M42 with that warning. The page has no centring; 055's arrows
   step 30″ or 4′.
 - Q: What does Track hold, and what does a stack steer to? → A: Track holds a place
-  (`Tracker::target`, `crates/finder/src/tracking.rs:457`) at the aim point, on the
+  (`Tracker::target`, `crates/finder/src/tracking.rs:431`) at the aim point, on the
   model's rates; with no live pointing no correction reaches it. A stack's steering hands
   the tracker the tracking error, the sky at the set point less the place Track holds
   (036's FR-003 and FR-014; `crates/finder/src/imaging/steering.rs:568`), the set point
@@ -69,7 +69,7 @@ pick is the owner's only logged word on the feature.
   `crates/finder/src/imaging/steering.rs:58`). So the place Track holds is what a stack
   brings to the sensor's centre.
 - Q: Can a nudge's step serve? → A: Yes. 055's `Tracker::nudge`
-  (`crates/finder/src/tracking.rs:393`) moves the held place and has Track's next turn
+  (`crates/finder/src/tracking.rs:386`) moves the held place and has Track's next turn
   make the step, planned as the counts plus the model's inverse at the new place on
   arrival less that at the old place now, each moved axis going 0.5° past against
   Track's own way, through a GoTo's guards, with a quiet window after it in which no
@@ -121,7 +121,7 @@ pick is the owner's only logged word on the feature.
   read it in three outcomes (run): back about 195 s after a centring at 240″ off, one
   more sync (`model.syncs` 2 to 3) with the epoch unchanged, no slip and no push,
   because every live solve is a frame sync and `Model::add_sync`
-  (`crates/finder/src/model.rs:524`) keeps a same-epoch sync beside the one before only
+  (`crates/finder/src/model.rs:555`) keeps a same-epoch sync beside the one before only
   120 s or more after it, so the count rises past a 120 s gap and not for the centring;
   back about 195 s after at 390″ off, a push and a slip at once and a new epoch about
   5 s later; and back about 75 s after at 240″ off, nothing taken and M42 pulled back
@@ -201,7 +201,7 @@ of their own, as each makes Track unsteady (040's marks).
    outcomes read on round 1 of the probe from this text: back about 195 s after a
    centring at 240″ off, one more sync (syncs 2 to 3) with the epoch unchanged, no slip
    and no push, as every live solve is a frame sync and `Model::add_sync`
-   (`crates/finder/src/model.rs:524`) keeps a same-epoch sync beside the one before only
+   (`crates/finder/src/model.rs:555`) keeps a same-epoch sync beside the one before only
    120 s or more after it, not for the centring; back about 195 s after at 390″ off, a
    push and a slip at once and the epoch 1 to 2 about 5 s later, M42 97.9″ off; and, in
    general, Track's correction undoes the centring (back about 75 s after at 240″, M42
@@ -327,7 +327,7 @@ file changes.
   `axis_move: {tool, state, reason?}` beside 014's `goto`". A centring's step is
   reported there with `tool` `centre` (FR-004).
 - 055's FR-008, which reads in part: "While a direct axis move runs, `api::start_motion`
-  SHALL refuse the tools `nudge` and `track`, beside those it refuses at f6d4f5fd".
+  SHALL refuse the tools `nudge` and `track`, beside those it refuses before this spec".
   `centre` joins them (FR-004).
 - 032's FR-036, which reads in part: "While Track is on (the session's `track.wanted` is
   true), `Session::set_measured_aim` SHALL hold the aim point back … So the main
@@ -548,7 +548,7 @@ its lock on the browser tests' fixed ports).
   at 240″; back about 75 s after a centring, 239.5″ off; run), and back past 120 s after
   the last sync the first pointing also adds one sync, as every live solve is a frame
   sync (back about 195 s after at 240″: syncs 2 to 3, the epoch unchanged, no slip, no
-  push; `Model::add_sync`, `crates/finder/src/model.rs:524`; run). Over 5′, at the
+  push; `Model::add_sync`, `crates/finder/src/model.rs:555`; run). Over 5′, at the
   night's 6.5′, the pointings read as a push, Track follows it, the model takes a sync
   and a new epoch (back about 195 s after at 390″: a push and a slip at once, the epoch
   1 to 2 about 5 s later, M42 97.9″ off; run); back at once, M42 stays centred but the
@@ -634,7 +634,7 @@ its lock on the browser tests' fixed ports).
   not wanted with `Track is off: turn Track on to centre` (owner decision 6); Track
   wanted but not `tracking` with `Track is not tracking yet`; Track not steady at any
   moment from the solved frame's start until now (`Tracker::steady_between`,
-  `crates/finder/src/tracking.rs:526`) with `the telescope moved after imaging frame N:
+  `crates/finder/src/tracking.rs:500`) with `the telescope moved after imaging frame N:
   take another and solve it`; and a frame that ended, its start plus its exposure, more
   than `AGE_S`, 60 s, before now with `imaging frame N is more than a minute old: take
   another and solve it`, N the solved frame (owner decision 3). Track is unsteady
@@ -659,7 +659,7 @@ its lock on the browser tests' fixed ports).
   report `axis_move` with `tool` `centre` and `state` `moving`, then `done` once made or
   `halted` with Track's reason, `motion` reading again what it read before. A centring
   SHALL be refused with `the mount is already moving` while a direct axis move runs
-  (`api::start_motion`'s list, `crates/finder/src/api.rs:844`), an entry that is
+  (`api::start_motion`'s list, `crates/finder/src/api.rs:846`), an entry that is
   defensive for `centre`, since every direct axis move needs Track off.
 - **FR-005**: A centring SHALL write nothing to the pointing model: the model's syncs,
   its zero-point epoch and `slip_pending` stay as they were; and nothing to the aim
@@ -705,7 +705,7 @@ its lock on the browser tests' fixed ports).
   the pixel of that live solve's frame at which the place Track holds lies
   (`Frame::project`), persisted with `source` `measured` as 032's FR-022 persists an
   aim reading and in force at once, a held aim point dropped
-  (`Session::record_live_pointing`, `crates/finder/src/session.rs:1629`); its pointing
+  (`Session::record_live_pointing`, `crates/finder/src/session.rs:1638`); its pointing
   is then the place Track holds, so Track has nothing to correct and no push is read.
   A pointing after that time SHALL clear the mark and read nothing; Track turned on
   again starts with no mark (owner decisions 3 and 5, owner approval 11).
@@ -798,7 +798,8 @@ its lock on the browser tests' fixed ports).
 
 - **Earlier features are in place.** Every spec in `depends_on_landed` has landed, and
   052 to 055 have landed before the flip (plan.md § Prerequisites). Every citation here
-  was read at 8b7212bb.
+  was read at 26a39791 (`main` with 055's US1 to US3), but those of 055's US4 and US5,
+  not yet on `main`, which were read at 8b7212bb.
 - **The simulator stands for the mount and cameras** in the gates: its mount's
   backlash, counts and rates, its finder camera, whose frames a test stops while the
   imaging camera goes on, and its imaging camera at the angle a test sets, solved by the

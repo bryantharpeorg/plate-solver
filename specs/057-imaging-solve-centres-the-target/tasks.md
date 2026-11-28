@@ -62,12 +62,14 @@ description: "Task list for 057-imaging-solve-centres-the-target: An Imaging Sol
 
 ### Implementation
 
-- [ ] T002 [US1] In `crates/finder/src/tracking.rs`, move `Tracker::nudge`'s body from
-  the axes' read onwards into `step_between`, have `nudge` work out its moved place and
-  call it, and add `Tracker::centre`, as plan.md § Interfaces gives them (FR-003).
-- [ ] T003 [US1] In `crates/finder/src/nudge.rs`, move the Track branch of `nudge` into
-  `pub(crate) async fn track_step` with its tool a parameter, and have `nudge` call it
-  with `"nudge"` (FR-004).
+- [ ] T002 [US1] In `crates/finder/src/tracking.rs`, move `Tracker::nudge`'s body into
+  `step_between`, its held place and moved place worked out by a `places` closure under
+  its lock, have `nudge` call it with that closure, and add `Tracker::centre`, as plan.md
+  § Interfaces gives them (FR-003).
+- [ ] T003 [US1] In `crates/finder/src/nudge.rs`, move `track_press`'s body after its
+  push check into `pub(crate) async fn track_step` with its tool and its `now`
+  parameters, give `watch_step` the tool, and have `track_press` call it with `"nudge"`
+  (FR-004).
 - [ ] T004 [US1] Create `crates/finder/src/centre.rs` with its module doc, `AGE_S`,
   `CentreAsk` with no field, `CentreView`, `routes` and `centre` for the session's
   target, its checks in FR-002's order and the step from the sky at the set point
@@ -75,8 +77,8 @@ description: "Task list for 057-imaging-solve-centres-the-target: An Imaging Sol
   FR-005); add `pub mod centre;` to `crates/finder/src/lib.rs` after `pub mod catalog;`
   (`crates/finder/src/lib.rs:86`).
 - [ ] T005 [US1] In `crates/finder/src/api.rs`, add `routes = routes.merge(crate::centre::routes());`
-  after the nudge's merge (`crates/finder/src/api.rs:665`) and `"centre"` after
-  `"nudge"` in `start_motion`'s reserved list (`crates/finder/src/api.rs:844`) (FR-004).
+  after the nudge's merge (`crates/finder/src/api.rs:667`) and `"centre"` after
+  `"nudge"` in `start_motion`'s reserved list (`crates/finder/src/api.rs:846`) (FR-004).
 - [ ] T006 [US1] Run the `lint` and `test` gates with every existing test unchanged and
   green, then commit the green story (FR-001 to FR-005; US1-S1).
 
@@ -85,9 +87,10 @@ description: "Task list for 057-imaging-solve-centres-the-target: An Imaging Sol
 ### Tests first
 
 - [ ] T007 [US2] Create `crates/finder/tests/motion/centre_tap.rs` with US2-S1 to US2-S5
-  on US1's rig from `super::centre` and 055's `send` and `write` from `super::nudge`,
-  with its own copy of PARTS and of the refusals' words, and add `mod centre_tap;` to
-  `crates/finder/tests/motion/main.rs` in its alphabetical place. Before T008 a tap
+  on US1's rig from `super::centre` and 055's `write` from `super::nudge`, with its own
+  `send` (055's is private) and its own copy of PARTS and of the refusals' words, and
+  add `mod centre_tap;` to `crates/finder/tests/motion/main.rs` in its alphabetical
+  place. Before T008 a tap
   answers 400 and US2-S1 and US2-S2 fail; US2-S3, US2-S4 and US2-S5 pass from US1 on
   (plan.md § Plan traps 4) (run).
 
