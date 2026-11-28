@@ -665,6 +665,7 @@ pub fn router(state: AppState) -> Router {
     routes = routes.merge(crate::imaging::routes::routes());
     routes = routes.merge(crate::finder_focus::routes());
     routes = routes.merge(crate::nudge::routes());
+    routes = routes.merge(crate::centre::routes());
     routes.with_state(state)
 }
 
@@ -844,6 +845,7 @@ where
             | "goto_axis_position"
             | "move_axis"
             | "nudge"
+            | "centre"
             | "track"
     ) && direct_move_running
     {

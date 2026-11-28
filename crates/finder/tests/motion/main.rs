@@ -5,6 +5,7 @@
 #[path = "../support/mod.rs"]
 mod support;
 
+mod centre;
 mod goto;
 mod imaging_align_track;
 mod imaging_focus_altitude;
