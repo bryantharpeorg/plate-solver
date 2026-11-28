@@ -191,12 +191,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         state_dir = state_dir.join("mount-sky");
     }
     let session = Session::with_state_file(state_dir.join("session.json"))?;
+    let token_path = state_dir.join(finder::pairing::TOKEN_FILE);
+    let token =
+        finder::pairing::ConsoleToken::load_or_create(&token_path).unwrap_or_else(|error| {
+            eprintln!("{error}");
+            std::process::exit(1)
+        });
 
     let state = AppState::shared(databases.first().db.clone(), samples)
         .with_databases(databases)
         .with_session(session)
         .with_recordings(state_dir.join("recordings"))
-        .with_allowed_hosts(args.allow_host);
+        .with_allowed_hosts(args.allow_host)
+        .with_console_token(token);
     let imaging_dir = args
         .imaging_dir
         .clone()
@@ -274,9 +281,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     eprintln!("finder console: http://{bound_addr}");
-    if args.listen.ip().is_loopback() {
-        eprintln!("(to open it from a phone, run with --listen 0.0.0.0:8080)");
-    }
+    eprintln!(
+        "{}",
+        finder::pairing::listening_hint(
+            bound_addr,
+            McpConfig::default().address_source.as_ref(),
+            &token_path
+        )
+    );
     axum::serve(
         listener,
         router(state).into_make_service_with_connect_info::<SocketAddr>(),
