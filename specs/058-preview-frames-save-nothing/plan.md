@@ -99,7 +99,7 @@ paragraph; two glossary entries and one changed; ADR 0002's one line.
 | Principle | How this plan honours it |
 |---|---|
 | I. Agreeing with cedar is correctness | Detection, the plate solver and the imaging solver are untouched. The crop is 031's own colour and stretch over the centre's samples (FR-006); a preview frame is never solved (032's refusal, unchanged). |
-| II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. `playwright.config.ts` gains two list entries, an owner approval as 050's and 051's were. The only edits to existing test files are the `mod` lines of `crates/finder/tests/console/main.rs` and `crates/finder/tests/mcp/main.rs` (SC-002). The README's count of the imaging camera's tools, which `crates/finder/tests/console/imaging_run_docs.rs:139` pins, keeps its words and gains a clause, so the test is not edited (spec.md owner approval 5). Every existing test passed unchanged at each story's tip and on the fold's final tip (run: nextest 1,528 to 1,533 of as many; Vitest 607 to 613 of as many; `CI=1 npm run e2e` 34 of 34 before US4 and 35 of 35 from it), and again in probe round 1, built from this text alone, and on its fold's final tip (run: nextest 1,528 to 1,533 of as many; Vitest 613 of 613 and `CI=1 npm run e2e` 35 of 35 at US4's tip and on the fold's tip). |
+| II. Never weaken a gate | No existing test, golden, fixture, `scripts/ci/`, `ci.yml`, `deny.toml`, `CODEOWNERS` or `ergane.yaml` is edited. `playwright.config.ts` gains two list entries, an owner approval as 050's and 051's were. The only edits to existing test files are the `mod` lines of `crates/finder/tests/console/main.rs` and `crates/finder/tests/mcp/main.rs`, and one line of 055's test helper `held` in `crates/finder/src/nudge.rs`, `crop: None,`, which names the frame view's new field and changes no assertion (SC-002; spec.md owner approval 9). The README's count of the imaging camera's tools, which `crates/finder/tests/console/imaging_run_docs.rs:139` pins, keeps its words and gains a clause, so the test is not edited (spec.md owner approval 5). Every existing test passed unchanged at each story's tip and on the fold's final tip (run: nextest 1,528 to 1,533 of as many; Vitest 607 to 613 of as many; `CI=1 npm run e2e` 34 of 34 before US4 and 35 of 35 from it), and again in probe round 1, built from this text alone, and on its fold's final tip (run: nextest 1,528 to 1,533 of as many; Vitest 613 of 613 and `CI=1 npm run e2e` 35 of 35 at US4's tip and on the fold's tip), and on the replay onto 936b140d with approval 9's line (run: nextest 1,597 of 1,597; Vitest 621 of 621; `CI=1 npm run e2e` 39 of 39). |
 | III. Tests first, independent expectations | The oracles are the simulated imaging camera's sensor (1236 × 822 RGGB, `crates/simulator/src/imaging.rs:145`), the worked frames and their hand-worked boxes and cells, the folders' own listings, 031's, 032's and 033's words and the scenarios' words, the README's and the ADR's text, and DESIGN.md's night ink. No test calls `crop` or `rgb` for an expected value or reads `CROP_SIDE`, `PREVIEW_SIDE`, `PREVIEWS_KEPT` or `POLL_MS`. Each story's new tests fail before it, and a mutation of each new or changed requirement is caught by a scenario (run, § What was run). Time comes from a paused tokio clock and the simulator's virtual clock in Rust, and real time within a bound in Vitest. |
 | IV. Read the critical paths twice | None is touched: no `Cargo.toml` or `Cargo.lock` change, no `unsafe`, nothing under `proto/`, `crates/math-core`, `crates/pattern-database`, `crates/database-generation`, `crates/scope-node` or `crates/scope-link`, no `build.rs` or `.cargo/`. |
 | V. Proven open source first, with honest licensing | Looked for, in local sources only (no download): the repository's survey of 2026-11-15 and the research notes behind it, the project's capture of INDI's CCD simulator (outside the repository), the vendored `reference-solutions/`, the crates in the cargo registry's local copy, the console's own code and the field night's viewer, outside the repository. **The camera maker's video mode**: the maker's library has one beside its single exposures, which INDI and INDIGO use for deep-sky frames (`docs/research/2026-11-15-imaging-camera.md:42`); the maker's planetary program uses video and its deep-sky one single frames (the research notes, read); one study saw its video stall on USB 3.0 (`docs/research/2026-11-15-imaging-camera.md:43`). **INDI's own stream**: the survey's property table lists the frame's format (`docs/research/2026-11-15-imaging-camera.md:74`) and where a frame goes (`docs/research/2026-11-15-imaging-camera.md:76`), not a stream, but INDI's CCD simulator, as the project captured it, offers `CCD_VIDEO_STREAM`, `STREAMING_EXPOSURE`, `CCD_STREAM_FRAME` (a subframe), `CCD_STREAM_ENCODER` with `RAW` and `MJPEG` and `LIMITS_PREVIEW_FPS`; whether `indi_asi_ccd` streams this camera is not known here. A stream would be a new node path and a `proto/` change (IV) and would amend ADR 0002's node that "does no pixel work": spec.md owner decision 1 (d), not adopted, not built. **N.I.N.A.'s looped exposure and Ekos's 1 s loop** (`docs/research/2026-11-15-imaging-camera.md:233`), the deep-sky focus tools, repeat single exposures, as this spec does; **SharpCap's** focus measures for the Moon and planets (`docs/research/2026-11-15-imaging-camera.md:208`): desktop programs that own the camera, read for their method only (owner decision 4 (d)). **OpenLiveStacker**: GPL-3, an appliance that wants the camera (`docs/research/2026-11-15-imaging-camera.md:419`). **The `image` crate** (0.25.10, already a dependency): its `imageops::crop_imm` crops a decoded picture, so it would need the whole frame in colour first, where a crop of the samples' rows before `rgb` keeps the mosaic's cells; its JPEG encoder is reused through `preview::jpeg`. **`reference-solutions/`** (cedar-detect, cedar-solve): no frame viewer (searched for one). The crop's box sum is a few lines over the samples the preview already reads. **The field night's viewer**, a script beside the field notes: one `POST /api/imaging/frame` at a time while the camera is idle, the console's preview shown; it is this design less the file. **The console's own `/api/live` stream** (`crates/finder/web/src/useLive.ts:22`), the finder camera's: a second kind of message on it, rejected in § Decisions. Nothing is adopted; the new code is the route, the frame's end without a file, the crop of rows around the brightest box, the tool and the block. |
@@ -114,7 +114,8 @@ crates/finder/
 │   ├── imaging/mod.rs                         # US1: take_preview, take_as's keep; US2: crops, crop()
 │   ├── imaging/preview.rs                     # US2: CROP_SIDE, BOX_SIDE, brightest, crop
 │   ├── imaging/routes.rs                      # US1: POST /api/imaging/preview; US2: crop.jpg
-│   └── mcp/tools.rs                           # US3: take_preview_frame
+│   ├── mcp/tools.rs                           # US3: take_preview_frame
+│   └── nudge.rs                               # US2: crop: None in 055's test helper held
 ├── tests/
 │   ├── console/imaging_preview_frames.rs      # US1, new
 │   ├── console/imaging_preview_crop.rs        # US2, new
@@ -826,8 +827,13 @@ browser test, the two config entries and the rebuilt `dist`.
 ## Prerequisites before this spec is flipped to `ready`
 
 1. **The earlier specs have landed:** every spec in `depends_on_landed`. Met: each is on
-   `main` at f6d4f5fd.
-2. **052 to 055 have landed, and this spec is re-anchored on them.** Not met. 054 writes
+   `main` at e7d6d094.
+2. **052 to 055 have landed, and this spec is re-anchored on them.** Met on `main` at
+   e7d6d094 (055 landed at 936b140d; e7d6d094 adds only 056's and 057's specs): every cite
+   into a changed file re-read and moved with its line, 054 and 055 in
+   `depends_on_landed`, the record's last writers 054 US1 and US2 and 055 US3, US4 and
+   US5, the probe's code replayed with every gate passing, and the validator and
+   preflight run again (spec.md § Clarifications, Session 2026-11-28). 054 writes
    `crates/finder/src/imaging/mod.rs` (`Imaging::set`), `api.ts`, `ImagingPage.tsx`
    (the kept picture of the section `Imaging frame`), the README, the glossary, `dist`
    and `crates/finder/tests/console/main.rs`; 055 writes `ImagingPage.tsx` (the Nudge
@@ -837,7 +843,9 @@ browser test, the two config entries and the rebuilt `dist`.
    `path:line`, name their stories in the record's `shared_writes`, add them to
    `depends_on_landed`, and run the validator and preflight again.
 3. **The owner decisions are answered and the owner approvals given** (spec.md § Owner
-   decisions, § Owner approvals). Not met: none is answered.
+   decisions, § Owner approvals). Met: the owner's "Flip 058, all recs" of 2026-11-28
+   answers every decision with its recommendation and gives approvals 1 to 8, and their
+   yes of the same day gives approval 9.
 4. **A cynical review** of this trio, folded. Met: round 1 (0 blockers, 5 majors, 11
    minors) folded on 2026-11-27, every finding in § What was run's fold round; whether a
    second round runs is the seat's call.
@@ -846,8 +854,8 @@ browser test, the two config entries and the rebuilt `dist`.
    0e2b083c: 0 blocking, 11 clarity), and its fold proved each change on that branch (tip
    61da6c7e, every gate passing) (§ What was run).
 6. **The page half has run once.** Met: `CI=1 npm run e2e` 35 of 35 at each story's tip
-   from US4 on, in probe round 1 at 0e2b083c and on its fold's tip 61da6c7e; it runs
-   again on the re-anchored base (2).
+   from US4 on, in probe round 1 at 0e2b083c and on its fold's tip 61da6c7e; and 39 of 39
+   on the replay onto 936b140d (2).
 7. **No operator-staged files are needed.** Met: no story reads a file outside the
    repository; the probe's measure of a real frame is not a story.
 
@@ -909,6 +917,10 @@ They bind every story.
    factory build has run over its probe on earlier specs: about 31,985 B (48.8 %),
    33,902 B (51.7 %), 38,142 B (58.2 %) and 34,549 B (52.7 %): every story under the
    60 % line, US3 by 1,179 B, and far under the 128 KiB refusal.
+   Replayed onto 936b140d, with ADR 0002's line in US1 and approval 9's line in US2:
+   US1 23,693 B, US2 25,488 B (38.9 %), US3 28,254 B and US4 25,588 B (39.0 %); at the
+   1.35 times, US2 about 34,409 B (52.5 %) and US4 about 34,544 B (52.7 %), the others
+   as before.
 3. **A spec fixed mid-epic needs a relaunch.** *Check:* no builder edits
    `specs/058-preview-frames-save-nothing/` or `.specify/`.
 4. **An earlier story's test file is an existing test.** *Check:* US2 to US4 write no
@@ -1030,16 +1042,18 @@ moved from US3 to US1, which keeps US3 under the 60 % line (§ What was run). Wr
 from the task text. Shared writes name the spec story that last wrote the same file on
 `main`; ADR 0002 was last written by a spec flip, not a story, so it has none; within the
 spec, each story's files written by an earlier one are ordered by `depends_on_merged`;
-054 and 055 are re-anchored at the flip (§ Prerequisites 2).
+re-anchored on 2026-11-28 on `main` at e7d6d094, where 054 and 055 had landed: the
+entries for files they last changed name their stories, and US2 writes 055's
+`nudge.rs` (spec.md owner approval 9).
 
-None of the ten owner decisions of spec.md is answered; this record is written to
-their recommendations, and approves nothing. The flip is the owner's. No open question
+The owner answered the ten decisions of spec.md on 2026-11-28 with their
+recommendations, which this record was written to. No open question
 is left: each choice is an owner decision with a recommendation, so every story's
 `open_questions` is empty.
 
 ```yaml
 version: 1
-reviewed_revision: f6d4f5fd482ccc9d5b634ef1aa5124c112769583
+reviewed_revision: e7d6d094fe489e4e93d2931e02c5522124dccefc
 stories:
   US1:
     tests:
@@ -1106,20 +1120,20 @@ stories:
         disposition: merge_order
         reason: "058 depends_on_landed 035, whose US5 last changed frames.rs (a1c1b331)"
       - path: crates/finder/src/imaging/mod.rs
-        other_spec: 050-tools-page-aligns-finder-camera
-        other_story: US2
+        other_spec: 054-focus-pause-gives-camera-back
+        other_story: US1
         disposition: merge_order
-        reason: "058 depends_on_landed 050, whose US2 last changed imaging/mod.rs (500c7574)"
+        reason: "058 depends_on_landed 054, whose US1 last changed imaging/mod.rs (a5fb8b85)"
       - path: crates/finder/src/imaging/routes.rs
         other_spec: 050-tools-page-aligns-finder-camera
         other_story: US3
         disposition: merge_order
         reason: "058 depends_on_landed 050, whose US3 last changed imaging/routes.rs (6b70a4a2)"
       - path: crates/finder/tests/console/main.rs
-        other_spec: 051-tools-page-focuses-either-camera
+        other_spec: 054-focus-pause-gives-camera-back
         other_story: US2
         disposition: merge_order
-        reason: "058 depends_on_landed 051, whose US2 last changed console/main.rs (f9706cc0)"
+        reason: "058 depends_on_landed 054, whose US2 last changed console/main.rs (92e833da)"
     open_questions: []
   US2:
     tests:
@@ -1153,6 +1167,7 @@ stories:
       - crates/finder/src/imaging/mod.rs
       - crates/finder/src/imaging/preview.rs
       - crates/finder/src/imaging/routes.rs
+      - crates/finder/src/nudge.rs
       - crates/finder/tests/console/imaging_preview_crop.rs
       - crates/finder/tests/console/main.rs
     no_write_reason: ""
@@ -1162,6 +1177,11 @@ stories:
         other_story: US6
         disposition: merge_order
         reason: "058 depends_on_landed 031, whose US6 last changed preview.rs (f7b58d53)"
+      - path: crates/finder/src/nudge.rs
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US3
+        disposition: merge_order
+        reason: "058 depends_on_landed 055, whose US3 last changed nudge.rs (26a39791); one line of its test helper held, owner approval 9"
     open_questions: []
   US3:
     tests:
@@ -1209,25 +1229,25 @@ stories:
     no_write_reason: ""
     shared_writes:
       - path: GLOSSARY.md
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US3
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US4
         disposition: merge_order
-        reason: "058 depends_on_landed 051, whose US3 last changed GLOSSARY.md (9424a371)"
+        reason: "058 depends_on_landed 055, whose US4 last changed GLOSSARY.md (b1ccbddd)"
       - path: crates/finder/README.md
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US3
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US4
         disposition: merge_order
-        reason: "058 depends_on_landed 051, whose US3 last changed the finder README (9424a371)"
+        reason: "058 depends_on_landed 055, whose US4 last changed the finder README (b1ccbddd)"
       - path: crates/finder/src/mcp/tools.rs
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US3
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US4
         disposition: merge_order
-        reason: "058 depends_on_landed 051, whose US3 last changed mcp/tools.rs (9424a371)"
+        reason: "058 depends_on_landed 055, whose US4 last changed mcp/tools.rs (b1ccbddd)"
       - path: crates/finder/tests/mcp/main.rs
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US3
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US4
         disposition: merge_order
-        reason: "058 depends_on_landed 051, whose US3 last changed mcp/main.rs (9424a371)"
+        reason: "058 depends_on_landed 055, whose US4 last changed mcp/main.rs (b1ccbddd)"
     open_questions: []
   US4:
     tests:
@@ -1298,24 +1318,24 @@ stories:
     no_write_reason: ""
     shared_writes:
       - path: crates/finder/web/dist
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US4
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US5
         disposition: merge_order
-        reason: "058 depends_on_landed 051, whose US4 last rebuilt dist (f6d4f5fd)"
+        reason: "058 depends_on_landed 055, whose US5 last rebuilt dist (936b140d)"
       - path: crates/finder/web/playwright.config.ts
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US4
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US5
         disposition: merge_order
-        reason: "058 depends_on_landed 051, whose US4 last changed playwright.config.ts (f6d4f5fd)"
+        reason: "058 depends_on_landed 055, whose US5 last changed playwright.config.ts (936b140d)"
       - path: crates/finder/web/src/api.ts
-        other_spec: 051-tools-page-focuses-either-camera
-        other_story: US4
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US5
         disposition: merge_order
-        reason: "058 depends_on_landed 051, whose US4 last changed api.ts (f6d4f5fd)"
+        reason: "058 depends_on_landed 055, whose US5 last changed api.ts (936b140d)"
       - path: crates/finder/web/src/components/ImagingPage.tsx
-        other_spec: 042-imaging-run-page-and-mcp
-        other_story: US9
+        other_spec: 055-nudge-arrows-follow-the-frame
+        other_story: US5
         disposition: merge_order
-        reason: "058 depends_on_landed 042, whose US9 last changed ImagingPage.tsx (5d8f5353)"
+        reason: "058 depends_on_landed 055, whose US5 last changed ImagingPage.tsx (936b140d)"
     open_questions: []
 ```

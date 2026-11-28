@@ -1,6 +1,6 @@
 ---
-state: draft
-depends_on_landed: ["013-live-finder", "016-mcp", "030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "035-live-stack", "042-imaging-run-page-and-mcp", "050-tools-page-aligns-finder-camera", "051-tools-page-focuses-either-camera"]
+state: ready
+depends_on_landed: ["013-live-finder", "016-mcp", "030-imaging-camera-link", "031-imaging-frames-on-console", "032-imaging-solve-and-aim-point", "033-focus-reading-and-aid", "035-live-stack", "042-imaging-run-page-and-mcp", "050-tools-page-aligns-finder-camera", "051-tools-page-focuses-either-camera", "054-focus-pause-gives-camera-back", "055-nudge-arrows-follow-the-frame"]
 # Drafted 2026-11-27 against `main` at f6d4f5fd, at the owner's ask of 2026-11-27 (the
 # owner picked "Imaging live view" from the operator seat's options after a field night;
 # the label and its description are the seat's words, not the owner's), from a probe of
@@ -11,15 +11,26 @@ depends_on_landed: ["013-live-finder", "016-mcp", "030-imaging-camera-link", "03
 # probe's round 1 built the four stories from this trio alone on `probe/058-r1` from
 # 660d4df7 (tip 0e2b083c: 0 blocking, 11 clarity defects), folded the same day with its
 # proofs on that branch (tip 61da6c7e, every gate passing). Every `path:line` here was read
-# at f6d4f5fd. None of the ten owner decisions is answered:
-# each carries its recommendation, and the scenarios and the record are written to the
-# recommendations. 013 is named for the simulator the rigs run
-# on; 016 for MCP; 030 for the simulated imaging camera and the node's own copy; 031 for
+# at f6d4f5fd, and every one into a file 052 to 055 changed re-read at 936b140d, where
+# 055 landed. The owner answered the ten decisions on 2026-11-28 with their
+# recommendations, which the scenarios were already written to. 013 is named for the
+# simulator the rigs run on; 016 for MCP; 030 for the simulated imaging camera and the
+# node's own copy; 031 for
 # the imaging frame, its preview, the lease and the Imaging page; 032 for the imaging
 # solve's refusal; 033 for the focus aid's refusal; 035, 042, 050 and 051 because each
 # last changed a file this spec writes (plan.md § Refinement Record). 052, 053, 054 and
 # 055 are drafted beside this spec and land before it, in that order; it is re-anchored
 # on them before any flip.
+# Re-anchored on 2026-11-28 on `main` at e7d6d094, where 052 to 055 had landed (056 and
+# 057 had not: they build beside it): 054 and 055 join `depends_on_landed`; the record's
+# last writers name 054's and 055's stories where they last changed a file; the probe's
+# code replayed onto 055's landed code story by story and passed every gate there, with
+# one line more, at the owner's yes (owner approval 9): 055's test helper `held` names
+# the frame view's new `crop`.
+# Flipped to `ready` on 2026-11-28 at the owner's ask ("Flip 058, all recs": a yes to
+# the seat flipping it itself with its recommended answers once the re-anchor passes,
+# MCP's `take_preview_frame` included), with every prerequisite in plan.md met and none
+# waived.
 ---
 
 # Feature Specification: Preview Frames Save Nothing
@@ -28,7 +39,7 @@ depends_on_landed: ["013-live-finder", "016-mcp", "030-imaging-camera-link", "03
 
 **Created**: 2026-11-27
 
-**Status**: Draft
+**Status**: Ready
 
 **Input**: On a field night the focus aid refused the imaging camera's first stars,
 donuts of about 80 px (`no_region`), until the owner had turned the focuser by eye; later
@@ -166,10 +177,35 @@ at the camera's own pace, saving nothing.
   `the preview frame was overtaken by another imaging frame` (FR-009; read, not run), where a copy of 031's tool's last arm would panic on a frame
   with no error and never answer (run in the probe, the tool made to take a saved frame).
 
+### Session 2026-11-28 (the flip)
+
+- Q: How were the ten open decisions answered? → A: Each with its recommendation, by the
+  owner's "Flip 058, all recs" on 2026-11-28 (MCP's `take_preview_frame` included), the
+  seat's question being whether it should flip 058 itself with its recommended answers.
+- Q: What moved on `main` between the draft and the flip? → A: 052 to 055 landed, at
+  936b140d; `main` at e7d6d094 adds only 056's and 057's specs. Every `path:line` into a
+  file they changed was re-read there and moved with its line. 054 last changed
+  `imaging/mod.rs` and the console test binary's `main.rs`; 055 the README, the
+  glossary, `mcp/tools.rs`, the MCP test binary's `main.rs`, `nudge.rs` and the page's
+  files; the record names them. The probe's code replayed onto 936b140d story by story
+  and passed every gate there (nextest 1,597, Vitest 621, `CI=1 npm run e2e` 39 of 39)
+  once 055's test helper named `crop`; no scenario or FR changed but for that line.
+- Q: Why does US2 write `crates/finder/src/nudge.rs`? → A: 055's test helper `held`
+  (`crates/finder/src/nudge.rs:416`) builds a `FrameView` with every field named, so
+  US2's new `crop` stops it compiling until it names `crop: None` too. The owner
+  approved that one line on 2026-11-28 ("Yes", to the seat's question; owner approval
+  9). It changes no assertion.
+- Q: 056 and 057 build beside this spec; are their files read here? → A: No. Neither
+  had landed at the flip. Where a story of theirs and one of this spec write the same
+  file (the README, the glossary, the test binaries' `main.rs`, `mcp/tools.rs`,
+  `nudge.rs`, the page's files, `dist`), the later to land is rebased onto the earlier.
+  Both keep the README's `sixteen tools of its own`, which US3 extends with a clause.
+
 ## Owner decisions
 
-None is answered. Each carries its options, its evidence and a recommendation, and the
-scenarios and the record are written to the recommendations. One general rule is behind
+All ten are settled by the owner on 2026-11-28, each with its recommendation. Each keeps
+its options and its evidence; the scenarios and the record were written to the
+recommendations, so no scenario changed for them. One general rule is behind
 decisions 1, 2, 5, 8 and 10: **a preview frame is a single imaging frame that the
 console does not save; every other rule is a single frame's.** It takes the settings in
 force, holds no lease, is refused and refuses others exactly as a single frame does, and
@@ -185,7 +221,7 @@ FR-014) and a run that takes the camera back while a preview frame is in flight 
 (decision 10). The README's paragraph gains a sentence saying so (FR-010).
 
 1. **A loop on the console, or a single frame the page repeats** (FR-001, FR-004,
-   FR-013). Recommended (a): **a preview frame, one unsaved single frame per request,
+   FR-013). Answered (a): **a preview frame, one unsaved single frame per request,
    that the page asks for again as soon as the last is shown**:
    `POST /api/imaging/preview`. Evidence: built and run in the probe (four stories);
    200 ms frames a mean 1.8 times the exposure apart on the simulated console, the
@@ -216,7 +252,7 @@ FR-014) and a run that takes the camera back while a preview frame is in flight 
    this camera is not known here; not built, not run. (a) still follows for a first cut:
    the deep-sky focus tools repeat single exposures as it does
    (`docs/research/2026-11-15-imaging-camera.md:233`).
-2. **Exposure, gain and binning while previewing** (FR-001). Recommended (a): **the
+2. **Exposure, gain and binning while previewing** (FR-001). Answered (a): **the
    settings in force**, set in the Imaging page's Settings, as any single frame takes
    them; nothing is remembered or put back by the console. To change them the observer
    stops the preview frames, waits until the block no longer reads `Stopping`, saves the
@@ -237,7 +273,7 @@ FR-014) and a run that takes the camera back while a preview frame is in flight 
    subject); (c) **one fixed short exposure**: a planet wants tens of milliseconds and a
    star field a second or more; (d) **the block pausing between frames for a settings
    change**: smoother, but a second state shared between the Settings form and the block.
-3. **The crop: its size and where it sits** (FR-006). Recommended (e): **200 × 200
+3. **The crop: its size and where it sits** (FR-006). Answered (e): **200 × 200
    cells around the frame's brightest 32 × 32-sample box**, one picture pixel a 2 × 2
    cell of the mosaic (one sample of a mono frame), drawn at the block's width, about
    twice its size on a phone. A box's sum is a box average, so one hot sample cannot
@@ -265,7 +301,7 @@ FR-014) and a run that takes the camera back while a preview frame is in flight 
    **the camera's region of interest as the crop**: far fewer bytes a frame, but no
    whole frame, and a setting changed and put back (2 (b)); it is also the only proven
    speed knob (decision 2).
-4. **The focus aid's star size beside it** (FR-012). Recommended (a): **none**: the aid
+4. **The focus aid's star size beside it** (FR-012). Answered (a): **none**: the aid
    and preview frames each need the camera and cannot run together, and a star size
    needs a saved file (033's measure is the imaging solver's on a FITS file,
    `crates/finder/src/imaging/focus/run.rs:986`), which is what this spec avoids; the
@@ -279,7 +315,7 @@ FR-014) and a run that takes the camera back while a preview frame is in flight 
    measure of its own to design and test, and on a planet the crop's stretch already
    draws the globe near white (run on the synthetic Saturns), so the number would be
    the samples', not the picture's; not built.
-5. **How it ends** (FR-014). Recommended (d): **Stop, leaving the page, a refusal, a
+5. **How it ends** (FR-014). Answered (d): **Stop, leaving the page, a refusal, a
    request that does not reach the console, or a frame that failed or was aborted end
    it; hiding the page (another tab, a phone's screen locked) pauses it, and showing the
    page again asks for the next frame**; Stop lets the frame in flight end by itself,
@@ -299,7 +335,7 @@ FR-014) and a run that takes the camera back while a preview frame is in flight 
    (`crates/finder/README.md:127`); (c) **Stop also aborts the frame in flight**: frees
    the camera sooner after a long exposure, but an abort ends whatever frame is in flight
    (`crates/finder/src/imaging/routes.rs:224`), which may by then be another's.
-6. **Where on the page** (FR-012). Recommended (a): **a block `Preview frames` on the
+6. **Where on the page** (FR-012). Answered (a): **a block `Preview frames` on the
    Imaging page right after the section `Imaging frame`**, whose own picture shows the
    whole frame (`crates/finder/web/src/components/ImagingPage.tsx:289`); the block shows
    the crop. On a phone the crop sits under the whole frame, so the observer scrolls to
@@ -307,14 +343,14 @@ FR-014) and a run that takes the camera back while a preview frame is in flight 
    fewer, but 054 rewrites that section's picture and 055 adds the Nudge block after the
    camera's sections; (c) **the Tools page**, beside the focus aid's block: away from the
    whole frame's picture.
-7. **MCP** (FR-009). Recommended (a), weakly: **one tool, `take_preview_frame`**, which
+7. **MCP** (FR-009). Answered (a): **one tool, `take_preview_frame`**, which
    takes no arguments and answers the view with the preview and the crop as two images:
    cheap, and it keeps an agent looking at the sky off the frame route. The field
    night's viewer was an agent's HTTP script, so (b) alone, the route, would have saved
    its 12 GB too. Instead: (b) **none**: an MCP client calls `POST /api/imaging/preview`
    itself, as that viewer called the frame route; (c) **an argument on
    `take_imaging_frame`**: changes 031's tool and its words (1 (c)).
-8. **"Save this one"** (FR-005). Recommended (a): **none new**: stop, wait for the last
+8. **"Save this one"** (FR-005). Answered (a): **none new**: stop, wait for the last
    preview frame, then `Take imaging frame` in the section above saves the next frame at
    the same settings. `Take imaging frame` is disabled while any frame is in flight
    (`crates/finder/web/src/components/ImagingPage.tsx:159`,
@@ -323,7 +359,7 @@ FR-014) and a run that takes the camera back while a preview frame is in flight 
    refused `an exposure is already in progress` and it stops with those words. Instead:
    (b) **keep the last preview frame's samples** (32,472,192 B on the imaging camera) to
    save on request: memory held while previewing, a route and its words.
-9. **The name** (FR-011). Recommended (a): **Preview frame**, the block **Preview
+9. **The name** (FR-011). Answered (a): **Preview frame**, the block **Preview
    frames**, and the glossary's **Crop** for the picture of its brightest part: "live
    view" is an _Avoid_ of **Preview** and of **Stack** (`GLOSSARY.md:159`,
    `GLOSSARY.md:203`). Instead: (b) **live view**, the seat's label: two glossary entries
@@ -338,7 +374,7 @@ FR-014) and a run that takes the camera back while a preview frame is in flight 
     aid refused the first donuts, so in a focus pause the observer would focus by eye
     with preview frames and then press `Go anyway`. Constructed on the probe's release
     console (run, § Clarifications): `Go anyway` with a preview frame in flight ended the
-    run `camera_failed`; with the frame shown first the run went on. Recommended (b):
+    run `camera_failed`; with the frame shown first the run went on. Answered (b):
     **the README's and the block's words**: stop the preview frames, wait until the block
     no longer reads `Stopping`, then go on; it keeps the night's flow (preview by eye in
     the pause, then go on) and touches no file outside this spec. Instead: (a) **the
@@ -353,7 +389,7 @@ FR-014) and a run that takes the camera back while a preview frame is in flight 
 
 Flipping this spec to `ready` approves the answer to every owner decision above, and the
 following. Each is named in the FR that makes it. No existing test, golden, fixture or CI
-file changes.
+file changes, but for approval 9's one line in a test helper.
 
 1. **New public API in `crates/finder`'s library** (FR-001, FR-006, FR-007):
    `Imaging::take_preview`, `Imaging::crop`, `preview::crop`, `preview::CROP_SIDE` and
@@ -386,6 +422,11 @@ file changes.
    (`docs/adr/0002-imaging-cameras-through-indi-frames-relayed-console-stacks.md:3`) is
    categorical, so the ADR gains, after its last line,
    `Amended by spec 058: the console saves every frame taken to be kept; a preview frame is shown and saved nowhere.`
+9. **One line in 055's test helper** (FR-007): `held` in `crates/finder/src/nudge.rs`'s
+   tests (`crates/finder/src/nudge.rs:416`) builds a `FrameView` with every field named,
+   so it gains `crop: None,` after `file: None,` (`crates/finder/src/nudge.rs:446`) and
+   changes nothing else; no assertion changes. Approved by the owner on 2026-11-28
+   ("Yes", to the seat's question at the re-anchor).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -806,7 +847,8 @@ under `npm test`, and `crates/finder/web/e2e/imaging-preview.spec.ts`, new, unde
   JPEG of quality 85 in the same blocking step as its preview, kept among the last eight
   crops, and its view SHALL carry `crop`, `/api/imaging/frames/{id}/crop.jpg`; a crop
   that cannot be made is left out, as a preview is. A saved frame SHALL have no `crop`.
-  `Imaging::crop(id)` SHALL answer a kept crop.
+  `Imaging::crop(id)` SHALL answer a kept crop. Every `FrameView` built with its fields
+  named SHALL name `crop`, 055's test helper `held` among them (owner approval 9).
 - **FR-008**: `GET /api/imaging/frames/{id}/crop.jpg` SHALL answer that crop as
   `image/jpeg` while it is among the last eight, 404 with
   `the console no longer holds that crop` otherwise, and 400 for an id that is not a
@@ -916,7 +958,8 @@ under `npm test`, and `crates/finder/web/e2e/imaging-preview.spec.ts`, new, unde
   `CODEOWNERS` entry or `ergane.yaml` is edited, and `playwright.config.ts` gains only its
   two list entries. Every existing test passes unchanged (plan.md § Shapes that existing
   tests pin). The only edits to existing test files are the `mod` lines of
-  `crates/finder/tests/console/main.rs` and `crates/finder/tests/mcp/main.rs`.
+  `crates/finder/tests/console/main.rs` and `crates/finder/tests/mcp/main.rs`, and one
+  line of 055's test helper `held` in `crates/finder/src/nudge.rs` (owner approval 9).
 - **SC-003**: Taking preview frames writes no file under the imaging folder or the
   node's save folder, with `save_at_node` on (US1-S1, US1-S2, US1-S3, US3-S1).
 - **SC-004**: A preview frame is refused, and refuses others, exactly as a single frame

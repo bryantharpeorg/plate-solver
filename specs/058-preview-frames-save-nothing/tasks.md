@@ -5,16 +5,17 @@ description: "Task list for 058-preview-frames-save-nothing: Preview Frames Save
 # Tasks: Preview Frames Save Nothing
 
 **Prerequisites** (plan.md § Prerequisites, each with its evidence there):
-- every spec in `depends_on_landed` has landed on `main`: met at f6d4f5fd;
-- 052 to 055 have landed and this spec is re-anchored on them: not met;
-- the owner decisions in spec.md are answered and the approvals given: not met, none
-  is answered;
+- every spec in `depends_on_landed` has landed on `main`: met at e7d6d094;
+- 052 to 055 have landed and this spec is re-anchored on them: met at e7d6d094, 055
+  having landed at 936b140d;
+- the owner decisions in spec.md are answered and the approvals given: met, the
+  owner's "Flip 058, all recs" of 2026-11-28 and their yes to approval 9;
 - a cynical review of this trio, folded: met, round 1 folded on 2026-11-27;
 - every story has been probe-built from this text: met, probe round 1 on `probe/058-r1`
   (tip 0e2b083c: 0 blocking, 11 clarity), folded with its proofs (tip 61da6c7e);
 - the page half has run once: met (`CI=1 npm run e2e`, 35 of 35 at US4's tip and the
-  final tip, and on probe round 1's fold's tip 61da6c7e); it runs again on the
-  re-anchored base;
+  final tip, and on probe round 1's fold's tip 61da6c7e), and 39 of 39 on the
+  replay onto 936b140d;
 - no operator-staged file is needed: met.
 
 **Rules for every story:**
@@ -25,7 +26,8 @@ description: "Task list for 058-preview-frames-save-nothing: Preview Frames Save
   `crates/finder/tests/console/main.rs` or `crates/finder/tests/mcp/main.rs`, each in
   its alphabetical place and naming a module of lower-case letters and `_` only, and
   US4's two list entries in `crates/finder/web/playwright.config.ts` (spec.md owner
-  approval 6).
+  approval 6), and US2's one line in 055's test helper `held` in
+  `crates/finder/src/nudge.rs` (spec.md owner approval 9).
 - Write only the files your story's tasks name; they are its `writes` in plan.md
   § Refinement Record. A story that needs another file escalates.
 - `crates/scope-node`, `crates/scope-link`, `proto/`, `crates/simulator`, the plate
@@ -108,7 +110,9 @@ description: "Task list for 058-preview-frames-save-nothing: Preview Frames Save
   `crop`; in `crates/finder/src/imaging/mod.rs`, add `Held::crops` and `Imaging::crop`;
   in `crates/finder/src/imaging/routes.rs`, add
   `GET /api/imaging/frames/{id}/crop.jpg` after the preview's route and its handler
-  `frame_crop` (FR-007, FR-008; plan.md § Interfaces).
+  `frame_crop`; in `crates/finder/src/nudge.rs`, add `crop: None,` after `file: None,` in
+  the test helper `held`'s `FrameView` (`crates/finder/src/nudge.rs:446`) and change
+  nothing else there (FR-007, FR-008; spec.md owner approval 9; plan.md § Interfaces).
 - [ ] T008 [US2] Run the `lint` and `test` gates with every existing test unchanged and
   green, US1's test file and `imaging_preview.rs` among them, then commit the green
   story (FR-006 to FR-008; US2-S1, US2-S2).
