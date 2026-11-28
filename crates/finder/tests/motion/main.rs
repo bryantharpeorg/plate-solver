@@ -19,6 +19,7 @@ mod mount_sky;
 mod mount_sky_night;
 mod night;
 mod nudge;
+mod nudge_views;
 mod recording_raw;
 mod simulate;
 mod steering;
