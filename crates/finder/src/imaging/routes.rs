@@ -29,6 +29,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/api/imaging", get(get_imaging))
         .route("/api/imaging/settings", put(put_settings))
         .route("/api/imaging/frame", post(take_frame))
+        .route("/api/imaging/preview", post(take_preview))
         .route("/api/imaging/abort", post(abort_frame))
         .route("/api/imaging/solve", post(post_solve))
         .route("/api/imaging/focus", post(post_focus).delete(delete_focus))
@@ -197,6 +198,23 @@ async fn take_frame(
     })?;
     let view = imaging
         .take("frame")
+        .await
+        .map_err(|refusal| ApiError::new(refusal.status, refusal.message))?;
+    Ok(Json(view))
+}
+
+/// `POST /api/imaging/preview` (058 FR-001): no body; one preview frame,
+/// shown and never saved, with `POST /api/imaging/frame`'s refusals and
+/// words.
+async fn take_preview(
+    State(state): State<AppState>,
+    _write: SessionWrite,
+) -> Result<Json<ImagingView>, ApiError> {
+    let imaging = state.imaging().ok_or_else(|| {
+        ApiError::new(StatusCode::CONFLICT, "this console takes no imaging frames")
+    })?;
+    let view = imaging
+        .take_preview()
         .await
         .map_err(|refusal| ApiError::new(refusal.status, refusal.message))?;
     Ok(Json(view))

@@ -9,3 +9,5 @@ The imaging camera at the main telescope's focuser is run by the scope node thro
 - **Our own hinted solver for imaging frames**, reusing the solver's verify and refine steps against a deep star catalogue. Rejected by the owner in favour of ASTAP: a proven program that several imaging tools call the same way, and one that needs no starting angle, which the first solve after the camera is seated cannot supply. The solver port keeps the other path open.
 - **An existing live stacker called as a program.** Rejected: the only one that can be called has no outlier rejection, round-trips every frame through files and is labelled experimental by its own manual. Two permissively licensed Rust stackers exist and may be tried before the stacking spec is built.
 - **A second aim point for the eyepiece.** Rejected: the eyepiece and the sensor share the focuser's axis to within a few arcminutes, and a measured value is better than a tapped one.
+
+Amended by spec 058: the console saves every frame taken to be kept; a preview frame is shown and saved nowhere.
