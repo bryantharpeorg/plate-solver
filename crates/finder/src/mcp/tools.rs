@@ -266,6 +266,20 @@ struct FinderFocusArguments {
     on: bool,
 }
 
+#[derive(rmcp::schemars::JsonSchema)]
+#[expect(
+    dead_code,
+    reason = "schema only; nudge parses its arguments as the route does"
+)]
+struct NudgeArguments {
+    /// up, right, down or left
+    direction: String,
+    /// fine (30 arcseconds) or coarse (4 arcminutes)
+    step: String,
+    /// mount, finder_camera or imaging_camera
+    view: String,
+}
+
 fn object_schema() -> Arc<JsonObject> {
     Arc::new(json!({"type":"object"}).as_object().unwrap().clone())
 }
@@ -481,6 +495,29 @@ impl Console {
             &json!(args),
             result.as_ref().map_err(String::as_str),
         );
+        tool_result(result)
+    }
+
+    #[tool(description = "Move a real telescope one step on the sky, as the page's nudge arrows do: direction up, right, down or left; step fine (30 arcseconds) or coarse (4 arcminutes); view mount (up is higher altitude, right a clockwise turn), finder_camera (the finder camera's live views as the page turns them) or imaging_camera (the imaging camera's frame, from its latest imaging solve). With Track off the axes move through all console guards; with Track on the place Track holds moves by the step and Track makes it. Answers the step as up_arcsec and right_arcsec, and moved: axes or track.",
+        input_schema = rmcp::handler::server::common::schema_for_input::<NudgeArguments>().expect("nudge schema"),
+        output_schema = object_schema())]
+    async fn nudge(&self, arguments: JsonObject) -> CallToolResult {
+        let raw = Value::Object(arguments);
+        let result = async {
+            // The route's parse: a malformed call is refused before it takes a place in the
+            // rate limit.
+            let ask = serde_json::from_value::<crate::nudge::NudgeAsk>(raw.clone()).map_err(
+                |_| "nudge takes direction (up, right, down or left), step (fine or coarse) and view (mount, finder_camera or imaging_camera)".to_owned(),
+            )?;
+            self.state.limit_move()?;
+            let view = crate::nudge::nudge(&self.state, "mcp", &ask)
+                .await
+                .map_err(|error| error.message)?;
+            Ok(serde_json::to_value(view).expect("nudge JSON"))
+        }
+        .await;
+        self.state
+            .log_call("nudge", &raw, result.as_ref().map_err(String::as_str));
         tool_result(result)
     }
 

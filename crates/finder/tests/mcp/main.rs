@@ -16,6 +16,7 @@ mod imaging_focus;
 mod imaging_run;
 mod imaging_solve;
 mod motion;
+mod nudge;
 mod push_tool;
 mod session_rotation;
 mod session_tools;
